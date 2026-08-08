@@ -3,3 +3,5 @@
 .vscode/
 CLAUDE.md
 AGENTS.md
+/target
+bench-results/
