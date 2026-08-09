@@ -105,7 +105,7 @@ closure ::= 'fn' '(' params_untyped? ')' (block | expr)
 params_untyped ::= closure_param (',' closure_param)* ','?
 closure_param  ::= param_mode? IDENT (':' type)?
 
-region_expr ::= 'region' IDENT (':' region_strategy)? block   /* sugar   */
+region_expr ::= 'region' IDENT? (':' region_strategy)? block  /* sugar   */
               | 'region' '(' region_strategy? ')'             /* value   */
               | 'in' expr block                               /* into r  */
               | 'freeze' expr

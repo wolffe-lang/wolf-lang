@@ -281,7 +281,7 @@ chain (`a < b < c` is a parse error with a "did you mean `&&`" diagnostic).
 |---|-----------|-------|
 | 1 | paths, literals, `(e)`, block-exprs, closures | — |
 | 2 | postfix: call `f(…)`, index/generic-apply `e[…]`, member `.`, postfix `?` | left |
-| 3 | prefix: `!` `-` `&` `&mut` `*` `move` `copy` | — |
+| 3 | prefix: `!` `-` `&` `&mut` `*` `move` `copy` `shared` | — |
 | 4 | `as` type cast | left |
 | 5 | `*` `/` `%` | left |
 | 6 | `+` `-` | left |
@@ -298,7 +298,8 @@ chain (`a < b < c` is a parse error with a "did you mean `&&`" diagnostic).
 Prefix `&`/`&mut` create Tier-0 **local** borrows (second-class at
 function boundaries; 02-memory-model). Prefix `*` is raw-pointer deref
 (unsafe tier). `move` transfers a region/value; `copy` forces a copy of a
-non-`Copy` value.
+non-`Copy` value; `shared` creates a Tier-2 RC cell from a value
+(`let a = shared (Cfg { limit: 7 })`).
 
 ### 3.3 Primary expressions `[gram.expr.primary]`
 
@@ -383,7 +384,7 @@ a token the expression grammar cannot consume (`,` `)` `]` `}` TERM).
 Both locked forms (X4):
 
 ```ebnf
-region_expr ::= 'region' IDENT (':' region_strategy)? block   /* sugar   */
+region_expr ::= 'region' IDENT? (':' region_strategy)? block  /* sugar   */
               | 'region' '(' region_strategy? ')'             /* value   */
               | 'in' expr block                               /* into r  */
               | 'freeze' expr
@@ -391,7 +392,8 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
 ```
 
 - Sugar: `region tmp { … }` — create, scope, free at `}`; the block's
-  value escapes by move.
+  value escapes by move. The name is optional: `freeze region { … }`
+  builds anonymously and promotes (the build-then-share idiom).
 - Value: `let r = region()`, `let r = region(rc)`, `region r: pool(Node)
   { … }` names the sugar's region for `in r { … }` use within.
 - `in r { … }` evaluates its block with allocations landing in `r`.

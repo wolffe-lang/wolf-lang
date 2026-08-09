@@ -1144,6 +1144,7 @@ pub fn wolf_grammar() -> Grammar {
                 vec![p("*"), N("prefix_expr")],
                 vec![k("move"), N("prefix_expr")],
                 vec![k("copy"), N("prefix_expr")],
+                vec![k("shared"), N("prefix_expr")],
             ],
         ),
         (
@@ -1345,6 +1346,8 @@ pub fn wolf_grammar() -> Grammar {
             vec![
                 vec![k("region"), id, N("block")],
                 vec![k("region"), id, p(":"), N("rstrat"), N("block")],
+                vec![k("region"), N("block")],
+                vec![k("region"), p(":"), N("rstrat"), N("block")],
             ],
         ),
         ("in_expr", vec![vec![k("in"), N("ns_range"), N("block")]]),
