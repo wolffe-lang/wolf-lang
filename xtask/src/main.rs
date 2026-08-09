@@ -442,6 +442,36 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         }
         _ => eprintln!("bench: wolf_sema bodies_bench unavailable — bodies/sec skipped"),
     }
+    // (c'') comptime engine metrics (s16, D5) — skips until the example exists.
+    let cb = Command::new("cargo")
+        .args([
+            "run",
+            "-p",
+            "wolf_sema",
+            "--example",
+            "ctfe_bench",
+            "--quiet",
+        ])
+        .output();
+    match cb {
+        Ok(out) if out.status.success() => {
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                && let Some(rate) = v["ctfe_memo_hit_rate"].as_f64()
+            {
+                records.push(record(
+                    "sema",
+                    "compile",
+                    "rust",
+                    "ctfe_memo_hit_rate",
+                    rate,
+                    "ratio",
+                    commit,
+                    config,
+                ));
+            }
+        }
+        _ => eprintln!("bench: wolf_sema ctfe_bench unavailable — memo rate skipped"),
+    }
     // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v
     touch(Path::new("crates/wolf_driver/src/main.rs"));
     match max_rss_kb("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
