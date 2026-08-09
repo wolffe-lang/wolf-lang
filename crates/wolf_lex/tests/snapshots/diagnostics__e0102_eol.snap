@@ -4,16 +4,40 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0102",
+        code: E0102,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 8,
-            hi: 12,
+        message: "this string never closes",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 12,
+            },
+            label: "it opens here and runs to the end of the line",
         },
-        message: "unterminated string literal; a `\"…\"` string must close before end of line",
-        notes: [],
+        secondary: [],
+        notes: [
+            "a `\"…\"` string must close before the line ends. For text that spans lines, use a multiline `\"\"\"` string.",
+        ],
+        suggestions: [
+            Suggestion {
+                message: "close the string before the line ends",
+                edits: [
+                    (
+                        Span {
+                            file: FileId(
+                                0,
+                            ),
+                            lo: 12,
+                            hi: 12,
+                        },
+                        "\"",
+                    ),
+                ],
+                applicability: Maybe,
+            },
+        ],
     },
 ]

@@ -4,7 +4,7 @@
 //! a [`Checkpoint`] truncates events, position, and diagnostics.
 
 use wolf_ast::SyntaxKind;
-use wolf_diag::Diagnostic;
+use wolf_diag::{Code, DiagMark, Diagnostic, Diagnostics};
 use wolf_lex::{Keyword, Punct, Token, TokenKind};
 use wolf_span::Span;
 
@@ -52,7 +52,7 @@ impl CompletedMarker {
 pub(crate) struct Checkpoint {
     events: usize,
     pos: usize,
-    diags: usize,
+    diags: DiagMark,
 }
 
 pub(crate) struct Parser<'a> {
@@ -60,7 +60,10 @@ pub(crate) struct Parser<'a> {
     src: &'a [u8],
     pos: usize,
     pub(crate) events: Vec<Event>,
-    pub(crate) diags: Vec<Diagnostic>,
+    /// The s10 sink: cascade suppression lives here — every skipped
+    /// region recovery wraps in an error node is fed to
+    /// [`Diagnostics::suppress`], so later diagnostics inside it drop.
+    pub(crate) diags: Diagnostics,
     /// Expression-recursion depth (bounded — hostile nesting degrades
     /// into error recovery instead of overflowing the stack).
     pub(crate) depth: u32,
@@ -134,7 +137,7 @@ impl<'a> Parser<'a> {
             src,
             pos: 0,
             events: Vec::new(),
-            diags: Vec::new(),
+            diags: Diagnostics::new(),
             depth: 0,
             frames: Vec::new(),
             suppressed_miss_reported: false,
@@ -188,6 +191,13 @@ impl<'a> Parser<'a> {
     /// `c`).
     pub(crate) fn current_text(&self) -> &'a [u8] {
         let s = self.current_span();
+        &self.src[s.lo as usize..s.hi as usize]
+    }
+
+    /// The `n`-th lookahead token's text (the D25 negative-index hint
+    /// quotes the literal).
+    pub(crate) fn nth_text(&self, n: usize) -> &'a [u8] {
+        let s = self.nth_span(n);
         &self.src[s.lo as usize..s.hi as usize]
     }
 
@@ -305,25 +315,35 @@ impl<'a> Parser<'a> {
         self.error(
             crate::codes::EXPECTED_TOKEN,
             self.here(),
-            format!("expected line end after the {what}"),
+            format!("expected the line to end after the {what}"),
         );
     }
 
     /// An unexpected-at-declaration-position diagnostic (E0203), folded
     /// over a run of stray lines (see `toplevel_error_reported`).
     pub(crate) fn toplevel_error(&mut self, span: Span, message: impl Into<String>) {
+        self.toplevel_diag(Diagnostic::error(
+            crate::codes::UNEXPECTED_TOPLEVEL,
+            span,
+            message,
+        ));
+    }
+
+    /// [`Parser::toplevel_error`] for pre-built diagnostics (the typo
+    /// path attaches a machine-applicable suggestion).
+    pub(crate) fn toplevel_diag(&mut self, d: Diagnostic) {
         if self.toplevel_error_reported {
             return;
         }
         self.toplevel_error_reported = true;
-        self.error(crate::codes::UNEXPECTED_TOPLEVEL, span, message);
+        self.push_diag(d);
     }
 
     /// An error suppressed when a truncated-construct report was just
     /// emitted at the same spot (the one-shot fold).
     pub(crate) fn error_unless_folded(
         &mut self,
-        code: &'static str,
+        code: Code,
         span: Span,
         message: impl Into<String>,
     ) {
@@ -418,20 +438,14 @@ impl<'a> Parser<'a> {
 
     // ------------------------------------------------------ diagnostics --
 
-    pub(crate) fn error(&mut self, code: &'static str, span: Span, message: impl Into<String>) {
+    pub(crate) fn error(&mut self, code: Code, span: Span, message: impl Into<String>) {
         self.diags.push(Diagnostic::error(code, span, message));
     }
 
-    pub(crate) fn error_with_note(
-        &mut self,
-        code: &'static str,
-        span: Span,
-        message: impl Into<String>,
-        note_span: Span,
-        note: impl Into<String>,
-    ) {
-        self.diags
-            .push(Diagnostic::error(code, span, message).with_note(note_span, note));
+    /// Push a fully built diagnostic (label / secondary / suggestion
+    /// call sites build it themselves).
+    pub(crate) fn push_diag(&mut self, d: Diagnostic) {
+        self.diags.push(d);
     }
 
     // ----------------------------------------------------------- events --
@@ -449,15 +463,16 @@ impl<'a> Parser<'a> {
         Checkpoint {
             events: self.events.len(),
             pos: self.pos,
-            diags: self.diags.len(),
+            diags: self.diags.mark(),
         }
     }
 
-    /// Rewind to `cp` — events, token position, and diagnostics together.
+    /// Rewind to `cp` — events, token position, and diagnostics
+    /// (including suppression regions) together.
     pub(crate) fn rollback(&mut self, cp: Checkpoint) {
         self.events.truncate(cp.events);
         self.pos = cp.pos;
-        self.diags.truncate(cp.diags);
+        self.diags.rollback(cp.diags);
     }
 
     // --------------------------------------------------------- recovery --
@@ -481,6 +496,7 @@ impl<'a> Parser<'a> {
         stop_at_rbrace: bool,
         stop: impl Fn(TokenKind) -> bool,
     ) -> usize {
+        let from = self.current_span();
         let mut skipped = 0usize;
         let mut depth = 0usize;
         let mut shield = 0usize;
@@ -529,6 +545,13 @@ impl<'a> Parser<'a> {
             self.bump();
             skipped += 1;
         }
+        // Cascade suppression (s10): the skipped junk is one already-
+        // reported wreck — feed its extent to the sink so any later
+        // diagnostic whose primary span lands inside it is dropped.
+        if skipped > 0 {
+            let to = self.tokens[self.pos - 1].span;
+            self.diags.suppress(Span::new(from.file, from.lo, to.hi));
+        }
         skipped
     }
 
@@ -540,6 +563,7 @@ impl<'a> Parser<'a> {
     /// stopping on them would detonate the enclosing statement.
     pub(crate) fn recover_to_interp_close(&mut self) {
         let m = self.start();
+        let from = self.current_span();
         let mut depth = 0usize;
         let mut skipped = 0usize;
         loop {
@@ -558,6 +582,8 @@ impl<'a> Parser<'a> {
             skipped += 1;
         }
         if skipped > 0 {
+            let to = self.tokens[self.pos - 1].span;
+            self.diags.suppress(Span::new(from.file, from.lo, to.hi));
             m.complete(self, SyntaxKind::ErrorNode);
         } else {
             m.abandon(self);

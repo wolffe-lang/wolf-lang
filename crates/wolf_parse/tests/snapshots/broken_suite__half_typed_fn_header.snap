@@ -38,5 +38,6 @@ SourceFile 0..38
       RBrace 36..37 "}"
   Eof 38..38 ""
 == diagnostics ==
-E0202 [Error] 9..10 unclosed `(`
-    note 17..17 expected the closing delimiter by here
+E0202 [Error] 9..10 this `(` is never closed
+    label opened here
+    secondary 17..17 the parser expected the closing `)` by here

@@ -3,15 +3,20 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: "E0005",
+    code: E0005,
     severity: Error,
-    span: Span {
-        file: FileId(
-            0,
-        ),
-        lo: 32,
-        hi: 36,
-    },
     message: "`else` must be on the same line as the `}` that closes the then-block — write `} else`",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 32,
+            hi: 36,
+        },
+        label: "",
+    },
+    secondary: [],
     notes: [],
+    suggestions: [],
 }

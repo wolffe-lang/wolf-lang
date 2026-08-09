@@ -69,4 +69,4 @@ SourceFile 0..62
   Term 61..62 "\n"
   Eof 62..62 ""
 == diagnostics ==
-E0205 [Error] 10..11 expected a generic parameter
+E0205 [Error] 10..11 expected a generic parameter name here, like `T` or `N: type`

@@ -93,12 +93,31 @@ pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
         TokenKind::Kw(Keyword::Use) => use_item(p, m),
         TokenKind::Kw(Keyword::Import) => import_c_item(p, m),
         _ => {
+            // The typo machinery (s10): an identifier in declaration
+            // position within edit distance of a declaration keyword
+            // gets "did you mean" plus a machine-applicable edit.
+            if p.at(TokenKind::Ident)
+                && let Some(d) = decl_keyword_typo(p)
+            {
+                p.toplevel_diag(d);
+                p.skip_until(in_body, |k| k == TokenKind::Term);
+                m.complete(p, SyntaxKind::ErrorNode);
+                return;
+            }
             let msg = if prefixed {
-                "expected a declaration after attributes/visibility"
+                "expected a declaration after the attributes"
             } else {
-                "expected a declaration"
+                "expected a declaration here"
             };
-            p.toplevel_error(p.current_span(), msg);
+            p.toplevel_diag(
+                wolf_diag::Diagnostic::error(codes::UNEXPECTED_TOPLEVEL, p.current_span(), msg)
+                    .with_note(
+                        "the top level of a file holds declarations only, each starting \
+                         with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, \
+                         `trait`, `impl`, `use`, `import`. If this line belongs inside a \
+                         function, a `{` is probably missing above it.",
+                    ),
+            );
             if p.at_punct(Punct::LBrace) {
                 // A stray block: parse it — declarations nested inside
                 // survive intact instead of being skipped raw (D22).
@@ -109,6 +128,33 @@ pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
             m.complete(p, SyntaxKind::ErrorNode);
         }
     }
+}
+
+/// The declaration-leading keywords, as candidate strings for the typo
+/// suggester (same set as [`is_decl_keyword`]).
+const DECL_KEYWORD_TEXTS: &[&str] = &[
+    "fn", "let", "var", "type", "struct", "enum", "trait", "impl", "use", "import", "const",
+    "extern", "export", "comptime", "pub",
+];
+
+/// `fnn` → "did you mean `fn`?" with the machine-applicable edit
+/// (VOICE.md rule 4). `None` when nothing is close enough.
+fn decl_keyword_typo(p: &Parser<'_>) -> Option<wolf_diag::Diagnostic> {
+    let text = std::str::from_utf8(p.current_text()).ok()?;
+    let kw = wolf_diag::suggest::best_match(text, DECL_KEYWORD_TEXTS)?;
+    let span = p.current_span();
+    Some(
+        wolf_diag::Diagnostic::error(
+            codes::UNEXPECTED_TOPLEVEL,
+            span,
+            format!("`{text}` is not how a declaration starts — did you mean `{kw}`?"),
+        )
+        .with_suggestion(wolf_diag::Suggestion::new(
+            format!("replace `{text}` with `{kw}`"),
+            vec![(span, kw.to_string())],
+            wolf_diag::Applicability::MachineApplicable,
+        )),
+    )
 }
 
 // ------------------------------------------------------------ functions --
@@ -126,7 +172,7 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
                     p.error(
                         codes::EXPECTED_TOKEN,
                         p.here(),
-                        "expected an ABI string after `extern`",
+                        "expected a quoted ABI string after `extern`, like `extern \"c\"`",
                     );
                     p.missing();
                 }
@@ -289,7 +335,7 @@ fn param(p: &mut Parser<'_>) {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.current_span(),
-                "expected a parameter name; `_` is not a parameter name",
+                "`_` is not a parameter name — give this parameter a real name",
             );
             p.bump();
             param_type(p);
@@ -402,7 +448,7 @@ fn generic_param_list(p: &mut Parser<'_>) {
                 p.error(
                     codes::MALFORMED_GENERICS,
                     p.current_span(),
-                    "expected a generic parameter",
+                    "expected a generic parameter name here, like `T` or `N: type`",
                 );
                 p.recover_until(true, |k| {
                     matches!(k, TokenKind::Punct(Punct::Comma | Punct::RBracket))
@@ -443,7 +489,7 @@ fn generic_param(p: &mut Parser<'_>) {
             p.error(
                 codes::MALFORMED_GENERICS,
                 p.here(),
-                "expected a bound or `type` after `:`",
+                "expected a trait bound or `type` after the `:`",
             );
             p.missing();
         }
@@ -569,7 +615,7 @@ pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: Syn
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.here(),
-                "expected `=` and an initializer",
+                "this binding has no value — expected `=` and an initializer",
             );
         }
         p.missing();
@@ -906,7 +952,7 @@ pub(crate) fn impl_item(p: &mut Parser<'_>, m: Marker) {
         p.error(
             codes::EXPECTED_TOKEN,
             p.here(),
-            "expected the implemented trait or type name",
+            "expected the name of the trait or type this `impl` is for",
         );
         p.missing();
     }
@@ -1049,7 +1095,7 @@ pub(crate) fn import_c_item(p: &mut Parser<'_>, m: Marker) {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.current_span(),
-                "expected `c` after `import` (only C headers can be imported)",
+                "only C headers can be imported — write `import c \"header.h\"`",
             );
         }
         p.bump();
@@ -1057,7 +1103,7 @@ pub(crate) fn import_c_item(p: &mut Parser<'_>, m: Marker) {
         p.error(
             codes::EXPECTED_TOKEN,
             p.here(),
-            "expected `c` after `import`",
+            "expected `c` after `import` — the form is `import c \"header.h\"`",
         );
         p.missing();
     }
@@ -1067,7 +1113,7 @@ pub(crate) fn import_c_item(p: &mut Parser<'_>, m: Marker) {
         p.error(
             codes::EXPECTED_TOKEN,
             p.here(),
-            "expected a header name string",
+            "expected the header name as a string, like `import c \"stdio.h\"`",
         );
         p.missing();
     }
@@ -1121,7 +1167,7 @@ pub(crate) fn attribute(p: &mut Parser<'_>) {
                 p.error(
                     codes::MALFORMED_ATTRIBUTE,
                     p.current_span(),
-                    "malformed attribute: expected an attribute name",
+                    "this attribute needs a name: `#[name]` or `#[name(args)]`",
                 );
                 p.recover_until(true, |k| {
                     matches!(k, TokenKind::Punct(Punct::Comma | Punct::RBracket))
@@ -1176,7 +1222,7 @@ fn attr_input_args(p: &mut Parser<'_>) {
                 p.error(
                     codes::MALFORMED_ATTRIBUTE,
                     p.current_span(),
-                    "malformed attribute: expected a nested attribute or literal",
+                    "attribute arguments are literals or nested attributes, like `#[repr(c)]`",
                 );
                 p.recover_until(true, |k| {
                     matches!(
@@ -1210,7 +1256,7 @@ fn attr_input_eq(p: &mut Parser<'_>) {
             p.error(
                 codes::MALFORMED_ATTRIBUTE,
                 p.here(),
-                "malformed attribute: expected a literal after `=`",
+                "expected a literal after the `=`, like `#[deprecated = \"note\"]`",
             );
             p.missing();
         }
@@ -1230,7 +1276,7 @@ pub(crate) fn visibility(p: &mut Parser<'_>) {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.here(),
-                "expected `pkg` in the visibility qualifier",
+                "the only visibility qualifier is `pub(pkg)` — expected `pkg` here",
             );
             p.recover_until(true, |k| k == TokenKind::Punct(Punct::RParen));
         }
@@ -1299,7 +1345,7 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
                 p.error(
                     codes::EXPECTED_TYPE,
                     p.here(),
-                    "expected a trait path after `dyn`",
+                    "expected a trait name after `dyn`, like `dyn Writer`",
                 );
                 p.missing();
             }
@@ -1314,7 +1360,7 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
                 p.error(
                     codes::EXPECTED_TOKEN,
                     p.here(),
-                    "expected `(` in the function type",
+                    "a function type spells its parameters: `fn(int) -> int`",
                 );
                 p.missing();
             }
@@ -1612,7 +1658,7 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
                 p.error(
                     codes::EXPECTED_TOKEN,
                     p.here(),
-                    "expected `(` — a dotted path pattern needs a payload",
+                    "a dotted path in a pattern must carry a payload, like `io.Error(e)`",
                 );
                 p.missing();
             }
@@ -1871,13 +1917,18 @@ pub(crate) fn name_token(p: &mut Parser<'_>, what: &str) -> bool {
 /// suggests renaming (wolf has no raw identifiers).
 fn keyword_as_ident(p: &mut Parser<'_>, what: &str) {
     let text = String::from_utf8_lossy(p.current_text()).into_owned();
-    p.error(
-        codes::KEYWORD_AS_IDENT,
-        p.current_span(),
-        format!(
-            "`{text}` is a reserved keyword and cannot be a {what} name; \
-             pick another name (wolf has no raw identifiers)"
-        ),
+    let span = p.current_span();
+    p.push_diag(
+        wolf_diag::Diagnostic::error(
+            codes::KEYWORD_AS_IDENT,
+            span,
+            format!("`{text}` is a reserved keyword, so it cannot name a {what}"),
+        )
+        .with_label("pick another name")
+        .with_note(format!(
+            "all 50 keywords are reserved everywhere, and wolf has no raw \
+             identifiers. `{text}_` is the usual dodge, or a more specific word.",
+        )),
     );
     p.bump();
 }
@@ -1908,11 +1959,21 @@ fn unclosed_diag(p: &mut Parser<'_>, opener: Span, what: &str) {
         return;
     }
     p.last_unclosed_at = Some(here.lo);
-    p.error_with_note(
-        codes::UNCLOSED_DELIMITER,
-        opener,
-        format!("unclosed `{what}`"),
-        here,
-        "expected the closing delimiter by here",
+    let closer = match what {
+        "(" => ")",
+        "[" | "#[" => "]",
+        _ => "}",
+    };
+    p.push_diag(
+        wolf_diag::Diagnostic::error(
+            codes::UNCLOSED_DELIMITER,
+            opener,
+            format!("this `{what}` is never closed"),
+        )
+        .with_label("opened here")
+        .with_secondary(
+            here,
+            format!("the parser expected the closing `{closer}` by here"),
+        ),
     );
 }

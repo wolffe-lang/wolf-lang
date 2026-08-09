@@ -57,7 +57,11 @@ pub fn kinds(src: &str) -> Vec<TokenKind> {
 }
 
 pub fn codes(src: &str) -> Vec<&'static str> {
-    lex(src).diagnostics.iter().map(|d| d.code).collect()
+    lex(src)
+        .diagnostics
+        .iter()
+        .map(|d| d.code.as_str())
+        .collect()
 }
 
 pub fn term_count(src: &str) -> usize {

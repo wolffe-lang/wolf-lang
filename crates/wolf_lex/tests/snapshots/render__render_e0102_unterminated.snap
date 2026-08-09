@@ -1,0 +1,16 @@
+---
+source: crates/wolf_lex/tests/render.rs
+expression: "render_all(\"let s = \\\"abc\\nlet t = 1\\n\")"
+---
+error[E0102]: this string never closes
+ --> demo.lu:1:9
+  |
+1 | let s = "abc
+  |         ^^^^ it opens here and runs to the end of the line
+  |
+  = note: a `"…"` string must close before the line ends. For text that spans lines, use a
+    multiline `"""` string.
+help: close the string before the line ends
+  |
+1 | let s = "abc"
+  |

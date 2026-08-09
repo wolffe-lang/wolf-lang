@@ -64,4 +64,6 @@ SourceFile 0..83
   Term 82..83 "\n"
   Eof 83..83 ""
 == diagnostics ==
-E0208 [Error] 29..30 assignment is a statement, not an expression — it produces no value ([gram.expr.assign])
+E0208 [Error] 29..30 assignment is a statement, so `=` produces no value here
+    label this `=` cannot be part of an expression
+    note if you meant to compare, write `==`. If you meant to assign, do it on its own line first ([gram.expr.assign]).

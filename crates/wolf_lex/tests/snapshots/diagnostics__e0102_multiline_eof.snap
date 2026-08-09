@@ -4,16 +4,23 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0102",
+        code: E0102,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 8,
-            hi: 18,
+        message: "this string is still open when the file ends",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 18,
+            },
+            label: "it opens here",
         },
-        message: "unterminated string literal at end of file",
-        notes: [],
+        secondary: [],
+        notes: [
+            "add the closing delimiter.",
+        ],
+        suggestions: [],
     },
 ]

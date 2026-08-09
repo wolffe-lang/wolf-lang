@@ -53,5 +53,6 @@ SourceFile 0..66
       Missing 66..66 ""
   Eof 66..66 ""
 == diagnostics ==
-E0202 [Error] 42..43 unclosed `{`
-    note 66..66 expected the closing delimiter by here
+E0202 [Error] 42..43 this `{` is never closed
+    label opened here
+    secondary 66..66 the parser expected the closing `}` by here

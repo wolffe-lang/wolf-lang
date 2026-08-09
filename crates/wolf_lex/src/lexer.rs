@@ -1,8 +1,13 @@
 //! The engine: one forward pass over bytes, a frame stack for delimiter
 //! tracking and string modes, byte-exact spans, total on arbitrary input.
 
-use wolf_diag::{Diagnostic, Diagnostics};
+use wolf_diag::{Applicability, Diagnostic, Diagnostics, Suggestion};
 use wolf_span::{FileId, Span};
+
+/// The escapes wolf understands — the shared E0101 next-step note.
+const ESCAPE_NOTE: &str = "the escapes wolf understands are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, \
+     `\\\"`, `\\xNN`, and `\\u{…}`. For a literal backslash, write `\\\\`; for text with no \
+     escapes at all, use a raw string `r\"…\"`.";
 
 use crate::{
     Lexed, MAX_NEST, Punct, StrKind, Token, TokenKind, Trivia, TriviaKind, codes, keyword,
@@ -149,9 +154,22 @@ impl Lexer<'_> {
         self.attr_close = false;
     }
 
-    fn error_diag(&mut self, code: &'static str, lo: usize, hi: usize, msg: impl Into<String>) {
+    /// The E0108 hard-rail diagnostic (three emit sites, one wording).
+    fn nest_diag(&mut self, lo: usize, hi: usize) {
         let span = self.span(lo, hi);
-        self.diags.push(Diagnostic::error(code, span, msg));
+        self.diags.push(
+            Diagnostic::error(
+                codes::NESTING_TOO_DEEP,
+                span,
+                format!("strings and interpolations nest more than {MAX_NEST} levels deep here"),
+            )
+            .with_label(format!("level {} would start here", MAX_NEST + 1))
+            .with_note(
+                "this is the lexer's hard safety rail; the language's own limit is 8 \
+                 levels (E0007). Hoist the innermost string into a `let` binding — \
+                 each hoist removes a level.",
+            ),
+        );
     }
 
     fn push_trivia(&mut self, kind: TriviaKind, lo: usize, hi: usize) {
@@ -472,11 +490,18 @@ impl Lexer<'_> {
                 while let Decoded::Invalid(n) = self.decode(self.pos) {
                     self.pos += n;
                 }
-                self.error_diag(
-                    codes::INVALID_UTF8,
-                    lo,
-                    self.pos,
-                    "source is not valid UTF-8 here; the bytes were skipped",
+                let span = self.span(lo, self.pos);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::INVALID_UTF8,
+                        span,
+                        "this part of the file is not valid UTF-8",
+                    )
+                    .with_label("these bytes decode as no character")
+                    .with_note(
+                        "wolf source files are UTF-8 ([gram.lex.source]). Re-save the file \
+                         as UTF-8; the bytes were skipped so the rest still lexes.",
+                    ),
                 );
                 self.emit(TokenKind::Error, lo, self.pos);
             }
@@ -489,13 +514,39 @@ impl Lexer<'_> {
                         break;
                     }
                 }
-                let msg = if first == '\u{feff}' {
-                    "byte order marks are rejected ([gram.lex.source]); save the file without a BOM"
-                        .to_string()
+                let span = self.span(lo, self.pos);
+                let d = if first == '\u{feff}' {
+                    Diagnostic::error(
+                        codes::STRAY_BYTE,
+                        span,
+                        "a byte order mark (BOM) does not belong in a wolf source file",
+                    )
+                    .with_label("the invisible BOM character sits here")
+                    .with_note(
+                        "wolf reads sources as plain UTF-8 and never uses a BOM \
+                         ([gram.lex.source]). Save the file without one.",
+                    )
+                    .with_suggestion(Suggestion::new(
+                        "delete the byte order mark",
+                        vec![(span, String::new())],
+                        Applicability::MachineApplicable,
+                    ))
                 } else {
-                    format!("stray character `{}`", first.escape_debug())
+                    Diagnostic::error(
+                        codes::STRAY_BYTE,
+                        span,
+                        format!(
+                            "the character `{}` is not part of wolf syntax",
+                            first.escape_debug()
+                        ),
+                    )
+                    .with_label("no wolf token can start with this")
+                    .with_note(
+                        "delete it — or if you cannot see anything here, an invisible \
+                         character was pasted in; retype the line.",
+                    )
                 };
-                self.error_diag(codes::STRAY_BYTE, lo, self.pos, msg);
+                self.diags.push(d);
                 self.emit(TokenKind::Error, lo, self.pos);
             }
             Decoded::Eof => {}
@@ -524,14 +575,7 @@ impl Lexer<'_> {
     /// and push the frame (or an E0108 error token past [`MAX_NEST`]).
     fn open_string(&mut self, kind: StrKind, open_lo: usize, content_lo: usize) {
         if self.nest_depth() >= MAX_NEST {
-            self.error_diag(
-                codes::NESTING_TOO_DEEP,
-                open_lo,
-                content_lo,
-                format!(
-                    "string/interpolation nesting deeper than {MAX_NEST}; you do not want this"
-                ),
-            );
+            self.nest_diag(open_lo, content_lo);
             self.pos = content_lo;
             self.emit(TokenKind::Error, open_lo, content_lo);
             return;
@@ -570,9 +614,16 @@ impl Lexer<'_> {
                     Diagnostic::error(
                         codes::AFTER_OPENING_MULTILINE,
                         span,
-                        "content after the opening `\"\"\"` must start on the next line",
+                        "a multiline string's content starts on the line after the \
+                         opening `\"\"\"`",
                     )
-                    .with_note(open_span, "the multiline literal opens here"),
+                    .with_label("move this text down to the next line")
+                    .with_secondary(open_span, "the multiline string opens here")
+                    .with_note(
+                        "the opener must be the last thing on its line: the whitespace \
+                         before the closing `\"\"\"` sets the margin stripped from every \
+                         content line.",
+                    ),
                 );
             }
         } else {
@@ -611,7 +662,7 @@ impl Lexer<'_> {
                         self.flush_frag(start);
                         let lo = self.pos;
                         self.pos += n;
-                        self.error_diag(codes::INVALID_ESCAPE, lo, self.pos, msg);
+                        self.escape_diag(lo, self.pos, msg);
                         self.emit(TokenKind::Error, lo, self.pos);
                         return;
                     }
@@ -623,14 +674,7 @@ impl Lexer<'_> {
                     let lo = self.pos;
                     self.pos += 1;
                     if self.nest_depth() >= MAX_NEST {
-                        self.error_diag(
-                            codes::NESTING_TOO_DEEP,
-                            lo,
-                            self.pos,
-                            format!(
-                                "string/interpolation nesting deeper than {MAX_NEST}; you do not want this"
-                            ),
-                        );
+                        self.nest_diag(lo, self.pos);
                         self.emit(TokenKind::Error, lo, self.pos);
                         return;
                     }
@@ -642,12 +686,7 @@ impl Lexer<'_> {
                     self.flush_frag(start);
                     let lo = self.pos;
                     self.pos += 1;
-                    self.error_diag(
-                        codes::STRAY_BYTE,
-                        lo,
-                        self.pos,
-                        "lone `}` in a string literal; write `}}` for a literal brace",
-                    );
+                    self.lone_brace_diag(lo);
                     self.emit(TokenKind::Error, lo, self.pos);
                     return;
                 }
@@ -679,16 +718,51 @@ impl Lexer<'_> {
         }
     }
 
+    /// The E0101 diagnostic: the site-specific message plus the shared
+    /// list-of-escapes note.
+    fn escape_diag(&mut self, lo: usize, hi: usize, msg: String) {
+        let span = self.span(lo, hi);
+        self.diags
+            .push(Diagnostic::error(codes::INVALID_ESCAPE, span, msg).with_note(ESCAPE_NOTE));
+    }
+
+    /// The lone-`}` diagnostic (E0107), with its machine-applicable fix.
+    fn lone_brace_diag(&mut self, lo: usize) {
+        let span = self.span(lo, lo + 1);
+        self.diags.push(
+            Diagnostic::error(
+                codes::STRAY_BYTE,
+                span,
+                "this `}` has no matching `{` in the string",
+            )
+            .with_label("a lone `}` would end an interpolation")
+            .with_suggestion(Suggestion::new(
+                "for a literal brace, write `}}`",
+                vec![(span, "}}".to_string())],
+                Applicability::MachineApplicable,
+            )),
+        );
+    }
+
     /// Diagnose an unterminated plain string at the current position and
     /// close its episode with a zero-width `StrEnd` (protocol balance).
     fn unterminated_here(&mut self, f: &StrFrame) {
-        self.error_diag(
-            codes::UNTERMINATED_STRING,
-            f.open_lo,
-            self.pos,
-            "unterminated string literal; a `\"…\"` string must close before end of line",
-        );
+        let span = self.span(f.open_lo, self.pos);
         let at = self.pos;
+        let insert_at = self.span(at, at);
+        self.diags.push(
+            Diagnostic::error(codes::UNTERMINATED_STRING, span, "this string never closes")
+                .with_label("it opens here and runs to the end of the line")
+                .with_note(
+                    "a `\"…\"` string must close before the line ends. For text that \
+                     spans lines, use a multiline `\"\"\"` string.",
+                )
+                .with_suggestion(Suggestion::new(
+                    "close the string before the line ends",
+                    vec![(insert_at, "\"".to_string())],
+                    Applicability::Maybe,
+                )),
+        );
         self.emit(TokenKind::StrEnd { dedent: 0 }, at, at);
         self.frames.pop();
     }
@@ -707,13 +781,16 @@ impl Lexer<'_> {
                     let got = 2 + usize::from(hex(2));
                     Err((
                         got,
-                        "invalid `\\x` escape: expected exactly two hex digits".into(),
+                        "a `\\x` escape needs exactly two hex digits, like `\\x7f`".into(),
                     ))
                 }
             }
             Some(b'u') => {
                 if self.peek(2) != Some(b'{') {
-                    return Err((2, "invalid `\\u` escape: expected `\\u{…}`".into()));
+                    return Err((
+                        2,
+                        "a `\\u` escape is written `\\u{…}`, like `\\u{1f60a}`".into(),
+                    ));
                 }
                 let mut i = 3;
                 while self.peek(i).is_some_and(|b| b.is_ascii_hexdigit()) {
@@ -726,17 +803,21 @@ impl Lexer<'_> {
                     let consumed = i + usize::from(self.peek(i) == Some(b'}'));
                     Err((
                         consumed,
-                        "invalid `\\u{…}` escape: expected one to six hex digits and `}`".into(),
+                        "a `\\u{…}` escape needs one to six hex digits inside the braces".into(),
                     ))
                 }
             }
             Some(_) => match self.decode(self.pos + 1) {
-                Decoded::Char(c, n) => {
-                    Err((1 + n, format!("unknown escape `\\{}`", c.escape_debug())))
-                }
-                _ => Err((1, "unknown escape".into())),
+                Decoded::Char(c, n) => Err((
+                    1 + n,
+                    format!("there is no `\\{}` escape in wolf", c.escape_debug()),
+                )),
+                _ => Err((1, "this `\\` escapes nothing wolf recognizes".into())),
             },
-            None => Err((1, "escape at end of input".into())),
+            None => Err((
+                1,
+                "this `\\` sits at the very end of the file with nothing to escape".into(),
+            )),
         }
     }
 
@@ -755,11 +836,19 @@ impl Lexer<'_> {
         let margin: &[u8] = &self.src[close_line_start..close_at];
         if margin.iter().any(|&b| !is_inline_ws(b)) {
             let span = self.span(close_at, close_at + 3);
-            self.diags.push(Diagnostic::error(
-                codes::UNDER_INDENTED,
-                span,
-                "the closing `\"\"\"` must be on its own line; its column sets the margin",
-            ));
+            self.diags.push(
+                Diagnostic::error(
+                    codes::UNDER_INDENTED,
+                    span,
+                    "the closing `\"\"\"` must stand alone on its line",
+                )
+                .with_label("only whitespace may sit before it")
+                .with_note(
+                    "the closing delimiter's column sets the margin stripped from every \
+                     content line, so nothing else can share its line. Move it to its \
+                     own line.",
+                ),
+            );
             return 0;
         }
         let margin = margin.to_vec();
@@ -783,17 +872,24 @@ impl Lexer<'_> {
             let blank = line.iter().all(|&b| is_inline_ws(b));
             if !blank && !line.starts_with(&margin) {
                 let lead = line.iter().take_while(|&&b| is_inline_ws(b)).count();
-                let (code, msg) = if lead >= margin.len() {
+                let (code, msg, label, note) = if lead >= margin.len() {
                     (
                         codes::MARGIN_MISMATCH,
-                        "this line's indentation mixes tabs and spaces differently from the \
-                         closing `\"\"\"`, which sets the margin",
+                        "this line's margin mixes tabs and spaces differently from the \
+                         closing `\"\"\"`",
+                        "the mismatch starts here",
+                        "wolf compares the margin byte-for-byte, never by visual width. \
+                         Re-indent this line with the same tab/space mix as the closing \
+                         `\"\"\"`'s line.",
                     )
                 } else {
                     (
                         codes::UNDER_INDENTED,
-                        "this line is indented less than the closing `\"\"\"`, which sets the \
-                         margin",
+                        "this line starts left of the string's margin",
+                        "the line starts here",
+                        "the whitespace before the closing `\"\"\"` is the margin stripped \
+                         from every content line. Indent this line at least that far, or \
+                         move the closing `\"\"\"` left.",
                     )
                 };
                 let hi = ls + lead.max(1).min(line.len());
@@ -805,7 +901,9 @@ impl Lexer<'_> {
                 };
                 self.diags.push(
                     Diagnostic::error(code, span, msg)
-                        .with_note(note_span, "the margin is set here"),
+                        .with_label(label)
+                        .with_secondary(note_span, "the margin is set here")
+                        .with_note(note),
                 );
             }
             line_start = None; // handled this line
@@ -846,11 +944,19 @@ impl Lexer<'_> {
                 None | Some(b'\n') => {
                     self.flush_frag(start);
                     let at = self.pos;
-                    self.error_diag(
-                        codes::UNTERMINATED_RAW,
-                        f.open_lo,
-                        at,
-                        "unterminated generalized literal; it must close before end of line",
+                    let span = self.span(f.open_lo, at);
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::UNTERMINATED_RAW,
+                            span,
+                            "this generalized literal never closes",
+                        )
+                        .with_label("it opens here and must close with `\"` before the line ends")
+                        .with_suggestion(Suggestion::new(
+                            "close the literal before the line ends",
+                            vec![(self.span(at, at), "\"".to_string())],
+                            Applicability::Maybe,
+                        )),
                     );
                     self.emit(TokenKind::StrEnd { dedent: 0 }, at, at);
                     self.frames.pop();
@@ -891,14 +997,7 @@ impl Lexer<'_> {
                     let lo = self.pos;
                     self.pos += 1;
                     if self.nest_depth() >= MAX_NEST {
-                        self.error_diag(
-                            codes::NESTING_TOO_DEEP,
-                            lo,
-                            self.pos,
-                            format!(
-                                "string/interpolation nesting deeper than {MAX_NEST}; you do not want this"
-                            ),
-                        );
+                        self.nest_diag(lo, self.pos);
                         self.emit(TokenKind::Error, lo, self.pos);
                         return;
                     }
@@ -920,7 +1019,7 @@ impl Lexer<'_> {
                         self.flush_frag(start);
                         let lo = self.pos;
                         self.pos += n;
-                        self.error_diag(codes::INVALID_ESCAPE, lo, self.pos, msg);
+                        self.escape_diag(lo, self.pos, msg);
                         self.emit(TokenKind::Error, lo, self.pos);
                         return;
                     }
@@ -931,12 +1030,21 @@ impl Lexer<'_> {
                     self.flush_frag(start);
                     let at = self.pos;
                     let open_lo = enclosing.map_or(at, |f| f.open_lo);
-                    self.error_diag(
-                        codes::UNTERMINATED_STRING,
-                        open_lo,
-                        at,
-                        "unterminated string literal; a `\"…\"` string (and its format spec) \
-                         must close before end of line",
+                    let span = self.span(open_lo, at);
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::UNTERMINATED_STRING,
+                            span,
+                            "this string never closes",
+                        )
+                        .with_label(
+                            "it opens here, and its format spec is still open when the \
+                             line ends",
+                        )
+                        .with_note(
+                            "a `\"…\"` string — and any `{value:…}` format spec inside it — \
+                             must close before the line ends.",
+                        ),
                     );
                     self.frames.pop(); // Interp
                     self.emit(TokenKind::InterpClose, at, at);
@@ -963,20 +1071,33 @@ impl Lexer<'_> {
             match frame {
                 Frame::Interp { .. } => self.emit(TokenKind::InterpClose, end, end),
                 Frame::Str(f) => {
-                    let (code, msg) = match f.kind {
-                        StrKind::Raw { .. } => (
+                    let span = self.span(f.open_lo, end);
+                    let d = match f.kind {
+                        StrKind::Raw { .. } => Diagnostic::error(
                             codes::UNTERMINATED_RAW,
-                            "unterminated raw string literal; expected the closing fence",
+                            span,
+                            "this raw string never closes before the end of the file",
+                        )
+                        .with_label("it opens here")
+                        .with_note(
+                            "a raw string closes at `\"` followed by the same number of \
+                             `#` as its opener — check that the closing fence matches.",
                         ),
-                        StrKind::Generalized => {
-                            (codes::UNTERMINATED_RAW, "unterminated generalized literal")
-                        }
-                        _ => (
+                        StrKind::Generalized => Diagnostic::error(
+                            codes::UNTERMINATED_RAW,
+                            span,
+                            "this generalized literal never closes",
+                        )
+                        .with_label("it opens here and must close with `\"`"),
+                        _ => Diagnostic::error(
                             codes::UNTERMINATED_STRING,
-                            "unterminated string literal at end of file",
-                        ),
+                            span,
+                            "this string is still open when the file ends",
+                        )
+                        .with_label("it opens here")
+                        .with_note("add the closing delimiter."),
                     };
-                    self.error_diag(code, f.open_lo, end, msg);
+                    self.diags.push(d);
                     self.emit(TokenKind::StrEnd { dedent: 0 }, end, end);
                 }
                 other => rest.push(other),

@@ -5,4 +5,4 @@ expression: dump
 FnDecl 139..179 name=<missing> body=Block
 FnDecl 220..243 name=main body=Block
 -- diagnostics --
-E0008 [Error] 142..146 `when` is a reserved keyword and cannot be a function name; pick another name (wolf has no raw identifiers)
+E0008 [Error] 142..146 `when` is a reserved keyword, so it cannot name a function

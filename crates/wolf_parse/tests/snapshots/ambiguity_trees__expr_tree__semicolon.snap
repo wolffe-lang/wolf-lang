@@ -68,4 +68,8 @@ SourceFile 197..417
   Term 416..417 "\n"
   Eof 417..417 ""
 == diagnostics ==
-E0002 [Error] 221..222 empty statement: this `;` terminates nothing — remove it (`;` only separates statements within a single-line block)
+E0002 [Error] 221..222 this `;` terminates nothing
+    label no statement comes before it
+    note in wolf, `;` and the line end are the same terminator, and a terminator must end a statement. Remove the `;` — it is only needed between statements sharing one line.
+    help [MachineApplicable] remove the `;`
+        edit 221..222 -> ""

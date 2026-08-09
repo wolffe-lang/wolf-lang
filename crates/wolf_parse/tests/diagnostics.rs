@@ -8,7 +8,7 @@ use wolf_parse::codes;
 
 /// Parse, pick the first diagnostic with `code`, snapshot its Debug
 /// form under `name`.
-fn snap(name: &str, src: &str, code: &'static str) {
+fn snap(name: &str, src: &str, code: wolf_diag::Code) {
     let parse = util::parse(src);
     let d = parse
         .diagnostics
@@ -197,4 +197,51 @@ fn e0208_assignment_in_expression() {
         "fn f() { let x = (y = 2)\n}\n",
         codes::ASSIGN_IN_EXPR,
     );
+}
+
+// ------------------------------------------------- s10 additions ---------
+
+#[test]
+fn e0209_negative_index() {
+    // The D25 hint: `s[-1]` → "use `s[^1]`", machine-applicable edit.
+    let src = "fn f() { let x = s[-1]\n}\n";
+    let parse = util::parse(src);
+    let d = parse
+        .diagnostics
+        .iter()
+        .find(|d| d.code == codes::NEGATIVE_INDEX)
+        .expect("E0209 for s[-1]");
+    let sugg = &d.suggestions[0];
+    assert_eq!(
+        sugg.applicability,
+        wolf_diag::Applicability::MachineApplicable
+    );
+    assert_eq!(sugg.edits.len(), 1);
+    assert_eq!(sugg.edits[0].1, "^");
+    snap("e0209_negative_index", src, codes::NEGATIVE_INDEX);
+    // Only the whole-argument `-INT` shape fires: arithmetic does not.
+    assert!(
+        !util::codes("fn f() { let x = s[i - 1]\n}\n").contains(&"E0209"),
+        "`s[i - 1]` is arithmetic, not negative indexing"
+    );
+}
+
+#[test]
+fn e0203_keyword_typo_suggests_fn() {
+    // The typo machinery: `fnn` at declaration position gets "did you
+    // mean `fn`?" with a machine-applicable edit.
+    let src = "fnn broken() { 1 }\n";
+    let parse = util::parse(src);
+    let d = parse
+        .diagnostics
+        .iter()
+        .find(|d| d.code == codes::UNEXPECTED_TOPLEVEL)
+        .expect("E0203 for fnn");
+    assert!(d.message.contains("did you mean `fn`?"), "{}", d.message);
+    assert_eq!(
+        d.suggestions[0].applicability,
+        wolf_diag::Applicability::MachineApplicable
+    );
+    assert_eq!(d.suggestions[0].edits[0].1, "fn");
+    snap("e0203_keyword_typo", src, codes::UNEXPECTED_TOPLEVEL);
 }

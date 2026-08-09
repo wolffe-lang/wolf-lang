@@ -42,7 +42,11 @@ fn corpus_declaration_structure() {
             for d in &parse.diagnostics {
                 dump.push_str(&format!(
                     "{} [{:?}] {}..{} {}\n",
-                    d.code, d.severity, d.span.lo, d.span.hi, d.message
+                    d.code,
+                    d.severity,
+                    d.span().lo,
+                    d.span().hi,
+                    d.message
                 ));
             }
         }

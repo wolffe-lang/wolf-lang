@@ -252,11 +252,24 @@ pub(crate) fn eat_terms_checked(p: &mut Parser<'_>) {
             None | Some(TokenKind::Term | TokenKind::Punct(Punct::LBrace))
         );
         if p.current_text() == b";" && after_nothing {
-            p.error(
-                codes::EMPTY_STATEMENT,
-                p.current_span(),
-                "empty statement: this `;` terminates nothing — remove it \
-                 (`;` only separates statements within a single-line block)",
+            let span = p.current_span();
+            p.push_diag(
+                wolf_diag::Diagnostic::error(
+                    codes::EMPTY_STATEMENT,
+                    span,
+                    "this `;` terminates nothing",
+                )
+                .with_label("no statement comes before it")
+                .with_note(
+                    "in wolf, `;` and the line end are the same terminator, and a \
+                     terminator must end a statement. Remove the `;` — it is only \
+                     needed between statements sharing one line.",
+                )
+                .with_suggestion(wolf_diag::Suggestion::new(
+                    "remove the `;`",
+                    vec![(span, String::new())],
+                    wolf_diag::Applicability::MachineApplicable,
+                )),
             );
             let e = p.start();
             p.bump();
@@ -604,11 +617,17 @@ fn expr_bp_inner(p: &mut Parser<'_>, min_bp: u8, ctx: Ctx) -> Option<CompletedMa
                 }
                 if !p.assign_error_reported {
                     p.assign_error_reported = true;
-                    p.error(
-                        codes::ASSIGN_IN_EXPR,
-                        p.current_span(),
-                        "assignment is a statement, not an expression — it \
-                         produces no value ([gram.expr.assign])",
+                    p.push_diag(
+                        wolf_diag::Diagnostic::error(
+                            codes::ASSIGN_IN_EXPR,
+                            p.current_span(),
+                            "assignment is a statement, so `=` produces no value here",
+                        )
+                        .with_label("this `=` cannot be part of an expression")
+                        .with_note(
+                            "if you meant to compare, write `==`. If you meant to \
+                             assign, do it on its own line first ([gram.expr.assign]).",
+                        ),
                     );
                 }
                 let m = lhs.precede(p);
@@ -1063,6 +1082,36 @@ fn arg(p: &mut Parser<'_>, ctx: Ctx, close: Punct) {
             grammar::type_required(p);
         }
         _ => {
+            // The D25 hint: a unary-minus integer literal alone in a
+            // bracket argument is Python-style negative indexing, which
+            // wolf spells `^n` (from the end). One report, with the
+            // machine-applicable `-` → `^` edit; the expression still
+            // parses so the tree stays complete.
+            if close == Punct::RBracket
+                && p.at_punct(Punct::Minus)
+                && p.nth(1) == TokenKind::Int
+                && matches!(p.nth(2), TokenKind::Punct(Punct::RBracket | Punct::Comma))
+            {
+                let minus = p.current_span();
+                let index = String::from_utf8_lossy(p.nth_text(1)).into_owned();
+                p.push_diag(
+                    wolf_diag::Diagnostic::error(
+                        codes::NEGATIVE_INDEX,
+                        minus.join(p.nth_span(1)),
+                        "wolf has no negative indexing",
+                    )
+                    .with_label(format!("did you mean `^{index}`?"))
+                    .with_note(
+                        "wolf counts from the end with `^`: `s[^1]` is the last \
+                         element, `s[1..^1]` trims one from each side (D25).",
+                    )
+                    .with_suggestion(wolf_diag::Suggestion::new(
+                        format!("index from the end: `^{index}`"),
+                        vec![(minus, "^".to_string())],
+                        wolf_diag::Applicability::MachineApplicable,
+                    )),
+                );
+            }
             if expr_bp(p, 0, ctx).is_none() {
                 p.arg_list_error(p.current_span(), "expected an argument");
                 p.recover_until(true, |k| {
@@ -1136,11 +1185,17 @@ fn string_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
     let depth = ctx.str_depth.saturating_add(1);
     if depth == 9 {
-        p.error(
-            codes::INTERP_TOO_DEEP,
-            p.current_span(),
-            "string interpolations nest 9 levels deep here; the limit is 8 — \
-             you do not want this, hoist the inner expression into a binding",
+        p.push_diag(
+            wolf_diag::Diagnostic::error(
+                codes::INTERP_TOO_DEEP,
+                p.current_span(),
+                "string interpolations nest 9 levels deep here — the limit is 8",
+            )
+            .with_label("the ninth level starts here")
+            .with_note(
+                "hoist the innermost string into a `let` binding and interpolate \
+                 the binding; each hoist removes a level.",
+            ),
         );
     }
     p.bump(); // StrBegin

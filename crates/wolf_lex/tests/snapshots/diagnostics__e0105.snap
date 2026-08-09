@@ -4,27 +4,34 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0105",
+        code: E0105,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 12,
-            hi: 16,
+        message: "this line's margin mixes tabs and spaces differently from the closing `\"\"\"`",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 12,
+                hi: 16,
+            },
+            label: "the mismatch starts here",
         },
-        message: "this line's indentation mixes tabs and spaces differently from the closing `\"\"\"`, which sets the margin",
-        notes: [
-            (
-                Span {
+        secondary: [
+            LabeledSpan {
+                span: Span {
                     file: FileId(
                         0,
                     ),
                     lo: 20,
                     hi: 24,
                 },
-                "the margin is set here",
-            ),
+                label: "the margin is set here",
+            },
         ],
+        notes: [
+            "wolf compares the margin byte-for-byte, never by visual width. Re-indent this line with the same tab/space mix as the closing `\"\"\"`'s line.",
+        ],
+        suggestions: [],
     },
 ]

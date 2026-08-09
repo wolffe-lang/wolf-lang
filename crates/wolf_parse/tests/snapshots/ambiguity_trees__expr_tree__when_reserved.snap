@@ -61,4 +61,6 @@ SourceFile 139..244
   Term 243..244 "\n"
   Eof 244..244 ""
 == diagnostics ==
-E0008 [Error] 142..146 `when` is a reserved keyword and cannot be a function name; pick another name (wolf has no raw identifiers)
+E0008 [Error] 142..146 `when` is a reserved keyword, so it cannot name a function
+    label pick another name
+    note all 50 keywords are reserved everywhere, and wolf has no raw identifiers. `when_` is the usual dodge, or a more specific word.

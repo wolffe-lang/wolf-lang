@@ -3,36 +3,34 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: E0002,
+    code: E0203,
     severity: Error,
-    message: "this `;` terminates nothing",
+    message: "`fnn` is not how a declaration starts — did you mean `fn`?",
     primary: LabeledSpan {
         span: Span {
             file: FileId(
                 0,
             ),
-            lo: 221,
-            hi: 222,
+            lo: 0,
+            hi: 3,
         },
-        label: "no statement comes before it",
+        label: "",
     },
     secondary: [],
-    notes: [
-        "in wolf, `;` and the line end are the same terminator, and a terminator must end a statement. Remove the `;` — it is only needed between statements sharing one line.",
-    ],
+    notes: [],
     suggestions: [
         Suggestion {
-            message: "remove the `;`",
+            message: "replace `fnn` with `fn`",
             edits: [
                 (
                     Span {
                         file: FileId(
                             0,
                         ),
-                        lo: 221,
-                        hi: 222,
+                        lo: 0,
+                        hi: 3,
                     },
-                    "",
+                    "fn",
                 ),
             ],
             applicability: MachineApplicable,

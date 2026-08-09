@@ -1,0 +1,14 @@
+---
+source: crates/wolf_lex/tests/render.rs
+expression: "render_all(\"let s = \\\"a}b\\\"\\n\")"
+---
+error[E0107]: this `}` has no matching `{` in the string
+ --> demo.lu:1:11
+  |
+1 | let s = "a}b"
+  |           ^ a lone `}` would end an interpolation
+  |
+help: for a literal brace, write `}}`
+  |
+1 | let s = "a}}b"
+  |

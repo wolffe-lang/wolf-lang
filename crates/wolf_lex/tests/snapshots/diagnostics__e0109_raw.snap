@@ -4,16 +4,23 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0109",
+        code: E0109,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 8,
-            hi: 15,
+        message: "this raw string never closes before the end of the file",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 15,
+            },
+            label: "it opens here",
         },
-        message: "unterminated raw string literal; expected the closing fence",
-        notes: [],
+        secondary: [],
+        notes: [
+            "a raw string closes at `\"` followed by the same number of `#` as its opener — check that the closing fence matches.",
+        ],
+        suggestions: [],
     },
 ]

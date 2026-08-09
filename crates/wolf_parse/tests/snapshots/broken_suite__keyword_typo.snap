@@ -36,4 +36,6 @@ SourceFile 0..40
   Term 39..40 "\n"
   Eof 40..40 ""
 == diagnostics ==
-E0203 [Error] 0..3 expected a declaration
+E0203 [Error] 0..3 `fnn` is not how a declaration starts — did you mean `fn`?
+    help [MachineApplicable] replace `fnn` with `fn`
+        edit 0..3 -> "fn"

@@ -4,16 +4,23 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0101",
+        code: E0101,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 10,
-            hi: 14,
+        message: "a `\\u{…}` escape needs one to six hex digits inside the braces",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 10,
+                hi: 14,
+            },
+            label: "",
         },
-        message: "invalid `\\u{…}` escape: expected one to six hex digits and `}`",
-        notes: [],
+        secondary: [],
+        notes: [
+            "the escapes wolf understands are `\\n`, `\\t`, `\\r`, `\\0`, `\\\\`, `\\\"`, `\\xNN`, and `\\u{…}`. For a literal backslash, write `\\\\`; for text with no escapes at all, use a raw string `r\"…\"`.",
+        ],
+        suggestions: [],
     },
 ]

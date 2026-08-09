@@ -23,17 +23,42 @@ pub fn parse_bytes(src: &[u8]) -> Parse {
 }
 
 /// Diagnostics, one per line: `code [severity] lo..hi message` with
-/// notes indented beneath.
+/// labels, secondary spans, notes, and suggestions indented beneath —
+/// the full structured value, so snapshot review sees everything.
 pub fn render_diags(parse: &Parse) -> String {
     let mut out = String::new();
     for d in &parse.diagnostics {
         let _ = writeln!(
             out,
             "{} [{:?}] {}..{} {}",
-            d.code, d.severity, d.span.lo, d.span.hi, d.message
+            d.code,
+            d.severity,
+            d.span().lo,
+            d.span().hi,
+            d.message
         );
-        for (span, label) in &d.notes {
-            let _ = writeln!(out, "    note {}..{} {}", span.lo, span.hi, label);
+        if !d.primary.label.is_empty() {
+            let _ = writeln!(out, "    label {}", d.primary.label);
+        }
+        for s in &d.secondary {
+            let _ = writeln!(
+                out,
+                "    secondary {}..{} {}",
+                s.span.lo, s.span.hi, s.label
+            );
+        }
+        for n in &d.notes {
+            let _ = writeln!(out, "    note {n}");
+        }
+        for s in &d.suggestions {
+            let _ = writeln!(out, "    help [{:?}] {}", s.applicability, s.message);
+            for (span, replacement) in &s.edits {
+                let _ = writeln!(
+                    out,
+                    "        edit {}..{} -> {:?}",
+                    span.lo, span.hi, replacement
+                );
+            }
         }
     }
     out
@@ -41,5 +66,9 @@ pub fn render_diags(parse: &Parse) -> String {
 
 /// The parser diagnostics' codes, in order.
 pub fn codes(src: &str) -> Vec<&'static str> {
-    parse(src).diagnostics.iter().map(|d| d.code).collect()
+    parse(src)
+        .diagnostics
+        .iter()
+        .map(|d| d.code.as_str())
+        .collect()
 }

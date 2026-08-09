@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/render.rs
+expression: "render_all(\"fn f(a: int\\nfn g() { }\\n\")"
+---
+error[E0202]: this `(` is never closed
+ --> demo.lu:1:5
+  |
+1 | fn f(a: int
+  |     ^ opened here
+2 | fn g() { }
+  | - the parser expected the closing `)` by here
+  |

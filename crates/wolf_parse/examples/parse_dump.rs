@@ -13,7 +13,11 @@ fn main() {
     for d in &parse.diagnostics {
         println!(
             "{} [{:?}] {}..{} {}",
-            d.code, d.severity, d.span.lo, d.span.hi, d.message
+            d.code,
+            d.severity,
+            d.span().lo,
+            d.span().hi,
+            d.message
         );
     }
 }

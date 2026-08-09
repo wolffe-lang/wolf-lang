@@ -108,15 +108,19 @@ pub use lexer::lex;
 /// Diagnostic codes the lexer can emit. Stable: they participate in the
 /// differential protocol (spec/06) and the s10 catalog.
 pub mod codes {
-    pub const INVALID_ESCAPE: &str = "E0101";
-    pub const UNTERMINATED_STRING: &str = "E0102";
-    pub const AFTER_OPENING_MULTILINE: &str = "E0103";
-    pub const UNDER_INDENTED: &str = "E0104";
-    pub const MARGIN_MISMATCH: &str = "E0105";
-    pub const INVALID_UTF8: &str = "E0106";
-    pub const STRAY_BYTE: &str = "E0107";
-    pub const NESTING_TOO_DEEP: &str = "E0108";
-    pub const UNTERMINATED_RAW: &str = "E0109";
+    // Semantic aliases for the s10 registry entries (`wolf_diag::registry`,
+    // the single place a code can be born).
+    use wolf_diag::{Code, codes as c};
+
+    pub const INVALID_ESCAPE: Code = c::E0101;
+    pub const UNTERMINATED_STRING: Code = c::E0102;
+    pub const AFTER_OPENING_MULTILINE: Code = c::E0103;
+    pub const UNDER_INDENTED: Code = c::E0104;
+    pub const MARGIN_MISMATCH: Code = c::E0105;
+    pub const INVALID_UTF8: Code = c::E0106;
+    pub const STRAY_BYTE: Code = c::E0107;
+    pub const NESTING_TOO_DEEP: Code = c::E0108;
+    pub const UNTERMINATED_RAW: Code = c::E0109;
 }
 
 /// Maximum string/interpolation mode-stack depth. Deeper input gets an
@@ -369,7 +373,11 @@ impl Lexed {
                 let _ = writeln!(
                     out,
                     "{} [{:?}] {}..{} {}",
-                    d.code, d.severity, d.span.lo, d.span.hi, d.message
+                    d.code,
+                    d.severity,
+                    d.span().lo,
+                    d.span().hi,
+                    d.message
                 );
             }
         }

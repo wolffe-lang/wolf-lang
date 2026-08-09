@@ -4,27 +4,34 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0103",
+        code: E0103,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 11,
-            hi: 15,
+        message: "a multiline string's content starts on the line after the opening `\"\"\"`",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 11,
+                hi: 15,
+            },
+            label: "move this text down to the next line",
         },
-        message: "content after the opening `\"\"\"` must start on the next line",
-        notes: [
-            (
-                Span {
+        secondary: [
+            LabeledSpan {
+                span: Span {
                     file: FileId(
                         0,
                     ),
                     lo: 8,
                     hi: 11,
                 },
-                "the multiline literal opens here",
-            ),
+                label: "the multiline string opens here",
+            },
         ],
+        notes: [
+            "the opener must be the last thing on its line: the whitespace before the closing `\"\"\"` sets the margin stripped from every content line.",
+        ],
+        suggestions: [],
     },
 ]

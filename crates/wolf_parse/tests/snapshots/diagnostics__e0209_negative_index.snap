@@ -3,36 +3,36 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: E0002,
+    code: E0209,
     severity: Error,
-    message: "this `;` terminates nothing",
+    message: "wolf has no negative indexing",
     primary: LabeledSpan {
         span: Span {
             file: FileId(
                 0,
             ),
-            lo: 221,
-            hi: 222,
+            lo: 19,
+            hi: 21,
         },
-        label: "no statement comes before it",
+        label: "did you mean `^1`?",
     },
     secondary: [],
     notes: [
-        "in wolf, `;` and the line end are the same terminator, and a terminator must end a statement. Remove the `;` — it is only needed between statements sharing one line.",
+        "wolf counts from the end with `^`: `s[^1]` is the last element, `s[1..^1]` trims one from each side (D25).",
     ],
     suggestions: [
         Suggestion {
-            message: "remove the `;`",
+            message: "index from the end: `^1`",
             edits: [
                 (
                     Span {
                         file: FileId(
                             0,
                         ),
-                        lo: 221,
-                        hi: 222,
+                        lo: 19,
+                        hi: 20,
                     },
-                    "",
+                    "^",
                 ),
             ],
             applicability: MachineApplicable,

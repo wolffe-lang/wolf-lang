@@ -3,15 +3,22 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: "E0007",
+    code: E0007,
     severity: Error,
-    span: Span {
-        file: FileId(
-            0,
-        ),
-        lo: 33,
-        hi: 34,
+    message: "string interpolations nest 9 levels deep here — the limit is 8",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 33,
+            hi: 34,
+        },
+        label: "the ninth level starts here",
     },
-    message: "string interpolations nest 9 levels deep here; the limit is 8 — you do not want this, hoist the inner expression into a binding",
-    notes: [],
+    secondary: [],
+    notes: [
+        "hoist the innermost string into a `let` binding and interpolate the binding; each hoist removes a level.",
+    ],
+    suggestions: [],
 }

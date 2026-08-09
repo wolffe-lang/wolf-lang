@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/render.rs
+expression: "render_all(\"fn f() { let s = \\\"count: {1 + }\\\"\\n}\\n\")"
+---
+error[E0201]: expected an expression
+ --> demo.lu:1:31
+  |
+1 | fn f() { let s = "count: {1 + }"
+  |                               ^
+  |

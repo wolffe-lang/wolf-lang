@@ -4,211 +4,323 @@ expression: "format!(\"{deep:#?}\")"
 ---
 [
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 32,
-            hi: 33,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 32,
+                hi: 33,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 34,
-            hi: 35,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 34,
+                hi: 35,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 36,
-            hi: 37,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 36,
+                hi: 37,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 38,
-            hi: 39,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 38,
+                hi: 39,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 40,
-            hi: 41,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 40,
+                hi: 41,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 42,
-            hi: 43,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 42,
+                hi: 43,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 44,
-            hi: 45,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 44,
+                hi: 45,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 46,
-            hi: 47,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 46,
+                hi: 47,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 48,
-            hi: 49,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 48,
+                hi: 49,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 50,
-            hi: 51,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 50,
+                hi: 51,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 52,
-            hi: 53,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 52,
+                hi: 53,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 54,
-            hi: 55,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 54,
+                hi: 55,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 56,
-            hi: 57,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 56,
+                hi: 57,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 58,
-            hi: 59,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 58,
+                hi: 59,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 60,
-            hi: 61,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 60,
+                hi: 61,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
     Diagnostic {
-        code: "E0108",
+        code: E0108,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 62,
-            hi: 63,
+        message: "strings and interpolations nest more than 32 levels deep here",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 62,
+                hi: 63,
+            },
+            label: "level 33 would start here",
         },
-        message: "string/interpolation nesting deeper than 32; you do not want this",
-        notes: [],
+        secondary: [],
+        notes: [
+            "this is the lexer's hard safety rail; the language's own limit is 8 levels (E0007). Hoist the innermost string into a `let` binding — each hoist removes a level.",
+        ],
+        suggestions: [],
     },
 ]

@@ -3,26 +3,31 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: "E0202",
+    code: E0202,
     severity: Error,
-    span: Span {
-        file: FileId(
-            0,
-        ),
-        lo: 7,
-        hi: 8,
+    message: "this `{` is never closed",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 7,
+            hi: 8,
+        },
+        label: "opened here",
     },
-    message: "unclosed `{`",
-    notes: [
-        (
-            Span {
+    secondary: [
+        LabeledSpan {
+            span: Span {
                 file: FileId(
                     0,
                 ),
                 lo: 9,
                 hi: 9,
             },
-            "expected the closing delimiter by here",
-        ),
+            label: "the parser expected the closing `}` by here",
+        },
     ],
+    notes: [],
+    suggestions: [],
 }

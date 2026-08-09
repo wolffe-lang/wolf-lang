@@ -4,16 +4,38 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0107",
+        code: E0107,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 10,
-            hi: 11,
+        message: "this `}` has no matching `{` in the string",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 10,
+                hi: 11,
+            },
+            label: "a lone `}` would end an interpolation",
         },
-        message: "lone `}` in a string literal; write `}}` for a literal brace",
+        secondary: [],
         notes: [],
+        suggestions: [
+            Suggestion {
+                message: "for a literal brace, write `}}`",
+                edits: [
+                    (
+                        Span {
+                            file: FileId(
+                                0,
+                            ),
+                            lo: 10,
+                            hi: 11,
+                        },
+                        "}}",
+                    ),
+                ],
+                applicability: MachineApplicable,
+            },
+        ],
     },
 ]

@@ -3,15 +3,22 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: "E0203",
+    code: E0203,
     severity: Error,
-    span: Span {
-        file: FileId(
-            0,
-        ),
-        lo: 0,
-        hi: 1,
+    message: "expected a declaration here",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 0,
+            hi: 1,
+        },
+        label: "",
     },
-    message: "expected a declaration",
-    notes: [],
+    secondary: [],
+    notes: [
+        "the top level of a file holds declarations only, each starting with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, `trait`, `impl`, `use`, `import`. If this line belongs inside a function, a `{` is probably missing above it.",
+    ],
+    suggestions: [],
 }

@@ -79,7 +79,7 @@ fn corpus_parse_expectations() {
                 );
                 for d in &parse.diagnostics {
                     assert_eq!(
-                        d.code,
+                        d.code.as_str(),
                         code,
                         "{} must fail with exactly {code}; got {:?}",
                         f.display(),

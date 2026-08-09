@@ -32,4 +32,4 @@ SourceFile 0..26
   Term 25..26 "\n"
   Eof 26..26 ""
 == diagnostics ==
-E0204 [Error] 2..3 malformed attribute: expected an attribute name
+E0204 [Error] 2..3 this attribute needs a name: `#[name]` or `#[name(args)]`

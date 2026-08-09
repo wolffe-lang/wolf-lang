@@ -129,7 +129,10 @@ fn invalid_escape_is_error_token_and_lexing_continues() {
     assert_eq!(lexed.diagnostics[0].code, "E0101");
     // exact span: the two bytes `\q`
     assert_eq!(
-        (lexed.diagnostics[0].span.lo, lexed.diagnostics[0].span.hi),
+        (
+            lexed.diagnostics[0].span().lo,
+            lexed.diagnostics[0].span().hi
+        ),
         (2, 4)
     );
 }
@@ -198,7 +201,7 @@ fn multiline_under_indent_diagnostic() {
     let d = &lexed.diagnostics[0];
     assert_eq!(d.code, "E0104");
     // points at the offending line AND notes the margin
-    assert_eq!(d.span.lo, 12);
+    assert_eq!(d.span().lo, 12);
     assert_eq!(d.notes.len(), 1);
 }
 
@@ -208,7 +211,7 @@ fn multiline_tab_space_margin_mismatch() {
     let lexed = lex(src);
     assert_eq!(lexed.diagnostics.len(), 1);
     assert_eq!(lexed.diagnostics[0].code, "E0105");
-    assert_eq!(lexed.diagnostics[0].notes.len(), 1);
+    assert_eq!(lexed.diagnostics[0].secondary.len(), 1);
 }
 
 #[test]

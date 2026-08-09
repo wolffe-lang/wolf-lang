@@ -1,0 +1,16 @@
+---
+source: crates/wolf_parse/tests/render.rs
+expression: "render_all(\"fn f() { let last = s[-1]\\n}\\n\")"
+---
+error[E0209]: wolf has no negative indexing
+ --> demo.lu:1:23
+  |
+1 | fn f() { let last = s[-1]
+  |                       ^^ did you mean `^1`?
+  |
+  = note: wolf counts from the end with `^`: `s[^1]` is the last element, `s[1..^1]` trims one
+    from each side (D25).
+help: index from the end: `^1`
+  |
+1 | fn f() { let last = s[^1]
+  |

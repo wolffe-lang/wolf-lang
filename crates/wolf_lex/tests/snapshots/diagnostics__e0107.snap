@@ -4,16 +4,23 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0107",
+        code: E0107,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 4,
-            hi: 5,
+        message: "the character `$` is not part of wolf syntax",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 4,
+                hi: 5,
+            },
+            label: "no wolf token can start with this",
         },
-        message: "stray character `$`",
-        notes: [],
+        secondary: [],
+        notes: [
+            "delete it — or if you cannot see anything here, an invisible character was pasted in; retype the line.",
+        ],
+        suggestions: [],
     },
 ]

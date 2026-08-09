@@ -3,15 +3,22 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: "E0008",
+    code: E0008,
     severity: Error,
-    span: Span {
-        file: FileId(
-            0,
-        ),
-        lo: 142,
-        hi: 146,
+    message: "`when` is a reserved keyword, so it cannot name a function",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 142,
+            hi: 146,
+        },
+        label: "pick another name",
     },
-    message: "`when` is a reserved keyword and cannot be a function name; pick another name (wolf has no raw identifiers)",
-    notes: [],
+    secondary: [],
+    notes: [
+        "all 50 keywords are reserved everywhere, and wolf has no raw identifiers. `when_` is the usual dodge, or a more specific word.",
+    ],
+    suggestions: [],
 }

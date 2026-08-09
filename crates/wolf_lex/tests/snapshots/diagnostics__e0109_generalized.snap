@@ -4,16 +4,38 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0109",
+        code: E0109,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 8,
-            hi: 14,
+        message: "this generalized literal never closes",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 14,
+            },
+            label: "it opens here and must close with `\"` before the line ends",
         },
-        message: "unterminated generalized literal; it must close before end of line",
+        secondary: [],
         notes: [],
+        suggestions: [
+            Suggestion {
+                message: "close the literal before the line ends",
+                edits: [
+                    (
+                        Span {
+                            file: FileId(
+                                0,
+                            ),
+                            lo: 14,
+                            hi: 14,
+                        },
+                        "\"",
+                    ),
+                ],
+                applicability: Maybe,
+            },
+        ],
     },
 ]

@@ -9,6 +9,6 @@ fn main() {
     let parse = wolf_parse::parse_file(file, &bytes);
     println!("{}", parse.root.dump(&bytes));
     for d in &parse.diagnostics {
-        println!("{} {}..{} {}", d.code, d.span.lo, d.span.hi, d.message);
+        println!("{} {}..{} {}", d.code, d.span().lo, d.span().hi, d.message);
     }
 }

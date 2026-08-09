@@ -3,15 +3,20 @@ source: crates/wolf_parse/tests/diagnostics.rs
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
-    code: "E0204",
+    code: E0204,
     severity: Error,
-    span: Span {
-        file: FileId(
-            0,
-        ),
-        lo: 2,
-        hi: 3,
+    message: "this attribute needs a name: `#[name]` or `#[name(args)]`",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 2,
+            hi: 3,
+        },
+        label: "",
     },
-    message: "malformed attribute: expected an attribute name",
+    secondary: [],
     notes: [],
+    suggestions: [],
 }

@@ -4,16 +4,23 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0106",
+        code: E0106,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 4,
-            hi: 6,
+        message: "this part of the file is not valid UTF-8",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 4,
+                hi: 6,
+            },
+            label: "these bytes decode as no character",
         },
-        message: "source is not valid UTF-8 here; the bytes were skipped",
-        notes: [],
+        secondary: [],
+        notes: [
+            "wolf source files are UTF-8 ([gram.lex.source]). Re-save the file as UTF-8; the bytes were skipped so the rest still lexes.",
+        ],
+        suggestions: [],
     },
 ]

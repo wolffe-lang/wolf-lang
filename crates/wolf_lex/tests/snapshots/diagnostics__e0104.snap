@@ -4,27 +4,34 @@ expression: "format!(\"{:#?}\", lexed.diagnostics)"
 ---
 [
     Diagnostic {
-        code: "E0104",
+        code: E0104,
         severity: Error,
-        span: Span {
-            file: FileId(
-                0,
-            ),
-            lo: 12,
-            hi: 14,
+        message: "this line starts left of the string's margin",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 12,
+                hi: 14,
+            },
+            label: "the line starts here",
         },
-        message: "this line is indented less than the closing `\"\"\"`, which sets the margin",
-        notes: [
-            (
-                Span {
+        secondary: [
+            LabeledSpan {
+                span: Span {
                     file: FileId(
                         0,
                     ),
                     lo: 18,
                     hi: 22,
                 },
-                "the margin is set here",
-            ),
+                label: "the margin is set here",
+            },
         ],
+        notes: [
+            "the whitespace before the closing `\"\"\"` is the margin stripped from every content line. Indent this line at least that far, or move the closing `\"\"\"` left.",
+        ],
+        suggestions: [],
     },
 ]

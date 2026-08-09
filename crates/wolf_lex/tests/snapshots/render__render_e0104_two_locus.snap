@@ -1,0 +1,14 @@
+---
+source: crates/wolf_lex/tests/render.rs
+expression: "render_all(\"let p = \\\"\\\"\\\"\\n    good\\n  bad\\n    \\\"\\\"\\\"\\n\")"
+---
+error[E0104]: this line starts left of the string's margin
+ --> demo.lu:3:1
+  |
+3 |   bad
+  | ^^ the line starts here
+4 |     """
+  | ---- the margin is set here
+  |
+  = note: the whitespace before the closing `"""` is the margin stripped from every content line.
+    Indent this line at least that far, or move the closing `"""` left.
