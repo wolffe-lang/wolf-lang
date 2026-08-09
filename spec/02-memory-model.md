@@ -192,7 +192,7 @@ Edge legality (source stores a reference to target):
 - `[mem.region.promote.1]` Stack promotion / escape analysis must not
   change any program observation: allocation placement is unobservable
   except through §7-licensed reasoning and address inspection in Tier 3
-  (which carries no placement guarantees — `[mem.ub.T]` layout freedom).
+  (which carries no placement guarantees — `[mem.ub]` row T2 layout freedom).
 
 ## §4 Tier 2 — `shared` and `handle` `[mem.shared]`
 
