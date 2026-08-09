@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0205",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 5,
+        hi: 6,
+    },
+    message: "expected a generic parameter",
+    notes: [],
+}

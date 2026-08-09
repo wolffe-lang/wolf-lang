@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 445..465 header="stdlib.h"
+ImportCDecl 465..485 header="string.h"
+FnDecl 556..601 name=wolf_answer extern body=BlockPending
+FnDecl 603..1197 name=main body=BlockPending

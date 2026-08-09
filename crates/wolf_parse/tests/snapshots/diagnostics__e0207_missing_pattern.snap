@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0207",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 4,
+        hi: 4,
+    },
+    message: "expected a pattern",
+    notes: [],
+}

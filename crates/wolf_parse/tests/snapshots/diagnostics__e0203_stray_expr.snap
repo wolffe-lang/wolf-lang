@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0203",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 0,
+        hi: 1,
+    },
+    message: "expected a declaration",
+    notes: [],
+}

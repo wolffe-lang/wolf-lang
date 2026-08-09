@@ -1,0 +1,68 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+fn broken[[T]](x: int) -> int { x }
+fn ok[T](x: T) -> T { x }
+== tree ==
+SourceFile 0..62
+  FnDecl 0..35
+    FnKw 0..2 "fn"
+    Ident 3..9 "broken"
+    GenericParamList 9..14
+      LBracket 9..10 "["
+      ErrorNode 10..13
+        LBracket 10..11 "["
+        Ident 11..12 "T"
+        RBracket 12..13 "]"
+      RBracket 13..14 "]"
+    ParamList 14..22
+      LParen 14..15 "("
+      Param 15..21
+        Ident 15..16 "x"
+        Colon 16..17 ":"
+        PathType 18..21
+          Path 18..21
+            Ident 18..21 "int"
+      RParen 21..22 ")"
+    RetType 23..29
+      Arrow 23..25 "->"
+      PathType 26..29
+        Path 26..29
+          Ident 26..29 "int"
+    BlockPending 30..35
+      LBrace 30..31 "{"
+      Ident 32..33 "x"
+      RBrace 34..35 "}"
+  Term 35..36 "\n"
+  FnDecl 36..61
+    FnKw 36..38 "fn"
+    Ident 39..41 "ok"
+    GenericParamList 41..44
+      LBracket 41..42 "["
+      GenericParam 42..43
+        Ident 42..43 "T"
+      RBracket 43..44 "]"
+    ParamList 44..50
+      LParen 44..45 "("
+      Param 45..49
+        Ident 45..46 "x"
+        Colon 46..47 ":"
+        PathType 48..49
+          Path 48..49
+            Ident 48..49 "T"
+      RParen 49..50 ")"
+    RetType 51..55
+      Arrow 51..53 "->"
+      PathType 54..55
+        Path 54..55
+          Ident 54..55 "T"
+    BlockPending 56..61
+      LBrace 56..57 "{"
+      Ident 58..59 "x"
+      RBrace 60..61 "}"
+  Term 61..62 "\n"
+  Eof 62..62 ""
+== diagnostics ==
+E0205 [Error] 10..11 expected a generic parameter

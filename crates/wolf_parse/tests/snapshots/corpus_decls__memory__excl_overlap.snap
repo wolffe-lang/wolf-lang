@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 155..182 name=P fields=2
+FnDecl 183..232 name=two body=BlockPending
+FnDecl 233..361 name=main body=BlockPending

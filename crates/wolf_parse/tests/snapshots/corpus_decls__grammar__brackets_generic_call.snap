@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 132..171 name=first body=BlockPending
+FnDecl 172..403 name=main body=BlockPending

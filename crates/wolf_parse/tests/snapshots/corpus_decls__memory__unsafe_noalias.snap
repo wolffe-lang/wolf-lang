@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 228..248 header="stdlib.h"
+FnDecl 248..579 name=main body=BlockPending

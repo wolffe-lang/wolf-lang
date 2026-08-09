@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 205..231 name=Node fields=1
+FnDecl 232..665 name=main body=BlockPending

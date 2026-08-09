@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 415..501 name=fib comptime body=BlockPending
+FnDecl 570..639 name=field_count comptime body=BlockPending
+StructDecl 641..679 name=Vec3 fields=3
+FnDecl 748..832 name=dot attrs=1 body=BlockPending
+FnDecl 834..1143 name=main body=BlockPending

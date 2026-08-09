@@ -1,0 +1,2 @@
+fn broken() -> int return 1
+fn ok() -> int { 3 }

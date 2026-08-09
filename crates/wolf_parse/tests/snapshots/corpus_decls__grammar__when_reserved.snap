@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 139..179 name=<missing> body=BlockPending
+FnDecl 220..243 name=main body=BlockPending
+-- diagnostics --
+E0008 [Error] 142..146 `when` is a reserved keyword and cannot be a function name; pick another name (wolf has no raw identifiers)

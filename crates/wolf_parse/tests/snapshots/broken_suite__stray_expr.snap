@@ -1,0 +1,33 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+1 + 2
+fn ok() -> int { 5 }
+== tree ==
+SourceFile 0..27
+  ErrorNode 0..5
+    Int 0..1 "1"
+    Plus 2..3 "+"
+    Int 4..5 "2"
+  Term 5..6 "\n"
+  FnDecl 6..26
+    FnKw 6..8 "fn"
+    Ident 9..11 "ok"
+    ParamList 11..13
+      LParen 11..12 "("
+      RParen 12..13 ")"
+    RetType 14..20
+      Arrow 14..16 "->"
+      PathType 17..20
+        Path 17..20
+          Ident 17..20 "int"
+    BlockPending 21..26
+      LBrace 21..22 "{"
+      Int 23..24 "5"
+      RBrace 25..26 "}"
+  Term 26..27 "\n"
+  Eof 27..27 ""
+== diagnostics ==
+E0203 [Error] 0..1 expected a declaration

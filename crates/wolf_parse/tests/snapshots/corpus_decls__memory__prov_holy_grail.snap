@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 342..598 name=observe body=BlockPending
+FnDecl 599..725 name=main body=BlockPending

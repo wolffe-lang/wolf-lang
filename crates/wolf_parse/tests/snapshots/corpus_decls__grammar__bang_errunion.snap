@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 122..193 name=may_fail body=BlockPending
+FnDecl 194..233 name=rowy body=BlockPending
+FnDecl 234..400 name=main body=BlockPending

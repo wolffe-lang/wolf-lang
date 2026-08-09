@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0201",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 3,
+        hi: 3,
+    },
+    message: "expected a function name",
+    notes: [],
+}

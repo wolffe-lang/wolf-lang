@@ -1,0 +1,58 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+fn broken(a: int, b: int -> int { a + b }
+fn ok() -> int { 2 }
+== tree ==
+SourceFile 0..63
+  FnDecl 0..41
+    FnKw 0..2 "fn"
+    Ident 3..9 "broken"
+    ParamList 9..24
+      LParen 9..10 "("
+      Param 10..16
+        Ident 10..11 "a"
+        Colon 11..12 ":"
+        PathType 13..16
+          Path 13..16
+            Ident 13..16 "int"
+      Comma 16..17 ","
+      Param 18..24
+        Ident 18..19 "b"
+        Colon 19..20 ":"
+        PathType 21..24
+          Path 21..24
+            Ident 21..24 "int"
+      Missing 24..24 ""
+    RetType 25..31
+      Arrow 25..27 "->"
+      PathType 28..31
+        Path 28..31
+          Ident 28..31 "int"
+    BlockPending 32..41
+      LBrace 32..33 "{"
+      Ident 34..35 "a"
+      Plus 36..37 "+"
+      Ident 38..39 "b"
+      RBrace 40..41 "}"
+  FnDecl 42..62
+    FnKw 42..44 "fn"
+    Ident 45..47 "ok"
+    ParamList 47..49
+      LParen 47..48 "("
+      RParen 48..49 ")"
+    RetType 50..56
+      Arrow 50..52 "->"
+      PathType 53..56
+        Path 53..56
+          Ident 53..56 "int"
+    BlockPending 57..62
+      LBrace 57..58 "{"
+      Int 59..60 "2"
+      RBrace 61..62 "}"
+  Eof 63..63 ""
+== diagnostics ==
+E0202 [Error] 9..10 unclosed `(`
+    note 25..25 expected the closing delimiter by here

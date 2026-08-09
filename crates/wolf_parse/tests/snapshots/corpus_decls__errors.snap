@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 390..431 name=ParseError fields=2
+FnDecl 433..615 name=digit body=BlockPending
+FnDecl 617..839 name=parse_pair body=BlockPending
+FnDecl 841..1059 name=load body=BlockPending
+FnDecl 1061..1472 name=main body=BlockPending

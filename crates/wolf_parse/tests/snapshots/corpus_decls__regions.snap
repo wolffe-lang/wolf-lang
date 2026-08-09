@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 526..655 name=Node fields=3
+FnDecl 657..1444 name=build_ring body=BlockPending
+FnDecl 1446..1859 name=main body=BlockPending

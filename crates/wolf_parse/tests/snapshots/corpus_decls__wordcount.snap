@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 546..557 path=std.fs
+LetDecl 558..720 pat=USAGE init=ExprPending
+FnDecl 721..1079 name=count body=BlockPending
+FnDecl 1081..1190 name=top body=BlockPending
+FnDecl 1192..1788 name=main body=BlockPending

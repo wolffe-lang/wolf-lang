@@ -1,0 +1,2 @@
+fn broken(a: int, b: int -> int { a + b }
+fn ok() -> int { 2 }

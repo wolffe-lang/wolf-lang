@@ -1,0 +1,28 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0202",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 4,
+        hi: 5,
+    },
+    message: "unclosed `(`",
+    notes: [
+        (
+            Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 12,
+                hi: 12,
+            },
+            "expected the closing delimiter by here",
+        ),
+    ],
+}
