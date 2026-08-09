@@ -1,0 +1,91 @@
+# PR + trunk CI (s02). Thin wrappers over `cargo xtask` — the commands are
+# the truth; this file is plumbing. Budget: <10 minutes.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [trunk]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # small case-count in PR CI; nightly runs the large sweep (s01 convention)
+  PROPTEST_CASES: "256"
+
+jobs:
+  lint-test:
+    name: lint + test + corpus (linux x86-64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
+        run: cargo xtask ci
+      - name: bench smoke (report-only, no gating until M1/M2)
+        run: |
+          cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
+          cargo xtask bench --track=compile --runs=1 --out=bench-results/pr-compile.jsonl
+      - name: bench report vs latest nightly baseline (report-only)
+        run: |
+          if git fetch --depth=1 origin bench-data 2>/dev/null; then
+            git worktree add /tmp/bench-data FETCH_HEAD
+            base=$(ls -1 /tmp/bench-data/data/*/runtime.jsonl 2>/dev/null | sort | tail -1)
+            if [ -n "$base" ]; then
+              echo '## bench diff vs latest nightly baseline' >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              cargo xtask bench diff "$base" bench-results/pr-runtime.jsonl 2>> "$GITHUB_STEP_SUMMARY" || true
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "no bench-data branch yet — skipping baseline diff"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-smoke
+          path: bench-results/
+
+  fuzz-smoke:
+    name: fuzz smoke (60s/target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: run each target briefly
+        run: |
+          for t in $(cargo fuzz list --fuzz-dir fuzz); do
+            cargo fuzz run --fuzz-dir fuzz "$t" -- -max_total_time=60
+          done
+
+  build-test:
+    name: build + test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace
+      - run: cargo test --workspace
+
+  freebsd-check:
+    name: cross-check (freebsd x86-64, tier-2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-freebsd
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --target x86_64-unknown-freebsd

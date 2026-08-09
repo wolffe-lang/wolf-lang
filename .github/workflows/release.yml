@@ -1,0 +1,31 @@
+# Release artifacts on tag (s02 stub — proves the matrix mechanics; c13/s66
+# add real cross-compilation, signing, and packaging).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  dist:
+    name: dist (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # tier-1 hosts: linux x86-64, linux aarch64, macOS aarch64, windows x86-64
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build archive
+        run: cargo xtask dist
+      - name: upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release upload "${GITHUB_REF_NAME}" target/dist/*.tar.gz --clobber || gh release create "${GITHUB_REF_NAME}" target/dist/*.tar.gz --draft --title "${GITHUB_REF_NAME}"

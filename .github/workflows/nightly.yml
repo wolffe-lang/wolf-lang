@@ -1,0 +1,88 @@
+# Nightly deep runs (s02): large property sweeps, longer fuzzing, full
+# benchmarks with results committed to the bench-data branch (the baseline
+# store the s44/s58 gates and PR diffs read from).
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  proptest-large:
+    name: property tests, large case count
+    runs-on: ubuntu-latest
+    env:
+      PROPTEST_CASES: "4096"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  fuzz-long:
+    name: fuzz (15m/target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-fuzz --locked
+      - run: |
+          for t in $(cargo fuzz list --fuzz-dir fuzz); do
+            cargo fuzz run --fuzz-dir fuzz "$t" -- -max_total_time=900
+          done
+
+  bench-full:
+    name: full benchmarks -> bench-data branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: install measurement tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq time linux-tools-common "linux-tools-$(uname -r)" || true
+      - name: run both tracks
+        run: |
+          cargo xtask bench --track=runtime --runs=10 --out=bench-results/runtime.jsonl
+          cargo xtask bench --track=compile --runs=3 --out=bench-results/compile.jsonl
+      - name: commit to bench-data branch
+        run: |
+          set -e
+          day=$(date -u +%Y-%m-%d)
+          sha=$(git rev-parse --short HEAD)
+          git config user.name "wolf-bench-bot"
+          git config user.email "bench@wolf-lang.invalid"
+          if git fetch origin bench-data 2>/dev/null; then
+            git worktree add /tmp/bd origin/bench-data
+          else
+            git worktree add --detach /tmp/bd
+            git -C /tmp/bd checkout --orphan bench-data
+            git -C /tmp/bd rm -rf --quiet . || true
+          fi
+          mkdir -p "/tmp/bd/data/$day"
+          cp bench-results/runtime.jsonl bench-results/compile.jsonl "/tmp/bd/data/$day/"
+          echo "$sha" > "/tmp/bd/data/$day/commit"
+          git -C /tmp/bd add data
+          git -C /tmp/bd commit -m "bench data $day ($sha)"
+          git -C /tmp/bd push origin HEAD:bench-data
+      - name: diff vs previous nightly (report-only)
+        run: |
+          prev=$(ls -1d /tmp/bd/data/*/ | sort | tail -2 | head -1)
+          if [ -f "$prev/runtime.jsonl" ]; then
+            echo '## nightly bench diff vs previous' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            cargo xtask bench diff "$prev/runtime.jsonl" bench-results/runtime.jsonl 2>> "$GITHUB_STEP_SUMMARY" || true
+            cargo xtask bench diff "$prev/compile.jsonl" bench-results/compile.jsonl 2>> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
