@@ -18,9 +18,9 @@
 //! [`Code`] has a private field, so the *only* way to obtain one is
 //! through the consts this registry emits — a diagnostic cannot be
 //! constructed with an unregistered code, by type. Families: `E01xx`
-//! lexer, `E000x` spec/01 §9 reservations + `E02xx` parser, `E1xxx+`
-//! sema and beyond (s13+). Warnings are `W####`. Retiring a code
-//! retires its number forever.
+//! lexer, `E000x` spec/01 §9 reservations + `E02xx` parser, `E03xx`
+//! name resolution (s12), `E1xxx+` sema and beyond (s13+). Warnings
+//! are `W####`. Retiring a code retires its number forever.
 
 /// A registered diagnostic code (e.g. `E0101`). Constructible only by
 /// this registry; compare with other codes or with `&str`.
@@ -350,6 +350,81 @@ and `s[1..^1]` trims one from each side. Replace the `-` with `^` —
 the suggested edit does exactly that. (If you meant to index with a
 negative *computed* value, that is a bounds error at runtime; compute
 the offset explicitly instead.)
+"#);
+
+// ------------------------------------------------------------------------
+// E03xx — name resolution's family (s12).
+// ------------------------------------------------------------------------
+
+code!(E0301, "nothing with this name is in scope", r#"
+Wolf could not find anything with this name: it is not a local binding,
+a parameter, an item defined in this module (remember: every `.lu` file
+in a directory is the *same* module), one of this file's imports, or a
+prelude name. Most of the time this is a typo — when a near-miss exists
+the message suggests it, and applying the suggested edit fixes the
+program. If the name lives in another module, add the import: `use
+that_module` at the top of the file, then reach it as
+`that_module.name`. Names never resolve through types here — a
+capitalized name used as an error-row tag (D30) is deferred to the type
+checker rather than reported by this pass.
+"#);
+
+code!(E0302, "the same name is defined twice in one module", r#"
+A directory is one module in wolf: every `.lu` file in it contributes
+to a single shared namespace, and each top-level name may be defined
+only once across all of them (D32). The second definition is the
+flagged one; the other definition's location is shown alongside so you
+can pick which to keep. Rename one of them, or delete one — file
+boundaries do not create scopes, so moving a definition to a sibling
+file changes nothing. If both definitions really are different things,
+one of them probably belongs in its own subdirectory, which *is* a new
+module.
+"#);
+
+code!(E0303, "modules import each other in a cycle", r#"
+Imports between wolf modules must form a DAG — a module cannot depend
+on itself through any chain of `use` declarations (D32). The message
+draws the whole cycle (`a → b → a`) and points at every `use` that
+participates, because the fix is rarely at the flagged line alone.
+The standard cure is to extract the pieces both sides need into a
+third module that each of them imports; the cycle disappears and the
+shared surface gets a name. Acyclic imports are what make wolf's
+module-parallel compilation and interface hashing possible, so there
+is no escape hatch.
+"#);
+
+code!(E0304, "the item exists but is not visible from here", r#"
+The name resolves — the module you imported really does define it —
+but the item is private, and private is the default in wolf:
+visibility is granted with a keyword, never guessed from a naming
+convention. To use the item from another module, its definition needs
+`pub` (exported to everyone) or `pub(pkg)` (visible only within this
+package); the message names the visibility the access would need.
+If the item is deliberately private, the module means to hide it —
+look for the `pub` function it exposes instead.
+"#);
+
+code!(E0305, "this import is never used", r#"
+Nothing in this file mentions the imported name, and an unused import
+is a hard error in wolf, not a lint: imports are the bounded, honest
+statement of what a file depends on, and dead ones rot fast (D32).
+Delete the line — the suggested edit does exactly that, and `wolf fix`
+can apply it unattended. Imports are file-scoped, so a name used only
+in a *sibling* file must be imported there, not here. There is no
+`import _` escape at v1; if you need an import purely for its side
+effects, comptime registration (D29) is the sanctioned pattern.
+"#);
+
+code!(E0306, "an import that collides with another binding", r#"
+Each imported name must be new in its file: importing the same name
+twice (even from two different paths), importing something that a
+module-level definition already claims, or importing the module you
+are standing in all report this error. The colliding binding's
+location is shown alongside. Drop the redundant import, or give one
+side its own name with `use long.path as other_name`. `import c`
+headers are exempt from the twice rule — every `import c` feeds the
+same `c` namespace, so repeating it with a new header is the normal
+form.
 "#);
 
 // ------------------------------------------------------------------------
