@@ -27,6 +27,8 @@ wolf_codegen_clif = { path = "crates/wolf_codegen_clif" }
 wolf_codegen_llvm = { path = "crates/wolf_codegen_llvm" }
 wolf_rt = { path = "crates/wolf_rt" }
 serde_json = "1"
+proptest = "1"
+insta = "1"
 
 [profile.release]
 debug = true
