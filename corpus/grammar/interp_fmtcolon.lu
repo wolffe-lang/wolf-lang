@@ -1,0 +1,12 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.fmtcolon
+//! First TOP-LEVEL `:` in an interpolation starts the format spec.
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["k"] = 42
+    print("{m["k"]:>8}")           // : after ] is top-level -> spec
+    let w = 8
+    print("{m["k"]:>{w}}")         // width itself interpolated
+    0
+}

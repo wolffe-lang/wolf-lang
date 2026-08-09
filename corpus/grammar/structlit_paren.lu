@@ -1,0 +1,9 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.structlit
+//! The parenthesized form is the fix E0006 suggests.
+struct Point { x: int }
+fn main() -> !int {
+    let p = Point { x: 0 }
+    if p == (Point { x: 0 }) { 0 } else { 1 }
+}

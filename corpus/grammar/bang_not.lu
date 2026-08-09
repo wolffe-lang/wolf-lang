@@ -1,0 +1,8 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.bang
+//! `!` in expression position is unary not.
+fn main() -> !int {
+    let t = true
+    if !t { 1 } else { 0 }
+}

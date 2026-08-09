@@ -1,0 +1,11 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.else
+//! `else` after a complete expression is the defaulting operator (D30).
+fn parse(s: str) -> !int { s.to_int() }
+fn main() -> !int {
+    let a = parse("7") else 0
+    let b = parse("x") else 0
+    let c = parse("x") else |err| { print("fell back: {err}"); 1 }
+    if a == 7 && b == 0 && c == 1 { 0 } else { 1 }
+}

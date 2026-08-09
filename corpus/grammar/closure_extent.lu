@@ -1,0 +1,11 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.closure
+//! Expression-bodied closures extend maximally; `,` terminates them.
+fn main() -> !int {
+    var xs = List[(int, int)]()
+    xs.push((1, 9)); xs.push((2, 3))
+    let top = xs.sorted_by(fn(a, b) b.1 <=> a.1).take(1)
+    let mixed = zip(xs, fn(p) p.0 + p.1, 100)   // closure is a NON-final arg
+    if top[0].1 == 9 && mixed == 115 { 0 } else { 1 }
+}

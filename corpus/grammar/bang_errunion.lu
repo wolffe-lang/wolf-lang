@@ -1,0 +1,14 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.bang
+//! `!` in type position is the error-union constructor (D30).
+fn may_fail(flag: bool) -> !int {
+    if flag { return Failed }
+    7
+}
+fn rowy() -> int ! {Failed, Slow} { 7 }
+fn main() -> !int {
+    let v = may_fail(false) else 0
+    let w = rowy() else 0
+    if v == 7 && w == 7 && !(v == 0) { 0 } else { 1 }   // both positions, one line
+}

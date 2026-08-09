@@ -1,0 +1,10 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.brackets
+//! `e[…]` is ONE postfix form; index vs generic-apply is sema's call (D29).
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["k"] = 1
+    let v = m["k"]                 // index
+    if v == 1 { 0 } else { 1 }
+}

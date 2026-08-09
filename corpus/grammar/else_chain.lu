@@ -1,0 +1,9 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.else
+//! `} else` must share the line; the chain binds to the nearest `if`.
+fn main() -> !int {
+    let x = 2
+    let r = if x == 1 { 10 } else if x == 2 { 20 } else { 30 }
+    if r == 20 { 0 } else { 1 }
+}

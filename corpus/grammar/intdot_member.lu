@@ -1,0 +1,10 @@
+//! check: pass
+//! phase: none
+//! conforms: gram.amb.intdot
+//! `1.s` is member access on the int literal; floats need digits both sides.
+fn main() -> !int {
+    let d = 5.s                    // Duration via member on int
+    let f = 1.0                    // float
+    let g = 1.0e5                  // float with exponent
+    if d.secs() == 5 && f < g { 0 } else { 1 }
+}
