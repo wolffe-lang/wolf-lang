@@ -540,6 +540,173 @@ user types arrive with the trait engine (s14).
 "#);
 
 // ------------------------------------------------------------------------
+// E05xx — traits, checked generics, and coherence (s14).
+// ------------------------------------------------------------------------
+
+code!(E0501, "the generic body uses something its bounds do not provide", r#"
+The golden rule of wolf generics: a generic body is checked once,
+against its declared bounds, and everything the body does with a type
+parameter must be provable from those bounds alone — a call site can
+then never fail inside the callee (D28). This body uses a capability —
+a trait method, an associated type or constant, an operator, `==`, a
+call — that no bound on the parameter provides. When a specific trait
+would supply it, the message says which bound to add and where; apply
+that edit and the body is provable again. Capabilities with no trait
+behind them yet (arithmetic and comparison operators arrive with the
+operator traits) cannot be granted by any bound today — for those,
+take a concrete type instead of a generic parameter. The error always
+lands here, at the definition, never as a backtrace out of some
+instantiation.
+"#);
+
+code!(E0502, "a type argument does not satisfy the generic's bound", r#"
+The generic function is fine — its body was proven against its bounds
+at its definition — but this call instantiates it with a type that
+does not satisfy one of those bounds: no impl of the named trait
+exists for the argument type. The fix is at the call, never inside the
+callee: pass a type that implements the trait, or write the missing
+`impl Trait for Type` in the trait's module or the type's module
+(coherence allows exactly those two homes). If the type is foreign and
+the trait is foreign, the sanctioned escape is an adapter: declare
+`type Local = distinct Foreign` and implement the trait for the
+adapter — same layout, free casts, its own impl set.
+"#);
+
+code!(E0503, "this bound is not a trait", r#"
+Only traits can appear as bounds (`T: Show`) — the name written here
+resolves to something else: a struct, an enum, a type alias, a
+function, or a module. A bound is a promise about capabilities, and
+only traits define capability sets, so wolf rejects the bound rather
+than guessing what constraint you meant. Check the spelling first (a
+struct and the trait it implements often share a stem). This error
+also fires when a bound or `dyn` names a trait that declares its own
+input parameters: applying trait arguments inside a bound has no
+surface syntax yet, so such traits cannot be used as bounds today —
+use a trait without input parameters, or dispatch through qualified
+calls instead.
+"#);
+
+code!(E0504, "an impl must live with its trait or with its type", r#"
+Wolf's coherence rule keeps every `impl Trait for Type` findable and
+unique: the impl must be written in the module that defines the trait
+or in the module that defines the self type — nowhere else (the
+"simple orphan rule", D28). An impl in a third module could collide
+invisibly with someone else's, and which one wins would depend on who
+happens to be compiled together; wolf refuses instead. Move the impl
+into the trait's module or the type's module. When both are foreign —
+you own neither the trait nor the type — declare an adapter in your
+own module: `type Mine = distinct Theirs` has the same layout, casts
+freely to and from its base, starts with an empty impl set, and you
+may implement anything for it.
+"#);
+
+code!(E0505, "an impl header parameter is not covered by the impl", r#"
+Every generic parameter of an impl must appear in the impl's subject —
+inside the self type or the trait's arguments. A parameter that
+appears nowhere (`impl[T] Show for Point`) is *uncovered*: no use of
+the impl could ever determine what `T` is, so the impl could apply
+infinitely many ways or none. Rust threads this needle with a covering
+rule; wolf v1 simply disallows uncovered parameters outright — simpler
+and more honest (D28). Delete the unused parameter, or make the impl
+subject actually mention it.
+"#);
+
+code!(E0506, "two impls of the same trait overlap", r#"
+Global coherence means one trait has at most one impl for any given
+type — the program's behavior can never depend on which impl a
+particular call happened to see. These two impl headers can describe
+the same type (wolf checks by trial unification, so a blanket
+`impl[T] Show for T` overlaps a specific `impl Show for Point` exactly
+like two duplicates would), and wolf has no specialization: there is
+no rule that could pick a winner, deliberately (D28 — locked). Delete
+one impl, or narrow the blanket so the two sets of types are disjoint.
+Overlap is judged on headers alone; bounds on the impls do not
+disambiguate them.
+"#);
+
+code!(E0507, "the impl does not match the trait it implements", r#"
+An `impl Trait for Type` must supply exactly what the trait declares:
+every required method with the same signature (after substituting the
+implementing type for `Self`), every associated type bound to a
+concrete type, and every associated constant at its declared type.
+This impl is missing a member, binds one at the wrong signature, or
+defines a member the trait never declared — extra members do not
+become part of the trait, because callers dispatch through the trait's
+declaration, not through any particular impl. The message names the
+member and shows the trait's declaration; make the impl agree with it.
+"#);
+
+code!(E0508, "the trait cannot be a `dyn` object: a generic method", r#"
+A `dyn Trait` value carries a witness table — one function pointer per
+method, fixed when the table is built. A generic method would need one
+entry per instantiation, a set that is not known until every caller is
+seen, so no finite table can represent it (the RFC 0255 model). The
+message names the offending method. Either drop the method's generic
+parameters (take a concrete type, or `dyn` of another trait, as the
+parameter), split the trait so the dynamic part is generic-free, or
+keep this trait static-only — generics over `T: Trait` have no such
+restriction and are wolf's default dispatch.
+"#);
+
+code!(E0509, "the trait cannot be a `dyn` object: an unconstrained associated type or input escapes", r#"
+This trait's methods mention an associated type (or the trait declares
+input parameters), and a `dyn Trait` object erases exactly the
+information that would pin those down: two objects behind the same
+`dyn Trait` may answer `Self.Item` with two different types, so a
+method signature that exposes it has no single ABI to dispatch
+through. Wolf has no surface syntax yet for constraining an associated
+type at a `dyn` spelling, so any escape makes the trait dyn-unsafe.
+Keep the associated type out of the dynamic methods' signatures, split
+the trait, or use static generics (`T: Trait`), where associated types
+work fully.
+"#);
+
+code!(E0510, "the trait cannot be a `dyn` object: `Self` outside receiver position", r#"
+Behind `dyn Trait`, the concrete type is erased — only the object
+itself knows what it is. A method that takes another `Self` as an
+ordinary parameter or returns `Self` by value would require the caller
+to name the erased type, which is exactly what `dyn` gave up (the RFC
+0255 self-position rule; the receiver itself is fine, because the
+object supplies it). The message names the method. Replace the loose
+`Self` with a concrete type or another `dyn Trait`, or keep this trait
+to static generics, where `Self` is a known rigid type and all of this
+checks.
+"#);
+
+code!(E0511, "a generic parameter cannot take type arguments", r#"
+Wolf generics are rank-1 over *types*, not over type constructors:
+a parameter `T` stands for one complete type, so applying it —
+`T[int]` — asks for higher-kinded polymorphism, which wolf does not
+have and v1 deliberately excludes (D28: the ceilings are spec'd, not
+discovered). The checking cost of higher kinds is a proof search wolf
+refuses to run; "the executed steps are in the source." Take the
+applied type as its own parameter instead: where you wanted
+`T[int]`, accept `U` and let the caller pass `List[int]` whole.
+"#);
+
+code!(E0512, "associated types cannot have their own generic parameters", r#"
+An associated type inside a trait is an *output*: each impl binds it
+to one concrete type. Giving it generic parameters of its own (`type
+Item[X]`) would make it a generic associated type — a family of
+outputs indexed by types — which wolf v1 deliberately does not have
+(D28: no GATs; the ceilings are stated up front, Roc-style, rather
+than discovered at the bottom of an error). Restate the trait so the
+parameter lives on the trait itself or on the method that needs it;
+both of those are plain rank-1 generics and check today.
+"#);
+
+code!(E0513, "associated-type bindings form a cycle", r#"
+The associated types of this impl are defined in terms of each other —
+following the bindings (`type A = Self.B`, `type B = Self.A`) never
+reaches a concrete type. Wolf normalizes associated types by textual
+rewriting to a fixed point, which is deterministic and always
+terminates precisely because cyclic rule sets are rejected here
+instead of being chased forever (Carbon's rewrite-constraint model,
+D28). Bind at least one of the associated types in the cycle to a
+concrete type and let the others build on it.
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — the formatter's family (s11).
 // ------------------------------------------------------------------------
 
