@@ -1,0 +1,10 @@
+//! member: true
+//! conforms: err.rows
+//!
+//! The narrow end of the chain: two payload-carrying tags.
+
+pub fn read(path: str) -> int ! {Locked(str), NotFound(str)} {
+    if path == "" { return NotFound(path) }
+    if path == "locked" { return Locked(path) }
+    42
+}

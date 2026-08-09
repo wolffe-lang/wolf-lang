@@ -1,0 +1,18 @@
+//! check: fail(E0606)
+//! phase: resolve
+//! conforms: err.rows
+//!
+//! A shared tag name is the same structural tag, so its payload types
+//! must agree across every row it appears in.
+
+fn read() -> int ! {NotFound(int)} {
+    NotFound(4)
+}
+
+fn show() -> int ! {NotFound(str)} {
+    read()?
+}
+
+fn main() -> !int {
+    show() else 0
+}

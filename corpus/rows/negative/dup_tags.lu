@@ -1,0 +1,14 @@
+//! check: fail(E0601)
+//! phase: resolve
+//! conforms: err.rows
+//!
+//! Rows are sets, not Koka's multi-maps: duplicate labels are rejected
+//! at the declaration, not silently merged.
+
+fn go() -> int ! {Io(str), Io} {
+    7
+}
+
+fn main() -> !int {
+    go() else 0
+}

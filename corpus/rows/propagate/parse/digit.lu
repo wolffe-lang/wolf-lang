@@ -1,0 +1,11 @@
+//! member: true
+//! conforms: err.rows
+//!
+//! Sibling file of the same module (directory = module): a private
+//! helper with an explicit single-tag row.
+
+fn digit(n: int) -> int ! {BadDigit} {
+    if n < 0 { return BadDigit }
+    if n > 9 { return BadDigit }
+    n
+}

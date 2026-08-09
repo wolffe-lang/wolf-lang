@@ -1,0 +1,15 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: err.rows, err.propagate, err.union
+//!
+//! Three-module propagation with widening at each hop (D30/s15):
+//! `io.read`'s row widens into `parse.pair`'s, which the handler here
+//! observes — rows compose by union, tags re-tag by injection, and no
+//! `From` ceremony exists anywhere on the path.
+
+use parse
+
+fn main() -> !int {
+    let both = parse.pair("cfg") else |_| 0
+    if both == 42 { 0 } else { 1 }
+}

@@ -1,0 +1,15 @@
+//! member: true
+//! conforms: err.rows, err.propagate
+//!
+//! The widening hop: `io.read`'s row and the sibling file's
+//! `digit` row both flow into this larger row via `?` — width
+//! subtyping at the call boundary, checked, never converted.
+
+use io
+
+pub fn pair(path: str) -> int ! {BadDigit, Locked(str), NotFound(str)} {
+    let raw = io.read(path)?
+    let lo = digit(raw % 10)?
+    let hi = digit(raw / 10)?
+    hi * 10 + lo
+}

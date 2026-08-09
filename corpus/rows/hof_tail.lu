@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: err.rows, err.rows.tail
+//!
+//! Row-polymorphic tails for HOFs (D30/s15): the `rethrows` problem
+//! solved by a type parameter — `{E}` is a row variable, and each call
+//! site's row instantiates it, so `apply` re-raises exactly what its
+//! argument can raise, no more.
+
+fn apply[T, E](x: T, f: fn(T) -> T ! {E}) -> T ! {E} {
+    f(x)?
+}
+
+fn half(n: int) -> int ! {Negative} {
+    if n < 0 { return Negative }
+    n / 2
+}
+
+fn double(n: int) -> int ! {TooBig(int)} {
+    if n > 100 { return TooBig(n) }
+    n * 2
+}
+
+fn main() -> !int {
+    let a = apply(8, half) else 0
+    let b = apply(21, double) else 0
+    if a == 4 && b == 42 { 0 } else { 1 }
+}

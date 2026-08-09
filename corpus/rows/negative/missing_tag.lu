@@ -1,0 +1,20 @@
+//! check: fail(E0602)
+//! phase: resolve
+//! conforms: err.rows, err.propagate
+//!
+//! `?` propagates a tag the caller's row does not include: the report
+//! names exactly the missing tags and offers the signature-extending
+//! fix-it (never a dump of both rows).
+
+fn read(path: str) -> int ! {Io(str), NotFound(str)} {
+    NotFound(path)
+}
+
+fn render(path: str) -> int ! {Empty} {
+    read(path)?
+}
+
+fn main() -> !int {
+    let v = render("cfg") else 0
+    v
+}

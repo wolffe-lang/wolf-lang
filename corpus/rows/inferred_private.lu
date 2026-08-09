@@ -1,0 +1,22 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: err.rows, err.rows.inferred
+//!
+//! Inferred rows are sealed to a concrete tag set at signature
+//! elaboration (s15) — so unlike Zig's inferred error sets, a private
+//! `-> !T` function recurses AND has its address taken, because it is
+//! an ordinary first-class value with a concrete type (the Zig trap,
+//! demonstrably fixed).
+
+fn countdown(n: int) -> !int {
+    if n < 0 { return Underflow }
+    if n == 0 { return 0 }
+    countdown(n - 1)?
+}
+
+fn main() -> !int {
+    let f = countdown
+    let a = countdown(3)?
+    let b = f(2)?
+    a + b
+}

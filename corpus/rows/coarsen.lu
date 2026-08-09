@@ -1,0 +1,37 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: err.rows, err.rows.coarsen
+//!
+//! Deliberate coarsening (many tags → one) is an explicit trait impl
+//! invoked by name — conversion lives in impls, never in the `?`
+//! desugar (RFC 3058's landing point, D30).
+
+struct Report { code: int }
+
+trait Coarsen {
+    fn coarsen(self) -> str
+}
+
+impl Coarsen for Report {
+    fn coarsen(self) -> str {
+        "report"
+    }
+}
+
+fn fetch(id: int) -> int ! {Missing(Report), Stale(Report)} {
+    if id == 0 { return Missing(Report { code: 404 }) }
+    if id < 0 { return Stale(Report { code: 410 }) }
+    id
+}
+
+fn load(id: int) -> int ! {Failed(str)} {
+    let v = fetch(id) else |_| {
+        return Failed(Coarsen.coarsen(Report { code: 500 }))
+    }
+    v
+}
+
+fn main() -> !int {
+    let v = load(7) else 0
+    if v == 7 { 0 } else { 1 }
+}

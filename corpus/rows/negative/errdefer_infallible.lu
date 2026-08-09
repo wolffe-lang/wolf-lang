@@ -1,0 +1,15 @@
+//! check: fail(E0607)
+//! phase: resolve
+//! conforms: err.errdefer
+//!
+//! `errdefer` runs only on the error path; a function with no error
+//! row has none, so the cleanup could never run.
+
+fn tidy() -> int {
+    errdefer print("undo")
+    1
+}
+
+fn main() -> !int {
+    tidy()
+}

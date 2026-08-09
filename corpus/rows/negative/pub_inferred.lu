@@ -1,0 +1,15 @@
+//! check: fail(E0605)
+//! phase: resolve
+//! conforms: err.rows.inferred
+//!
+//! Inferred rows are private-only: an exported signature states its
+//! failure set. The fix-it writes the sealed row the body implies.
+
+pub fn parse(flag: bool) -> !int {
+    if flag { return Invalid }
+    1
+}
+
+fn main() -> !int {
+    parse(false) else 0
+}

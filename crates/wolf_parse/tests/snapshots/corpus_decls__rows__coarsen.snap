@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 275..302 name=Report fields=1
+TraitDecl 304..349 name=Coarsen
+  FnDecl 324..348 name=coarsen
+ImplDecl 351..431 path=Coarsen for=Report
+  FnDecl 381..429 name=coarsen body=Block
+FnDecl 433..612 name=fetch body=Block
+FnDecl 614..763 name=load body=Block
+FnDecl 765..844 name=main body=Block
