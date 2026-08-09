@@ -314,7 +314,7 @@ non-`Copy` value; `shared` creates a Tier-2 RC cell from a value
 
 ```ebnf
 expr ::= else_expr | jump_expr
-else_expr ::= range_expr ('else' (block | '|' pattern '|' (expr | block) | expr))?
+else_expr ::= range_expr ('else' (block | '|' closed_pattern '|' (expr | block) | expr))?
 range_expr ::= r_end (('..' | '..=') r_end?)? | ('..' | '..=') r_end
 r_end ::= or_expr | '^' or_expr
 /* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
@@ -363,6 +363,11 @@ loop_expr  ::= 'for' pattern 'in' expr block
              | 'loop' block
 jump_expr  ::= 'return' expr? | 'break' expr? | 'continue'
 ```
+
+Loop labels do not exist at v1: `break`/`continue` target the innermost
+loop. Every label surface either collides with expression grammar
+(`break name`) or imports sigils; nested-loop escapes use `return` from
+a helper. Revisit post-v1 with evidence.
 
 Arm separators (also for `select`): the comma is **required** after an
 expression-bodied arm that is followed by another arm, **optional** after a
@@ -488,13 +493,19 @@ row_entry ::= path ('(' type (',' type)* ')')?
 ## 5. Patterns `[gram.pat]`
 
 ```ebnf
-pattern ::= '_' | literal | IDENT | path '(' pattern (',' pattern)* ','? ')'
-          | '(' pattern (',' pattern)* ','? ')' | pattern '|' pattern
-          | IDENT '@' pattern
+pattern ::= closed_pattern ('|' closed_pattern)*
+closed_pattern ::= '_' | literal | IDENT
+          | path '(' pattern (',' pattern)* ','? ')'
+          | '(' pattern (',' pattern)* ','? ')'
+          | IDENT '@' closed_pattern
 ```
 
 Payload binding: `BadDigit(e) => …`; or-patterns `A | B`; guards are arm
-syntax (`[gram.expr.flow]`), not pattern syntax.
+syntax (`[gram.expr.flow]`), not pattern syntax. `closed_pattern` is a
+pattern without a top-level `|`: positions where a `|` delimiter follows
+the pattern — the `else` handler `else |pat| …` (`[gram.expr.primary]`)
+— take `closed_pattern`, keeping the or-bar and the closing delimiter
+unambiguous (parenthesize inside the payload to combine: `E((A | B))`).
 
 ---
 

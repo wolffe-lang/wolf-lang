@@ -68,7 +68,7 @@ expr_stmt   ::= expr TERM
 place ::= expr  /* must be a place-expression; checked in sema, not grammar */
 
 expr ::= else_expr | jump_expr
-else_expr ::= range_expr ('else' (block | '|' pattern '|' (expr | block) | expr))?
+else_expr ::= range_expr ('else' (block | '|' closed_pattern '|' (expr | block) | expr))?
 range_expr ::= r_end (('..' | '..=') r_end?)? | ('..' | '..=') r_end
 r_end ::= or_expr | '^' or_expr
 /* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
@@ -144,9 +144,11 @@ type_arg  ::= type | expr            /* const generics; disambiguated in sema */
 error_row ::= '{' row_entry (',' row_entry)* (',' '..')? ','? '}'
 row_entry ::= path ('(' type (',' type)* ')')?
 
-pattern ::= '_' | literal | IDENT | path '(' pattern (',' pattern)* ','? ')'
-          | '(' pattern (',' pattern)* ','? ')' | pattern '|' pattern
-          | IDENT '@' pattern
+pattern ::= closed_pattern ('|' closed_pattern)*
+closed_pattern ::= '_' | literal | IDENT
+          | path '(' pattern (',' pattern)* ','? ')'
+          | '(' pattern (',' pattern)* ','? ')'
+          | IDENT '@' closed_pattern
 
 reserved_kw ::= 'as' | 'asm' | 'assume' | 'borrow' | 'break' | 'comptime'
   | 'const' | 'continue' | 'copy' | 'defer' | 'distinct' | 'dyn' | 'else'
