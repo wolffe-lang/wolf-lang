@@ -8,6 +8,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+mod line_index;
+
+pub use line_index::{LineCol, LineIndex};
+
 /// Interned identity of a source file. Cheap to copy, stable for the life
 /// of the [`SourceMap`] that produced it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]

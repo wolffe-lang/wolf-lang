@@ -1,0 +1,22 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: "render_human(&d, &sources, &RenderOptions::default())"
+---
+error[E0201]: `scale` is private to module `geo`
+ --> main.lu:4:5
+  |
+1 | use geo
+  |     --- the module is imported here
+...
+4 |     s.scale(2)
+  |     ^^^^^^^^^^ called here
+  |
+ ::: geo.lu:5:4
+  |
+1 | pub struct Shape {
+  |            ----- its type is public
+...
+5 | fn scale(self, k: f64) { }
+  |    ----- `scale` is declared here, without `pub`
+  |
+  = note: mark `scale` as `pub fn scale(…)` in geo.lu, or call it from inside `geo`.

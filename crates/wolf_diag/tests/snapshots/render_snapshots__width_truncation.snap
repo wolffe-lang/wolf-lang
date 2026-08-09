@@ -1,0 +1,10 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: "render_human(&d, &sources, &RenderOptions\n{ width: 60, ..RenderOptions::default() })"
+---
+error[E0107]: the character `$` is not part of wolf syntax
+ --> demo.lu:1:169
+  |
+1 | … x + x + x + x + x + x + x + $ + x + x + x + x + x + x + x…
+  |                               ^ here, deep inside a very long line
+  |

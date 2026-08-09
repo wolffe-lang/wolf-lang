@@ -1,0 +1,16 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: "render_human(&d, &sources, &RenderOptions::default())"
+---
+error[E0201]: this handle cannot write into a frozen region
+ --> demo.lu:4:5
+  |
+1 | region r {
+  | -------- the region is created here
+2 |     let h = alloc(r)
+3 |     freeze r
+  |     -------- and frozen here
+4 |     h.write(1)
+  |     ^^^^^^^^^^ write attempted here
+  |
+  = note: a frozen region is immutable for the rest of its life.

@@ -1,0 +1,14 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: "render_human(&d, &sources, &RenderOptions::default())"
+---
+error[E0209]: wolf has no negative indexing
+ --> demo.lu:2:18
+  |
+2 |     let last = s[-1]
+  |                  ^^ did you mean `^1`?
+  |
+help: index from the end: `^1`
+  |
+2 |     let last = s[^1]
+  |

@@ -1,0 +1,14 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: "render_human(&d, &sources, &RenderOptions::default())"
+---
+error[E0202]: this `(` is never closed
+ --> demo.lu:2:13
+  |
+2 |     let x = (1 +
+  |             ^^^^
+3 |         2 +
+4 |         3
+  | ^^^^^^^^^ the expression it opens ends nowhere
+  |
+  = note: add the closing `)`.

@@ -440,6 +440,8 @@ dependencies = [
 name = "wolf_diag"
 version = "0.0.1"
 dependencies = [
+ "insta",
+ "serde_json",
  "wolf_span",
 ]
 

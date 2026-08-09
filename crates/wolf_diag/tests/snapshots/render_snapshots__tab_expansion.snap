@@ -1,0 +1,10 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: out
+---
+error[E0107]: the character `$` is not part of wolf syntax
+ --> demo.lu:2:10
+  |
+2 |     let x   = $ + 1
+  |               ^ no wolf token can start with this
+  |
