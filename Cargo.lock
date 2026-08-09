@@ -452,12 +452,26 @@ dependencies = [
  "serde_json",
  "wolf_codegen_clif",
  "wolf_diag",
+ "wolf_fmt",
  "wolf_lex",
  "wolf_mem",
  "wolf_parse",
  "wolf_sema",
  "wolf_span",
  "wolf_wir",
+]
+
+[[package]]
+name = "wolf_fmt"
+version = "0.0.1"
+dependencies = [
+ "insta",
+ "proptest",
+ "wolf_ast",
+ "wolf_diag",
+ "wolf_lex",
+ "wolf_parse",
+ "wolf_span",
 ]
 
 [[package]]

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_fmt/tests/broken.rs
+expression: rendered
+---
+warning[W0301]: this file has syntax errors, so it was only partially formatted
+ --> broken.lu:1:1
+  |
+1 | fn broken( {
+  | ^
+  |
+  = note: regions with syntax errors (and one statement around them) were left byte-for-byte
+    untouched; fix the parse errors and run `wolf fmt` again

@@ -1,0 +1,19 @@
+[package]
+name = "wolf_fmt"
+description = "wolf's zero-option formatter over the lossless tree (s11)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+wolf_span = { workspace = true }
+wolf_diag = { workspace = true }
+wolf_lex = { workspace = true }
+wolf_ast = { workspace = true }
+wolf_parse = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+proptest = { workspace = true }

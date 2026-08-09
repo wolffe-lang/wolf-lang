@@ -21,6 +21,7 @@ wolf_diag = { path = "crates/wolf_diag" }
 wolf_lex = { path = "crates/wolf_lex" }
 wolf_ast = { path = "crates/wolf_ast" }
 wolf_parse = { path = "crates/wolf_parse" }
+wolf_fmt = { path = "crates/wolf_fmt" }
 wolf_sema = { path = "crates/wolf_sema" }
 wolf_mem = { path = "crates/wolf_mem" }
 wolf_wir = { path = "crates/wolf_wir" }
