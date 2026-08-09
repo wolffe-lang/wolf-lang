@@ -1,0 +1,13 @@
+//! check: fail(E0004)
+//! phase: resolve
+//! conforms: gram.amb.intdot
+//!
+//! `1.e5` parses as member access on the integer `1` (floats need
+//! digits on both sides of the dot); the checker names the float the
+//! user meant with a machine edit: `1.0e5`.
+
+fn main() -> !int {
+    let x = 1.e5
+    let _ = x
+    0
+}

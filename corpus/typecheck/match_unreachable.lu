@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: ty.match.reachable
+//!
+//! A dead arm is a WARNING (E0802) citing the covering arm — the
+//! program still compiles and runs; the body's meaning is unchanged.
+
+fn main() -> !int {
+    let b = true
+    let v = match b {
+        true => 0,
+        false => 1,
+        _ => 2,
+    }
+    v
+}

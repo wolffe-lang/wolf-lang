@@ -1,0 +1,36 @@
+//! check: fail(E0803)
+//! phase: resolve
+//! conforms: ty.method.ambiguous
+//!
+//! Two in-scope traits provide the method: no precedence exists (D28
+//! isolated namespaces) — the diagnostic offers both qualified forms.
+
+trait Loud {
+    fn speak(self) -> str
+}
+
+trait Quiet {
+    fn speak(self) -> str
+}
+
+struct Dog {
+    id: int,
+}
+
+impl Loud for Dog {
+    fn speak(self) -> str {
+        "WOOF"
+    }
+}
+
+impl Quiet for Dog {
+    fn speak(self) -> str {
+        "woof"
+    }
+}
+
+fn main() -> !int {
+    let d = Dog { id: 1 }
+    print(d.speak())
+    0
+}

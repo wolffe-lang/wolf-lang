@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="hi wolf")
+//! phase: typecheck
+//! conforms: ty.trait.default-body
+//!
+//! Trait default bodies check once against the trait's own archetype
+//! Self (s17): `greet` may use only what `Greeter` itself grants —
+//! here `self.name()` through the receiver.
+
+trait Greeter {
+    fn name(self) -> str
+
+    fn greet(self) -> str {
+        "hi {self.name()}"
+    }
+}
+
+struct P {
+    x: int,
+}
+
+impl Greeter for P {
+    fn name(self) -> str {
+        "wolf"
+    }
+}
+
+fn main() -> !int {
+    let p = P { x: 1 }
+    print(p.greet())
+    0
+}

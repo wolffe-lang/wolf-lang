@@ -1,0 +1,11 @@
+//! check: fail(E0210)
+//! phase: lex
+//! conforms: gram.expr.primary
+//!
+//! `(mut x)` is receiver spelling (X1): legal only immediately before
+//! a `.` member — detached, the mode marks nothing.
+
+fn main() -> !int {
+    let x = (mut y)
+    0
+}

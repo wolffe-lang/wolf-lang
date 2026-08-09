@@ -1,0 +1,5 @@
+//! member: true
+
+pub trait Show {
+    fn show(self) -> str
+}

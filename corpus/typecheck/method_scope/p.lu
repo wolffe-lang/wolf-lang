@@ -1,0 +1,17 @@
+//! member: true
+//!
+//! Defines `P` and implements the foreign trait for it — legal in the
+//! type's own module. The `use` here is file-scoped: it does not leak
+//! into `main.lu`.
+
+use fmt.Show
+
+pub struct P {
+    pub x: int,
+}
+
+impl Show for P {
+    fn show(self) -> str {
+        "p {self.x}"
+    }
+}

@@ -1,0 +1,27 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: err.rows.open
+//!
+//! The growing-tag-union bar (report 02 Done-well #10): `probe`'s row
+//! is OPEN (`..`) — it may raise tags it never lists (`Weird`), and a
+//! rest-arm consumer compiles untouched when tags are added upstream.
+
+fn probe(n: int) -> int ! { Io(int), ..} {
+    if n < 0 {
+        return Weird
+    }
+    if n == 0 {
+        return Io(4)
+    }
+    n
+}
+
+fn main() -> !int {
+    let v = probe(42) else |err| {
+        match err {
+            Io(code) => code,
+            _ => 0,
+        }
+    }
+    if v == 42 { 0 } else { 1 }
+}

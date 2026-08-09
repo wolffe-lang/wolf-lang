@@ -1,0 +1,25 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.3, mem.tier0.mode.mut
+//!
+//! The view-set litmus (deferred since s04, unblocked by the X1
+//! receiver ruling): `norm(mut self.{x, y})` declares a path footprint
+//! of `self.x`/`self.y` only, so the caller may use `self.z`
+//! concurrently. Footprint *checking* is c04's; the signature surface
+//! and the `(mut p).norm()` call-site spelling are pinned here.
+
+struct P { x: int, y: int, z: int }
+
+impl P {
+    fn norm(mut self.{x, y}) -> int {
+        self.x = self.x + self.y
+        self.y = 0
+        self.x
+    }
+}
+
+fn main() -> !int {
+    var p = P { x: 1, y: 2, z: 39 }
+    let n = (mut p).norm() + p.z   // z stays usable: disjoint footprint
+    if n == 42 { 0 } else { 1 }
+}

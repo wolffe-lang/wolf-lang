@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: ty.cast.closed-set, ty.trait.adapter
+//!
+//! The closed cast set (s17): numeric casts convert explicitly (X3 —
+//! wolf never widens implicitly), adapter casts (`distinct`) are free
+//! and bidirectional (the D28 layout-identity fact).
+
+type Meters = distinct int
+
+fn main() -> !int {
+    let a = 40 as i64
+    let m = 2 as Meters
+    let b = m as int
+    if a as int + b == 42 { 0 } else { 1 }
+}

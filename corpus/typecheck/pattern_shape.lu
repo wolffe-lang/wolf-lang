@@ -1,0 +1,15 @@
+//! check: fail(E0808)
+//! phase: resolve
+//! conforms: ty.pattern.shape
+//!
+//! A pattern mirrors the value's shape: deconstructing a variant out
+//! of a plain integer can never be checked.
+
+fn main() -> !int {
+    let n = 3
+    let v = match n {
+        Io(x) => x,
+        _ => 0,
+    }
+    v
+}

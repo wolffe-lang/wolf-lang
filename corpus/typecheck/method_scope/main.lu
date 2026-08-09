@@ -1,0 +1,13 @@
+//! check: fail(E0807)
+//! phase: resolve
+//! conforms: ty.method.trait-scope
+//!
+//! Method calls resolve through the traits IN SCOPE (D28): `P`
+//! implements `fmt.Show`, but this file never imports the trait, so
+//! `.show()` does not resolve — the fix-it writes the `use`.
+
+fn main() -> !int {
+    let p = P { x: 1 }
+    print(p.show())
+    0
+}

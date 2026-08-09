@@ -1,0 +1,16 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: ty.coerce.no-widening
+//!
+//! The coercion set is closed (s17): no implicit numeric widening —
+//! `i32` does not flow into `i64`; the hint spells the conversion.
+
+fn wide(n: i64) -> i64 {
+    n
+}
+
+fn main() -> !int {
+    let small: i32 = 1
+    wide(small)
+    0
+}

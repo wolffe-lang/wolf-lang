@@ -1,0 +1,21 @@
+//! check: fail(E0801)
+//! phase: resolve
+//! conforms: ty.match.exhaustive
+//!
+//! Non-exhaustive match: the missing variant is named as a concrete
+//! witness ("`Stop` not covered"), never a bare "not exhaustive".
+
+enum Signal {
+    Go,
+    Slow,
+    Stop,
+}
+
+fn main() -> !int {
+    let s = Signal.Slow
+    let v = match s {
+        Go => 0,
+        Slow => 1,
+    }
+    v
+}

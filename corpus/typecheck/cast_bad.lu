@@ -1,0 +1,12 @@
+//! check: fail(E0805)
+//! phase: resolve
+//! conforms: ty.cast.closed-set
+//!
+//! Outside the cast set: there is no truthiness bridge — `as` is not
+//! a converter of last resort.
+
+fn main() -> !int {
+    let b = true
+    let n = b as int
+    n
+}

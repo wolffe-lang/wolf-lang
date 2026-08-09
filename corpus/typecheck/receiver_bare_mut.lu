@@ -1,0 +1,22 @@
+//! check: fail(E0804)
+//! phase: resolve
+//! conforms: ty.method.receiver-mode, mem.tier0.mode.mut
+//!
+//! A `mut self` method on a bare receiver: the syntax law (X1) binds
+//! at the call site, with a machine-applicable insert-`(mut …)` edit.
+
+struct Counter {
+    n: int,
+}
+
+impl Counter {
+    fn bump(mut self) -> int {
+        self.n = self.n + 1
+        self.n
+    }
+}
+
+fn main() -> !int {
+    var c = Counter { n: 41 }
+    c.bump()
+}

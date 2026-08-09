@@ -1,0 +1,22 @@
+//! check: fail(E0602)
+//! phase: resolve
+//! conforms: err.rows.open
+//!
+//! An open row (`..`) cannot flow into a closed one: the unlisted
+//! remainder has nowhere to go — only another open row absorbs it.
+
+fn probe(n: int) -> int ! { Io(int), ..} {
+    if n == 0 {
+        return Io(4)
+    }
+    n
+}
+
+fn caller(n: int) -> int ! {Io(int)} {
+    probe(n)?
+}
+
+fn main() -> !int {
+    let v = caller(1) else 0
+    v
+}

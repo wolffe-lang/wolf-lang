@@ -1,0 +1,12 @@
+//! check: fail(E0806)
+//! phase: resolve
+//! conforms: ty.pattern.irrefutable
+//!
+//! `let` binds unconditionally: a pattern that can fail to match has
+//! no else-branch there — the fix-it points at `match`.
+
+fn main() -> !int {
+    let n = 3
+    let 1 = n
+    0
+}

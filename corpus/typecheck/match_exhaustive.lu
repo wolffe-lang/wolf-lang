@@ -1,0 +1,42 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: ty.match.exhaustive, err.rows
+//!
+//! Exhaustiveness (s17): enums split by full case analysis, sealed
+//! error rows are closed over their tag set — the `_`-free matches
+//! here are PROVED total by the usefulness engine, not hoped so.
+
+enum Color {
+    Red,
+    Green,
+    Rgb(int int int),
+}
+
+fn brightness(c: Color) -> int {
+    match c {
+        Red => 2,
+        Green => 3,
+        Rgb(r, g, b) => (r + g + b) / 3,
+    }
+}
+
+fn risky(n: int) -> int ! {Io(int), Timeout} {
+    if n == 0 {
+        return Timeout
+    }
+    if n == 1 {
+        return Io(9)
+    }
+    n
+}
+
+fn main() -> !int {
+    let a = brightness(Color.Rgb(1, 2, 3))
+    let b = risky(40) else |err| {
+        match err {
+            Io(code) => code,
+            Timeout => 0,
+        }
+    }
+    if a + b == 42 { 0 } else { 1 }
+}

@@ -1,0 +1,34 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: ty.method.order, ty.trait.qualified-call
+//!
+//! The fixed resolution order (s17, D27): the type's own impl wins
+//! over an in-scope trait method — no fallback chains — and the
+//! qualified form reaches the shadowed trait method explicitly.
+
+trait Speak {
+    fn speak(self) -> str
+}
+
+struct Dog {
+    id: int,
+}
+
+impl Dog {
+    fn speak(self) -> str {
+        "woof"
+    }
+}
+
+impl Speak for Dog {
+    fn speak(self) -> str {
+        "spoken {self.id}"
+    }
+}
+
+fn main() -> !int {
+    let d = Dog { id: 7 }
+    print(d.speak())
+    print(Speak.speak(d))
+    0
+}
