@@ -57,9 +57,11 @@ Counter-example: `1.e5` does not parse as a float (it is member access on
 ### 1.5 String literals — the mode stack `[gram.lex.str]`
 
 Every plain string literal is an f-string (X9/D26). The lexer runs a mode
-stack; inside interpolation braces it re-enters normal token mode (nesting
+stack; inside interpolation braces it re-enters normal token mode. Nesting
 strings inside interpolations is legal to depth 8; deeper is an error with
-a "you do not want this" diagnostic).
+a "you do not want this" diagnostic (E0007, enforced at the parse tier).
+The lexer's hard safety rail is depth 32 (E0108) — between 8 and 32 the
+input still tokenizes so the parser can produce the friendly error.
 
 ```ebnf
 STRING     ::= '"' STR_PART* '"'

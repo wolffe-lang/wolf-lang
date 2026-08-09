@@ -1,5 +1,5 @@
 //! check: run(exit=trap(stale-handle))
-//! phase: none
+//! phase: lex
 //! conforms: mem.shared.handle.2
 //! Stale handle access is a DETERMINISTIC fault in every profile —
 //! defined behavior, not UB (X5's contract).

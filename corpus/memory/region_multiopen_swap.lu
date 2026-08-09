@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: none
+//! phase: lex
 //! conforms: mem.region.multiopen, mem.region.intra.1
 //! FLAGGED FOR is07: interleaved building into two pool regions; each
 //! handle stays valid for its own pool.

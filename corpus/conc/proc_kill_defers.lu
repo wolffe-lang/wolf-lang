@@ -1,5 +1,5 @@
 //! check: run(exit=0, stdout="released")
-//! phase: none
+//! phase: lex
 //! conforms: conc.proc.kill, conc.proc.exit
 //! THE decided rule: defers in a KILLED proc do not run — its regions
 //! bulk-free instead. Cross-proc resources must be owned by channels/

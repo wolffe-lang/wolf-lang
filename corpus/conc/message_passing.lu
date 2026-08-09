@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: none
+//! phase: lex
 //! conforms: conc.mm.hb.chan, conc.mm.hb.move, conc.task.scope
 //! The message-passing litmus: every write into a region before its
 //! `move` send is visible to the receiver — transfer publishes the graph.

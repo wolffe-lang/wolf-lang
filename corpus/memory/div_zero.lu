@@ -1,5 +1,5 @@
 //! check: run(exit=trap(div-zero))
-//! phase: none
+//! phase: lex
 //! conforms: mem.ub.defined
 //! Division by zero is a deterministic trap, not UB — the optimizer's
 //! recovery is range-based check elision, never nasal demons.

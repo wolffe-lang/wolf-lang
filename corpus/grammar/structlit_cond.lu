@@ -1,5 +1,5 @@
 //! check: fail(E0006)
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.structlit
 //! Struct literals are illegal in condition position without parens —
 //! the `{` opens the if-block. This file must NOT parse.

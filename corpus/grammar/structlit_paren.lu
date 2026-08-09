@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.structlit
 //! The parenthesized form is the fix E0006 suggests.
 struct Point { x: int }

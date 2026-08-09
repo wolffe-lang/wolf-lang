@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.intdot
 //! `1.s` is member access on the int literal; floats need digits both sides.
 fn main() -> !int {

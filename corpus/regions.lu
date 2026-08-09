@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: none
+//! phase: lex
 //! conforms: mem.region.create.1, mem.region.create.3, mem.region.freeze.1, mem.region.intra.1, mem.shared.handle.1
 //!
 //! The memory model's surface (D10, X4, X5): block-sugar scratch regions,

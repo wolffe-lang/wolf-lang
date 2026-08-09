@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.bang
 //! `!` in expression position is unary not.
 fn main() -> !int {

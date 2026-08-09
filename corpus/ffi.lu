@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: none
+//! phase: lex
 //! conforms: ffi.import_c, ffi.extern_export, unsafe.raw, unsafe.asm
 //!
 //! C interop (D17–D19): `import c` pulls a real header through the

@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.closure
 //! Expression-bodied closures extend maximally; `,` terminates them.
 fn main() -> !int {

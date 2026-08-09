@@ -1,5 +1,5 @@
 //! check: fail(E0008)
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.when
 //! `when` is reserved: it can never be a function name. Must NOT parse.
 fn when(a: int, b: int) -> int { a + b }   // ERROR E0008: keyword as identifier

@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.brackets
 //! `e[…]` is ONE postfix form; index vs generic-apply is sema's call (D29).
 fn main() -> !int {

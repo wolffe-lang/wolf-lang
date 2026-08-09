@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: none
+//! phase: lex
 //! conforms: conc.select.ready, conc.select.fair, conc.det.events
 //! Two simultaneously-ready arms: the choice is pseudo-random from the
 //! SCHEDULER seed (a recorded event) — both outcomes are conforming,

@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.else
 //! `else` after a complete expression is the defaulting operator (D30).
 fn parse(s: str) -> !int { s.to_int() }

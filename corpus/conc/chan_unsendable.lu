@@ -1,5 +1,5 @@
 //! check: fail(E1102)
-//! phase: none
+//! phase: lex
 //! conforms: conc.chan.type
 //! Channel payloads must be Copy, imm, a moved region, or a sync type.
 //! A bare region-interior value (List) is none of those — send the

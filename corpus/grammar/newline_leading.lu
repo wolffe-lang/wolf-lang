@@ -1,5 +1,5 @@
 //! check: fail(E0001)
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.newline, gram.lex.newline
 //! Leading-operator continuation does NOT parse: a terminator was
 //! inserted after `1`, so `+ 2` starts a broken statement.

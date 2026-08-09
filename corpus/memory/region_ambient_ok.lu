@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: none
+//! phase: lex
 //! conforms: mem.region.create.3, mem.region.intra.2
 //! The callee allocates into the CALLER's region by default (D12): the
 //! list built in `fill` lives in `tmp` and dies with it.

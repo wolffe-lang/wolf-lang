@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: none
+//! phase: lex
 //! conforms: gram.amb.newline, gram.lex.newline
 //! Continuation is TRAILING-operator/dot style (Go-adapted insertion).
 fn main() -> !int {

@@ -119,10 +119,66 @@ fn corpus_cmd() -> ExitCode {
             }
         );
     }
+    // Phase execution + ledger enforcement (s01 rule, live since s07):
+    // the declared phase must equal the deepest phase that succeeds today.
+    // Runs through the differential protocol so xtask stays independent of
+    // compiler crates. A stub driver (verdict `unsupported`) skips checks.
+    let mut executed = false;
+    if run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+        for (f, d) in &parsed {
+            let out = Command::new("target/debug/wolf")
+                .arg("conform-run")
+                .arg(f)
+                .arg("--json")
+                .output();
+            let Ok(out) = out else { continue };
+            if !out.status.success() {
+                eprintln!("corpus: {}: conform-run failed", f.display());
+                bad += 1;
+                continue;
+            }
+            let Ok(rec) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
+                eprintln!("corpus: {}: bad observation record", f.display());
+                bad += 1;
+                continue;
+            };
+            let verdict = rec["verdict"].as_str().unwrap_or("");
+            let reached = rec["phase_reached"].as_str().unwrap_or("none");
+            if verdict == "unsupported" && reached == "none" {
+                continue; // stub driver: no phase engine at all
+            }
+            // `unsupported` with a real phase_reached still carries phase
+            // evidence: everything through phase_reached completed clean.
+            executed = true;
+            let reached_rank = corpus::phase_rank(reached).unwrap_or(0);
+            // deepest phase that SUCCEEDS: reached on pass/run-verdicts,
+            // one before reached on fail (reached = the phase that failed)
+            let deepest_pass = if verdict.starts_with("fail(") {
+                reached_rank.saturating_sub(1)
+            } else {
+                reached_rank
+            };
+            let declared = d.phase.as_deref().and_then(corpus::phase_rank).unwrap_or(0);
+            if declared != deepest_pass {
+                eprintln!(
+                    "corpus: {}: header claims phase `{}` but deepest passing phase is `{}` — advance/retreat `//! phase:` deliberately",
+                    f.display(),
+                    d.phase.as_deref().unwrap_or("none"),
+                    corpus::PHASES[deepest_pass],
+                );
+                bad += 1;
+            }
+        }
+    }
     eprintln!(
-        "corpus: {} file(s), {} bad — phase execution stubbed until s31",
+        "corpus: {} file(s), {} bad{}",
         files.len(),
-        bad
+        bad,
+        if executed {
+            " — phase ledger enforced via conform-run"
+        } else {
+            " — phase execution pending a non-stub driver"
+        }
     );
     if bad > 0 {
         ExitCode::FAILURE

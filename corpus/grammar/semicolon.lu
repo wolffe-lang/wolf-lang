@@ -1,5 +1,5 @@
 //! check: fail(E0002)
-//! phase: none
+//! phase: lex
 //! conforms: gram.lex.newline
 //! `;` is legal only as a statement separator (single-line blocks). An
 //! empty statement — a stray `;` — does NOT parse.
