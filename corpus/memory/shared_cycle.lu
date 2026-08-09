@@ -1,5 +1,5 @@
 //! check: fail(E1006)
-//! phase: resolve
+//! phase: typecheck
 //! conforms: mem.shared.rc.2
 //! Strong `shared` cycles are a COMPILE error by type shape — wolf has no
 //! cycle collector and refuses to leak instead.

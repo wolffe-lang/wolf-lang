@@ -1,0 +1,12 @@
+//! check: fail(E0401)
+//! conforms: ty.mismatch.branches
+//! phase: resolve
+//!
+//! The Elm classic: an `if` used as a value whose branches disagree.
+//! Neither branch is "expected" — the diagnostic shows both with
+//! provenance (D22) instead of blaming whichever unified second.
+
+fn main() -> !int {
+    let label = if true { 1 } else { "one" }
+    0
+}

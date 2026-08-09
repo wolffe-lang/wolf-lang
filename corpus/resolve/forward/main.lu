@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: resolve
+//! phase: typecheck
 //! conforms: mod.forward
 //!
 //! Within a module, forward references across files are unrestricted

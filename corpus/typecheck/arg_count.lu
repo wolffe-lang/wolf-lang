@@ -1,0 +1,15 @@
+//! check: fail(E0402)
+//! conforms: ty.call.arity
+//! phase: resolve
+//!
+//! Wrong argument count: every wolf parameter is required, and the
+//! diagnostic points at the definition site so the two lists can be
+//! compared side by side.
+
+fn area(width: int, height: int) -> int {
+    width * height
+}
+
+fn main() -> !int {
+    area(3)
+}

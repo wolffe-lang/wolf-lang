@@ -1,0 +1,12 @@
+//! check: fail(E0405)
+//! phase: resolve
+//! conforms: arith.literal.default
+//!
+//! Cannot-infer is an error, never a guess (D27): literals default by
+//! rule (`i32`/`f64`), but a context-free closure parameter has no
+//! rule to fall back on — annotate it or give the closure context.
+
+fn main() -> !int {
+    let id = fn(x) x
+    0
+}

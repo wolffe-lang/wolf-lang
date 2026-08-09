@@ -1,0 +1,19 @@
+//! check: fail(E0401)
+//! conforms: ty.mismatch.fn_value
+//! phase: resolve
+//!
+//! The argument-vs-return confusion: passing a function where its
+//! result was meant. The mismatch renders the whole `fn() -> int`
+//! against `int` and hints at the missing `()`.
+
+fn get_num() -> int {
+    41
+}
+
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() -> !int {
+    add(get_num, 1)
+}

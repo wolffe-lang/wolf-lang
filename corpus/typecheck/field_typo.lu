@@ -1,0 +1,16 @@
+//! check: fail(E0403)
+//! conforms: ty.field.unknown
+//! phase: resolve
+//!
+//! An unresolved field with a near-miss: typo detection against the
+//! struct's field names suggests `radius` (D22).
+
+struct Circle {
+    radius: f64,
+}
+
+fn main() -> !int {
+    let c = Circle { radius: 2.0 }
+    let r = c.radbus
+    0
+}

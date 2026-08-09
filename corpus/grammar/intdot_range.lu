@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: resolve
+//! phase: typecheck
 //! conforms: gram.amb.intdot
 //! `1..10` is a range — two dots never lex as a float.
 
