@@ -19,12 +19,11 @@ fn main() -> ExitCode {
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("dist") => dist(),
         Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
-        Some("recognize") => recognize_cmd(),
         Some("conformance") => conformance_cmd(&args[1..]),
         Some("differ") => differ_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|recognize|conformance|differ>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ>"
             );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
@@ -52,7 +51,6 @@ fn ci() -> ExitCode {
         ("deps-check", &["xtask", "deps-check"]),
         ("corpus", &["xtask", "corpus"]),
         ("spec-extract", &["xtask", "spec-extract", "--check"]),
-        ("recognize", &["xtask", "recognize"]),
         ("conformance", &["xtask", "conformance"]),
         ("differ-self", &["xtask", "differ", "--self"]),
     ];
@@ -582,87 +580,6 @@ fn spec_extract(check: bool) -> ExitCode {
             "spec-extract: wrote spec/grammar.ebnf ({} bytes)",
             extracted.len()
         );
-        ExitCode::SUCCESS
-    }
-}
-
-// ------------------------------------------------------------- recognize --
-
-/// THROWAWAY (s03 Target 5): delete when s08–s09 parser lands.
-///
-/// Run the spec-faithful lexer + Earley recognizer over every corpus
-/// file: `check: fail(E…)` files must be rejected (lex or parse), all
-/// others must be accepted with exactly one parse. Nonzero exit on any
-/// mismatch or ambiguity.
-fn recognize_cmd() -> ExitCode {
-    let ebnf = match std::fs::read_to_string("spec/grammar.ebnf") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("recognize: read spec/grammar.ebnf: {e} (run spec-extract first)");
-            return ExitCode::FAILURE;
-        }
-    };
-    let kws = match xtask::speclex::reserved_keywords(&ebnf) {
-        Ok(k) => k,
-        Err(e) => {
-            eprintln!("recognize: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-    let grammar = xtask::recognize::wolf_grammar();
-    let mut files = Vec::new();
-    collect_wolf_files(Path::new("corpus"), &mut files);
-    files.sort();
-    let mut bad = 0u32;
-    for f in &files {
-        let src = std::fs::read_to_string(f).expect("read corpus file");
-        // Error-code families (spec 02 §7 discipline): E0xxx are syntax-tier
-        // codes — the file must fail to PARSE. E1xxx and up are post-parse
-        // (sema/memory/runtime) — the file must parse cleanly; its failure
-        // is observed by later phases, not the recognizer.
-        let expect_fail = match corpus::parse_directives(&src).ok().and_then(|d| d.check) {
-            Some(corpus::Check::Fail(code)) => code
-                .strip_prefix('E')
-                .and_then(|n| n.parse::<u32>().ok())
-                .is_none_or(|n| n < 1000),
-            _ => false,
-        };
-        let verdict: Result<xtask::recognize::Analysis, String> =
-            match xtask::speclex::lex(&src, &kws) {
-                Ok(toks) => grammar.analyze(&toks),
-                Err(e) => Err(format!("lex: {e}")),
-            };
-        let name = f.display();
-        match (verdict, expect_fail) {
-            (Ok(a), false) if a.parses == 1 => eprintln!("recognize: {name}: ok (1 parse)"),
-            (Ok(a), _) if a.parses > 1 => {
-                eprintln!(
-                    "recognize: {name}: AMBIGUOUS ({} parses)\n  {}",
-                    a.parses,
-                    a.ambiguity.as_deref().unwrap_or("")
-                );
-                bad += 1;
-            }
-            (Ok(_), true) => {
-                eprintln!("recognize: {name}: MISMATCH — expected fail, but it parses");
-                bad += 1;
-            }
-            (Err(e), true) => eprintln!("recognize: {name}: ok (rejected: {e})"),
-            (Err(e), false) => {
-                eprintln!("recognize: {name}: MISMATCH — expected pass: {e}");
-                bad += 1;
-            }
-            (Ok(_), false) => unreachable!("parses == 0 cannot be Ok"),
-        }
-    }
-    eprintln!(
-        "recognize: {} file(s), {} mismatch(es)/ambiguit(ies)",
-        files.len(),
-        bad
-    );
-    if bad > 0 {
-        ExitCode::FAILURE
-    } else {
         ExitCode::SUCCESS
     }
 }

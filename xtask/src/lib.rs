@@ -3,7 +3,5 @@
 
 pub mod corpus;
 pub mod protocol;
-pub mod recognize;
 pub mod spec;
-pub mod speclex;
 pub mod stats;
