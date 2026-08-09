@@ -58,11 +58,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
       - name: install cargo-fuzz
-        run: cargo install cargo-fuzz --locked
+        run: cargo +nightly install cargo-fuzz --locked
       - name: run each target briefly
+        # `+nightly` beats the rust-toolchain.toml pin — cargo-fuzz needs -Z
         run: |
-          for t in $(cargo fuzz list --fuzz-dir fuzz); do
-            cargo fuzz run --fuzz-dir fuzz "$t" -- -max_total_time=60
+          for t in $(cargo +nightly fuzz list --fuzz-dir fuzz); do
+            cargo +nightly fuzz run --fuzz-dir fuzz "$t" -- -max_total_time=60
           done
 
   build-test:
@@ -85,7 +86,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-freebsd
       - uses: Swatinem/rust-cache@v2
+      # add the target to the ACTIVE toolchain (the rust-toolchain.toml pin),
+      # not the action's default — they can differ
+      - run: rustup target add x86_64-unknown-freebsd
       - run: cargo check --workspace --target x86_64-unknown-freebsd
