@@ -1,0 +1,31 @@
+//! check: fail(E0506)
+//! phase: resolve
+//! conforms: ty.trait.coherence.overlap
+//!
+//! Overlap is a hard error found by trial unification: the blanket
+//! impl can describe `Point` too, and wolf has no specialization to
+//! pick a winner (D28 — locked).
+
+trait Show {
+    fn show(x: Self) -> str
+}
+
+struct Point {
+    x: int,
+}
+
+impl Show for Point {
+    fn show(x: Self) -> str {
+        "a"
+    }
+}
+
+impl[T] Show for T {
+    fn show(x: Self) -> str {
+        "b"
+    }
+}
+
+fn main() -> !int {
+    0
+}

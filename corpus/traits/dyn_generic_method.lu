@@ -1,0 +1,19 @@
+//! check: fail(E0508)
+//! phase: resolve
+//! conforms: ty.trait.dyn.generic-method
+//!
+//! RFC-0255 class 1: a generic method has no finite witness-table
+//! entry, so the trait cannot be a `dyn` object — reported at the
+//! object-creation site.
+
+trait Mapper {
+    fn map[U](self, u: U) -> int
+}
+
+fn go(d: dyn Mapper) -> int {
+    0
+}
+
+fn main() -> !int {
+    0
+}

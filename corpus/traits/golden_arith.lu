@@ -1,0 +1,14 @@
+//! check: fail(E0501)
+//! phase: resolve
+//! conforms: generics.golden.def-site
+//!
+//! Arithmetic on an archetype: no bound can grant `+` yet (operator
+//! traits are a later sprint), so the definition is the error site.
+
+fn sum[T](a: T, b: T) -> T {
+    a + b
+}
+
+fn main() -> !int {
+    0
+}

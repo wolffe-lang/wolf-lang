@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 281..323 name=Show
+  FnDecl 298..322 name=show
+StructDecl 325..353 name=Point fields=1
+ImplDecl 355..429 path=Show for=Point
+  FnDecl 384..427 name=show body=Block
+FnDecl 431..458 name=main body=Block

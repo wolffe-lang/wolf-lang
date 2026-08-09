@@ -1,0 +1,14 @@
+//! check: fail(E0501)
+//! phase: resolve
+//! conforms: generics.golden.def-site
+//!
+//! `==` on an archetype is a capability like any other — unstated,
+//! so the generic body is rejected at its definition.
+
+fn same[T](a: T, b: T) -> bool {
+    a == b
+}
+
+fn main() -> !int {
+    0
+}

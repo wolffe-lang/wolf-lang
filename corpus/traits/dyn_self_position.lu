@@ -1,0 +1,18 @@
+//! check: fail(E0510)
+//! phase: resolve
+//! conforms: ty.trait.dyn.self-position
+//!
+//! RFC-0255 class 3: `Self` outside receiver position would make the
+//! caller name the erased type — only the receiver may be `Self`.
+
+trait Merge {
+    fn join(self, other: Self) -> Self
+}
+
+fn go(d: dyn Merge) -> int {
+    0
+}
+
+fn main() -> !int {
+    0
+}

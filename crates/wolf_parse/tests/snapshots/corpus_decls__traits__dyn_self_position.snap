@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 227..281 name=Merge
+  FnDecl 245..280 name=join
+FnDecl 283..319 name=go body=Block
+FnDecl 321..348 name=main body=Block

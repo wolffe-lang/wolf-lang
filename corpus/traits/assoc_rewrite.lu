@@ -1,0 +1,33 @@
+//! check: pass
+//! phase: typecheck
+//! conforms: ty.trait.assoc.rewrite
+//!
+//! Associated types are outputs (RFC 0195): the impl binds `Item`,
+//! projections normalize by textual rewriting to a fixed point, and
+//! the projection in `front`'s signature is proven from the bound.
+
+trait Seq {
+    type Item = type
+    fn head(s: Self) -> Self.Item
+}
+
+struct Counter {
+    value: int,
+}
+
+impl Seq for Counter {
+    type Item = int
+    fn head(s: Self) -> Self.Item {
+        s.value
+    }
+}
+
+fn front[T: Seq](s: T) -> T.Item {
+    Seq.head(s)
+}
+
+fn main() -> !int {
+    let c = Counter { value: 7 }
+    let n: int = front(c)
+    n
+}

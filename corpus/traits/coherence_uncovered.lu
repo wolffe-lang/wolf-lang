@@ -1,0 +1,25 @@
+//! check: fail(E0505)
+//! phase: resolve
+//! conforms: ty.trait.coherence.uncovered
+//!
+//! An impl parameter appearing in neither the self type nor the
+//! trait arguments could never be determined — rejected outright in
+//! v1 (simpler and more honest than a covering rule).
+
+trait Show {
+    fn show(x: Self) -> str
+}
+
+struct Point {
+    x: int,
+}
+
+impl[T] Show for Point {
+    fn show(x: Self) -> str {
+        "p"
+    }
+}
+
+fn main() -> !int {
+    0
+}

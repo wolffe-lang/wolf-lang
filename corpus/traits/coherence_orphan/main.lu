@@ -1,0 +1,22 @@
+//! check: fail(E0504)
+//! phase: resolve
+//! conforms: ty.trait.coherence.orphan
+//!
+//! The simple orphan rule: this module owns neither `Show` nor
+//! `Thing`, so the impl may not live here — the sanctioned escape is
+//! an adapter (`type Local = distinct data.Thing`), shown compiling
+//! in the adapter_distinct corpus case.
+
+use data
+use fmt.Show
+
+impl Show for data.Thing {
+    fn show(x: Self) -> str {
+        "thing"
+    }
+}
+
+fn main() -> !int {
+    let t = data.make()
+    0
+}

@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 333..342 path=data
+UseDecl 342..355 path=fmt.Show
+ImplDecl 356..436 path=Show for=data.Thing
+  FnDecl 387..434 name=show body=Block
+FnDecl 438..489 name=main body=Block

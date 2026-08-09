@@ -1,0 +1,32 @@
+//! check: pass
+//! phase: typecheck
+//! conforms: ty.trait.adapter
+//!
+//! The sanctioned orphan escape (D28): both the trait and the type
+//! are foreign, so we adapt — `type Cover = distinct media.Song` is
+//! a nominal type of our own (same layout as its base, free
+//! bidirectional `as` casts, an EMPTY impl set inheriting nothing),
+//! and implementing the foreign trait for it here is legal.
+
+use media
+use media.Show
+
+type Cover = distinct media.Song
+
+impl Show for Cover {
+    fn show(x: Self) -> str {
+        "cover"
+    }
+}
+
+fn describe[T: Show](v: T) -> str {
+    Show.show(v)
+}
+
+fn main() -> !int {
+    let s = media.make()
+    let c = s as Cover
+    print(describe(c))
+    let back = c as media.Song
+    0
+}

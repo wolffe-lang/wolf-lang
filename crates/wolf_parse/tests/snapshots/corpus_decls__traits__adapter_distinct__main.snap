@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 403..413 path=media
+UseDecl 413..428 path=media.Show
+TypeDecl 429..462 name=Cover def=PrefixType
+ImplDecl 463..538 path=Show for=Cover
+  FnDecl 489..536 name=show body=Block
+FnDecl 540..594 name=describe body=Block
+FnDecl 596..725 name=main body=Block

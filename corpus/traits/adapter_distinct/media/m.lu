@@ -1,0 +1,15 @@
+//! member: true
+//!
+//! The foreign module: it owns both the trait and the type.
+
+pub trait Show {
+    fn show(x: Self) -> str
+}
+
+pub struct Song {
+    pub title: str,
+}
+
+pub fn make() -> Song {
+    Song { title: "t" }
+}

@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 83..129 name=Show pub
+  FnDecl 104..128 name=show
+StructDecl 131..170 name=Song pub fields=1
+FnDecl 172..221 name=make pub body=Block

@@ -1,0 +1,32 @@
+//! check: pass
+//! phase: typecheck
+//! conforms: generics.golden.checked, ty.trait.qualified-call
+//!
+//! The happy path of D28: a nominal trait, an impl, a bounded generic
+//! whose body is proven from its bounds alone, and a call that
+//! instantiates it correctly — qualified call syntax throughout
+//! (method receivers are s17).
+
+trait Show {
+    fn show(x: Self) -> str
+}
+
+struct Point {
+    x: int,
+}
+
+impl Show for Point {
+    fn show(x: Self) -> str {
+        "point {x.x}"
+    }
+}
+
+fn describe[T: Show](v: T) -> str {
+    Show.show(v)
+}
+
+fn main() -> !int {
+    let p = Point { x: 1 }
+    print(describe(p))
+    0
+}

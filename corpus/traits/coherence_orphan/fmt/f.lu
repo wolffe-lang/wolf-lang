@@ -1,0 +1,7 @@
+//! member: true
+//!
+//! The trait's home module.
+
+pub trait Show {
+    fn show(x: Self) -> str
+}

@@ -1,0 +1,19 @@
+//! check: fail(E0501)
+//! phase: resolve
+//! conforms: generics.golden.def-site
+//!
+//! The golden rule: a generic body using a capability its bounds do
+//! not state errors HERE, at the definition, with an add-this-bound
+//! edit — never as a backtrace out of an instantiation.
+
+trait Show {
+    fn show(x: Self) -> str
+}
+
+fn describe[T](v: T) -> str {
+    Show.show(v)
+}
+
+fn main() -> !int {
+    0
+}

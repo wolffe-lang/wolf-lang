@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 251..300 name=Mapper
+  FnDecl 270..299 name=map
+FnDecl 302..339 name=go body=Block
+FnDecl 341..368 name=main body=Block

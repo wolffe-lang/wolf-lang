@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 50..86 name=Thing pub fields=1
+FnDecl 88..133 name=make pub body=Block

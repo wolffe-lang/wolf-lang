@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 283..325 name=Show
+  FnDecl 300..324 name=show
+FnDecl 327..375 name=describe body=Block
+FnDecl 377..404 name=main body=Block

@@ -1,0 +1,20 @@
+//! check: fail(E0509)
+//! phase: resolve
+//! conforms: ty.trait.dyn.assoc-escape
+//!
+//! RFC-0255 class 2: an associated type escaping into a method
+//! signature has no single ABI behind `dyn` — and there is no
+//! surface syntax to constrain it at the `dyn` spelling.
+
+trait Iterish {
+    type Item = type
+    fn head(self) -> Self.Item
+}
+
+fn go(d: dyn Iterish) -> int {
+    0
+}
+
+fn main() -> !int {
+    0
+}

@@ -1,0 +1,36 @@
+//! check: fail(E0502)
+//! phase: resolve
+//! conforms: generics.golden.call-site
+//!
+//! The acceptance gate's other half: the SAME generic as the
+//! definition-site corpus, correctly bounded — instantiating it with
+//! a type lacking the impl errors at the call site only, naming the
+//! unmet bound. The callee is never re-entered.
+
+trait Show {
+    fn show(x: Self) -> str
+}
+
+struct Point {
+    x: int,
+}
+
+impl Show for Point {
+    fn show(x: Self) -> str {
+        "point"
+    }
+}
+
+struct Silent {
+    n: int,
+}
+
+fn describe[T: Show](v: T) -> str {
+    Show.show(v)
+}
+
+fn main() -> !int {
+    let s = Silent { n: 0 }
+    let t = describe(s)
+    0
+}

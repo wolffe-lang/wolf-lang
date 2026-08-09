@@ -1,0 +1,11 @@
+//! member: true
+//!
+//! The type's home module.
+
+pub struct Thing {
+    pub n: int,
+}
+
+pub fn make() -> Thing {
+    Thing { n: 0 }
+}

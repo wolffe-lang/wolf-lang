@@ -1,0 +1,29 @@
+//! check: pass
+//! phase: typecheck
+//! conforms: ty.trait.dyn.safe
+//!
+//! A dyn-safe trait (receiver-only `Self`, no generics, no
+//! associated escapes): the `dyn` object satisfies its own trait,
+//! and sema records the dyn-safe method set for the interface.
+
+trait Draw {
+    fn draw(self) -> str
+}
+
+struct Dot {
+    x: int,
+}
+
+impl Draw for Dot {
+    fn draw(self) -> str {
+        "dot"
+    }
+}
+
+fn render(d: dyn Draw) -> str {
+    Draw.draw(d)
+}
+
+fn main() -> !int {
+    0
+}
