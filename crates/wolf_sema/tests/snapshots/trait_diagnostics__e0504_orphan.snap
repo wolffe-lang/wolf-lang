@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\",\n\"use data\\nuse fmt.Show\\n\\n\\\n                 impl Show for data.Thing {\\n    fn show(x: Self) -> str {\\n        \\\"thing\\\"\\n    }\\n}\\n\\n\\\n                 fn main() -> !int {\\n    let t = data.make()\\n    0\\n}\\n\",),\n(&[\"fmt\"], \"f.lu\", \"pub trait Show {\\n    fn show(x: Self) -> str\\n}\\n\",),\n(&[\"data\"], \"d.lu\",\n\"pub struct Thing {\\n    pub n: int,\\n}\\npub fn make() -> Thing {\\n    Thing { n: 0 }\\n}\\n\",),])"
+---
+error[E0504]: this impl of `Show` is an orphan: neither the trait nor `Thing` lives in this module
+ --> mem:///main.lu:4:6
+  |
+4 | impl Show for data.Thing {
+  |      ^^^^ impl written here
+  |
+ ::: mem://fmt/f.lu:1:11
+  |
+1 | pub trait Show {
+  |           ---- the trait is declared here
+  |
+  = note: an impl must live in the trait's module or the self type's module (global coherence,
+    D28). When both are foreign, declare an adapter — `type Local = distinct Foreign` — and
+    implement the trait for it: same layout, free casts, its own impl set.

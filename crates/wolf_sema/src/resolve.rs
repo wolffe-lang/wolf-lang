@@ -179,6 +179,9 @@ impl Resolver<'_> {
             SyntaxKind::TraitDecl => {
                 if let Some(d) = TraitDecl::cast(node) {
                     self.push_scope();
+                    // `Self` names the implementing type inside trait
+                    // and impl member signatures (s14).
+                    self.bind("Self".to_string());
                     self.bind_generics(d.generics());
                     for m in d.members() {
                         self.resolve_item(m);
@@ -189,6 +192,7 @@ impl Resolver<'_> {
             SyntaxKind::ImplDecl => {
                 if let Some(d) = ImplDecl::cast(node) {
                     self.push_scope();
+                    self.bind("Self".to_string());
                     self.bind_generics(d.generics());
                     if let Some(p) = d.trait_path() {
                         self.resolve_path_first(p.syntax(), false);

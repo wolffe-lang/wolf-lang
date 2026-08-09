@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0502]: `Silent` does not implement `Show`, which `describe` requires of `T`
+  --> mem:///main.lu:20:22
+   |
+15 | fn describe[T: Show](v: T) -> str {
+   |                ---- the bound is declared here
+...
+20 |     let t = describe(s)
+   |                      ^ this is `Silent`
+   |
+   = note: write `impl Show for Silent` in the trait's module or the type's module — or, when both
+     are foreign, adapt: `type Local = distinct Silent` and implement the trait for the
+     adapter.

@@ -248,9 +248,16 @@ fn method_calls_are_not_yet_checkable() {
 }
 
 #[test]
-fn generic_instantiation_is_not_yet_checkable() {
+fn generic_instantiation_checks_since_s14() {
+    // s13 refused this honestly; s14's instantiation solves `T` from
+    // the argument and the call checks end to end.
     let tc = check_one("fn first[T](x: T) -> T { x }\nfn main() -> !int { first(1) }\n");
-    assert!(is_nyc(&tc, "main"));
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
 }
 
 #[test]

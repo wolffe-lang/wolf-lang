@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0510]: `Merge` cannot be a `dyn` object: `join` uses `Self` outside receiver position
+ --> mem:///main.lu:4:10
+  |
+2 |     fn join(self, other: Self) -> Self
+  |        ---- `Self` escapes in this method's signature
+3 | }
+4 | fn go(d: dyn Merge) -> int {
+  |          ^^^^^^^^^ `dyn` object created here
+  |
+  = note: behind `dyn` the concrete type is erased, so only the receiver itself may be `Self` (RFC
+    0255); take another `dyn` object or a concrete type instead.

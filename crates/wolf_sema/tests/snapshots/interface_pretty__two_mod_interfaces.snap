@@ -4,16 +4,16 @@ expression: out
 ---
 module pkg :: geometry
   wolfi v0 · toolchain 0.0.1 · edition v1
-  export_hash 717151803ca76ee72c7f6a674bc05ce3ce06021c546dac5e4aca6d5d2b1cdb3b
-  pkg_hash    717151803ca76ee72c7f6a674bc05ce3ce06021c546dac5e4aca6d5d2b1cdb3b
+  export_hash 0f4a5bf512415f662aa3d1343b59a911d11527a777cf71fa49b41e6cf8864b47
+  pkg_hash    0f4a5bf512415f662aa3d1343b59a911d11527a777cf71fa49b41e6cf8864b47
   deps: (none)
   items:
     [0] pub area — fn area(side: int) -> int
 
 module pkg :: (root)
   wolfi v0 · toolchain 0.0.1 · edition v1
-  export_hash 3354b5d450da30d8350edf7de4326f8b4cc056e650bb4bb97f1b67a3c07a7b97
-  pkg_hash    3354b5d450da30d8350edf7de4326f8b4cc056e650bb4bb97f1b67a3c07a7b97
+  export_hash 97826693bed08655f202b0edd2a82a5bb52412ce30a56f1d22c68b97ec2b8c70
+  pkg_hash    97826693bed08655f202b0edd2a82a5bb52412ce30a56f1d22c68b97ec2b8c70
   deps:
-    geometry  717151803ca76ee72c7f6a674bc05ce3ce06021c546dac5e4aca6d5d2b1cdb3b
+    geometry  0f4a5bf512415f662aa3d1343b59a911d11527a777cf71fa49b41e6cf8864b47
   items: (none)

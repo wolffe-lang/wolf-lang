@@ -1,0 +1,22 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0501]: the bounds on `T` do not provide `Show` (needed to call `Show.show`)
+ --> mem:///main.lu:5:15
+  |
+1 | trait Show {
+  |       ---- the required bound is declared here
+...
+4 | fn describe[T](v: T) -> str {
+  |             - `T` is declared here
+5 |     Show.show(v)
+  |               ^ `T` could be any type here
+  |
+  = note: generic bodies are checked once against their bounds (the golden rule, D28): everything
+    a body does with a parameter must be provable from the bounds alone, so instantiation
+    can never fail inside it.
+help: add the bound: `T: Show`
+  |
+4 | fn describe[T: Show](v: T) -> str {
+  |

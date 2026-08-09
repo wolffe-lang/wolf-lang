@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0506]: this impl of `Show` overlaps another impl of the same trait
+  --> mem:///main.lu:12:9
+   |
+ 7 | impl Show for Point {
+   |      ---- it can apply to the same types as this one
+...
+12 | impl[T] Show for T {
+   |         ^^^^ second impl here
+   |
+   = note: one trait has at most one impl per type (global coherence), and wolf has no
+     specialization to pick a winner (D28 — locked). Delete one impl, or narrow the blanket
+     one; bounds do not disambiguate overlap.

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0511]: `F` is a generic parameter, so it cannot take type arguments
+ --> mem:///main.lu:1:19
+  |
+1 | fn apply[F, T](f: F[T]) -> int {
+  |                   ^^^^ applied here
+  |
+  = note: wolf generics are rank-1 over complete types (no higher-kinded parameters, D28); accept
+    the applied type as its own parameter and let the caller pass it whole.

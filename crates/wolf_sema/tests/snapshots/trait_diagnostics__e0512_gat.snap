@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0512]: an associated type cannot have generic parameters of its own
+ --> mem:///main.lu:2:10
+  |
+2 |     type Member[X] = type
+  |          ^^^^^^ generic associated type here
+  |
+  = note: wolf v1 has no GATs (D28 — the ceilings are stated, not discovered); move the parameter
+    onto the trait or the method that needs it.

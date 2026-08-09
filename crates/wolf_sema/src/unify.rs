@@ -295,7 +295,8 @@ fn occurs_adjust(
         | TyKind::Shared(t)
         | TyKind::Handle(t)
         | TyKind::Weak(t)
-        | TyKind::Distinct(t) => occurs_adjust(store, table, var, level, t),
+        | TyKind::Distinct(t)
+        | TyKind::Proj(t, _) => occurs_adjust(store, table, var, level, t),
         TyKind::Tuple(ts) => {
             for t in ts {
                 occurs_adjust(store, table, var, level, t)?;
@@ -368,7 +369,20 @@ pub fn unify(
             },
         ) if ma == mb && na == nb => Ok(()),
         (TyKind::Unsupported(x), TyKind::Unsupported(y)) if x == y => Ok(()),
-        (TyKind::Dyn(x), TyKind::Dyn(y)) if x == y => Ok(()),
+        (
+            TyKind::Dyn {
+                module: ma,
+                name: na,
+            },
+            TyKind::Dyn {
+                module: mb,
+                name: nb,
+            },
+        ) if ma == mb && na == nb => Ok(()),
+        // Projections are equal textually (after normalization — the
+        // rewrite engine runs before unification; D28: no equality
+        // solver): same associated name, unifiable bases.
+        (TyKind::Proj(ba, na), TyKind::Proj(bb, nb)) if na == nb => unify(table, store, ba, bb),
         (TyKind::RegionTy, TyKind::RegionTy) | (TyKind::TypeTy, TyKind::TypeTy) => Ok(()),
         (TyKind::Wrapping(x), TyKind::Wrapping(y))
         | (TyKind::ErrUnion(x), TyKind::ErrUnion(y))

@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0508]: `Mapper` cannot be a `dyn` object: its method `map` has generic parameters
+ --> mem:///main.lu:4:10
+  |
+2 |     fn map[U](self, u: U) -> int
+  |        --- the generic method is declared here
+3 | }
+4 | fn go(d: dyn Mapper) -> int {
+  |          ^^^^^^^^^^ `dyn` object created here
+  |
+  = note: a witness table holds one entry per method, but a generic method would need one per
+    instantiation (RFC 0255 model); drop the method's generics, split the trait, or use `T:
+    Trait` generics.

@@ -88,10 +88,10 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
         sink.push(d.clone());
     }
     diagnostics.extend(sink.into_vec());
-    // Impl/trait member bodies exist but are s14/s17 constructs: they
-    // are NotYetCheckable wholesale, recorded so the ledger stays
-    // honest about the rung.
-    for nyc in member_bodies_not_yet(pkg) {
+    // Trait member *default bodies* are s17's receiver work: each is
+    // one honest NotYetCheckable (impl member bodies check for real
+    // now — s14).
+    for nyc in trait_default_bodies_not_yet(pkg) {
         not_yet.push(nyc);
     }
     for (body, result) in tasks.into_iter().zip(results) {
@@ -140,33 +140,83 @@ fn collect_bodies(pkg: &Package) -> Vec<BodyRef> {
                     file: item.file,
                     name: item.name.clone(),
                     decl: item.decl,
+                    member: None,
                 });
             }
         }
     }
-    // Deterministic order: file, then declaration.
-    out.sort_by_key(|b| (b.file, b.decl));
+    // Impl member bodies (s14): methods and associated-const
+    // initializers check like any other body, with `Self` bound to
+    // the impl's self type.
+    for (m, md) in pkg.modules.iter().enumerate() {
+        for &fi in &md.files {
+            let root = &pkg.files[fi].parse.root;
+            for (decl, node) in root.nodes().filter(|n| n.kind.is_item()).enumerate() {
+                if node.kind != wolf_ast::SyntaxKind::ImplDecl {
+                    continue;
+                }
+                for (member, mnode) in node.nodes().filter(|n| n.kind.is_item()).enumerate() {
+                    let (has_body, name) = match mnode.kind {
+                        wolf_ast::SyntaxKind::FnDecl => {
+                            let d = wolf_ast::FnDecl::cast(mnode);
+                            (
+                                d.and_then(|d| d.body()).is_some(),
+                                d.and_then(|d| d.name())
+                                    .map(|t| text(&pkg.files[fi].raw.src, t.span))
+                                    .unwrap_or_default(),
+                            )
+                        }
+                        wolf_ast::SyntaxKind::ConstDecl => {
+                            let d = wolf_ast::ConstDecl::cast(mnode);
+                            (
+                                d.and_then(|d| d.init()).is_some(),
+                                d.and_then(|d| d.name())
+                                    .map(|t| text(&pkg.files[fi].raw.src, t.span))
+                                    .unwrap_or_default(),
+                            )
+                        }
+                        _ => (false, String::new()),
+                    };
+                    if has_body {
+                        out.push(BodyRef {
+                            module: m,
+                            file: fi,
+                            name,
+                            decl,
+                            member: Some(member),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    // Deterministic order: file, declaration, member.
+    out.sort_by_key(|b| (b.file, b.decl, b.member));
     out
 }
 
-/// `impl`/`trait` member bodies: method receivers and trait machinery
-/// are s14/s17 — each such body is one honest NotYetCheckable.
-fn member_bodies_not_yet(pkg: &Package) -> Vec<NotYet> {
+fn text(src: &[u8], span: wolf_span::Span) -> String {
+    String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]).into_owned()
+}
+
+/// Trait member *default* bodies: checking them against the trait's
+/// own archetype is s17's work — each is one honest NotYetCheckable.
+fn trait_default_bodies_not_yet(pkg: &Package) -> Vec<NotYet> {
     let mut out = Vec::new();
     for unit in &pkg.files {
-        for node in unit.parse.root.nodes().filter(|n| {
-            matches!(
-                n.kind,
-                wolf_ast::SyntaxKind::ImplDecl | wolf_ast::SyntaxKind::TraitDecl
-            )
-        }) {
+        for node in unit
+            .parse
+            .root
+            .nodes()
+            .filter(|n| n.kind == wolf_ast::SyntaxKind::TraitDecl)
+        {
             for member in node.nodes().filter(|n| n.kind.is_item()) {
                 if member.kind == wolf_ast::SyntaxKind::FnDecl
                     && let Some(d) = wolf_ast::FnDecl::cast(member)
                     && d.body().is_some()
                 {
                     out.push(NotYet {
-                        construct: "impl/trait member bodies (s14/s17)",
+                        construct: "trait default method bodies (s17)",
                         span: member.span,
                     });
                 }

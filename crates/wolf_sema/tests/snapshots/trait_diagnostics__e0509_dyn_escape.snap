@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0509]: `Iterish` cannot be a `dyn` object: `head`'s signature exposes an associated type
+ --> mem:///main.lu:5:10
+  |
+3 |     fn head(self) -> Self.Item
+  |        ---- the associated type escapes here
+4 | }
+5 | fn go(d: dyn Iterish) -> int {
+  |          ^^^^^^^^^^^ `dyn` object created here
+  |
+  = note: behind `dyn`, two objects may bind the associated type differently, so a signature
+    exposing it has no single ABI; keep it out of the dynamic methods, or use `T: Trait`
+    generics.

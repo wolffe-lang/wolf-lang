@@ -41,6 +41,27 @@ pub struct ParamSig {
     pub span: Span,
 }
 
+/// A resolved trait bound on a generic parameter (`T: Show` — module
+/// + name identify the trait globally).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundRef {
+    pub module: usize,
+    pub name: String,
+    /// The bound path's span (provenance for E0501/E0502).
+    pub span: Span,
+}
+
+/// One generic parameter with its resolved bounds (s14: the archetype
+/// a body checks against — the only known facts about the parameter).
+#[derive(Debug, Clone)]
+pub struct GenericSig {
+    pub name: String,
+    /// The parameter's declaration span (where an add-this-bound
+    /// suggestion inserts).
+    pub span: Span,
+    pub bounds: Vec<BoundRef>,
+}
+
 /// One function item's elaborated signature.
 #[derive(Debug, Clone)]
 pub struct FnSig {
@@ -52,12 +73,18 @@ pub struct FnSig {
     /// The `-> …` node's span (the "because" locus of return-type
     /// provenance), if written.
     pub ret_span: Option<Span>,
-    /// Generic parameter names, in order. Non-empty ⇒ calls need
-    /// instantiation (s14) and are NotYetCheckable.
-    pub generics: Vec<String>,
-    /// Any generic parameter carries a bound ⇒ the *body* waits for
-    /// s14 too.
-    pub bounded: bool,
+    /// Generic parameters, in order, with resolved bounds. Non-empty
+    /// ⇒ calls instantiate (s14: fresh existentials per parameter,
+    /// argument-driven, bounds checked at the call site only).
+    pub generics: Vec<GenericSig>,
+}
+
+impl FnSig {
+    /// The generic parameter names (rigid names in scope for
+    /// lowering).
+    pub fn generic_names(&self) -> Vec<String> {
+        self.generics.iter().map(|g| g.name.clone()).collect()
+    }
 }
 
 /// One struct field's elaborated signature.
@@ -100,6 +127,15 @@ pub enum ItemSig {
     Alias {
         generic: bool,
     },
+    /// `type X = distinct T` — an **adapter type** (D28's sanctioned
+    /// orphan escape): a nominal type of its own, with its OWN empty
+    /// impl set (nothing inherited), whose recorded `base` is the
+    /// layout-identity fact for c05 — `as` casts between the adapter
+    /// and its base are free and bidirectional (no-ops at lowering).
+    Distinct {
+        base: TyId,
+        name_span: Span,
+    },
     Trait,
     Global(GlobalSig),
 }
@@ -113,7 +149,12 @@ pub struct SigTables {
     pub modules: Vec<BTreeMap<String, ItemSig>>,
     /// Dotted module names for rendering.
     pub module_names: Vec<String>,
-    /// Missing-annotation diagnostics (E0407), deterministic order.
+    /// Every trait declaration, by global identity (s14).
+    pub traits: BTreeMap<crate::traits::TraitRef, crate::traits::TraitDef>,
+    /// Every impl block, coherence-checked (s14).
+    pub impls: Vec<crate::traits::ImplDef>,
+    /// Signature-elaboration + trait/coherence diagnostics (E0407,
+    /// E05xx), deterministic order.
     pub diagnostics: Vec<Diagnostic>,
 }
 
@@ -142,12 +183,17 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
         }
         modules[m] = sigs;
     }
+    // The s14 layer: trait declarations, impls, coherence, dyn use
+    // checks — all elaborating into the same base table.
+    let (traits, impls) = crate::traits::build(&mut lower);
     let mut diagnostics = lower.diags;
     wolf_diag::sort_diagnostics(&mut diagnostics);
     SigTables {
         table: lower.table,
         modules,
         module_names: pkg.modules.iter().map(|md| md.dotted()).collect(),
+        traits,
+        impls,
         diagnostics,
     }
 }
@@ -181,7 +227,7 @@ pub(crate) struct Lower<'a> {
     pub table: TypeTable,
     /// Alias-expansion cycle guard: (module, item name).
     alias_stack: Vec<(usize, String)>,
-    diags: Vec<Diagnostic>,
+    pub(crate) diags: Vec<Diagnostic>,
 }
 
 impl<'a> Lower<'a> {
@@ -238,6 +284,19 @@ impl<'a> Lower<'a> {
             SyntaxKind::TypeDecl => {
                 let d = TypeDecl::cast(node).expect("kind");
                 let generic = d.generics().is_some_and(|g| g.params().next().is_some());
+                // `type X = distinct T` — the adapter form (D28): a
+                // nominal type of its own with a recorded base (the
+                // layout-identity fact for c05).
+                if !generic
+                    && let Some(def) = d.def()
+                    && is_distinct_def(def)
+                {
+                    let base = self.lower_inner(module, file, &[], def);
+                    return ItemSig::Distinct {
+                        base,
+                        name_span: item.name_span,
+                    };
+                }
                 match d.def().map(|def| def.kind) {
                     Some(SyntaxKind::StructDef) => {
                         let generics = generic_names(self, file, node);
@@ -338,18 +397,47 @@ impl<'a> Lower<'a> {
         self.diags.push(d);
     }
 
-    fn fn_sig(&mut self, module: usize, file: usize, node: &GreenNode, name_span: Span) -> FnSig {
+    pub(crate) fn fn_sig(
+        &mut self,
+        module: usize,
+        file: usize,
+        node: &GreenNode,
+        name_span: Span,
+    ) -> FnSig {
+        self.fn_sig_in(module, file, node, name_span, &[])
+    }
+
+    /// [`Lower::fn_sig`] with `outer` rigid names already in scope
+    /// (an impl's generics + `Self` when elaborating members).
+    pub(crate) fn fn_sig_in(
+        &mut self,
+        module: usize,
+        file: usize,
+        node: &GreenNode,
+        name_span: Span,
+        outer: &[String],
+    ) -> FnSig {
         let d = FnDecl::cast(node).expect("kind");
-        let generics = generic_names(self, file, node);
-        let bounded = d
-            .generics()
-            .is_some_and(|g| g.params().any(|p| p.bound().is_some() || p.is_type_param()));
+        let own = self.generic_defs(module, file, node);
+        let mut generics: Vec<String> = outer.to_vec();
+        generics.extend(own.iter().map(|g| g.name.clone()));
         let mut params = Vec::new();
         if let Some(list) = d.params() {
             for p in list.params() {
                 if p.is_self() {
-                    // Free items never take `self`; impl members are
-                    // s17's method work and are not elaborated here.
+                    // Inside a trait/impl (where `Self` is in scope),
+                    // a receiver elaborates as a leading `Self`-typed
+                    // parameter — qualified calls pass it explicitly
+                    // (receiver *syntax* is s17). Free items never
+                    // take `self`.
+                    if generics.iter().any(|g| g == "Self") {
+                        let ty = self.table.intern(TyKind::Rigid("Self".to_string()));
+                        params.push(ParamSig {
+                            name: "self".to_string(),
+                            ty,
+                            span: p.syntax().span,
+                        });
+                    }
                     continue;
                 }
                 let pname = p
@@ -393,8 +481,116 @@ impl<'a> Lower<'a> {
             ret,
             name_span,
             ret_span,
-            generics,
-            bounded,
+            generics: own,
+        }
+    }
+
+    /// Elaborate an item's generic parameter list into [`GenericSig`]s
+    /// with resolved trait bounds. A bound naming anything but a
+    /// trait — or a trait with its own input parameters, which the
+    /// bound surface cannot apply yet — is E0503.
+    pub(crate) fn generic_defs(
+        &mut self,
+        module: usize,
+        file: usize,
+        node: &GreenNode,
+    ) -> Vec<GenericSig> {
+        let Some(list) = node.nodes().find_map(wolf_ast::GenericParamList::cast) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for p in list.params() {
+            let Some(name_tok) = p.name() else { continue };
+            let name = self.text(file, name_tok.span);
+            let mut bounds = Vec::new();
+            if let Some(bound) = p.bound() {
+                for path in bound.paths() {
+                    let segs: Vec<(String, Span)> = path
+                        .segments()
+                        .map(|t| (self.text(file, t.span), t.span))
+                        .collect();
+                    let span = segs
+                        .first()
+                        .map(|(_, s)| segs.iter().fold(*s, |a, (_, b)| a.join(*b)))
+                        .unwrap_or(name_tok.span);
+                    match self.resolve_type_head(module, file, &segs) {
+                        TypeHead::Item {
+                            module: tm,
+                            name: tn,
+                        } => match self.trait_bound_check(tm, &tn) {
+                            BoundCheck::Ok => bounds.push(BoundRef {
+                                module: tm,
+                                name: tn,
+                                span,
+                            }),
+                            BoundCheck::NotATrait(kind) => {
+                                self.diags.push(
+                                    Diagnostic::error(
+                                        codes::E0503,
+                                        span,
+                                        format!(
+                                            "`{tn}` is a {kind}, and only traits can be bounds"
+                                        ),
+                                    )
+                                    .with_label("not a trait")
+                                    .with_note(
+                                        "a bound promises capabilities, and only a `trait` \
+                                             declares a capability set — check the name, or \
+                                             write the trait you meant.",
+                                    ),
+                                );
+                            }
+                            BoundCheck::Parameterized => {
+                                self.diags.push(
+                                    Diagnostic::error(
+                                        codes::E0503,
+                                        span,
+                                        format!(
+                                            "the trait `{tn}` takes input parameters, which \
+                                                 a bound cannot apply"
+                                        ),
+                                    )
+                                    .with_label("this trait is parameterized")
+                                    .with_note(
+                                        "bounds are written `T: Trait` with no arguments; \
+                                             applying trait inputs inside a bound has no surface \
+                                             syntax yet — use a trait without input parameters.",
+                                    ),
+                                );
+                            }
+                        },
+                        // Unresolved bound paths were already reported
+                        // by name resolution (E0301); poisoned imports
+                        // stay silent.
+                        TypeHead::Unknown | TypeHead::Poisoned => {}
+                    }
+                }
+            }
+            out.push(GenericSig {
+                name,
+                span: name_tok.span,
+                bounds,
+            });
+        }
+        out
+    }
+
+    /// Is the item at (module, name) a bindable trait bound?
+    fn trait_bound_check(&self, module: usize, name: &str) -> BoundCheck {
+        let Some(item) = self.pkg.tables[module].get(name) else {
+            return BoundCheck::NotATrait("missing item");
+        };
+        let node = item_node(self.pkg, item);
+        if node.kind != SyntaxKind::TraitDecl {
+            return BoundCheck::NotATrait(item.kind.keyword());
+        }
+        let parameterized = wolf_ast::TraitDecl::cast(node)
+            .and_then(|d| d.generics())
+            .is_some_and(|g| g.params().next().is_some());
+        if parameterized {
+            BoundCheck::Parameterized
+        } else {
+            BoundCheck::Ok
         }
     }
 
@@ -490,11 +686,32 @@ impl<'a> Lower<'a> {
                 self.table.intern(kind)
             }
             SyntaxKind::DynType => {
-                let path = node
-                    .child_node(SyntaxKind::Path)
-                    .map(|p| self.text(file, p.span))
-                    .unwrap_or_default();
-                self.table.intern(TyKind::Dyn(path))
+                let Some(pnode) = node.child_node(SyntaxKind::Path) else {
+                    return self.table.error();
+                };
+                let segs: Vec<(String, Span)> = pnode
+                    .tokens()
+                    .filter(|t| t.kind == SyntaxKind::Ident)
+                    .map(|t| (self.text(file, t.span), t.span))
+                    .collect();
+                if segs.is_empty() {
+                    return self.table.error();
+                }
+                match self.resolve_type_head(module, file, &segs) {
+                    TypeHead::Item { module: tm, name }
+                        if self.pkg.tables[tm].get(&name).is_some_and(|i| {
+                            item_node(self.pkg, i).kind == SyntaxKind::TraitDecl
+                        }) =>
+                    {
+                        self.table.intern(TyKind::Dyn {
+                            module: tm as u32,
+                            name,
+                        })
+                    }
+                    // Non-traits and unresolved paths: the dyn-safety
+                    // pass / resolution already own the report.
+                    _ => self.opaque(file, node),
+                }
             }
             SyntaxKind::RegionType => self.table.intern(TyKind::RegionTy),
             SyntaxKind::TypeType => self.table.intern(TyKind::TypeTy),
@@ -502,7 +719,7 @@ impl<'a> Lower<'a> {
         }
     }
 
-    fn lower_inner(
+    pub(crate) fn lower_inner(
         &mut self,
         module: usize,
         file: usize,
@@ -553,13 +770,44 @@ impl<'a> Lower<'a> {
             return self.opaque(file, node);
         }
 
-        if segs.len() == 1 && !has_args {
-            if generics.contains(&first) {
+        if generics.contains(&first) {
+            if has_args {
+                // The no-HKP ceiling (D28): a parameter names one
+                // complete type, never a constructor.
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0511,
+                        node.span,
+                        format!(
+                            "`{first}` is a generic parameter, so it cannot take type arguments"
+                        ),
+                    )
+                    .with_label("applied here")
+                    .with_note(
+                        "wolf generics are rank-1 over complete types (no higher-kinded \
+                         parameters, D28); accept the applied type as its own parameter \
+                         and let the caller pass it whole.",
+                    ),
+                );
+                return self.table.error();
+            }
+            if segs.len() == 1 {
                 return self.table.intern(TyKind::Rigid(first));
             }
-            if let Some(p) = Prim::from_name(&first) {
-                return self.table.prim(p);
+            if segs.len() == 2 {
+                // `T.Item` — an associated-type projection through the
+                // parameter's bounds (provability checked by s14's
+                // archetype validation).
+                let base = self.table.intern(TyKind::Rigid(first));
+                return self.table.intern(TyKind::Proj(base, segs[1].0.clone()));
             }
+            return self.opaque(file, node);
+        }
+        if segs.len() == 1
+            && !has_args
+            && let Some(p) = Prim::from_name(&first)
+        {
+            return self.table.prim(p);
         }
 
         // Resolve the head: imports first (file-scoped), then module
@@ -586,7 +834,12 @@ impl<'a> Lower<'a> {
         }
     }
 
-    fn resolve_type_head(&self, module: usize, file: usize, segs: &[(String, Span)]) -> TypeHead {
+    pub(crate) fn resolve_type_head(
+        &self,
+        module: usize,
+        file: usize,
+        segs: &[(String, Span)],
+    ) -> TypeHead {
         let first = &segs[0].0;
         for b in bindings_for(self.pkg, module, file) {
             if b.name == *first {
@@ -617,7 +870,7 @@ impl<'a> Lower<'a> {
     }
 
     /// A path that resolved to a module item used as a type.
-    fn named_item_type(
+    pub(crate) fn named_item_type(
         &mut self,
         module: usize,
         name: &str,
@@ -645,6 +898,14 @@ impl<'a> Lower<'a> {
                             name: name.to_string(),
                         })
                     }
+                    // An adapter (`type X = distinct T`) is a nominal
+                    // type of its own — never alias-expanded (D28).
+                    Some(def) if !generic && is_distinct_def(def) => {
+                        self.table.intern(TyKind::Nominal {
+                            module: module as u32,
+                            name: name.to_string(),
+                        })
+                    }
                     Some(def) if !generic => {
                         // Alias expansion, in the alias's own context,
                         // with a cycle guard.
@@ -667,17 +928,32 @@ impl<'a> Lower<'a> {
     /// The opaque fallback: keep the source rendering (whitespace
     /// normalized) so identical spellings stay equal and every
     /// operation on the value is NotYetCheckable.
-    fn opaque(&mut self, file: usize, node: &GreenNode) -> TyId {
+    pub(crate) fn opaque(&mut self, file: usize, node: &GreenNode) -> TyId {
         let text = self.text(file, node.span);
         let norm = text.split_whitespace().collect::<Vec<_>>().join(" ");
         self.table.intern(TyKind::Unsupported(norm))
     }
 }
 
-enum TypeHead {
+pub(crate) enum TypeHead {
     Item { module: usize, name: String },
     Unknown,
     Poisoned,
+}
+
+enum BoundCheck {
+    Ok,
+    NotATrait(&'static str),
+    Parameterized,
+}
+
+/// Is this TypeDecl right-hand side the `distinct T` prefix form?
+pub(crate) fn is_distinct_def(def: &GreenNode) -> bool {
+    def.kind == SyntaxKind::PrefixType
+        && def
+            .tokens()
+            .next()
+            .is_some_and(|t| t.kind == SyntaxKind::DistinctKw)
 }
 
 /// A literal-initializer type for the E0407 hint ("the compiler knows").

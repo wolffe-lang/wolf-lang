@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0503]: `Post` is a struct, and only traits can be bounds
+ --> mem:///main.lu:4:10
+  |
+4 | fn go[T: Post](x: T) -> int {
+  |          ^^^^ not a trait
+  |
+  = note: a bound promises capabilities, and only a `trait` declares a capability set — check the
+    name, or write the trait you meant.

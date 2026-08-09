@@ -1,0 +1,36 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0513]: the associated types `A` and `B` are bound in terms of each other
+  --> mem:///main.lu:8:1
+   |
+ 8 | impl Pair for P {
+   | ^^^^^^^^^^^^^^^^^
+ 9 |     type A = Self.B
+10 |     type B = Self.A
+11 | }
+   | ^ this impl's bindings form a cycle
+   |
+   = note: associated types normalize by rewriting to a fixed point; a cycle never reaches one —
+     bind at least one of them to a concrete type.
+
+error[E0507]: this impl of `Pair` does not bind the associated type `A`
+ --> mem:///main.lu:8:6
+  |
+2 |     type A = type
+  |          - declared by the trait here
+...
+8 | impl Pair for P {
+  |      ^^^^ missing `type A = …`
+  |
+
+error[E0507]: this impl of `Pair` does not bind the associated type `B`
+ --> mem:///main.lu:8:6
+  |
+3 |     type B = type
+  |          - declared by the trait here
+...
+8 | impl Pair for P {
+  |      ^^^^ missing `type B = …`
+  |

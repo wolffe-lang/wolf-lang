@@ -160,8 +160,18 @@ pub enum TyKind {
     Handle(TyId),
     Weak(TyId),
     Distinct(TyId),
-    /// `dyn Trait` by rendered path (s14 owns the semantics).
-    Dyn(String),
+    /// `dyn Trait` with the trait resolved to its defining module
+    /// (s14). Dyn-safety is checked where the type is written; witness
+    /// layout is c05's.
+    Dyn {
+        module: u32,
+        name: String,
+    },
+    /// An associated-type projection `Base.Name` (s14). Bases are
+    /// rigid inside generic bodies; concrete bases normalize away via
+    /// the impl's rewrite rules ([`crate::rewrite`]). Equality is
+    /// textual-after-normalization — no equality solver (D28).
+    Proj(TyId, String),
     /// The `region` type (X4).
     RegionTy,
     /// The `type` type (comptime, D29).
@@ -268,7 +278,8 @@ pub fn render(
         TyKind::Handle(t) => format!("handle {}", render(table, *t, resolve)),
         TyKind::Weak(t) => format!("weak {}", render(table, *t, resolve)),
         TyKind::Distinct(t) => format!("distinct {}", render(table, *t, resolve)),
-        TyKind::Dyn(p) => format!("dyn {p}"),
+        TyKind::Dyn { name, .. } => format!("dyn {name}"),
+        TyKind::Proj(base, name) => format!("{}.{name}", render(table, *base, resolve)),
         TyKind::RegionTy => "region".to_string(),
         TyKind::TypeTy => "type".to_string(),
         TyKind::Unsupported(s) => s.clone(),
@@ -341,6 +352,66 @@ pub fn diff(
             diff(table, *x, *y, resolve, out, "the element type");
         }
         _ => leaf(out),
+    }
+}
+
+/// Substitute rigid type variables by name (s14 instantiation: an
+/// archetype's rigids become the call's inference variables; a trait
+/// member's `Self` becomes the impl's self type). Structural and
+/// total — unknown rigids pass through unchanged.
+pub fn subst(
+    table: &mut TypeTable,
+    ty: TyId,
+    map: &std::collections::BTreeMap<String, TyId>,
+) -> TyId {
+    match table.kind(ty).clone() {
+        TyKind::Rigid(name) => map.get(&name).copied().unwrap_or(ty),
+        TyKind::Wrapping(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Wrapping(s))
+        }
+        TyKind::ErrUnion(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::ErrUnion(s))
+        }
+        TyKind::Range(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Range(s))
+        }
+        TyKind::Ptr(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Ptr(s))
+        }
+        TyKind::Shared(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Shared(s))
+        }
+        TyKind::Handle(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Handle(s))
+        }
+        TyKind::Weak(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Weak(s))
+        }
+        TyKind::Distinct(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Distinct(s))
+        }
+        TyKind::Proj(base, name) => {
+            let s = subst(table, base, map);
+            table.intern(TyKind::Proj(s, name))
+        }
+        TyKind::Tuple(ts) => {
+            let s: Vec<TyId> = ts.into_iter().map(|t| subst(table, t, map)).collect();
+            table.intern(TyKind::Tuple(s))
+        }
+        TyKind::Fn(params, ret) => {
+            let ps: Vec<TyId> = params.into_iter().map(|t| subst(table, t, map)).collect();
+            let r = subst(table, ret, map);
+            table.intern(TyKind::Fn(ps, r))
+        }
+        _ => ty,
     }
 }
 

@@ -17,6 +17,13 @@
 //! artifact bytes, [`decode`] is the loader API that s31's separate
 //! compilation will consume (exercised by round-trip tests today), and
 //! [`pretty`] backs `wolf interface`.
+//!
+//! s14 extends the format with impl rows (headers + associated-type
+//! rewrites, canonical order) and per-trait dyn-safety records (the
+//! dyn-safe method set, canonical order). Both ride in BOTH hash
+//! partitions: coherence makes an impl addition anywhere an
+//! interface change, while member *bodies* — like all bodies — never
+//! serialize, so generic/impl body edits keep every hash fixed.
 
 use std::collections::BTreeMap;
 
@@ -48,6 +55,30 @@ pub struct IfaceItem {
     pub sig: String,
 }
 
+/// One impl row (s14). Impls have no names and no visibility: every
+/// impl is interface surface, because coherence makes an impl
+/// addition anywhere an observable change — adding or removing one
+/// moves both hashes; editing member *bodies* moves neither.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IfaceImpl {
+    /// Rendered header, resolved paths, canonical:
+    /// `impl[T: self.Show] self.Show for self.Cover`.
+    pub header: String,
+    /// Associated-type rewrites (`type Item = int`), canonical order.
+    pub rewrites: Vec<String>,
+}
+
+/// A trait's recorded dyn-safety (s14, RFC 0255): the verdict plus
+/// the dyn-safe method set in canonical order (c05 builds witness
+/// tables from exactly this list).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IfaceTraitDyn {
+    pub name: String,
+    pub dyn_safe: bool,
+    /// Canonically ordered method names (empty when not dyn-safe).
+    pub methods: Vec<String>,
+}
+
 /// A decoded (or freshly built) module interface.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interface {
@@ -61,6 +92,12 @@ pub struct Interface {
     /// Exported items (`pub` and `pub(pkg)`), canonically sorted by
     /// `(kind, name)`. Private items never appear.
     pub items: Vec<IfaceItem>,
+    /// Every impl of the module (s14), canonically sorted; hashed
+    /// into both partitions.
+    pub impls: Vec<IfaceImpl>,
+    /// Dyn-safety records for the module's exported traits (s14),
+    /// sorted by name.
+    pub dyns: Vec<IfaceTraitDyn>,
     pub export_hash: [u8; 32],
     pub pkg_hash: [u8; 32],
 }
@@ -111,15 +148,23 @@ fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>)
             sig: render_item_sig(pkg, m, item),
         })
         .collect();
+    let impls = render_impls(pkg, m);
+    let dyns = render_dyns(pkg, m, &rows);
     let mut head = Vec::new();
     write_header(&mut head, pkg, module, &deps);
+    // Impls and dyn records ride in BOTH partitions: coherence makes
+    // an impl addition anywhere an interface change (s14).
     let mut export_bytes = head.clone();
     write_items(
         &mut export_bytes,
         items.iter().filter(|i| i.vis == Vis::Pub),
     );
+    write_impls(&mut export_bytes, &impls);
+    write_dyns(&mut export_bytes, &dyns);
     let mut pkg_bytes = head;
     write_items(&mut pkg_bytes, items.iter());
+    write_impls(&mut pkg_bytes, &impls);
+    write_dyns(&mut pkg_bytes, &dyns);
     Interface {
         package: pkg.name.clone(),
         module_path: module.path.clone(),
@@ -127,9 +172,97 @@ fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>)
         edition: EDITION.to_string(),
         deps,
         items,
+        impls,
+        dyns,
         export_hash: *blake3::hash(&export_bytes).as_bytes(),
         pkg_hash: *blake3::hash(&pkg_bytes).as_bytes(),
     }
+}
+
+/// Render every impl of module `m` (headers + assoc rewrites),
+/// canonically sorted. Bodies never appear — the golden rule keeps
+/// generic bodies out of the interface.
+fn render_impls(pkg: &Package, m: usize) -> Vec<IfaceImpl> {
+    let mut out = Vec::new();
+    for &fi in &pkg.modules[m].files {
+        let root = &pkg.files[fi].parse.root;
+        for node in root.nodes().filter(|n| n.kind == SyntaxKind::ImplDecl) {
+            let Some(d) = wolf_ast::ImplDecl::cast(node) else {
+                continue;
+            };
+            let mut ctx = SigCtx {
+                pkg,
+                module: m,
+                file: fi,
+                generics: Vec::new(),
+            };
+            let mut header = String::from("impl");
+            header.push_str(&bind_generics(&mut ctx, d.generics()));
+            header.push(' ');
+            match d.trait_path() {
+                Some(p) => header.push_str(&render_path(&ctx, p.syntax())),
+                None => header.push_str("<error>"),
+            }
+            if let Some(args) = node.nodes().find_map(wolf_ast::TypeArgList::cast) {
+                let parts: Vec<String> = args
+                    .args()
+                    .filter(|a| is_type_kind(a.kind))
+                    .map(|a| render_type(&ctx, a))
+                    .collect();
+                if !parts.is_empty() {
+                    header.push_str(&format!("[{}]", parts.join(", ")));
+                }
+            }
+            if let Some(t) = d.self_ty() {
+                header.push_str(" for ");
+                header.push_str(&render_type(&ctx, t));
+            }
+            let mut rewrites: Vec<String> = d
+                .members()
+                .filter(|mn| mn.kind == SyntaxKind::TypeDecl)
+                .filter_map(|mn| {
+                    let t = TypeDecl::cast(mn)?;
+                    let name = t.name().map(|tok| ctx.text(tok.span))?;
+                    let rhs = t
+                        .def()
+                        .map(|def| render_type(&ctx, def))
+                        .unwrap_or_else(|| "<error>".to_string());
+                    Some(format!("type {name} = {rhs}"))
+                })
+                .collect();
+            rewrites.sort();
+            out.push(IfaceImpl { header, rewrites });
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Dyn-safety records for the module's exported traits (s14).
+fn render_dyns(
+    pkg: &Package,
+    m: usize,
+    rows: &[(&crate::graph::Item, ItemKind, String)],
+) -> Vec<IfaceTraitDyn> {
+    let mut out: Vec<IfaceTraitDyn> = rows
+        .iter()
+        .filter(|(_, kind, _)| *kind == ItemKind::Trait)
+        .filter_map(|(item, _, _)| {
+            let node = crate::sig::item_node(pkg, item);
+            if node.kind != SyntaxKind::TraitDecl {
+                return None;
+            }
+            let report = crate::traits::dyn_report(node, &pkg.files[item.file].raw.src);
+            Some(IfaceTraitDyn {
+                name: item.name.clone(),
+                dyn_safe: report.safe(),
+                methods: report.methods,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    let _ = m;
+    out
 }
 
 // ------------------------------------------------------------ encoding --
@@ -177,6 +310,29 @@ fn write_items<'a>(out: &mut Vec<u8>, items: impl Iterator<Item = &'a IfaceItem>
     }
 }
 
+fn write_impls(out: &mut Vec<u8>, impls: &[IfaceImpl]) {
+    w_u32(out, impls.len() as u32);
+    for i in impls {
+        w_str(out, &i.header);
+        w_u32(out, i.rewrites.len() as u32);
+        for r in &i.rewrites {
+            w_str(out, r);
+        }
+    }
+}
+
+fn write_dyns(out: &mut Vec<u8>, dyns: &[IfaceTraitDyn]) {
+    w_u32(out, dyns.len() as u32);
+    for d in dyns {
+        w_str(out, &d.name);
+        out.push(u8::from(d.dyn_safe));
+        w_u32(out, d.methods.len() as u32);
+        for m in &d.methods {
+            w_str(out, m);
+        }
+    }
+}
+
 /// Serialize an interface to its on-disk `wolfi` v0 bytes.
 pub fn encode(iface: &Interface) -> Vec<u8> {
     let mut out = Vec::new();
@@ -195,6 +351,8 @@ pub fn encode(iface: &Interface) -> Vec<u8> {
         out.extend_from_slice(hash);
     }
     write_items(&mut out, iface.items.iter());
+    write_impls(&mut out, &iface.impls);
+    write_dyns(&mut out, &iface.dyns);
     out.extend_from_slice(&iface.export_hash);
     out.extend_from_slice(&iface.pkg_hash);
     out
@@ -274,6 +432,33 @@ pub fn decode(bytes: &[u8]) -> Result<Interface, String> {
             sig,
         });
     }
+    let nimpls = r.u32()?;
+    let mut impls = Vec::new();
+    for _ in 0..nimpls {
+        let header = r.str()?;
+        let nrw = r.u32()?;
+        let mut rewrites = Vec::new();
+        for _ in 0..nrw {
+            rewrites.push(r.str()?);
+        }
+        impls.push(IfaceImpl { header, rewrites });
+    }
+    let ndyns = r.u32()?;
+    let mut dyns = Vec::new();
+    for _ in 0..ndyns {
+        let name = r.str()?;
+        let dyn_safe = r.take(1)?[0] != 0;
+        let nm = r.u32()?;
+        let mut methods = Vec::new();
+        for _ in 0..nm {
+            methods.push(r.str()?);
+        }
+        dyns.push(IfaceTraitDyn {
+            name,
+            dyn_safe,
+            methods,
+        });
+    }
     let export_hash = r.hash()?;
     let pkg_hash = r.hash()?;
     if r.pos != bytes.len() {
@@ -286,6 +471,8 @@ pub fn decode(bytes: &[u8]) -> Result<Interface, String> {
         edition,
         deps,
         items,
+        impls,
+        dyns,
         export_hash,
         pkg_hash,
     })
@@ -333,6 +520,30 @@ pub fn pretty(iface: &Interface) -> String {
                 i.name,
                 i.sig
             );
+        }
+    }
+    if !iface.impls.is_empty() {
+        let _ = writeln!(out, "  impls:");
+        for i in &iface.impls {
+            let _ = writeln!(out, "    {}", i.header);
+            for r in &i.rewrites {
+                let _ = writeln!(out, "      {r}");
+            }
+        }
+    }
+    if !iface.dyns.is_empty() {
+        let _ = writeln!(out, "  dyn:");
+        for d in &iface.dyns {
+            if d.dyn_safe {
+                let _ = writeln!(
+                    out,
+                    "    {} dyn-safe {{ {} }}",
+                    d.name,
+                    d.methods.join(", ")
+                );
+            } else {
+                let _ = writeln!(out, "    {} not dyn-safe", d.name);
+            }
         }
     }
     out

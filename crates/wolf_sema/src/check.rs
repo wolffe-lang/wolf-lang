@@ -27,19 +27,22 @@
 //! mutable state — each body is an independent inference problem
 //! (Target 5; parallelized in [`crate::typecheck`]).
 
+use std::collections::{BTreeMap, HashMap};
 use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, CallExpr, CastExpr, ClosureExpr, ConstDecl,
     DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, GreenNode, IfExpr, LetDecl, MatchArm,
     MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr,
     StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
 };
+
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
 
 use crate::graph::{BindTarget, Package};
 use crate::prelude;
-use crate::sig::{FnSig, ItemSig, Lower, SigTables, StructSig, bindings_for};
-use crate::types::{Prim, TyId, TyKind, TypeTable, diff, render};
+use crate::sig::{FnSig, GenericSig, ItemSig, Lower, SigTables, StructSig, bindings_for};
+use crate::traits::{self, TraitRef};
+use crate::types::{Prim, TyId, TyKind, TypeTable, diff, render, subst};
 use crate::unify::{NumKind, UnifyErr, VarStore, join, unify};
 
 // ------------------------------------------------------------ contract --
@@ -85,7 +88,8 @@ impl TypedBody {
     }
 }
 
-/// One body to check: a function body or an item initializer.
+/// One body to check: a function body, an item initializer, or (s14)
+/// an impl member body.
 #[derive(Debug, Clone)]
 pub struct BodyRef {
     pub module: usize,
@@ -94,6 +98,9 @@ pub struct BodyRef {
     pub name: String,
     /// Ordinal among the file root's item nodes.
     pub decl: usize,
+    /// For impl member bodies: the member's ordinal among the impl's
+    /// item nodes (`None` for top-level bodies).
+    pub member: Option<usize>,
 }
 
 // ---------------------------------------------------------- provenance --
@@ -202,6 +209,30 @@ struct LoopCtx {
     saw_break: bool,
 }
 
+/// The impl-search depth rail for blanket-impl chains.
+const SAT_DEPTH: u32 = 8;
+
+/// Why a type must satisfy a trait (s14 obligations, discharged at
+/// body end once inputs are solved).
+#[derive(Debug, Clone)]
+enum OblOrigin {
+    /// Instantiating `callee`'s generic parameter `param`.
+    Instantiation { callee: String, param: String },
+    /// A qualified call `Trait.method(…)` constrains its `Self`.
+    Qualified { method: String },
+}
+
+#[derive(Debug, Clone)]
+struct Obligation {
+    ty: TyId,
+    tr: TraitRef,
+    /// Primary span: the call-site argument (or call) to blame.
+    span: Span,
+    /// Where the bound was declared (the secondary).
+    bound_span: Option<Span>,
+    origin: OblOrigin,
+}
+
 struct Checker<'a> {
     sigs: &'a SigTables,
     module: usize,
@@ -215,6 +246,17 @@ struct Checker<'a> {
     /// (return type, fn name, because span) of the enclosing function.
     ret: Option<(TyId, String, Span)>,
     generics: Vec<String>,
+    /// Rigid name → declared bounds (the archetype facts, D28).
+    bounds: traits::Bounds,
+    /// Rigid name → (declaration span, has any bound) for the
+    /// add-this-bound suggestion.
+    generic_info: BTreeMap<String, (Span, bool)>,
+    /// The impl self type when checking an impl member body.
+    self_ty: Option<TyId>,
+    /// Bound obligations, discharged after defaulting.
+    obligations: Vec<Obligation>,
+    /// Satisfaction cache keyed on (type, trait) — the s14 contract.
+    sat_cache: HashMap<(TyId, usize, String), bool>,
     level: u32,
     in_closure: bool,
     loops: Vec<LoopCtx>,
@@ -223,13 +265,21 @@ struct Checker<'a> {
 /// Check one body against the elaborated signatures. Pure in
 /// `(&Package, &SigTables, &BodyRef)` — no shared mutable state.
 pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult {
-    let node = pkg.files[body.file]
+    let outer = pkg.files[body.file]
         .parse
         .root
         .nodes()
         .filter(|n| n.kind.is_item())
         .nth(body.decl)
         .expect("body decl index valid");
+    let node = match body.member {
+        None => outer,
+        Some(mi) => outer
+            .nodes()
+            .filter(|n| n.kind.is_item())
+            .nth(mi)
+            .expect("impl member index valid"),
+    };
     let mut c = Checker {
         sigs,
         module: body.module,
@@ -242,15 +292,24 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         locals: Vec::new(),
         ret: None,
         generics: Vec::new(),
+        bounds: traits::Bounds::new(),
+        generic_info: BTreeMap::new(),
+        self_ty: None,
+        obligations: Vec::new(),
+        sat_cache: HashMap::new(),
         level: 0,
         in_closure: false,
         loops: Vec::new(),
     };
-    let outcome = c.run(node, body);
+    let outcome = match body.member {
+        None => c.run(node, body),
+        Some(mi) => c.run_impl_member(node, body, mi),
+    };
     match outcome {
         Err(nyc) => BodyResult::NotYetCheckable(nyc),
         Ok(()) => {
             c.finish_defaulting();
+            c.discharge_obligations();
             // Cascade suppression: diagnostics inside parse-wrecked
             // regions stay quiet (the s10 contract).
             let mut sink = wolf_diag::Diagnostics::new();
@@ -302,6 +361,10 @@ fn zonk(table: &mut TypeTable, vars: &VarStore, ty: TyId) -> TyId {
         TyKind::Range(t) => {
             let z = zonk(table, vars, t);
             table.intern(TyKind::Range(z))
+        }
+        TyKind::Proj(base, name) => {
+            let z = zonk(table, vars, base);
+            table.intern(TyKind::Proj(z, name))
         }
         TyKind::Tuple(ts) => {
             let z: Vec<TyId> = ts.into_iter().map(|t| zonk(table, vars, t)).collect();
@@ -389,6 +452,26 @@ impl<'a> Checker<'a> {
         self.lo.table.kind(self.shallow(ty)).clone()
     }
 
+    /// Lower a body-level type node: rigid names in scope, `Self`
+    /// substituted by the impl self type, concrete projections
+    /// normalized through the package's impls.
+    fn lower_ty(&mut self, node: &GreenNode) -> TyId {
+        let names = self.generics.clone();
+        let mut with_self = names;
+        if self.self_ty.is_some() && !with_self.iter().any(|n| n == "Self") {
+            with_self.push("Self".to_string());
+        }
+        let t = self.lo.lower_type(self.module, self.file, &with_self, node);
+        let t = match self.self_ty {
+            Some(st) => {
+                let map: BTreeMap<String, TyId> = [("Self".to_string(), st)].into();
+                subst(&mut self.lo.table, t, &map)
+            }
+            None => t,
+        };
+        traits::normalize_projections(self.sigs, &mut self.lo.table, &mut self.vars, t)
+    }
+
     // ------------------------------------------------------- entry ----
 
     fn run(&mut self, node: &GreenNode, body: &BodyRef) -> R<()> {
@@ -414,14 +497,9 @@ impl<'a> Checker<'a> {
                 });
             }
         };
-        if sig.bounded {
-            return Err(NotYet {
-                construct: "a body with bounded generics (s14)",
-                span: node.span,
-            });
-        }
         let d = FnDecl::cast(node).expect("kind");
-        self.generics = sig.generics.clone();
+        self.install_generics(&sig.generics);
+        self.validate_sig_projections(&sig);
         let because = sig.ret_span.unwrap_or(sig.name_span);
         self.ret = Some((sig.ret, body.name.clone(), because));
         self.push_scope();
@@ -440,6 +518,184 @@ impl<'a> Checker<'a> {
         self.check_block(block, &exp)?;
         self.pop_scope();
         Ok(())
+    }
+
+    /// An impl member body (s14): the body of a method or associated
+    /// const inside an `impl` block. `Self` is the impl's self type;
+    /// the archetype facts are the impl's bounds plus the method's.
+    fn run_impl_member(&mut self, node: &GreenNode, body: &BodyRef, member: usize) -> R<()> {
+        let Some(imp) = self
+            .sigs
+            .impls
+            .iter()
+            .find(|i| i.file == body.file && i.decl == body.decl)
+        else {
+            return Err(NotYet {
+                construct: "an impl member without an elaborated header",
+                span: node.span,
+            });
+        };
+        self.self_ty = Some(imp.self_ty);
+        self.install_generics(&imp.generics.clone());
+        match node.kind {
+            SyntaxKind::FnDecl => {
+                let Some(m) = imp.methods.iter().find(|m| m.member == member).cloned() else {
+                    return Err(NotYet {
+                        construct: "an impl member without an elaborated signature",
+                        span: node.span,
+                    });
+                };
+                let d = FnDecl::cast(node).expect("kind");
+                self.install_generics(&m.sig.generics);
+                self.validate_sig_projections(&m.sig);
+                let because = m.sig.ret_span.unwrap_or(m.sig.name_span);
+                self.ret = Some((m.sig.ret, m.name.clone(), because));
+                self.push_scope();
+                for p in &m.sig.params {
+                    self.bind(p.name.clone(), p.span, p.ty);
+                }
+                let Some(block) = d.body() else {
+                    self.pop_scope();
+                    return Ok(());
+                };
+                let exp = Expect {
+                    ty: m.sig.ret,
+                    reason: Reason::ReturnOfFn(m.name.clone()),
+                    because: Some(because),
+                };
+                self.check_block(block, &exp)?;
+                self.pop_scope();
+                Ok(())
+            }
+            SyntaxKind::ConstDecl => {
+                let c = imp.consts.iter().find(|c| c.member == member).cloned();
+                let d = ConstDecl::cast(node);
+                let init = d.and_then(|c| c.init());
+                if let Some(init) = init {
+                    self.push_scope();
+                    match c {
+                        Some(c) => {
+                            let exp = Expect {
+                                ty: c.ty,
+                                reason: Reason::GlobalInit(c.name.clone()),
+                                because: Some(c.name_span),
+                            };
+                            self.check_expr(init, &exp)?;
+                        }
+                        None => {
+                            self.synth_expr(init)?;
+                        }
+                    }
+                    self.pop_scope();
+                }
+                Ok(())
+            }
+            _ => Err(NotYet {
+                construct: "this impl member's body",
+                span: node.span,
+            }),
+        }
+    }
+
+    /// Bring a generic parameter list into scope: rigid names, bound
+    /// facts, and the add-this-bound spans.
+    fn install_generics(&mut self, gens: &[GenericSig]) {
+        for g in gens {
+            if !self.generics.contains(&g.name) {
+                self.generics.push(g.name.clone());
+            }
+            self.bounds.insert(g.name.clone(), g.bounds.clone());
+            self.generic_info
+                .insert(g.name.clone(), (g.span, !g.bounds.is_empty()));
+        }
+    }
+
+    /// Golden-rule validation of the signature itself: every
+    /// projection `T.Item` written in the signature must be provable
+    /// from `T`'s bounds (a bound trait declaring `Item`).
+    fn validate_sig_projections(&mut self, sig: &FnSig) {
+        let mut sites: Vec<(TyId, Span)> = sig.params.iter().map(|p| (p.ty, p.span)).collect();
+        sites.push((sig.ret, sig.ret_span.unwrap_or(sig.name_span)));
+        for (ty, span) in sites {
+            self.validate_projections_in(ty, span);
+        }
+    }
+
+    fn validate_projections_in(&mut self, ty: TyId, span: Span) {
+        match self.lo.table.kind(ty).clone() {
+            TyKind::Proj(base, name) => {
+                if let TyKind::Rigid(param) = self.lo.table.kind(base).clone()
+                    && self.assoc_type_provider(&param, &name).is_none()
+                {
+                    self.golden_rule_missing(
+                        span,
+                        &param,
+                        &format!("an associated type `{name}`"),
+                        self.suggest_assoc_provider(&name),
+                    );
+                }
+                self.validate_projections_in(base, span);
+            }
+            TyKind::Wrapping(t)
+            | TyKind::ErrUnion(t)
+            | TyKind::Range(t)
+            | TyKind::Ptr(t)
+            | TyKind::Shared(t)
+            | TyKind::Handle(t)
+            | TyKind::Weak(t)
+            | TyKind::Distinct(t) => self.validate_projections_in(t, span),
+            TyKind::Tuple(ts) => {
+                for t in ts {
+                    self.validate_projections_in(t, span);
+                }
+            }
+            TyKind::Fn(ps, r) => {
+                for t in ps {
+                    self.validate_projections_in(t, span);
+                }
+                self.validate_projections_in(r, span);
+            }
+            _ => {}
+        }
+    }
+
+    /// The bound trait of `param` that declares associated type
+    /// `name`, if exactly one does.
+    fn assoc_type_provider(&self, param: &str, name: &str) -> Option<TraitRef> {
+        let bs = self.bounds.get(param)?;
+        let mut hit = None;
+        for b in bs {
+            let tr = TraitRef {
+                module: b.module,
+                name: b.name.clone(),
+            };
+            if let Some(td) = self.sigs.traits.get(&tr)
+                && td.assoc_types.iter().any(|a| a.name == name)
+            {
+                if hit.is_some() {
+                    return None; // ambiguous: not provable as written
+                }
+                hit = Some(tr);
+            }
+        }
+        hit
+    }
+
+    /// A trait (anywhere in the package) declaring associated type
+    /// `name` — suggestion fodder for the add-this-bound hint.
+    fn suggest_assoc_provider(&self, name: &str) -> Option<String> {
+        let mut hits = self
+            .sigs
+            .traits
+            .values()
+            .filter(|td| td.assoc_types.iter().any(|a| a.name == name))
+            .map(|td| td.name.clone());
+        let first = hits.next()?;
+        if hits.next().is_some() {
+            None
+        } else {
+            Some(first)
+        }
     }
 
     fn run_global(&mut self, node: &GreenNode, body: &BodyRef) -> R<()> {
@@ -638,6 +894,186 @@ impl<'a> Checker<'a> {
         self.diags.push(d);
     }
 
+    // ---------------------------------------------- the golden rule ----
+
+    /// The rigid (archetype) name of `ty`, if it is one.
+    fn rigid_name(&self, ty: TyId) -> Option<String> {
+        match self.kind_of(ty) {
+            TyKind::Rigid(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// E0501 — a generic body uses a capability its bounds do not
+    /// provide (definition-site, D28). `capability` is mid-sentence
+    /// ("`+`", "the method `show` of `Show`"); `add_bound` names a
+    /// trait that would grant it, wired to a machine edit when the
+    /// parameter has no bounds yet.
+    fn golden_rule_missing(
+        &mut self,
+        span: Span,
+        param: &str,
+        capability: &str,
+        add_bound: Option<String>,
+    ) {
+        let mut d = Diagnostic::error(
+            codes::E0501,
+            span,
+            format!("the bounds on `{param}` do not provide {capability}"),
+        )
+        .with_label(format!("`{param}` could be any type here"));
+        if let Some((decl, has_bounds)) = self.generic_info.get(param).copied() {
+            d = d.with_secondary(decl, format!("`{param}` is declared here"));
+            if let Some(tr) = add_bound {
+                if has_bounds {
+                    d = d.with_note(format!(
+                        "add `+ {tr}` to `{param}`'s bounds to make this provable."
+                    ));
+                } else {
+                    let insert = Span::new(decl.file, decl.hi, decl.hi);
+                    d = d.with_suggestion(Suggestion::new(
+                        format!("add the bound: `{param}: {tr}`"),
+                        vec![(insert, format!(": {tr}"))],
+                        Applicability::Maybe,
+                    ));
+                }
+            }
+        }
+        d = d.with_note(
+            "generic bodies are checked once against their bounds (the golden \
+             rule, D28): everything a body does with a parameter must be provable \
+             from the bounds alone, so instantiation can never fail inside it.",
+        );
+        self.diags.push(d);
+    }
+
+    /// E0501 for operator/comparison capabilities on archetypes: no
+    /// bound can grant these yet (operator traits are later), so the
+    /// message says so instead of hinting a bound.
+    fn golden_rule_op(&mut self, span: Span, param: &str, op: &str) {
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0501,
+                span,
+                format!("the bounds on `{param}` say nothing about `{op}`"),
+            )
+            .with_label(format!("`{param}` could be any type here"))
+            .with_note(
+                "bounds grant trait members only, and no trait covers this \
+                 operator yet (operator traits are a later sprint); take a \
+                 concrete type here, or dispatch through a trait method.",
+            ),
+        );
+    }
+
+    /// Record a bound obligation, discharged after defaulting.
+    fn obligate(
+        &mut self,
+        ty: TyId,
+        tr: TraitRef,
+        span: Span,
+        bound_span: Option<Span>,
+        origin: OblOrigin,
+    ) {
+        self.obligations.push(Obligation {
+            ty,
+            tr,
+            span,
+            bound_span,
+            origin,
+        });
+    }
+
+    /// The (type, trait) satisfaction query, cached (s14 contract).
+    fn trait_satisfied(&mut self, ty: TyId, tr: &TraitRef) -> bool {
+        let key = (ty, tr.module, tr.name.clone());
+        if let Some(&hit) = self.sat_cache.get(&key) {
+            return hit;
+        }
+        let ok = traits::satisfies(
+            self.sigs,
+            &mut self.lo.table,
+            &mut self.vars,
+            &self.bounds,
+            ty,
+            tr.module,
+            &tr.name,
+            SAT_DEPTH,
+        );
+        self.sat_cache.insert(key, ok);
+        ok
+    }
+
+    /// Discharge every recorded obligation. Runs after defaulting, so
+    /// inputs are as solved as they will ever be: archetypes answer
+    /// from bounds (E0501, definition-site); concrete types answer by
+    /// impl search (E0502, call-site — the errors name the unmet
+    /// bound and never enter the callee).
+    fn discharge_obligations(&mut self) {
+        let obls = std::mem::take(&mut self.obligations);
+        for o in obls {
+            let t = zonk(&mut self.lo.table, &self.vars, o.ty);
+            match self.lo.table.kind(t).clone() {
+                // Unsolved: either defaulting already reported E0405,
+                // or another error owns this body — one root cause,
+                // one diagnostic.
+                TyKind::Var(_) => continue,
+                TyKind::Rigid(param) => {
+                    if !self.trait_satisfied(t, &o.tr) {
+                        let capability = match &o.origin {
+                            OblOrigin::Instantiation { callee, param: gp } => {
+                                format!("`{}`, which `{callee}` requires of `{gp}`", o.tr.name)
+                            }
+                            OblOrigin::Qualified { method } => {
+                                format!("`{}` (needed to call `{}.{method}`)", o.tr.name, o.tr.name)
+                            }
+                        };
+                        let mut sub = None;
+                        if self.generic_info.contains_key(&param) {
+                            sub = Some(o.tr.name.clone());
+                        }
+                        self.golden_rule_missing(o.span, &param, &capability, sub);
+                        if let Some(bs) = o.bound_span
+                            && let Some(d) = self.diags.last_mut()
+                        {
+                            *d = d
+                                .clone()
+                                .with_secondary(bs, "the required bound is declared here");
+                        }
+                    }
+                }
+                _ => {
+                    if !self.trait_satisfied(t, &o.tr) {
+                        let shown = self.show(t);
+                        let what = match &o.origin {
+                            OblOrigin::Instantiation { callee, param } => format!(
+                                "`{shown}` does not implement `{}`, which `{callee}` requires of `{param}`",
+                                o.tr.name
+                            ),
+                            OblOrigin::Qualified { method } => format!(
+                                "`{shown}` does not implement `{}`, so `{}.{method}` cannot take it",
+                                o.tr.name, o.tr.name
+                            ),
+                        };
+                        let mut d = Diagnostic::error(codes::E0502, o.span, what)
+                            .with_label(format!("this is `{shown}`"));
+                        if let Some(bs) = o.bound_span {
+                            d = d.with_secondary(bs, "the bound is declared here");
+                        }
+                        d = d.with_note(format!(
+                            "write `impl {} for {shown}` in the trait's module or the \
+                             type's module — or, when both are foreign, adapt: \
+                             `type Local = distinct {shown}` and implement the trait \
+                             for the adapter.",
+                            o.tr.name
+                        ));
+                        self.diags.push(d);
+                    }
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------- blocks ----
 
     fn split_block<'n>(&self, b: Block<'n>) -> (Vec<&'n GreenNode>, Option<&'n GreenNode>) {
@@ -724,10 +1160,9 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            // Nested items in statement position are s14+ (a nested fn
-            // is an item with a signature; wiring its resolution scope
-            // into checking waits for the trait sprint's restructuring
-            // of item environments).
+            // Nested items in statement position wait for s17's
+            // restructuring of item environments (a nested fn is an
+            // item with a signature).
             k if k.is_item() => Err(NotYet {
                 construct: "a nested item declaration",
                 span: s.span,
@@ -770,9 +1205,7 @@ impl<'a> Checker<'a> {
     ) -> R<TyId> {
         match (ann, init) {
             (Some(a), Some(i)) => {
-                let ty = self
-                    .lo
-                    .lower_type(self.module, self.file, &self.generics.clone(), a);
+                let ty = self.lower_ty(a);
                 let exp = Expect {
                     ty,
                     reason: Reason::LetAnnotation(name.unwrap_or_else(|| "this binding".into())),
@@ -781,11 +1214,7 @@ impl<'a> Checker<'a> {
                 self.check_expr(i, &exp)?;
                 Ok(ty)
             }
-            (Some(a), None) => {
-                Ok(self
-                    .lo
-                    .lower_type(self.module, self.file, &self.generics.clone(), a))
-            }
+            (Some(a), None) => Ok(self.lower_ty(a)),
             (None, Some(i)) => self.synth_expr(i),
             // Neither annotation nor initializer: definite-assignment
             // analysis is c04; type-wise this is a fresh existential
@@ -1141,6 +1570,8 @@ impl<'a> Checker<'a> {
             return None;
         }
         if self.lookup_local(&name).is_some()
+            || self.generics.contains(&name)
+            || name == "Self"
             || self.pkg().tables[self.module].get(&name).is_some()
             || bindings_for(self.pkg(), self.module, self.file)
                 .iter()
@@ -1158,14 +1589,22 @@ impl<'a> Checker<'a> {
             return Ok(self.error_ty());
         };
         let name = self.text(t.span);
+        if let Some(ty) = self.lookup_local(&name) {
+            return Ok(ty);
+        }
         if name == "self" {
+            // Bound as a local inside impl member bodies (s14); bare
+            // elsewhere it is s17's receiver machinery.
             return Err(NotYet {
                 construct: "`self` receivers (s17 methods)",
                 span: e.span,
             });
         }
-        if let Some(ty) = self.lookup_local(&name) {
-            return Ok(ty);
+        if self.generics.contains(&name) || name == "Self" {
+            return Err(NotYet {
+                construct: "a type used as a value (comptime, s16)",
+                span: e.span,
+            });
         }
         // File-scoped imports next (the resolver's order).
         for b in bindings_for(self.pkg(), self.module, self.file) {
@@ -1226,7 +1665,7 @@ impl<'a> Checker<'a> {
             Some(ItemSig::Fn(f)) => {
                 if !f.generics.is_empty() {
                     return Err(NotYet {
-                        construct: "a generic function value (s14 instantiation)",
+                        construct: "a generic function used as a value (s16 comptime)",
                         span,
                     });
                 }
@@ -1241,14 +1680,17 @@ impl<'a> Checker<'a> {
                     span,
                 }),
             },
-            Some(ItemSig::Struct(_) | ItemSig::Enum { .. } | ItemSig::Alias { .. }) => {
-                Err(NotYet {
-                    construct: "a type used as a value (comptime, s16)",
-                    span,
-                })
-            }
+            Some(
+                ItemSig::Struct(_)
+                | ItemSig::Enum { .. }
+                | ItemSig::Alias { .. }
+                | ItemSig::Distinct { .. },
+            ) => Err(NotYet {
+                construct: "a type used as a value (comptime, s16)",
+                span,
+            }),
             Some(ItemSig::Trait) => Err(NotYet {
-                construct: "trait machinery (s14)",
+                construct: "a trait used as a value (comptime, s16)",
                 span,
             }),
             None => Ok(self.error_ty()),
@@ -1267,13 +1709,19 @@ impl<'a> Checker<'a> {
             Some(SyntaxKind::Not) => {
                 let t = self.synth_expr(operand)?;
                 let bool_ = self.lo.table.prim(Prim::Bool);
-                if unify(&mut self.lo.table, &mut self.vars, t, bool_).is_err() {
+                if let Some(n) = self.rigid_name(t) {
+                    self.golden_rule_op(operand.span, &n, "!");
+                } else if unify(&mut self.lo.table, &mut self.vars, t, bool_).is_err() {
                     self.report_bad_operand(operand.span, "!", "`bool`", t);
                 }
                 Ok(bool_)
             }
             Some(SyntaxKind::Minus) => {
                 let t = self.synth_expr(operand)?;
+                if let Some(n) = self.rigid_name(t) {
+                    self.golden_rule_op(operand.span, &n, "-");
+                    return Ok(self.error_ty());
+                }
                 let probe = self.fresh(NumKind::Num, e.span);
                 if unify(&mut self.lo.table, &mut self.vars, t, probe).is_err() {
                     self.report_bad_operand(operand.span, "-", "numbers", t);
@@ -1314,6 +1762,13 @@ impl<'a> Checker<'a> {
                 let mut reported = false;
                 for side in [lhs, rhs] {
                     let t = self.synth_expr(side)?;
+                    if let Some(n) = self.rigid_name(t) {
+                        if !reported {
+                            self.golden_rule_op(side.span, &n, &op_text);
+                            reported = true;
+                        }
+                        continue;
+                    }
                     if unify(&mut self.lo.table, &mut self.vars, t, bool_).is_err() && !reported {
                         // One report per operator — the second operand's
                         // echo is the same root cause.
@@ -1344,6 +1799,10 @@ impl<'a> Checker<'a> {
             ) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if let Some(n) = self.rigid_name(lt) {
+                    self.golden_rule_op(lhs.span, &n, &op_text);
+                    return Ok(self.lo.table.prim(Prim::Bool));
+                }
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "numbers", lt);
@@ -1373,6 +1832,10 @@ impl<'a> Checker<'a> {
                 // wrapping — `wrapping[T]` is just another number type.
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if let Some(n) = self.rigid_name(lt) {
+                    self.golden_rule_op(lhs.span, &n, &op_text);
+                    return Ok(self.error_ty());
+                }
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "numbers", lt);
@@ -1394,6 +1857,10 @@ impl<'a> Checker<'a> {
             ) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if let Some(n) = self.rigid_name(lt) {
+                    self.golden_rule_op(lhs.span, &n, &op_text);
+                    return Ok(self.error_ty());
+                }
                 let probe = self.fresh(NumKind::Integer, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "integer types", lt);
@@ -1414,8 +1881,9 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// `==`/`!=` compare the primitive family in s13; everything else
-    /// waits for trait-based equality (s14).
+    /// `==`/`!=` compare the primitive family; archetypes answer from
+    /// their bounds (no trait covers `==` yet — E0501, the golden
+    /// rule); nominal equality waits for the operator traits (s17).
     fn equatable(&mut self, span: Span, ty: TyId) -> R<()> {
         match self.kind_of(ty) {
             TyKind::Prim(_)
@@ -1423,8 +1891,12 @@ impl<'a> Checker<'a> {
             | TyKind::Var(_)
             | TyKind::Error
             | TyKind::Never => Ok(()),
+            TyKind::Rigid(n) => {
+                self.golden_rule_op(span, &n, "==");
+                Ok(())
+            }
             _ => Err(NotYet {
-                construct: "`==` on non-primitive types (s14 traits)",
+                construct: "`==` on non-primitive types (s17 operator traits)",
                 span,
             }),
         }
@@ -1437,9 +1909,7 @@ impl<'a> Checker<'a> {
             None => self.error_ty(),
         };
         let target = match d.ty() {
-            Some(t) => self
-                .lo
-                .lower_type(self.module, self.file, &self.generics.clone(), t),
+            Some(t) => self.lower_ty(t),
             None => self.error_ty(),
         };
         let numeric = |k: &TyKind, vars: &VarStore| match k {
@@ -1466,10 +1936,30 @@ impl<'a> Checker<'a> {
         if src_ty == target {
             return Ok(target);
         }
+        // Adapter casts (D28): between `type X = distinct B` and its
+        // base `B`, `as` is free and bidirectional — same layout (the
+        // recorded layout-identity fact; a no-op at c05 lowering).
+        let src_res = self.shallow(src_ty);
+        let tgt_res = self.shallow(target);
+        if self.distinct_base(src_res) == Some(tgt_res)
+            || self.distinct_base(tgt_res) == Some(src_res)
+        {
+            return Ok(target);
+        }
         Err(NotYet {
             construct: "this `as` conversion (s17 coercions)",
             span: e.span,
         })
+    }
+
+    /// The recorded base of an adapter type (`type X = distinct B`).
+    fn distinct_base(&self, ty: TyId) -> Option<TyId> {
+        if let TyKind::Nominal { module, name } = self.lo.table.kind(ty)
+            && let Some(ItemSig::Distinct { base, .. }) = self.sigs.get(*module as usize, name)
+        {
+            return Some(*base);
+        }
+        None
     }
 
     fn synth_range(&mut self, e: &GreenNode) -> R<TyId> {
@@ -1503,7 +1993,7 @@ impl<'a> Checker<'a> {
             if let Some(v) = Arg::value(a) {
                 if is_type_kind(v.kind) {
                     return Err(NotYet {
-                        construct: "a type-shaped argument (s14/s16 generics)",
+                        construct: "a type-shaped argument (s16 comptime)",
                         span: v.span,
                     });
                 }
@@ -1542,9 +2032,16 @@ impl<'a> Checker<'a> {
         }
         if callee.kind == SyntaxKind::MemberExpr
             && let Some(m) = MemberExpr::cast(callee)
-            && let Some((module, item)) = self.namespace_member(m)
         {
-            return self.call_named(&item, module, callee.span, e, d.args());
+            // `Trait.method(args)` / `ns.Trait.method(args)` — the s14
+            // qualified call (isolated namespaces: this is the only
+            // method-call spelling until s17 receivers).
+            if let Some((tr, member_span, mname)) = self.qualified_trait_method(m) {
+                return self.call_trait_method(&tr, callee.span, &mname, member_span, e, d.args());
+            }
+            if let Some((module, item)) = self.namespace_member(m) {
+                return self.call_named(&item, module, callee.span, e, d.args());
+            }
         }
         // Otherwise: call through the callee's type (closures, fn-typed
         // locals/fields, higher-order parameters).
@@ -1567,6 +2064,188 @@ impl<'a> Checker<'a> {
             return Some((self.module, name.to_string()));
         }
         None
+    }
+
+    /// The trait a bare name resolves to (module item or item
+    /// import), if it names one.
+    fn trait_target(&self, name: &str) -> Option<TraitRef> {
+        if self.lookup_local(name).is_some() {
+            return None;
+        }
+        for b in bindings_for(self.pkg(), self.module, self.file) {
+            if b.name == name {
+                if let BindTarget::Item { module, name } = &b.target {
+                    let tr = TraitRef {
+                        module: *module,
+                        name: name.clone(),
+                    };
+                    if self.sigs.traits.contains_key(&tr) {
+                        return Some(tr);
+                    }
+                }
+                return None;
+            }
+        }
+        let tr = TraitRef {
+            module: self.module,
+            name: name.to_string(),
+        };
+        if self.sigs.traits.contains_key(&tr) {
+            return Some(tr);
+        }
+        None
+    }
+
+    /// A callee of the shape `Trait.method` or `ns.Trait.method`:
+    /// (trait, method-name span, method name).
+    fn qualified_trait_method(&self, m: MemberExpr<'_>) -> Option<(TraitRef, Span, String)> {
+        let member = m.member()?;
+        let base = m.base()?;
+        let tr = if base.kind == SyntaxKind::PathExpr {
+            let t = PathExpr::cast(base)?.ident()?;
+            self.trait_target(&self.text(t.span))?
+        } else if base.kind == SyntaxKind::MemberExpr {
+            let inner = MemberExpr::cast(base)?;
+            let (module, name) = self.namespace_member(inner)?;
+            let tr = TraitRef { module, name };
+            if !self.sigs.traits.contains_key(&tr) {
+                return None;
+            }
+            tr
+        } else {
+            return None;
+        };
+        Some((tr, member.span, self.text(member.span)))
+    }
+
+    /// The s14 qualified trait-method call: instantiate `Self` (and
+    /// the method's own generics) as fresh existentials, let the
+    /// *arguments* solve them (inputs select the impl; outputs never
+    /// drive inference), and record the bound obligation.
+    fn call_trait_method(
+        &mut self,
+        tr: &TraitRef,
+        callee_span: Span,
+        mname: &str,
+        member_span: Span,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let Some(td) = self.sigs.traits.get(tr) else {
+            return Ok(self.error_ty());
+        };
+        if !td.params.is_empty() {
+            return Err(NotYet {
+                construct: "qualified calls on parameterized traits (bracket-argument surface)",
+                span: callee_span,
+            });
+        }
+        let Some(method) = td.method(mname).cloned() else {
+            let names: Vec<&str> = td.methods.iter().map(|m| m.name.as_str()).collect();
+            let mut d = Diagnostic::error(
+                codes::E0403,
+                member_span,
+                format!("`{}` has no method named `{mname}`", tr.name),
+            )
+            .with_label("unknown trait method")
+            .with_secondary(td.name_span, format!("`{}` is declared here", tr.name));
+            if let Some(hit) = wolf_diag::suggest::best_match(mname, &names) {
+                d = d.with_suggestion(Suggestion::new(
+                    format!("did you mean `{hit}`?"),
+                    vec![(member_span, hit.to_string())],
+                    Applicability::Maybe,
+                ));
+            }
+            self.diags.push(d);
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+            return Ok(self.error_ty());
+        };
+        let full_name = format!("{}.{mname}", tr.name);
+        let mut map: BTreeMap<String, TyId> = BTreeMap::new();
+        let self_var = self.fresh(NumKind::Any, callee_span);
+        map.insert("Self".to_string(), self_var);
+        for g in &method.sig.generics {
+            let v = self.fresh(NumKind::Any, e.span);
+            map.insert(g.name.clone(), v);
+            for b in &g.bounds {
+                self.obligate(
+                    v,
+                    TraitRef {
+                        module: b.module,
+                        name: b.name.clone(),
+                    },
+                    e.span,
+                    Some(b.span),
+                    OblOrigin::Instantiation {
+                        callee: full_name.clone(),
+                        param: g.name.clone(),
+                    },
+                );
+            }
+        }
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        if arg_nodes.len() != method.sig.params.len() {
+            self.wrong_arg_count(
+                &full_name,
+                e.span,
+                Some(method.name_span),
+                method.sig.params.len(),
+                arg_nodes.len(),
+            );
+        }
+        // Blame span for the Self obligation: the argument that pins
+        // `Self` (call-site errors point at the argument, D28).
+        let mut self_blame = callee_span;
+        for (i, arg) in arg_nodes.iter().enumerate() {
+            let Some(v) = Arg::value(*arg) else { continue };
+            if is_type_kind(v.kind) {
+                return Err(NotYet {
+                    construct: "a type-shaped argument (s16 comptime)",
+                    span: v.span,
+                });
+            }
+            match method.sig.params.get(i) {
+                Some(p) => {
+                    if self_blame == callee_span
+                        && traits::mentions_rigid(&self.lo.table, p.ty, "Self")
+                    {
+                        self_blame = v.span;
+                    }
+                    let pty = subst(&mut self.lo.table, p.ty, &map);
+                    let exp = Expect {
+                        ty: pty,
+                        reason: Reason::ArgOfCall {
+                            callee: full_name.clone(),
+                            index: i,
+                        },
+                        because: Some(p.span),
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+                None => {
+                    self.synth_expr(v)?;
+                }
+            }
+        }
+        self.obligate(
+            self_var,
+            tr.clone(),
+            self_blame,
+            Some(td.name_span),
+            OblOrigin::Qualified {
+                method: mname.to_string(),
+            },
+        );
+        let ret = subst(&mut self.lo.table, method.sig.ret, &map);
+        Ok(self.normalize(ret))
+    }
+
+    /// Normalize concrete projections (outputs) — after inputs are
+    /// solved, never before.
+    fn normalize(&mut self, ty: TyId) -> TyId {
+        traits::normalize_projections(self.sigs, &mut self.lo.table, &mut self.vars, ty)
     }
 
     /// `ns.member` where `ns` is a file binding to a package module.
@@ -1620,16 +2299,13 @@ impl<'a> Checker<'a> {
         args: Option<ArgList<'_>>,
     ) -> R<TyId> {
         match self.sigs.get(module, name).cloned() {
-            Some(ItemSig::Fn(sig)) => {
-                if !sig.generics.is_empty() {
-                    return Err(NotYet {
-                        construct: "calling a generic function (s14 instantiation)",
-                        span: callee_span,
-                    });
-                }
-                self.call_by_sig(name, &sig, e, args)
-            }
-            Some(ItemSig::Struct(_) | ItemSig::Enum { .. } | ItemSig::Alias { .. }) => {
+            Some(ItemSig::Fn(sig)) => self.call_by_sig(name, &sig, e, args),
+            Some(
+                ItemSig::Struct(_)
+                | ItemSig::Enum { .. }
+                | ItemSig::Alias { .. }
+                | ItemSig::Distinct { .. },
+            ) => {
                 self.not_callable(callee_span, &format!("the type `{name}`"));
                 if let Some(a) = args {
                     self.synth_args_loosely(a)?;
@@ -1652,10 +2328,13 @@ impl<'a> Checker<'a> {
                     .expect("callee exists");
                 self.call_by_type(ty, callee, e, args)
             }
-            Some(ItemSig::Trait) => Err(NotYet {
-                construct: "trait machinery (s14)",
-                span: callee_span,
-            }),
+            Some(ItemSig::Trait) => {
+                self.not_callable(callee_span, &format!("the trait `{name}`"));
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(self.error_ty())
+            }
             None => {
                 if let Some(a) = args {
                     self.synth_args_loosely(a)?;
@@ -1672,6 +2351,15 @@ impl<'a> Checker<'a> {
         e: &GreenNode,
         args: Option<ArgList<'_>>,
     ) -> R<TyId> {
+        // s14 instantiation: each generic parameter becomes a fresh
+        // existential; the *arguments* solve them, and the solutions
+        // are checked against the bounds only (never the callee's
+        // body — the golden rule made that impossible to need).
+        let mut map: BTreeMap<String, TyId> = BTreeMap::new();
+        for g in &sig.generics {
+            let v = self.fresh(NumKind::Any, e.span);
+            map.insert(g.name.clone(), v);
+        }
         let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
         if arg_nodes.len() != sig.params.len() {
             self.wrong_arg_count(
@@ -1682,18 +2370,33 @@ impl<'a> Checker<'a> {
                 arg_nodes.len(),
             );
         }
+        // Call-site blame spans: the first argument whose declared
+        // parameter mentions the generic parameter.
+        let mut blames: BTreeMap<String, Span> = BTreeMap::new();
         for (i, arg) in arg_nodes.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
             if is_type_kind(v.kind) {
                 return Err(NotYet {
-                    construct: "a type-shaped argument (s14/s16 generics)",
+                    construct: "a type-shaped argument (s16 comptime)",
                     span: v.span,
                 });
             }
             match sig.params.get(i) {
                 Some(p) => {
+                    for g in &sig.generics {
+                        if !blames.contains_key(&g.name)
+                            && traits::mentions_rigid(&self.lo.table, p.ty, &g.name)
+                        {
+                            blames.insert(g.name.clone(), v.span);
+                        }
+                    }
+                    let pty = if map.is_empty() {
+                        p.ty
+                    } else {
+                        subst(&mut self.lo.table, p.ty, &map)
+                    };
                     let exp = Expect {
-                        ty: p.ty,
+                        ty: pty,
                         reason: Reason::ArgOfCall {
                             callee: name.to_string(),
                             index: i,
@@ -1707,7 +2410,31 @@ impl<'a> Checker<'a> {
                 }
             }
         }
-        Ok(sig.ret)
+        for g in &sig.generics {
+            let v = map[&g.name];
+            let blame = blames.get(&g.name).copied().unwrap_or(e.span);
+            for b in &g.bounds {
+                self.obligate(
+                    v,
+                    TraitRef {
+                        module: b.module,
+                        name: b.name.clone(),
+                    },
+                    blame,
+                    Some(b.span),
+                    OblOrigin::Instantiation {
+                        callee: name.to_string(),
+                        param: g.name.clone(),
+                    },
+                );
+            }
+        }
+        if map.is_empty() {
+            Ok(sig.ret)
+        } else {
+            let ret = subst(&mut self.lo.table, sig.ret, &map);
+            Ok(self.normalize(ret))
+        }
     }
 
     fn call_by_type(
@@ -1729,7 +2456,7 @@ impl<'a> Checker<'a> {
                     let Some(v) = Arg::value(*arg) else { continue };
                     if is_type_kind(v.kind) {
                         return Err(NotYet {
-                            construct: "a type-shaped argument (s14/s16 generics)",
+                            construct: "a type-shaped argument (s16 comptime)",
                             span: v.span,
                         });
                     }
@@ -1763,7 +2490,7 @@ impl<'a> Checker<'a> {
                     let Some(v) = Arg::value(*arg) else { continue };
                     if is_type_kind(v.kind) {
                         return Err(NotYet {
-                            construct: "a type-shaped argument (s14/s16 generics)",
+                            construct: "a type-shaped argument (s16 comptime)",
                             span: v.span,
                         });
                     }
@@ -1786,6 +2513,15 @@ impl<'a> Checker<'a> {
                 Ok(ret)
             }
             TyKind::Error | TyKind::Never => {
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(self.error_ty())
+            }
+            TyKind::Rigid(n) => {
+                // Golden rule: calling an archetype value needs a
+                // capability no bound can grant yet.
+                self.golden_rule_missing(callee.span, &n, "a callable interface", None);
                 if let Some(a) = args {
                     self.synth_args_loosely(a)?;
                 }
@@ -1857,6 +2593,29 @@ impl<'a> Checker<'a> {
         if let Some((module, item)) = self.namespace_member(d) {
             return self.item_value_ty(module, &item, e.span);
         }
+        // s14: archetype member access (`T.N` — associated consts
+        // through the bounds) and trait members outside call position.
+        if let Some(base) = d.base()
+            && base.kind == SyntaxKind::PathExpr
+            && let Some(t) = PathExpr::cast(base).and_then(|p| p.ident())
+        {
+            let bname = self.text(t.span);
+            if self.lookup_local(&bname).is_none() {
+                if self.generics.contains(&bname) {
+                    let Some(member) = d.member() else {
+                        return Ok(self.error_ty());
+                    };
+                    let mname = self.text(member.span);
+                    return self.rigid_member(&bname, member.span, &mname);
+                }
+                if self.trait_target(&bname).is_some() {
+                    return Err(NotYet {
+                        construct: "a trait method used as a value (s17)",
+                        span: e.span,
+                    });
+                }
+            }
+        }
         let Some(base) = d.base() else {
             return Ok(self.error_ty());
         };
@@ -1870,7 +2629,7 @@ impl<'a> Checker<'a> {
                     Some(ItemSig::Struct(s)) => {
                         if s.generic {
                             return Err(NotYet {
-                                construct: "fields of a generic struct (s14)",
+                                construct: "fields of a generic struct (s16 generic data)",
                                 span: e.span,
                             });
                         }
@@ -1931,6 +2690,90 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// Member access on an archetype (`T.member`): associated consts
+    /// resolve through the bounds; anything else is a golden-rule
+    /// E0501 at the definition.
+    fn rigid_member(&mut self, param: &str, span: Span, mname: &str) -> R<TyId> {
+        let bs = self.bounds.get(param).cloned().unwrap_or_default();
+        let mut const_hit: Option<TyId> = None;
+        let mut const_hits = 0usize;
+        let mut assoc_ty = false;
+        let mut method = false;
+        for b in &bs {
+            let tr = TraitRef {
+                module: b.module,
+                name: b.name.clone(),
+            };
+            let Some(td) = self.sigs.traits.get(&tr) else {
+                continue;
+            };
+            if let Some(c) = td.assoc_consts.iter().find(|c| c.name == mname) {
+                const_hit = Some(c.ty);
+                const_hits += 1;
+            }
+            if td.assoc_types.iter().any(|a| a.name == mname) {
+                assoc_ty = true;
+            }
+            if td.method(mname).is_some() {
+                method = true;
+            }
+        }
+        if const_hits > 1 {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0501,
+                    span,
+                    format!(
+                        "more than one bound on `{param}` provides a `{mname}` — the use is ambiguous"
+                    ),
+                )
+                .with_label("ambiguous member")
+                .with_note(
+                    "trait namespaces are isolated, so two bounds may collide on a \
+                     name; qualification through the trait arrives with s17 — until \
+                     then, drop one of the colliding bounds here.",
+                ),
+            );
+            return Ok(self.error_ty());
+        }
+        if let Some(cty) = const_hit {
+            let rigid = self.lo.table.intern(TyKind::Rigid(param.to_string()));
+            let map: BTreeMap<String, TyId> = [("Self".to_string(), rigid)].into();
+            return Ok(subst(&mut self.lo.table, cty, &map));
+        }
+        if assoc_ty {
+            return Err(NotYet {
+                construct: "an associated type used as a value (comptime, s16)",
+                span,
+            });
+        }
+        if method {
+            return Err(NotYet {
+                construct: "a trait method used as a value (s17)",
+                span,
+            });
+        }
+        // No bound provides the member: definition-site E0501, with a
+        // bound suggestion when exactly one trait declares it.
+        let provider = {
+            let mut hits = self
+                .sigs
+                .traits
+                .values()
+                .filter(|td| {
+                    td.assoc_consts.iter().any(|c| c.name == mname) || td.method(mname).is_some()
+                })
+                .map(|td| td.name.clone());
+            let first = hits.next();
+            match (first, hits.next()) {
+                (Some(f), None) => Some(f),
+                _ => None,
+            }
+        };
+        self.golden_rule_missing(span, param, &format!("a member `{mname}`"), provider);
+        Ok(self.error_ty())
+    }
+
     /// E0403 with typo detection against the struct's field names.
     fn unknown_field(&mut self, struct_name: &str, s: &StructSig, span: Span, field: &str) {
         let mut d = Diagnostic::error(
@@ -1985,7 +2828,7 @@ impl<'a> Checker<'a> {
         };
         if sig.generic {
             return Err(NotYet {
-                construct: "a generic struct literal (s14 inference of arguments)",
+                construct: "a generic struct literal (s16 generic data)",
                 span: e.span,
             });
         }
@@ -2311,7 +3154,7 @@ impl<'a> Checker<'a> {
                     TyKind::Error | TyKind::Never => self.error_ty(),
                     _ => {
                         return Err(NotYet {
-                            construct: "the iteration protocol (s14 traits)",
+                            construct: "the iteration protocol (s17 for-trait wiring)",
                             span: it.span,
                         });
                     }
@@ -2469,9 +3312,7 @@ impl<'a> Checker<'a> {
                 self.level += 1;
                 for (p, &pty) in params.iter().zip(ptys.iter()) {
                     if let Some(t) = p.ty() {
-                        let ann =
-                            self.lo
-                                .lower_type(self.module, self.file, &self.generics.clone(), t);
+                        let ann = self.lower_ty(t);
                         let name = p
                             .name()
                             .map(|n| self.text(n.span))
@@ -2529,9 +3370,7 @@ impl<'a> Checker<'a> {
         let mut ptys = Vec::new();
         for p in &params {
             let ty = match p.ty() {
-                Some(t) => self
-                    .lo
-                    .lower_type(self.module, self.file, &self.generics.clone(), t),
+                Some(t) => self.lower_ty(t),
                 // Unannotated and uncontexted: a deeper-level
                 // existential; if nothing pins it, E0405 at body end.
                 None => {

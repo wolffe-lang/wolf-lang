@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0507]: the impl's `show` does not match `Show`'s declaration: it returns `int`, but the trait says `str`
+ --> mem:///main.lu:8:8
+  |
+2 |     fn show(x: Self) -> str
+  |        ---- declared here
+...
+8 |     fn show(x: Self) -> int {
+  |        ^^^^ does not match the trait
+  |

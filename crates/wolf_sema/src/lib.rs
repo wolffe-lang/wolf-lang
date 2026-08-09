@@ -49,6 +49,35 @@
 //!   (rayon-parallel by default), the conform-run `typecheck` rung
 //!   contract, and the bodies/sec bench surface (D5).
 //!
+//! # Implemented today (s14)
+//!
+//! - **Traits & impls** ([`traits`]): nominal traits with isolated
+//!   member namespaces (qualified calls `Trait.method(args)`;
+//!   receiver syntax is s17), associated types/consts with the
+//!   input/output distinction (RFC 0195), impl conformance (E0507),
+//!   and global coherence — the simple orphan rule (E0504),
+//!   uncovered-parameter rejection (E0505), and overlap as a hard
+//!   error by trial unification (E0506; blanket impls uniform, **no
+//!   specialization — locked**). Adapter types
+//!   (`type X = distinct B`) are the sanctioned orphan escape: own
+//!   nominal identity, empty impl set, free bidirectional casts, the
+//!   layout-identity fact recorded for c05.
+//! - **The golden rule** ([`check`]): generic bodies check once
+//!   against archetypes built from their bounds — unprovable
+//!   capability uses are definition-site E0501 with add-this-bound
+//!   edits; instantiation checks arguments against bounds only
+//!   (call-site E0502 naming the unmet bound), satisfaction cached
+//!   per (type, trait). Ceilings enforced: rank-1, no HKP (E0511),
+//!   no GATs (E0512).
+//! - **Rewrite constraints** ([`rewrite`]): associated-type equality
+//!   by textual canonicalization to a fixed point with up-front
+//!   cycle rejection (E0513) — deterministic, terminating, confluent
+//!   under rule reordering (property-tested). No surface syntax yet
+//!   (spec-amendment candidate for s15/s17).
+//! - **`dyn Trait`** ([`traits`]): RFC-0255 dyn-safety at the
+//!   object-creation site (E0508/E0509/E0510), with the dyn-safe
+//!   method set recorded in canonical order in the interface.
+//!
 //! The std/prelude stub tables ([`prelude`]) carry *names only* until
 //! the real standard library lands (s05/s51).
 
@@ -57,7 +86,9 @@ pub mod graph;
 pub mod interface;
 pub mod prelude;
 pub mod resolve;
+pub mod rewrite;
 pub mod sig;
+pub mod traits;
 pub mod typecheck;
 pub mod types;
 pub mod unify;
@@ -69,6 +100,7 @@ pub use graph::{
 };
 pub use interface::{Interface, build_interfaces, decode, encode, pretty};
 pub use resolve::{Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_package_with};
-pub use sig::{ItemSig, SigTables, build_sigs};
+pub use sig::{BoundRef, GenericSig, ItemSig, SigTables, build_sigs};
+pub use traits::{DynReport, ImplDef, TraitDef, TraitRef};
 pub use typecheck::{BodyOutcome, Typecheck, typecheck_package, typecheck_package_with};
 pub use types::{Prim, TyId, TyKind, TypeTable};

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0505]: the impl parameter `T` is not covered by the impl
+ --> mem:///main.lu:7:6
+  |
+7 | impl[T] Show for Point {
+  |      ^ appears in neither the self type nor the trait arguments
+  |
+  = note: nothing could ever determine what this parameter is; wolf v1 disallows uncovered impl
+    parameters outright (D28) — delete it, or make the impl subject mention it.
