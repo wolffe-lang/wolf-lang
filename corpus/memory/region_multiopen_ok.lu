@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: lex
+//! phase: parse
 //! conforms: mem.region.multiopen, mem.region.open.2, mem.region.create.2
 //! FLAGGED FOR is07 MODEL CHECKING: two distinct regions open at once —
 //! wolf's extension past Verona's single window. Distinctness is by

@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: lex
+//! phase: parse
 //! conforms: mem.tier0.mode.read, mem.ub, mem.prov.tag
 //! The SB "holy grail" shape: a `read` parameter is immutable for the
 //! whole call, so the second load may be hoisted/CSE'd across the opaque

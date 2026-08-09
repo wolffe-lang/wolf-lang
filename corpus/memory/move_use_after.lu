@@ -1,5 +1,5 @@
 //! check: fail(E1001)
-//! phase: lex
+//! phase: parse
 //! conforms: mem.tier0.move.2
 //! Use of a moved-from place is a compile error (dynamically: a
 //! use-after-move trap in the interpreter, which is is02's check).

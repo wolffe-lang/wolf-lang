@@ -1,5 +1,5 @@
 //! check: run(exit=trap(ub))
-//! phase: lex
+//! phase: parse
 //! conforms: mem.ub, mem.prov.region
 //! §7/P1: use-after-free through a raw pointer. Compiled behavior is
 //! UNDEFINED (licenses O1); the is04 oracle and the D21 quarantine

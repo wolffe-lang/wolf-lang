@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: lex
+//! phase: parse
 //! conforms: gram.amb.bang
 //! `!` in type position is the error-union constructor (D30).
 fn may_fail(flag: bool) -> !int {

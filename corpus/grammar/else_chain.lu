@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: lex
+//! phase: parse
 //! conforms: gram.amb.else
 //! `} else` must share the line; the chain binds to the nearest `if`.
 fn main() -> !int {

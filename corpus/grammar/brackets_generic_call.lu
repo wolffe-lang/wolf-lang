@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: lex
+//! phase: parse
 //! conforms: gram.amb.brackets
 //! Same postfix shape as indexing: `f[int]()` — resolved in sema.
 fn first[T](xs: List[T]) -> T { xs[0] }

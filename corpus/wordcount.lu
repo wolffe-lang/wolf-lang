@@ -1,5 +1,5 @@
 //! check: run(exit=2)
-//! phase: lex
+//! phase: parse
 //! conforms: str.interp, str.views, err.union, err.propagate, task.par, generics.brackets
 //!
 //! THE canonical program — the syntax bake-off sample from reports/05

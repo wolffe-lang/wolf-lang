@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: lex
+//! phase: parse
 //! conforms: gram.amb.fmtcolon
 //! First TOP-LEVEL `:` in an interpolation starts the format spec.
 fn main() -> !int {

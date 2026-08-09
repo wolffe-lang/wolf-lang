@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: lex
+//! phase: parse
 //! conforms: err.union, err.rows, err.propagate, err.errdefer, err.else
 //!
 //! Error handling (D30): `!T` unions with payload-carrying structural
