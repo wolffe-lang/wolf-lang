@@ -23,9 +23,10 @@ fn main() -> ExitCode {
         Some("differ") => differ_cmd(&args[1..]),
         Some("print-gate") => print_gate(),
         Some("diag-catalog") => diag_catalog(args.iter().any(|a| a == "--check")),
+        Some("fmt-lu") => fmt_lu(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu>"
             );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
@@ -56,6 +57,7 @@ fn ci() -> ExitCode {
         ("conformance", &["xtask", "conformance"]),
         ("print-gate", &["xtask", "print-gate"]),
         ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
+        ("fmt-lu", &["xtask", "fmt-lu"]),
         ("differ-self", &["xtask", "differ", "--self"]),
     ];
     for (name, args) in steps {
@@ -495,6 +497,7 @@ fn record(
     serde_json::json!({
         "bench": bench, "track": track, "lang": lang, "metric": metric,
         "value": value, "unit": unit, "commit": commit, "config": config,
+        "style": style_version(),
     })
 }
 
@@ -733,6 +736,26 @@ fn collect_snap_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+// ---------------------------------------------------------------- fmt-lu --
+
+/// Canonical-style gate (s11): every `.lu` file in the tree passes
+/// `wolf fmt --check`. Runs through the driver so xtask stays independent
+/// of compiler crates.
+fn fmt_lu() -> ExitCode {
+    if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+        eprintln!("fmt-lu: failed to build wolf");
+        return ExitCode::FAILURE;
+    }
+    let ok = run_ok("target/debug/wolf", &["fmt", "--check", "corpus"]);
+    if ok {
+        eprintln!("fmt-lu: corpus is canonical");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("fmt-lu: unformatted .lu files — run `wolf fmt corpus`");
+        ExitCode::FAILURE
+    }
+}
+
 // ------------------------------------------------------------ print-gate --
 
 /// Compiler-phase crates never print (s10): all reporting flows through
@@ -881,6 +904,7 @@ fn conformance_cmd(args: &[String]) -> ExitCode {
             body.push_str(
                 &serde_json::json!({
                     "clause": clause, "tests": tests, "status": status, "commit": commit,
+                    "style": style_version(),
                 })
                 .to_string(),
             );
@@ -1048,6 +1072,20 @@ fn touch(path: &Path) {
     std::fs::write(path, now).expect("touch: write");
 }
 
+/// The canonical-style version (s11 stability tiers), read textually from
+/// wolf_fmt so xtask stays independent of compiler crates. Stamped into
+/// JSONL report metadata so style churn never silently invalidates data.
+fn style_version() -> String {
+    std::fs::read_to_string("crates/wolf_fmt/src/lib.rs")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.contains("pub const STYLE_VERSION"))
+                .and_then(|l| l.split('"').nth(1).map(str::to_string))
+        })
+        .unwrap_or_else(|| "unknown".into())
+}
+
 fn git_short_sha() -> String {
     Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
@@ -1138,6 +1176,18 @@ fn deps_check() -> ExitCode {
                     "wolf_ast",
                     "wolf_sema",
                     "wolf_mem",
+                ][..],
+            ),
+        ),
+        (
+            "wolf_fmt",
+            Some(
+                &[
+                    "wolf_span",
+                    "wolf_diag",
+                    "wolf_lex",
+                    "wolf_ast",
+                    "wolf_parse",
                 ][..],
             ),
         ),
