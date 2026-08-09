@@ -301,11 +301,28 @@ fn interface(args: &[String]) {
         std::process::exit(1);
     }
     let ifaces = wolf_sema::build_interfaces(&res.package);
+    // Sealed inferred rows (s15): module-private facts — shown for
+    // humans, never serialized or hashed (private items are not
+    // interface surface). `build_interfaces` iterates `pkg.topo`, so
+    // ifaces[i] is module topo[i].
+    let sigs = wolf_sema::build_sigs(&res.package);
     for (i, iface) in ifaces.iter().enumerate() {
         if i > 0 {
             println!();
         }
         print!("{}", wolf_sema::pretty(iface));
+        let module = res.package.topo[i];
+        let sealed: Vec<&(usize, String, String)> = sigs
+            .sealed
+            .iter()
+            .filter(|(m, _, _)| *m == module)
+            .collect();
+        if !sealed.is_empty() {
+            println!("  sealed rows (private, not hashed):");
+            for (_, _, rendered) in sealed {
+                println!("    {rendered}");
+            }
+        }
     }
 }
 
