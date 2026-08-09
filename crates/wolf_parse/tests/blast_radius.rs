@@ -252,8 +252,10 @@ fn single_token_mutations_have_bounded_blast_radius() {
             .collect();
 
         for iteration in 0..budget {
-            let seed =
-                fnv(f.to_string_lossy().as_bytes()) ^ (iteration as u64).wrapping_mul(0x9e37);
+            // Path separators normalized so the seed — and therefore the
+            // explored mutation set — is identical on every platform.
+            let seed = fnv(f.to_string_lossy().replace('\\', "/").as_bytes())
+                ^ (iteration as u64).wrapping_mul(0x9e37);
             let mut rng = Rng::new(seed);
             let Some(m) = pick_mutation(&mut rng, &src, &lexed.tokens) else {
                 continue;
