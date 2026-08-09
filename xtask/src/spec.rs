@@ -78,9 +78,9 @@ fn anchors_in(body: &str) -> Vec<String> {
         let inner = &body[open + 1..close];
         let dotted = inner.contains('.')
             && !inner.contains(' ')
-            && inner
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-');
+            && inner.chars().all(|c| {
+                c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-' || c == '_'
+            });
         if dotted {
             out.push(inner.to_string());
         }
@@ -119,9 +119,9 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
 /// Registered namespaces resolve against the anchor index; reserved
 /// forward namespaces are legal-but-unresolvable ([conf.anchor.ns]).
 pub const REGISTERED_NS: [&str; 6] = ["gram", "mem", "conc", "abi", "conf", "proto"];
-pub const FORWARD_NS: [&str; 13] = [
+pub const FORWARD_NS: [&str; 14] = [
     "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",
-    "mod", "std",
+    "mod", "std", "ty",
 ];
 
 #[cfg(test)]

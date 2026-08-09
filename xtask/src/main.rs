@@ -410,6 +410,38 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
             config,
         ));
     }
+    // (c') checker throughput (s13, D5): bodies-checked-per-second over
+    // the corpus, from wolf_sema's bench example. Skips gracefully until
+    // the example exists.
+    let bb = Command::new("cargo")
+        .args([
+            "run",
+            "-p",
+            "wolf_sema",
+            "--example",
+            "bodies_bench",
+            "--quiet",
+        ])
+        .output();
+    match bb {
+        Ok(out) if out.status.success() => {
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                && let Some(bps) = v["bodies_per_sec"].as_f64()
+            {
+                records.push(record(
+                    "sema",
+                    "compile",
+                    "rust",
+                    "bodies_per_sec",
+                    bps,
+                    "bodies/s",
+                    commit,
+                    config,
+                ));
+            }
+        }
+        _ => eprintln!("bench: wolf_sema bodies_bench unavailable — bodies/sec skipped"),
+    }
     // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v
     touch(Path::new("crates/wolf_driver/src/main.rs"));
     match max_rss_kb("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
