@@ -36,6 +36,12 @@ fn build_ring(n: int) -> int {
     }
 }
 
+struct Config { limit: int }
+
+fn build_config() -> Config {
+    Config { limit: 42 }               // allocates into the ambient region
+}
+
 fn main() -> !int {
     // first-class form: strategy at creation, freeze for sharing (X4)
     let r = region(rc)                  // Perceus-managed interior

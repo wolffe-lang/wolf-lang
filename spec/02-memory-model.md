@@ -170,16 +170,24 @@ Edge legality (source stores a reference to target):
 
 - `[mem.region.open.1]` A region is **Open** (mutable) in at most one
   scope at a time; entering `in r { … }` or the sugar block opens it;
-  exit closes it (state Suspended).
+  exit closes it (state Suspended). Re-entering a region that is already
+  open in the current scope chain (`in a { … }` inside `region a { … }`)
+  is **idempotent** — openness is depth-counted, not a violation
+  (is03 model-checking repair, 2026-08-09).
 - `[mem.region.open.2]` `[mem.region.multiopen]` **Multiple disjoint
-  regions may be open simultaneously.** The disjointness obligation:
-  the open set is a set of *distinct region values*; since region values
-  are affine (`[mem.region.create.2]`), two open handles are two regions
-  by construction. Opening a region through anything other than its value
-  (e.g., a Tier-3 raw path) is outside this clause and lands in §7.
-  **Model-checking priority**: this clause is the unproven extension past
-  Verona's single-window rule; is07 explores it exhaustively; the s20
-  fallback is single-open-window.
+  regions may be open simultaneously.** The disjointness obligation
+  (repaired 2026-08-09 after is03's dynamic machine found the original
+  wording incoherent): the open set must be an **antichain in the region
+  forest** — no open region may be an ancestor (owner, transitively via
+  iso edges) of another open region. Distinctness of affine region
+  values is *not* sufficient: `[mem.region.edge.iso]` lets one region
+  own another, and an owner's open window reaches its child's data.
+  Distinct *sibling* subtrees are always safely co-openable, which is
+  the pattern every corpus litmus exercises. Opening a region through
+  anything other than its value (e.g., a Tier-3 raw path) is outside
+  this clause and lands in §7. **Model-checking priority**: is03's
+  executable machine enforces the antichain; is07 explores schedules
+  over it exhaustively; the s20 fallback is single-open-window.
 - `[mem.region.open.3]` A Suspended region's contents are unreachable for
   writing (no live path can write into it — its handle is busy being
   somewhere); the optimizer entitlement this creates is §7/O4.

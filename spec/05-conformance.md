@@ -81,7 +81,9 @@ parser contract):
   alphabet of spec 06. Sources: `overflow`/`div-zero`/`bounds` (s04
   defined-behavior table), `use-after-move`/`exclusivity` (s04 dynamic
   meanings of E1001/E1002), `region-fault` (dynamic region-rule
-  violations the static tier cannot see), `stale-handle`
+  violations: the runtime meanings of E1004 — illegal cross-region
+  edge — and E1005 — transfer of an open region — plus rule violations
+  the static tier cannot see), `stale-handle`
   (`[mem.shared.handle.2]`), `alloc-contract` (I15 `#[noalloc]`-family
   violations in checked builds), `assert` (user assertions), `race`
   (`[conc.mm.race.3]` — detection permitted, not required), `ub`
