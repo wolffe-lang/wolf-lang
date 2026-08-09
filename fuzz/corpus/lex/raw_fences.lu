@@ -1,0 +1,2 @@
+let x = r##"say "hi"# not yet"##
+let y = r"a\d+"

@@ -1,0 +1,1 @@
+let s = "bad \q escape and \u{} too"

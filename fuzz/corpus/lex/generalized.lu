@@ -1,0 +1,2 @@
+let v = re"[aeiou]+"
+let w = re "two tokens"

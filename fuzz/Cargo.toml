@@ -14,10 +14,19 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 xtask = { path = "../xtask" }
+wolf_lex = { path = "../crates/wolf_lex" }
+wolf_span = { path = "../crates/wolf_span" }
 
 [[bin]]
 name = "fuzz_corpus_directives"
 path = "fuzz_targets/fuzz_corpus_directives.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lex"
+path = "fuzz_targets/lex.rs"
 test = false
 doc = false
 bench = false

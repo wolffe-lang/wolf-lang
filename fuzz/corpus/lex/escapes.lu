@@ -1,0 +1,2 @@
+print("{{not interpolated}}")
+print("a\n\u{1F43A}\x7f")
