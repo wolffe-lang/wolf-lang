@@ -1,0 +1,71 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 197..417
+  FnDecl 197..416
+    FnKw 197..199 "fn"
+    Ident 200..204 "main"
+    ParamList 204..206
+      LParen 204..205 "("
+      RParen 205..206 ")"
+    RetType 207..214
+      Arrow 207..209 "->"
+      ErrorUnionType 210..214
+        Not 210..211 "!"
+        PathType 211..214
+          Path 211..214
+            Ident 211..214 "int"
+    Block 215..416
+      LBrace 215..216 "{"
+      ErrorNode 221..222
+        Term 221..222 ";"
+      LetDecl 272..282
+        LetKw 272..275 "let"
+        IdentPat 276..277
+          Ident 276..277 "x"
+        Eq 278..279 "="
+        LiteralExpr 280..281
+          Int 280..281 "1"
+        Term 281..282 ";"
+      ExprStmt 343..409
+        IfExpr 343..378
+          IfKw 343..345 "if"
+          BinExpr 346..352
+            PathExpr 346..347
+              Ident 346..347 "x"
+            EqEq 348..350 "=="
+            LiteralExpr 351..352
+              Int 351..352 "1"
+          Block 353..378
+            LBrace 353..354 "{"
+            ExprStmt 355..367
+              CallExpr 355..366
+                PathExpr 355..360
+                  Ident 355..360 "print"
+                ArgList 360..366
+                  LParen 360..361 "("
+                  Arg 361..365
+                    StringExpr 361..365
+                      StrBegin 361..362 "\""
+                      StrFragment 362..364 "ok"
+                      StrEnd 364..365 "\""
+                  RParen 365..366 ")"
+              Term 366..367 ";"
+            ExprStmt 368..376
+              ReturnExpr 368..376
+                ReturnKw 368..374 "return"
+                LiteralExpr 375..376
+                  Int 375..376 "0"
+            RBrace 377..378 "}"
+        Term 408..409 "\n"
+      ExprStmt 413..415
+        LiteralExpr 413..414
+          Int 413..414 "1"
+        Term 414..415 "\n"
+      RBrace 415..416 "}"
+  Term 416..417 "\n"
+  Eof 417..417 ""
+== diagnostics ==
+E0002 [Error] 221..222 empty statement: this `;` terminates nothing — remove it (`;` only separates statements within a single-line block)

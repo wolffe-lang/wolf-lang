@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 526..655 name=Node fields=3
-FnDecl 657..1444 name=build_ring body=BlockPending
-FnDecl 1446..1859 name=main body=BlockPending
+StructDecl 528..657 name=Node fields=3
+FnDecl 659..1446 name=build_ring body=Block
+FnDecl 1448..1861 name=main body=Block

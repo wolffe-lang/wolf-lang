@@ -3,4 +3,6 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 StructDecl 202..225 name=Point fields=1
-FnDecl 226..337 name=main body=BlockPending
+FnDecl 226..337 name=main body=Block
+-- diagnostics --
+E0006 [Error] 291..292 struct literals are not allowed in condition or scrutinee position — wrap the literal in parentheses: `(Path { … })`

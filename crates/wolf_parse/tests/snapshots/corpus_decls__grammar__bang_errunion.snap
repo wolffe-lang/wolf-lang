@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 122..193 name=may_fail body=BlockPending
-FnDecl 194..233 name=rowy body=BlockPending
-FnDecl 234..400 name=main body=BlockPending
+FnDecl 124..195 name=may_fail body=Block
+FnDecl 196..235 name=rowy body=Block
+FnDecl 236..402 name=main body=Block

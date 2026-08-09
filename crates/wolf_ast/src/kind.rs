@@ -93,12 +93,96 @@ pub enum SyntaxKind {
     // Patterns `[gram.pat]`.
     WildcardPat, LiteralPat, IdentPat, PathPat, TuplePat, OrPat, BindingPat,
 
-    // s09 fences: complete, lossless raw-token groups.
-    /// A `{…}` body held as raw tokens; s09 opens it.
-    BlockPending,
-    /// An initializer expression (`= …` up to TERM) held as raw tokens;
-    /// s09 opens it.
-    ExprPending,
+    // Statements `[gram.expr.block]` (s09).
+    /// `expr TERM` (or a trailing block expression — no `Term` child).
+    ExprStmt,
+    /// `place assign_op expr TERM` — statement-only `[gram.expr.assign]`.
+    AssignStmt,
+    /// `defer expr TERM` / `errdefer expr TERM` (keyword child decides).
+    DeferStmt,
+    /// `assume noalias expr (',' expr)+ TERM` `[gram.expr.unsafe]`.
+    AssumeStmt,
+
+    // Expressions `[gram.expr]` (s09).
+    /// A single identifier in expression position (dots build
+    /// `MemberExpr` chains — member position is keyword-transparent).
+    PathExpr,
+    /// `INT | FLOAT | true | false`.
+    LiteralExpr,
+    /// One whole string episode in expression position; interpolations
+    /// are parsed as `Interp` children `[gram.lex.str]`.
+    StringExpr,
+    /// `{ expr format_spec? }` inside a string.
+    Interp,
+    /// The `: …` format spec inside an interpolation.
+    FormatSpec,
+    /// `( expr )` grouping.
+    ParenExpr,
+    /// `( expr, … )` tuple construction (incl. `(a,)`).
+    TupleExpr,
+    /// `{ stmt* expr? }` — blocks are expressions `[gram.expr.block]`.
+    Block,
+    /// `! - & &mut * move copy shared` prefix operators (tier 3).
+    PrefixExpr,
+    /// One binary operator application, tiers 5–13 `[gram.expr.prec]`.
+    BinExpr,
+    /// `expr as type` (tier 4).
+    CastExpr,
+    /// `a..b`, `a..=b`, `..b`, `a..` (tier 14).
+    RangeExpr,
+    /// `^n` — end-relative range endpoint (D25).
+    FromEndExpr,
+    /// Postfix `?` (max binding power, D30).
+    TryExpr,
+    /// `callee(args)`.
+    CallExpr,
+    /// `expr[args]` — ONE postfix form covering indexing and generic
+    /// application; sema resolves which (D29, `[gram.amb.brackets]`).
+    BracketApply,
+    /// The delimited argument list of a call or bracket apply.
+    ArgList,
+    /// One argument: `('mut' | 'take')? expr` or a type-only form.
+    Arg,
+    /// `expr . member` (member: IDENT, INT, or any keyword).
+    MemberExpr,
+    /// `path { field_init, … }` `[gram.expr.primary]`.
+    StructLit,
+    /// `IDENT (':' expr)?` in a struct literal.
+    FieldInit,
+    // Control flow as expressions `[gram.expr.flow]`.
+    IfExpr, MatchExpr, MatchArm,
+    /// The `if expr` guard of a match arm.
+    MatchGuard,
+    ForExpr, WhileExpr, LoopExpr,
+    /// `fn(a, b) expr` / `fn(a, b) { … }` `[gram.expr.closure]`.
+    ClosureExpr,
+    ReturnExpr, BreakExpr, ContinueExpr,
+    /// `expr else …` — the defaulting operator (tier 15, D30).
+    ElseExpr,
+    // Regions `[gram.expr.region]` — sugar vs value forms are distinct.
+    /// `region name? (':' strategy)? { … }` block sugar (X4).
+    RegionBlock,
+    /// `region(strategy?)` first-class value form (X4).
+    RegionValue,
+    /// `rc` / `pool(T)`.
+    RegionStrategy,
+    /// `in expr { … }`.
+    InBlock,
+    /// `freeze expr`.
+    FreezeExpr,
+    // Concurrency surface `[gram.expr.conc]`.
+    ScopeExpr, SelectExpr, SelectArm, WhenExpr, SpawnExpr,
+    // Unsafe tier `[gram.expr.unsafe]`.
+    UnsafeBlock,
+    /// `unsafe c capture_list? { … }` — inline C.
+    InlineC,
+    /// The opaque brace-balanced token body of an `unsafe c` block.
+    InlineCBody,
+    /// `[a, b]` capture list of an inline-C block.
+    CaptureList,
+    AsmExpr, AsmOperand,
+    /// `borrow expr from expr`.
+    BorrowExpr,
 }
 
 impl SyntaxKind {
@@ -144,7 +228,8 @@ mod tests {
         assert!(!SyntaxKind::Missing.is_node());
         assert!(SyntaxKind::SourceFile.is_node());
         assert!(!SyntaxKind::SourceFile.is_token());
-        assert!(SyntaxKind::ExprPending.is_node());
+        assert!(SyntaxKind::BorrowExpr.is_node());
+        assert!(SyntaxKind::Block.is_node());
         assert!(SyntaxKind::FnDecl.is_item());
         assert!(!SyntaxKind::Attribute.is_item());
     }

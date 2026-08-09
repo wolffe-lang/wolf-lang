@@ -1,7 +1,8 @@
 //! The declaration grammar (spec/01 §2, §4, §5) — resilient recursive
-//! descent over the event-driven skeleton. Bodies (`{…}` after headers)
-//! and initializer expressions (`= …` up to TERM) are fenced into
-//! `BlockPending` / `ExprPending` raw-token groups for s09.
+//! descent over the event-driven skeleton. Bodies and initializers are
+//! parsed by the expression/statement grammar in [`crate::exprs`] (s09);
+//! expression-shaped `[…]` type arguments in *type* position still park
+//! as `TypeArgPending` for sema (D29).
 //!
 //! One-token lookahead is the norm; every bounded-lookahead use lives
 //! behind a named helper with a comment saying why.
@@ -17,7 +18,7 @@ use wolf_span::Span;
 pub(crate) fn source_file(p: &mut Parser<'_>) {
     let m = p.start();
     loop {
-        p.eat_terms();
+        crate::exprs::eat_terms_checked(p);
         if p.at_eof() {
             break;
         }
@@ -42,6 +43,30 @@ pub(crate) fn source_file(p: &mut Parser<'_>) {
 /// parsing members of a `trait`/`impl` body, where a `}` at depth zero
 /// closes the enclosing item and must stop recovery.
 pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
+    // An unambiguous *item* keyword ends any stray-line E0203 fold.
+    // `let`/`var`/`const` deliberately do not: a function body spilled
+    // to the top level (its `{` lost) interleaves bindings with
+    // expression statements — that is one wreck, not many.
+    if matches!(
+        p.current(),
+        TokenKind::PoundBracket
+            | TokenKind::Kw(
+                Keyword::Type
+                    | Keyword::Struct
+                    | Keyword::Enum
+                    | Keyword::Trait
+                    | Keyword::Impl
+                    | Keyword::Use
+                    | Keyword::Import
+                    | Keyword::Extern
+                    | Keyword::Export
+                    | Keyword::Comptime
+                    | Keyword::Pub
+            )
+    ) || (p.at_kw(Keyword::Fn) && p.nth(1) != TokenKind::Punct(Punct::LParen))
+    {
+        p.toplevel_error_reported = false;
+    }
     let m = p.start();
     let mut prefixed = false;
     while p.at(TokenKind::PoundBracket) {
@@ -53,9 +78,10 @@ pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
         prefixed = true;
     }
     match p.current() {
-        TokenKind::Kw(Keyword::Fn | Keyword::Comptime | Keyword::Extern | Keyword::Export) => {
-            fn_item(p, m)
-        }
+        // Bounded lookahead: `fn (` is a closure — a stray expression
+        // line up here, not a nameless function item.
+        TokenKind::Kw(Keyword::Fn) if p.nth(1) != TokenKind::Punct(Punct::LParen) => fn_item(p, m),
+        TokenKind::Kw(Keyword::Comptime | Keyword::Extern | Keyword::Export) => fn_item(p, m),
         TokenKind::Kw(Keyword::Let) => binding_item(p, m, Keyword::Let, SyntaxKind::LetDecl),
         TokenKind::Kw(Keyword::Var) => binding_item(p, m, Keyword::Var, SyntaxKind::VarDecl),
         TokenKind::Kw(Keyword::Const) => binding_item(p, m, Keyword::Const, SyntaxKind::ConstDecl),
@@ -72,8 +98,14 @@ pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
             } else {
                 "expected a declaration"
             };
-            p.error(codes::UNEXPECTED_TOPLEVEL, p.current_span(), msg);
-            p.skip_until(in_body, |k| k == TokenKind::Term);
+            p.toplevel_error(p.current_span(), msg);
+            if p.at_punct(Punct::LBrace) {
+                // A stray block: parse it — declarations nested inside
+                // survive intact instead of being skipped raw (D22).
+                crate::exprs::block(p);
+            } else {
+                p.skip_until(in_body, |k| k == TokenKind::Term);
+            }
             m.complete(p, SyntaxKind::ErrorNode);
         }
     }
@@ -81,7 +113,7 @@ pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
 
 // ------------------------------------------------------------ functions --
 
-fn fn_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
     // fn_qual* : 'comptime' | 'extern' STRING | 'export'
     loop {
         match p.current() {
@@ -102,48 +134,75 @@ fn fn_item(p: &mut Parser<'_>, m: Marker) {
             _ => break,
         }
     }
+    let fn_ok = p.at_kw(Keyword::Fn);
     p.expect_kw(Keyword::Fn, "`fn`");
-    name_token(p, "function");
+    let name_ok = matches!(p.current(), TokenKind::Ident)
+        || matches!(p.current(), TokenKind::Kw(k) if !is_decl_keyword(k));
+    if !fn_ok && !name_ok {
+        // Hopeless header (no `fn`, no name): one report — sync to the
+        // body block (parsed, keeping its contents) or end of line.
+        p.missing();
+        p.recover_until(true, |k| {
+            matches!(k, TokenKind::Punct(Punct::LBrace)) || k == TokenKind::Term
+        });
+        if p.at_punct(Punct::LBrace) {
+            crate::exprs::block(p);
+        } else if p.at(TokenKind::Term) {
+            p.bump();
+        }
+        m.complete(p, SyntaxKind::FnDecl);
+        return;
+    }
+    let named = name_token(p, "function");
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
     }
     let params_ok = if p.at_punct(Punct::LParen) {
         param_list(p)
     } else {
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            "expected `(` to start the parameter list",
-        );
+        // One report per broken header: a missing name was already
+        // diagnosed above.
+        if named {
+            p.error(
+                codes::EXPECTED_TOKEN,
+                p.here(),
+                "expected `(` to start the parameter list",
+            );
+        }
         p.missing();
         false
     };
     if p.at_punct(Punct::Arrow) {
         ret_type(p);
     }
-    // Body: a fenced block, or TERM for the bodyless form.
+    // Body: a block, or TERM for the bodyless form.
     if p.at_punct(Punct::LBrace) {
-        block_pending(p);
+        crate::exprs::block(p);
     } else if p.at(TokenKind::Term) {
         p.bump();
     } else if !p.at_eof() && !p.at_decl_start() && !p.at_punct(Punct::RBrace) {
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            "expected `{` or line end after the function header",
-        );
+        // One report per broken header: a missing parameter list or
+        // return type was already diagnosed above.
+        if params_ok {
+            p.error_unless_folded(
+                codes::EXPECTED_TOKEN,
+                p.here(),
+                "expected `{` or line end after the function header",
+            );
+        }
         p.recover_until(true, |k| {
             matches!(k, TokenKind::Punct(Punct::LBrace) | TokenKind::Term)
         });
         if p.at_punct(Punct::LBrace) {
-            block_pending(p);
+            crate::exprs::block(p);
         } else if p.at(TokenKind::Term) {
             p.bump();
         }
     } else if params_ok && !p.at_eof() {
         // Header was fine but the body is missing before the next
-        // declaration (same line, no TERM).
-        p.error(codes::EXPECTED_TOKEN, p.here(), "expected a function body");
+        // declaration (same line, no TERM). Folded when an unclosed
+        // delimiter was just reported here — same wreck.
+        p.error_unless_folded(codes::EXPECTED_TOKEN, p.here(), "expected a function body");
         p.missing();
     }
     m.complete(p, SyntaxKind::FnDecl);
@@ -167,7 +226,13 @@ fn param_list(p: &mut Parser<'_>) -> bool {
             break;
         }
         let before = p.pos();
+        let diags_before = p.diags.len();
         param(p);
+        if p.diags.len() > diags_before {
+            // The broken parameter was reported; the separator miss
+            // that follows is the same wreck.
+            p.arg_error_reported = true;
+        }
         if p.at_punct(Punct::Comma) {
             p.bump();
             continue;
@@ -175,11 +240,7 @@ fn param_list(p: &mut Parser<'_>) -> bool {
         if p.at_punct(Punct::RParen) || paren_list_escape(p) {
             continue;
         }
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            "expected `,` or `)` in the parameter list",
-        );
+        p.arg_list_error(p.here(), "expected `,` or `)` in the parameter list");
         p.recover_until(true, |k| {
             matches!(k, TokenKind::Punct(Punct::Comma | Punct::RParen))
         });
@@ -238,7 +299,7 @@ fn param(p: &mut Parser<'_>) {
             param_type(p);
         }
         _ => {
-            p.error(codes::EXPECTED_TOKEN, p.here(), "expected a parameter");
+            p.arg_list_error(p.here(), "expected a parameter");
             p.recover_until(true, |k| {
                 matches!(
                     k,
@@ -251,8 +312,20 @@ fn param(p: &mut Parser<'_>) {
 }
 
 fn param_type(p: &mut Parser<'_>) {
-    p.expect_punct(Punct::Colon, "`:` after the parameter name");
-    type_required(p);
+    if p.at_punct(Punct::Colon) {
+        p.bump();
+        type_required(p);
+    } else {
+        // One report for the missing ascription; still salvage a type
+        // that starts here anyway (`fn f(x int)`).
+        p.error(
+            codes::EXPECTED_TOKEN,
+            p.here(),
+            "expected `:` and a type after the parameter name",
+        );
+        p.missing();
+        type_(p);
+    }
 }
 
 /// Bounded lookahead: a view set is `self` `.` `{` — the `.` alone is
@@ -382,7 +455,12 @@ fn generic_param(p: &mut Parser<'_>) {
 fn ret_type(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump(); // `->`
+    let diags_before = p.diags.len();
     type_required(p);
+    if p.diags.len() > diags_before {
+        // The broken return type is this header's one report.
+        p.fold_line_end();
+    }
     if p.at_punct(Punct::Not) {
         p.bump();
         if p.at_punct(Punct::LBrace) {
@@ -394,6 +472,8 @@ fn ret_type(p: &mut Parser<'_>) {
                 "expected `{` to open the error row after `!`",
             );
             p.missing();
+            // One report per broken header tail.
+            p.fold_line_end();
         }
     }
     m.complete(p, SyntaxKind::RetType);
@@ -410,7 +490,14 @@ fn error_row(p: &mut Parser<'_>) {
             p.bump();
             break;
         }
-        if p.at_eof() || p.at_decl_start() {
+        // Row entries are `path (types)` lists — a keyword or `{` here
+        // means the row was never closed and this token belongs to the
+        // function body. Escape rather than cascade (D22).
+        if p.at_eof()
+            || p.at_decl_start()
+            || p.at_punct(Punct::LBrace)
+            || matches!(p.current(), TokenKind::Kw(_))
+        {
             unclosed(p, opener, "{");
             break;
         }
@@ -433,11 +520,7 @@ fn error_row(p: &mut Parser<'_>) {
                 e.complete(p, SyntaxKind::RowEntry);
             }
             _ => {
-                p.error(
-                    codes::EXPECTED_TOKEN,
-                    p.current_span(),
-                    "expected an error-row entry",
-                );
+                p.arg_list_error(p.current_span(), "expected an error-row entry");
                 p.recover_until(true, |k| {
                     matches!(k, TokenKind::Punct(Punct::Comma) | TokenKind::Term)
                 });
@@ -462,13 +545,15 @@ fn error_row(p: &mut Parser<'_>) {
 
 // ------------------------------------------------------------- bindings --
 
-fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: SyntaxKind) {
+pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: SyntaxKind) {
     p.bump(); // let/var/const
+    let mut binder_ok = true;
     if kw == Keyword::Const {
-        name_token(p, "constant");
+        binder_ok = name_token(p, "constant");
     } else if !pattern(p) {
         p.error(codes::EXPECTED_PATTERN, p.here(), "expected a pattern");
         p.missing();
+        binder_ok = false;
     }
     if p.at_punct(Punct::Colon) {
         p.bump();
@@ -476,14 +561,20 @@ fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: SyntaxKind) {
     }
     if p.at_punct(Punct::Eq) {
         p.bump();
-        expr_pending(p);
+        crate::exprs::expr_required(p);
     } else {
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            "expected `=` and an initializer",
-        );
+        // One report per truncated binding: a missing binder was
+        // already diagnosed above.
+        if binder_ok {
+            p.error(
+                codes::EXPECTED_TOKEN,
+                p.here(),
+                "expected `=` and an initializer",
+            );
+        }
         p.missing();
+        // ...and fold the follow-up missing-terminator diagnostic.
+        p.fold_line_end();
         if !p.at(TokenKind::Term) && !p.at_eof() && !p.at_decl_start() && !p.at_punct(Punct::RBrace)
         {
             p.recover_until(true, |k| {
@@ -491,29 +582,52 @@ fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: SyntaxKind) {
             });
             if p.at_punct(Punct::Eq) {
                 p.bump();
-                expr_pending(p);
+                crate::exprs::expr_required(p);
             }
         }
     }
     if p.at(TokenKind::Term) {
         p.bump();
     } else if !p.at_eof() && !p.at_punct(Punct::RBrace) {
-        // ExprPending stops only at TERM / `}` / EOF / a declaration
-        // start — the latter means two declarations on one line.
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            "expected line end after the initializer",
-        );
-        p.missing();
+        // The initializer expression stops only at TERM / `}` / EOF or
+        // an unconsumable token — the latter means junk on this line.
+        p.expected_line_end("initializer");
+        p.recover_until(true, |k| k == TokenKind::Term);
+        if p.at(TokenKind::Term) {
+            p.bump();
+        }
     }
     m.complete(p, kind);
 }
 
 // ----------------------------------------------------------- type items --
 
-fn type_item(p: &mut Parser<'_>, m: Marker) {
+/// After an item keyword, is the header hopeless — no name, no
+/// structural anchor (`[`, `{`, `=`)? Then the keyword itself most
+/// likely strayed here (a mutation, a half-deleted line): report once
+/// through the stray-line fold and move on, instead of a cascade of
+/// name/`=`/body diagnostics.
+fn hopeless_item_header(p: &Parser<'_>) -> bool {
+    let name_ok = match p.current() {
+        TokenKind::Ident => true,
+        TokenKind::Kw(k) => !is_decl_keyword(k),
+        _ => false,
+    };
+    !name_ok
+        && !matches!(
+            p.current(),
+            TokenKind::Punct(Punct::LBracket | Punct::LBrace | Punct::Eq)
+        )
+}
+
+pub(crate) fn type_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `type`
+    if hopeless_item_header(p) {
+        p.toplevel_error(p.here(), "expected a type name");
+        p.missing();
+        m.complete(p, SyntaxKind::ErrorNode);
+        return;
+    }
     name_token(p, "type");
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
@@ -540,8 +654,14 @@ fn type_item(p: &mut Parser<'_>, m: Marker) {
     m.complete(p, SyntaxKind::TypeDecl);
 }
 
-fn struct_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn struct_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `struct`
+    if hopeless_item_header(p) {
+        p.toplevel_error(p.here(), "expected a struct name");
+        p.missing();
+        m.complete(p, SyntaxKind::ErrorNode);
+        return;
+    }
     name_token(p, "struct");
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
@@ -550,8 +670,14 @@ fn struct_item(p: &mut Parser<'_>, m: Marker) {
     m.complete(p, SyntaxKind::StructDecl);
 }
 
-fn enum_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn enum_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `enum`
+    if hopeless_item_header(p) {
+        p.toplevel_error(p.here(), "expected an enum name");
+        p.missing();
+        m.complete(p, SyntaxKind::ErrorNode);
+        return;
+    }
     name_token(p, "enum");
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
@@ -593,10 +719,22 @@ fn struct_body(p: &mut Parser<'_>) {
             break;
         }
         let before = p.pos();
+        let diags_before = p.diags.len();
         match p.current() {
-            TokenKind::Ident | TokenKind::PoundBracket | TokenKind::Kw(_) => struct_field(p),
+            TokenKind::Ident | TokenKind::PoundBracket | TokenKind::Kw(_) => {
+                // Speculative: if the "field" turns out to be the next
+                // declaration (its attributes/`pub` prefix followed by
+                // a declaration keyword), rewind and escape — the
+                // prefix belongs to that declaration, not to a field.
+                let cp = p.checkpoint();
+                if !struct_field(p) {
+                    p.rollback(cp);
+                    unclosed(p, opener, "{");
+                    break;
+                }
+            }
             _ => {
-                p.error(codes::EXPECTED_TOKEN, p.current_span(), "expected a field");
+                p.arm_error(p.current_span(), "expected a field");
                 p.recover_until(true, |k| {
                     matches!(k, TokenKind::Punct(Punct::Comma) | TokenKind::Term)
                 });
@@ -605,6 +743,9 @@ fn struct_body(p: &mut Parser<'_>) {
                 }
             }
         }
+        if p.diags.len() == diags_before {
+            p.arm_error_reported = false;
+        }
         if p.pos() == before {
             unclosed(p, opener, "{");
             break;
@@ -612,8 +753,11 @@ fn struct_body(p: &mut Parser<'_>) {
     }
 }
 
-/// `attribute* visibility? IDENT ':' type ','?`.
-fn struct_field(p: &mut Parser<'_>) {
+/// `attribute* visibility? IDENT ':' type ','?`. Returns false —
+/// emitting nothing the caller keeps — when the name position holds a
+/// declaration keyword: the consumed prefix belongs to the *next*
+/// declaration and the caller rewinds.
+fn struct_field(p: &mut Parser<'_>) -> bool {
     let m = p.start();
     while p.at(TokenKind::PoundBracket) {
         attribute(p);
@@ -621,13 +765,44 @@ fn struct_field(p: &mut Parser<'_>) {
     if p.at_kw(Keyword::Pub) {
         visibility(p);
     }
-    name_token(p, "field");
-    p.expect_punct(Punct::Colon, "`:` after the field name");
-    type_required(p);
+    let name_ok = match p.current() {
+        TokenKind::Ident => true,
+        TokenKind::Kw(k) => !is_decl_keyword(k),
+        _ => false,
+    };
+    if !name_ok && p.at_decl_start() {
+        m.abandon(p);
+        return false;
+    }
+    if name_ok {
+        name_token(p, "field");
+    } else {
+        p.arm_error(p.here(), "expected a field name");
+        p.missing();
+    }
+    if p.at_punct(Punct::Colon) {
+        p.bump();
+        type_required(p);
+    } else {
+        // One report per broken field; salvage a plain path type that
+        // starts here anyway (`x f64`), and sync to the next field
+        // otherwise. Keyword-led types are not salvaged — a stray `fn`
+        // here is the next declaration, not a field type.
+        if name_ok {
+            p.arm_error(p.here(), "expected `:` and a type after the field name");
+        }
+        p.missing();
+        if !(name_ok && p.at(TokenKind::Ident) && type_(p)) {
+            p.recover_until(true, |k| {
+                matches!(k, TokenKind::Punct(Punct::Comma) | TokenKind::Term)
+            });
+        }
+    }
     if p.at_punct(Punct::Comma) {
         p.bump();
     }
     m.complete(p, SyntaxKind::StructField);
+    true
 }
 
 fn enum_body(p: &mut Parser<'_>) {
@@ -653,19 +828,19 @@ fn enum_body(p: &mut Parser<'_>) {
             break;
         }
         let before = p.pos();
+        let diags_before = p.diags.len();
         match p.current() {
             TokenKind::Ident => enum_variant(p),
             TokenKind::Kw(k) if !is_decl_keyword(k) => enum_variant(p),
             _ => {
-                p.error(
-                    codes::EXPECTED_TOKEN,
-                    p.current_span(),
-                    "expected an enum variant",
-                );
+                p.arm_error(p.current_span(), "expected an enum variant");
                 p.recover_until(true, |k| {
                     matches!(k, TokenKind::Punct(Punct::Comma) | TokenKind::Term)
                 });
             }
+        }
+        if p.diags.len() == diags_before {
+            p.arm_error_reported = false;
         }
         if p.at_punct(Punct::Comma) {
             p.bump();
@@ -697,8 +872,14 @@ fn enum_variant(p: &mut Parser<'_>) {
 
 // ---------------------------------------------------------- trait/impl --
 
-fn trait_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn trait_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `trait`
+    if hopeless_item_header(p) {
+        p.toplevel_error(p.here(), "expected a trait name");
+        p.missing();
+        m.complete(p, SyntaxKind::ErrorNode);
+        return;
+    }
     name_token(p, "trait");
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
@@ -707,7 +888,7 @@ fn trait_item(p: &mut Parser<'_>, m: Marker) {
     m.complete(p, SyntaxKind::TraitDecl);
 }
 
-fn impl_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn impl_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `impl`
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
@@ -764,11 +945,7 @@ fn member_body(p: &mut Parser<'_>) {
         if p.at_decl_start() {
             item(p, true);
         } else {
-            p.error(
-                codes::UNEXPECTED_TOPLEVEL,
-                p.current_span(),
-                "expected a declaration",
-            );
+            p.toplevel_error(p.current_span(), "expected a declaration");
             p.recover_until(true, |k| k == TokenKind::Term);
         }
         if p.pos() == before {
@@ -780,7 +957,7 @@ fn member_body(p: &mut Parser<'_>) {
 
 // -------------------------------------------------------- use / import --
 
-fn use_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn use_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `use`
     use_path(p);
     if at_use_group(p) {
@@ -865,7 +1042,7 @@ fn use_group(p: &mut Parser<'_>) {
     m.complete(p, SyntaxKind::UseGroup);
 }
 
-fn import_c_item(p: &mut Parser<'_>, m: Marker) {
+pub(crate) fn import_c_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `import`
     if p.at(TokenKind::Ident) {
         if p.current_text() != b"c" {
@@ -903,12 +1080,17 @@ fn item_term(p: &mut Parser<'_>, what: &str) {
     if p.at(TokenKind::Term) {
         p.bump();
     } else if !p.at_eof() && !p.at_decl_start() && !p.at_punct(Punct::RBrace) {
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            format!("expected line end after the {what}"),
-        );
-        p.recover_until(true, |k| k == TokenKind::Term);
+        p.expected_line_end(what);
+        if p.at_punct(Punct::LBrace) {
+            // A stray block: parse it rather than skipping raw — a
+            // never-closed `{` would otherwise swallow the file, and
+            // declarations inside a closed one survive intact.
+            let e = p.start();
+            crate::exprs::block(p);
+            e.complete(p, SyntaxKind::ErrorNode);
+        } else {
+            p.recover_until(true, |k| k == TokenKind::Term);
+        }
         if p.at(TokenKind::Term) {
             p.bump();
         }
@@ -918,7 +1100,7 @@ fn item_term(p: &mut Parser<'_>, what: &str) {
 // ------------------------------------------- attributes & visibility --
 
 /// `#[' attr (',' attr)* ']` `[gram.item.attr]`.
-fn attribute(p: &mut Parser<'_>) {
+pub(crate) fn attribute(p: &mut Parser<'_>) {
     let m = p.start();
     let opener = p.current_span();
     p.bump(); // `#[`
@@ -1037,7 +1219,7 @@ fn attr_input_eq(p: &mut Parser<'_>) {
 }
 
 /// `pub` / `pub(pkg)`.
-fn visibility(p: &mut Parser<'_>) {
+pub(crate) fn visibility(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump(); // `pub`
     if p.at_punct(Punct::LParen) {
@@ -1060,18 +1242,26 @@ fn visibility(p: &mut Parser<'_>) {
 // ---------------------------------------------------------------- paths --
 
 /// `IDENT ('.' IDENT)*`. Reserved keywords in segment position get the
-/// E0008 treatment.
-fn path(p: &mut Parser<'_>, what: &str) {
+/// E0008 treatment. Bounded lookahead: a `.` not followed by a name
+/// stays unconsumed — it belongs to whatever broke around the path,
+/// and the caller's recovery handles it with one report, not two.
+pub(crate) fn path(p: &mut Parser<'_>, what: &str) {
     let m = p.start();
     if !name_token(p, what) {
         m.complete(p, SyntaxKind::Path);
         return;
     }
     while p.at_punct(Punct::Dot) {
-        p.bump();
-        if !name_token(p, "path segment") {
+        let nameable = match p.nth(1) {
+            TokenKind::Ident => true,
+            TokenKind::Kw(k) => !is_decl_keyword(k),
+            _ => false,
+        };
+        if !nameable {
             break;
         }
+        p.bump();
+        name_token(p, "path segment");
     }
     m.complete(p, SyntaxKind::Path);
 }
@@ -1080,7 +1270,7 @@ fn path(p: &mut Parser<'_>, what: &str) {
 
 /// Parse a type per `[gram.type]`. Returns false (emitting nothing)
 /// when the current token cannot begin a type.
-fn type_(p: &mut Parser<'_>) -> bool {
+pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
     match p.current() {
         TokenKind::Punct(Punct::Not) => {
             let m = p.start();
@@ -1162,7 +1352,7 @@ fn type_(p: &mut Parser<'_>) -> bool {
 }
 
 /// [`type_`], diagnosing E0206 + Missing when no type can start here.
-fn type_required(p: &mut Parser<'_>) {
+pub(crate) fn type_required(p: &mut Parser<'_>) {
     if !type_(p) {
         p.error(codes::EXPECTED_TYPE, p.here(), "expected a type");
         p.missing();
@@ -1237,23 +1427,28 @@ fn type_args(p: &mut Parser<'_>) {
     m.complete(p, SyntaxKind::TypeArgList);
 }
 
-/// Keywords that can never continue a type argument — reaching one at
-/// depth zero means the `[` was never closed.
+/// Tokens that can never continue a type argument at depth zero —
+/// reaching one means the `[` was never closed. `->` and `{` are
+/// included: a fn-type argument parses through the *type* grammar
+/// (its arrow is behind `fn(…)`), so a bare depth-zero arrow or brace
+/// here belongs to the enclosing header, and stopping keeps an
+/// unclosed `[` from swallowing the function body (D22).
 fn type_arg_escape(k: TokenKind) -> bool {
     matches!(
         k,
-        TokenKind::Kw(
-            Keyword::Let
-                | Keyword::Var
-                | Keyword::Const
-                | Keyword::Use
-                | Keyword::Import
-                | Keyword::Trait
-                | Keyword::Impl
-                | Keyword::Pub
-                | Keyword::Struct
-                | Keyword::Enum
-        )
+        TokenKind::Punct(Punct::Arrow | Punct::LBrace)
+            | TokenKind::Kw(
+                Keyword::Let
+                    | Keyword::Var
+                    | Keyword::Const
+                    | Keyword::Use
+                    | Keyword::Import
+                    | Keyword::Trait
+                    | Keyword::Impl
+                    | Keyword::Pub
+                    | Keyword::Struct
+                    | Keyword::Enum
+            )
     )
 }
 
@@ -1314,7 +1509,7 @@ fn type_arg_pending(p: &mut Parser<'_>) {
 
 /// `[gram.pat]`, or-patterns wrapped via `precede`. Returns false if no
 /// pattern can start here (nothing emitted).
-fn pattern(p: &mut Parser<'_>) -> bool {
+pub(crate) fn pattern(p: &mut Parser<'_>) -> bool {
     let Some(first) = pattern_atom(p) else {
         return false;
     };
@@ -1337,7 +1532,7 @@ fn pattern(p: &mut Parser<'_>) -> bool {
     true
 }
 
-fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::CompletedMarker> {
+pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::CompletedMarker> {
     match p.current() {
         TokenKind::Underscore => {
             let m = p.start();
@@ -1369,11 +1564,14 @@ fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::CompletedMarker> {
                 }
                 let before = p.pos();
                 if !pattern(p) {
-                    p.error(
-                        codes::EXPECTED_PATTERN,
-                        p.current_span(),
-                        "expected a pattern",
-                    );
+                    if !p.arm_error_reported {
+                        p.arm_error_reported = true;
+                        p.error(
+                            codes::EXPECTED_PATTERN,
+                            p.current_span(),
+                            "expected a pattern",
+                        );
+                    }
                     p.recover_until(true, |k| {
                         matches!(
                             k,
@@ -1456,11 +1654,14 @@ fn pattern_payload(p: &mut Parser<'_>) {
         }
         let before = p.pos();
         if !pattern(p) {
-            p.error(
-                codes::EXPECTED_PATTERN,
-                p.current_span(),
-                "expected a pattern",
-            );
+            if !p.arm_error_reported {
+                p.arm_error_reported = true;
+                p.error(
+                    codes::EXPECTED_PATTERN,
+                    p.current_span(),
+                    "expected a pattern",
+                );
+            }
             p.recover_until(true, |k| {
                 matches!(
                     k,
@@ -1478,13 +1679,14 @@ fn pattern_payload(p: &mut Parser<'_>) {
     }
 }
 
-// ------------------------------------------------------- fences (s09) --
+// -------------------------------------------------- opaque bodies --------
 
-/// `{…}` after a header: consumed by delimiter matching into a
-/// `BlockPending` node holding the raw tokens — complete and lossless;
-/// s09 opens it. Unbalanced delimiters degrade with a closest-match
-/// heuristic and an E0202 at the unclosed opener.
-fn block_pending(p: &mut Parser<'_>) {
+/// An opaque `{…}` consumed by delimiter matching into an
+/// `InlineCBody` node holding the raw tokens (the body of an
+/// `unsafe c` block is C text, not wolf syntax — c10 owns its meaning).
+/// Complete and lossless; unbalanced delimiters degrade with a
+/// closest-match heuristic and an E0202 at the unclosed opener.
+pub(crate) fn opaque_brace_block(p: &mut Parser<'_>) {
     let m = p.start();
     let opener = p.current_span();
     p.bump(); // `{`
@@ -1524,58 +1726,29 @@ fn block_pending(p: &mut Parser<'_>) {
             _ => p.bump(),
         }
     }
-    m.complete(p, SyntaxKind::BlockPending);
-}
-
-/// `= …` initializer up to a depth-zero TERM (left for the caller), `}`
-/// or a declaration keyword — parked raw for s09.
-fn expr_pending(p: &mut Parser<'_>) {
-    let m = p.start();
-    let consumed = raw_scan(p, |k| {
-        matches!(
-            k,
-            TokenKind::Term
-                | TokenKind::Punct(Punct::RBrace)
-                | TokenKind::PoundBracket
-                | TokenKind::Kw(
-                    Keyword::Let
-                        | Keyword::Var
-                        | Keyword::Const
-                        | Keyword::Use
-                        | Keyword::Import
-                        | Keyword::Type
-                        | Keyword::Struct
-                        | Keyword::Enum
-                        | Keyword::Trait
-                        | Keyword::Impl
-                        | Keyword::Pub
-                        | Keyword::Comptime
-                        | Keyword::Extern
-                        | Keyword::Export
-                )
-        )
-    });
-    if consumed == 0 {
-        m.abandon(p);
-        p.error(codes::EXPECTED_TOKEN, p.here(), "expected an expression");
-        p.missing();
-    } else {
-        m.complete(p, SyntaxKind::ExprPending);
-    }
+    m.complete(p, SyntaxKind::InlineCBody);
 }
 
 /// Raw scan with delimiter matching: consume tokens into the current
 /// node until `stop` matches at delimiter depth zero (or Eof). String
 /// episodes are consumed wholesale; unclosed openers get E0202 at Eof;
-/// mismatched closers use the closest-match heuristic. Note: `fn` is
-/// deliberately *not* a stop in initializer scans — closures
-/// (`let f = fn() { … }`) are expressions.
+/// mismatched closers use the closest-match heuristic. Declaration
+/// keywords are a hard stop at *any* depth: the scan's only client is
+/// `TypeArgPending` (expression-shaped const-generic arguments), where
+/// a declaration keyword can only mean an unclosed delimiter about to
+/// swallow the rest of the file (D22 containment).
 fn raw_scan(p: &mut Parser<'_>, stop: impl Fn(TokenKind) -> bool) -> usize {
     let mut stack: Vec<(Punct, Span)> = Vec::new();
     let mut consumed = 0usize;
     loop {
         let k = p.current();
         if k == TokenKind::Eof {
+            flush_unclosed(p, &mut stack);
+            break;
+        }
+        if let TokenKind::Kw(kw) = k
+            && is_decl_keyword(kw)
+        {
             flush_unclosed(p, &mut stack);
             break;
         }
@@ -1656,7 +1829,7 @@ fn raw_string_episode(p: &mut Parser<'_>) {
 }
 
 /// A string episode wrapped as a `StringLit` node (header positions).
-fn string_lit(p: &mut Parser<'_>) {
+pub(crate) fn string_lit(p: &mut Parser<'_>) {
     let m = p.start();
     raw_string_episode(p);
     m.complete(p, SyntaxKind::StringLit);
@@ -1664,7 +1837,7 @@ fn string_lit(p: &mut Parser<'_>) {
 
 // -------------------------------------------------------------- helpers --
 
-fn is_str_begin(k: TokenKind) -> bool {
+pub(crate) fn is_str_begin(k: TokenKind) -> bool {
     matches!(k, TokenKind::StrBegin(_))
 }
 
@@ -1672,7 +1845,7 @@ fn is_str_begin(k: TokenKind) -> bool {
 /// (spec §9) and is consumed as the name; anything else gets E0201 and
 /// a Missing marker. Declaration-leading keywords are *not* consumed —
 /// they are sync points and almost certainly start the next item.
-fn name_token(p: &mut Parser<'_>, what: &str) -> bool {
+pub(crate) fn name_token(p: &mut Parser<'_>, what: &str) -> bool {
     match p.current() {
         TokenKind::Ident => {
             p.bump();
@@ -1711,7 +1884,7 @@ fn keyword_as_ident(p: &mut Parser<'_>, what: &str) {
 
 /// E0202 at the unclosed opener, noting where scanning stopped, plus a
 /// zero-width Missing marker for the absent closer.
-fn unclosed(p: &mut Parser<'_>, opener: Span, what: &str) {
+pub(crate) fn unclosed(p: &mut Parser<'_>, opener: Span, what: &str) {
     unclosed_diag(p, opener, what);
     p.missing();
 }
@@ -1719,7 +1892,22 @@ fn unclosed(p: &mut Parser<'_>, opener: Span, what: &str) {
 /// The E0202 diagnostic alone (closest-match pops mid-scan: the fence
 /// content is raw tokens, a Missing marker there would be noise).
 fn unclosed_diag(p: &mut Parser<'_>, opener: Span, what: &str) {
+    // The escape is this line's error, and every downstream
+    // suppressed-terminator miss is the same wreck (D22 containment).
+    p.fold_unclosed();
+    // Likewise, delimiters still open when the file ends are one wreck.
+    if p.at_eof() {
+        if p.eof_unclosed_reported {
+            return;
+        }
+        p.eof_unclosed_reported = true;
+    }
     let here = p.here();
+    // Several openers stalling at the same token are one wreck too.
+    if p.last_unclosed_at == Some(here.lo) {
+        return;
+    }
+    p.last_unclosed_at = Some(here.lo);
     p.error_with_note(
         codes::UNCLOSED_DELIMITER,
         opener,

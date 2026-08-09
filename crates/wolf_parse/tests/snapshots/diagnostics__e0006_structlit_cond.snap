@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0006",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 291,
+        hi: 292,
+    },
+    message: "struct literals are not allowed in condition or scrutinee position — wrap the literal in parentheses: `(Path { … })`",
+    notes: [],
+}

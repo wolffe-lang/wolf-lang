@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0002",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 221,
+        hi: 222,
+    },
+    message: "empty statement: this `;` terminates nothing — remove it (`;` only separates statements within a single-line block)",
+    notes: [],
+}

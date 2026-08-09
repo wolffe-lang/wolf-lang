@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0208",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 20,
+        hi: 21,
+    },
+    message: "assignment is a statement, not an expression — it produces no value ([gram.expr.assign])",
+    notes: [],
+}

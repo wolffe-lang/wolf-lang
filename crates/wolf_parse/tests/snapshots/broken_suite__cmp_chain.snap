@@ -1,0 +1,80 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+fn broken(a: int, b: int, c: int) -> bool {
+    a < b < c
+}
+
+fn later_is_fine() -> int { 7 }
+== tree ==
+SourceFile 0..93
+  FnDecl 0..59
+    FnKw 0..2 "fn"
+    Ident 3..9 "broken"
+    ParamList 9..33
+      LParen 9..10 "("
+      Param 10..16
+        Ident 10..11 "a"
+        Colon 11..12 ":"
+        PathType 13..16
+          Path 13..16
+            Ident 13..16 "int"
+      Comma 16..17 ","
+      Param 18..24
+        Ident 18..19 "b"
+        Colon 19..20 ":"
+        PathType 21..24
+          Path 21..24
+            Ident 21..24 "int"
+      Comma 24..25 ","
+      Param 26..32
+        Ident 26..27 "c"
+        Colon 27..28 ":"
+        PathType 29..32
+          Path 29..32
+            Ident 29..32 "int"
+      RParen 32..33 ")"
+    RetType 34..41
+      Arrow 34..36 "->"
+      PathType 37..41
+        Path 37..41
+          Ident 37..41 "bool"
+    Block 42..59
+      LBrace 42..43 "{"
+      ExprStmt 48..58
+        BinExpr 48..57
+          BinExpr 48..53
+            PathExpr 48..49
+              Ident 48..49 "a"
+            Lt 50..51 "<"
+            PathExpr 52..53
+              Ident 52..53 "b"
+          Lt 54..55 "<"
+          PathExpr 56..57
+            Ident 56..57 "c"
+        Term 57..58 "\n"
+      RBrace 58..59 "}"
+  Term 59..60 "\n"
+  FnDecl 61..92
+    FnKw 61..63 "fn"
+    Ident 64..77 "later_is_fine"
+    ParamList 77..79
+      LParen 77..78 "("
+      RParen 78..79 ")"
+    RetType 80..86
+      Arrow 80..82 "->"
+      PathType 83..86
+        Path 83..86
+          Ident 83..86 "int"
+    Block 87..92
+      LBrace 87..88 "{"
+      ExprStmt 89..90
+        LiteralExpr 89..90
+          Int 89..90 "7"
+      RBrace 91..92 "}"
+  Term 92..93 "\n"
+  Eof 93..93 ""
+== diagnostics ==
+E0003 [Error] 54..55 comparison operators do not chain — did you mean `a < b && b < c`?

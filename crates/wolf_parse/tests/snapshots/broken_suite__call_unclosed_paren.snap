@@ -1,0 +1,64 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+fn broken() {
+    g(1, 2
+    let x = 3
+}
+
+fn later_is_fine() -> int { 7 }
+== tree ==
+SourceFile 0..74
+  FnDecl 0..40
+    FnKw 0..2 "fn"
+    Ident 3..9 "broken"
+    ParamList 9..11
+      LParen 9..10 "("
+      RParen 10..11 ")"
+    Block 12..40
+      LBrace 12..13 "{"
+      ExprStmt 18..24
+        CallExpr 18..24
+          PathExpr 18..19
+            Ident 18..19 "g"
+          ArgList 19..24
+            LParen 19..20 "("
+            Arg 20..21
+              LiteralExpr 20..21
+                Int 20..21 "1"
+            Comma 21..22 ","
+            Arg 23..24
+              LiteralExpr 23..24
+                Int 23..24 "2"
+            Missing 24..24 ""
+      LetDecl 29..38
+        LetKw 29..32 "let"
+        IdentPat 33..34
+          Ident 33..34 "x"
+        Eq 35..36 "="
+        LiteralExpr 37..38
+          Int 37..38 "3"
+      RBrace 39..40 "}"
+  FnDecl 42..73
+    FnKw 42..44 "fn"
+    Ident 45..58 "later_is_fine"
+    ParamList 58..60
+      LParen 58..59 "("
+      RParen 59..60 ")"
+    RetType 61..67
+      Arrow 61..63 "->"
+      PathType 64..67
+        Path 64..67
+          Ident 64..67 "int"
+    Block 68..73
+      LBrace 68..69 "{"
+      ExprStmt 70..71
+        LiteralExpr 70..71
+          Int 70..71 "7"
+      RBrace 72..73 "}"
+  Eof 74..74 ""
+== diagnostics ==
+E0202 [Error] 19..20 unclosed `(`
+    note 29..29 expected the closing delimiter by here

@@ -373,24 +373,22 @@ fn type_args_types_and_const_generics() {
     assert_eq!(args, [SyntaxKind::TypeArgPending, SyntaxKind::PathType]);
 }
 
-// ------------------------------------------------- fences & resilience --
+// -------------------------------------------------- bodies & resilience --
 
 #[test]
-fn bodies_are_fenced_and_lossless() {
+fn bodies_are_parsed_and_lossless() {
     let src =
         "fn main() {\n    let s = \"nested {interp} stuff\"\n    if x { y() } else { z() }\n}\n";
     let root = clean(src);
     let f = root.nodes().find_map(FnDecl::cast).expect("fn");
     let body = f.body().expect("body");
-    assert_eq!(body.kind, SyntaxKind::BlockPending);
+    assert_eq!(body.syntax().kind, SyntaxKind::Block);
     assert_eq!(
-        text(src, body.span),
+        text(src, body.syntax().span),
         "{\n    let s = \"nested {interp} stuff\"\n    if x { y() } else { z() }\n}"
     );
-    assert!(
-        body.nodes().next().is_none(),
-        "fence holds raw tokens only — no structure until s09"
-    );
+    // s09 opened the fences: the body has real statement structure.
+    assert_eq!(body.statements().count(), 2);
 }
 
 #[test]

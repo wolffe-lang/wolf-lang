@@ -15,29 +15,43 @@ SourceFile 0..66
     ParamList 9..11
       LParen 9..10 "("
       RParen 10..11 ")"
-    BlockPending 12..66
+    Block 12..66
       LBrace 12..13 "{"
-      LetKw 18..21 "let"
-      Ident 22..23 "x"
-      Eq 24..25 "="
-      Int 26..27 "1"
-      Term 27..28 "\n"
-      IfKw 32..34 "if"
-      Ident 35..36 "x"
-      EqEq 37..39 "=="
-      Int 40..41 "1"
-      LBrace 42..43 "{"
-      Ident 52..57 "print"
-      LParen 57..58 "("
-      StrBegin 58..59 "\""
-      StrFragment 59..63 "deep"
-      StrEnd 63..64 "\""
-      RParen 64..65 ")"
-      Term 65..66 "\n"
+      LetDecl 18..28
+        LetKw 18..21 "let"
+        IdentPat 22..23
+          Ident 22..23 "x"
+        Eq 24..25 "="
+        LiteralExpr 26..27
+          Int 26..27 "1"
+        Term 27..28 "\n"
+      ExprStmt 32..66
+        IfExpr 32..66
+          IfKw 32..34 "if"
+          BinExpr 35..41
+            PathExpr 35..36
+              Ident 35..36 "x"
+            EqEq 37..39 "=="
+            LiteralExpr 40..41
+              Int 40..41 "1"
+          Block 42..66
+            LBrace 42..43 "{"
+            ExprStmt 52..66
+              CallExpr 52..65
+                PathExpr 52..57
+                  Ident 52..57 "print"
+                ArgList 57..65
+                  LParen 57..58 "("
+                  Arg 58..64
+                    StringExpr 58..64
+                      StrBegin 58..59 "\""
+                      StrFragment 59..63 "deep"
+                      StrEnd 63..64 "\""
+                  RParen 64..65 ")"
+              Term 65..66 "\n"
+            Missing 66..66 ""
       Missing 66..66 ""
   Eof 66..66 ""
 == diagnostics ==
-E0202 [Error] 12..13 unclosed `{`
-    note 66..66 expected the closing delimiter by here
 E0202 [Error] 42..43 unclosed `{`
     note 66..66 expected the closing delimiter by here

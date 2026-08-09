@@ -1,0 +1,6 @@
+fn broken() {
+    let x = (y = 2)
+    let z = 3
+}
+
+fn later_is_fine() -> int { 7 }

@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0007",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 33,
+        hi: 34,
+    },
+    message: "string interpolations nest 9 levels deep here; the limit is 8 — you do not want this, hoist the inner expression into a binding",
+    notes: [],
+}

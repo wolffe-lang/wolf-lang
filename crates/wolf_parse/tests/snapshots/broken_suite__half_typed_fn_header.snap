@@ -30,9 +30,11 @@ SourceFile 0..38
       PathType 28..31
         Path 28..31
           Ident 28..31 "int"
-    BlockPending 32..37
+    Block 32..37
       LBrace 32..33 "{"
-      Int 34..35 "1"
+      ExprStmt 34..35
+        LiteralExpr 34..35
+          Int 34..35 "1"
       RBrace 36..37 "}"
   Eof 38..38 ""
 == diagnostics ==

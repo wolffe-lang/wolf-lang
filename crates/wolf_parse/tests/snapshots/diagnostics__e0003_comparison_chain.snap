@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0003",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 23,
+        hi: 24,
+    },
+    message: "comparison operators do not chain — did you mean `a < b && b < c`?",
+    notes: [],
+}

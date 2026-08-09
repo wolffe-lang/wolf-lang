@@ -1,0 +1,5 @@
+fn broken(a: int, b: int, c: int) -> bool {
+    a < b < c
+}
+
+fn later_is_fine() -> int { 7 }

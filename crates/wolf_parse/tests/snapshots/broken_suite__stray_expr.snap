@@ -23,9 +23,11 @@ SourceFile 0..27
       PathType 17..20
         Path 17..20
           Ident 17..20 "int"
-    BlockPending 21..26
+    Block 21..26
       LBrace 21..22 "{"
-      Int 23..24 "5"
+      ExprStmt 23..24
+        LiteralExpr 23..24
+          Int 23..24 "5"
       RBrace 25..26 "}"
   Term 26..27 "\n"
   Eof 27..27 ""

@@ -1,0 +1,6 @@
+fn broken() {
+    g(1, 2
+    let x = 3
+}
+
+fn later_is_fine() -> int { 7 }

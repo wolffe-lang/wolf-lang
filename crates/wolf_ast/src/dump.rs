@@ -1,6 +1,7 @@
 //! Declaration-structure dump: one line per item (kind + name + span,
-//! bodies shown as `BlockPending`), members of `trait`/`impl` indented.
-//! The corpus snapshot format for s08.
+//! bodies shown as `Block`, initializers by their expression kind),
+//! members of `trait`/`impl` indented. The corpus snapshot format
+//! (s08, fences opened in s09).
 
 use crate::ast::{
     ConstDecl, EnumDecl, FnDecl, ImplDecl, ImportCDecl, LetDecl, StructDecl, TraitDecl, TypeDecl,
@@ -63,7 +64,7 @@ fn dump_item(node: &GreenNode, src: &[u8], depth: usize, out: &mut String) {
                 quals.push_str(" export");
             }
             let body = match f.body() {
-                Some(_) => " body=BlockPending",
+                Some(_) => " body=Block",
                 None => "",
             };
             let _ = writeln!(out, "{head} name={}{flags}{quals}{body}", name_of(f.name()));
@@ -144,18 +145,14 @@ fn dump_item(node: &GreenNode, src: &[u8], depth: usize, out: &mut String) {
                 (v.pattern(), v.init())
             };
             let pat = pat.map_or("<missing>".to_string(), |p| text(src, p.span));
-            let init = match init {
-                Some(_) => " init=ExprPending",
-                None => "",
-            };
+            let init = init.map_or(String::new(), |i| format!(" init={:?}", i.kind));
             let _ = writeln!(out, "{head} pat={pat}{flags}{init}");
         }
         SyntaxKind::ConstDecl => {
             let c = ConstDecl::cast(node).expect("kind checked");
-            let init = match c.init() {
-                Some(_) => " init=ExprPending",
-                None => "",
-            };
+            let init = c
+                .init()
+                .map_or(String::new(), |i| format!(" init={:?}", i.kind));
             let _ = writeln!(out, "{head} name={}{flags}{init}", name_of(c.name()));
         }
         SyntaxKind::ErrorNode => {

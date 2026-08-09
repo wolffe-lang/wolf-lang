@@ -1,0 +1,160 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 134..406
+  FnDecl 134..173
+    FnKw 134..136 "fn"
+    Ident 137..142 "first"
+    GenericParamList 142..145
+      LBracket 142..143 "["
+      GenericParam 143..144
+        Ident 143..144 "T"
+      RBracket 144..145 "]"
+    ParamList 145..158
+      LParen 145..146 "("
+      Param 146..157
+        Ident 146..148 "xs"
+        Colon 148..149 ":"
+        PathType 150..157
+          Path 150..154
+            Ident 150..154 "List"
+          TypeArgList 154..157
+            LBracket 154..155 "["
+            PathType 155..156
+              Path 155..156
+                Ident 155..156 "T"
+            RBracket 156..157 "]"
+      RParen 157..158 ")"
+    RetType 159..163
+      Arrow 159..161 "->"
+      PathType 162..163
+        Path 162..163
+          Ident 162..163 "T"
+    Block 164..173
+      LBrace 164..165 "{"
+      ExprStmt 166..171
+        BracketApply 166..171
+          PathExpr 166..168
+            Ident 166..168 "xs"
+          ArgList 168..171
+            LBracket 168..169 "["
+            Arg 169..170
+              LiteralExpr 169..170
+                Int 169..170 "0"
+            RBracket 170..171 "]"
+      RBrace 172..173 "}"
+  Term 173..174 "\n"
+  FnDecl 174..405
+    FnKw 174..176 "fn"
+    Ident 177..181 "main"
+    ParamList 181..183
+      LParen 181..182 "("
+      RParen 182..183 ")"
+    RetType 184..191
+      Arrow 184..186 "->"
+      ErrorUnionType 187..191
+        Not 187..188 "!"
+        PathType 188..191
+          Path 188..191
+            Ident 188..191 "int"
+    Block 192..405
+      LBrace 192..193 "{"
+      VarDecl 198..219
+        VarKw 198..201 "var"
+        IdentPat 202..204
+          Ident 202..204 "xs"
+        Eq 205..206 "="
+        CallExpr 207..218
+          BracketApply 207..216
+            PathExpr 207..211
+              Ident 207..211 "List"
+            ArgList 211..216
+              LBracket 211..212 "["
+              Arg 212..215
+                PathExpr 212..215
+                  Ident 212..215 "int"
+              RBracket 215..216 "]"
+          ArgList 216..218
+            LParen 216..217 "("
+            RParen 217..218 ")"
+        Term 218..219 "\n"
+      ExprStmt 223..234
+        CallExpr 223..233
+          MemberExpr 223..230
+            PathExpr 223..225
+              Ident 223..225 "xs"
+            Dot 225..226 "."
+            Ident 226..230 "push"
+          ArgList 230..233
+            LParen 230..231 "("
+            Arg 231..232
+              LiteralExpr 231..232
+                Int 231..232 "7"
+            RParen 232..233 ")"
+        Term 233..234 "\n"
+      LetDecl 238..301
+        LetKw 238..241 "let"
+        IdentPat 242..243
+          Ident 242..243 "a"
+        Eq 244..245 "="
+        CallExpr 246..260
+          BracketApply 246..256
+            PathExpr 246..251
+              Ident 246..251 "first"
+            ArgList 251..256
+              LBracket 251..252 "["
+              Arg 252..255
+                PathExpr 252..255
+                  Ident 252..255 "int"
+              RBracket 255..256 "]"
+          ArgList 256..260
+            LParen 256..257 "("
+            Arg 257..259
+              PathExpr 257..259
+                Ident 257..259 "xs"
+            RParen 259..260 ")"
+        Term 300..301 "\n"
+      LetDecl 305..373
+        LetKw 305..308 "let"
+        IdentPat 309..310
+          Ident 309..310 "b"
+        Eq 311..312 "="
+        BracketApply 313..318
+          PathExpr 313..315
+            Ident 313..315 "xs"
+          ArgList 315..318
+            LBracket 315..316 "["
+            Arg 316..317
+              LiteralExpr 316..317
+                Int 316..317 "0"
+            RBracket 317..318 "]"
+        Term 372..373 "\n"
+      ExprStmt 377..404
+        IfExpr 377..403
+          IfKw 377..379 "if"
+          BinExpr 380..386
+            PathExpr 380..381
+              Ident 380..381 "a"
+            EqEq 382..384 "=="
+            PathExpr 385..386
+              Ident 385..386 "b"
+          Block 387..392
+            LBrace 387..388 "{"
+            ExprStmt 389..390
+              LiteralExpr 389..390
+                Int 389..390 "0"
+            RBrace 391..392 "}"
+          ElseKw 393..397 "else"
+          Block 398..403
+            LBrace 398..399 "{"
+            ExprStmt 400..401
+              LiteralExpr 400..401
+                Int 400..401 "1"
+            RBrace 402..403 "}"
+        Term 403..404 "\n"
+      RBrace 404..405 "}"
+  Term 405..406 "\n"
+  Eof 406..406 ""
+== diagnostics ==

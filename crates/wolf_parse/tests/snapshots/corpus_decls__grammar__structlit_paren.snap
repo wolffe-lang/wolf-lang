@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 118..141 name=Point fields=1
-FnDecl 142..236 name=main body=BlockPending
+StructDecl 120..143 name=Point fields=1
+FnDecl 144..238 name=main body=Block

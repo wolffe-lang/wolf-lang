@@ -1,0 +1,81 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+fn first() -> int {
+    let a = 1 + / 2
+    let b = 3
+    a + b
+}
+
+fn later_is_fine() -> int { 7 }
+== tree ==
+SourceFile 0..99
+  FnDecl 0..65
+    FnKw 0..2 "fn"
+    Ident 3..8 "first"
+    ParamList 8..10
+      LParen 8..9 "("
+      RParen 9..10 ")"
+    RetType 11..17
+      Arrow 11..13 "->"
+      PathType 14..17
+        Path 14..17
+          Ident 14..17 "int"
+    Block 18..65
+      LBrace 18..19 "{"
+      LetDecl 24..40
+        LetKw 24..27 "let"
+        IdentPat 28..29
+          Ident 28..29 "a"
+        Eq 30..31 "="
+        BinExpr 32..39
+          BinExpr 32..35
+            LiteralExpr 32..33
+              Int 32..33 "1"
+            Plus 34..35 "+"
+            Missing 35..35 ""
+          Slash 36..37 "/"
+          LiteralExpr 38..39
+            Int 38..39 "2"
+        Term 39..40 "\n"
+      LetDecl 44..54
+        LetKw 44..47 "let"
+        IdentPat 48..49
+          Ident 48..49 "b"
+        Eq 50..51 "="
+        LiteralExpr 52..53
+          Int 52..53 "3"
+        Term 53..54 "\n"
+      ExprStmt 58..64
+        BinExpr 58..63
+          PathExpr 58..59
+            Ident 58..59 "a"
+          Plus 60..61 "+"
+          PathExpr 62..63
+            Ident 62..63 "b"
+        Term 63..64 "\n"
+      RBrace 64..65 "}"
+  Term 65..66 "\n"
+  FnDecl 67..98
+    FnKw 67..69 "fn"
+    Ident 70..83 "later_is_fine"
+    ParamList 83..85
+      LParen 83..84 "("
+      RParen 84..85 ")"
+    RetType 86..92
+      Arrow 86..88 "->"
+      PathType 89..92
+        Path 89..92
+          Ident 89..92 "int"
+    Block 93..98
+      LBrace 93..94 "{"
+      ExprStmt 95..96
+        LiteralExpr 95..96
+          Int 95..96 "7"
+      RBrace 97..98 "}"
+  Term 98..99 "\n"
+  Eof 99..99 ""
+== diagnostics ==
+E0201 [Error] 36..36 expected an expression

@@ -2,4 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 197..416 name=main body=BlockPending
+FnDecl 197..416 name=main body=Block
+-- diagnostics --
+E0002 [Error] 221..222 empty statement: this `;` terminates nothing — remove it (`;` only separates statements within a single-line block)

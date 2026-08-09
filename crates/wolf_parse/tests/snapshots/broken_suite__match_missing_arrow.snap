@@ -1,0 +1,87 @@
+---
+source: crates/wolf_parse/tests/broken_suite.rs
+expression: out
+---
+== source ==
+fn broken(x: int) -> int {
+    match x {
+        1 => 10,
+        2 20,
+        _ => 0,
+    }
+}
+
+fn later_is_fine() -> int { 7 }
+== tree ==
+SourceFile 0..129
+  FnDecl 0..95
+    FnKw 0..2 "fn"
+    Ident 3..9 "broken"
+    ParamList 9..17
+      LParen 9..10 "("
+      Param 10..16
+        Ident 10..11 "x"
+        Colon 11..12 ":"
+        PathType 13..16
+          Path 13..16
+            Ident 13..16 "int"
+      RParen 16..17 ")"
+    RetType 18..24
+      Arrow 18..20 "->"
+      PathType 21..24
+        Path 21..24
+          Ident 21..24 "int"
+    Block 25..95
+      LBrace 25..26 "{"
+      ExprStmt 31..94
+        MatchExpr 31..93
+          MatchKw 31..36 "match"
+          PathExpr 37..38
+            Ident 37..38 "x"
+          LBrace 39..40 "{"
+          MatchArm 49..57
+            LiteralPat 49..50
+              Int 49..50 "1"
+            FatArrow 51..53 "=>"
+            LiteralExpr 54..56
+              Int 54..56 "10"
+            Comma 56..57 ","
+          MatchArm 66..71
+            LiteralPat 66..67
+              Int 66..67 "2"
+            Missing 67..67 ""
+            LiteralExpr 68..70
+              Int 68..70 "20"
+            Comma 70..71 ","
+          MatchArm 80..87
+            WildcardPat 80..81
+              Underscore 80..81 "_"
+            FatArrow 82..84 "=>"
+            LiteralExpr 85..86
+              Int 85..86 "0"
+            Comma 86..87 ","
+          RBrace 92..93 "}"
+        Term 93..94 "\n"
+      RBrace 94..95 "}"
+  Term 95..96 "\n"
+  FnDecl 97..128
+    FnKw 97..99 "fn"
+    Ident 100..113 "later_is_fine"
+    ParamList 113..115
+      LParen 113..114 "("
+      RParen 114..115 ")"
+    RetType 116..122
+      Arrow 116..118 "->"
+      PathType 119..122
+        Path 119..122
+          Ident 119..122 "int"
+    Block 123..128
+      LBrace 123..124 "{"
+      ExprStmt 125..126
+        LiteralExpr 125..126
+          Int 125..126 "7"
+      RBrace 127..128 "}"
+  Term 128..129 "\n"
+  Eof 129..129 ""
+== diagnostics ==
+E0201 [Error] 68..68 expected `=>` in the match arm

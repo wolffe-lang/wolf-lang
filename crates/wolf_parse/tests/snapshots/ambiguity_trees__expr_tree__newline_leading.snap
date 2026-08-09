@@ -1,0 +1,42 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 214..290
+  FnDecl 214..289
+    FnKw 214..216 "fn"
+    Ident 217..221 "main"
+    ParamList 221..223
+      LParen 221..222 "("
+      RParen 222..223 ")"
+    RetType 224..231
+      Arrow 224..226 "->"
+      ErrorUnionType 227..231
+        Not 227..228 "!"
+        PathType 228..231
+          Path 228..231
+            Ident 228..231 "int"
+    Block 232..289
+      LBrace 232..233 "{"
+      LetDecl 238..248
+        LetKw 238..241 "let"
+        IdentPat 242..243
+          Ident 242..243 "a"
+        Eq 244..245 "="
+        LiteralExpr 246..247
+          Int 246..247 "1"
+        Term 247..248 "\n"
+      ErrorNode 256..259
+        Plus 256..257 "+"
+        Int 258..259 "2"
+      Term 281..282 "\n"
+      ExprStmt 286..288
+        LiteralExpr 286..287
+          Int 286..287 "0"
+        Term 287..288 "\n"
+      RBrace 288..289 "}"
+  Term 289..290 "\n"
+  Eof 290..290 ""
+== diagnostics ==
+E0001 [Error] 256..257 this line starts with `+`, but a statement cannot begin with an operator; wolf continuations are trailing — move `+` to the end of the previous line

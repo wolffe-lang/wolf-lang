@@ -1,0 +1,9 @@
+fn broken(x: int) -> int {
+    match x {
+        1 => 10,
+        2 20,
+        _ => 0,
+    }
+}
+
+fn later_is_fine() -> int { 7 }

@@ -34,11 +34,17 @@ mod kind;
 mod verify;
 
 pub use ast::{
-    AttrItem, Attribute, ConstDecl, DynType, EnumDecl, EnumDef, EnumVariant, ErrorRow,
-    ErrorUnionType, FnDecl, FnType, GenericParam, GenericParamList, ImplDecl, ImportCDecl, LetDecl,
-    Param, ParamList, ParamMode, Path, PathType, PrefixType, PtrType, RetType, RowEntry, StringLit,
-    StructDecl, StructDef, StructField, TraitDecl, TupleType, TypeArgList, TypeBound, TypeDecl,
-    UseDecl, UseGroup, VarDecl, ViewSet, Visibility, is_pattern_kind, is_type_kind,
+    Arg, ArgList, AsmExpr, AsmOperand, AssignStmt, AssumeStmt, AttrItem, Attribute, BinExpr, Block,
+    BorrowExpr, BracketApply, BreakExpr, CallExpr, CastExpr, ClosureExpr, ConstDecl, ContinueExpr,
+    DeferStmt, DynType, ElseExpr, EnumDecl, EnumDef, EnumVariant, ErrorRow, ErrorUnionType,
+    ExprStmt, FieldInit, FnDecl, FnType, ForExpr, FreezeExpr, FromEndExpr, GenericParam,
+    GenericParamList, IfExpr, ImplDecl, ImportCDecl, InBlock, InlineC, Interp, LetDecl,
+    LiteralExpr, LoopExpr, MatchArm, MatchExpr, MemberExpr, Param, ParamList, ParamMode, ParenExpr,
+    Path, PathExpr, PathType, PrefixExpr, PrefixType, PtrType, RangeExpr, RegionBlock, RegionValue,
+    RetType, ReturnExpr, RowEntry, ScopeExpr, SelectArm, SelectExpr, SpawnExpr, StringExpr,
+    StringLit, StructDecl, StructDef, StructField, StructLit, TraitDecl, TryExpr, TupleExpr,
+    TupleType, TypeArgList, TypeBound, TypeDecl, UnsafeBlock, UseDecl, UseGroup, VarDecl, ViewSet,
+    Visibility, WhenExpr, WhileExpr, is_expr_kind, is_pattern_kind, is_stmt_kind, is_type_kind,
 };
 pub use dump::dump_decls;
 pub use green::{Child, GreenNode, GreenToken};

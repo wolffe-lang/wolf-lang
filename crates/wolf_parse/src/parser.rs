@@ -36,6 +36,15 @@ pub(crate) struct Marker {
 #[derive(Clone, Copy)]
 pub(crate) struct CompletedMarker {
     pos: u32,
+    kind: SyntaxKind,
+}
+
+impl CompletedMarker {
+    /// The kind this node was completed with (the expression climb
+    /// keys chain rules — ranges, comparisons — off it).
+    pub(crate) fn kind(self) -> SyntaxKind {
+        self.kind
+    }
 }
 
 /// A rollback point for speculative parsing (event stream, token
@@ -52,6 +61,47 @@ pub(crate) struct Parser<'a> {
     pos: usize,
     pub(crate) events: Vec<Event>,
     pub(crate) diags: Vec<Diagnostic>,
+    /// Expression-recursion depth (bounded — hostile nesting degrades
+    /// into error recovery instead of overflowing the stack).
+    pub(crate) depth: u32,
+    /// The lexer's delimiter-frame automaton, replayed over consumed
+    /// tokens (same top-match pop rule): whenever the innermost frame
+    /// is `(`/`[`, the lexer suppressed terminator insertion there
+    /// (`[gram.lex.newline]`).
+    frames: Vec<Punct>,
+    /// Missing-terminator fold: one unclosed `(`/`[` suppresses
+    /// terminators for every following line — every such miss is one
+    /// wreck, reported once per file (s10 owns real cascade
+    /// suppression). Genuine same-line misses (no suppression active)
+    /// always report. Also set by unclosed-delimiter and
+    /// truncated-construct reports — the escape *is* the line's error.
+    suppressed_miss_reported: bool,
+    /// One broken argument list reports once per line region — nested
+    /// lists dragged into the same wreck stay silent (D22 containment).
+    /// Cleared whenever a real terminator is consumed.
+    pub(crate) arg_error_reported: bool,
+    /// A run of not-a-declaration lines reports once — cleared when a
+    /// real declaration keyword is reached (D22 containment).
+    pub(crate) toplevel_error_reported: bool,
+    /// Assignment-in-expression (E0208) reports once per line region —
+    /// a chain (`a = b = c`) is one mistake. Cleared by any consumed
+    /// terminator.
+    pub(crate) assign_error_reported: bool,
+    /// One-shot: a truncated-construct report was just emitted; the
+    /// immediately following missing-terminator miss is the same wreck.
+    /// Cleared by any consumed terminator.
+    line_end_fold_once: bool,
+    /// Unclosed-delimiter reports discovered at end of file fold into
+    /// one: the file ended mid-wreck, and every still-open delimiter is
+    /// the same story.
+    pub(crate) eof_unclosed_reported: bool,
+    /// Byte position of the last unclosed-delimiter report's stall
+    /// point: several openers stalling at the same token are one wreck.
+    pub(crate) last_unclosed_at: Option<u32>,
+    /// A run of structurally broken match/select arms reports once —
+    /// cleared when an arm parses without diagnostics (D22
+    /// containment; one misaligned arm otherwise poisons the list).
+    pub(crate) arm_error_reported: bool,
 }
 
 /// The panic-mode sync set: declaration-leading keywords (spec §2) —
@@ -85,6 +135,16 @@ impl<'a> Parser<'a> {
             pos: 0,
             events: Vec::new(),
             diags: Vec::new(),
+            depth: 0,
+            frames: Vec::new(),
+            suppressed_miss_reported: false,
+            arg_error_reported: false,
+            toplevel_error_reported: false,
+            arm_error_reported: false,
+            line_end_fold_once: false,
+            assign_error_reported: false,
+            eof_unclosed_reported: false,
+            last_unclosed_at: None,
         }
     }
 
@@ -102,6 +162,19 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn current_span(&self) -> Span {
         self.tokens[self.pos.min(self.tokens.len() - 1)].span
+    }
+
+    /// The span of the `n`-th lookahead token (clamped to Eof).
+    pub(crate) fn nth_span(&self, n: usize) -> Span {
+        self.tokens[(self.pos + n).min(self.tokens.len() - 1)].span
+    }
+
+    /// The kind of the token *before* the current one (`None` at the
+    /// start of the stream). Used by the empty-statement check: a `;`
+    /// terminates nothing iff nothing sits between it and the previous
+    /// terminator / block opener.
+    pub(crate) fn prev_kind(&self) -> Option<TokenKind> {
+        self.pos.checked_sub(1).map(|i| self.tokens[i].kind)
     }
 
     /// Zero-width span at the start of the current token — where a
@@ -151,10 +224,135 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn bump(&mut self) {
         assert!(!self.at_eof(), "bump past Eof");
+        match self.current() {
+            TokenKind::Term => {
+                // A real terminator ends the per-line folds — the
+                // argument fold only once every `(`/`[` list is closed
+                // (terminators inside a block nested in a broken list
+                // do not end the list's wreck).
+                if !self
+                    .frames
+                    .iter()
+                    .any(|f| matches!(f, Punct::LParen | Punct::LBracket))
+                {
+                    self.arg_error_reported = false;
+                }
+                self.line_end_fold_once = false;
+                self.assign_error_reported = false;
+            }
+            TokenKind::Punct(p @ (Punct::LParen | Punct::LBracket | Punct::LBrace)) => {
+                self.frames.push(p);
+            }
+            TokenKind::Punct(Punct::RParen) => {
+                if self.frames.last() == Some(&Punct::LParen) {
+                    self.frames.pop();
+                }
+            }
+            TokenKind::Punct(Punct::RBracket) => {
+                if self.frames.last() == Some(&Punct::LBracket) {
+                    self.frames.pop();
+                }
+            }
+            TokenKind::Punct(Punct::RBrace) if self.frames.last() == Some(&Punct::LBrace) => {
+                self.frames.pop();
+            }
+            _ => {}
+        }
         self.events.push(Event::Token {
             kind_override: None,
         });
         self.pos += 1;
+    }
+
+    /// Is terminator insertion suppressed at the current position (the
+    /// innermost consumed delimiter is `(` or `[`)?
+    fn term_suppressed(&self) -> bool {
+        matches!(self.frames.last(), Some(Punct::LParen | Punct::LBracket))
+    }
+
+    /// Enter the missing-terminator fold without reporting: the caller
+    /// already emitted the line's error (a truncated construct).
+    pub(crate) fn fold_line_end(&mut self) {
+        self.line_end_fold_once = true;
+    }
+
+    /// An unclosed `(`/`[`/`{` was just reported: every downstream
+    /// suppressed-terminator miss is that same wreck — pre-fold them
+    /// all (plus the immediate one-shot).
+    pub(crate) fn fold_unclosed(&mut self) {
+        self.line_end_fold_once = true;
+        self.suppressed_miss_reported = true;
+        // A list stalling on the same wreck needs no second report.
+        self.arg_error_reported = true;
+    }
+
+    /// A missing-terminator diagnostic, folded: in a region where an
+    /// unclosed `(`/`[` suppressed insertion, only the first miss is
+    /// reported (s10 owns full cascade suppression; this keeps the
+    /// blast radius of one lost delimiter bounded, D22).
+    pub(crate) fn expected_line_end(&mut self, what: &str) {
+        if self.line_end_fold_once {
+            self.line_end_fold_once = false;
+            return;
+        }
+        if self.term_suppressed() {
+            // A cascade of an earlier delimiter wreck: fold.
+            if self.suppressed_miss_reported {
+                return;
+            }
+            self.suppressed_miss_reported = true;
+        }
+        self.error(
+            crate::codes::EXPECTED_TOKEN,
+            self.here(),
+            format!("expected line end after the {what}"),
+        );
+    }
+
+    /// An unexpected-at-declaration-position diagnostic (E0203), folded
+    /// over a run of stray lines (see `toplevel_error_reported`).
+    pub(crate) fn toplevel_error(&mut self, span: Span, message: impl Into<String>) {
+        if self.toplevel_error_reported {
+            return;
+        }
+        self.toplevel_error_reported = true;
+        self.error(crate::codes::UNEXPECTED_TOPLEVEL, span, message);
+    }
+
+    /// An error suppressed when a truncated-construct report was just
+    /// emitted at the same spot (the one-shot fold).
+    pub(crate) fn error_unless_folded(
+        &mut self,
+        code: &'static str,
+        span: Span,
+        message: impl Into<String>,
+    ) {
+        if self.line_end_fold_once {
+            self.line_end_fold_once = false;
+            return;
+        }
+        self.error(code, span, message);
+    }
+
+    /// An arm-structure diagnostic (pattern / `from` / `=>` /
+    /// separator), folded over a run of broken arms (see
+    /// `arm_error_reported`).
+    pub(crate) fn arm_error(&mut self, span: Span, message: impl Into<String>) {
+        if self.arm_error_reported {
+            return;
+        }
+        self.arm_error_reported = true;
+        self.error(crate::codes::EXPECTED_TOKEN, span, message);
+    }
+
+    /// An argument-list diagnostic, folded per line region (see
+    /// `arg_error_reported`).
+    pub(crate) fn arg_list_error(&mut self, span: Span, message: impl Into<String>) {
+        if self.arg_error_reported {
+            return;
+        }
+        self.arg_error_reported = true;
+        self.error(crate::codes::EXPECTED_TOKEN, span, message);
     }
 
     /// Bump, reclassifying the token's kind (contextual keywords).
@@ -269,13 +467,15 @@ impl<'a> Parser<'a> {
     }
 
     /// Panic-mode recovery: skip tokens until a sync point, attaching
-    /// them to whatever node is currently open. Sync points, all at
-    /// local delimiter depth zero: the declaration-leading keywords /
-    /// `#[`, `Eof`, a `}` closing the current item (when
-    /// `stop_at_rbrace`), and any token `stop` accepts. Skipped
-    /// delimiters are depth-tracked so a keyword inside a skipped `{…}`
-    /// never syncs; string episodes are skipped wholesale (the lexer
-    /// guarantees their balance). Returns how many tokens were skipped.
+    /// them to whatever node is currently open. Sync points: any token
+    /// `stop` accepts at local delimiter depth zero, `Eof`, and — when
+    /// not *shielded* — the declaration-leading keywords / `#[` and a
+    /// `}` closing the current item (when `stop_at_rbrace`). Shielding
+    /// counts only `{…}` blocks and string episodes: nested items are
+    /// legal in braces and keyword tokens occur in interpolations, but
+    /// an open `(`/`[` never shields — a declaration keyword inside
+    /// parens means an unclosed delimiter that must not swallow the
+    /// next declaration (D22). Returns how many tokens were skipped.
     pub(crate) fn skip_until(
         &mut self,
         stop_at_rbrace: bool,
@@ -283,15 +483,23 @@ impl<'a> Parser<'a> {
     ) -> usize {
         let mut skipped = 0usize;
         let mut depth = 0usize;
+        let mut shield = 0usize;
         loop {
             let k = self.current();
             if k == TokenKind::Eof {
                 break;
             }
-            if depth == 0 {
-                if stop(k) {
-                    break;
-                }
+            if depth == 0 && stop(k) {
+                break;
+            }
+            // Universal depth-zero stops: an `InterpClose` (or format
+            // spec) at depth zero belongs to the enclosing
+            // interpolation — recovery must never eat its way out of a
+            // string (the interpolation's own recovery owns it).
+            if depth == 0 && matches!(k, TokenKind::InterpClose | TokenKind::FormatSpecBegin) {
+                break;
+            }
+            if shield == 0 {
                 match k {
                     TokenKind::PoundBracket => break,
                     TokenKind::Kw(kw) if is_decl_keyword(kw) => break,
@@ -300,18 +508,60 @@ impl<'a> Parser<'a> {
                 }
             }
             match k {
-                TokenKind::Punct(Punct::LParen | Punct::LBracket | Punct::LBrace)
+                TokenKind::Punct(Punct::LParen | Punct::LBracket) => depth += 1,
+                TokenKind::Punct(Punct::LBrace)
                 | TokenKind::StrBegin(_)
-                | TokenKind::InterpOpen => depth += 1,
-                TokenKind::Punct(Punct::RParen | Punct::RBracket | Punct::RBrace)
+                | TokenKind::InterpOpen => {
+                    depth += 1;
+                    shield += 1;
+                }
+                TokenKind::Punct(Punct::RParen | Punct::RBracket) => {
+                    depth = depth.saturating_sub(1)
+                }
+                TokenKind::Punct(Punct::RBrace)
                 | TokenKind::StrEnd { .. }
-                | TokenKind::InterpClose => depth = depth.saturating_sub(1),
+                | TokenKind::InterpClose => {
+                    depth = depth.saturating_sub(1);
+                    shield = shield.saturating_sub(1);
+                }
                 _ => {}
             }
             self.bump();
             skipped += 1;
         }
         skipped
+    }
+
+    /// Interpolation recovery: skip to the `InterpClose` that ends the
+    /// current interpolation, wrapping the junk in an `ErrorNode`. The
+    /// lexer *guarantees* the closer exists (episode balance), so —
+    /// unlike [`Parser::skip_until`] — declaration keywords are not
+    /// sync points here: they are string content gone wrong, and
+    /// stopping on them would detonate the enclosing statement.
+    pub(crate) fn recover_to_interp_close(&mut self) {
+        let m = self.start();
+        let mut depth = 0usize;
+        let mut skipped = 0usize;
+        loop {
+            match self.current() {
+                TokenKind::Eof => break,
+                TokenKind::InterpClose if depth == 0 => break,
+                // Nested strings *and* nested interpolations (format
+                // specs re-nest: `{v:>{w}}`) shield their closers.
+                TokenKind::StrBegin(_) | TokenKind::InterpOpen => depth += 1,
+                TokenKind::StrEnd { .. } | TokenKind::InterpClose => {
+                    depth = depth.saturating_sub(1)
+                }
+                _ => {}
+            }
+            self.bump();
+            skipped += 1;
+        }
+        if skipped > 0 {
+            m.complete(self, SyntaxKind::ErrorNode);
+        } else {
+            m.abandon(self);
+        }
     }
 
     /// [`Parser::skip_until`], wrapping whatever was skipped in an
@@ -340,7 +590,10 @@ impl Marker {
             _ => unreachable!("marker does not point at a Start event"),
         }
         p.events.push(Event::Finish);
-        CompletedMarker { pos: self.pos }
+        CompletedMarker {
+            pos: self.pos,
+            kind,
+        }
     }
 
     /// Drop an unused marker (its Start stays a Tombstone; the builder

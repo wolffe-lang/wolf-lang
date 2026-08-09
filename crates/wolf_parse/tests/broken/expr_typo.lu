@@ -1,0 +1,7 @@
+fn first() -> int {
+    let a = 1 + / 2
+    let b = 3
+    a + b
+}
+
+fn later_is_fine() -> int { 7 }

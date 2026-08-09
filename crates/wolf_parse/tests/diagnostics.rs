@@ -51,9 +51,11 @@ fn e0008_keyword_used_as_identifier() {
 
 #[test]
 fn e0201_expected_token() {
+    // (`fn (` reads as a stray closure line — E0203 — so the missing
+    // name is pinned on a generic header instead.)
     snap(
         "e0201_missing_name",
-        "fn (x: int) { }\n",
+        "fn [T](x: int) { }\n",
         codes::EXPECTED_TOKEN,
     );
     snap("e0201_missing_init", "let x\n", codes::EXPECTED_TOKEN);
@@ -107,5 +109,92 @@ fn e0207_expected_pattern() {
         "e0207_missing_pattern",
         "let = 1\n",
         codes::EXPECTED_PATTERN,
+    );
+}
+
+// ---------------------------------------------- spec §9 codes (s09) ------
+
+#[test]
+fn e0001_leading_operator_continuation() {
+    // corpus/grammar/newline_leading.lu is the conformance fixture.
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus/grammar/newline_leading.lu");
+    let src = std::fs::read_to_string(fixture).expect("read newline_leading.lu");
+    let parse = util::parse(&src);
+    assert_eq!(
+        parse.diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+        [codes::LEADING_OPERATOR],
+        "newline_leading.lu must fail with exactly E0001"
+    );
+    snap("e0001_leading_operator", &src, codes::LEADING_OPERATOR);
+}
+
+#[test]
+fn e0002_empty_statement() {
+    // corpus/grammar/semicolon.lu is the conformance fixture.
+    let fixture =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/grammar/semicolon.lu");
+    let src = std::fs::read_to_string(fixture).expect("read semicolon.lu");
+    let parse = util::parse(&src);
+    assert_eq!(
+        parse.diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+        [codes::EMPTY_STATEMENT],
+        "semicolon.lu must fail with exactly E0002"
+    );
+    snap("e0002_empty_statement", &src, codes::EMPTY_STATEMENT);
+}
+
+#[test]
+fn e0003_comparison_chain() {
+    snap(
+        "e0003_comparison_chain",
+        "fn f() { let x = a < b < c\n}\n",
+        codes::COMPARISON_CHAIN,
+    );
+}
+
+#[test]
+fn e0005_else_on_new_line() {
+    snap(
+        "e0005_else_new_line",
+        "fn f() { let x = if c { 1 }\n    else { 2 }\n}\n",
+        codes::ELSE_ON_NEW_LINE,
+    );
+}
+
+#[test]
+fn e0006_struct_literal_in_condition() {
+    // corpus/grammar/structlit_cond.lu is the conformance fixture.
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus/grammar/structlit_cond.lu");
+    let src = std::fs::read_to_string(fixture).expect("read structlit_cond.lu");
+    let parse = util::parse(&src);
+    assert_eq!(
+        parse.diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+        [codes::STRUCT_LIT_IN_COND],
+        "structlit_cond.lu must fail with exactly E0006"
+    );
+    snap("e0006_structlit_cond", &src, codes::STRUCT_LIT_IN_COND);
+}
+
+#[test]
+fn e0007_interp_nesting_too_deep() {
+    let mut lit = String::from("\"x\"");
+    for _ in 0..8 {
+        lit = format!("\"{{{lit}}}\"");
+    }
+    snap(
+        "e0007_interp_depth",
+        &format!("fn f() {{ let s = {lit}\n}}\n"),
+        codes::INTERP_TOO_DEEP,
+    );
+}
+
+#[test]
+fn e0208_assignment_in_expression() {
+    snap(
+        "e0208_assign_in_expr",
+        "fn f() { let x = (y = 2)\n}\n",
+        codes::ASSIGN_IN_EXPR,
     );
 }

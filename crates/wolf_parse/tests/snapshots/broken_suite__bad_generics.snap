@@ -31,9 +31,11 @@ SourceFile 0..62
       PathType 26..29
         Path 26..29
           Ident 26..29 "int"
-    BlockPending 30..35
+    Block 30..35
       LBrace 30..31 "{"
-      Ident 32..33 "x"
+      ExprStmt 32..33
+        PathExpr 32..33
+          Ident 32..33 "x"
       RBrace 34..35 "}"
   Term 35..36 "\n"
   FnDecl 36..61
@@ -58,9 +60,11 @@ SourceFile 0..62
       PathType 54..55
         Path 54..55
           Ident 54..55 "T"
-    BlockPending 56..61
+    Block 56..61
       LBrace 56..57 "{"
-      Ident 58..59 "x"
+      ExprStmt 58..59
+        PathExpr 58..59
+          Ident 58..59 "x"
       RBrace 60..61 "}"
   Term 61..62 "\n"
   Eof 62..62 ""

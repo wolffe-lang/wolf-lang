@@ -31,11 +31,15 @@ SourceFile 0..63
       PathType 28..31
         Path 28..31
           Ident 28..31 "int"
-    BlockPending 32..41
+    Block 32..41
       LBrace 32..33 "{"
-      Ident 34..35 "a"
-      Plus 36..37 "+"
-      Ident 38..39 "b"
+      ExprStmt 34..39
+        BinExpr 34..39
+          PathExpr 34..35
+            Ident 34..35 "a"
+          Plus 36..37 "+"
+          PathExpr 38..39
+            Ident 38..39 "b"
       RBrace 40..41 "}"
   FnDecl 42..62
     FnKw 42..44 "fn"
@@ -48,9 +52,11 @@ SourceFile 0..63
       PathType 53..56
         Path 53..56
           Ident 53..56 "int"
-    BlockPending 57..62
+    Block 57..62
       LBrace 57..58 "{"
-      Int 59..60 "2"
+      ExprStmt 59..60
+        LiteralExpr 59..60
+          Int 59..60 "2"
       RBrace 61..62 "}"
   Eof 63..63 ""
 == diagnostics ==

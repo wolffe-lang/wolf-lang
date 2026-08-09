@@ -1,0 +1,17 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: "E0001",
+    severity: Error,
+    span: Span {
+        file: FileId(
+            0,
+        ),
+        lo: 256,
+        hi: 257,
+    },
+    message: "this line starts with `+`, but a statement cannot begin with an operator; wolf continuations are trailing — move `+` to the end of the previous line",
+    notes: [],
+}
