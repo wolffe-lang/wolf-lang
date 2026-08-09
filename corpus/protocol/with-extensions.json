@@ -1,0 +1,15 @@
+{
+  "protocol": 1,
+  "impl": "example",
+  "impl_version": "0.0.1",
+  "commit": "abc1234",
+  "file": "corpus/memory/unsafe_ub_uaf.lu",
+  "phase_reached": "run",
+  "seeded": false,
+  "diagnostics": [],
+  "verdict": "ub(mem.ub)",
+  "stdout_sha256": null,
+  "stdout_inline": null,
+  "x-ub-row": "P1",
+  "x-oracle-trace": ["retag", "free", "read"]
+}

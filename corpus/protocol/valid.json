@@ -1,0 +1,13 @@
+{
+  "protocol": 1,
+  "impl": "example",
+  "impl_version": "0.0.1",
+  "commit": "abc1234",
+  "file": "corpus/hello.lu",
+  "phase_reached": "run",
+  "seeded": false,
+  "diagnostics": [],
+  "verdict": "exit(0)",
+  "stdout_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "stdout_inline": "hello, wolf\n"
+}

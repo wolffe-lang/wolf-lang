@@ -1,0 +1,10 @@
+{
+  "protocol": 1,
+  "impl": "example",
+  "impl_version": "0.0.1",
+  "commit": "abc1234",
+  "file": "corpus/hello.lu",
+  "seeded": false,
+  "diagnostics": [],
+  "verdict": "exit(0)"
+}
