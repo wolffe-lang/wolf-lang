@@ -805,6 +805,127 @@ different construct — this message is about `expr else fallback`.)
 "#);
 
 // ------------------------------------------------------------------------
+// E07xx — comptime / CTFE (s16, D29 + D33). The sandbox family: every
+// refusal names its reason, every budget is finite, and the witness
+// line for const-generic equality is documented in the diagnostic.
+// ------------------------------------------------------------------------
+
+code!(E0701, "comptime code reached for ambient IO", r#"
+Comptime evaluation is hermetically sandboxed (D33): no filesystem, no
+network, no environment variables, no clock, no randomness, no FFI —
+the intrinsics available at compile time are an explicit allowlist,
+and nothing ambient is on it. Each refusal names its category and its
+reason: confinement (compiling a package must never act on or read
+the machine that compiles it — `wolf add` must never mean arbitrary
+code runs with your credentials) or determinism (the same program and
+target must produce bit-identical comptime results on every host).
+Compute the value at runtime instead; file contents will later arrive
+as *declared build inputs* through the build system (s51), never as
+an evaluator capability.
+"#);
+
+code!(E0702, "comptime evaluation ran out of fuel", r#"
+Every comptime evaluation runs under an instruction budget, so a
+runaway computation ends in this report instead of a hung build — the
+budget also bounds comptime as an attack surface (D33). The
+diagnostic carries the comptime call backtrace, so the loop or
+recursion that burned the fuel is visible. If the computation is
+genuinely that large, raise the budget at the call site with
+`#[budget(fuel = N)]` — budgets have defaults, per-site overrides,
+and a hard ceiling; no spelling disables one.
+"#);
+
+code!(E0703, "comptime evaluation exceeded its heap budget", r#"
+Comptime code allocates values in a compiler-owned arena with a hard
+cap, so evaluation can never exhaust the machine compiling the
+program (D33). Most overruns are unbounded value growth inside a
+loop — each iteration building a strictly larger value. The
+diagnostic points at the allocation that crossed the cap with the
+comptime backtrace attached. If the computation legitimately needs
+more, raise the cap at the call site with `#[budget(heap = N)]`;
+like all comptime budgets it has a hard ceiling and cannot be turned
+off.
+"#);
+
+code!(E0704, "comptime evaluation recursed too deeply", r#"
+The comptime evaluator keeps its own explicit call stack, so deep
+recursion is a *resource limit* with a report, never a compiler crash
+(D33). The default depth accommodates ordinary recursive folds; an
+overflow usually means the recursion is missing its base case — the
+backtrace shows the repeating frame. If the depth is intentional,
+raise it at the call site with `#[budget(depth = N)]`, up to the
+hard ceiling; consider an iterative shape instead, which spends fuel
+rather than frames.
+"#);
+
+code!(E0705, "this value is not comptime-known", r#"
+A `comptime fn` runs during compilation, so every argument must be
+known at compile time: a literal, a `const`, a type, or the result of
+another comptime call. A runtime `let`/`var` local, a runtime global,
+or a self-referential `const` cannot cross into comptime position —
+the evaluator will not guess at a value the program has not produced
+yet. Bind the value with `const`, pass a literal, or move the
+computation to runtime if the input genuinely arrives at runtime.
+"#);
+
+code!(E0706, "comptime arithmetic faulted", r#"
+Checked arithmetic has exactly one semantics everywhere (X3): an
+operation that would trap at runtime — overflow past the declared
+width, division or remainder by zero, an out-of-range shift — is a
+compile error when it happens at comptime, at the declared widths of
+the declared target, never the host's. Intended wraparound is spelled
+in the type system as `wrapping[T]`, and wraps identically at
+comptime; there is no flag, profile, or mode that changes any of
+this. Fix the computation, widen the type, or spell the wraparound.
+"#);
+
+code!(E0707, "const-generic equality needs a witness", r#"
+Const-expression equality in generic position is decided in three
+steps, and the line between them is fixed: (1) closed expressions
+fully evaluate and compare by value; (2) linear `+`/`-` arithmetic
+over generic parameters compares by ring normalization — `N + 1`
+equals `1 + N`, killing the Rust RFC-2000 identity-only wart at a
+defined line; (3) anything beyond linear — `*`, `/`, `%`, shifts, bit
+operators — is compared only by identical spelling, and differing
+spellings require an explicit witness. This error is step 3 firing:
+the two forms may well be equal, but the compiler will not run a
+decision procedure it cannot bound. Rewrite both sides into the same
+`+`/`-` form, or assert the equality where the reader can see it.
+"#);
+
+code!(E0708, "layout is unresolved until codegen", r#"
+Sizes and offsets are decided when codegen lays types out (c05), not
+by the type checker — so `size_of` at comptime answers only for
+fixed-width primitives today, and `typeinfo` describes fields without
+offsets. This is a staging rule, not a permanent refusal: when layout
+lands, the same intrinsics answer for aggregates, and code written
+against them starts compiling without change. Until then, compute
+from the primitive widths, or defer the computation to a later phase
+that has layout in hand.
+"#);
+
+code!(E0709, "invalid comptime budget attribute", r#"
+`#[budget(fuel = N, heap = N, depth = N)]` raises the evaluation
+budgets for one call site. Every budget has a default and a hard
+ceiling, and none can be disabled — a zero value, a value beyond the
+ceiling, or a key that is not a budget is rejected here (the bounded
+evaluation guarantee is part of the D33 sandbox, so there is
+deliberately no spelling that removes a limit). Use one of `fuel`,
+`heap`, or `depth` with a positive integer at or below the ceiling.
+"#);
+
+code!(E0710, "a comptime assertion failed", r#"
+`assert` inside comptime evaluation checks a fact during compilation
+and stops the build when the fact does not hold — it is the witness
+mechanism for properties the checker cannot see on its own, such as
+const-generic equalities beyond the linear line (E0707) or invariants
+of reflected type shapes. The diagnostic points at the failing
+assertion with the comptime call backtrace attached. Make the
+asserted condition true, or delete the assertion if the invariant was
+wrong.
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — the formatter's family (s11).
 // ------------------------------------------------------------------------
 
