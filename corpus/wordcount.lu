@@ -1,0 +1,42 @@
+//! check: run(exit=2)
+//! phase: none
+//! conforms: str.interp, str.views, err.union, err.propagate, task.par, generics.brackets
+//!
+//! THE canonical program — the syntax bake-off sample from reports/05
+//! (Candidate A, locked in R2). Exercises: generics with `[]`, structured
+//! parallel map (D13/D16), `?` propagation through `par` (D30), zero-copy
+//! word views (D25), f-string format specs (D26), zero ownership
+//! annotations in application code (D10 Tier 0).
+//! Run with no args -> prints usage, exits 2 (the checked expectation).
+
+let USAGE = """
+    usage: wc FILE...
+    Count words across files, in parallel.
+    """                                    // closing """ sets the dedent column
+
+fn count(text: str) -> Map[str, int] {
+    var tally = Map[str, int]()
+    for word in text.words() {             // zero-copy word slices, Unicode-aware
+        let w = word.trim(".,!?").lower()
+        if !w.is_empty() { tally[w] += 1 } // absent key defaults to zero value
+    }
+    tally                                  // last expression is the value
+}
+
+fn top[T](m: Map[T, int], n: int) -> List[(T, int)] {
+    m.pairs().sorted_by(fn(a, b) b.1 <=> a.1).take(n)
+}
+
+fn main(args: List[str]) -> !int {
+    if args.is_empty() { print(USAGE); return 2 }
+    let counts = args.par(fn(path) {       // one task per file; joins before `?` resolves
+        count(fs.read_text(path)?)         // ? propagates io.Error out through par
+    })?
+    var total = Map[str, int]()
+    for c in counts { total.merge(c, fn(a, b) a + b) }
+    for (word, n) in top(total, 10) {
+        let name = word[..min(word.len, 12)]        // byte slice, checked, zero-copy
+        print("{name:<14}{n:>7}  {\"#\".repeat(n / 10)}")
+    }
+    0
+}

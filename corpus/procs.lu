@@ -1,0 +1,50 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: task.scope, task.channel, task.select, proc.spawn, proc.monitor, sync.when
+//!
+//! Concurrency surface (D13–D16): scoped spawn only, typed channels,
+//! `select` with timeout arms, procs under the root supervisor with
+//! `monitor`, region `move` through a channel, and `when (a, b)`
+//! multi-acquire (deadlock-free by ordered set acquisition).
+//! NOTE: exact API names ride the s05 spec — corpus updates land in the
+//! same commit as spec surface changes (s02 discipline).
+
+fn main() -> !int {
+    var sum = 0
+    scope s {                            // D16: no global spawn exists
+        let ch = channel[int](4)
+        s.spawn(fn() {
+            for i in 1..=10 { ch.send(i) }
+            ch.close()
+        })
+        for v in ch { sum += v }
+    }                                    // scope exit joins all children
+
+    // region transfer: the whole graph moves, zero-copy (D14 `move`)
+    let results = channel[region](2)
+    scope s2 {
+        s2.spawn(fn() {
+            let r = region()
+            let data = in r { build_batch() }
+            results.send(move r)         // sender's later use = compile error
+        })
+        let got = results.recv()?
+    }
+
+    // procs: failure domains; monitor delivers the exit *reason*
+    let w = spawn proc worker()          // under the root supervisor, named
+    let m = monitor w
+    select {
+        exit(reason) from m => { if !reason.is_normal() { return 1 } }
+        timeout(1.s) => { return 1 }
+    }
+
+    // shared-mutable requires a sync wrapper; `when` acquires as a set
+    let a = Mutex(0)
+    let b = Mutex(0)
+    when (a, b) {                        // BoC-style: no lock-order deadlocks
+        a += 1
+        b += sum
+    }
+    if sum == 55 { 0 } else { 1 }
+}

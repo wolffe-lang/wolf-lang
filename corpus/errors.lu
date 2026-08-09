@@ -1,0 +1,44 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: err.union, err.rows, err.propagate, err.errdefer, err.else
+//!
+//! Error handling (D30): `!T` unions with payload-carrying structural
+//! rows, `?` propagation composing rows by union (no `From` ceremony),
+//! `else |err|` defaulting, `errdefer` for unwind-free cleanup — errors
+//! are values; there is no unwinding anywhere in wolf.
+
+struct ParseError { at: int, found: str }
+
+fn digit(s: str, i: int) -> int ! {BadDigit(ParseError)} {
+    let c = s[i..i+1]
+    if c < "0" || c > "9" { return BadDigit(ParseError { at: i, found: c }) }
+    c.to_int() else 0
+}
+
+fn parse_pair(s: str) -> (int, int) ! {BadDigit(ParseError), TooShort} {
+    if s.len < 2 { return TooShort }
+    let a = digit(s, 0)?                 // row {BadDigit} flows into ours
+    let b = digit(s, 1)?
+    (a, b)
+}
+
+fn load() -> int ! {BadDigit(ParseError), TooShort, io.Error} {
+    var res = acquire()?
+    errdefer release(mut res)            // runs only on the error path
+    let (a, b) = parse_pair(res.text())?
+    a * 10 + b
+}
+
+fn main() -> !int {
+    // handle with payload access, default with `else`
+    let v = load() else |err| {
+        match err {
+            BadDigit(e) => print("bad digit `{e.found}` at {e.at}"),
+            TooShort => print("input too short"),
+            io.Error(_) => print("io failed"),
+        }
+        0
+    }
+    let (a, b) = parse_pair("42") else |_| (0, 0)
+    if a == 4 && b == 2 { 0 } else { 1 }
+}

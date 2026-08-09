@@ -1,0 +1,34 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: str.multiline, str.slice, str.views, str.regex_literal, str.interp
+//!
+//! Strings (D24–D26): UTF-8 always, byte-offset checked slicing (never
+//! UB), `^n` indexing from the end, zero-copy views, `"""` dedent by the
+//! closing delimiter's column, `re"…"` generalized literals, format specs.
+
+fn main() -> !int {
+    let poem = """
+        the wolf runs
+        the moon watches
+        """                       // dedented to the closing quotes' column
+
+    // byte-offset slicing: checked (trap in debug, `get` recoverable)
+    let head = poem[..8]          // "the wolf"
+    let tail = poem[^13..]        // last 13 bytes: "moon watches\n"
+    let mid = poem.get(4..8) else |_| ""
+
+    // zero-copy views; no s[i] char indexing exists (D25)
+    var words = 0
+    for _ in poem.words() { words += 1 }
+    let lines = poem.lines().count()
+
+    // generalized literals: compiled at comptime where possible
+    let vowels = re"[aeiou]+"
+    let hits = vowels.find_all(poem).count()
+
+    // format specs, comptime-checked against argument types (D26)
+    print("{words:>3} words, {lines} lines, {hits} vowel runs")
+    print("head={head} mid={mid} tail={tail.trim()}")
+
+    if words == 6 && lines == 2 && head == "the wolf" { 0 } else { 1 }
+}

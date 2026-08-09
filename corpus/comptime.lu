@@ -1,0 +1,34 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: comptime.fn, comptime.types_as_values, perf.contract
+//!
+//! The single metaprogramming tier (D29): full CTFE, types as comptime
+//! values, reflection — no macros at v1. Plus a checked perf contract
+//! (I15): `#[noalloc]` is compiler-VERIFIED against WIR facts, not a
+//! comment that rots.
+
+// runs entirely at compile time when arguments are comptime-known
+comptime fn fib(n: int) -> int {
+    if n < 2 { n } else { fib(n - 1) + fib(n - 2) }
+}
+
+// types are comptime values: this is a function over a type (D29)
+comptime fn field_count(T: type) -> int {
+    reflect(T).fields.len
+}
+
+struct Vec3 { x: f64, y: f64, z: f64 }
+
+// the compiler PROVES this allocates nothing, or rejects it (I15)
+#[noalloc]
+fn dot(a: Vec3, b: Vec3) -> f64 {
+    a.x * b.x + a.y * b.y + a.z * b.z
+}
+
+fn main() -> !int {
+    const F10 = fib(10)                    // folded at comptime: 55
+    const N = field_count(Vec3)            // 3, via reflection
+    let d = dot(Vec3 { x: 1.0, y: 2.0, z: 3.0 },
+                Vec3 { x: 3.0, y: 2.0, z: 1.0 })
+    if F10 == 55 && N == 3 && d == 10.0 { 0 } else { 1 }
+}

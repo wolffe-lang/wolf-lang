@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="hello, wolf")
+//! phase: none
+//! conforms: str.interp
+//!
+//! The first program. Every string literal is an f-string (D26/X9);
+//! `main` returns `!int` (D30) with the last expression as the value.
+//! `print` appends a newline; stdout matching ignores the trailing one.
+
+fn main() -> !int {
+    let who = "wolf"
+    print("hello, {who}")
+    0
+}

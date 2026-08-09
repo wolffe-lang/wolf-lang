@@ -1,0 +1,38 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: ffi.import_c, ffi.extern_export, unsafe.raw, unsafe.asm
+//!
+//! C interop (D17–D19): `import c` pulls a real header through the
+//! importer (macros stay live); imported C is unsafe-tier (D11); wolf
+//! exports cross the membrane with `extern "c"`; inline asm has typed
+//! operands (RFC-2873 lineage). Raw pointers carry NO aliasing
+//! assumptions unless asserted (anti-Stacked-Borrows).
+
+import c "stdlib.h"
+import c "string.h"
+
+// wolf-native ABI inside; C ABI only at this explicit membrane (D19)
+extern "c" fn wolf_answer() -> i32 {
+    42
+}
+
+fn main() -> !int {
+    var total = 0
+    unsafe {
+        // C calls borrow an implicit region for the call's extent
+        let p = c.malloc(64) as *u8
+        if p.is_null() { return 1 }
+        c.memset(p, 0, 64)
+        p[0] = 7                       // raw tier: checked nowhere, C rules
+        total += p[0] as int
+        c.free(p)
+
+        // typed-operand inline asm (x86-64 variant; target-gated)
+        #[cfg(target = "x86_64")]
+        asm {
+            "add {t}, 35",
+            t = inout(reg) total,
+        }
+    }
+    if total == 42 && wolf_answer() == 42 { 0 } else { 1 }
+}

@@ -1,0 +1,19 @@
+//! check: run(exit=trap)
+//! phase: none
+//! conforms: arith.checked, arith.wrapping
+//!
+//! Checked arithmetic in EVERY profile (X3): overflow is a bug and faults
+//! deterministically — debug and release behave identically (no Rust
+//! two-behaviors trap, no C UB). Intended overflow is spelled with
+//! wrapping types. This program traps; that IS the expected outcome.
+
+fn main() -> !int {
+    // wrapping is explicit and fine
+    var h: wrapping[u32] = 0x9e3779b9
+    for _ in 0..8 { h = h * 1664525 + 1013904223 }
+
+    // plain arithmetic is checked; this line traps (overflow), exit=trap
+    var x: i32 = 2_147_483_647
+    x += 1
+    0   // unreachable
+}

@@ -1,0 +1,46 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.region.block, mem.region.value, mem.region.freeze, mem.shared, mem.handle
+//!
+//! The memory model's surface (D10, X4, X5): block-sugar scratch regions,
+//! first-class region values with per-region strategy, `freeze` to shared
+//! immutable, `shared` (RC, never dangles) vs `handle` (generational,
+//! faults on stale) at the shared edges. Intra-region cycles are SAFE —
+//! the doubly-linked list below is the program Rust makes miserable.
+
+struct Node {
+    value: int,
+    next: handle Node,      // generational: back/forward edges never leak
+    prev: handle Node,
+}
+
+fn build_ring(n: int) -> int {
+    region r {                          // sugar: create + scope + free (X4)
+        var pool = Pool[Node]()         // handle pool lives in r
+        var first = pool.insert(Node { value: 0, next: handle.null, prev: handle.null })
+        var prev = first
+        for i in 1..n {
+            let h = pool.insert(Node { value: i, next: handle.null, prev: prev })
+            pool[mut prev].next = h     // call-site mut (X1), field-granular
+            prev = h
+        }
+        pool[mut prev].next = first     // close the cycle — fine within a region
+        pool[mut first].prev = prev
+        var sum = 0
+        var cur = first
+        for _ in 0..n {
+            sum += pool[cur].value
+            cur = pool[cur].next
+        }
+        sum                             // value moves out; r freed wholesale here
+    }
+}
+
+fn main() -> !int {
+    // first-class form: strategy at creation, freeze for sharing (X4)
+    let r = region(rc)                  // Perceus-managed interior
+    let config = in r { build_config() }
+    let frozen = freeze r               // deep-immutable, shareable, zero-copy
+    let total = build_ring(100)         // 0+1+...+99 = 4950
+    if total == 4950 && frozen.get(config).is_valid() { 0 } else { 1 }
+}
