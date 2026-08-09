@@ -197,7 +197,8 @@ ret_type  ::= type ('!' error_row)?   /* `-> !T` parses via type's '!' type */
 - Returns: `-> T` plain; `-> !T` error union with inferred private row;
   `-> T ! {Tag(Payload), io.Error}` explicit row (`[gram.type.row]`).
 - Generic params use `[]` — there is no `<>` anywhere in the language.
-- Bodyless form (TERM) only under `extern`.
+- Bodyless form (TERM) under `extern`, or as a trait member
+  (a required method the impl must provide).
 
 Examples: see `corpus/wordcount.lu` (`fn top[T](m: Map[T, int], n: int)`).
 

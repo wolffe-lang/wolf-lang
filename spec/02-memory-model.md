@@ -45,6 +45,12 @@ vocabulary.
   implementation places in memory; whether a given value lives in a
   register, on the stack, or in its region is unobservable except as §3
   and §7 permit.
+- `[mem.model.order]` Evaluation is strict and **left-to-right**
+  everywhere: operands before operators, arguments left-to-right before
+  the call, receivers before arguments, struct-literal fields in written
+  order. Nothing is unsequenced. `?` and error returns are ordinary
+  control flow: `defer`/`errdefer` run as the frames return, LIFO,
+  after the error value is formed.
 - `[mem.codes]` Diagnostic-code families by tier: `E000x` (spec-01 §9)
   + `E01xx` (lexer) + `E02xx` (parser) are syntax-tier — the file fails
   to lex or parse. `E03xx` (resolution), `E04xx` (types), `E1xxx`

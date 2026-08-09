@@ -169,6 +169,7 @@
     "mem.model.alloc": "02-memory-model.md",
     "mem.model.granule": "02-memory-model.md",
     "mem.model.machine": "02-memory-model.md",
+    "mem.model.order": "02-memory-model.md",
     "mem.model.path.disjoint": "02-memory-model.md",
     "mem.model.place": "02-memory-model.md",
     "mem.model.value": "02-memory-model.md",
