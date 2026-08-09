@@ -17,8 +17,9 @@ fn main() -> ExitCode {
         Some("corpus") => corpus_cmd(),
         Some("bench") => bench_cmd(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
+        Some("dist") => dist(),
         _ => {
-            eprintln!("usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke>");
+            eprintln!("usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist>");
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
             ExitCode::from(2)
@@ -438,6 +439,56 @@ fn fuzz_smoke() -> ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+// ------------------------------------------------------------------ dist --
+
+/// Release-artifact mechanics (s02 stub): build the host-target `wolf`
+/// binary and stage a versioned archive under target/dist/. The release
+/// workflow runs this per-OS on the tier-1 matrix; c13 fills in substance
+/// (real cross-compilation, signing).
+fn dist() -> ExitCode {
+    let host = rustc_host_triple();
+    let version = env!("CARGO_PKG_VERSION");
+    if !run_ok(
+        "cargo",
+        &["build", "--release", "-p", "wolf_driver", "--quiet"],
+    ) {
+        eprintln!("dist: release build failed");
+        return ExitCode::FAILURE;
+    }
+    let exe = if host.contains("windows") {
+        "wolf.exe"
+    } else {
+        "wolf"
+    };
+    let name = format!("wolf-{version}-{host}");
+    let stage = Path::new("target/dist").join(&name);
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).expect("mkdir dist stage");
+    std::fs::copy(Path::new("target/release").join(exe), stage.join(exe))
+        .expect("stage wolf binary");
+    for f in ["README.md", "LICENSE-MIT", "LICENSE-APACHE"] {
+        std::fs::copy(f, stage.join(f)).expect("stage metadata file");
+    }
+    let archive = format!("target/dist/{name}.tar.gz");
+    if !run_ok("tar", &["-C", "target/dist", "-czf", &archive, &name]) {
+        eprintln!("dist: tar failed");
+        return ExitCode::FAILURE;
+    }
+    eprintln!("dist: {archive}");
+    ExitCode::SUCCESS
+}
+
+fn rustc_host_triple() -> String {
+    let out = Command::new("rustc")
+        .args(["-vV"])
+        .output()
+        .expect("rustc -vV");
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .find_map(|l| l.strip_prefix("host: ").map(str::to_string))
+        .expect("host triple in rustc -vV")
 }
 
 // --------------------------------------------------------------- helpers --
