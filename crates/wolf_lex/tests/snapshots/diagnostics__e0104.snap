@@ -1,0 +1,30 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: "E0104",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 12,
+            hi: 14,
+        },
+        message: "this line is indented less than the closing `\"\"\"`, which sets the margin",
+        notes: [
+            (
+                Span {
+                    file: FileId(
+                        0,
+                    ),
+                    lo: 18,
+                    hi: 22,
+                },
+                "the margin is set here",
+            ),
+        ],
+    },
+]

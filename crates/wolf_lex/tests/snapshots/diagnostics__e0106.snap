@@ -1,0 +1,19 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: "E0106",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 4,
+            hi: 6,
+        },
+        message: "source is not valid UTF-8 here; the bytes were skipped",
+        notes: [],
+    },
+]

@@ -1,0 +1,19 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: "E0107",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 10,
+            hi: 11,
+        },
+        message: "lone `}` in a string literal; write `}}` for a literal brace",
+        notes: [],
+    },
+]

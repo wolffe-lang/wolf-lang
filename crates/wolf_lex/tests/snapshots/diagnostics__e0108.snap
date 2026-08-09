@@ -1,0 +1,214 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{deep:#?}\")"
+---
+[
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 32,
+            hi: 33,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 34,
+            hi: 35,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 36,
+            hi: 37,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 38,
+            hi: 39,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 40,
+            hi: 41,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 42,
+            hi: 43,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 44,
+            hi: 45,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 46,
+            hi: 47,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 48,
+            hi: 49,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 50,
+            hi: 51,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 52,
+            hi: 53,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 54,
+            hi: 55,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 56,
+            hi: 57,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 58,
+            hi: 59,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 60,
+            hi: 61,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+    Diagnostic {
+        code: "E0108",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 62,
+            hi: 63,
+        },
+        message: "string/interpolation nesting deeper than 32; you do not want this",
+        notes: [],
+    },
+]

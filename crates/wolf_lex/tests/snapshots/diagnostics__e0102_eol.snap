@@ -1,0 +1,19 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: "E0102",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 8,
+            hi: 12,
+        },
+        message: "unterminated string literal; a `\"…\"` string must close before end of line",
+        notes: [],
+    },
+]

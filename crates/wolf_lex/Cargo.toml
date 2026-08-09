@@ -9,3 +9,8 @@ rust-version.workspace = true
 [dependencies]
 wolf_span.workspace = true
 wolf_diag.workspace = true
+unicode-ident.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true

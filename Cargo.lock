@@ -447,8 +447,10 @@ dependencies = [
 name = "wolf_driver"
 version = "0.0.1"
 dependencies = [
+ "serde_json",
  "wolf_codegen_clif",
  "wolf_diag",
+ "wolf_lex",
  "wolf_mem",
  "wolf_parse",
  "wolf_sema",
@@ -460,6 +462,9 @@ dependencies = [
 name = "wolf_lex"
 version = "0.0.1"
 dependencies = [
+ "insta",
+ "proptest",
+ "unicode-ident",
  "wolf_diag",
  "wolf_span",
 ]

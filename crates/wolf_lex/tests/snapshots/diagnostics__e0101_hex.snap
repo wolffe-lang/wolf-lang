@@ -1,0 +1,19 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: "E0101",
+        severity: Error,
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 10,
+            hi: 13,
+        },
+        message: "invalid `\\x` escape: expected exactly two hex digits",
+        notes: [],
+    },
+]
