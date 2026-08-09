@@ -128,7 +128,7 @@ fn collect_wolf_files(dir: &Path, out: &mut Vec<PathBuf>) {
         let p = entry.path();
         if p.is_dir() {
             collect_wolf_files(&p, out);
-        } else if p.extension().is_some_and(|e| e == "wolf") {
+        } else if p.extension().is_some_and(|e| e == "lu") {
             out.push(p);
         }
     }
@@ -141,7 +141,7 @@ fn collect_wolf_files(dir: &Path, out: &mut Vec<PathBuf>) {
 const KERNELS: &[(&str, u64)] = &[
     ("alias_daxpy", 20_000),
     ("list_alloc", 400),
-    ("aos_dot", 4_000),
+    ("aos_dot", 1_500),
     ("word_count", 60),
 ];
 
@@ -177,7 +177,6 @@ fn bench_cmd(args: &[String]) -> ExitCode {
         return ExitCode::FAILURE;
     };
     let out_path = out_path.unwrap_or_else(|| {
-        std::fs::create_dir_all("bench-results").expect("mkdir bench-results");
         let t = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("clock before epoch")
@@ -192,8 +191,15 @@ fn bench_cmd(args: &[String]) -> ExitCode {
         body.push_str(&r.to_string());
         body.push('\n');
     }
+    if let Some(parent) = out_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent).expect("mkdir bench output dir");
+    }
     std::fs::write(&out_path, body).expect("write bench results");
-    eprintln!("bench: {} record(s) -> {}", records.len(), out_path.display());
+    eprintln!(
+        "bench: {} record(s) -> {}",
+        records.len(),
+        out_path.display()
+    );
     ExitCode::SUCCESS
 }
 
@@ -258,19 +264,17 @@ fn bench_runtime(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
                     config,
                 ));
             }
-            if perf {
-                if let Some(instr) = perf_instructions(&bin, &ops.to_string()) {
-                    records.push(record(
-                        kernel,
-                        "runtime",
-                        lang,
-                        "instructions",
-                        instr,
-                        "count",
-                        commit,
-                        config,
-                    ));
-                }
+            if perf && let Some(instr) = perf_instructions(&bin, &ops.to_string()) {
+                records.push(record(
+                    kernel,
+                    "runtime",
+                    lang,
+                    "instructions",
+                    instr,
+                    "count",
+                    commit,
+                    config,
+                ));
             }
         }
     }
@@ -357,7 +361,9 @@ fn bench_diff(args: &[String]) -> ExitCode {
                 v["lang"].as_str().expect("lang"),
                 v["metric"].as_str().expect("metric"),
             );
-            m.entry(key).or_default().push(v["value"].as_f64().expect("value"));
+            m.entry(key)
+                .or_default()
+                .push(v["value"].as_f64().expect("value"));
         }
         m
     };
@@ -372,7 +378,11 @@ fn bench_diff(args: &[String]) -> ExitCode {
         match stats::compare(bvals, cvals) {
             Some(stats::Verdict::Unchanged) => eprintln!("  {key}: unchanged"),
             Some(stats::Verdict::Significant { delta_pct }) => {
-                let dir = if delta_pct > 0.0 { "REGRESSED" } else { "improved" };
+                let dir = if delta_pct > 0.0 {
+                    "REGRESSED"
+                } else {
+                    "improved"
+                };
                 eprintln!("  {key}: {dir} {delta_pct:+.1}%");
                 if delta_pct > 0.0 {
                     regressions += 1;
@@ -417,7 +427,9 @@ fn fuzz_smoke() -> ExitCode {
         .unwrap_or(false);
     if !available {
         eprintln!("fuzz-smoke: cargo-fuzz not installed — scaffold present, smoke skipped");
-        eprintln!("fuzz-smoke: CI runs this with nightly (s02); install with `cargo install cargo-fuzz`");
+        eprintln!(
+            "fuzz-smoke: CI runs this with nightly (s02); install with `cargo install cargo-fuzz`"
+        );
         return ExitCode::SUCCESS;
     }
     if run_ok("cargo", &["fuzz", "build", "--fuzz-dir", "fuzz"]) {

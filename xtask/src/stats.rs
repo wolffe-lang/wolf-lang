@@ -9,7 +9,7 @@ pub fn median(xs: &[f64]) -> Option<f64> {
     let mut v = xs.to_vec();
     v.sort_by(|a, b| a.partial_cmp(b).expect("NaN in sample"));
     let mid = v.len() / 2;
-    Some(if v.len() % 2 == 0 {
+    Some(if v.len().is_multiple_of(2) {
         (v[mid - 1] + v[mid]) / 2.0
     } else {
         v[mid]
@@ -64,13 +64,17 @@ mod tests {
 
     #[test]
     fn same_distribution_is_unchanged() {
-        let a = [100.0, 101.0, 99.0, 100.5, 100.2, 99.8, 100.1, 99.9, 100.3, 100.0];
+        let a = [
+            100.0, 101.0, 99.0, 100.5, 100.2, 99.8, 100.1, 99.9, 100.3, 100.0,
+        ];
         assert_eq!(compare(&a, &a), Some(Verdict::Unchanged));
     }
 
     #[test]
     fn big_move_is_significant() {
-        let a = [100.0, 101.0, 99.0, 100.0, 100.0, 100.0, 99.5, 100.5, 100.0, 100.0];
+        let a = [
+            100.0, 101.0, 99.0, 100.0, 100.0, 100.0, 99.5, 100.5, 100.0, 100.0,
+        ];
         let b: Vec<f64> = a.iter().map(|x| x * 1.5).collect();
         match compare(&a, &b) {
             Some(Verdict::Significant { delta_pct }) => {
@@ -82,7 +86,9 @@ mod tests {
 
     #[test]
     fn small_move_inside_noise_is_unchanged() {
-        let a = [100.0, 110.0, 90.0, 105.0, 95.0, 102.0, 98.0, 108.0, 92.0, 100.0];
+        let a = [
+            100.0, 110.0, 90.0, 105.0, 95.0, 102.0, 98.0, 108.0, 92.0, 100.0,
+        ];
         let b: Vec<f64> = a.iter().map(|x| x + 1.0).collect();
         assert_eq!(compare(&a, &b), Some(Verdict::Unchanged));
     }
