@@ -4,11 +4,12 @@
 //! publish fix toolchain. v0 grows at s31 (`wolf build|run`); today the
 //! binary anchors the crate graph's top, serves the differential protocol
 //! (`conform-run`, spec/06 [proto.invoke]) with the deepest implemented
-//! phase (parse, s09), and fronts the s10 diagnostics engine:
+//! phase (resolve, s12), and fronts the s10 diagnostics engine:
 //! `wolf --explain E####` renders the registry entry, and `conform-run`
 //! reports diagnostics on stderr in the human CLI format (default) or
 //! the diag-schema JSON line format (`--error-format=json`) while stdout
-//! keeps the spec/06-minimal observation record.
+//! keeps the spec/06-minimal observation record. `wolf interface`
+//! pretty-prints the s12 `wolfi` module interfaces of a package.
 
 use std::path::Path;
 
@@ -20,6 +21,7 @@ fn main() {
         Some("--version") => println!("wolf 0.0.1 (pre-alpha)"),
         Some("--explain") => explain(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
+        Some("interface") => interface(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
         _ => {
             eprintln!("wolf: pre-alpha scaffold; `wolf build|run` lands at sprint s31");
@@ -207,6 +209,106 @@ fn explain(args: &[String]) {
     println!("{}", info.explanation.trim());
 }
 
+/// Does this file's `//!` header carry `member: true` (s12: it belongs
+/// to a multi-file module case and is compiled via its entry file)?
+fn is_member_file(src: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(src);
+    for line in text.lines() {
+        let Some(rest) = line.trim_start().strip_prefix("//!") else {
+            break;
+        };
+        if let Some(v) = rest.trim().strip_prefix("member:")
+            && v.trim() == "true"
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Run s12 resolution from an entry file; registers every loaded file
+/// with `sources` and returns the full diagnostic set (parse + graph +
+/// resolution) in deterministic order.
+fn resolve_from_entry(
+    entry: &Path,
+    sm: &mut wolf_span::SourceMap,
+    sources: &mut Sources,
+) -> Result<Vec<Diagnostic>, String> {
+    let mut loader =
+        wolf_sema::DiskLoader::from_entry(entry, sm, Box::new(|src: &[u8]| is_member_file(src)))
+            .ok_or_else(|| format!("cannot open package around {}", entry.display()))?;
+    let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
+    for unit in &res.package.files {
+        sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
+    }
+    Ok(res.diagnostics)
+}
+
+/// `wolf interface <file-or-dir>` — resolve the package and pretty-print
+/// every module's `wolfi` v0 interface, dependencies first (s12). A file
+/// argument is an entry point (conform-run rules); a directory takes all
+/// of its `.lu` files as the root module. Nothing is persisted — build
+/// artifacts arrive with the incremental driver (s31).
+fn interface(args: &[String]) {
+    let Some(path) = args.first() else {
+        eprintln!("usage: wolf interface <file.lu|dir>");
+        std::process::exit(2);
+    };
+    let p = Path::new(path);
+    let mut sm = wolf_span::SourceMap::new();
+    let mut sources = Sources::new();
+    let res = if p.is_file() {
+        let mut loader = wolf_sema::DiskLoader::from_entry(
+            p,
+            &mut sm,
+            Box::new(|src: &[u8]| is_member_file(src)),
+        )
+        .unwrap_or_else(|| {
+            eprintln!("wolf interface: cannot open package around {path}");
+            std::process::exit(2);
+        });
+        wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())
+    } else if p.is_dir() {
+        let mut loader = wolf_sema::DiskLoader::from_dir(p, &mut sm);
+        wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())
+    } else {
+        eprintln!("wolf interface: no such file or directory: {path}");
+        std::process::exit(2);
+    };
+    let res = match res {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("wolf interface: {e}");
+            std::process::exit(2);
+        }
+    };
+    for unit in &res.package.files {
+        sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
+    }
+    let has_errors = res
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == wolf_diag::Severity::Error);
+    if !res.diagnostics.is_empty() {
+        let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+        for d in &res.diagnostics {
+            reporter.report(d);
+        }
+        eprint!("{}", reporter.take_output());
+    }
+    if has_errors {
+        eprintln!("wolf interface: the package does not resolve; fix the errors above");
+        std::process::exit(1);
+    }
+    let ifaces = wolf_sema::build_interfaces(&res.package);
+    for (i, iface) in ifaces.iter().enumerate() {
+        if i > 0 {
+            println!();
+        }
+        print!("{}", wolf_sema::pretty(iface));
+    }
+}
+
 const PHASES: [&str; 8] = [
     "none",
     "lex",
@@ -314,7 +416,26 @@ fn conform_run(args: &[String]) {
             } else if phase.as_deref() == Some("parse") {
                 ("parse", "pass".to_string(), all)
             } else {
-                ("parse", "unsupported".to_string(), all)
+                // The resolve rung (s12): the module graph grows from
+                // the entry file's directory; sibling files participate
+                // when their header carries `member: true` (the corpus
+                // multi-file contract), sibling directories are child
+                // modules loaded on import.
+                match resolve_from_entry(Path::new(&file), &mut sm, &mut sources) {
+                    Err(e) => {
+                        eprintln!("wolf conform-run: {e}");
+                        std::process::exit(2);
+                    }
+                    Ok(all) => {
+                        if let Some(code) = first_error(&all) {
+                            ("resolve", format!("fail({code})"), all)
+                        } else if phase.as_deref() == Some("resolve") {
+                            ("resolve", "pass".to_string(), all)
+                        } else {
+                            ("resolve", "unsupported".to_string(), all)
+                        }
+                    }
+                }
             }
         }
     };
