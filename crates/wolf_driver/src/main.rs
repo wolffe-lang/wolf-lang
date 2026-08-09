@@ -83,33 +83,45 @@ fn conform_run(args: &[String]) {
         let mut sm = wolf_span::SourceMap::new();
         let id = sm.intern(Path::new(&file));
         let lexed = wolf_lex::lex(id, &bytes);
-        let diags: Vec<serde_json::Value> = lexed
-            .diagnostics
-            .iter()
-            .map(|d| {
-                serde_json::json!({
-                    "code": d.code,
-                    "span": [d.span.lo, d.span.hi],
-                    "severity": match d.severity {
-                        wolf_diag::Severity::Error => "error",
-                        wolf_diag::Severity::Warning => "warning",
-                    },
+        let to_json = |ds: &[wolf_diag::Diagnostic]| -> Vec<serde_json::Value> {
+            ds.iter()
+                .map(|d| {
+                    serde_json::json!({
+                        "code": d.code,
+                        "span": [d.span.lo, d.span.hi],
+                        "severity": match d.severity {
+                            wolf_diag::Severity::Error => "error",
+                            wolf_diag::Severity::Warning => "warning",
+                        },
+                    })
                 })
-            })
-            .collect();
-        let first_error = lexed
-            .diagnostics
-            .iter()
-            .find(|d| d.severity == wolf_diag::Severity::Error);
-        let verdict = match (first_error, phase.as_deref()) {
-            (Some(e), _) => format!("fail({})", e.code),
-            // Stopped exactly at the requested phase, clean.
-            (None, Some("lex")) => "pass".to_string(),
-            // Asked to go deeper (or as deep as possible): lex is clean
-            // but the rest is out of scope — conservatism ledger.
-            (None, _) => "unsupported".to_string(),
+                .collect()
         };
-        ("lex", verdict, diags)
+        let first_error = |ds: &[wolf_diag::Diagnostic]| {
+            ds.iter()
+                .find(|d| d.severity == wolf_diag::Severity::Error)
+                .map(|d| d.code)
+        };
+        // Phase ladder, deepest implemented: parse (s09). Each rung either
+        // stops with fail(code) at that rung, passes at the requested rung,
+        // or falls through deeper; past the last rung the verdict is
+        // `unsupported` (conservatism ledger).
+        if let Some(code) = first_error(&lexed.diagnostics) {
+            ("lex", format!("fail({code})"), to_json(&lexed.diagnostics))
+        } else if phase.as_deref() == Some("lex") {
+            ("lex", "pass".to_string(), to_json(&lexed.diagnostics))
+        } else {
+            let parsed = wolf_parse::parse_tokens(&lexed, &bytes);
+            let mut all = lexed.diagnostics.clone();
+            all.extend(parsed.diagnostics.iter().cloned());
+            if let Some(code) = first_error(&parsed.diagnostics) {
+                ("parse", format!("fail({code})"), to_json(&all))
+            } else if phase.as_deref() == Some("parse") {
+                ("parse", "pass".to_string(), to_json(&all))
+            } else {
+                ("parse", "unsupported".to_string(), to_json(&all))
+            }
+        }
     };
 
     let record = serde_json::json!({
