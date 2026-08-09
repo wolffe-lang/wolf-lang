@@ -45,9 +45,12 @@ vocabulary.
   implementation places in memory; whether a given value lives in a
   register, on the stack, or in its region is unobservable except as §3
   and §7 permit.
-- `[mem.codes]` E0xxx codes are syntax-tier (fail to parse); E1xxx are
-  memory-tier static rejections (parse, then rejected); traps are runtime
-  outcomes of *defined* behavior. Nothing in this document is both.
+- `[mem.codes]` Diagnostic-code families by tier: `E000x` (spec-01 §9)
+  + `E01xx` (lexer) + `E02xx` (parser) are syntax-tier — the file fails
+  to lex or parse. `E03xx` (resolution), `E04xx` (types), `E1xxx`
+  (memory), `E11xx` (concurrency), and `E12xx` (ABI) are post-parse
+  static rejections. Traps are runtime outcomes of *defined* behavior.
+  Nothing in this document is both an error and a trap.
 
 ## §2 Tier 0 — values `[mem.tier0]`
 

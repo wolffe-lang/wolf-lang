@@ -40,6 +40,11 @@ One JSON object on stdout. Schema (`"protocol": 1`):
 }
 ```
 
+- `[proto.record.phase]` `phase_reached` names the deepest phase that
+  **completed**. An implementation that cannot complete a phase because a
+  construct is outside its current coverage reports the last *completed*
+  phase with verdict `unsupported` — never the incomplete phase. A
+  `fail(CODE)` verdict reports the phase that failed as `phase_reached`.
 - `[proto.record.fields]` Required: `protocol`, `impl`, `impl_version`,
   `commit`, `file`, `phase_reached`, `seeded`, `diagnostics`, `verdict`.
   `stdout_sha256`/`stdout_inline` are required when `verdict` is
