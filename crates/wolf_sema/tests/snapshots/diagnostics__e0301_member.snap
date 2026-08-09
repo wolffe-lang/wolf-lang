@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: module `geometry` has no item named `aera`
+ --> mem:///main.lu:4:14
+  |
+4 |     geometry.aera(3)
+  |              ^^^^ not found in the module
+  |
+help: did you mean `area`?
+  |
+4 |     geometry.area(3)
+  |

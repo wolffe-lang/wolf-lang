@@ -32,6 +32,8 @@ serde_json = "1"
 proptest = "1"
 insta = "1"
 unicode-ident = "1"
+rayon = "1"
+blake3 = "1"
 
 [profile.release]
 debug = true

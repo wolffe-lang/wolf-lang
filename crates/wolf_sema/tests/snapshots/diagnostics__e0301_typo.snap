@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: nothing named `pirnt` is in scope
+ --> mem:///main.lu:2:5
+  |
+2 |     pirnt("hello")
+  |     ^^^^^ not found
+  |
+help: did you mean `print`?
+  |
+2 |     print("hello")
+  |

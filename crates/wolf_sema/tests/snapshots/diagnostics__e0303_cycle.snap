@@ -1,0 +1,17 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0303]: this import completes a cycle: `alpha` → `beta` → `alpha`
+ --> mem://beta/b.lu:1:1
+  |
+1 | use alpha
+  | ^^^^^^^^^ the cycle closes here
+  |
+ ::: mem://alpha/a.lu:1:1
+  |
+1 | use beta
+  | -------- `alpha` enters the cycle here
+  |
+  = note: imports between modules must form a DAG (D32); extract what both sides need into a third
+    module they can each import.

@@ -1,0 +1,17 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0302]: the name `helper` is defined twice in this module
+ --> mem:///twice.lu:1:4
+  |
+1 | fn helper() -> int {
+  |    ^^^^^^ defined again here
+  |
+ ::: mem:///main.lu:1:4
+  |
+1 | fn helper() -> int {
+  |    ------ first defined here
+  |
+  = note: every `.lu` file in a directory is one module (D32), so a top-level name may be defined
+    only once across all of them; rename or remove one of the definitions.

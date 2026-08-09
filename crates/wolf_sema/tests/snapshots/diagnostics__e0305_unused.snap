@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0305]: the import `tools` is never used
+ --> mem:///main.lu:1:5
+  |
+1 | use tools
+  |     ^^^^^ imported here, used nowhere in this file
+  |
+  = note: imports are file-scoped (D32): a name used only in a sibling file must be imported there
+    instead.
+help: delete the unused import
+  |
+1 | 
+  |

@@ -1,0 +1,17 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0304]: `secret` exists in `vault`, but it is private
+ --> mem:///main.lu:4:11
+  |
+4 |     vault.secret()
+  |           ^^^^^^ not visible from here
+  |
+ ::: mem://vault/keys.lu:1:4
+  |
+1 | fn secret() -> int {
+  |    ------ defined here, without `pub`
+  |
+  = note: mark the fn `pub` to export it from the module, or `pub(pkg)` to share it within this
+    package — `pub(pkg)` is enough for this use.

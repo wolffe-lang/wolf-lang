@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0306]: `tools` is already bound by an earlier import
+ --> mem:///main.lu:2:13
+  |
+1 | use tools
+  |     ----- first bound here
+2 | use gear as tools
+  |             ^^^^^ imported again here
+  |
+  = note: drop the repeated import, or give this one its own name with `use path as other_name`.

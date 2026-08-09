@@ -11,3 +11,8 @@ wolf_span.workspace = true
 wolf_diag.workspace = true
 wolf_ast.workspace = true
 wolf_parse.workspace = true
+rayon.workspace = true
+blake3.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
