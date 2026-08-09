@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: the branches of this `if` disagree about its type
+ --> mem:///main.lu:2:38
+  |
+2 |     let label = if true { 1 } else { "one" }
+  |                           - but this one is `{integer}`
+  |                                      ^^^^^ this branch is `str`
+  |
+  = note: an `if` used as a value produces one type; neither branch is more "right" — make both
+    `{integer}`, or both `str`, or move the `if` into statement position.

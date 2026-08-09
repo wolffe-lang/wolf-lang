@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `{integer}`, but an `if` condition must be `bool`
+ --> mem:///main.lu:3:8
+  |
+3 |     if count { 0 } else { 1 }
+  |        ^^^^^ found `{integer}` here
+  |
+  = note: expected `bool`, found `{integer}`
+  = note: wolf has no truthiness: write the comparison out, e.g. `x != 0`.

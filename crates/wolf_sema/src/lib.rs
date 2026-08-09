@@ -30,17 +30,45 @@
 //!   timestamps, no hash-map iteration), plus the loader API and the
 //!   `wolf interface` pretty renderer.
 //!
+//! # Implemented today (s13)
+//!
+//! - **Signature elaboration** ([`sig`]): every item's signature
+//!   elaborates against resolved names into the interned type table
+//!   ([`types`], hash-consed flat arena, index-equality fast path) —
+//!   the s12 interface content as types, the typing firewall (D27).
+//!   Missing item annotations are E0407 with insertion fix-its.
+//! - **Bidirectional checker** ([`check`]): check/synthesize on the
+//!   Pfenning recipe, DK-style algorithmic checking on a union-find of
+//!   leveled existentials ([`unify`]) with snapshot/rollback trial
+//!   unification; monomorphic locals; literals polymorphic over
+//!   `{integer}`/`{float}` with the `i32`/`f64` defaulting *rule*;
+//!   constraint provenance and structural type diffs (D22, E04xx);
+//!   constructs beyond s13's set return `NotYetCheckable`, never a
+//!   guess.
+//! - **Package driver** ([`typecheck`]): per-body independent checking
+//!   (rayon-parallel by default), the conform-run `typecheck` rung
+//!   contract, and the bodies/sec bench surface (D5).
+//!
 //! The std/prelude stub tables ([`prelude`]) carry *names only* until
 //! the real standard library lands (s05/s51).
 
+pub mod check;
 pub mod graph;
 pub mod interface;
 pub mod prelude;
 pub mod resolve;
+pub mod sig;
+pub mod typecheck;
+pub mod types;
+pub mod unify;
 
+pub use check::{BodyRef, BodyResult, NotYet, TypedBody, check_body};
 pub use graph::{
     AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, MemoryLoader, ModuleData,
     ModuleLoader, Package, RawFile, SourceUnit, Vis, load_package,
 };
 pub use interface::{Interface, build_interfaces, decode, encode, pretty};
 pub use resolve::{Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_package_with};
+pub use sig::{ItemSig, SigTables, build_sigs};
+pub use typecheck::{BodyOutcome, Typecheck, typecheck_package, typecheck_package_with};
+pub use types::{Prim, TyId, TyKind, TypeTable};

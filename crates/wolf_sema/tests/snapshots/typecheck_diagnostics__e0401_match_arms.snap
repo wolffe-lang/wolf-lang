@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: the arms of this `match` disagree about its type
+ --> mem:///main.lu:4:14
+  |
+3 |         0 => 10,
+  |              -- but this one is `{integer}`
+4 |         _ => "lots",
+  |              ^^^^^^ this arm is `str`
+  |
+  = note: a `match` used as a value produces one type; neither arm is more "right" — make both
+    `{integer}`, or both `str`, or move the `match` into statement position.

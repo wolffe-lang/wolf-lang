@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0409]: `&&` cannot be applied to `{integer}`
+ --> mem:///main.lu:2:14
+  |
+2 |     let ok = 1 && 0
+  |              ^ this is `{integer}`
+  |
+  = note: `&&` works on `bool`.
+  = note: wolf has no truthiness: write the comparison out, e.g. `x != 0`.

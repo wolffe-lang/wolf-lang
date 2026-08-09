@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0402]: `area` takes 2 arguments, but this call passes 1
+ --> mem:///main.lu:6:5
+  |
+1 | fn area(width: int, height: int) -> int {
+  |    ---- `area` is defined here
+...
+6 |     area(3)
+  |     ^^^^^^^ 1 argument here
+  |
+  = note: add the missing arguments — every parameter is required.

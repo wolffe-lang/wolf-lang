@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0404]: this would need an infinite type
+ --> mem:///main.lu:2:19
+  |
+2 |     let f = fn(g) g(g)
+  |                   ^ call it `t`: `t` would have to be `fn(_) -> _` with `t` itself inside — the substitution never terminates
+  |
+  = note: no finite type satisfies a cycle like `t = fn(t) -> …`; this usually means a function is
+    applied to itself — name the intended type explicitly to break the cycle.

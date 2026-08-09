@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0408]: this `Config` literal is missing the field `port`
+ --> mem:///main.lu:7:13
+  |
+1 | struct Config {
+  |        ------ `Config` is defined here
+...
+7 |     let c = Config { host: "wolf" }
+  |             ^^^^^^^^^^^^^^^^^^^^^^^ missing fields
+  |
+  = note: every field is written explicitly — wolf has no defaults yet.

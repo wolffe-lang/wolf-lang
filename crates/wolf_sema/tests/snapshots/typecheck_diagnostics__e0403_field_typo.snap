@@ -1,0 +1,17 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0403]: `Circle` has no field named `radbus`
+ --> mem:///main.lu:7:15
+  |
+1 | struct Circle {
+  |        ------ `Circle` is defined here
+...
+7 |     let r = c.radbus
+  |               ^^^^^^ unknown field
+  |
+help: did you mean `radius`?
+  |
+7 |     let r = c.radius
+  |

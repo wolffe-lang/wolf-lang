@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0405]: wolf cannot infer a type here
+ --> mem:///main.lu:2:16
+  |
+2 |     let f = fn(x) x
+  |                ^ no use of this pins its type down
+  |
+  = note: closure parameters take their types from context; when there is no context, annotate:
+    `fn(x: int) …`. Literals default (`i32`/`f64`) by rule, but nothing else does.

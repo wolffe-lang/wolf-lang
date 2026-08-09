@@ -1,0 +1,841 @@
+//! Item signature elaboration (s13, Target 1).
+//!
+//! Every item declares its full signature (D27 — no inference across
+//! item boundaries, ever; SE-0244's "a mistake"). This pass elaborates
+//! each module item's signature against resolved names into the
+//! interned [`TypeTable`], producing the [`SigTables`] that body
+//! checking consumes: the elaborated signature set is exactly the s12
+//! interface content, so the module interface stays the typing
+//! firewall — checking module M's bodies needs only M's bodies plus
+//! dependency *signatures*, never dependency bodies.
+//!
+//! Missing annotations on items are parse-adjacent diagnostics (E0407)
+//! with insertion fix-its: the compiler may know the type, but makes
+//! you write it.
+//!
+//! Type forms beyond s13's checkable universe (generic instantiations,
+//! trait names in type position) elaborate as *opaque* tokens
+//! ([`TyKind::Unsupported`]): values of such types pass around by
+//! equality, and every operation on them is NotYetCheckable — the
+//! checker never guesses.
+
+use std::collections::BTreeMap;
+
+use wolf_ast::{
+    ConstDecl, EnumDecl, FnDecl, GreenNode, PathType, StructDecl, SyntaxKind, TypeDecl,
+    is_type_kind,
+};
+use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
+use wolf_span::Span;
+
+use crate::graph::{BindTarget, Binding, ItemKind, Package};
+use crate::types::{Prim, TyId, TyKind, TypeTable};
+
+/// One function parameter's elaborated signature.
+#[derive(Debug, Clone)]
+pub struct ParamSig {
+    pub name: String,
+    pub ty: TyId,
+    /// The parameter's span (the "declared here" secondary for E0401
+    /// argument mismatches and E0402).
+    pub span: Span,
+}
+
+/// One function item's elaborated signature.
+#[derive(Debug, Clone)]
+pub struct FnSig {
+    pub params: Vec<ParamSig>,
+    /// The declared return type; `()` when no `->` is written. `!T`
+    /// elaborates as an opaque-row error union (D30; rows are s15).
+    pub ret: TyId,
+    pub name_span: Span,
+    /// The `-> …` node's span (the "because" locus of return-type
+    /// provenance), if written.
+    pub ret_span: Option<Span>,
+    /// Generic parameter names, in order. Non-empty ⇒ calls need
+    /// instantiation (s14) and are NotYetCheckable.
+    pub generics: Vec<String>,
+    /// Any generic parameter carries a bound ⇒ the *body* waits for
+    /// s14 too.
+    pub bounded: bool,
+}
+
+/// One struct field's elaborated signature.
+#[derive(Debug, Clone)]
+pub struct FieldSig {
+    pub name: String,
+    pub ty: TyId,
+    pub span: Span,
+}
+
+/// A struct item's elaborated signature.
+#[derive(Debug, Clone)]
+pub struct StructSig {
+    pub generic: bool,
+    pub fields: Vec<FieldSig>,
+    pub name_span: Span,
+}
+
+/// A `const`/module-level `let`/`var` item's elaborated signature.
+#[derive(Debug, Clone)]
+pub struct GlobalSig {
+    /// `None` when the annotation is missing (reported as E0407; uses
+    /// of the item are then NotYetCheckable, never guessed).
+    pub ty: Option<TyId>,
+    pub name_span: Span,
+}
+
+/// One module item's elaborated signature.
+#[derive(Debug, Clone)]
+pub enum ItemSig {
+    Fn(FnSig),
+    Struct(StructSig),
+    /// Enums elaborate their identity; variant typing is s17's
+    /// pattern/variant work.
+    Enum {
+        generic: bool,
+        name_span: Span,
+    },
+    /// A type alias; non-generic aliases expand during lowering.
+    Alias {
+        generic: bool,
+    },
+    Trait,
+    Global(GlobalSig),
+}
+
+/// The elaborated signature set of a whole package: the typing
+/// firewall. Body checking borrows this immutably (Target 5).
+#[derive(Debug)]
+pub struct SigTables {
+    pub table: TypeTable,
+    /// Per module (parallel to `Package::modules`): name → signature.
+    pub modules: Vec<BTreeMap<String, ItemSig>>,
+    /// Dotted module names for rendering.
+    pub module_names: Vec<String>,
+    /// Missing-annotation diagnostics (E0407), deterministic order.
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl SigTables {
+    pub fn get(&self, module: usize, name: &str) -> Option<&ItemSig> {
+        self.modules.get(module)?.get(name)
+    }
+}
+
+/// Elaborate every module item's signature (dependency-first order so
+/// the process is deterministic; lowering itself is order-independent
+/// because aliases expand on demand).
+pub fn build_sigs(pkg: &Package) -> SigTables {
+    let mut lower = Lower {
+        pkg,
+        table: TypeTable::new(),
+        alias_stack: Vec::new(),
+        diags: Vec::new(),
+    };
+    let mut modules: Vec<BTreeMap<String, ItemSig>> = vec![BTreeMap::new(); pkg.modules.len()];
+    for &m in &pkg.topo {
+        let mut sigs = BTreeMap::new();
+        for item in &pkg.tables[m].items {
+            let sig = lower.item_sig(m, item);
+            sigs.insert(item.name.clone(), sig);
+        }
+        modules[m] = sigs;
+    }
+    let mut diagnostics = lower.diags;
+    wolf_diag::sort_diagnostics(&mut diagnostics);
+    SigTables {
+        table: lower.table,
+        modules,
+        module_names: pkg.modules.iter().map(|md| md.dotted()).collect(),
+        diagnostics,
+    }
+}
+
+/// The import bindings of `file` within `module`.
+pub(crate) fn bindings_for(pkg: &Package, module: usize, file: usize) -> &[Binding] {
+    let md = &pkg.modules[module];
+    let slot = md
+        .files
+        .iter()
+        .position(|&f| f == file)
+        .expect("file belongs to module");
+    &md.bindings[slot]
+}
+
+/// The AST node of a module item (by its recorded decl ordinal).
+pub(crate) fn item_node<'a>(pkg: &'a Package, item: &crate::graph::Item) -> &'a GreenNode {
+    pkg.files[item.file]
+        .parse
+        .root
+        .nodes()
+        .filter(|n| n.kind.is_item())
+        .nth(item.decl)
+        .expect("item decl index valid")
+}
+
+/// Signature-and-type lowering context, shared by [`build_sigs`] and
+/// the body checker (`let` annotations, casts, closure params).
+pub(crate) struct Lower<'a> {
+    pub pkg: &'a Package,
+    pub table: TypeTable,
+    /// Alias-expansion cycle guard: (module, item name).
+    alias_stack: Vec<(usize, String)>,
+    diags: Vec<Diagnostic>,
+}
+
+impl<'a> Lower<'a> {
+    pub fn new(pkg: &'a Package, table: TypeTable) -> Lower<'a> {
+        Lower {
+            pkg,
+            table,
+            alias_stack: Vec::new(),
+            diags: Vec::new(),
+        }
+    }
+
+    fn text(&self, file: usize, span: Span) -> String {
+        let src = &self.pkg.files[file].raw.src;
+        String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]).into_owned()
+    }
+
+    fn item_sig(&mut self, module: usize, item: &crate::graph::Item) -> ItemSig {
+        let node = item_node(self.pkg, item);
+        let file = item.file;
+        match node.kind {
+            SyntaxKind::FnDecl => ItemSig::Fn(self.fn_sig(module, file, node, item.name_span)),
+            SyntaxKind::StructDecl => {
+                let d = StructDecl::cast(node).expect("kind");
+                let generics = generic_names(self, file, node);
+                let fields = d
+                    .fields()
+                    .map(|f| FieldSig {
+                        name: f
+                            .name()
+                            .map(|t| self.text(file, t.span))
+                            .unwrap_or_default(),
+                        ty: f
+                            .ty()
+                            .map(|t| self.lower_type(module, file, &generics, t))
+                            .unwrap_or_else(|| self.table.error()),
+                        span: f.name().map(|t| t.span).unwrap_or(node.span),
+                    })
+                    .collect();
+                ItemSig::Struct(StructSig {
+                    generic: !generics.is_empty(),
+                    fields,
+                    name_span: item.name_span,
+                })
+            }
+            SyntaxKind::EnumDecl => {
+                let generics = generic_names(self, file, node);
+                let _ = EnumDecl::cast(node);
+                ItemSig::Enum {
+                    generic: !generics.is_empty(),
+                    name_span: item.name_span,
+                }
+            }
+            SyntaxKind::TypeDecl => {
+                let d = TypeDecl::cast(node).expect("kind");
+                let generic = d.generics().is_some_and(|g| g.params().next().is_some());
+                match d.def().map(|def| def.kind) {
+                    Some(SyntaxKind::StructDef) => {
+                        let generics = generic_names(self, file, node);
+                        let fields = d
+                            .def()
+                            .into_iter()
+                            .flat_map(|def| def.nodes().filter_map(wolf_ast::StructField::cast))
+                            .map(|f| FieldSig {
+                                name: f
+                                    .name()
+                                    .map(|t| self.text(file, t.span))
+                                    .unwrap_or_default(),
+                                ty: f
+                                    .ty()
+                                    .map(|t| self.lower_type(module, file, &generics, t))
+                                    .unwrap_or_else(|| self.table.error()),
+                                span: f.name().map(|t| t.span).unwrap_or(node.span),
+                            })
+                            .collect();
+                        ItemSig::Struct(StructSig {
+                            generic,
+                            fields,
+                            name_span: item.name_span,
+                        })
+                    }
+                    Some(SyntaxKind::EnumDef) => ItemSig::Enum {
+                        generic,
+                        name_span: item.name_span,
+                    },
+                    _ => ItemSig::Alias { generic },
+                }
+            }
+            SyntaxKind::TraitDecl => ItemSig::Trait,
+            SyntaxKind::ConstDecl => {
+                let d = ConstDecl::cast(node).expect("kind");
+                let ty = d.ty().map(|t| self.lower_type(module, file, &[], t));
+                if ty.is_none() {
+                    self.missing_annotation(item, node, ItemKind::Const);
+                }
+                ItemSig::Global(GlobalSig {
+                    ty,
+                    name_span: item.name_span,
+                })
+            }
+            SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+                let ty = node
+                    .nodes()
+                    .find(|n| is_type_kind(n.kind))
+                    .map(|t| self.lower_type(module, file, &[], t));
+                if ty.is_none() {
+                    self.missing_annotation(item, node, item.kind);
+                }
+                ItemSig::Global(GlobalSig {
+                    ty,
+                    name_span: item.name_span,
+                })
+            }
+            _ => ItemSig::Trait,
+        }
+    }
+
+    /// E0407: an item without its full signature (D27 — "the compiler
+    /// knows but makes you write it").
+    fn missing_annotation(&mut self, item: &crate::graph::Item, node: &GreenNode, kind: ItemKind) {
+        // Fix-it: insert `: <type>` right after the declared name.
+        let insert_at = Span::new(item.name_span.file, item.name_span.hi, item.name_span.hi);
+        let hint = literal_type_hint(node);
+        let mut d = Diagnostic::error(
+            codes::E0407,
+            item.name_span,
+            format!(
+                "the {} `{}` is an item, so it must declare its type",
+                kind.keyword(),
+                item.name
+            ),
+        )
+        .with_label("no `: type` annotation")
+        .with_note(
+            "items are the typing firewall (D27): types are inferred inside \
+             function bodies, never across item boundaries.",
+        );
+        match hint {
+            Some(t) => {
+                d = d.with_suggestion(Suggestion::new(
+                    format!("the initializer makes it `{t}` — write that down"),
+                    vec![(insert_at, format!(": {t}"))],
+                    Applicability::Maybe,
+                ));
+            }
+            None => {
+                d = d.with_suggestion(Suggestion::new(
+                    "annotate the declared type",
+                    vec![(insert_at, ": <type>".to_string())],
+                    Applicability::HasPlaceholders,
+                ));
+            }
+        }
+        self.diags.push(d);
+    }
+
+    fn fn_sig(&mut self, module: usize, file: usize, node: &GreenNode, name_span: Span) -> FnSig {
+        let d = FnDecl::cast(node).expect("kind");
+        let generics = generic_names(self, file, node);
+        let bounded = d
+            .generics()
+            .is_some_and(|g| g.params().any(|p| p.bound().is_some() || p.is_type_param()));
+        let mut params = Vec::new();
+        if let Some(list) = d.params() {
+            for p in list.params() {
+                if p.is_self() {
+                    // Free items never take `self`; impl members are
+                    // s17's method work and are not elaborated here.
+                    continue;
+                }
+                let pname = p
+                    .name()
+                    .map(|t| self.text(file, t.span))
+                    .unwrap_or_default();
+                let span = p.name().map(|t| t.span).unwrap_or(p.syntax().span);
+                let ty = match p.ty() {
+                    Some(t) => self.lower_type(module, file, &generics, t),
+                    None => {
+                        self.param_missing_annotation(&pname, span);
+                        self.table.error()
+                    }
+                };
+                params.push(ParamSig {
+                    name: pname,
+                    ty,
+                    span,
+                });
+            }
+        }
+        let (ret, ret_span) = match d.ret_ty() {
+            Some(r) => {
+                let base = r
+                    .ty()
+                    .map(|t| self.lower_type(module, file, &generics, t))
+                    .unwrap_or_else(|| self.table.error());
+                // An explicit `! {row}` also makes an error union; the
+                // row side stays opaque until s15 (D30).
+                let ty = if r.error_row().is_some() {
+                    self.table.intern(TyKind::ErrUnion(base))
+                } else {
+                    base
+                };
+                (ty, Some(r.syntax().span))
+            }
+            None => (self.table.unit(), None),
+        };
+        FnSig {
+            params,
+            ret,
+            name_span,
+            ret_span,
+            generics,
+            bounded,
+        }
+    }
+
+    fn param_missing_annotation(&mut self, name: &str, span: Span) {
+        let insert_at = Span::new(span.file, span.hi, span.hi);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0407,
+                span,
+                format!("the parameter `{name}` needs a type annotation"),
+            )
+            .with_label("no `: type` here")
+            .with_note(
+                "function signatures are the typing firewall (D27): parameters \
+                 always state their types; only closure parameters may take \
+                 theirs from context.",
+            )
+            .with_suggestion(Suggestion::new(
+                "annotate the parameter",
+                vec![(insert_at, ": <type>".to_string())],
+                Applicability::HasPlaceholders,
+            )),
+        );
+    }
+
+    /// Lower an AST type node to an interned type. `generics` are the
+    /// rigid names in scope.
+    pub(crate) fn lower_type(
+        &mut self,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        node: &GreenNode,
+    ) -> TyId {
+        match node.kind {
+            SyntaxKind::PathType => self.lower_path_type(module, file, generics, node),
+            SyntaxKind::ErrorUnionType => {
+                let inner = node
+                    .nodes()
+                    .find(|n| is_type_kind(n.kind))
+                    .map(|t| self.lower_type(module, file, generics, t))
+                    .unwrap_or_else(|| self.table.error());
+                self.table.intern(TyKind::ErrUnion(inner))
+            }
+            SyntaxKind::TupleType => {
+                let elems: Vec<TyId> = node
+                    .nodes()
+                    .filter(|n| is_type_kind(n.kind))
+                    .map(|t| self.lower_type(module, file, generics, t))
+                    .collect();
+                match elems.len() {
+                    0 => self.table.unit(),
+                    1 => elems[0], // `(T)` is grouping
+                    _ => self.table.intern(TyKind::Tuple(elems)),
+                }
+            }
+            SyntaxKind::FnType => {
+                let params: Vec<TyId> = node
+                    .nodes()
+                    .filter(|n| is_type_kind(n.kind))
+                    .map(|t| self.lower_type(module, file, generics, t))
+                    .collect();
+                let ret = match node.nodes().find_map(wolf_ast::RetType::cast) {
+                    Some(r) => {
+                        let base = r
+                            .ty()
+                            .map(|t| self.lower_type(module, file, generics, t))
+                            .unwrap_or_else(|| self.table.error());
+                        if r.error_row().is_some() {
+                            self.table.intern(TyKind::ErrUnion(base))
+                        } else {
+                            base
+                        }
+                    }
+                    None => self.table.unit(),
+                };
+                self.table.intern(TyKind::Fn(params, ret))
+            }
+            SyntaxKind::PtrType => {
+                let inner = self.lower_inner(module, file, generics, node);
+                self.table.intern(TyKind::Ptr(inner))
+            }
+            SyntaxKind::PrefixType => {
+                let inner = self.lower_inner(module, file, generics, node);
+                let kw = node.tokens().next().map(|t| t.kind);
+                let kind = match kw {
+                    Some(SyntaxKind::SharedKw) => TyKind::Shared(inner),
+                    Some(SyntaxKind::HandleKw) => TyKind::Handle(inner),
+                    Some(SyntaxKind::WeakKw) => TyKind::Weak(inner),
+                    Some(SyntaxKind::DistinctKw) => TyKind::Distinct(inner),
+                    _ => TyKind::Error,
+                };
+                self.table.intern(kind)
+            }
+            SyntaxKind::DynType => {
+                let path = node
+                    .child_node(SyntaxKind::Path)
+                    .map(|p| self.text(file, p.span))
+                    .unwrap_or_default();
+                self.table.intern(TyKind::Dyn(path))
+            }
+            SyntaxKind::RegionType => self.table.intern(TyKind::RegionTy),
+            SyntaxKind::TypeType => self.table.intern(TyKind::TypeTy),
+            _ => self.table.error(),
+        }
+    }
+
+    fn lower_inner(
+        &mut self,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        node: &GreenNode,
+    ) -> TyId {
+        node.nodes()
+            .find(|n| is_type_kind(n.kind))
+            .map(|t| self.lower_type(module, file, generics, t))
+            .unwrap_or_else(|| self.table.error())
+    }
+
+    fn lower_path_type(
+        &mut self,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        node: &GreenNode,
+    ) -> TyId {
+        let d = PathType::cast(node).expect("kind");
+        let segs: Vec<(String, Span)> = d
+            .path()
+            .map(|p| {
+                p.segments()
+                    .map(|t| (self.text(file, t.span), t.span))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let Some((first, _)) = segs.first().cloned() else {
+            return self.table.error();
+        };
+        let has_args = d.args().is_some_and(|a| a.args().next().is_some());
+
+        // `wrapping[uN]` — the one builtin type constructor (X3).
+        if first == "wrapping" && segs.len() == 1 {
+            if let Some(args) = d.args() {
+                let arg_tys: Vec<TyId> = args
+                    .args()
+                    .filter(|a| is_type_kind(a.kind))
+                    .map(|a| self.lower_type(module, file, generics, a))
+                    .collect();
+                if arg_tys.len() == 1
+                    && matches!(self.table.kind(arg_tys[0]), TyKind::Prim(p) if p.is_integer())
+                {
+                    return self.table.intern(TyKind::Wrapping(arg_tys[0]));
+                }
+            }
+            return self.opaque(file, node);
+        }
+
+        if segs.len() == 1 && !has_args {
+            if generics.contains(&first) {
+                return self.table.intern(TyKind::Rigid(first));
+            }
+            if let Some(p) = Prim::from_name(&first) {
+                return self.table.prim(p);
+            }
+        }
+
+        // Resolve the head: imports first (file-scoped), then module
+        // items — mirroring the resolver's order.
+        let target = self.resolve_type_head(module, file, &segs);
+        match target {
+            TypeHead::Item { module: tm, name } => {
+                if has_args {
+                    return self.opaque(file, node);
+                }
+                self.named_item_type(tm, &name, file, node)
+            }
+            TypeHead::Unknown => {
+                if generics.contains(&first) || Prim::from_name(&first).is_some() {
+                    // qualified/applied builtin form — not a s13 type
+                    self.opaque(file, node)
+                } else {
+                    // Resolution already reported unresolved names; a
+                    // prelude collection name lands here too.
+                    self.opaque(file, node)
+                }
+            }
+            TypeHead::Poisoned => self.table.error(),
+        }
+    }
+
+    fn resolve_type_head(&self, module: usize, file: usize, segs: &[(String, Span)]) -> TypeHead {
+        let first = &segs[0].0;
+        for b in bindings_for(self.pkg, module, file) {
+            if b.name == *first {
+                return match &b.target {
+                    BindTarget::PkgModule(m) => match segs.get(1) {
+                        Some((member, _)) if segs.len() == 2 => TypeHead::Item {
+                            module: *m,
+                            name: member.clone(),
+                        },
+                        _ => TypeHead::Unknown,
+                    },
+                    BindTarget::Item { module, name } if segs.len() == 1 => TypeHead::Item {
+                        module: *module,
+                        name: name.clone(),
+                    },
+                    BindTarget::Poisoned => TypeHead::Poisoned,
+                    _ => TypeHead::Unknown,
+                };
+            }
+        }
+        if segs.len() == 1 && self.pkg.tables[module].get(first).is_some() {
+            return TypeHead::Item {
+                module,
+                name: first.clone(),
+            };
+        }
+        TypeHead::Unknown
+    }
+
+    /// A path that resolved to a module item used as a type.
+    fn named_item_type(
+        &mut self,
+        module: usize,
+        name: &str,
+        file: usize,
+        node: &GreenNode,
+    ) -> TyId {
+        let Some(item) = self.pkg.tables[module].get(name) else {
+            return self.table.error();
+        };
+        let inode = item_node(self.pkg, item);
+        match inode.kind {
+            SyntaxKind::StructDecl | SyntaxKind::EnumDecl => self.table.intern(TyKind::Nominal {
+                module: module as u32,
+                name: name.to_string(),
+            }),
+            SyntaxKind::TypeDecl => {
+                let d = TypeDecl::cast(inode).expect("kind");
+                let generic = d.generics().is_some_and(|g| g.params().next().is_some());
+                match d.def() {
+                    Some(def)
+                        if matches!(def.kind, SyntaxKind::StructDef | SyntaxKind::EnumDef) =>
+                    {
+                        self.table.intern(TyKind::Nominal {
+                            module: module as u32,
+                            name: name.to_string(),
+                        })
+                    }
+                    Some(def) if !generic => {
+                        // Alias expansion, in the alias's own context,
+                        // with a cycle guard.
+                        let key = (module, name.to_string());
+                        if self.alias_stack.contains(&key) {
+                            return self.table.error();
+                        }
+                        self.alias_stack.push(key);
+                        let t = self.lower_type(module, item.file, &[], def);
+                        self.alias_stack.pop();
+                        t
+                    }
+                    _ => self.opaque(file, node),
+                }
+            }
+            _ => self.opaque(file, node),
+        }
+    }
+
+    /// The opaque fallback: keep the source rendering (whitespace
+    /// normalized) so identical spellings stay equal and every
+    /// operation on the value is NotYetCheckable.
+    fn opaque(&mut self, file: usize, node: &GreenNode) -> TyId {
+        let text = self.text(file, node.span);
+        let norm = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        self.table.intern(TyKind::Unsupported(norm))
+    }
+}
+
+enum TypeHead {
+    Item { module: usize, name: String },
+    Unknown,
+    Poisoned,
+}
+
+/// A literal-initializer type for the E0407 hint ("the compiler knows").
+fn literal_type_hint(node: &GreenNode) -> Option<&'static str> {
+    let init = node.nodes().find(|n| wolf_ast::is_expr_kind(n.kind))?;
+    match init.kind {
+        SyntaxKind::StringExpr => Some("str"),
+        SyntaxKind::LiteralExpr => {
+            let t = init.tokens().next()?;
+            match t.kind {
+                SyntaxKind::Int => Some("int"),
+                SyntaxKind::Float => Some("f64"),
+                SyntaxKind::TrueKw | SyntaxKind::FalseKw => Some("bool"),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Generic parameter names of an item node (empty if none).
+fn generic_names(lower: &Lower<'_>, file: usize, node: &GreenNode) -> Vec<String> {
+    node.nodes()
+        .find_map(wolf_ast::GenericParamList::cast)
+        .map(|g| {
+            g.params()
+                .filter_map(|p| p.name().map(|t| lower.text(file, t.span)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::{AliasTable, MemoryLoader, load_package};
+    use crate::types::render;
+
+    fn pkg(files: &[(&[&str], &str, &str)]) -> Package {
+        let mut ml = MemoryLoader::new("t");
+        for (m, n, s) in files {
+            ml.add_file(m, n, s);
+        }
+        load_package(&mut ml, &AliasTable::default()).expect("loads")
+    }
+
+    fn no_vars(_: u32) -> Result<TyId, &'static str> {
+        Err("_")
+    }
+
+    #[test]
+    fn fn_signatures_elaborate_to_interned_types() {
+        let p = pkg(&[(
+            &[],
+            "main.lu",
+            "fn area(w: int, h: int) -> int { w * h }\nfn main() -> !int { area(2, 3) }\n",
+        )]);
+        let sigs = build_sigs(&p);
+        let ItemSig::Fn(f) = sigs.get(0, "area").expect("area") else {
+            panic!("fn sig")
+        };
+        assert_eq!(f.params.len(), 2);
+        assert_eq!(render(&sigs.table, f.ret, &no_vars), "int");
+        let ItemSig::Fn(m) = sigs.get(0, "main").expect("main") else {
+            panic!("fn sig")
+        };
+        assert_eq!(render(&sigs.table, m.ret, &no_vars), "!int");
+        assert!(sigs.diagnostics.is_empty(), "{:?}", sigs.diagnostics);
+    }
+
+    #[test]
+    fn cross_module_types_are_nominal_and_shared() {
+        let p = pkg(&[
+            (
+                &[],
+                "main.lu",
+                "use geometry\nfn go(c: geometry.Circle) -> f64 { 0.0 }\nfn main() -> !int { 0 }\n",
+            ),
+            (
+                &["geometry"],
+                "shapes.lu",
+                "pub struct Circle { pub r: f64 }\n",
+            ),
+        ]);
+        let sigs = build_sigs(&p);
+        let ItemSig::Fn(f) = sigs.get(0, "go").expect("go") else {
+            panic!("fn sig")
+        };
+        assert!(matches!(
+            sigs.table.kind(f.params[0].ty),
+            TyKind::Nominal { .. }
+        ));
+    }
+
+    #[test]
+    fn generic_instantiations_stay_opaque() {
+        let p = pkg(&[(
+            &[],
+            "main.lu",
+            "struct Big { data: List[int] }\nfn main() -> !int { 0 }\n",
+        )]);
+        let sigs = build_sigs(&p);
+        let ItemSig::Struct(s) = sigs.get(0, "Big").expect("Big") else {
+            panic!("struct sig")
+        };
+        assert!(matches!(
+            sigs.table.kind(s.fields[0].ty),
+            TyKind::Unsupported(t) if t == "List[int]"
+        ));
+    }
+
+    #[test]
+    fn missing_global_annotation_is_e0407_with_fixit() {
+        let p = pkg(&[(
+            &[],
+            "main.lu",
+            "let banner = \"hi\"\nfn main() -> !int { 0 }\n",
+        )]);
+        let sigs = build_sigs(&p);
+        assert_eq!(sigs.diagnostics.len(), 1);
+        let d = &sigs.diagnostics[0];
+        assert_eq!(d.code, codes::E0407);
+        assert!(d.suggestions[0].message.contains("str"), "{d:?}");
+    }
+
+    #[test]
+    fn wrapping_is_a_builtin_integer_constructor() {
+        let p = pkg(&[(
+            &[],
+            "main.lu",
+            "fn spin(h: wrapping[u32]) -> wrapping[u32] { h }\nfn main() -> !int { 0 }\n",
+        )]);
+        let sigs = build_sigs(&p);
+        let ItemSig::Fn(f) = sigs.get(0, "spin").expect("spin") else {
+            panic!("fn sig")
+        };
+        assert!(matches!(
+            sigs.table.kind(f.params[0].ty),
+            TyKind::Wrapping(_)
+        ));
+        assert!(sigs.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn alias_expansion_and_cycle_guard() {
+        let p = pkg(&[(
+            &[],
+            "main.lu",
+            "type Meters = f64\ntype A = B\ntype B = A\nfn len(m: Meters) -> f64 { m }\nfn spin(a: A) -> int { 0 }\nfn main() -> !int { 0 }\n",
+        )]);
+        let sigs = build_sigs(&p);
+        let ItemSig::Fn(f) = sigs.get(0, "len").expect("len") else {
+            panic!("fn sig")
+        };
+        assert_eq!(render(&sigs.table, f.params[0].ty, &no_vars), "f64");
+        let ItemSig::Fn(s) = sigs.get(0, "spin").expect("spin") else {
+            panic!("fn sig")
+        };
+        assert!(matches!(sigs.table.kind(s.params[0].ty), TyKind::Error));
+    }
+}

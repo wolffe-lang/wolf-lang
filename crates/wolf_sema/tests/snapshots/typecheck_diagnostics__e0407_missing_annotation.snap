@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: out
+---
+error[E0407]: the let `banner` is an item, so it must declare its type
+ --> mem:///main.lu:1:5
+  |
+1 | let banner = "hello"
+  |     ^^^^^^ no `: type` annotation
+  |
+  = note: items are the typing firewall (D27): types are inferred inside function bodies, never
+    across item boundaries.
+help: the initializer makes it `str` — write that down
+  |
+1 | let banner: str = "hello"
+  |

@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `fn(int, str, int) -> int`, but `fold` needs its 1st argument to be `fn(int, str, bool) -> int`
+  --> mem:///main.lu:10:10
+   |
+ 1 | fn fold(step: fn(int, str, bool) -> int, seed: int) -> int {
+   |         ---- the parameter is declared here
+...
+10 |     fold(step3, 0)
+   |          ^^^^^ found `fn(int, str, int) -> int` here
+   |
+   = note: expected `fn(int, str, bool) -> int`, found `fn(int, str, int) -> int`
+   = note: the types differ in parameter 3: `bool` vs `int`

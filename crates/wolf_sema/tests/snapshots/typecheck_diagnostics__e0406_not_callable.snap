@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0406]: the type `Point` is not a function, so it cannot be called
+ --> mem:///main.lu:7:13
+  |
+7 |     let p = Point(1, 2)
+  |             ^^^^^ called here
+  |
+  = note: only functions and closures accept `(…)`; construct a struct with `Name { field: value
+    }` braces instead.

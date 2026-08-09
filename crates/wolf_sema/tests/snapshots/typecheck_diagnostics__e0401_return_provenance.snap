@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `str`, but `answer` must return `int`
+ --> mem:///main.lu:2:5
+  |
+1 | fn answer() -> int {
+  |             ------ the return type is declared here
+2 |     "forty-two"
+  |     ^^^^^^^^^^^ found `str` here
+  |
+  = note: expected `int`, found `str`
