@@ -2,6 +2,7 @@
 //! The binary (`main.rs`) is a thin command dispatcher over this.
 
 pub mod corpus;
+pub mod protocol;
 pub mod recognize;
 pub mod spec;
 pub mod speclex;

@@ -37,6 +37,8 @@ pub fn link_check(docs: &[(&str, &str)]) -> Vec<String> {
             "mem" => Some("02-memory-model.md"),
             "conc" => Some("03-concurrency.md"),
             "abi" => Some("04-abi.md"),
+            "conf" => Some("05-conformance.md"),
+            "proto" => Some("06-differential-protocol.md"),
             _ => None, // corpus-tag namespaces (str.*, err.*, …) are s06's
         }
     };
@@ -89,6 +91,38 @@ fn anchors_in(body: &str) -> Vec<String> {
     }
     out
 }
+
+/// Build the anchor registry: every anchor appearing in its OWNING
+/// document is a definition ([conf.anchor.index]).
+pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for (file, body) in docs {
+        for anchor in anchors_in(body) {
+            let prefix = anchor.split('.').next().unwrap_or("");
+            let owns = matches!(
+                (prefix, *file),
+                ("gram", "01-grammar.md")
+                    | ("mem", "02-memory-model.md")
+                    | ("conc", "03-concurrency.md")
+                    | ("abi", "04-abi.md")
+                    | ("conf", "05-conformance.md")
+                    | ("proto", "06-differential-protocol.md")
+            );
+            if owns {
+                out.insert(anchor, file.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// Registered namespaces resolve against the anchor index; reserved
+/// forward namespaces are legal-but-unresolvable ([conf.anchor.ns]).
+pub const REGISTERED_NS: [&str; 6] = ["gram", "mem", "conc", "abi", "conf", "proto"];
+pub const FORWARD_NS: [&str; 13] = [
+    "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",
+    "mod", "std",
+];
 
 #[cfg(test)]
 mod tests {

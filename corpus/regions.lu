@@ -1,6 +1,6 @@
 //! check: run(exit=0)
 //! phase: none
-//! conforms: mem.region.block, mem.region.value, mem.region.freeze, mem.shared, mem.handle
+//! conforms: mem.region.create.1, mem.region.create.3, mem.region.freeze.1, mem.region.intra.1, mem.shared.handle.1
 //!
 //! The memory model's surface (D10, X4, X5): block-sugar scratch regions,
 //! first-class region values with per-region strategy, `freeze` to shared

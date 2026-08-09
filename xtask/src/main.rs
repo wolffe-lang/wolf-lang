@@ -20,9 +20,11 @@ fn main() -> ExitCode {
         Some("dist") => dist(),
         Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
         Some("recognize") => recognize_cmd(),
+        Some("conformance") => conformance_cmd(&args[1..]),
+        Some("differ") => differ_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|recognize>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|recognize|conformance|differ>"
             );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
@@ -51,6 +53,8 @@ fn ci() -> ExitCode {
         ("corpus", &["xtask", "corpus"]),
         ("spec-extract", &["xtask", "spec-extract", "--check"]),
         ("recognize", &["xtask", "recognize"]),
+        ("conformance", &["xtask", "conformance"]),
+        ("differ-self", &["xtask", "differ", "--self"]),
     ];
     for (name, args) in steps {
         eprintln!("== xtask ci: {name}");
@@ -458,6 +462,8 @@ fn spec_extract(check: bool) -> ExitCode {
         "02-memory-model.md",
         "03-concurrency.md",
         "04-abi.md",
+        "05-conformance.md",
+        "06-differential-protocol.md",
     ];
     let bodies: Vec<(String, String)> = names
         .iter()
@@ -477,6 +483,30 @@ fn spec_extract(check: bool) -> ExitCode {
             eprintln!("spec-extract: {e}");
         }
         return ExitCode::FAILURE;
+    }
+    // anchors.json — the machine-readable clause registry [conf.anchor.index]
+    let index = xtask::spec::anchor_index(&docs);
+    let anchors_json = serde_json::to_string_pretty(&serde_json::json!({
+        "version": 1,
+        "anchors": index,
+    }))
+    .expect("serialize anchors")
+        + "\n";
+    let anchors_path = Path::new("spec/anchors.json");
+    if check {
+        let on_disk = std::fs::read_to_string(anchors_path).unwrap_or_default();
+        if on_disk != anchors_json {
+            eprintln!(
+                "spec-extract: spec/anchors.json OUT OF SYNC — run `cargo xtask spec-extract`"
+            );
+            return ExitCode::FAILURE;
+        }
+    } else {
+        std::fs::write(anchors_path, &anchors_json).expect("write anchors.json");
+        eprintln!(
+            "spec-extract: wrote spec/anchors.json ({} anchors)",
+            index.len()
+        );
     }
     let md = std::fs::read_to_string("spec/01-grammar.md").expect("read spec/01-grammar.md");
     let extracted = xtask::spec::extract_ebnf(&md);
@@ -575,6 +605,196 @@ fn recognize_cmd() -> ExitCode {
         bad
     );
     if bad > 0 {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+// ----------------------------------------------------------- conformance --
+
+/// Tag validity + coverage report ([conf.tag], [conf.cover]). Gates on
+/// validity; coverage is informational (the debt list).
+fn conformance_cmd(args: &[String]) -> ExitCode {
+    let out_path = args
+        .iter()
+        .find_map(|a| a.strip_prefix("--out="))
+        .map(PathBuf::from);
+    let anchors: serde_json::Value = match std::fs::read_to_string("spec/anchors.json") {
+        Ok(s) => serde_json::from_str(&s).expect("anchors.json parses"),
+        Err(e) => {
+            eprintln!("conformance: read spec/anchors.json: {e} (run spec-extract)");
+            return ExitCode::FAILURE;
+        }
+    };
+    let registry = anchors["anchors"].as_object().expect("anchors map");
+    let mut files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut files);
+    files.sort();
+    let mut bad = 0u32;
+    let mut forward = 0u32;
+    let mut untagged = Vec::new();
+    let mut tests_per_clause: BTreeMap<String, u32> = BTreeMap::new();
+    for f in &files {
+        let src = std::fs::read_to_string(f).expect("read corpus file");
+        let d = match corpus::parse_directives(&src) {
+            Ok(d) => d,
+            Err(_) => continue, // xtask corpus owns directive errors
+        };
+        let litmus = ["grammar", "memory", "conc"]
+            .iter()
+            .any(|t| f.starts_with(Path::new("corpus").join(t)));
+        if d.conforms.is_empty() {
+            if litmus {
+                eprintln!(
+                    "conformance: {}: litmus file missing `conforms:`",
+                    f.display()
+                );
+                bad += 1;
+            } else {
+                untagged.push(f.clone());
+            }
+            continue;
+        }
+        for tag in &d.conforms {
+            let ns = tag.split('.').next().unwrap_or("");
+            if xtask::spec::REGISTERED_NS.contains(&ns) {
+                if registry.contains_key(tag) {
+                    *tests_per_clause.entry(tag.clone()).or_default() += 1;
+                } else {
+                    eprintln!(
+                        "conformance: {}: unknown anchor `{tag}` (not in anchors.json)",
+                        f.display()
+                    );
+                    bad += 1;
+                }
+            } else if xtask::spec::FORWARD_NS.contains(&ns) {
+                forward += 1;
+            } else {
+                eprintln!(
+                    "conformance: {}: tag `{tag}` in unregistered namespace `{ns}`",
+                    f.display()
+                );
+                bad += 1;
+            }
+        }
+    }
+    let covered = tests_per_clause.len();
+    let total = registry.len();
+    eprintln!(
+        "conformance: {} anchors, {} covered ({} debt), {} forward tags, {} untagged non-litmus files",
+        total,
+        covered,
+        total - covered,
+        forward,
+        untagged.len()
+    );
+    if let Some(out) = out_path {
+        let commit = git_short_sha();
+        let mut body = String::new();
+        for (clause, owner) in registry {
+            let tests = tests_per_clause.get(clause.as_str()).copied().unwrap_or(0);
+            let status = if tests > 0 { "covered" } else { "debt" };
+            let _ = owner;
+            body.push_str(
+                &serde_json::json!({
+                    "clause": clause, "tests": tests, "status": status, "commit": commit,
+                })
+                .to_string(),
+            );
+            body.push('\n');
+        }
+        if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).expect("mkdir conformance out dir");
+        }
+        std::fs::write(&out, body).expect("write conformance report");
+        eprintln!("conformance: report -> {}", out.display());
+    }
+    if bad > 0 {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+// ---------------------------------------------------------------- differ --
+
+/// Reference differential harness ([proto.harness.differ]).
+fn differ_cmd(args: &[String]) -> ExitCode {
+    let (cmd_a, cmd_b): (String, String) = if args.iter().any(|a| a == "--self") {
+        if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+            eprintln!("differ: failed to build wolf");
+            return ExitCode::FAILURE;
+        }
+        ("target/debug/wolf".into(), "target/debug/wolf".into())
+    } else {
+        let free: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+        let [a, b] = free.as_slice() else {
+            eprintln!("differ: need <implA-cmd> <implB-cmd> (or --self)");
+            return ExitCode::from(2);
+        };
+        ((*a).clone(), (*b).clone())
+    };
+    let conform_run = |cmd: &str, file: &Path| -> Result<serde_json::Value, String> {
+        let parts: Vec<&str> = cmd.split_whitespace().collect();
+        let out = Command::new(parts[0])
+            .args(&parts[1..])
+            .args(["conform-run"])
+            .arg(file)
+            .arg("--json")
+            .output()
+            .map_err(|e| format!("spawn {cmd}: {e}"))?;
+        if !out.status.success() {
+            return Err(format!("{cmd}: conform-run exited nonzero"));
+        }
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("{cmd}: bad record: {e}"))
+    };
+    let mut files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut files);
+    files.sort();
+    let mut divergences = 0u32;
+    let mut unsupported = 0u32;
+    for f in &files {
+        let (ra, rb) = match (conform_run(&cmd_a, f), conform_run(&cmd_b, f)) {
+            (Ok(a), Ok(b)) => (a, b),
+            (Err(e), _) | (_, Err(e)) => {
+                eprintln!("differ: {}: {e}", f.display());
+                divergences += 1;
+                continue;
+            }
+        };
+        for (name, r) in [("A", &ra), ("B", &rb)] {
+            if let Err(e) = xtask::protocol::validate_record(r) {
+                eprintln!("differ: {}: impl {name} record invalid: {e}", f.display());
+                divergences += 1;
+            }
+        }
+        let structural =
+            !ra["seeded"].as_bool().unwrap_or(false) || !rb["seeded"].as_bool().unwrap_or(false);
+        if ra["verdict"] == serde_json::json!("unsupported")
+            || rb["verdict"] == serde_json::json!("unsupported")
+        {
+            unsupported += 1;
+        }
+        if let Some((class, detail)) = xtask::protocol::compare(&ra, &rb, structural) {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "file": f.display().to_string(),
+                    "class": format!("{class:?}"),
+                    "detail": detail,
+                })
+            );
+            divergences += 1;
+        }
+    }
+    eprintln!(
+        "differ: {} file(s), {} divergence(s), {} in conservatism ledger (unsupported)",
+        files.len(),
+        divergences,
+        unsupported
+    );
+    if divergences > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
