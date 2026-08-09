@@ -37,6 +37,17 @@ two comparisons out and join them: `a < b && b < c`.
 
 Fixtures: crates/wolf_parse/tests/snapshots/broken_suite__cmp_chain.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0003_comparison_chain.snap
 
+## E0004 — a float exponent written as member access
+
+`1.e5` is not a float in wolf: a float literal needs digits on both
+sides of the dot, so `1.e5` parses as the member `e5` accessed on the
+integer `1` — and integers have no such member. The exponent form you
+meant spells the fraction out: `1.0e5`. Write digits after the dot
+(`1.0e5`, `2.5e-3`) and the literal lexes as one float token; the
+suggested edit does exactly that ([gram.amb.intdot]).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__intdot_exponent.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0004_float_exponent.snap
+
 ## E0005 — `else` may not start a new line
 
 The newline after the `}` of the then-block ends the `if` statement, so
@@ -302,6 +313,19 @@ the offset explicitly instead.)
 
 Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__suggestion_edit_preview.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0209_negative_index.snap, crates/wolf_parse/tests/snapshots/render__render_e0209.snap
 
+## E0210 — a moded receiver outside receiver position
+
+`(mut x)` and `(take x)` are receiver spellings, not expressions: they
+exist so a call to a `mut self` or `take self` method names its
+exclusive or consuming access at the call site — `(mut p).norm()` —
+mirroring the argument modes of `f(mut x)` (X1). Detached from a
+method call the mode marks nothing, so the grammar rejects it
+anywhere a `.` does not follow the closing parenthesis. Delete the
+mode to get a plain parenthesized expression, or complete the method
+call the receiver was written for ([gram.expr.primary]).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__receiver_moded.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__receiver_moded.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__receiver_moded.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0210_moded_receiver.snap
+
 ## E0301 — nothing with this name is in scope
 
 Wolf could not find anything with this name: it is not a local binding,
@@ -400,7 +424,7 @@ of making you eyeball two long renderings. Note that wolf never
 converts numbers implicitly — `int` and `i64` are simply different
 types, and the fix is an explicit `as` conversion.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
@@ -427,7 +451,7 @@ Methods are looked up separately from fields (s17 method resolution):
 if you meant to *call* something, the parentheses matter — `p.len` is
 a field access, `p.len()` is a method call.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0403_unknown_method.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap
 
 ## E0404 — this would be an infinite type
 
@@ -727,7 +751,7 @@ do it explicitly: handle the error (`else |err| …`) and raise your own
 tag. Functions with an inferred row (`-> !T`, private only) never hit
 this error — their rows grow to fit their bodies.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__missing_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_large_rows.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_missing_tag.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__missing_tag.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__open_into_closed.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_large_rows.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_missing_tag.snap
 
 ## E0603 — `?` needs a fallible operand
 
@@ -944,6 +968,109 @@ asserted condition true, or delete the assertion if the invariant was
 wrong.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__assert_static.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0710_assert.snap
+
+## E0801 — this `match` does not cover every case
+
+A `match` used in wolf must handle every value its scrutinee can be —
+there is no implicit fall-through and no runtime "no arm matched"
+error, so the checker proves coverage up front and names concrete
+values that slip past every arm ("`Timeout` not covered", "not
+covered: `2`"). Arms with `if` guards do not count toward coverage:
+a guard can be false, so only unguarded arms prove anything. Add arms
+for the listed witnesses, or end the `match` with a `_` arm (or a
+binding) to catch the rest deliberately.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap
+
+## E0802 — this `match` arm can never match
+
+The arms before this one already cover every value its pattern
+accepts, so the arm is dead: its body will never run, which usually
+means an arm is out of order, a pattern is broader than intended, or
+a case was written twice. The diagnostic points at the earlier arm
+that swallows this one. Delete the unreachable arm, or reorder the
+arms so the more specific pattern comes first. (This is a warning:
+the program still compiles and its meaning is unchanged.)
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_unreachable.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_duplicate_literal.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_unreachable_arm.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
+
+## E0803 — more than one trait in scope provides this method
+
+`recv.method(…)` resolves through the traits in scope, and two or
+more of them declare a method with this name that the receiver's type
+implements — wolf will not pick one by precedence, because trait
+namespaces are isolated by design (D28) and a silent winner would
+change meaning when imports change. Say which trait you mean with the
+qualified form the suggestion offers: `Trait.method(recv, …)`. The
+qualified call is always available and never ambiguous.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_ambiguous.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0803_two_traits.snap
+
+## E0804 — the receiver's mode disagrees with the method's declaration
+
+A method declares how it takes `self` — `mut self` needs exclusive
+access, `take self` consumes the value — and the call site must say
+so where the reader can see it, exactly like argument modes (X1):
+`(mut p).norm()`, `(take conn).close()`. A bare receiver calls only
+`read self` methods; conversely, a `read self` method takes no mode.
+Wrap the receiver in the declared mode — the suggested edit inserts
+`(mut …)`/`(take …)` for you — or drop the mode the method does not
+ask for. Whether the access is actually exclusive is checked by the
+memory tiers (c04); this rule is the syntax law only.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_bare_mut_receiver.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_superfluous_mode.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_wrong_mode.snap
+
+## E0805 — this `as` cast is outside the cast set
+
+`as` converts within a closed set: between numeric types (integers,
+floats, `wrapping[T]` — explicitly, since wolf never converts numbers
+implicitly), and between an adapter type (`type X = distinct B`) and
+its base, which share a layout so the cast is free both ways. Nothing
+else casts: `as` is not a parser of strings, not a truthiness bridge
+from `bool`, and not a reinterpretation of unrelated types. Build the
+value you need with the operation that names it — interpolation for
+strings ("{x}"), a comparison for `bool` (`x != 0`), a constructor or
+conversion function for everything else.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__cast_bad.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0805_bool_to_int.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0805_str_to_int.snap
+
+## E0806 — a refutable pattern where matching cannot fail
+
+`let`, `var`, `for`, and parameters bind unconditionally — there is
+no "else" branch there, so their pattern must accept every value of
+the initializer's type. A pattern that can *fail* to match (a
+literal, an enum variant, an error-row tag) needs somewhere for the
+other values to go: that place is `match`. Move the test into a
+`match` (or an `if` on the value), keeping only irrefutable patterns
+— names, `_`, and tuples of those — in binding position.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__refutable_let.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0806_refutable_let.snap
+
+## E0807 — the method exists, but its trait is not in scope
+
+Method calls resolve through the traits *in scope* — defined in this
+module or brought in with `use` — so an implemented method still does
+not resolve when its trait was never imported: visible resolution is
+what keeps a new dependency from silently changing what `.method()`
+means (D28). The suggestion adds the `use` for the one trait that
+declares this method; after that the call resolves normally. The
+qualified form `Trait.method(recv, …)` works too, and needs the same
+import.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_scope__main.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0807_out_of_scope.snap
+
+## E0808 — the pattern does not fit the shape of the value
+
+A pattern mirrors the value it deconstructs, piece for piece: an enum
+variant or error tag with a payload is matched as `Name(pat, …)` with
+exactly as many sub-patterns as the payload has parts, a payload-less
+one as bare `Name`, and a tuple pattern needs the scrutinee to be a
+tuple of that width. This pattern binds a different number of pieces
+than the value carries, so it can never be checked against it. Match
+the declared shape — the diagnostic names it — adding `_` for pieces
+you do not need.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_shape.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_payload_arity.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
 
 ## W0301 — file only partially formatted: syntax errors present
 
