@@ -482,6 +482,7 @@ dependencies = [
 name = "wolf_parse"
 version = "0.0.1"
 dependencies = [
+ "insta",
  "wolf_ast",
  "wolf_diag",
  "wolf_lex",
