@@ -40,4 +40,11 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "parse_mutated"
+path = "fuzz_targets/parse_mutated.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

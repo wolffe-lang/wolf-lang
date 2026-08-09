@@ -1,4 +1,6 @@
-//! s08 parser fuzz target. Parsing is TOTAL: arbitrary bytes in, a
+//! Parser fuzz target (s08 declarations; the s09 expression/statement
+//! grammar parses through the same entry point, so this target now
+//! exercises the full surface). Parsing is TOTAL: arbitrary bytes in, a
 //! complete lossless tree + diagnostics out. Asserted invariants (beyond
 //! "no panic"): the tree verifier passes (token tiling, span nesting)
 //! and tree text reproduces the input byte-for-byte. Seeds live in
