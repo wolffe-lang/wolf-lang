@@ -452,6 +452,32 @@ fn fuzz_smoke() -> ExitCode {
 /// Extract the normative EBNF from spec/01-grammar.md into
 /// spec/grammar.ebnf; `--check` verifies sync instead of writing (CI).
 fn spec_extract(check: bool) -> ExitCode {
+    // link pass first: dangling cross-references fail regardless of mode
+    let names = [
+        "01-grammar.md",
+        "02-memory-model.md",
+        "03-concurrency.md",
+        "04-abi.md",
+    ];
+    let bodies: Vec<(String, String)> = names
+        .iter()
+        .filter_map(|n| {
+            std::fs::read_to_string(Path::new("spec").join(n))
+                .ok()
+                .map(|b| (n.to_string(), b))
+        })
+        .collect();
+    let docs: Vec<(&str, &str)> = bodies
+        .iter()
+        .map(|(n, b)| (n.as_str(), b.as_str()))
+        .collect();
+    let link_errors = xtask::spec::link_check(&docs);
+    if !link_errors.is_empty() {
+        for e in &link_errors {
+            eprintln!("spec-extract: {e}");
+        }
+        return ExitCode::FAILURE;
+    }
     let md = std::fs::read_to_string("spec/01-grammar.md").expect("read spec/01-grammar.md");
     let extracted = xtask::spec::extract_ebnf(&md);
     let out = Path::new("spec/grammar.ebnf");

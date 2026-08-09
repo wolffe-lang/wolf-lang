@@ -26,6 +26,70 @@ pub fn extract_ebnf(md: &str) -> String {
     out
 }
 
+/// Cross-reference link pass (s05): every `[prefix.…]` anchor cited in any
+/// spec document must exist verbatim in the document that owns the prefix.
+/// Ownership map: gram→01, mem→02, conc→03, abi→04.
+pub fn link_check(docs: &[(&str, &str)]) -> Vec<String> {
+    let owner = |anchor: &str| -> Option<&'static str> {
+        let prefix = anchor.split('.').next().unwrap_or("");
+        match prefix {
+            "gram" => Some("01-grammar.md"),
+            "mem" => Some("02-memory-model.md"),
+            "conc" => Some("03-concurrency.md"),
+            "abi" => Some("04-abi.md"),
+            _ => None, // corpus-tag namespaces (str.*, err.*, …) are s06's
+        }
+    };
+    let mut errors = Vec::new();
+    for (file, body) in docs {
+        for anchor in anchors_in(body) {
+            let Some(owner_file) = owner(&anchor) else {
+                continue;
+            };
+            let Some((_, owner_body)) = docs.iter().find(|(n, _)| *n == owner_file) else {
+                errors.push(format!(
+                    "{file}: [{anchor}] cites missing document {owner_file}"
+                ));
+                continue;
+            };
+            if !owner_body.contains(&format!("[{anchor}]")) {
+                errors.push(format!(
+                    "{file}: dangling cross-reference [{anchor}] (not defined in {owner_file})"
+                ));
+            }
+        }
+    }
+    errors.sort();
+    errors.dedup();
+    errors
+}
+
+/// All `[a.b.c]`-shaped anchors in a document (dotted, lowercase-alnum).
+fn anchors_in(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = body.as_bytes();
+    let mut i = 0;
+    while let Some(open) = body[i..].find('[').map(|o| i + o) {
+        let Some(close) = body[open..].find(']').map(|c| open + c) else {
+            break;
+        };
+        let inner = &body[open + 1..close];
+        let dotted = inner.contains('.')
+            && !inner.contains(' ')
+            && inner
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-');
+        if dotted {
+            out.push(inner.to_string());
+        }
+        i = close + 1;
+        if i >= bytes.len() {
+            break;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,5 +105,16 @@ mod tests {
         let a = got.find("A ::=").unwrap();
         let b = got.find("B ::=").unwrap();
         assert!(a < b);
+    }
+
+    #[test]
+    fn link_check_finds_dangling() {
+        let docs = [
+            ("02-memory-model.md", "- `[mem.a.1]` rule; see [conc.x.9]."),
+            ("03-concurrency.md", "- `[conc.b.2]` rule cites [mem.a.1]."),
+        ];
+        let errs = link_check(&docs);
+        assert_eq!(errs.len(), 1, "{errs:?}");
+        assert!(errs[0].contains("conc.x.9"));
     }
 }
