@@ -3,64 +3,64 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 139..244
-  FnDecl 139..179
-    FnKw 139..141 "fn"
-    WhenKw 142..146 "when"
-    ParamList 146..162
-      LParen 146..147 "("
-      Param 147..153
-        Ident 147..148 "a"
-        Colon 148..149 ":"
-        PathType 150..153
-          Path 150..153
-            Ident 150..153 "int"
-      Comma 153..154 ","
-      Param 155..161
-        Ident 155..156 "b"
-        Colon 156..157 ":"
-        PathType 158..161
-          Path 158..161
-            Ident 158..161 "int"
-      RParen 161..162 ")"
-    RetType 163..169
-      Arrow 163..165 "->"
-      PathType 166..169
-        Path 166..169
-          Ident 166..169 "int"
-    Block 170..179
-      LBrace 170..171 "{"
-      ExprStmt 172..177
-        BinExpr 172..177
-          PathExpr 172..173
-            Ident 172..173 "a"
-          Plus 174..175 "+"
-          PathExpr 176..177
-            Ident 176..177 "b"
-      RBrace 178..179 "}"
-  Term 219..220 "\n"
-  FnDecl 220..243
-    FnKw 220..222 "fn"
-    Ident 223..227 "main"
-    ParamList 227..229
-      LParen 227..228 "("
-      RParen 228..229 ")"
-    RetType 230..237
-      Arrow 230..232 "->"
-      ErrorUnionType 233..237
-        Not 233..234 "!"
-        PathType 234..237
-          Path 234..237
-            Ident 234..237 "int"
-    Block 238..243
-      LBrace 238..239 "{"
-      ExprStmt 240..241
-        LiteralExpr 240..241
-          Int 240..241 "0"
-      RBrace 242..243 "}"
-  Term 243..244 "\n"
-  Eof 244..244 ""
+SourceFile 140..246
+  FnDecl 140..180
+    FnKw 140..142 "fn"
+    WhenKw 143..147 "when"
+    ParamList 147..163
+      LParen 147..148 "("
+      Param 148..154
+        Ident 148..149 "a"
+        Colon 149..150 ":"
+        PathType 151..154
+          Path 151..154
+            Ident 151..154 "int"
+      Comma 154..155 ","
+      Param 156..162
+        Ident 156..157 "b"
+        Colon 157..158 ":"
+        PathType 159..162
+          Path 159..162
+            Ident 159..162 "int"
+      RParen 162..163 ")"
+    RetType 164..170
+      Arrow 164..166 "->"
+      PathType 167..170
+        Path 167..170
+          Ident 167..170 "int"
+    Block 171..180
+      LBrace 171..172 "{"
+      ExprStmt 173..178
+        BinExpr 173..178
+          PathExpr 173..174
+            Ident 173..174 "a"
+          Plus 175..176 "+"
+          PathExpr 177..178
+            Ident 177..178 "b"
+      RBrace 179..180 "}"
+  Term 220..221 "\n"
+  FnDecl 222..245
+    FnKw 222..224 "fn"
+    Ident 225..229 "main"
+    ParamList 229..231
+      LParen 229..230 "("
+      RParen 230..231 ")"
+    RetType 232..239
+      Arrow 232..234 "->"
+      ErrorUnionType 235..239
+        Not 235..236 "!"
+        PathType 236..239
+          Path 236..239
+            Ident 236..239 "int"
+    Block 240..245
+      LBrace 240..241 "{"
+      ExprStmt 242..243
+        LiteralExpr 242..243
+          Int 242..243 "0"
+      RBrace 244..245 "}"
+  Term 245..246 "\n"
+  Eof 246..246 ""
 == diagnostics ==
-E0008 [Error] 142..146 `when` is a reserved keyword, so it cannot name a function
+E0008 [Error] 143..147 `when` is a reserved keyword, so it cannot name a function
     label pick another name
     note all 50 keywords are reserved everywhere, and wolf has no raw identifiers. `when_` is the usual dodge, or a more specific word.

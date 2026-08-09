@@ -3,73 +3,73 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 197..417
-  FnDecl 197..416
-    FnKw 197..199 "fn"
-    Ident 200..204 "main"
-    ParamList 204..206
-      LParen 204..205 "("
-      RParen 205..206 ")"
-    RetType 207..214
-      Arrow 207..209 "->"
-      ErrorUnionType 210..214
-        Not 210..211 "!"
-        PathType 211..214
-          Path 211..214
-            Ident 211..214 "int"
-    Block 215..416
-      LBrace 215..216 "{"
-      ErrorNode 221..222
-        Term 221..222 ";"
-      LetDecl 272..282
-        LetKw 272..275 "let"
-        IdentPat 276..277
-          Ident 276..277 "x"
-        Eq 278..279 "="
-        LiteralExpr 280..281
-          Int 280..281 "1"
-        Term 281..282 ";"
-      ExprStmt 343..409
-        IfExpr 343..378
-          IfKw 343..345 "if"
-          BinExpr 346..352
-            PathExpr 346..347
-              Ident 346..347 "x"
-            EqEq 348..350 "=="
-            LiteralExpr 351..352
-              Int 351..352 "1"
-          Block 353..378
-            LBrace 353..354 "{"
-            ExprStmt 355..367
-              CallExpr 355..366
-                PathExpr 355..360
-                  Ident 355..360 "print"
-                ArgList 360..366
-                  LParen 360..361 "("
-                  Arg 361..365
-                    StringExpr 361..365
-                      StrBegin 361..362 "\""
-                      StrFragment 362..364 "ok"
-                      StrEnd 364..365 "\""
-                  RParen 365..366 ")"
-              Term 366..367 ";"
-            ExprStmt 368..376
-              ReturnExpr 368..376
-                ReturnKw 368..374 "return"
-                LiteralExpr 375..376
-                  Int 375..376 "0"
-            RBrace 377..378 "}"
-        Term 408..409 "\n"
-      ExprStmt 413..415
-        LiteralExpr 413..414
-          Int 413..414 "1"
-        Term 414..415 "\n"
-      RBrace 415..416 "}"
-  Term 416..417 "\n"
-  Eof 417..417 ""
+SourceFile 198..418
+  FnDecl 198..417
+    FnKw 198..200 "fn"
+    Ident 201..205 "main"
+    ParamList 205..207
+      LParen 205..206 "("
+      RParen 206..207 ")"
+    RetType 208..215
+      Arrow 208..210 "->"
+      ErrorUnionType 211..215
+        Not 211..212 "!"
+        PathType 212..215
+          Path 212..215
+            Ident 212..215 "int"
+    Block 216..417
+      LBrace 216..217 "{"
+      ErrorNode 222..223
+        Term 222..223 ";"
+      LetDecl 273..283
+        LetKw 273..276 "let"
+        IdentPat 277..278
+          Ident 277..278 "x"
+        Eq 279..280 "="
+        LiteralExpr 281..282
+          Int 281..282 "1"
+        Term 282..283 ";"
+      ExprStmt 344..410
+        IfExpr 344..379
+          IfKw 344..346 "if"
+          BinExpr 347..353
+            PathExpr 347..348
+              Ident 347..348 "x"
+            EqEq 349..351 "=="
+            LiteralExpr 352..353
+              Int 352..353 "1"
+          Block 354..379
+            LBrace 354..355 "{"
+            ExprStmt 356..368
+              CallExpr 356..367
+                PathExpr 356..361
+                  Ident 356..361 "print"
+                ArgList 361..367
+                  LParen 361..362 "("
+                  Arg 362..366
+                    StringExpr 362..366
+                      StrBegin 362..363 "\""
+                      StrFragment 363..365 "ok"
+                      StrEnd 365..366 "\""
+                  RParen 366..367 ")"
+              Term 367..368 ";"
+            ExprStmt 369..377
+              ReturnExpr 369..377
+                ReturnKw 369..375 "return"
+                LiteralExpr 376..377
+                  Int 376..377 "0"
+            RBrace 378..379 "}"
+        Term 409..410 "\n"
+      ExprStmt 414..416
+        LiteralExpr 414..415
+          Int 414..415 "1"
+        Term 415..416 "\n"
+      RBrace 416..417 "}"
+  Term 417..418 "\n"
+  Eof 418..418 ""
 == diagnostics ==
-E0002 [Error] 221..222 this `;` terminates nothing
+E0002 [Error] 222..223 this `;` terminates nothing
     label no statement comes before it
     note in wolf, `;` and the line end are the same terminator, and a terminator must end a statement. Remove the `;` — it is only needed between statements sharing one line.
     help [MachineApplicable] remove the `;`
-        edit 221..222 -> ""
+        edit 222..223 -> ""

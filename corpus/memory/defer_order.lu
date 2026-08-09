@@ -3,6 +3,7 @@
 //! conforms: mem.shared.drop.1
 //! Scope-exit effects run LIFO: defers (and destructors, which share the
 //! scope-exit point) unwind in reverse registration order.
+
 fn main() -> !int {
     defer print_raw(" second")
     defer print_raw(" first")

@@ -28,7 +28,6 @@ fn dot(a: Vec3, b: Vec3) -> f64 {
 fn main() -> !int {
     const F10 = fib(10)                    // folded at comptime: 55
     const N = field_count(Vec3)            // 3, via reflection
-    let d = dot(Vec3 { x: 1.0, y: 2.0, z: 3.0 },
-                Vec3 { x: 3.0, y: 2.0, z: 1.0 })
+    let d = dot(Vec3 { x: 1.0, y: 2.0, z: 3.0 }, Vec3 { x: 3.0, y: 2.0, z: 1.0 })
     if F10 == 55 && N == 3 && d == 10.0 { 0 } else { 1 }
 }

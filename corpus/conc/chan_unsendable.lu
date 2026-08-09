@@ -4,6 +4,7 @@
 //! Channel payloads must be Copy, imm, a moved region, or a sync type.
 //! A bare region-interior value (List) is none of those — send the
 //! region instead.
+
 fn main() -> !int {
     let ch = channel[List[int]](1)   // ERROR E1102: List is not sendable
     0

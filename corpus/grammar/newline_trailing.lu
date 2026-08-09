@@ -2,12 +2,9 @@
 //! phase: parse
 //! conforms: gram.amb.newline, gram.lex.newline
 //! Continuation is TRAILING-operator/dot style (Go-adapted insertion).
+
 fn main() -> !int {
-    let a = 1 +
-        2 +
-        3
-    let s = "abc".
-        upper().
-        lower()
+    let a = 1 + 2 + 3
+    let s = "abc".upper().lower()
     if a == 6 && s == "abc" { 0 } else { 1 }
 }

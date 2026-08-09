@@ -3,82 +3,82 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 202..338
-  StructDecl 202..225
-    StructKw 202..208 "struct"
-    Ident 209..214 "Point"
-    LBrace 215..216 "{"
-    StructField 217..223
-      Ident 217..218 "x"
-      Colon 218..219 ":"
-      PathType 220..223
-        Path 220..223
-          Ident 220..223 "int"
-    RBrace 224..225 "}"
-  Term 225..226 "\n"
-  FnDecl 226..337
-    FnKw 226..228 "fn"
-    Ident 229..233 "main"
-    ParamList 233..235
-      LParen 233..234 "("
-      RParen 234..235 ")"
-    RetType 236..243
-      Arrow 236..238 "->"
-      ErrorUnionType 239..243
-        Not 239..240 "!"
-        PathType 240..243
-          Path 240..243
-            Ident 240..243 "int"
-    Block 244..337
-      LBrace 244..245 "{"
-      LetDecl 250..273
-        LetKw 250..253 "let"
-        IdentPat 254..255
-          Ident 254..255 "p"
-        Eq 256..257 "="
-        StructLit 258..272
-          PathExpr 258..263
-            Ident 258..263 "Point"
-          LBrace 264..265 "{"
-          FieldInit 266..270
-            Ident 266..267 "x"
-            Colon 267..268 ":"
-            LiteralExpr 269..270
-              Int 269..270 "0"
-          RBrace 271..272 "}"
-        Term 272..273 "\n"
-      ExprStmt 277..330
-        IfExpr 277..312
-          IfKw 277..279 "if"
-          BinExpr 280..299
-            PathExpr 280..281
-              Ident 280..281 "p"
-            EqEq 282..284 "=="
-            StructLit 285..299
-              PathExpr 285..290
-                Ident 285..290 "Point"
-              LBrace 291..292 "{"
-              FieldInit 293..297
-                Ident 293..294 "x"
-                Colon 294..295 ":"
-                LiteralExpr 296..297
-                  Int 296..297 "0"
-              RBrace 298..299 "}"
-          Block 300..312
-            LBrace 300..301 "{"
-            ExprStmt 302..310
-              ReturnExpr 302..310
-                ReturnKw 302..308 "return"
-                LiteralExpr 309..310
-                  Int 309..310 "0"
-            RBrace 311..312 "}"
-        Term 329..330 "\n"
-      ExprStmt 334..336
-        LiteralExpr 334..335
-          Int 334..335 "1"
-        Term 335..336 "\n"
-      RBrace 336..337 "}"
-  Term 337..338 "\n"
-  Eof 338..338 ""
+SourceFile 203..340
+  StructDecl 203..226
+    StructKw 203..209 "struct"
+    Ident 210..215 "Point"
+    LBrace 216..217 "{"
+    StructField 218..224
+      Ident 218..219 "x"
+      Colon 219..220 ":"
+      PathType 221..224
+        Path 221..224
+          Ident 221..224 "int"
+    RBrace 225..226 "}"
+  Term 226..227 "\n"
+  FnDecl 228..339
+    FnKw 228..230 "fn"
+    Ident 231..235 "main"
+    ParamList 235..237
+      LParen 235..236 "("
+      RParen 236..237 ")"
+    RetType 238..245
+      Arrow 238..240 "->"
+      ErrorUnionType 241..245
+        Not 241..242 "!"
+        PathType 242..245
+          Path 242..245
+            Ident 242..245 "int"
+    Block 246..339
+      LBrace 246..247 "{"
+      LetDecl 252..275
+        LetKw 252..255 "let"
+        IdentPat 256..257
+          Ident 256..257 "p"
+        Eq 258..259 "="
+        StructLit 260..274
+          PathExpr 260..265
+            Ident 260..265 "Point"
+          LBrace 266..267 "{"
+          FieldInit 268..272
+            Ident 268..269 "x"
+            Colon 269..270 ":"
+            LiteralExpr 271..272
+              Int 271..272 "0"
+          RBrace 273..274 "}"
+        Term 274..275 "\n"
+      ExprStmt 279..332
+        IfExpr 279..314
+          IfKw 279..281 "if"
+          BinExpr 282..301
+            PathExpr 282..283
+              Ident 282..283 "p"
+            EqEq 284..286 "=="
+            StructLit 287..301
+              PathExpr 287..292
+                Ident 287..292 "Point"
+              LBrace 293..294 "{"
+              FieldInit 295..299
+                Ident 295..296 "x"
+                Colon 296..297 ":"
+                LiteralExpr 298..299
+                  Int 298..299 "0"
+              RBrace 300..301 "}"
+          Block 302..314
+            LBrace 302..303 "{"
+            ExprStmt 304..312
+              ReturnExpr 304..312
+                ReturnKw 304..310 "return"
+                LiteralExpr 311..312
+                  Int 311..312 "0"
+            RBrace 313..314 "}"
+        Term 331..332 "\n"
+      ExprStmt 336..338
+        LiteralExpr 336..337
+          Int 336..337 "1"
+        Term 337..338 "\n"
+      RBrace 338..339 "}"
+  Term 339..340 "\n"
+  Eof 340..340 ""
 == diagnostics ==
-E0006 [Error] 291..292 struct literals are not allowed in condition or scrutinee position — wrap the literal in parentheses: `(Path { … })`
+E0006 [Error] 293..294 struct literals are not allowed in condition or scrutinee position — wrap the literal in parentheses: `(Path { … })`

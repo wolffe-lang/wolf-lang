@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 214..289 name=main body=Block
+FnDecl 215..290 name=main body=Block
 -- diagnostics --
-E0001 [Error] 256..257 this line starts with `+`, but a statement cannot begin with an operator; wolf continuations are trailing — move `+` to the end of the previous line
+E0001 [Error] 257..258 this line starts with `+`, but a statement cannot begin with an operator; wolf continuations are trailing — move `+` to the end of the previous line

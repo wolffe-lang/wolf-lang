@@ -3,7 +3,9 @@
 //! conforms: gram.amb.structlit
 //! Struct literals are illegal in condition position without parens —
 //! the `{` opens the if-block. This file must NOT parse.
+
 struct Point { x: int }
+
 fn main() -> !int {
     let p = Point { x: 0 }
     if p == Point { x: 0 } { return 0 }   // ERROR E0006

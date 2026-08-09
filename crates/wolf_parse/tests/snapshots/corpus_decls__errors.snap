@@ -3,7 +3,7 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 StructDecl 392..433 name=ParseError fields=2
-FnDecl 435..617 name=digit body=Block
-FnDecl 619..841 name=parse_pair body=Block
-FnDecl 843..1061 name=load body=Block
-FnDecl 1063..1474 name=main body=Block
+FnDecl 435..619 name=digit body=Block
+FnDecl 621..843 name=parse_pair body=Block
+FnDecl 845..1063 name=load body=Block
+FnDecl 1065..1476 name=main body=Block

@@ -10,7 +10,7 @@
 struct ParseError { at: int, found: str }
 
 fn digit(s: str, i: int) -> int ! {BadDigit(ParseError)} {
-    let c = s[i..i+1]
+    let c = s[i..i + 1]
     if c < "0" || c > "9" { return BadDigit(ParseError { at: i, found: c }) }
     c.to_int() else 0
 }

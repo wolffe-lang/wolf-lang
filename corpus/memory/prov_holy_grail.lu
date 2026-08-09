@@ -5,12 +5,14 @@
 //! whole call, so the second load may be hoisted/CSE'd across the opaque
 //! callback (§7/O2). This file is the CONFORMING side: the program can't
 //! observe the difference.
+
 fn observe(xs: List[int], f: fn() -> int) -> int {
     let a = xs[0]                  // load
     let side = f()                 // opaque call — xs still Frozen for us
     let b = xs[0]                  // optimizer may reuse `a` (O2)
     a + b + side
 }
+
 fn main() -> !int {
     var xs = List[int]()
     xs.push(20)

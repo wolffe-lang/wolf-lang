@@ -2,7 +2,7 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 202..225 name=Point fields=1
-FnDecl 226..337 name=main body=Block
+StructDecl 203..226 name=Point fields=1
+FnDecl 228..339 name=main body=Block
 -- diagnostics --
-E0006 [Error] 291..292 struct literals are not allowed in condition or scrutinee position — wrap the literal in parentheses: `(Path { … })`
+E0006 [Error] 293..294 struct literals are not allowed in condition or scrutinee position — wrap the literal in parentheses: `(Path { … })`

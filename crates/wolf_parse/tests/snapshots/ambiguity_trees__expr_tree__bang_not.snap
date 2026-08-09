@@ -3,52 +3,52 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 106..172
-  FnDecl 106..171
-    FnKw 106..108 "fn"
-    Ident 109..113 "main"
-    ParamList 113..115
-      LParen 113..114 "("
-      RParen 114..115 ")"
-    RetType 116..123
-      Arrow 116..118 "->"
-      ErrorUnionType 119..123
-        Not 119..120 "!"
-        PathType 120..123
-          Path 120..123
-            Ident 120..123 "int"
-    Block 124..171
-      LBrace 124..125 "{"
-      LetDecl 130..143
-        LetKw 130..133 "let"
-        IdentPat 134..135
-          Ident 134..135 "t"
-        Eq 136..137 "="
-        LiteralExpr 138..142
-          TrueKw 138..142 "true"
-        Term 142..143 "\n"
-      ExprStmt 147..170
-        IfExpr 147..169
-          IfKw 147..149 "if"
-          PrefixExpr 150..152
-            Not 150..151 "!"
-            PathExpr 151..152
-              Ident 151..152 "t"
-          Block 153..158
-            LBrace 153..154 "{"
-            ExprStmt 155..156
-              LiteralExpr 155..156
-                Int 155..156 "1"
-            RBrace 157..158 "}"
-          ElseKw 159..163 "else"
-          Block 164..169
-            LBrace 164..165 "{"
-            ExprStmt 166..167
-              LiteralExpr 166..167
-                Int 166..167 "0"
-            RBrace 168..169 "}"
-        Term 169..170 "\n"
-      RBrace 170..171 "}"
-  Term 171..172 "\n"
-  Eof 172..172 ""
+SourceFile 107..173
+  FnDecl 107..172
+    FnKw 107..109 "fn"
+    Ident 110..114 "main"
+    ParamList 114..116
+      LParen 114..115 "("
+      RParen 115..116 ")"
+    RetType 117..124
+      Arrow 117..119 "->"
+      ErrorUnionType 120..124
+        Not 120..121 "!"
+        PathType 121..124
+          Path 121..124
+            Ident 121..124 "int"
+    Block 125..172
+      LBrace 125..126 "{"
+      LetDecl 131..144
+        LetKw 131..134 "let"
+        IdentPat 135..136
+          Ident 135..136 "t"
+        Eq 137..138 "="
+        LiteralExpr 139..143
+          TrueKw 139..143 "true"
+        Term 143..144 "\n"
+      ExprStmt 148..171
+        IfExpr 148..170
+          IfKw 148..150 "if"
+          PrefixExpr 151..153
+            Not 151..152 "!"
+            PathExpr 152..153
+              Ident 152..153 "t"
+          Block 154..159
+            LBrace 154..155 "{"
+            ExprStmt 156..157
+              LiteralExpr 156..157
+                Int 156..157 "1"
+            RBrace 158..159 "}"
+          ElseKw 160..164 "else"
+          Block 165..170
+            LBrace 165..166 "{"
+            ExprStmt 167..168
+              LiteralExpr 167..168
+                Int 167..168 "0"
+            RBrace 169..170 "}"
+        Term 170..171 "\n"
+      RBrace 171..172 "}"
+  Term 172..173 "\n"
+  Eof 173..173 ""
 == diagnostics ==

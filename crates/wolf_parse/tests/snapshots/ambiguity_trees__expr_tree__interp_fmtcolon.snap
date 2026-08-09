@@ -3,137 +3,137 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 133..352
-  FnDecl 133..351
-    FnKw 133..135 "fn"
-    Ident 136..140 "main"
-    ParamList 140..142
-      LParen 140..141 "("
-      RParen 141..142 ")"
-    RetType 143..150
-      Arrow 143..145 "->"
-      ErrorUnionType 146..150
-        Not 146..147 "!"
-        PathType 147..150
-          Path 147..150
-            Ident 147..150 "int"
-    Block 151..351
-      LBrace 151..152 "{"
-      VarDecl 157..181
-        VarKw 157..160 "var"
-        IdentPat 161..162
-          Ident 161..162 "m"
-        Eq 163..164 "="
-        CallExpr 165..180
-          BracketApply 165..178
-            PathExpr 165..168
-              Ident 165..168 "Map"
-            ArgList 168..178
-              LBracket 168..169 "["
-              Arg 169..172
-                PathExpr 169..172
-                  Ident 169..172 "str"
-              Comma 172..173 ","
-              Arg 174..177
-                PathExpr 174..177
-                  Ident 174..177 "int"
-              RBracket 177..178 "]"
-          ArgList 178..180
-            LParen 178..179 "("
-            RParen 179..180 ")"
-        Term 180..181 "\n"
-      AssignStmt 185..197
-        BracketApply 185..191
-          PathExpr 185..186
-            Ident 185..186 "m"
-          ArgList 186..191
-            LBracket 186..187 "["
-            Arg 187..190
-              StringExpr 187..190
-                StrBegin 187..188 "\""
-                StrFragment 188..189 "k"
-                StrEnd 189..190 "\""
-            RBracket 190..191 "]"
-        Eq 192..193 "="
-        LiteralExpr 194..196
-          Int 194..196 "42"
-        Term 196..197 "\n"
-      ExprStmt 201..266
-        CallExpr 201..221
-          PathExpr 201..206
-            Ident 201..206 "print"
-          ArgList 206..221
-            LParen 206..207 "("
-            Arg 207..220
-              StringExpr 207..220
-                StrBegin 207..208 "\""
-                Interp 208..219
-                  InterpOpen 208..209 "{"
-                  BracketApply 209..215
-                    PathExpr 209..210
-                      Ident 209..210 "m"
-                    ArgList 210..215
-                      LBracket 210..211 "["
-                      Arg 211..214
-                        StringExpr 211..214
-                          StrBegin 211..212 "\""
-                          StrFragment 212..213 "k"
-                          StrEnd 213..214 "\""
-                      RBracket 214..215 "]"
-                  FormatSpec 215..218
-                    FormatSpecBegin 215..216 ":"
-                    StrFragment 216..218 ">8"
-                  InterpClose 218..219 "}"
-                StrEnd 219..220 "\""
-            RParen 220..221 ")"
-        Term 265..266 "\n"
-      LetDecl 270..280
-        LetKw 270..273 "let"
-        IdentPat 274..275
-          Ident 274..275 "w"
-        Eq 276..277 "="
-        LiteralExpr 278..279
-          Int 278..279 "8"
-        Term 279..280 "\n"
-      ExprStmt 284..344
-        CallExpr 284..306
-          PathExpr 284..289
-            Ident 284..289 "print"
-          ArgList 289..306
-            LParen 289..290 "("
-            Arg 290..305
-              StringExpr 290..305
-                StrBegin 290..291 "\""
-                Interp 291..304
-                  InterpOpen 291..292 "{"
-                  BracketApply 292..298
-                    PathExpr 292..293
-                      Ident 292..293 "m"
-                    ArgList 293..298
-                      LBracket 293..294 "["
-                      Arg 294..297
-                        StringExpr 294..297
-                          StrBegin 294..295 "\""
-                          StrFragment 295..296 "k"
-                          StrEnd 296..297 "\""
-                      RBracket 297..298 "]"
-                  FormatSpec 298..303
-                    FormatSpecBegin 298..299 ":"
-                    StrFragment 299..300 ">"
-                    Interp 300..303
-                      InterpOpen 300..301 "{"
-                      PathExpr 301..302
-                        Ident 301..302 "w"
-                      InterpClose 302..303 "}"
-                  InterpClose 303..304 "}"
-                StrEnd 304..305 "\""
-            RParen 305..306 ")"
-        Term 343..344 "\n"
-      ExprStmt 348..350
-        LiteralExpr 348..349
-          Int 348..349 "0"
-        Term 349..350 "\n"
-      RBrace 350..351 "}"
-  Term 351..352 "\n"
-  Eof 352..352 ""
+SourceFile 134..353
+  FnDecl 134..352
+    FnKw 134..136 "fn"
+    Ident 137..141 "main"
+    ParamList 141..143
+      LParen 141..142 "("
+      RParen 142..143 ")"
+    RetType 144..151
+      Arrow 144..146 "->"
+      ErrorUnionType 147..151
+        Not 147..148 "!"
+        PathType 148..151
+          Path 148..151
+            Ident 148..151 "int"
+    Block 152..352
+      LBrace 152..153 "{"
+      VarDecl 158..182
+        VarKw 158..161 "var"
+        IdentPat 162..163
+          Ident 162..163 "m"
+        Eq 164..165 "="
+        CallExpr 166..181
+          BracketApply 166..179
+            PathExpr 166..169
+              Ident 166..169 "Map"
+            ArgList 169..179
+              LBracket 169..170 "["
+              Arg 170..173
+                PathExpr 170..173
+                  Ident 170..173 "str"
+              Comma 173..174 ","
+              Arg 175..178
+                PathExpr 175..178
+                  Ident 175..178 "int"
+              RBracket 178..179 "]"
+          ArgList 179..181
+            LParen 179..180 "("
+            RParen 180..181 ")"
+        Term 181..182 "\n"
+      AssignStmt 186..198
+        BracketApply 186..192
+          PathExpr 186..187
+            Ident 186..187 "m"
+          ArgList 187..192
+            LBracket 187..188 "["
+            Arg 188..191
+              StringExpr 188..191
+                StrBegin 188..189 "\""
+                StrFragment 189..190 "k"
+                StrEnd 190..191 "\""
+            RBracket 191..192 "]"
+        Eq 193..194 "="
+        LiteralExpr 195..197
+          Int 195..197 "42"
+        Term 197..198 "\n"
+      ExprStmt 202..267
+        CallExpr 202..222
+          PathExpr 202..207
+            Ident 202..207 "print"
+          ArgList 207..222
+            LParen 207..208 "("
+            Arg 208..221
+              StringExpr 208..221
+                StrBegin 208..209 "\""
+                Interp 209..220
+                  InterpOpen 209..210 "{"
+                  BracketApply 210..216
+                    PathExpr 210..211
+                      Ident 210..211 "m"
+                    ArgList 211..216
+                      LBracket 211..212 "["
+                      Arg 212..215
+                        StringExpr 212..215
+                          StrBegin 212..213 "\""
+                          StrFragment 213..214 "k"
+                          StrEnd 214..215 "\""
+                      RBracket 215..216 "]"
+                  FormatSpec 216..219
+                    FormatSpecBegin 216..217 ":"
+                    StrFragment 217..219 ">8"
+                  InterpClose 219..220 "}"
+                StrEnd 220..221 "\""
+            RParen 221..222 ")"
+        Term 266..267 "\n"
+      LetDecl 271..281
+        LetKw 271..274 "let"
+        IdentPat 275..276
+          Ident 275..276 "w"
+        Eq 277..278 "="
+        LiteralExpr 279..280
+          Int 279..280 "8"
+        Term 280..281 "\n"
+      ExprStmt 285..345
+        CallExpr 285..307
+          PathExpr 285..290
+            Ident 285..290 "print"
+          ArgList 290..307
+            LParen 290..291 "("
+            Arg 291..306
+              StringExpr 291..306
+                StrBegin 291..292 "\""
+                Interp 292..305
+                  InterpOpen 292..293 "{"
+                  BracketApply 293..299
+                    PathExpr 293..294
+                      Ident 293..294 "m"
+                    ArgList 294..299
+                      LBracket 294..295 "["
+                      Arg 295..298
+                        StringExpr 295..298
+                          StrBegin 295..296 "\""
+                          StrFragment 296..297 "k"
+                          StrEnd 297..298 "\""
+                      RBracket 298..299 "]"
+                  FormatSpec 299..304
+                    FormatSpecBegin 299..300 ":"
+                    StrFragment 300..301 ">"
+                    Interp 301..304
+                      InterpOpen 301..302 "{"
+                      PathExpr 302..303
+                        Ident 302..303 "w"
+                      InterpClose 303..304 "}"
+                  InterpClose 304..305 "}"
+                StrEnd 305..306 "\""
+            RParen 306..307 ")"
+        Term 344..345 "\n"
+      ExprStmt 349..351
+        LiteralExpr 349..350
+          Int 349..350 "0"
+        Term 350..351 "\n"
+      RBrace 351..352 "}"
+  Term 352..353 "\n"
+  Eof 353..353 ""
 == diagnostics ==

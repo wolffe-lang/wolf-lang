@@ -2,7 +2,9 @@
 //! phase: parse
 //! conforms: gram.amb.else
 //! `else` after a complete expression is the defaulting operator (D30).
+
 fn parse(s: str) -> !int { s.to_int() }
+
 fn main() -> !int {
     let a = parse("7") else 0
     let b = parse("x") else 0

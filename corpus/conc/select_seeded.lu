@@ -4,6 +4,7 @@
 //! Two simultaneously-ready arms: the choice is pseudo-random from the
 //! SCHEDULER seed (a recorded event) — both outcomes are conforming,
 //! and `--replay` reproduces whichever happened.
+
 fn main() -> !int {
     let a = channel[int](1)
     let b = channel[int](1)
@@ -11,8 +12,8 @@ fn main() -> !int {
     b.send(2)
     var got = 0
     select {
-        v from a => { got = v }
-        v from b => { got = v }
+        v from a => { got = v },
+        v from b => { got = v },
     }
     if got == 1 || got == 2 { 0 } else { 1 }
 }

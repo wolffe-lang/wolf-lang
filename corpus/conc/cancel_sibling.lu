@@ -5,7 +5,9 @@
 //! cancelled task's own defers run (cancellation is polite — contrast
 //! the killed-proc rule in proc_kill_defers.lu). The scope re-raises
 //! the child error into the enclosing function's error union.
+
 fn fail_fast() -> !int { Boom }
+
 fn race_them() -> !int {
     let ch = channel[int](0)
     scope s {
@@ -17,6 +19,7 @@ fn race_them() -> !int {
     }                                // join re-raises Boom [conc.task.fail]
     0
 }
+
 fn main() -> !int {
     let r = race_them() else |_| { 42 }
     if r == 42 { 0 } else { 1 }

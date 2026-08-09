@@ -11,8 +11,8 @@ Diagnostic {
             file: FileId(
                 0,
             ),
-            lo: 221,
-            hi: 222,
+            lo: 222,
+            hi: 223,
         },
         label: "no statement comes before it",
     },
@@ -29,8 +29,8 @@ Diagnostic {
                         file: FileId(
                             0,
                         ),
-                        lo: 221,
-                        hi: 222,
+                        lo: 222,
+                        hi: 223,
                     },
                     "",
                 ),

@@ -3,6 +3,7 @@
 //! conforms: mem.region.open.1, mem.region.freeze.3
 //! A region cannot be transferred while it is open — the forest moves
 //! as closed subtrees only.
+
 fn main() -> !int {
     let ch = channel[region](1)
     region p {

@@ -3,6 +3,7 @@
 //! conforms: gram.amb.newline, gram.lex.newline
 //! Leading-operator continuation does NOT parse: a terminator was
 //! inserted after `1`, so `+ 2` starts a broken statement.
+
 fn main() -> !int {
     let a = 1
         + 2        // ERROR E0001

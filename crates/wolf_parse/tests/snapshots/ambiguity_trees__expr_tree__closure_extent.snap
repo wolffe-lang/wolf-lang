@@ -3,217 +3,217 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 134..414
-  FnDecl 134..413
-    FnKw 134..136 "fn"
-    Ident 137..141 "main"
-    ParamList 141..143
-      LParen 141..142 "("
-      RParen 142..143 ")"
-    RetType 144..151
-      Arrow 144..146 "->"
-      ErrorUnionType 147..151
-        Not 147..148 "!"
-        PathType 148..151
-          Path 148..151
-            Ident 148..151 "int"
-    Block 152..413
-      LBrace 152..153 "{"
-      VarDecl 158..186
-        VarKw 158..161 "var"
-        IdentPat 162..164
-          Ident 162..164 "xs"
-        Eq 165..166 "="
-        CallExpr 167..185
-          BracketApply 167..183
-            PathExpr 167..171
-              Ident 167..171 "List"
-            ArgList 171..183
-              LBracket 171..172 "["
-              Arg 172..182
-                TupleExpr 172..182
-                  LParen 172..173 "("
-                  PathExpr 173..176
-                    Ident 173..176 "int"
-                  Comma 176..177 ","
-                  PathExpr 178..181
-                    Ident 178..181 "int"
-                  RParen 181..182 ")"
-              RBracket 182..183 "]"
-          ArgList 183..185
-            LParen 183..184 "("
-            RParen 184..185 ")"
-        Term 185..186 "\n"
-      ExprStmt 190..206
-        CallExpr 190..205
-          MemberExpr 190..197
-            PathExpr 190..192
-              Ident 190..192 "xs"
-            Dot 192..193 "."
-            Ident 193..197 "push"
-          ArgList 197..205
-            LParen 197..198 "("
-            Arg 198..204
-              TupleExpr 198..204
-                LParen 198..199 "("
-                LiteralExpr 199..200
-                  Int 199..200 "1"
-                Comma 200..201 ","
-                LiteralExpr 202..203
-                  Int 202..203 "9"
-                RParen 203..204 ")"
-            RParen 204..205 ")"
-        Term 205..206 ";"
-      ExprStmt 207..223
-        CallExpr 207..222
-          MemberExpr 207..214
-            PathExpr 207..209
-              Ident 207..209 "xs"
-            Dot 209..210 "."
-            Ident 210..214 "push"
-          ArgList 214..222
-            LParen 214..215 "("
-            Arg 215..221
-              TupleExpr 215..221
-                LParen 215..216 "("
-                LiteralExpr 216..217
-                  Int 216..217 "2"
-                Comma 217..218 ","
-                LiteralExpr 219..220
-                  Int 219..220 "3"
-                RParen 220..221 ")"
-            RParen 221..222 ")"
-        Term 222..223 "\n"
-      LetDecl 227..280
-        LetKw 227..230 "let"
-        IdentPat 231..234
-          Ident 231..234 "top"
-        Eq 235..236 "="
-        CallExpr 237..279
-          MemberExpr 237..276
-            CallExpr 237..271
-              MemberExpr 237..249
-                PathExpr 237..239
-                  Ident 237..239 "xs"
-                Dot 239..240 "."
-                Ident 240..249 "sorted_by"
-              ArgList 249..271
-                LParen 249..250 "("
-                Arg 250..270
-                  ClosureExpr 250..270
-                    FnKw 250..252 "fn"
-                    ParamList 252..258
-                      LParen 252..253 "("
-                      Param 253..254
-                        Ident 253..254 "a"
-                      Comma 254..255 ","
-                      Param 256..257
-                        Ident 256..257 "b"
-                      RParen 257..258 ")"
-                    BinExpr 259..270
-                      MemberExpr 259..262
-                        PathExpr 259..260
-                          Ident 259..260 "b"
-                        Dot 260..261 "."
-                        Int 261..262 "1"
-                      Spaceship 263..266 "<=>"
-                      MemberExpr 267..270
-                        PathExpr 267..268
-                          Ident 267..268 "a"
-                        Dot 268..269 "."
-                        Int 269..270 "1"
-                RParen 270..271 ")"
-            Dot 271..272 "."
-            TakeKw 272..276 "take"
-          ArgList 276..279
-            LParen 276..277 "("
-            Arg 277..278
-              LiteralExpr 277..278
-                Int 277..278 "1"
-            RParen 278..279 ")"
-        Term 279..280 "\n"
-      LetDecl 284..358
-        LetKw 284..287 "let"
-        IdentPat 288..293
-          Ident 288..293 "mixed"
-        Eq 294..295 "="
-        CallExpr 296..325
-          PathExpr 296..299
-            Ident 296..299 "zip"
-          ArgList 299..325
-            LParen 299..300 "("
-            Arg 300..302
-              PathExpr 300..302
-                Ident 300..302 "xs"
-            Comma 302..303 ","
-            Arg 304..319
-              ClosureExpr 304..319
-                FnKw 304..306 "fn"
-                ParamList 306..309
-                  LParen 306..307 "("
-                  Param 307..308
-                    Ident 307..308 "p"
-                  RParen 308..309 ")"
-                BinExpr 310..319
-                  MemberExpr 310..313
-                    PathExpr 310..311
-                      Ident 310..311 "p"
-                    Dot 311..312 "."
-                    Int 312..313 "0"
-                  Plus 314..315 "+"
-                  MemberExpr 316..319
-                    PathExpr 316..317
-                      Ident 316..317 "p"
-                    Dot 317..318 "."
-                    Int 318..319 "1"
-            Comma 319..320 ","
-            Arg 321..324
-              LiteralExpr 321..324
-                Int 321..324 "100"
-            RParen 324..325 ")"
-        Term 357..358 "\n"
-      ExprStmt 362..412
-        IfExpr 362..411
-          IfKw 362..364 "if"
-          BinExpr 365..394
-            BinExpr 365..378
-              MemberExpr 365..373
-                BracketApply 365..371
-                  PathExpr 365..368
-                    Ident 365..368 "top"
-                  ArgList 368..371
-                    LBracket 368..369 "["
-                    Arg 369..370
-                      LiteralExpr 369..370
-                        Int 369..370 "0"
-                    RBracket 370..371 "]"
-                Dot 371..372 "."
-                Int 372..373 "1"
-              EqEq 374..376 "=="
-              LiteralExpr 377..378
-                Int 377..378 "9"
-            AmpAmp 379..381 "&&"
-            BinExpr 382..394
-              PathExpr 382..387
-                Ident 382..387 "mixed"
-              EqEq 388..390 "=="
-              LiteralExpr 391..394
-                Int 391..394 "115"
-          Block 395..400
-            LBrace 395..396 "{"
-            ExprStmt 397..398
-              LiteralExpr 397..398
-                Int 397..398 "0"
-            RBrace 399..400 "}"
-          ElseKw 401..405 "else"
-          Block 406..411
-            LBrace 406..407 "{"
-            ExprStmt 408..409
-              LiteralExpr 408..409
-                Int 408..409 "1"
-            RBrace 410..411 "}"
-        Term 411..412 "\n"
-      RBrace 412..413 "}"
-  Term 413..414 "\n"
-  Eof 414..414 ""
+SourceFile 135..418
+  FnDecl 135..417
+    FnKw 135..137 "fn"
+    Ident 138..142 "main"
+    ParamList 142..144
+      LParen 142..143 "("
+      RParen 143..144 ")"
+    RetType 145..152
+      Arrow 145..147 "->"
+      ErrorUnionType 148..152
+        Not 148..149 "!"
+        PathType 149..152
+          Path 149..152
+            Ident 149..152 "int"
+    Block 153..417
+      LBrace 153..154 "{"
+      VarDecl 159..187
+        VarKw 159..162 "var"
+        IdentPat 163..165
+          Ident 163..165 "xs"
+        Eq 166..167 "="
+        CallExpr 168..186
+          BracketApply 168..184
+            PathExpr 168..172
+              Ident 168..172 "List"
+            ArgList 172..184
+              LBracket 172..173 "["
+              Arg 173..183
+                TupleExpr 173..183
+                  LParen 173..174 "("
+                  PathExpr 174..177
+                    Ident 174..177 "int"
+                  Comma 177..178 ","
+                  PathExpr 179..182
+                    Ident 179..182 "int"
+                  RParen 182..183 ")"
+              RBracket 183..184 "]"
+          ArgList 184..186
+            LParen 184..185 "("
+            RParen 185..186 ")"
+        Term 186..187 "\n"
+      ExprStmt 191..207
+        CallExpr 191..206
+          MemberExpr 191..198
+            PathExpr 191..193
+              Ident 191..193 "xs"
+            Dot 193..194 "."
+            Ident 194..198 "push"
+          ArgList 198..206
+            LParen 198..199 "("
+            Arg 199..205
+              TupleExpr 199..205
+                LParen 199..200 "("
+                LiteralExpr 200..201
+                  Int 200..201 "1"
+                Comma 201..202 ","
+                LiteralExpr 203..204
+                  Int 203..204 "9"
+                RParen 204..205 ")"
+            RParen 205..206 ")"
+        Term 206..207 "\n"
+      ExprStmt 211..227
+        CallExpr 211..226
+          MemberExpr 211..218
+            PathExpr 211..213
+              Ident 211..213 "xs"
+            Dot 213..214 "."
+            Ident 214..218 "push"
+          ArgList 218..226
+            LParen 218..219 "("
+            Arg 219..225
+              TupleExpr 219..225
+                LParen 219..220 "("
+                LiteralExpr 220..221
+                  Int 220..221 "2"
+                Comma 221..222 ","
+                LiteralExpr 223..224
+                  Int 223..224 "3"
+                RParen 224..225 ")"
+            RParen 225..226 ")"
+        Term 226..227 "\n"
+      LetDecl 231..284
+        LetKw 231..234 "let"
+        IdentPat 235..238
+          Ident 235..238 "top"
+        Eq 239..240 "="
+        CallExpr 241..283
+          MemberExpr 241..280
+            CallExpr 241..275
+              MemberExpr 241..253
+                PathExpr 241..243
+                  Ident 241..243 "xs"
+                Dot 243..244 "."
+                Ident 244..253 "sorted_by"
+              ArgList 253..275
+                LParen 253..254 "("
+                Arg 254..274
+                  ClosureExpr 254..274
+                    FnKw 254..256 "fn"
+                    ParamList 256..262
+                      LParen 256..257 "("
+                      Param 257..258
+                        Ident 257..258 "a"
+                      Comma 258..259 ","
+                      Param 260..261
+                        Ident 260..261 "b"
+                      RParen 261..262 ")"
+                    BinExpr 263..274
+                      MemberExpr 263..266
+                        PathExpr 263..264
+                          Ident 263..264 "b"
+                        Dot 264..265 "."
+                        Int 265..266 "1"
+                      Spaceship 267..270 "<=>"
+                      MemberExpr 271..274
+                        PathExpr 271..272
+                          Ident 271..272 "a"
+                        Dot 272..273 "."
+                        Int 273..274 "1"
+                RParen 274..275 ")"
+            Dot 275..276 "."
+            TakeKw 276..280 "take"
+          ArgList 280..283
+            LParen 280..281 "("
+            Arg 281..282
+              LiteralExpr 281..282
+                Int 281..282 "1"
+            RParen 282..283 ")"
+        Term 283..284 "\n"
+      LetDecl 288..362
+        LetKw 288..291 "let"
+        IdentPat 292..297
+          Ident 292..297 "mixed"
+        Eq 298..299 "="
+        CallExpr 300..329
+          PathExpr 300..303
+            Ident 300..303 "zip"
+          ArgList 303..329
+            LParen 303..304 "("
+            Arg 304..306
+              PathExpr 304..306
+                Ident 304..306 "xs"
+            Comma 306..307 ","
+            Arg 308..323
+              ClosureExpr 308..323
+                FnKw 308..310 "fn"
+                ParamList 310..313
+                  LParen 310..311 "("
+                  Param 311..312
+                    Ident 311..312 "p"
+                  RParen 312..313 ")"
+                BinExpr 314..323
+                  MemberExpr 314..317
+                    PathExpr 314..315
+                      Ident 314..315 "p"
+                    Dot 315..316 "."
+                    Int 316..317 "0"
+                  Plus 318..319 "+"
+                  MemberExpr 320..323
+                    PathExpr 320..321
+                      Ident 320..321 "p"
+                    Dot 321..322 "."
+                    Int 322..323 "1"
+            Comma 323..324 ","
+            Arg 325..328
+              LiteralExpr 325..328
+                Int 325..328 "100"
+            RParen 328..329 ")"
+        Term 361..362 "\n"
+      ExprStmt 366..416
+        IfExpr 366..415
+          IfKw 366..368 "if"
+          BinExpr 369..398
+            BinExpr 369..382
+              MemberExpr 369..377
+                BracketApply 369..375
+                  PathExpr 369..372
+                    Ident 369..372 "top"
+                  ArgList 372..375
+                    LBracket 372..373 "["
+                    Arg 373..374
+                      LiteralExpr 373..374
+                        Int 373..374 "0"
+                    RBracket 374..375 "]"
+                Dot 375..376 "."
+                Int 376..377 "1"
+              EqEq 378..380 "=="
+              LiteralExpr 381..382
+                Int 381..382 "9"
+            AmpAmp 383..385 "&&"
+            BinExpr 386..398
+              PathExpr 386..391
+                Ident 386..391 "mixed"
+              EqEq 392..394 "=="
+              LiteralExpr 395..398
+                Int 395..398 "115"
+          Block 399..404
+            LBrace 399..400 "{"
+            ExprStmt 401..402
+              LiteralExpr 401..402
+                Int 401..402 "0"
+            RBrace 403..404 "}"
+          ElseKw 405..409 "else"
+          Block 410..415
+            LBrace 410..411 "{"
+            ExprStmt 412..413
+              LiteralExpr 412..413
+                Int 412..413 "1"
+            RBrace 414..415 "}"
+        Term 415..416 "\n"
+      RBrace 416..417 "}"
+  Term 417..418 "\n"
+  Eof 418..418 ""
 == diagnostics ==

@@ -2,6 +2,7 @@
 //! phase: parse
 //! conforms: gram.amb.intdot
 //! `1.s` is member access on the int literal; floats need digits both sides.
+
 fn main() -> !int {
     let d = 5.s                    // Duration via member on int
     let f = 1.0                    // float

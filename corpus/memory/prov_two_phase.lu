@@ -4,6 +4,7 @@
 //! The two-phase shape Tree Borrows tolerates (and SB rejects): the
 //! receiver's mut tag is Reserved while the argument reads the same
 //! container, activating only at the write.
+
 fn main() -> !int {
     var xs = List[int]()
     xs.push(10)

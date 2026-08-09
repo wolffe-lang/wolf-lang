@@ -4,7 +4,9 @@
 //! §7/P1: use-after-free through a raw pointer. Compiled behavior is
 //! UNDEFINED (licenses O1); the is04 oracle and the D21 quarantine
 //! allocator both flag it — `trap(ub)` is the checked-build outcome.
+
 import c "stdlib.h"
+
 fn main() -> !int {
     unsafe {
         let p = c.malloc(8) as *u8

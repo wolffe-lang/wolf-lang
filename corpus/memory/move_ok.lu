@@ -2,8 +2,11 @@
 //! phase: parse
 //! conforms: mem.tier0.move.1, mem.tier0.move.3, mem.tier0.move.4
 //! Moves, explicit copy, and re-initialization — all conforming.
+
 struct Big { data: List[int] }
+
 fn consume(take b: Big) -> int { b.data.len }
+
 fn main() -> !int {
     var b = Big { data: List[int]() }
     b.data.push(1)
