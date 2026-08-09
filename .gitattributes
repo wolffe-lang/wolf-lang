@@ -1,0 +1,5 @@
+# Byte-exact spans are the lexer's currency (spec/01 [gram.lex.source]):
+# sources must check out byte-identical on every platform. LF everywhere.
+* text=auto eol=lf
+*.png binary
+*.pdf binary
