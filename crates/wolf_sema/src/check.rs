@@ -49,7 +49,7 @@ use crate::graph::{BindTarget, Package};
 use crate::prelude;
 use crate::sig::{FnSig, GenericSig, ItemSig, Lower, SigTables, StructSig, bindings_for};
 use crate::traits::{self, TraitRef};
-use crate::types::{Prim, TyId, TyKind, TypeTable, diff, render, subst};
+use crate::types::{MetaTy, Prim, TyId, TyKind, TypeTable, diff, render, subst};
 use crate::unify::{NumKind, UnifyErr, VarStore, join, unify};
 
 // ------------------------------------------------------------ contract --
@@ -92,6 +92,11 @@ pub struct TypedBody {
     /// order. Debug builds write one trace entry per point ([abi.err.
     /// trace]); the runtime buffer is s32's.
     pub trace_points: Vec<Span>,
+    /// Comptime call sites (s16, D29): every call to a `comptime fn`
+    /// or reflection intrinsic in this (runtime) body, in visit
+    /// order. The package-level comptime pass evaluates exactly
+    /// these ([`crate::ctfe::run_package`]).
+    pub comptime_calls: Vec<Span>,
 }
 
 impl TypedBody {
@@ -296,6 +301,11 @@ struct Checker<'a> {
     cleanups: Vec<(Span, bool)>,
     /// `?` / `else` / tag-injection trace hook points (s15 → s32).
     trace_points: Vec<Span>,
+    /// Comptime call sites in visit order (s16 → the ctfe pass).
+    comptime_calls: Vec<Span>,
+    /// Inside a `comptime fn` body: its own calls evaluate only when
+    /// the evaluator walks them — never registered as root sites.
+    in_comptime_fn: bool,
     /// Row-sealing mode (s15): tags raised or propagated by this body
     /// are absorbed here instead of width-checked; diagnostics are
     /// discarded by the caller ([`collect_body_rows`]).
@@ -405,6 +415,8 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         loops: Vec::new(),
         cleanups: Vec::new(),
         trace_points: Vec::new(),
+        comptime_calls: Vec::new(),
+        in_comptime_fn: false,
         collect: None,
         row_fix: None,
     };
@@ -447,6 +459,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     locals,
                     cleanups: c.cleanups,
                     trace_points: c.trace_points,
+                    comptime_calls: c.comptime_calls,
                 })
             } else {
                 BodyResult::Errors(diags)
@@ -497,6 +510,8 @@ pub(crate) fn collect_body_rows(
         loops: Vec::new(),
         cleanups: Vec::new(),
         trace_points: Vec::new(),
+        comptime_calls: Vec::new(),
+        in_comptime_fn: false,
         collect: Some(RowSink::default()),
         row_fix: None,
     };
@@ -692,6 +707,7 @@ impl<'a> Checker<'a> {
             }
         };
         let d = FnDecl::cast(node).expect("kind");
+        self.in_comptime_fn = sig.comptime;
         self.install_generics(&sig.generics);
         self.validate_sig_projections(&sig);
         let because = sig.ret_span.unwrap_or(sig.name_span);
@@ -741,6 +757,7 @@ impl<'a> Checker<'a> {
                     });
                 };
                 let d = FnDecl::cast(node).expect("kind");
+                self.in_comptime_fn = m.sig.comptime;
                 self.install_generics(&m.sig.generics);
                 self.validate_sig_projections(&m.sig);
                 let because = m.sig.ret_span.unwrap_or(m.sig.name_span);
@@ -993,7 +1010,40 @@ impl<'a> Checker<'a> {
         match err {
             UnifyErr::Occurs { var, ty } => self.report_occurs(span, var, ty),
             UnifyErr::Mismatch => self.report_mismatch(span, actual, exp),
+            UnifyErr::NeedsWitness => self.report_needs_witness(span, actual, exp),
         }
+    }
+
+    /// E0707 — const-generic equality beyond the linear line: the
+    /// forms may be equal, but the compiler will not guess, and the
+    /// line is documented right here (s16, report 02 Needs-work #8).
+    fn report_needs_witness(&mut self, span: Span, actual: TyId, exp: &Expect) {
+        let a = self.show(actual);
+        let e = self.show(exp.ty);
+        let mut d = Diagnostic::error(
+            codes::E0707,
+            span,
+            format!("`{a}` and `{e}` may be equal, but proving it needs a witness"),
+        )
+        .with_label("these const expressions differ beyond linear arithmetic");
+        if let Some(because) = exp.because {
+            d = d.with_secondary(because, exp.reason.because_label());
+        }
+        d = d
+            .with_note(
+                "const-expression equality is decided in three steps, and the line \
+                 is fixed: (1) closed expressions evaluate and compare by value; \
+                 (2) `+`/`-` arithmetic over generic parameters compares by ring \
+                 normalization, so `N + 1` equals `1 + N`; (3) anything beyond — \
+                 `*`, `/`, `%`, shifts, bit operators — needs an explicit witness. \
+                 This pair sits at step 3.",
+            )
+            .with_note(
+                "state the equality where the reader can see it: a comptime \
+                 `assert` on the sizes involved, or rewrite both spellings into \
+                 the same `+`/`-` form.",
+            );
+        self.diags.push(d);
     }
 
     /// E0404 — render the cycle.
@@ -2086,12 +2136,6 @@ impl<'a> Checker<'a> {
                         let mut args: Vec<&GreenNode> = Vec::new();
                         for a in c.args().into_iter().flat_map(|a| a.args()) {
                             if let Some(v) = Arg::value(a) {
-                                if is_type_kind(v.kind) {
-                                    return Err(NotYet {
-                                        construct: "a type-shaped argument (s16 comptime)",
-                                        span: v.span,
-                                    });
-                                }
                                 args.push(v);
                             }
                         }
@@ -2113,6 +2157,13 @@ impl<'a> Checker<'a> {
     }
 
     fn synth_expr_inner(&mut self, e: &GreenNode) -> R<TyId> {
+        // A type-shaped node in value position (call arguments like
+        // `typeinfo(*T)`): types are comptime values of kind `type`
+        // (D29, s16). The node elaborates for validation only.
+        if is_type_kind(e.kind) {
+            let _ = self.lower_ty(e);
+            return Ok(self.lo.table.intern(TyKind::TypeTy));
+        }
         match e.kind {
             SyntaxKind::LiteralExpr => Ok(self.synth_literal(e)),
             SyntaxKind::StringExpr => self.synth_string(e),
@@ -2281,10 +2332,10 @@ impl<'a> Checker<'a> {
             });
         }
         if self.generics.contains(&name) || name == "Self" {
-            return Err(NotYet {
-                construct: "a type used as a value (comptime, s16)",
-                span: e.span,
-            });
+            // Types are comptime values (D29, s16): a generic
+            // parameter in expression position is a `type`-kinded
+            // value.
+            return Ok(self.lo.table.intern(TyKind::TypeTy));
         }
         // File-scoped imports next (the resolver's order).
         for b in bindings_for(self.pkg(), self.module, self.file) {
@@ -2324,10 +2375,8 @@ impl<'a> Checker<'a> {
             });
         }
         if prelude::is_builtin_type(&name) {
-            return Err(NotYet {
-                construct: "a type used as a value (comptime, s16)",
-                span: e.span,
-            });
+            // A builtin type name is a `type`-kinded comptime value.
+            return Ok(self.lo.table.intern(TyKind::TypeTy));
         }
         if self.deferred_tag(e).is_some() {
             return Err(NotYet {
@@ -2365,10 +2414,10 @@ impl<'a> Checker<'a> {
                 | ItemSig::Enum { .. }
                 | ItemSig::Alias { .. }
                 | ItemSig::Distinct { .. },
-            ) => Err(NotYet {
-                construct: "a type used as a value (comptime, s16)",
-                span,
-            }),
+            ) => {
+                // Types are comptime values (D29, s16).
+                Ok(self.lo.table.intern(TyKind::TypeTy))
+            }
             Some(ItemSig::Trait) => Err(NotYet {
                 construct: "a trait used as a value (comptime, s16)",
                 span,
@@ -2845,12 +2894,6 @@ impl<'a> Checker<'a> {
     fn synth_args_loosely(&mut self, args: ArgList<'_>) -> R<()> {
         for a in args.args() {
             if let Some(v) = Arg::value(a) {
-                if is_type_kind(v.kind) {
-                    return Err(NotYet {
-                        construct: "a type-shaped argument (s16 comptime)",
-                        span: v.span,
-                    });
-                }
                 self.synth_expr(v)?;
             }
         }
@@ -2871,6 +2914,16 @@ impl<'a> Checker<'a> {
                     // print/print_raw builtin signature.
                     if name == "print" || name == "print_raw" {
                         return self.call_print(&name, e, d.args());
+                    }
+                    // Ambient host surfaces (s16): typed here, callable
+                    // at runtime, categorically refused at comptime by
+                    // the D33 sandbox.
+                    if crate::ctfe::intrinsics::host_stub(&name).is_some() {
+                        return self.call_host_stub(&name, e, d.args());
+                    }
+                    // The comptime intrinsics allowlist (D29/D33).
+                    if let Some(i) = crate::ctfe::intrinsics::intrinsic(&name) {
+                        return self.call_intrinsic(&name, i, e, d.args());
                     }
                     if let Some((module, item)) = self.named_fn_target(&name) {
                         return self.call_named(&item, module, callee.span, e, d.args());
@@ -3054,12 +3107,6 @@ impl<'a> Checker<'a> {
         let mut self_blame = callee_span;
         for (i, arg) in arg_nodes.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
-            if is_type_kind(v.kind) {
-                return Err(NotYet {
-                    construct: "a type-shaped argument (s16 comptime)",
-                    span: v.span,
-                });
-            }
             match method.sig.params.get(i) {
                 Some(p) => {
                     if self_blame == callee_span
@@ -3144,6 +3191,143 @@ impl<'a> Checker<'a> {
         Ok(self.lo.table.unit())
     }
 
+    /// Register a root comptime call site (s16). Sites inside a
+    /// `comptime fn` body are the evaluator's to walk, and the
+    /// row-collection pass never evaluates.
+    fn note_comptime_call(&mut self, span: Span) {
+        if !self.in_comptime_fn && self.collect.is_none() {
+            self.comptime_calls.push(span);
+        }
+    }
+
+    /// An ambient host stub's builtin signature (s16). These type like
+    /// `print`: real signatures so runtime code checks, with the
+    /// comptime sandbox refusing every one of them by category.
+    fn call_host_stub(&mut self, name: &str, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
+        let str_ = self.lo.table.prim(Prim::Str);
+        let int_ = self.lo.table.prim(Prim::Int);
+        let (params, ret): (Vec<TyId>, TyId) = match name {
+            "read_text" | "net_fetch" | "env_var" => (vec![str_], str_),
+            "clock_ms" | "random_seed" => (Vec::new(), int_),
+            _ => (Vec::new(), self.error_ty()),
+        };
+        self.call_fixed(name, &params, ret, e, args)
+    }
+
+    /// A comptime intrinsic call (the D33 allowlist): `typeinfo` /
+    /// `reflect`, `typebuild`, `implements`, `size_of`, `assert`.
+    fn call_intrinsic(
+        &mut self,
+        name: &str,
+        i: crate::ctfe::intrinsics::Intrinsic,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        use crate::ctfe::intrinsics::Intrinsic as I;
+        let type_ty = self.lo.table.intern(TyKind::TypeTy);
+        let bool_ = self.lo.table.prim(Prim::Bool);
+        let int_ = self.lo.table.prim(Prim::Int);
+        let unit = self.lo.table.unit();
+        match i {
+            I::Assert => {
+                // Runtime asserts stay runtime ([conf.trap.map]); the
+                // evaluator owns comptime failures (E0710).
+                self.call_fixed(name, &[bool_], unit, e, args)
+            }
+            I::TypeInfo => {
+                self.note_comptime_call(e.span);
+                let meta = self.lo.table.intern(TyKind::Meta(MetaTy::TypeInfo));
+                self.call_fixed(name, &[type_ty], meta, e, args)
+            }
+            I::SizeOf => {
+                self.note_comptime_call(e.span);
+                self.call_fixed(name, &[type_ty], int_, e, args)
+            }
+            I::TypeBuild => {
+                // The descriptor is a comptime aggregate; its shape is
+                // the evaluator's contract, not a surface type.
+                self.note_comptime_call(e.span);
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(type_ty)
+            }
+            I::Implements => {
+                self.note_comptime_call(e.span);
+                let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+                if arg_nodes.len() != 2 {
+                    self.wrong_arg_count(name, e.span, None, 2, arg_nodes.len());
+                    for a in &arg_nodes {
+                        if let Some(v) = Arg::value(*a) {
+                            self.synth_expr(v)?;
+                        }
+                    }
+                    return Ok(bool_);
+                }
+                if let Some(v) = Arg::value(arg_nodes[0]) {
+                    let exp = Expect {
+                        ty: type_ty,
+                        reason: Reason::ArgOfCall {
+                            callee: name.to_string(),
+                            index: 0,
+                        },
+                        because: None,
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+                // The second argument names a trait — semantic value,
+                // never syntax (the D29 amendment).
+                let trait_ok = Arg::value(arg_nodes[1])
+                    .filter(|v| v.kind == SyntaxKind::PathExpr)
+                    .and_then(|v| PathExpr::cast(v).and_then(|p| p.ident()))
+                    .map(|t| self.text(t.span))
+                    .is_some_and(|n| self.trait_target(&n).is_some());
+                if !trait_ok {
+                    return Err(NotYet {
+                        construct: "an `implements` argument that does not name a trait",
+                        span: arg_nodes[1].syntax().span,
+                    });
+                }
+                Ok(bool_)
+            }
+        }
+    }
+
+    /// Check a call against a fixed (non-generic) builtin signature.
+    fn call_fixed(
+        &mut self,
+        name: &str,
+        params: &[TyId],
+        ret: TyId,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        if arg_nodes.len() != params.len() {
+            self.wrong_arg_count(name, e.span, None, params.len(), arg_nodes.len());
+        }
+        for (i, arg) in arg_nodes.iter().enumerate() {
+            let Some(v) = Arg::value(*arg) else { continue };
+            match params.get(i) {
+                Some(&p) => {
+                    let exp = Expect {
+                        ty: p,
+                        reason: Reason::ArgOfCall {
+                            callee: name.to_string(),
+                            index: i,
+                        },
+                        because: None,
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+                None => {
+                    self.synth_expr(v)?;
+                }
+            }
+        }
+        Ok(ret)
+    }
+
     fn call_named(
         &mut self,
         name: &str,
@@ -3205,6 +3389,11 @@ impl<'a> Checker<'a> {
         e: &GreenNode,
         args: Option<ArgList<'_>>,
     ) -> R<TyId> {
+        // A call to a `comptime fn` from runtime code is a root
+        // comptime site: the ctfe pass evaluates it (D29, s16).
+        if sig.comptime {
+            self.note_comptime_call(e.span);
+        }
         // s14 instantiation: each generic parameter becomes a fresh
         // existential; the *arguments* solve them, and the solutions
         // are checked against the bounds only (never the callee's
@@ -3229,12 +3418,6 @@ impl<'a> Checker<'a> {
         let mut blames: BTreeMap<String, Span> = BTreeMap::new();
         for (i, arg) in arg_nodes.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
-            if is_type_kind(v.kind) {
-                return Err(NotYet {
-                    construct: "a type-shaped argument (s16 comptime)",
-                    span: v.span,
-                });
-            }
             match sig.params.get(i) {
                 Some(p) => {
                     for g in &sig.generics {
@@ -3308,12 +3491,6 @@ impl<'a> Checker<'a> {
                 let callee_name = self.text(callee.span);
                 for (i, arg) in arg_nodes.iter().enumerate() {
                     let Some(v) = Arg::value(*arg) else { continue };
-                    if is_type_kind(v.kind) {
-                        return Err(NotYet {
-                            construct: "a type-shaped argument (s16 comptime)",
-                            span: v.span,
-                        });
-                    }
                     match params.get(i) {
                         Some(&p) => {
                             let exp = Expect {
@@ -3342,12 +3519,6 @@ impl<'a> Checker<'a> {
                 let mut params = Vec::new();
                 for arg in &arg_nodes {
                     let Some(v) = Arg::value(*arg) else { continue };
-                    if is_type_kind(v.kind) {
-                        return Err(NotYet {
-                            construct: "a type-shaped argument (s16 comptime)",
-                            span: v.span,
-                        });
-                    }
                     let t = self.synth_expr(v)?;
                     let p = self.fresh(NumKind::Any, v.span);
                     let _ = unify(&mut self.lo.table, &mut self.vars, t, p);
@@ -3533,6 +3704,18 @@ impl<'a> Checker<'a> {
                 }
             }
             TyKind::Error | TyKind::Never => Ok(self.error_ty()),
+            // Reflection values (s16): a closed member table per meta
+            // kind — semantic values only, no syntax anywhere (D29).
+            TyKind::Meta(m) => {
+                let mname = self.text(member.span);
+                match meta_member_ty(m, &mname) {
+                    Some(k) => Ok(self.lo.table.intern(k)),
+                    None => {
+                        self.unknown_meta_member(m, member.span, &mname);
+                        Ok(self.error_ty())
+                    }
+                }
+            }
             TyKind::Var(_) => Err(NotYet {
                 construct: "member access on an inferred type (s17)",
                 span: e.span,
@@ -3542,6 +3725,27 @@ impl<'a> Checker<'a> {
                 span: e.span,
             }),
         }
+    }
+
+    /// E0403 for reflection values, with the closed member list.
+    fn unknown_meta_member(&mut self, m: MetaTy, span: Span, member: &str) {
+        let members = meta_members(m);
+        let mut d = Diagnostic::error(
+            codes::E0403,
+            span,
+            format!("`{}` has no member named `{member}`", m.name()),
+        )
+        .with_label("unknown reflection member");
+        if let Some(hit) = wolf_diag::suggest::best_match(member, members) {
+            d = d.with_suggestion(Suggestion::new(
+                format!("did you mean `{hit}`?"),
+                vec![(span, hit.to_string())],
+                Applicability::Maybe,
+            ));
+        } else {
+            d = d.with_note(format!("the members are: {}", members.join(", ")));
+        }
+        self.diags.push(d);
     }
 
     /// Member access on an archetype (`T.member`): associated consts
@@ -4295,6 +4499,31 @@ impl<'a> Checker<'a> {
 }
 
 /// The single bound name of a simple pattern (for provenance wording).
+/// The closed member table of each reflection kind (s16).
+fn meta_members(m: MetaTy) -> &'static [&'static str] {
+    match m {
+        MetaTy::TypeInfo => &["kind", "name", "fields", "variants", "traits"],
+        MetaTy::FieldList | MetaTy::VariantList | MetaTy::TraitList => &["len"],
+        MetaTy::Field => &["name", "ty"],
+    }
+}
+
+/// The type of one reflection member, if it exists.
+fn meta_member_ty(m: MetaTy, member: &str) -> Option<TyKind> {
+    Some(match (m, member) {
+        (MetaTy::TypeInfo, "kind" | "name") => TyKind::Prim(Prim::Str),
+        (MetaTy::TypeInfo, "fields") => TyKind::Meta(MetaTy::FieldList),
+        (MetaTy::TypeInfo, "variants") => TyKind::Meta(MetaTy::VariantList),
+        (MetaTy::TypeInfo, "traits") => TyKind::Meta(MetaTy::TraitList),
+        (MetaTy::FieldList | MetaTy::VariantList | MetaTy::TraitList, "len") => {
+            TyKind::Prim(Prim::Int)
+        }
+        (MetaTy::Field, "name") => TyKind::Prim(Prim::Str),
+        (MetaTy::Field, "ty") => TyKind::TypeTy,
+        _ => return None,
+    })
+}
+
 fn single_ident(pat: &GreenNode, src: &[u8]) -> Option<String> {
     if pat.kind == SyntaxKind::IdentPat {
         let t = pat.child_token(SyntaxKind::Ident)?;

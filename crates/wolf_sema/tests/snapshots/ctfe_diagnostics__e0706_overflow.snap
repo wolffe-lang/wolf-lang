@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0706]: this `+` on `i32` faults at compile time: 2147483647 + 1 leaves `i32`'s range
+ --> mem:///main.lu:3:5
+  |
+3 |     big + 1
+  |     ^^^^^^^ checked arithmetic, comptime included
+...
+7 |     const B = brim()
+  |               ------ while evaluating `brim`, entered here
+  |               ------ while evaluating `main`, entered here
+  |
+  = note: checked arithmetic has one semantics everywhere (X3): what would trap at runtime is an
+    error at comptime — intended wraparound is spelled `wrapping[T]`, never a mode.

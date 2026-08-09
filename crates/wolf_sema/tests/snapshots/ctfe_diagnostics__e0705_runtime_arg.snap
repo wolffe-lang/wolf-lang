@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0705]: `x` is a runtime value, so this cannot evaluate at compile time
+ --> mem:///main.lu:7:22
+  |
+7 |     const Y = double(x)
+  |               --------- while evaluating `main`, entered here
+  |                      ^ must be comptime-known
+  |
+  = note: a `comptime fn` runs during compilation: every argument must be a literal, a `const`, a
+    type, or the result of another comptime call.

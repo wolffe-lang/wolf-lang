@@ -113,6 +113,37 @@ impl Prim {
     }
 }
 
+/// The closed family of comptime reflection types (s16, D29). Small on
+/// purpose: reflection consumes and produces *semantic* values — types,
+/// fields, variants, traits — never syntax (the D29 amendment).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub enum MetaTy {
+    /// `typeinfo(T)` — kind, name, fields, variants, implemented
+    /// traits. Field offsets stay unresolved until c05 lays types out.
+    TypeInfo,
+    /// `typeinfo(T).fields` — the field list (`.len` today; indexing
+    /// arrives with s17 brackets).
+    FieldList,
+    /// One field description: `.name`, `.ty`.
+    Field,
+    /// `typeinfo(T).variants` — the enum variant list.
+    VariantList,
+    /// `typeinfo(T).traits` — the implemented-trait name list.
+    TraitList,
+}
+
+impl MetaTy {
+    pub fn name(self) -> &'static str {
+        match self {
+            MetaTy::TypeInfo => "TypeInfo",
+            MetaTy::FieldList => "FieldList",
+            MetaTy::Field => "Field",
+            MetaTy::VariantList => "VariantList",
+            MetaTy::TraitList => "TraitList",
+        }
+    }
+}
+
 /// One interned type's structure. Children are [`TyId`]s into the same
 /// table, so the arena is flat and cycles are unrepresentable (nominal
 /// types refer to their definition by name, never by structure).
@@ -197,6 +228,11 @@ pub enum TyKind {
     RegionTy,
     /// The `type` type (comptime, D29).
     TypeTy,
+    /// A comptime-only reflection value's type (s16, D29): what
+    /// `typeinfo(T)` and its projections type as. These kinds exist
+    /// only during semantic analysis — reflection values never reach
+    /// runtime code, and no runtime type ever unifies with one.
+    Meta(MetaTy),
     /// A type form s13 elaborates only as an opaque token (generic
     /// instantiations like `List[int]`). Carries its rendered source
     /// form; equal only to the identical rendering. Any *operation* on
@@ -432,6 +468,7 @@ pub fn render(
         TyKind::Proj(base, name) => format!("{}.{name}", render(table, *base, resolve)),
         TyKind::RegionTy => "region".to_string(),
         TyKind::TypeTy => "type".to_string(),
+        TyKind::Meta(m) => m.name().to_string(),
         TyKind::Unsupported(s) => s.clone(),
     }
 }

@@ -26,8 +26,24 @@ pub const PRELUDE: &[&str] = &[
     // small helpers the corpus leans on
     "min",
     "zip",
-    // comptime reflection (D29)
+    // comptime reflection intrinsics (D29, s16 — the explicit
+    // allowlist; `reflect` is the s02 corpus spelling of `typeinfo`)
     "reflect",
+    "typeinfo",
+    "typebuild",
+    "implements",
+    "size_of",
+    // assertions ([conf.trap.map]: the one user-raised trap; at
+    // comptime a failure is E0710)
+    "assert",
+    // ambient host surfaces (s16 sandbox probes; callable at runtime,
+    // categorically refused at comptime — D33). Retire with s05's
+    // real std surface like the stand-ins below.
+    "read_text",
+    "net_fetch",
+    "env_var",
+    "clock_ms",
+    "random_seed",
     // provisional corpus stand-ins (retire with s05's real std surface)
     "acquire",
     "release",

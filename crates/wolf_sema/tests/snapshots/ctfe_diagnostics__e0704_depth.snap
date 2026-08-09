@@ -1,0 +1,21 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0704]: comptime evaluation recursed past 256 call frames
+ --> mem:///main.lu:2:5
+  |
+2 |     dive(n + 1)
+  |     ^^^^^^^^^^^ the call that went over the limit
+  |     ----------- while evaluating `dive` — 254 recursive frames
+...
+6 |     const D = dive(0)
+  |               ------- while evaluating `dive`, entered here
+  |               ------- while evaluating `main`, entered here
+  |
+  = note: call depth is a resource limit, not a host stack: deep recursion is refused with this
+    report instead of crashing the compiler (D33).
+help: raise the budget here: `#[budget(depth = 512)]`
+  |
+6 |     #[budget(depth = 512)]
+  |

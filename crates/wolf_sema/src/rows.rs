@@ -231,6 +231,7 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
         TyKind::Dyn { module, name } => dst.intern(TyKind::Dyn { module, name }),
         TyKind::RegionTy => dst.intern(TyKind::RegionTy),
         TyKind::TypeTy => dst.intern(TyKind::TypeTy),
+        TyKind::Meta(m) => dst.intern(TyKind::Meta(m)),
         TyKind::Unsupported(s) => dst.intern(TyKind::Unsupported(s)),
         TyKind::InferredRow { module, name } => dst.intern(TyKind::InferredRow { module, name }),
         TyKind::Wrapping(t) => {

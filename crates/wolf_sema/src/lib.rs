@@ -109,6 +109,7 @@
 //! the real standard library lands (s05/s51).
 
 pub mod check;
+pub mod ctfe;
 pub mod graph;
 pub mod interface;
 pub mod prelude;
@@ -122,6 +123,7 @@ pub mod types;
 pub mod unify;
 
 pub use check::{BodyRef, BodyResult, NotYet, TypedBody, check_body};
+pub use ctfe::{Budget, CtfeStats, Engine, ValueArena, ValueKind};
 pub use graph::{
     AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, MemoryLoader, ModuleData,
     ModuleLoader, Package, RawFile, SourceUnit, Vis, load_package,
@@ -131,4 +133,4 @@ pub use resolve::{Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_packag
 pub use sig::{BoundRef, GenericSig, ItemSig, SigTables, build_sigs};
 pub use traits::{DynReport, ImplDef, TraitDef, TraitRef};
 pub use typecheck::{BodyOutcome, Typecheck, typecheck_package, typecheck_package_with};
-pub use types::{Prim, TyId, TyKind, TypeTable};
+pub use types::{MetaTy, Prim, TyId, TyKind, TypeTable};

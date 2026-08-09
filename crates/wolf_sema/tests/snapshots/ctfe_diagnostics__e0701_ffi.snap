@@ -1,0 +1,20 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0701]: `c_abs` reaches native code, which comptime code can never touch
+ --> mem:///main.lu:4:5
+  |
+4 |     c_abs(n)
+  |     ^^^^^^^^ outside the sandbox
+...
+8 |     const M = magnitude(-3)
+  |               ------------- while evaluating `magnitude`, entered here
+  |               ------------- while evaluating `main`, entered here
+  |
+  = note: why it is refused — confinement: the sandbox cannot see into native code, so it never
+    runs any.
+  = note: the comptime sandbox is hermetic (D33): the intrinsics available at compile time are an
+    explicit allowlist, and nothing ambient is on it. Compute this value at runtime instead;
+    file contents will arrive later as declared build inputs (s51), never as an evaluator
+    capability.

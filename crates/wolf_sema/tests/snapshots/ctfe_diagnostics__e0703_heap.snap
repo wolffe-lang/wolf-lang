@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0703]: comptime evaluation exceeded its heap budget of 65536 cells
+  --> mem:///main.lu:11:15
+   |
+11 |     const N = flood()
+   |               ^^^^^^^ the allocation that went over happened here
+   |               ------- while evaluating `flood`, entered here
+   |               ------- while evaluating `main`, entered here
+   |
+   = note: the comptime heap is capped so evaluation cannot exhaust the machine compiling the
+     program (D33); most overruns are unbounded value growth in a loop.
+help: raise the budget here: `#[budget(heap = 131072)]`
+   |
+10 |     #[budget(heap = 131072)]
+   |

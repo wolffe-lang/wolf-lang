@@ -37,11 +37,16 @@ pub struct BodyOutcome {
 pub struct Typecheck {
     pub sigs: SigTables,
     pub bodies: Vec<BodyOutcome>,
-    /// Signature diagnostics + body errors, deterministically sorted.
-    /// Meaningful for the rung verdict only when `not_yet` is empty.
+    /// Signature diagnostics + body errors + comptime faults (s16),
+    /// deterministically sorted. Meaningful for the rung verdict only
+    /// when `not_yet` is empty.
     pub diagnostics: Vec<Diagnostic>,
-    /// Every NotYetCheckable refusal, in body order.
+    /// Every NotYetCheckable refusal, in body order — checker
+    /// refusals first, then comptime-evaluator gaps (s16).
     pub not_yet: Vec<NotYet>,
+    /// Comptime evaluation counters (s16): memo hit rate rides the
+    /// D5 bench stream.
+    pub ctfe: crate::ctfe::CtfeStats,
 }
 
 impl Typecheck {
@@ -102,12 +107,19 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
         }
         bodies.push(BodyOutcome { body, result });
     }
+    // The comptime pass (s16): every registered comptime call site in
+    // a checked body evaluates under its budget; faults are catalog
+    // diagnostics, engine gaps are honest NotYet refusals.
+    let ctfe_pass = crate::ctfe::run_package(pkg, &sigs, &bodies);
+    diagnostics.extend(ctfe_pass.diagnostics);
+    not_yet.extend(ctfe_pass.not_yet);
     wolf_diag::sort_diagnostics(&mut diagnostics);
     Typecheck {
         sigs,
         bodies,
         diagnostics,
         not_yet,
+        ctfe: ctfe_pass.stats,
     }
 }
 

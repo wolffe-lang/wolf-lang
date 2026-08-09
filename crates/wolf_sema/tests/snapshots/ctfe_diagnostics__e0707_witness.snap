@@ -1,0 +1,19 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0707]: `Buf[N + N]` and `Buf[N * 2]` may be equal, but proving it needs a witness
+ --> mem:///main.lu:6:5
+  |
+5 | fn sneak[N: type](b: Buf[N + N]) -> Buf[N * 2] {
+  |                                  ------------- the return type is declared here
+6 |     b
+  |     ^ these const expressions differ beyond linear arithmetic
+  |
+  = note: const-expression equality is decided in three steps, and the line is fixed: (1) closed
+    expressions evaluate and compare by value; (2) `+`/`-` arithmetic over generic
+    parameters compares by ring normalization, so `N + 1` equals `1 + N`; (3) anything
+    beyond — `*`, `/`, `%`, shifts, bit operators — needs an explicit witness. This pair
+    sits at step 3.
+  = note: state the equality where the reader can see it: a comptime `assert` on the sizes
+    involved, or rewrite both spellings into the same `+`/`-` form.

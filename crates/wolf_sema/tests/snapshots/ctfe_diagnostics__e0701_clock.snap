@@ -1,0 +1,19 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0701]: `clock_ms` reaches the clock, which comptime code can never touch
+ --> mem:///main.lu:2:5
+  |
+2 |     clock_ms()
+  |     ^^^^^^^^^^ ambient IO at compile time
+...
+6 |     const STAMP = build_stamp()
+  |                   ------------- while evaluating `build_stamp`, entered here
+  |                   ------------- while evaluating `main`, entered here
+  |
+  = note: why it is refused — determinism: two identical builds must not observe different times.
+  = note: the comptime sandbox is hermetic (D33): the intrinsics available at compile time are an
+    explicit allowlist, and nothing ambient is on it. Compute this value at runtime instead;
+    file contents will arrive later as declared build inputs (s51), never as an evaluator
+    capability.

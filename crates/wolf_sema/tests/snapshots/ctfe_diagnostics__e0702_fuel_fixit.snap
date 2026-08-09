@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0702]: comptime evaluation ran out of fuel after 1000000 steps
+ --> mem:///main.lu:7:15
+  |
+7 |     const N = spin()
+  |               ^^^^^^ evaluation stopped here
+  |               ------ while evaluating `spin`, entered here
+  |               ------ while evaluating `main`, entered here
+  |
+  = note: fuel bounds how long the compiler will evaluate before concluding the computation is
+    runaway — a build can be slow, never hung (D33).
+help: raise the budget here: `#[budget(fuel = 2000000)]`
+  |
+7 |     #[budget(fuel = 2000000)]
+  |

@@ -98,6 +98,10 @@ pub enum UnifyErr {
     /// Occurs-check failure: binding `var` to `ty` would build an
     /// infinite type (E0404 renders the cycle).
     Occurs { var: TyId, ty: TyId },
+    /// Two const-generic argument forms differ beyond the linear
+    /// line ([`crate::ctfe::norm`], s16): they *may* be equal, but
+    /// deciding it needs an explicit witness (E0707) — never a guess.
+    NeedsWitness,
 }
 
 /// The per-body variable arena + undo log.
@@ -382,7 +386,20 @@ pub fn unify(
                 name: nb,
             },
         ) if ma == mb && na == nb => Ok(()),
-        (TyKind::Unsupported(x), TyKind::Unsupported(y)) if x == y => Ok(()),
+        // Opaque forms (generic instantiations with possible
+        // const-generic arguments): identical renderings are equal;
+        // differing renderings go through const-expression
+        // normalization (s16) — closed expressions compare by value,
+        // linear arithmetic ring-normalizes, and anything beyond the
+        // line asks for a witness rather than guessing.
+        (TyKind::Unsupported(x), TyKind::Unsupported(y)) => {
+            match crate::ctfe::norm::opaque_eq(&x, &y) {
+                crate::ctfe::norm::OpaqueEq::Equal => Ok(()),
+                crate::ctfe::norm::OpaqueEq::Distinct => Err(UnifyErr::Mismatch),
+                crate::ctfe::norm::OpaqueEq::NeedsWitness => Err(UnifyErr::NeedsWitness),
+            }
+        }
+        (TyKind::Meta(x), TyKind::Meta(y)) if x == y => Ok(()),
         (
             TyKind::Dyn {
                 module: ma,

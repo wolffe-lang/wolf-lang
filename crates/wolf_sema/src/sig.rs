@@ -80,6 +80,10 @@ pub struct FnSig {
     /// ⇒ calls instantiate (s14: fresh existentials per parameter,
     /// argument-driven, bounds checked at the call site only).
     pub generics: Vec<GenericSig>,
+    /// `comptime fn` (D29, s16): calls with comptime-known arguments
+    /// evaluate during checking; the body itself checks like any
+    /// other body.
+    pub comptime: bool,
 }
 
 impl FnSig {
@@ -529,6 +533,7 @@ impl<'a> Lower<'a> {
             ret_span,
             row_span,
             generics: own,
+            comptime: d.is_comptime(),
         }
     }
 

@@ -35,7 +35,7 @@ use wolf_ast::{ConstDecl, FnDecl, GreenNode, ImplDecl, SyntaxKind, TraitDecl, Ty
 use wolf_diag::{Diagnostic, codes};
 use wolf_span::Span;
 
-use crate::graph::ItemKind;
+use crate::graph::{ItemKind, Package};
 use crate::rewrite;
 use crate::sig::{BoundRef, FnSig, GenericSig, Lower, SigTables, TypeHead};
 use crate::types::{Prim, TyId, TyKind, TypeTable, render, subst};
@@ -924,6 +924,23 @@ fn check_method_match(
         let g = render(&lower.table, got, &|_| Err("_"));
         mismatch(lower, format!("it returns `{g}`, but the trait says `{w}`"));
     }
+}
+
+/// s16 staged-diagnostics surface: conformance-check ONE synthesized
+/// (reflection-generated) impl and return its diagnostics. The impl
+/// goes through exactly the machinery handwritten impls do
+/// ([`check_conformance`]) — comptime produces concrete code that is
+/// then ordinarily checked (D29). `table` must be the table the
+/// impl's `TyId`s live in.
+pub(crate) fn check_generated_impl(
+    pkg: &Package,
+    sigs: &SigTables,
+    table: TypeTable,
+    imp: &ImplDef,
+) -> Vec<wolf_diag::Diagnostic> {
+    let mut lower = Lower::new(pkg, table);
+    check_conformance(&mut lower, &sigs.traits, std::slice::from_ref(imp));
+    lower.diags
 }
 
 // ------------------------------------------------------- dyn safety ----

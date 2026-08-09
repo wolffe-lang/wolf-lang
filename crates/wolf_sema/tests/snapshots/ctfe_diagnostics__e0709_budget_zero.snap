@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0709]: a comptime budget cannot be turned off — `fuel = 0` would disable the limit
+ --> mem:///main.lu:6:14
+  |
+6 |     #[budget(fuel = 0)]
+  |              ^^^^^^^^ budgets are raised, never removed
+  |
+  = note: the sandbox guarantee (D33) includes bounded evaluation: every budget has a default, a
+    per-site override, and a hard ceiling — there is no spelling that removes one.
