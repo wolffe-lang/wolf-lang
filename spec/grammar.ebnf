@@ -49,7 +49,7 @@ enum_item   ::= 'enum' IDENT generics? '{' variant (',' variant)* ','? '}'
 
 trait_item ::= 'trait' IDENT generics? '{' trait_member* '}'
 trait_member ::= fn_item | type_item | const_item
-impl_item  ::= 'impl' generics? path ('for' type)? '{' impl_member* '}'
+impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item
 
 attribute ::= '#[' attr (',' attr)* ']'

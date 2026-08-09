@@ -233,12 +233,19 @@ enum_item   ::= 'enum' IDENT generics? '{' variant (',' variant)* ','? '}'
 ```ebnf
 trait_item ::= 'trait' IDENT generics? '{' trait_member* '}'
 trait_member ::= fn_item | type_item | const_item
-impl_item  ::= 'impl' generics? path ('for' type)? '{' impl_member* '}'
+impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item
 ```
 
 Nominal traits, checked generics (D28). Adapter types are ordinary
-`struct` + `impl` — no dedicated syntax.
+`struct` + `impl` — no dedicated syntax. The impl subject is a *type*
+(so `impl[T] List[T] { … }` works); when `for` is present the first
+type is the trait path applied to its arguments.
+
+Punctuation asymmetry, intentional: struct **fields** are
+newline-separated declarations (per-field `','?`); enum **variants**
+and error-**row** entries are comma-punctuated lists. Fields read like
+items; variants and rows read like alternatives.
 
 ### 2.7 Attributes `[gram.item.attr]`
 
