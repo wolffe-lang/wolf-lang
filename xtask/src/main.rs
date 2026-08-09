@@ -656,6 +656,7 @@ fn diag_catalog(check: bool) -> ExitCode {
     for krate in std::fs::read_dir("crates").expect("crates dir").flatten() {
         collect_snap_files(&krate.path().join("tests").join("snapshots"), &mut snaps);
     }
+    snaps.sort(); // read_dir order is filesystem-dependent; the catalog is not
     let all_snaps: Vec<(PathBuf, String)> = snaps
         .into_iter()
         .map(|p| {

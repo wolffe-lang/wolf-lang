@@ -25,7 +25,7 @@ grammar rejects rather than silently ignoring — a stray `;` is usually
 a typo or a leftover from another language. Delete the `;`; use it only
 to separate statements written on a single line.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__semicolon.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0002_empty_statement.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__semicolon.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__semicolon.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__semicolon.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__semicolon.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__semicolon.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0002_empty_statement.snap
 
 ## E0003 — comparison operators do not chain
 
@@ -81,7 +81,7 @@ trailing underscore (`type_`) or a more specific word (`kind`,
 `variant`). Member access is the one keyword-transparent position:
 `x.take(n)` is fine because `.take` can only be a member name.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__when_reserved.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0008_minimal.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__when_reserved.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0008_when_reserved.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__when_reserved.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__when_reserved.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__when_reserved.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__when_reserved.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0008_minimal.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0008_when_reserved.snap
 
 ## E0101 — invalid escape sequence in a string literal
 
@@ -94,13 +94,13 @@ regex or a Windows path ended up in the wrong kind of string. For a
 literal backslash write `\\`; for text that should not be escaped at
 all, use a raw string `r"…"`, which has no escapes.
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap
+Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap
 
 ## E0101 — one-line summary
 
 extended explanation
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap
+Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap
 
 ## E0102 — unterminated string literal or interpolation
 
@@ -136,7 +136,7 @@ closing `"""` left to the shallowest content line. Blank lines are
 exempt. This code also fires when the closing `"""` is not alone on its
 line — its column *is* the margin, so it must stand alone.
 
-Fixtures: crates/wolf_lex/tests/snapshots/render__render_e0104_two_locus.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0104.snap
+Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0104.snap, crates/wolf_lex/tests/snapshots/render__render_e0104_two_locus.snap
 
 ## E0105 — margin tabs and spaces do not match the closing `\
 
@@ -171,7 +171,7 @@ UTF-8). Delete the character. A related case is a lone `}` inside a
 string: `}` closes an interpolation there, so a literal closing brace
 must be written `}}` (just as `{{` is a literal `{`).
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0107.snap, crates/wolf_lex/tests/snapshots/render__render_e0107_lone_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_lone_brace.snap, crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation.snap, crates/wolf_diag/tests/snapshots/render_snapshots__tab_expansion.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__tab_expansion.snap, crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_lone_brace.snap, crates/wolf_lex/tests/snapshots/render__render_e0107_lone_brace.snap
 
 ## E0108 — string/interpolation nesting exceeds the lexer's 32-level rail
 
@@ -189,7 +189,7 @@ Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0108.snap
 
 …
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0109_raw.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0109_generalized.snap
+Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0109_generalized.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0109_raw.snap
 
 ## E0201 — the parser expected a different token or construct here
 
@@ -201,7 +201,7 @@ zero-width placeholder and continues, so one miss does not cascade into
 a screenful. Fix the flagged spot first: later errors in the same
 region may be echoes of this one.
 
-Fixtures: crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
 
 ## E0202 — an opening delimiter is never closed
 
@@ -214,7 +214,7 @@ next declaration keyword and reports the wreck once. If the code below
 this error looks fine, trust the opener: count delimiters on the
 flagged line.
 
-Fixtures: crates/wolf_parse/tests/snapshots/broken_suite__half_typed_fn_header.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_rparen.snap, crates/wolf_parse/tests/snapshots/broken_suite__unclosed_brace_eof.snap, crates/wolf_parse/tests/snapshots/broken_suite__call_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/render__render_e0202.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_brace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_paren.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_primary.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_elided.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__multiline_elided.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_primary.snap, crates/wolf_parse/tests/snapshots/broken_suite__call_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/broken_suite__half_typed_fn_header.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_rparen.snap, crates/wolf_parse/tests/snapshots/broken_suite__unclosed_brace_eof.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_brace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/render__render_e0202.snap
 
 ## E0203 — expected a declaration at the top level
 
@@ -300,4 +300,4 @@ the suggested edit does exactly that. (If you meant to index with a
 negative *computed* value, that is a bounds error at runtime; compute
 the offset explicitly instead.)
 
-Fixtures: crates/wolf_parse/tests/snapshots/diagnostics__e0209_negative_index.snap, crates/wolf_parse/tests/snapshots/render__render_e0209.snap, crates/wolf_diag/tests/snapshots/render_snapshots__suggestion_edit_preview.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__suggestion_edit_preview.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0209_negative_index.snap, crates/wolf_parse/tests/snapshots/render__render_e0209.snap
