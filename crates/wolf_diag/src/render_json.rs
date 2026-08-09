@@ -51,7 +51,28 @@ pub fn render_json_line(d: &Diagnostic) -> String {
         }
         suggestion(&mut s, sugg);
     }
-    s.push_str("]}");
+    s.push(']');
+    // Optional within schema v1 (consumers ignore unknown keys): the
+    // structural row diff of E06xx diagnostics — tags only, never
+    // whole rows (s15/D30).
+    if let Some(rd) = &d.row_diff {
+        s.push_str(",\"row_diff\":{\"missing\":[");
+        for (i, t) in rd.missing.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            string(&mut s, t);
+        }
+        s.push_str("],\"extra\":[");
+        for (i, t) in rd.extra.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            string(&mut s, t);
+        }
+        s.push_str("]}");
+    }
+    s.push('}');
     s
 }
 

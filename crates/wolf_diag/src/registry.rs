@@ -707,6 +707,104 @@ concrete type and let the others build on it.
 "#);
 
 // ------------------------------------------------------------------------
+// E06xx — error rows, `?`, `else`, `errdefer` (s15, D30).
+// ------------------------------------------------------------------------
+
+code!(E0601, "the error row is not well-formed", r#"
+An error row is a *set* of payload-carrying tags, so each tag may appear
+exactly once — `{Io(str), Io}` is rejected on the second `Io`, not
+silently merged, because two entries for one tag would disagree about
+its payload. The same rule keeps a row to at most one row variable (the
+entry naming a generic parameter, the row's polymorphic tail): a row
+extends exactly one tail. Delete the duplicate entry, or if the two
+entries really are different failures, give them different tag names —
+tags are structural, so any name you have not used yet is free.
+"#);
+
+code!(E0602, "the error row does not include this tag", r#"
+An error can only flow where the receiving row expects it. This
+failure carries a tag — raised directly, or propagated by `?` from a
+callee's row — that the target row does not include. Rows compose by
+union and widen automatically toward *larger* rows, so the fix is
+almost always to extend the narrower row: the suggested edit adds the
+missing tags to the signature. There is no `From`-style conversion in
+`?` (deliberately — conversion in the operator makes inference
+unsolvable); if you meant to *collapse* several failure kinds into one,
+do it explicitly: handle the error (`else |err| …`) and raise your own
+tag. Functions with an inferred row (`-> !T`, private only) never hit
+this error — their rows grow to fit their bodies.
+"#);
+
+code!(E0603, "`?` needs a fallible operand", r#"
+The `?` operator propagates the error of a `!T` value and unwraps its
+ok half — but the expression it is applied to here cannot fail: its
+type has no error row. A `?` on an infallible value would do nothing,
+and wolf rejects dead operators rather than ignoring them, since a
+stray `?` usually means the call you expected to be fallible is not
+(check the callee's signature), or the value was already unwrapped by
+an earlier `?` or `else`. Delete the `?`, or apply it to the fallible
+call itself.
+"#);
+
+code!(E0604, "an error cannot leave a function with no error row", r#"
+This function's signature has no error row — it promises to always
+return normally — but the body raises or propagates an error (`?`, or
+an error-tag return). Errors are values that travel in the declared
+row, never an invisible side channel, so the signature must admit the
+failure. Make the function fallible: write `-> !T` (private functions
+infer their row from the body) or state the row explicitly with
+`-> T ! {Tag, …}`; or handle the error here instead — `else` with a
+default, or `else |err| …` — so nothing needs to escape.
+"#);
+
+code!(E0605, "an exported function must state its error row", r#"
+Inferred rows (`-> !T`) are legal for module-private functions only:
+the compiler seals the row from the body, and no one outside the
+module ever depends on it. An exported (`pub`/`pub(pkg)`) signature is
+a contract other modules rebuild against, so its failure set must be
+stated in the interface, not derived from a body that can drift —
+Zig's inferred error sets show how an inferred public surface breaks
+recursion, function pointers, and target independence. The message
+names the sealed row the body implies; the suggested edit writes
+exactly that row into the signature (or drops the `!` when the body
+cannot fail at all).
+"#);
+
+code!(E0606, "the payloads of a shared error tag do not match", r#"
+Two rows share a tag name, but disagree about what the tag carries —
+`NotFound(Path)` cannot propagate into a row expecting `NotFound(str)`,
+and a raise of `Bad(int, int)` does not fit a row declaring `Bad(int)`.
+Tag names are structural, so the same name in two signatures is *the
+same tag*, and its payload types must agree everywhere it appears
+(propagation re-tags by injection — a bit-level move, never a
+conversion). Align the payload types across the signatures, or give
+the two failures different tag names if they are genuinely different
+shapes.
+"#);
+
+code!(E0607, "`errdefer` only runs in a function that can fail", r#"
+`errdefer` schedules cleanup for the *error path*: it runs only when
+the function exits by returning an error, interleaved with `defer` in
+reverse declaration order. In a function with no error row there is no
+error path, so this `errdefer` could never run — wolf rejects dead
+cleanup rather than silently keeping it. Use plain `defer` if the
+cleanup should run on every exit; keep `errdefer` and make the
+function fallible (`-> !T` or an explicit row) if this function really
+can fail.
+"#);
+
+code!(E0608, "`else` defaulting needs a fallible operand", r#"
+Postfix `else` is the defaulting operator: it takes a `!T` value and
+either substitutes the fallback or hands the error to a `|err|`
+handler. The expression to its left cannot fail, so there is nothing
+to default — the `else` would never fire. This usually means the
+fallible call was already unwrapped (an earlier `?` or `else`), or the
+callee is not actually fallible. Delete the `else`, or attach it to
+the fallible expression itself. (An `else` completing an `if` is a
+different construct — this message is about `expr else fallback`.)
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — the formatter's family (s11).
 // ------------------------------------------------------------------------
 

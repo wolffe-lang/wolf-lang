@@ -48,6 +48,18 @@ fn check_line(v: &serde_json::Value) {
             e["replacement"].as_str().expect("replacement");
         }
     }
+    // `row_diff` is optional within v1 (added by s15; consumers ignore
+    // unknown keys). When present, it is the structural shape.
+    if let Some(rd) = v.get("row_diff")
+        && !rd.is_null()
+    {
+        for t in rd["missing"].as_array().expect("missing array") {
+            t.as_str().expect("missing tag is a string");
+        }
+        for t in rd["extra"].as_array().expect("extra array") {
+            t.as_str().expect("extra tag is a string");
+        }
+    }
 }
 
 #[test]

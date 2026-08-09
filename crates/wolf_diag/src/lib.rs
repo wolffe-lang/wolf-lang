@@ -129,10 +129,22 @@ impl Suggestion {
     }
 }
 
+/// A structural error-row diff (s15, D30): the tags one row lacks and
+/// the tags it has over — never whole rows. Rides the JSON format
+/// structurally (`row_diff`, optional) so tools need not parse prose.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct RowDiff {
+    /// Tags required but absent from the target row, source-rendered
+    /// (`Io(IoError)`).
+    pub missing: Vec<String>,
+    /// Tags present but not required, source-rendered.
+    pub extra: Vec<String>,
+}
+
 /// One structured diagnostic. `code` participates in the differential
 /// protocol (spec/06 `[proto.record.diag]`); messages never do — wording
 /// is a per-implementation quality concern governed by `VOICE.md`.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub code: Code,
     pub severity: Severity,
@@ -146,6 +158,29 @@ pub struct Diagnostic {
     pub notes: Vec<String>,
     /// Concrete fixes, rendered as prose + an edited-line preview.
     pub suggestions: Vec<Suggestion>,
+    /// The structural row diff, when this diagnostic is about error
+    /// rows (E06xx).
+    pub row_diff: Option<RowDiff>,
+}
+
+// Manual Debug: `row_diff` appears only when present, so the many
+// committed Debug-format snapshots of row-less diagnostics stay
+// byte-stable (snapshots are reviewed artifacts).
+impl std::fmt::Debug for Diagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("Diagnostic");
+        s.field("code", &self.code)
+            .field("severity", &self.severity)
+            .field("message", &self.message)
+            .field("primary", &self.primary)
+            .field("secondary", &self.secondary)
+            .field("notes", &self.notes)
+            .field("suggestions", &self.suggestions);
+        if let Some(rd) = &self.row_diff {
+            s.field("row_diff", rd);
+        }
+        s.finish()
+    }
 }
 
 impl Diagnostic {
@@ -163,6 +198,7 @@ impl Diagnostic {
             secondary: Vec::new(),
             notes: Vec::new(),
             suggestions: Vec::new(),
+            row_diff: None,
         }
     }
 
@@ -204,6 +240,13 @@ impl Diagnostic {
     #[must_use]
     pub fn with_suggestion(mut self, suggestion: Suggestion) -> Diagnostic {
         self.suggestions.push(suggestion);
+        self
+    }
+
+    /// Attach the structural row diff (E06xx).
+    #[must_use]
+    pub fn with_row_diff(mut self, diff: RowDiff) -> Diagnostic {
+        self.row_diff = Some(diff);
         self
     }
 }

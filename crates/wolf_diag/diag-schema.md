@@ -24,6 +24,16 @@ compatibility test lives in `tests/json_schema.rs` next to the fixture
 | `secondary`   | array of span obj | why (may reference other files)         |
 | `notes`       | array of string | free-standing prose                        |
 | `suggestions` | array of suggestion obj | concrete fixes                     |
+| `row_diff`    | row-diff obj | *optional* (present on E06xx error-row diagnostics only) |
+
+## Row-diff object (s15, D30)
+
+The structural error-row delta — tags only, never whole rows:
+
+| field     | type            | meaning                                     |
+|-----------|-----------------|---------------------------------------------|
+| `missing` | array of string | tags the target row lacks, source-rendered (`Io(IoError)`) |
+| `extra`   | array of string | tags present but not required               |
 
 ## Span object
 
