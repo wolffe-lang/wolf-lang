@@ -18,6 +18,11 @@
   updates `corpus/` in the same commit as the spec change — the corpus is
   never allowed to drift from the locked surface (s02 discipline; review
   checklist item).
+- Diagnostic messages follow `crates/wolf_diag/VOICE.md` (full sentences,
+  second person, concrete next step — Elm's register). New-diagnostic PRs
+  quote the guide in review; every code needs a registry entry with a real
+  explanation and ≥1 snapshot fixture (`cargo xtask diag-catalog` gates).
+  Compiler-phase crates never print (`cargo xtask print-gate`).
 - Platform-agnostic by default: code must not assume linux/x86-64; the CI
   matrix (linux x86-64/aarch64, macOS aarch64, windows x86-64, freebsd
   cross-build) is the arbiter.
