@@ -1,0 +1,7 @@
+---
+source: xtask/tests/directive_snapshots.rs
+expression: "xtask::corpus::parse_directives(\"//! phase: sema\\n\")"
+---
+Err(
+    "line 1: unknown phase `sema` (canonical: none, lex, parse, resolve, typecheck, mem, wir, run)",
+)

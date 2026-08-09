@@ -1,0 +1,27 @@
+---
+source: xtask/tests/directive_snapshots.rs
+expression: "xtask::corpus::parse_directives(src)"
+---
+Ok(
+    Directives {
+        check: Some(
+            Run(
+                RunExpect {
+                    exit: Code(
+                        0,
+                    ),
+                    stdout: Some(
+                        "hi, wolf",
+                    ),
+                },
+            ),
+        ),
+        phase: Some(
+            "run",
+        ),
+        conforms: [
+            "str.interp",
+            "mem.region.freeze",
+        ],
+    },
+)
