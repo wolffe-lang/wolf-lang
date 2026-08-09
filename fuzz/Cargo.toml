@@ -1,0 +1,25 @@
+# cargo-fuzz scaffold (s01). Standalone workspace — built by
+# `cargo xtask fuzz-smoke` (and nightly CI), not by the main workspace.
+# Adding a target: one [[bin]] block + one file in fuzz_targets/.
+
+[package]
+name = "wolf-fuzz"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+xtask = { path = "../xtask" }
+
+[[bin]]
+name = "fuzz_corpus_directives"
+path = "fuzz_targets/fuzz_corpus_directives.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
