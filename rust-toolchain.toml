@@ -1,0 +1,6 @@
+# Pinned toolchain (bump deliberately, in its own commit, CI-green).
+# Note: honored by rustup and by CI; developers on distro rust must match
+# rust-version in Cargo.toml (enforced at build time).
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]

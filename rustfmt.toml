@@ -1,0 +1,2 @@
+# Defaults only — we eat the zero-option dogfood we plan to serve (D34).
+edition = "2024"
