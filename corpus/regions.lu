@@ -48,5 +48,6 @@ fn main() -> !int {
     let config = in r { build_config() }
     let frozen = freeze r               // deep-immutable, shareable, zero-copy
     let total = build_ring(100)         // 0+1+...+99 = 4950
-    if total == 4950 && frozen.get(config).is_valid() { 0 } else { 1 }
+    // frozen data is readable forever ([mem.region.freeze.1])
+    if total == 4950 && config.limit == 42 { 0 } else { 1 }
 }

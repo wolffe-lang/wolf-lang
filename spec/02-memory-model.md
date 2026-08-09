@@ -296,13 +296,16 @@ the C-style pointer arithmetic and two-phase patterns SB rejects.
 
   | state | meaning | child read | child write | foreign read | foreign write |
   |-------|---------|-----------|-------------|--------------|---------------|
-  | Reserved | created, unused (two-phase window) | → Active | → Active | ok | → Disabled |
+  | Reserved | created, unused (two-phase window) | ok (stays Reserved) | → Active | ok | → Disabled |
   | Active | live unique/mutable | ok | ok | → Frozen | → Disabled |
   | Frozen | shared/read-only | ok | **UB §7/P2** | ok | → Disabled |
   | Disabled | dead | **UB §7/P1** | **UB §7/P1** | ok | ok |
 
   ("child" = access through this tag or a descendant; "foreign" = through
-  a non-descendant. Protected tags escalate the foreign-write transition
+  a non-descendant. Reserved surviving child *reads* is what makes the
+  two-phase window real — activation happens at the first child write
+  (published Tree Borrows; repaired 2026-08-09, the original table
+  activated on reads by transcription error). Protected tags escalate the foreign-write transition
   to immediate UB for the protection's duration.)
 - `[mem.prov.expose]` Int→ptr casts produce a pointer with **exposed**
   provenance resolved angelically among exposed tags (a defined execution
@@ -326,7 +329,7 @@ Detection legend: **S** static checker (s18–s23) · **O** is04 oracle ·
 
 | # | UB (unsafe-tier reachable only) | Licensed optimization | Detected |
 |---|--------------------------------|----------------------|----------|
-| P1 | Access through a Disabled tag (use-after-free, use of invalidated borrow) | O1: `mut` params lower to `noalias` + `dereferenceable`; unique-tag stores forward without memory checks | O, Q |
+| P1 | Access through a Disabled tag (use-after-free, use of an invalidated borrow), or a foreign write to a **protected** tag | O1: `mut` params lower to `noalias` + `dereferenceable`; unique-tag stores forward without memory checks | O, Q |
 | P2 | Write through a Frozen tag | O2: `read` params are immutable-for-the-call — loads hoist/CSE across opaque calls (the SB "holy grail") ; `imm` data const-propagates and needs no sync | O |
 | P3 | Access outside an allocation's bounds | O3a: `dereferenceable(n)` on known-size accesses; bounds-based alias disproof between distinct allocations | O, Q |
 | P4 | Access to an allocation whose region was freed | O3b: one alias-scope domain **per region** — pointers into distinct regions never alias (inter-procedural strength, unavailable to C/Rust); O4: regions not open in the current scope yield `invariant.load` | O, Q |

@@ -6,4 +6,4 @@ StructDecl 530..659 name=Node fields=3
 FnDecl 661..1448 name=build_ring body=Block
 StructDecl 1450..1478 name=Config fields=1
 FnDecl 1480..1587 name=build_config body=Block
-FnDecl 1589..2002 name=main body=Block
+FnDecl 1589..2054 name=main body=Block
