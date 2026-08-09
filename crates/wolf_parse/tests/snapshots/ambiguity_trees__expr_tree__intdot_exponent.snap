@@ -1,0 +1,48 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 259..318
+  FnDecl 259..317
+    FnKw 259..261 "fn"
+    Ident 262..266 "main"
+    ParamList 266..268
+      LParen 266..267 "("
+      RParen 267..268 ")"
+    RetType 269..276
+      Arrow 269..271 "->"
+      ErrorUnionType 272..276
+        Not 272..273 "!"
+        PathType 273..276
+          Path 273..276
+            Ident 273..276 "int"
+    Block 277..317
+      LBrace 277..278 "{"
+      LetDecl 283..296
+        LetKw 283..286 "let"
+        IdentPat 287..288
+          Ident 287..288 "x"
+        Eq 289..290 "="
+        MemberExpr 291..295
+          LiteralExpr 291..292
+            Int 291..292 "1"
+          Dot 292..293 "."
+          Ident 293..295 "e5"
+        Term 295..296 "\n"
+      LetDecl 300..310
+        LetKw 300..303 "let"
+        WildcardPat 304..305
+          Underscore 304..305 "_"
+        Eq 306..307 "="
+        PathExpr 308..309
+          Ident 308..309 "x"
+        Term 309..310 "\n"
+      ExprStmt 314..316
+        LiteralExpr 314..315
+          Int 314..315 "0"
+        Term 315..316 "\n"
+      RBrace 316..317 "}"
+  Term 317..318 "\n"
+  Eof 318..318 ""
+== diagnostics ==

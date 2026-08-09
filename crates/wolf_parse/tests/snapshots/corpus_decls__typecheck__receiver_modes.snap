@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 329..359 name=Counter fields=1
+ImplDecl 361..561 path=Counter
+  FnDecl 380..422 name=get body=Block
+  FnDecl 428..503 name=bump body=Block
+  FnDecl 509..559 name=finish body=Block
+FnDecl 563..732 name=main body=Block

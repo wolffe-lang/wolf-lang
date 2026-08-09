@@ -333,7 +333,9 @@ r_end ::= or_expr | '^' or_expr
 prefix_operand ::= /* a tier-3 prefix expression: see the climb table */ postfix_expr
 /* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
 /* …tiers 5–13 by the table; extraction includes the full climb… */
-postfix_expr ::= primary (call_args | index_args | '.' member | '?')*
+postfix_expr ::= receiver (call_args | index_args | '.' member | '?')*
+receiver   ::= primary | '(' param_mode expr ')'
+/* the moded form is receiver position only: '.' member must follow.  */
 call_args  ::= '(' (call_arg (',' call_arg)* ','?)? ')'
 call_arg   ::= ('mut' | 'take')? expr
 index_args ::= '[' (index_arg (',' index_arg)* ','?)? ']'
@@ -358,6 +360,12 @@ position without parens (`[gram.amb.structlit]`).
 
 - **Call-site modes (X1)**: `f(mut x)`, `pool[mut prev]` — `mut`/`take`
   are argument prefixes in both call and index argument lists.
+- **Receiver modes (X1)**: a method declared `mut self` / `take self` is
+  called through a parenthesized moded receiver — `(mut p).norm()`,
+  `(take conn).close()` — mirroring call-argument modes exactly. The
+  moded form is admitted only where a `.` member immediately follows the
+  closing `)`; anywhere else it is a parse error (E0210). `read self`
+  receivers stay bare: `p.dist()`.
 - `index_arg` also admits the type forms no expression can spell
   (`List[handle Node]()`, `channel[region]`) — `e[…]` stays one postfix
   shape and sema (D29) sees a single argument list (`[gram.amb.brackets]`).

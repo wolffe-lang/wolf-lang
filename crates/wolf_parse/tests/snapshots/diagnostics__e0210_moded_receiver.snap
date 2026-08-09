@@ -1,0 +1,22 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0210,
+    severity: Error,
+    message: "`mut` marks a method receiver, but no method call follows the `)`",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 18,
+            hi: 21,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [],
+    suggestions: [],
+}

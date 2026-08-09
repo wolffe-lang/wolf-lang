@@ -74,7 +74,9 @@ r_end ::= or_expr | '^' or_expr
 prefix_operand ::= /* a tier-3 prefix expression: see the climb table */ postfix_expr
 /* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
 /* …tiers 5–13 by the table; extraction includes the full climb… */
-postfix_expr ::= primary (call_args | index_args | '.' member | '?')*
+postfix_expr ::= receiver (call_args | index_args | '.' member | '?')*
+receiver   ::= primary | '(' param_mode expr ')'
+/* the moded form is receiver position only: '.' member must follow.  */
 call_args  ::= '(' (call_arg (',' call_arg)* ','?)? ')'
 call_arg   ::= ('mut' | 'take')? expr
 index_args ::= '[' (index_arg (',' index_arg)* ','?)? ']'

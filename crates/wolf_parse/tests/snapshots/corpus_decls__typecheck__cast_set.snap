@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TypeDecl 297..324 name=Meters def=PrefixType
+FnDecl 325..456 name=main body=Block

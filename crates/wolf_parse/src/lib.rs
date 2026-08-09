@@ -78,6 +78,7 @@ pub mod codes {
     pub const EXPECTED_PATTERN: Code = c::E0207;
     pub const ASSIGN_IN_EXPR: Code = c::E0208;
     pub const NEGATIVE_INDEX: Code = c::E0209;
+    pub const RECEIVER_MODE: Code = c::E0210;
 }
 
 /// The result of parsing: a complete lossless tree and the parse-tier

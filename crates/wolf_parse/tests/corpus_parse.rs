@@ -24,10 +24,16 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// The `fail(EXXXX)` code from the `//! check:` header, if the failure
 /// is syntax-tier (E0001–E0299 — E03xx is resolution's family, s12).
+/// One numbering quirk: E0004 (`1.e5` float-exponent member access)
+/// carries a spec/01 §9 number but fires at *typecheck* — the parse
+/// tree is a legal member access (c02 closeout; s17 implements it).
 fn expected_parse_failure(src: &str) -> Option<String> {
     let line = src.lines().find(|l| l.starts_with("//! check:"))?;
     let rest = line.split("fail(").nth(1)?;
     let code = rest.split(')').next()?.trim();
+    if code == "E0004" {
+        return None;
+    }
     let num: u32 = code.strip_prefix('E')?.parse().ok()?;
     (num < 300).then(|| code.to_string())
 }
@@ -111,8 +117,8 @@ fn corpus_parse_expectations() {
             }
         }
     }
-    // The ledger: 4 syntax-tier counter-examples exist today
-    // (E0001, E0002, E0006, E0008); everything else must pass.
-    assert_eq!(fail, 4, "syntax-tier fail-file count drifted");
+    // The ledger: 5 syntax-tier counter-examples exist today
+    // (E0001, E0002, E0006, E0008, E0210); everything else must pass.
+    assert_eq!(fail, 5, "syntax-tier fail-file count drifted");
     assert!(pass > 40, "expected the full corpus, saw {pass} pass files");
 }

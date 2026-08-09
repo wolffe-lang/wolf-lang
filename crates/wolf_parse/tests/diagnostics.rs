@@ -226,6 +226,31 @@ fn e0209_negative_index() {
     );
 }
 
+// ------------------------------------------------- s17 additions ---------
+
+#[test]
+fn e0210_moded_receiver_outside_receiver_position() {
+    // `(mut x)` is a receiver spelling (X1): legal only immediately
+    // before `.`; detached it marks nothing.
+    let src = "fn f() { let x = (mut y)\n}\n";
+    snap("e0210_moded_receiver", src, codes::RECEIVER_MODE);
+    // The receiver position itself parses clean…
+    assert!(
+        !util::codes("fn f() { let x = (mut p).norm()\n}\n").contains(&"E0210"),
+        "`(mut p).norm()` is the legal receiver form"
+    );
+    // …and so does `take`.
+    assert!(
+        !util::codes("fn f() { let x = (take p).close()\n}\n").contains(&"E0210"),
+        "`(take p).close()` is the legal receiver form"
+    );
+    // An argument-position moded paren is not receiver position.
+    assert!(
+        util::codes("fn f() { g((mut y))\n}\n").contains(&"E0210"),
+        "a moded paren inside an argument list is not a receiver"
+    );
+}
+
 #[test]
 fn e0203_keyword_typo_suggests_fn() {
     // The typo machinery: `fnn` at declaration position gets "did you

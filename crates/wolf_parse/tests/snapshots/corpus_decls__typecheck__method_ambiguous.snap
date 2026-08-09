@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 224..264 name=Loud
+  FnDecl 241..263 name=speak
+TraitDecl 266..307 name=Quiet
+  FnDecl 284..306 name=speak
+StructDecl 309..336 name=Dog fields=1
+ImplDecl 338..408 path=Loud for=Dog
+  FnDecl 362..406 name=speak body=Block
+ImplDecl 410..481 path=Quiet for=Dog
+  FnDecl 435..479 name=speak body=Block
+FnDecl 483..557 name=main body=Block

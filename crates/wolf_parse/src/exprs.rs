@@ -918,6 +918,40 @@ fn paren_or_tuple(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     p.bump(); // `(`
     let inner = ctx.inner();
     let mut tuple = false;
+    // `(mut expr)` / `(take expr)` — the X1 moded receiver
+    // ([gram.expr.primary]): legal only immediately before a `.`
+    // member; anywhere else the mode marks nothing (E0210).
+    if matches!(p.current(), TokenKind::Kw(Keyword::Mut | Keyword::Take)) {
+        let mode_span = p.current_span();
+        let mode_text = if p.at_kw(Keyword::Mut) { "mut" } else { "take" };
+        p.bump(); // the mode marker
+        if expr_bp(p, 0, inner).is_none() {
+            p.arg_list_error(
+                p.current_span(),
+                "expected an expression after the receiver mode",
+            );
+            p.recover_until(true, |k| {
+                matches!(k, TokenKind::Punct(Punct::RParen)) || k == TokenKind::Term
+            });
+        }
+        if p.at_punct(Punct::RParen) {
+            p.bump();
+        } else {
+            grammar::unclosed(p, opener, "(");
+        }
+        let cm = m.complete(p, SyntaxKind::ParenExpr);
+        if !p.at_punct(Punct::Dot) {
+            p.error(
+                codes::RECEIVER_MODE,
+                mode_span,
+                format!(
+                    "`{mode_text}` marks a method receiver, but no method call \
+                     follows the `)`"
+                ),
+            );
+        }
+        return cm;
+    }
     if p.at_punct(Punct::RParen) {
         // `()` is not in the grammar (no unit literal) — diagnose and
         // keep the shape.

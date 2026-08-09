@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 217..260 name=Signal variants=3
+FnDecl 262..377 name=main body=Block

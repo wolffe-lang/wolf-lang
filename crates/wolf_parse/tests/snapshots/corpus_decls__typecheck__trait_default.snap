@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 288..392 name=Greeter
+  FnDecl 308..329 name=name
+  FnDecl 334..390 name=greet body=Block
+StructDecl 394..418 name=P fields=1
+ImplDecl 420..490 path=Greeter for=P
+  FnDecl 445..488 name=name body=Block
+FnDecl 492..563 name=main body=Block

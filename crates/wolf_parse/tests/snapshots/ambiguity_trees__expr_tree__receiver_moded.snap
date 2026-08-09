@@ -1,0 +1,42 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 201..249
+  FnDecl 201..248
+    FnKw 201..203 "fn"
+    Ident 204..208 "main"
+    ParamList 208..210
+      LParen 208..209 "("
+      RParen 209..210 ")"
+    RetType 211..218
+      Arrow 211..213 "->"
+      ErrorUnionType 214..218
+        Not 214..215 "!"
+        PathType 215..218
+          Path 215..218
+            Ident 215..218 "int"
+    Block 219..248
+      LBrace 219..220 "{"
+      LetDecl 225..241
+        LetKw 225..228 "let"
+        IdentPat 229..230
+          Ident 229..230 "x"
+        Eq 231..232 "="
+        ParenExpr 233..240
+          LParen 233..234 "("
+          MutKw 234..237 "mut"
+          PathExpr 238..239
+            Ident 238..239 "y"
+          RParen 239..240 ")"
+        Term 240..241 "\n"
+      ExprStmt 245..247
+        LiteralExpr 245..246
+          Int 245..246 "0"
+        Term 246..247 "\n"
+      RBrace 247..248 "}"
+  Term 248..249 "\n"
+  Eof 249..249 ""
+== diagnostics ==
+E0210 [Error] 234..237 `mut` marks a method receiver, but no method call follows the `)`

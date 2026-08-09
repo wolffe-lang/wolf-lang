@@ -1590,6 +1590,27 @@ impl<'a> Fmt<'a> {
         let inner = n.nodes().next();
         let lp = n.child_token(K::LParen);
         let rp = n.child_token(K::RParen);
+        // A moded receiver `(mut p)` / `(take p)` (X1): the parens are
+        // load-bearing syntax, never droppable; the receiver stays flat.
+        let mode = n.tokens().find(|t| matches!(t.kind, K::MutKw | K::TakeKw));
+        if let Some(mode) = mode {
+            let mut g = Vec::new();
+            if let Some(lp) = lp {
+                self.lead(lp, &mut g);
+                g.push(Doc::text("("));
+                self.trail(lp, &mut g);
+            }
+            self.tok(mode, &mut g);
+            g.push(Doc::text(" "));
+            if let Some(e) = inner {
+                self.expr(e, &mut g, Ctx::Free);
+            }
+            if let Some(rp) = rp {
+                self.tok(rp, &mut g);
+            }
+            out.push(Doc::Concat(g));
+            return;
+        }
         let droppable = match inner {
             Some(e) => {
                 !paren_blacklisted(e.kind)
