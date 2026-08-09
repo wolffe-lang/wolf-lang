@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="released")
+//! phase: none
+//! conforms: conc.proc.kill, conc.proc.exit
+//! THE decided rule: defers in a KILLED proc do not run — its regions
+//! bulk-free instead. Cross-proc resources must be owned by channels/
+//! supervisors. The only output is the owner's release message; the
+//! proc's defer print must NOT appear.
+fn main() -> !int {
+    let w = spawn proc sleeper()
+    let m = w.monitor()
+    w.kill()
+    select {
+        exit(reason) from m => {
+            if reason.is_killed() { print_raw("released") } else { print_raw("wrong") }
+        }
+        timeout(1.s) => { print_raw("timeout") }
+    }
+    0
+}

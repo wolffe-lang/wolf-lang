@@ -1,0 +1,19 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: conc.mm.hb.freeze, mem.region.freeze.1
+//! `freeze` happens-before every cross-task read: imm data is shared by
+//! reference, no copies, no synchronization.
+fn main() -> !int {
+    let table = freeze region {
+        var xs = List[int]()
+        for i in 0..10 { xs.push(i * i) }
+        xs
+    }
+    var a = 0
+    var b = 0
+    scope s {
+        s.spawn(fn() { a = table[3] })   // imm: capture by shared read
+        s.spawn(fn() { b = table[4] })
+    }
+    if a + b == 25 { 0 } else { 1 }
+}

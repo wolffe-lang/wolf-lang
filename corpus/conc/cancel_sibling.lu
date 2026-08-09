@@ -1,0 +1,23 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: conc.task.fail, conc.cancel.points, conc.cancel.defer
+//! A failing child cancels its blocked sibling at a blocking point; the
+//! cancelled task's own defers run (cancellation is polite — contrast
+//! the killed-proc rule in proc_kill_defers.lu). The scope re-raises
+//! the child error into the enclosing function's error union.
+fn fail_fast() -> !int { Boom }
+fn race_them() -> !int {
+    let ch = channel[int](0)
+    scope s {
+        s.spawn(fn() {
+            let v = ch.recv()?       // blocks forever; cancelled here
+            v
+        })
+        s.spawn(fn() { fail_fast() })
+    }                                // join re-raises Boom [conc.task.fail]
+    0
+}
+fn main() -> !int {
+    let r = race_them() else |_| { 42 }
+    if r == 42 { 0 } else { 1 }
+}

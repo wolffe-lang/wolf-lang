@@ -1,0 +1,24 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: conc.mm.hb.chan, conc.mm.hb.move, conc.task.scope
+//! The message-passing litmus: every write into a region before its
+//! `move` send is visible to the receiver — transfer publishes the graph.
+fn main() -> !int {
+    let ch = channel[region](1)
+    var got = 0
+    scope s {
+        s.spawn(fn() {
+            let r = region()
+            let xs = in r {
+                var v = List[int]()
+                v.push(41)
+                v.push(1)
+                v
+            }
+            ch.send(move r)          // publishes both pushes [conc.mm.hb.move]
+        })
+        let r2 = ch.recv() else |_| { return 1 }
+        got = in r2 { 42 }           // receiver owns the graph now
+    }
+    if got == 42 { 0 } else { 1 }
+}

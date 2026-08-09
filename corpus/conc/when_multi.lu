@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: conc.mm.hb.mutex, conc.select.fair
+//! `when (a, b)` acquires the whole set at once (ordered acquisition
+//! under the hood): no lock-order deadlock exists by construction.
+fn main() -> !int {
+    let a = Mutex(1)
+    let b = Mutex(2)
+    var total = 0
+    scope s {
+        s.spawn(fn() {
+            when (a, b) { a += 10; b += 10 }
+        })
+        s.spawn(fn() {
+            when (b, a) { b += 100; a += 100 }   // reversed order: still fine
+        })
+    }
+    when (a, b) { total = a + b }
+    if total == 224 { 0 } else { 1 }
+}
