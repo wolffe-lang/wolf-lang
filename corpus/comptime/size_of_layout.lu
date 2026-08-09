@@ -1,0 +1,18 @@
+//! check: fail(E0708)
+//! phase: resolve
+//! conforms: comptime.reflect, comptime.layout
+//!
+//! Layout queries are staged: `size_of` answers for fixed-width
+//! primitives now, and errors as unresolved-until-codegen for
+//! aggregates until c05 defines layout — the intrinsic exists, its
+//! answer does not yet.
+
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+fn main() -> !int {
+    const S = size_of(Vec2)
+    if S == 16 { 0 } else { 1 }
+}

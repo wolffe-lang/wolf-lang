@@ -1,0 +1,36 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: comptime.reflect, comptime.types_as_values
+//!
+//! Reflection consumes and produces semantic values only (the D29
+//! amendment): `typeinfo` describes a type's fields, `implements`
+//! asks the s14 trait engine — no syntax observed anywhere.
+
+trait Show {
+    fn show(v: Self) -> str
+}
+
+struct Point {
+    x: f64,
+    y: f64,
+}
+
+impl Show for Point {
+    fn show(v: Point) -> str {
+        "point"
+    }
+}
+
+comptime fn field_count(T: type) -> int {
+    typeinfo(T).fields.len
+}
+
+comptime fn is_showable(T: type) -> bool {
+    implements(T, Show)
+}
+
+fn main() -> !int {
+    const N = field_count(Point)
+    const S = is_showable(Point)
+    if N == 2 && S { 0 } else { 1 }
+}

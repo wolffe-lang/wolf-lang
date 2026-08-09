@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 419..505 name=fib comptime body=Block
-FnDecl 574..643 name=field_count comptime body=Block
-StructDecl 645..683 name=Vec3 fields=3
-FnDecl 752..836 name=dot attrs=1 body=Block
-FnDecl 838..1131 name=main body=Block
+FnDecl 421..507 name=fib comptime body=Block
+FnDecl 576..645 name=field_count comptime body=Block
+StructDecl 647..685 name=Vec3 fields=3
+FnDecl 754..838 name=dot attrs=1 body=Block
+FnDecl 840..1133 name=main body=Block

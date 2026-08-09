@@ -1,0 +1,22 @@
+//! check: fail(E0703)
+//! phase: resolve
+//! conforms: comptime.budget, comptime.budget.heap
+//!
+//! D33: the comptime heap is capped. The raised fuel budget (a legal
+//! per-site override) proves the heap cap fires on its own: the loop
+//! interns a fresh value every iteration and dies on cells, fast,
+//! under the default heap budget.
+
+comptime fn flood() -> int {
+    var n = 0
+    while n < 100000000 {
+        n = n + 1
+    }
+    n
+}
+
+fn main() -> !int {
+    #[budget(fuel = 100000000)]
+    const N = flood()
+    if N == 0 { 1 } else { 0 }
+}

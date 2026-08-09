@@ -1,0 +1,22 @@
+//! check: run(exit=trap(use-after-move))
+//! phase: typecheck
+//! conforms: mem.tier0.move.1, mem.tier0.move.2, mem.model.path.disjoint
+//!
+//! Move states are field-granular: `p.x` moving out leaves `p.y` live, and
+//! reading `p.x` afterwards traps. `corpus/memory/move_use_after.lu` moves a
+//! whole binding; this pins the granularity, which is the part a per-variable
+//! implementation would get wrong while still passing that file.
+
+struct Inner { n: int }
+
+struct P { x: Inner, y: Inner }
+
+fn eat(take i: Inner) -> int { i.n }
+
+fn main() -> !int {
+    var p = P { x: Inner { n: 1 }, y: Inner { n: 2 } }
+    let a = eat(take p.x)          // p.x is uninitialized from here
+    let b = p.y.n                  // still live: disjoint path
+    let c = p.x.n                  // TRAP use-after-move
+    a + b + c
+}

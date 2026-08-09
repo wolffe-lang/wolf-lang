@@ -1,0 +1,19 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.ffi
+//!
+//! D33: no FFI at comptime — the sandbox cannot see into native code,
+//! so it never runs any. An `extern` function has no comptime body by
+//! construction; calling one during evaluation is refused with the
+//! reason named.
+
+extern "c" fn c_abs(n: int) -> int
+
+comptime fn magnitude(n: int) -> int {
+    c_abs(n)
+}
+
+fn main() -> !int {
+    const M = magnitude(-3)
+    if M == 3 { 0 } else { 1 }
+}

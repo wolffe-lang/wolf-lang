@@ -1,0 +1,17 @@
+//! check: fail(E0702)
+//! phase: resolve
+//! conforms: comptime.budget, comptime.budget.fuel
+//!
+//! D33: fuel bounds evaluation, so a runaway comptime loop is a fast
+//! diagnostic with a backtrace and a raise-the-budget fix-it — never a
+//! hung build.
+
+comptime fn spin() -> int {
+    while true {}
+    0
+}
+
+fn main() -> !int {
+    const N = spin()
+    if N == 0 { 0 } else { 1 }
+}

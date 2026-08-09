@@ -1,0 +1,20 @@
+//! check: fail(E0707)
+//! phase: resolve
+//! conforms: comptime.const_generics, comptime.norm.witness
+//!
+//! The witness line, held exactly where documented: `N * 2` and
+//! `N + N` may be equal, but `*` sits beyond linear arithmetic — the
+//! compiler asks for an explicit witness instead of guessing (and the
+//! diagnostic states the three-step ladder).
+
+struct Buf[N: type] {
+    len: int,
+}
+
+fn sneak[N: type](b: Buf[N + N]) -> Buf[N *2] {
+    b
+}
+
+fn main() -> !int {
+    0
+}

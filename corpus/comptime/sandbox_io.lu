@@ -1,0 +1,16 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.io
+//!
+//! D33: no ambient output at comptime. `print` is a runtime effect;
+//! compiling a program must not act on the machine compiling it.
+
+comptime fn loud_square(n: int) -> int {
+    print("squaring")
+    n * n
+}
+
+fn main() -> !int {
+    const N = loud_square(7)
+    if N == 49 { 0 } else { 1 }
+}

@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 234..308 name=loud_square comptime body=Block
+FnDecl 310..392 name=main body=Block

@@ -1,0 +1,17 @@
+//! check: run(exit=trap(overflow))
+//! phase: typecheck
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! Checked arithmetic in every profile (X3): a `+` that leaves `i32`'s range
+//! traps rather than wrapping. The neighbouring `wrapping[i32]` line is the
+//! control — same arithmetic, same operands, no trap — so the file pins the
+//! *distinction*, not merely the fault.
+
+fn main() -> !int {
+    var w: wrapping[i32] = 2147483647
+    w = w + 1                      // fine: wrapping is the spelling for this
+
+    var x: i32 = 2147483647
+    x = x + 1                      // TRAP overflow
+    0
+}

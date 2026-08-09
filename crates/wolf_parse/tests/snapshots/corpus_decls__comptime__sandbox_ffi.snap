@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 330..365 name=c_abs extern
+FnDecl 366..419 name=magnitude comptime body=Block
+FnDecl 421..501 name=main body=Block

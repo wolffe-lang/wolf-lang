@@ -1,0 +1,37 @@
+//! check: run(exit=0)
+//! phase: typecheck
+//! conforms: comptime.reflect, comptime.derive
+//!
+//! The derive-class shape, corpus side: reflection asserts at compile
+//! time that `Pair` carries an equality impl and is a plain struct;
+//! the impl itself then passes ordinary s14 checking and dispatches
+//! at runtime. (Impl *synthesis* by a comptime generator is the
+//! engine-level exemplar — staged diagnostics live in the s16 tests.)
+
+trait Eq {
+    fn eq(a: Self, b: Self) -> bool
+}
+
+struct Pair {
+    a: int,
+    b: int,
+}
+
+impl Eq for Pair {
+    fn eq(a: Pair, b: Pair) -> bool {
+        a.a == b.a && a.b == b.b
+    }
+}
+
+comptime fn eq_ready(T: type) -> bool {
+    assert(implements(T, Eq))
+    assert(typeinfo(T).kind == "struct")
+    true
+}
+
+fn main() -> !int {
+    const OK = eq_ready(Pair)
+    let p = Pair { a: 1, b: 2 }
+    let q = Pair { a: 1, b: 2 }
+    if OK && Eq.eq(p, q) { 0 } else { 1 }
+}

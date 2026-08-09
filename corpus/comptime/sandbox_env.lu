@@ -1,0 +1,15 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.env
+//!
+//! D33: no environment variables at comptime — they differ per machine
+//! (determinism) and may hold secrets (confinement).
+
+comptime fn build_user() -> str {
+    env_var("USER")
+}
+
+fn main() -> !int {
+    const WHO = build_user()
+    if WHO == "" { 1 } else { 0 }
+}

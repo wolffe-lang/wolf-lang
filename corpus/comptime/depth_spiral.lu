@@ -1,0 +1,16 @@
+//! check: fail(E0704)
+//! phase: resolve
+//! conforms: comptime.budget, comptime.budget.depth
+//!
+//! D33: recursion depth is a resource limit with a report, not a
+//! compiler crash. Pathological recursion fails FAST under the default
+//! budgets — the backtrace folds the repeating frame.
+
+comptime fn dive(n: int) -> int {
+    dive(n + 1)
+}
+
+fn main() -> !int {
+    const D = dive(0)
+    if D == 0 { 1 } else { 0 }
+}

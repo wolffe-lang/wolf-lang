@@ -1,0 +1,16 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.clock
+//!
+//! D33: no clock at comptime — two identical builds must not observe
+//! different times (determinism; a build timestamp is the classic
+//! reproducibility leak).
+
+comptime fn build_stamp() -> int {
+    clock_ms()
+}
+
+fn main() -> !int {
+    const STAMP = build_stamp()
+    if STAMP == 0 { 1 } else { 0 }
+}

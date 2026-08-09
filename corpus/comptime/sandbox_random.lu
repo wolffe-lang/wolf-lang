@@ -1,0 +1,16 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.random
+//!
+//! D33: no randomness at comptime — same program + target must give
+//! bit-identical comptime results on every host (the differential
+//! determinism gate depends on it).
+
+comptime fn salt() -> int {
+    random_seed()
+}
+
+fn main() -> !int {
+    const SALT = salt()
+    if SALT == 0 { 1 } else { 0 }
+}

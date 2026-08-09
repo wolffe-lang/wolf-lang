@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 278..325 name=salt comptime body=Block
+FnDecl 327..406 name=main body=Block

@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 295..346 name=dive comptime body=Block
+FnDecl 348..422 name=main body=Block

@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 259..312 name=spin comptime body=Block
+FnDecl 314..387 name=main body=Block

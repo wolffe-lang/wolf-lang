@@ -1,0 +1,22 @@
+//! check: fail(E0710)
+//! phase: resolve
+//! conforms: comptime.assert, comptime.reflect
+//!
+//! A comptime `assert` is the witness mechanism: it checks a fact
+//! during compilation and stops the build when the fact is false —
+//! here, a reflected field count that does not match.
+
+comptime fn expect_fields(T: type, n: int) -> bool {
+    assert(typeinfo(T).fields.len == n)
+    true
+}
+
+struct Pair {
+    a: int,
+    b: int,
+}
+
+fn main() -> !int {
+    const OK = expect_fields(Pair, 3)
+    if OK { 0 } else { 1 }
+}

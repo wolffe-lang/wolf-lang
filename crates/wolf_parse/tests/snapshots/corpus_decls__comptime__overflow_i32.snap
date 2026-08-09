@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 251..322 name=brim comptime body=Block
+FnDecl 324..397 name=main body=Block

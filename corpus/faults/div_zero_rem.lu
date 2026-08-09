@@ -1,0 +1,13 @@
+//! check: run(exit=trap(div-zero))
+//! phase: typecheck
+//! conforms: mem.ub.defined
+//!
+//! Division by zero is defined behavior with a defined outcome — it traps, it
+//! is not UB. `%` is the half `corpus/memory/div_zero.lu` does not cover: the
+//! remainder operator has the same zero divisor and the same trap.
+
+fn main() -> !int {
+    var d = 0
+    let r = 10 % d                 // TRAP div-zero
+    r
+}

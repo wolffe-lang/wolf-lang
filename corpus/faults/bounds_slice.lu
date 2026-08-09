@@ -1,0 +1,14 @@
+//! check: run(exit=trap(bounds))
+//! phase: resolve
+//! conforms: mem.ub.defined
+//!
+//! `[mem.ub.defined]` names two bounds faults in one row: "OOB index /
+//! split-code-point slice (D25)". `corpus/memory/oob_bounds.lu` covers the
+//! index; this covers the slice, whose endpoint is a byte offset that must
+//! land on a code-point boundary.
+
+fn main() -> !int {
+    let s = "héllo"
+    let head = s[..2]              // TRAP bounds: 2 splits `é`
+    0
+}

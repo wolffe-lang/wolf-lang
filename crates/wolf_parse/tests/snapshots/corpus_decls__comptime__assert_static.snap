@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 287..390 name=expect_fields comptime body=Block
+StructDecl 392..431 name=Pair fields=2
+FnDecl 433..519 name=main body=Block

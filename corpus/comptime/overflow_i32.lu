@@ -1,0 +1,17 @@
+//! check: fail(E0706)
+//! phase: resolve
+//! conforms: comptime.arith, arith.checked
+//!
+//! X3 holds at comptime: arithmetic evaluates at the declared widths
+//! and faults on overflow — one semantics everywhere, host width
+//! never observable.
+
+comptime fn brim() -> i32 {
+    let big: i32 = 2147483647
+    big + 1
+}
+
+fn main() -> !int {
+    const B = brim()
+    if B == 0 { 1 } else { 0 }
+}

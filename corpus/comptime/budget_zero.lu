@@ -1,0 +1,16 @@
+//! check: fail(E0709)
+//! phase: resolve
+//! conforms: comptime.budget
+//!
+//! Budgets are raised, never removed (D33): `fuel = 0` would disable
+//! the limit, and there is deliberately no spelling that does that.
+
+comptime fn ten() -> int {
+    10
+}
+
+fn main() -> !int {
+    #[budget(fuel = 0)]
+    const N = ten()
+    if N == 10 { 0 } else { 1 }
+}

@@ -1,0 +1,17 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.fs
+//!
+//! D33: no filesystem at comptime. Reading a file during evaluation
+//! would make the build depend on the machine it runs on (confinement)
+//! and un-reproducible (determinism). Declared build inputs arrive via
+//! the build system (s51) — never as an evaluator capability.
+
+comptime fn embed(path: str) -> str {
+    read_text(path)
+}
+
+fn main() -> !int {
+    const BANNER = embed("banner.txt")
+    if BANNER == "" { 1 } else { 0 }
+}

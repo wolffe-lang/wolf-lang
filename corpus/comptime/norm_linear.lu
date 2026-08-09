@@ -1,0 +1,29 @@
+//! check: pass
+//! phase: typecheck
+//! conforms: comptime.const_generics, comptime.norm
+//!
+//! Const-generic normalization (s16): linear `+`/`-` arithmetic over
+//! generic parameters ring-normalizes to `Σ cᵢ·xᵢ + k`, so `N + 1`
+//! and `1 + N` are the same type — Rust's RFC-2000 "same AST node or
+//! nothing" wart, dead at a defined line. Closed expressions compare
+//! by value: `Buf[4]` is `Buf[2 + 2]`.
+
+struct Buf[N: type] {
+    len: int,
+}
+
+fn shuffle[N: type](b: Buf[N + 1]) -> Buf[1 + N] {
+    b
+}
+
+fn widen[N: type](b: Buf[N + 2 - 1]) -> Buf[1 + N] {
+    b
+}
+
+fn closed(b: Buf[2 + 2]) -> Buf[4] {
+    b
+}
+
+fn main() -> !int {
+    0
+}

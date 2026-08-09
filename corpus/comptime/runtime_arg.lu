@@ -1,0 +1,18 @@
+//! check: fail(E0705)
+//! phase: resolve
+//! conforms: comptime.fn, comptime.known
+//!
+//! A `comptime fn` runs during compilation: every argument must be
+//! comptime-known (a literal, a `const`, a type, another comptime
+//! result). A runtime `let` local is not — and the evaluator says so
+//! instead of guessing.
+
+comptime fn double(n: int) -> int {
+    n + n
+}
+
+fn main() -> !int {
+    let x = 21
+    const Y = double(x)
+    if Y == 42 { 0 } else { 1 }
+}

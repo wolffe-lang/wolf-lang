@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 321..368 name=double comptime body=Block
+FnDecl 370..462 name=main body=Block

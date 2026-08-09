@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 290..354 name=fetch_schema comptime body=Block
+FnDecl 356..482 name=main body=Block

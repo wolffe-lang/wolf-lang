@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 341..441 name=flood comptime body=Block
+FnDecl 443..549 name=main body=Block

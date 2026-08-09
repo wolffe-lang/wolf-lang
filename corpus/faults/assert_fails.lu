@@ -1,0 +1,14 @@
+//! check: run(exit=trap(assert))
+//! phase: typecheck
+//! conforms: mem.ub.defined
+//!
+//! `assert` is the one trap identity a *user* raises rather than the machine
+//! (`[conf.trap.map]`: "`assert` (user assertions)"). The passing assertion
+//! first, so the file pins that a satisfied assertion is silent.
+
+fn main() -> !int {
+    let n = 2
+    assert(n == 2)
+    assert(n == 3)                 // TRAP assert
+    0
+}

@@ -1,0 +1,22 @@
+//! check: run(exit=trap(exclusivity))
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.tier0.excl.2, mem.model.path.disjoint
+//!
+//! `[mem.model.path.disjoint]`: "Two paths conflict iff one is a prefix of the
+//! other." The first call is the legal half — two disjoint nested paths, both
+//! `mut`. The second passes a path and one of its own prefixes, which conflicts.
+
+struct Inner { n: int }
+
+struct P { a: Inner, b: Inner }
+
+fn bump(mut x: int, mut y: int) { x += 1; y += 1 }
+
+fn wide(mut i: Inner, mut n: int) { n += 1 }
+
+fn main() -> !int {
+    var p = P { a: Inner { n: 1 }, b: Inner { n: 2 } }
+    bump(mut p.a.n, mut p.b.n)     // disjoint: legal
+    wide(mut p.a, mut p.a.n)       // TRAP exclusivity: prefix of the other
+    0
+}

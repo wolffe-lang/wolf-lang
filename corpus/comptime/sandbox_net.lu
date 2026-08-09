@@ -1,0 +1,16 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.net
+//!
+//! D33: no network at comptime — `wolf add` must never mean arbitrary
+//! code talks to the network with the builder's credentials (report 07
+//! Needs-work #2, the event-stream lesson).
+
+comptime fn fetch_schema(url: str) -> str {
+    net_fetch(url)
+}
+
+fn main() -> !int {
+    const SCHEMA = fetch_schema("https://example.test/schema.json")
+    if SCHEMA == "" { 1 } else { 0 }
+}
