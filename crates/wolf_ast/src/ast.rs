@@ -945,6 +945,17 @@ impl<'a> ParenExpr<'a> {
     pub fn expr(self) -> Option<&'a GreenNode> {
         first_expr(self.0)
     }
+
+    /// The X1 receiver-mode marker (`(mut p)` / `(take p)`), if any.
+    /// A moded paren is legal only in method-receiver position
+    /// ([gram.expr.primary]); the parser enforces the position.
+    pub fn mode(self) -> Option<ParamMode> {
+        self.0.tokens().find_map(|t| match t.kind {
+            SyntaxKind::MutKw => Some(ParamMode::Mut),
+            SyntaxKind::TakeKw => Some(ParamMode::Take),
+            _ => None,
+        })
+    }
 }
 
 ast_node!(
