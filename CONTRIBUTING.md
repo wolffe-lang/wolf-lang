@@ -20,6 +20,18 @@
   matrix (linux x86-64/aarch64, macOS aarch64, windows x86-64, freebsd
   cross-build) is the arbiter.
 
+## Testing conventions
+- Property tests use proptest; case count follows `PROPTEST_CASES` (small
+  in PR CI, large in nightly CI). Exemplar: `crates/wolf_span/tests/`.
+- Snapshots use insta (`cargo insta review` to update deliberately);
+  exemplar: `xtask/tests/directive_snapshots.rs`.
+- Benchmarks: `cargo xtask bench --track=<runtime|compile>` emits JSONL to
+  `bench-results/`; `cargo xtask bench diff <base> <cand> [--gate]` is the
+  variance-aware comparison (median + 3×MAD noise floor, 2% practical
+  floor, N≥10 runs). Reference kernels live in `bench/kernels/`.
+- Fuzz targets live in `fuzz/`; `cargo xtask fuzz-smoke` builds them where
+  cargo-fuzz (nightly) is available.
+
 ## Toolchain
 - Pinned in `rust-toolchain.toml` (rustup/CI) and `rust-version`
   (everyone). Bump deliberately, in a dedicated commit, CI-green.
