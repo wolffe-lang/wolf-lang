@@ -18,8 +18,11 @@ fn main() -> ExitCode {
         Some("bench") => bench_cmd(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("dist") => dist(),
+        Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
         _ => {
-            eprintln!("usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist>");
+            eprintln!(
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract>"
+            );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
             ExitCode::from(2)
@@ -45,6 +48,7 @@ fn ci() -> ExitCode {
         ("test", &["test", "--workspace"]),
         ("deps-check", &["xtask", "deps-check"]),
         ("corpus", &["xtask", "corpus"]),
+        ("spec-extract", &["xtask", "spec-extract", "--check"]),
     ];
     for (name, args) in steps {
         eprintln!("== xtask ci: {name}");
@@ -438,6 +442,33 @@ fn fuzz_smoke() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+// ---------------------------------------------------------- spec-extract --
+
+/// Extract the normative EBNF from spec/01-grammar.md into
+/// spec/grammar.ebnf; `--check` verifies sync instead of writing (CI).
+fn spec_extract(check: bool) -> ExitCode {
+    let md = std::fs::read_to_string("spec/01-grammar.md").expect("read spec/01-grammar.md");
+    let extracted = xtask::spec::extract_ebnf(&md);
+    let out = Path::new("spec/grammar.ebnf");
+    if check {
+        let on_disk = std::fs::read_to_string(out).unwrap_or_default();
+        if on_disk == extracted {
+            eprintln!("spec-extract: spec/grammar.ebnf is in sync");
+            ExitCode::SUCCESS
+        } else {
+            eprintln!("spec-extract: OUT OF SYNC — run `cargo xtask spec-extract`");
+            ExitCode::FAILURE
+        }
+    } else {
+        std::fs::write(out, &extracted).expect("write spec/grammar.ebnf");
+        eprintln!(
+            "spec-extract: wrote spec/grammar.ebnf ({} bytes)",
+            extracted.len()
+        );
+        ExitCode::SUCCESS
     }
 }
 

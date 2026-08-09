@@ -1,0 +1,581 @@
+# Wolf Language Specification — 01: Surface Grammar
+
+Status: normative, v0 (sprint s03). Clause anchors (`[gram.*]`) are stable:
+they are cited by later spec documents, conformance tags (`conforms:`), and
+diagnostics. EBNF blocks tagged ` ```ebnf ` are extracted to
+`spec/grammar.ebnf` by `cargo xtask spec-extract` (CI-enforced sync).
+
+Notation: W3C-style EBNF. `::=` defines; `|` alternates; `?` optional; `*`
+zero-or-more; `+` one-or-more; parentheses group; terminals in `'quotes'`;
+UPPER names are lexer tokens, lower names are syntactic productions.
+
+This document says what *parses*. Meaning is informal gloss only; semantics
+live in 02-memory-model, 03-concurrency, and later sema documents.
+
+---
+
+## 1. Lexical structure `[gram.lex]`
+
+### 1.1 Source `[gram.lex.source]`
+
+Source files are UTF-8, extension `.lu`. Byte order marks are rejected.
+Tokens are defined over Unicode scalar values; all offsets in diagnostics
+and slicing are byte offsets (D25).
+
+### 1.2 Comments `[gram.lex.comment]`
+
+`// …` line comment. `//! …` inner doc comment (file/module header; corpus
+directives live here). `/// …` outer doc comment (documents the next item).
+No block comments (nesting arguments lose to simplicity + lexer speed).
+
+### 1.3 Identifiers `[gram.lex.ident]`
+
+```ebnf
+IDENT ::= XID_Start XID_Continue*
+```
+
+plus `_` as the wildcard identifier (never a binding you can read).
+Identifiers that collide with reserved keywords do not parse (`[gram.inv]`).
+
+### 1.4 Integer and float literals `[gram.lex.number]`
+
+```ebnf
+INT   ::= DEC_LIT | '0x' HEX_DIGIT ('_' | HEX_DIGIT)* | '0o' OCT_DIGIT ('_' | OCT_DIGIT)* | '0b' BIN_DIGIT ('_' | BIN_DIGIT)*
+DEC_LIT ::= DIGIT ('_' | DIGIT)*
+FLOAT ::= DEC_LIT '.' DEC_LIT EXPONENT? | DEC_LIT EXPONENT
+EXPONENT ::= ('e' | 'E') ('+' | '-')? DEC_LIT
+```
+
+A float requires digits on **both** sides of the dot: `1.0` is a float;
+`1.` is an integer followed by `.` (member access — `1.s`, `4096.kb` are
+member/method access on the literal `[gram.amb.intdot]`); `1..10` is a
+range. Underscore separators: `2_147_483_647`.
+
+Counter-example: `1.e5` does not parse as a float (it is member access on
+`1` with member `e5`); write `1.0e5`. Diagnostic should suggest the fix.
+
+### 1.5 String literals — the mode stack `[gram.lex.str]`
+
+Every plain string literal is an f-string (X9/D26). The lexer runs a mode
+stack; inside interpolation braces it re-enters normal token mode (nesting
+strings inside interpolations is legal to depth 8; deeper is an error with
+a "you do not want this" diagnostic).
+
+```ebnf
+STRING     ::= '"' STR_PART* '"'
+STR_PART   ::= STR_TEXT | '{{' | '}}' | INTERP
+INTERP     ::= '{' expr FORMAT_SPEC? '}'
+FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
+```
+
+- `{{` and `}}` are literal braces `[gram.lex.str.escape]`.
+- The `:` beginning a format spec is the first top-level `:` inside the
+  interpolation (top-level = not inside nested `(` `[` `{` or a nested
+  string) `[gram.amb.fmtcolon]`.
+- Escapes: `\n \t \r \\ \" \0 \x7f \u{1F43A}`.
+
+**Multiline** `[gram.lex.str.multi]`: `"""` opens; the literal ends at the
+next `"""`; the closing delimiter's column sets the dedent — every content
+line must start with at least that much whitespace, which is stripped
+(SE-0168 lineage). First newline after the opening `"""` is dropped.
+Interpolation works inside.
+
+**Raw** `[gram.lex.str.raw]`: `r"…"`, `r#"…"#`, `r##"…"##` — no escapes,
+no interpolation, `#`-fences balance.
+
+**Generalized literals** `[gram.lex.str.gen]`: `IDENT '"' … '"'` with no
+whitespace between — `re"[a-z]+"`, `path"/etc/hosts"`. Desugars to a
+comptime call `IDENT.from_literal("…")`; the prefix is any identifier that
+is not a reserved keyword. Raw-mode body (no escapes/interpolation).
+
+### 1.6 Newline termination `[gram.lex.newline]`
+
+Go-adapted, last-token-only, **normative and byte-exact** (Track 2 must
+match):
+
+A statement terminator is inserted at a newline iff the last token on the
+line is one of:
+
+- an identifier or `_`
+- any literal (INT, FLOAT, any string-mode end, `true`, `false`)
+- one of the keywords: `return`, `break`, `continue`
+- a closing delimiter: `)`, `]`, `}`
+- postfix `?`
+
+No terminator is inserted otherwise — in particular after binary operators,
+`.`, `,`, `=`, open delimiters, and keywords other than the three above.
+Multiline expression style is therefore **trailing** operator/dot; the
+formatter enforces it (`[gram.fmt.continuation]`).
+
+`;` is an explicit terminator token, interchangeable with the inserted one
+— it exists for single-line blocks (`{ print(USAGE); return 2 }`, the
+guard-clause idiom). An empty statement (a `;` with no statement before it
+on the same line) is an error (E0002). The formatter strips every `;` that
+is not separating statements within a single-line block
+(`[gram.fmt.inline]`).
+
+Exceptions (grammar-level):
+- `else` must appear on the same line as the preceding `}` — the inserted
+  terminator after `}` would otherwise orphan it. `[gram.amb.else]`
+- Inside `(…)`, `[…]`, and interpolations, newlines never terminate
+  (bracket depth > 0 suppresses insertion). `{…}` blocks do not suppress.
+
+Counter-example (does not parse; diagnostic points at the break):
+
+```text
+let x = a
+      + b        // ERROR: `+ b` is a new statement; write `a +` on line 1
+```
+
+---
+
+## 2. Compilation unit & items `[gram.item]`
+
+### 2.1 Unit `[gram.item.unit]`
+
+```ebnf
+unit  ::= inner_doc* item*
+item  ::= attribute* visibility? bare_item
+bare_item ::= fn_item | let_item | var_item | type_item | trait_item
+            | impl_item | use_item | import_c_item | const_item
+visibility ::= 'pub' ('(' 'pkg' ')')?
+```
+
+Directory = module (D32); there is no `mod` keyword. `[gram.item.module]`
+
+### 2.2 Imports `[gram.item.use]`
+
+```ebnf
+use_item ::= 'use' path ( '.' '{' IDENT (',' IDENT)* ','? '}' )? ('as' IDENT)? TERM
+import_c_item ::= 'import' 'c' STRING TERM
+path ::= IDENT ('.' IDENT)*
+```
+
+`use std.fs` · `use std.{fs, net}` · `use verylongname as vln`. `import c
+"stdlib.h"` binds the contextual namespace `c` (`[gram.inv.ctx]`); the
+string is a header name, not wolf syntax. A prelude (spec 02-…, D31) makes
+`print`, `Map`, `List`, `channel`, `Mutex`, region/pool APIs ambient.
+
+### 2.3 Functions `[gram.item.fn]`
+
+```ebnf
+fn_item   ::= fn_qual* 'fn' IDENT generics? '(' params? ')' fn_ret? (block | TERM)
+fn_qual   ::= 'comptime' | 'extern' STRING | 'export'
+generics  ::= '[' generic_param (',' generic_param)* ','? ']'
+generic_param ::= IDENT (':' bound)? | IDENT ':' 'type'
+bound     ::= path ('+' path)*
+params    ::= param (',' param)* ','?
+param     ::= param_mode? IDENT ':' type | param_mode? 'self' view_set?
+param_mode ::= 'mut' | 'take'
+view_set  ::= '.' '{' IDENT (',' IDENT)* '}'
+fn_ret    ::= '->' ret_type
+ret_type  ::= '!' type | type ('!' error_row)?
+```
+
+- Modes (D10 Tier 0): default is `read` (no keyword — the absence *is* the
+  syntax); `mut` = exclusive inout; `take` = consume.
+- View sets: `fn norm(mut self.{x, y})` — field-granular exclusivity.
+- Returns: `-> T` plain; `-> !T` error union with inferred private row;
+  `-> T ! {Tag(Payload), io.Error}` explicit row (`[gram.type.row]`).
+- Generic params use `[]` — there is no `<>` anywhere in the language.
+- Bodyless form (TERM) only under `extern`.
+
+Examples: see `corpus/wordcount.lu` (`fn top[T](m: Map[T, int], n: int)`).
+
+Counter-example: `fn f(x: mut int)` does not parse — modes precede the
+*name*, not the type: `fn f(mut x: int)`.
+
+### 2.4 Bindings & constants `[gram.item.let]`
+
+```ebnf
+let_item ::= 'let' pattern (':' type)? '=' expr TERM
+var_item ::= 'var' pattern (':' type)? '=' expr TERM
+const_item ::= 'const' IDENT (':' type)? '=' expr TERM
+```
+
+`let` immutable, `var` mutable, `const` comptime-evaluated. Item-level and
+statement-level share the grammar. `let (a, b) = pair` destructures.
+
+### 2.5 Types `[gram.item.type]`
+
+```ebnf
+type_item   ::= 'type' IDENT generics? '=' type_def TERM?
+type_def    ::= struct_def | enum_def | 'distinct' type | type
+struct_def  ::= 'struct' '{' field* '}'
+field       ::= attribute* visibility? IDENT ':' type ','?
+enum_def    ::= 'enum' '{' variant (',' variant)* ','? '}'
+variant     ::= IDENT ('(' type (',' type)* ')')?
+```
+
+Sugar: `struct Name { … }` and `enum Name { … }` at item level are
+accepted and canonicalized by the formatter to themselves (they are the
+idiomatic spelling; `type Name = struct { … }` is the general form that
+also serves comptime type construction).
+
+```ebnf
+struct_item ::= 'struct' IDENT generics? '{' field* '}'
+enum_item   ::= 'enum' IDENT generics? '{' variant (',' variant)* ','? '}'
+```
+
+(These two are included in `bare_item`.)
+
+### 2.6 Traits & impls `[gram.item.trait]`
+
+```ebnf
+trait_item ::= 'trait' IDENT generics? '{' trait_member* '}'
+trait_member ::= fn_item | type_item | const_item
+impl_item  ::= 'impl' generics? path ('for' type)? '{' impl_member* '}'
+impl_member ::= fn_item | type_item | const_item
+```
+
+Nominal traits, checked generics (D28). Adapter types are ordinary
+`struct` + `impl` — no dedicated syntax.
+
+### 2.7 Attributes `[gram.item.attr]`
+
+```ebnf
+attribute ::= '#[' attr (',' attr)* ']'
+attr      ::= path attr_input?
+attr_input ::= '(' attr_arg (',' attr_arg)* ')' | '=' literal
+attr_arg  ::= attr | literal | IDENT '=' literal
+```
+
+Closed, structured — attributes are not token soup (no macros at v1).
+Known at v1: `#[trusted]`, `#[noalloc]`, `#[inplace]`, `#[nopanic]`,
+`#[bounded_stack]`, `#[repr(c)]`, `#[cfg(target = "…")]`.
+
+---
+
+## 3. Statements & expressions `[gram.expr]`
+
+Wolf is expression-oriented: blocks evaluate to their final expression.
+Assignment is a **statement**, not an expression (`[gram.expr.assign]`).
+
+### 3.1 Blocks & statements `[gram.expr.block]`
+
+```ebnf
+block ::= '{' stmt* expr? '}'
+stmt  ::= let_item | var_item | const_item | assign_stmt | defer_stmt
+        | expr_stmt | item
+assign_stmt ::= place assign_op expr TERM
+assign_op   ::= '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>='
+defer_stmt  ::= ('defer' | 'errdefer') expr TERM
+expr_stmt   ::= expr TERM
+place ::= expr  /* must be a place-expression; checked in sema, not grammar */
+```
+
+### 3.2 Precedence & operators `[gram.expr.prec]`
+
+One authoritative climb, tightest first. Comparison operators do **not**
+chain (`a < b < c` is a parse error with a "did you mean `&&`" diagnostic).
+
+| # | Operators | Assoc |
+|---|-----------|-------|
+| 1 | paths, literals, `(e)`, block-exprs, closures | — |
+| 2 | postfix: call `f(…)`, index/generic-apply `e[…]`, member `.`, postfix `?` | left |
+| 3 | prefix: `!` `-` `&` `&mut` `*` `move` `copy` | — |
+| 4 | `as` type cast | left |
+| 5 | `*` `/` `%` | left |
+| 6 | `+` `-` | left |
+| 7 | `<<` `>>` | left |
+| 8 | `&` | left |
+| 9 | `^` | left |
+| 10 | `\|` | left |
+| 11 | `==` `!=` `<` `>` `<=` `>=` `<=>` | none |
+| 12 | `&&` | left |
+| 13 | `\|\|` | left |
+| 14 | `..` `..=` ranges (endpoints may be `^n` from-end forms) | none |
+| 15 | `else` defaulting (`expr else expr`, `expr else \|p\| expr-or-block`) | right |
+
+Prefix `&`/`&mut` create Tier-0 **local** borrows (second-class at
+function boundaries; 02-memory-model). Prefix `*` is raw-pointer deref
+(unsafe tier). `move` transfers a region/value; `copy` forces a copy of a
+non-`Copy` value.
+
+### 3.3 Primary expressions `[gram.expr.primary]`
+
+```ebnf
+expr ::= else_expr
+else_expr ::= range_expr ('else' (block | '|' pattern '|' (expr | block) | expr))?
+range_expr ::= r_end (('..' | '..=') r_end?)? | ('..' | '..=') r_end
+r_end ::= or_expr | '^' or_expr
+/* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
+/* …tiers 5–13 by the table; extraction includes the full climb… */
+postfix_expr ::= primary (call_args | index_args | '.' member | '?')*
+call_args  ::= '(' (call_arg (',' call_arg)* ','?)? ')'
+call_arg   ::= ('mut' | 'take')? expr
+index_args ::= '[' (call_arg (',' call_arg)* ','?)? ']'
+member     ::= IDENT | INT   /* tuple access: pair.0, pair.1 */
+primary ::= literal | path | struct_lit | '(' expr (',' expr)* ','? ')' | block
+          | if_expr | match_expr | loop_expr | closure | region_expr
+          | scope_expr | select_expr | when_expr | unsafe_expr | spawn_expr
+          | asm_expr | borrow_expr
+struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}'
+field_init ::= IDENT ':' expr | IDENT
+literal ::= INT | FLOAT | STRING | MULTILINE_STRING | RAW_STRING
+          | GENERALIZED_STRING | 'true' | 'false'
+```
+
+Struct literals: `ParseError { at: i, found: c }`; `Point { x }` shorthand
+binds the field from the identifier. Illegal in condition/scrutinee
+position without parens (`[gram.amb.structlit]`).
+
+- **Call-site modes (X1)**: `f(mut x)`, `pool[mut prev]` — `mut`/`take`
+  are argument prefixes in both call and index argument lists.
+- `(e)` grouping; `(a, b)` tuple; `(a,)` one-tuple.
+- Parenthesized-vs-tuple: comma decides, standard.
+
+### 3.4 Control flow as expressions `[gram.expr.flow]`
+
+```ebnf
+if_expr    ::= 'if' expr block ('else' (if_expr | block))?
+match_expr ::= 'match' expr '{' arm* '}'
+match_arm  ::= pattern ('if' expr)? '=>' (expr | block)
+arm        ::= match_arm arm_sep?
+arm_sep    ::= ','
+loop_expr  ::= 'for' pattern 'in' expr block
+             | 'while' expr block
+             | 'loop' block
+jump_expr  ::= 'return' expr? | 'break' expr? | 'continue'
+```
+
+Arm separators (also for `select`): the comma is **required** after an
+expression-bodied arm that is followed by another arm, **optional** after a
+block-bodied arm (a newline suffices there). The formatter emits trailing
+commas in multiline arm lists either way (`[gram.fmt.commas]`).
+
+The condition of `if`/`while` and the scrutinee of `match`/`for` use
+no-struct-literal expression mode (a `{` there begins the block —
+`[gram.amb.structlit]`).
+
+### 3.5 Closures `[gram.expr.closure]`
+
+```ebnf
+closure ::= 'fn' '(' params_untyped? ')' (block | expr)
+params_untyped ::= closure_param (',' closure_param)* ','?
+closure_param  ::= param_mode? IDENT (':' type)?
+```
+
+Expression-bodied closure extent rule (`[gram.amb.closure]`): the body is
+one `else_expr` — it extends maximally rightward and is terminated only by
+a token the expression grammar cannot consume (`,` `)` `]` `}` TERM).
+`sorted_by(fn(a, b) b.1 <=> a.1)` parses as expected.
+
+### 3.6 Regions `[gram.expr.region]`
+
+Both locked forms (X4):
+
+```ebnf
+region_expr ::= 'region' IDENT (':' region_strategy)? block   /* sugar   */
+              | 'region' '(' region_strategy? ')'             /* value   */
+              | 'in' expr block                               /* into r  */
+              | 'freeze' expr
+region_strategy ::= 'rc' | 'pool' '(' type ')'
+```
+
+- Sugar: `region tmp { … }` — create, scope, free at `}`; the block's
+  value escapes by move.
+- Value: `let r = region()`, `let r = region(rc)`, `region r: pool(Node)
+  { … }` names the sugar's region for `in r { … }` use within.
+- `in r { … }` evaluates its block with allocations landing in `r`.
+- `freeze r` promotes to deep-immutable; `freeze region { … }` composes.
+- `move` (prefix operator, tier 3) transfers: `ch.send(move r)`.
+
+`rc` and `pool` are contextual keywords (`[gram.inv.ctx]`).
+
+### 3.7 Concurrency surface `[gram.expr.conc]`
+
+```ebnf
+scope_expr  ::= 'scope' IDENT? block
+spawn_expr  ::= 'spawn' 'proc' path call_args
+select_expr ::= 'select' '{' select_arm (',' select_arm)* ','? '}'
+select_arm  ::= pattern 'from' expr '=>' (expr | block)
+              | 'timeout' '(' expr ')' '=>' (expr | block)
+when_expr   ::= 'when' '(' expr (',' expr)+ ','? ')' block
+```
+
+- Task spawning is a *method* on the scope handle (`s.spawn(fn() { … })`)
+  — no task-spawn keyword exists; the binder `scope s { … }` makes the
+  handle a value (D16: scope handles are values).
+- `spawn proc worker(args)` starts a proc under the current supervisor;
+  proc linking/monitoring are methods (`w.monitor()`, `w.link()`), not
+  keywords.
+- `from` and `timeout` are contextual (only meaningful in select arms).
+- `when` requires ≥2 operands (one operand is just a method on the sync
+  type).
+
+### 3.8 Unsafe tier `[gram.expr.unsafe]`
+
+```ebnf
+unsafe_expr ::= 'unsafe' block
+              | 'unsafe' 'c' capture_list? block          /* inline C   */
+asm_expr    ::= 'asm' '{' STRING (',' asm_operand)* ','? '}'
+asm_operand ::= IDENT '=' asm_dir '(' asm_constraint ')' expr
+              | asm_dir '(' asm_constraint ')' expr
+asm_dir     ::= 'in' | 'out' | 'inout' | 'lateout'
+asm_constraint ::= IDENT
+capture_list ::= '[' IDENT (',' IDENT)* ','? ']'
+assume_stmt ::= 'assume' 'noalias' expr (',' expr)+ TERM
+borrow_expr ::= 'borrow' expr 'from' expr
+```
+
+`asm`, `assume`, `borrow` are only legal inside `unsafe` (enforced in
+sema; the grammar accepts them anywhere for recovery quality, D22).
+Inline-C block bodies are opaque token text to wolf's lexer (brace-balanced
+scan; c10 owns their meaning). `asm_expr` is a `primary`; `assume_stmt`
+is a `stmt`; `borrow_expr` is a `primary`.
+
+---
+
+## 4. Types `[gram.type]`
+
+```ebnf
+type ::= path type_args?
+       | '!' type
+       | type '!' error_row          /* postfix row on return types */
+       | prefix_type_kw type
+       | '*' type                    /* raw pointer, unsafe tier */
+       | 'dyn' path
+       | '(' type (',' type)* ','? ')'
+       | 'fn' '(' (type (',' type)*)? ')' ('->' ret_type)?
+       | 'type'                      /* the type of types, comptime */
+prefix_type_kw ::= 'shared' | 'handle' | 'weak' | 'distinct'
+type_args ::= '[' type_arg (',' type_arg)* ','? ']'
+type_arg  ::= type | expr            /* const generics; disambiguated in sema */
+error_row ::= '{' row_entry (',' row_entry)* (',' '..')? ','? '}'
+row_entry ::= path ('(' type (',' type)* ')')?
+```
+
+- `!T` and `T ! {row}` per D30. In *expression* position `!` is unary not;
+  in *type* position it is the error-union constructor. The positions are
+  syntactically disjoint (`[gram.amb.bang]`).
+- `handle Node`, `shared Config`, `weak Parent`: prefix type keywords.
+- `Map[str, int]`, `List[(T, int)]`: `[]` type application.
+- `&T`-style reference *types* do not exist in the surface (borrows are
+  second-class at boundaries; D10) — parameter modes carry what references
+  would.
+
+---
+
+## 5. Patterns `[gram.pat]`
+
+```ebnf
+pattern ::= '_' | literal | IDENT | path '(' pattern (',' pattern)* ','? ')'
+          | '(' pattern (',' pattern)* ','? ')' | pattern '|' pattern
+          | IDENT '@' pattern
+```
+
+Payload binding: `BadDigit(e) => …`; or-patterns `A | B`; guards are arm
+syntax (`[gram.expr.flow]`), not pattern syntax.
+
+---
+
+## 6. Keyword & operator inventory `[gram.inv]`
+
+### 6.1 Reserved keywords `[gram.inv.kw]` (closed set — 50)
+
+```ebnf
+reserved_kw ::= 'as' | 'asm' | 'assume' | 'borrow' | 'break' | 'comptime'
+  | 'const' | 'continue' | 'copy' | 'defer' | 'distinct' | 'dyn' | 'else'
+  | 'enum' | 'errdefer' | 'export' | 'extern' | 'false' | 'fn' | 'for'
+  | 'freeze' | 'handle' | 'if' | 'impl' | 'import' | 'in' | 'let' | 'loop'
+  | 'match' | 'move' | 'mut' | 'proc' | 'pub' | 'region' | 'return'
+  | 'scope' | 'select' | 'shared' | 'spawn' | 'struct' | 'take' | 'trait'
+  | 'true' | 'type' | 'unsafe' | 'use' | 'var' | 'weak' | 'when' | 'while'
+```
+
+(The list is normative, the count is a checksum: 50.) Additions/removals
+are spec commits with corpus updates.
+
+### 6.2 Contextual keywords `[gram.inv.ctx]`
+
+Identifier everywhere except the noted position: `c` (`import c`,
+`unsafe c`), `rc` / `pool` (region strategies), `from` / `timeout`
+(select arms), `noalias` (after `assume`), `pkg` (in `pub(pkg)`),
+`self` (receiver), `in`/`out`/`inout`/`lateout`/register classes (asm
+operands). Rationale: each appears only after a reserved keyword or inside
+a closed construct, so reserving them would steal good identifiers
+(`from`, `timeout`, `c`) for no parsing benefit.
+
+### 6.3 Deliberately absent `[gram.inv.absent]`
+
+No turbofish, no `<>` generics, no `do` single-statement form, no
+`++`/`--`, no statement macros, no ternary `?:` (use `if` expressions),
+no `goto`, no *required* semicolons (terminators are inserted;
+`[gram.lex.newline]` defines the explicit `;` and its single legal use).
+
+---
+
+## 7. Formatter-canonical style `[gram.fmt]` (appendix, normative for `wolf fmt`)
+
+- `[gram.fmt.indent]` 4 spaces; no tabs. Line width 100 (soft — the
+  formatter breaks at operators/args, never mid-token/mid-string).
+- `[gram.fmt.brace]` Opening brace on the construct's line; `} else` on
+  one line; `}` of an item followed by one blank line.
+- `[gram.fmt.continuation]` Multiline expressions break **after** binary
+  operators and after `.` (trailing style — required by
+  `[gram.lex.newline]`); continuations indent one level.
+- `[gram.fmt.commas]` Trailing comma in every multiline list; none inline.
+- `[gram.fmt.inline]` A block stays on one line (with `;` separators) only
+  when it is a guard-clause-shaped body (≤2 statements, fits the width);
+  otherwise the formatter breaks it multiline and strips the semicolons.
+- `[gram.fmt.region]` X4 canonicalization: a region created, used
+  lexically, and freed in one scope is written in sugar form; a region
+  that escapes (moved, stored, returned) is written in value form. The
+  formatter rewrites sugar↔value only when provable from syntax alone.
+- `[gram.fmt.imports]` `use` items first, sorted (std first, then
+  packages, then relative), one blank line after; `import c` after `use`.
+- `[gram.fmt.strings]` Prefer `"""` when a literal contains a newline;
+  prefer raw when it contains ≥2 backslash escapes.
+- `[gram.fmt.canon]` `corpus/wordcount.lu` is the canonical formatted
+  artifact; `wolf fmt` must fix-point every corpus file byte-identically.
+
+---
+
+## 8. Ambiguity annex `[gram.amb]` (living)
+
+Each entry: the rule, and its paired files in `corpus/grammar/`.
+
+- `[gram.amb.brackets]` **`e[…]` is one postfix form.** Whether it is
+  indexing or generic application is resolved in sema (types-as-values,
+  D29) — the grammar has a single `index_args` production, so there is
+  nothing to disambiguate at parse time. `f[int](x)` and `m[k]` are the
+  same shape. Files: `brackets_index.lu`, `brackets_generic_call.lu`.
+- `[gram.amb.intdot]` `1.s` = member on int; `1.0` float; `1..2` range;
+  `1.` = int then member-dot (awaiting member). Files: `intdot_member.lu`,
+  `intdot_range.lu`.
+- `[gram.amb.fmtcolon]` First top-level `:` in an interpolation starts the
+  format spec: `"{m[k]:>8}"` formats `m[k]`; `"{ {a: 1}.a }"` — the `:`
+  inside `{…}` nesting is not top-level. Files: `interp_fmtcolon.lu`,
+  `interp_nested.lu`.
+- `[gram.amb.else]` `else` binds to the nearest viable construct on the
+  same logical statement: after an `if`'s `}` it continues the if; after a
+  complete expression it is the defaulting operator. `} else` same-line
+  rule makes the two cases lexically disjoint. Files: `else_default.lu`,
+  `else_chain.lu`.
+- `[gram.amb.bang]` `!` prefix in expression position = not; `!` in type
+  position (after `->`, after `:`, inside `[…]` type args) = error union.
+  Disjoint by position. Files: `bang_not.lu`, `bang_errunion.lu`.
+- `[gram.amb.closure]` Expression-bodied closures extend maximally; a
+  closure passed as a non-final argument must be block-bodied if its body
+  would swallow the comma — it cannot, because `,` terminates. File:
+  `closure_extent.lu`.
+- `[gram.amb.structlit]` No struct-literal expressions in condition/
+  scrutinee position; `if x == (Point { x: 0 }) { … }` requires parens.
+  Files: `structlit_cond.lu` (counter), `structlit_paren.lu`.
+- `[gram.amb.when]` `when` is reserved, so `when(a, b)` is never a call.
+  File: `when_reserved.lu` (counter-example, expects `fail`).
+- `[gram.amb.newline]` Trailing-operator continuation accepted; leading-
+  operator rejected. Files: `newline_trailing.lu`, `newline_leading.lu`
+  (counter).
+
+---
+
+## 9. Diagnostics IOUs (seed for s10 catalog)
+
+Every counter-example above names an expected diagnostic. Codes reserved:
+E0001 (leading-operator continuation), E0002 (empty statement),
+E0003 (comparison chaining), E0004 (float `1.e5`), E0005 (`else` on new
+line), E0006 (struct literal in condition), E0007 (interp nesting depth),
+E0008 (keyword as identifier — names the keyword and suggests `r#`-free
+rename; wolf has no raw identifiers, pick another name).

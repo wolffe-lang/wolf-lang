@@ -17,17 +17,17 @@ struct Node {
 fn build_ring(n: int) -> int {
     region r {                          // sugar: create + scope + free (X4)
         var pool = Pool[Node]()         // handle pool lives in r
-        var first = pool.insert(Node { value: 0, next: handle.null, prev: handle.null })
-        var prev = first
-        for i in 1..n {
-            let h = pool.insert(Node { value: i, next: handle.null, prev: prev })
-            pool[mut prev].next = h     // call-site mut (X1), field-granular
-            prev = h
+        var hs = List[handle Node]()
+        for _ in 0..n { hs.push(pool.reserve()) }   // two-phase: no null handles exist
+        for i in 0..n {
+            pool.init(hs[i], Node {
+                value: i,
+                next: hs[(i + 1) % n],              // closing the cycle — fine within a region
+                prev: hs[(i + n - 1) % n],
+            })
         }
-        pool[mut prev].next = first     // close the cycle — fine within a region
-        pool[mut first].prev = prev
         var sum = 0
-        var cur = first
+        var cur = hs[0]
         for _ in 0..n {
             sum += pool[cur].value
             cur = pool[cur].next

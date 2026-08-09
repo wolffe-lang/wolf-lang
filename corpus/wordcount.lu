@@ -9,6 +9,8 @@
 //! annotations in application code (D10 Tier 0).
 //! Run with no args -> prints usage, exits 2 (the checked expectation).
 
+use std.fs
+
 let USAGE = """
     usage: wc FILE...
     Count words across files, in parallel.
@@ -36,7 +38,7 @@ fn main(args: List[str]) -> !int {
     for c in counts { total.merge(c, fn(a, b) a + b) }
     for (word, n) in top(total, 10) {
         let name = word[..min(word.len, 12)]        // byte slice, checked, zero-copy
-        print("{name:<14}{n:>7}  {\"#\".repeat(n / 10)}")
+        print("{name:<14}{n:>7}  {"#".repeat(n / 10)}")   // nested strings need no escapes: mode stack
     }
     0
 }

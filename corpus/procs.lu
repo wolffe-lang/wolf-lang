@@ -31,12 +31,12 @@ fn main() -> !int {
         let got = results.recv()?
     }
 
-    // procs: failure domains; monitor delivers the exit *reason*
+    // procs: failure domains; monitoring is a method, not a keyword
     let w = spawn proc worker()          // under the root supervisor, named
-    let m = monitor w
+    let m = w.monitor()                  // delivers the exit *reason*
     select {
         exit(reason) from m => { if !reason.is_normal() { return 1 } }
-        timeout(1.s) => { return 1 }
+        timeout(1.s) => { return 1 }     // member access on int literal: [gram.amb.intdot]
     }
 
     // shared-mutable requires a sync wrapper; `when` acquires as a set
