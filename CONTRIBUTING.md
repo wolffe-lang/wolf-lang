@@ -15,7 +15,9 @@
   `span ← diag ← {lex, ast} ← parse ← sema ← mem ← wir ← codegen_* ← driver`;
   `wolf_rt` may depend on `wolf_span` at most.
 - Every diagnostic gets a reviewed snapshot. Every corpus surface change
-  updates `corpus/` in the same commit as the spec change.
+  updates `corpus/` in the same commit as the spec change — the corpus is
+  never allowed to drift from the locked surface (s02 discipline; review
+  checklist item).
 - Platform-agnostic by default: code must not assume linux/x86-64; the CI
   matrix (linux x86-64/aarch64, macOS aarch64, windows x86-64, freebsd
   cross-build) is the arbiter.
