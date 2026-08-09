@@ -31,10 +31,11 @@ No block comments (nesting arguments lose to simplicity + lexer speed).
 ### 1.3 Identifiers `[gram.lex.ident]`
 
 ```ebnf
-IDENT ::= XID_Start XID_Continue*
+IDENT ::= ('_' XID_Continue+) | (XID_Start XID_Continue*)
 ```
 
-plus `_` as the wildcard identifier (never a binding you can read).
+A bare `_` is the wildcard identifier (never a binding you can read);
+`_foo`-style identifiers are ordinary names, conventionally unused.
 Identifiers that collide with reserved keywords do not parse (`[gram.inv]`).
 
 ### 1.4 Integer and float literals `[gram.lex.number]`
@@ -135,6 +136,15 @@ Counter-example (does not parse; diagnostic points at the break):
 let x = a
       + b        // ERROR: `+ b` is a new statement; write `a +` on line 1
 ```
+
+### 1.7 Nesting rails `[gram.lex.rails]`
+
+Hostile nesting degrades to diagnostics, never to crashes. Normative
+rails: string/interpolation mode nesting per `[gram.lex.str]` (8
+friendly / 32 lexer); **expression/statement recursion depth 256** —
+deeper input is rejected with a diagnostic at the point the rail is
+hit. Both implementations enforce identical rail values
+(differential-tested).
 
 ---
 
@@ -319,6 +329,7 @@ expr ::= else_expr | jump_expr
 else_expr ::= range_expr ('else' (block | '|' closed_pattern '|' (expr | block) | expr))?
 range_expr ::= r_end (('..' | '..=') r_end?)? | ('..' | '..=') r_end
 r_end ::= or_expr | '^' or_expr
+prefix_operand ::= /* a tier-3 prefix expression: see the climb table */ postfix_expr
 /* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
 /* …tiers 5–13 by the table; extraction includes the full climb… */
 postfix_expr ::= primary (call_args | index_args | '.' member | '?')*
@@ -403,7 +414,7 @@ Both locked forms (X4):
 region_expr ::= 'region' IDENT? (':' region_strategy)? block  /* sugar   */
               | 'region' '(' region_strategy? ')'             /* value   */
               | 'in' expr block                               /* into r  */
-              | 'freeze' expr
+              | 'freeze' prefix_operand
 region_strategy ::= 'rc' | 'pool' '(' type ')'
 ```
 
@@ -413,7 +424,10 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
 - Value: `let r = region()`, `let r = region(rc)`, `region r: pool(Node)
   { … }` names the sugar's region for `in r { … }` use within.
 - `in r { … }` evaluates its block with allocations landing in `r`.
-- `freeze r` promotes to deep-immutable; `freeze region { … }` composes.
+- `freeze e` promotes to deep-immutable; its operand is a *prefix-tier*
+  operand (tier 3, like `move`/`copy`/`shared`): `freeze r == x` means
+  `(freeze r) == x`. The `in`-block header expression parses in
+  no-struct-literal mode. `freeze region { ... } ` composes.
 - `move` (prefix operator, tier 3) transfers: `ch.send(move r)`.
 
 `rc` and `pool` are contextual keywords (`[gram.inv.ctx]`).
@@ -532,7 +546,7 @@ are spec commits with corpus updates.
 
 Identifier everywhere except the noted position: `c` (`import c`,
 `unsafe c`), `rc` / `pool` (region strategies), `from` / `timeout`
-(select arms), `noalias` (after `assume`), `pkg` (in `pub(pkg)`),
+(select arms), `noalias` (after `assume`), `pkg` (in `pub(pkg)`), the v1 asm register class `reg` (target-specific classes arrive with c10),
 `self` (receiver), `in`/`out`/`inout`/`lateout`/register classes (asm
 operands). Rationale: each appears only after a reserved keyword or inside
 a closed construct, so reserving them would steal good identifiers
@@ -601,7 +615,7 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
   closure passed as a non-final argument must be block-bodied if its body
   would swallow the comma — it cannot, because `,` terminates. File:
   `closure_extent.lu`.
-- `[gram.amb.structlit]` No struct-literal expressions in condition/
+- `[gram.amb.structlit]` No struct-literal expressions in condition/`in`-header/
   scrutinee position; `if x == (Point { x: 0 }) { … }` requires parens.
   Files: `structlit_cond.lu` (counter), `structlit_paren.lu`.
 - `[gram.amb.when]` `when` is reserved, so `when(a, b)` is never a call.
@@ -617,6 +631,6 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
 Every counter-example above names an expected diagnostic. Codes reserved:
 E0001 (leading-operator continuation), E0002 (empty statement),
 E0003 (comparison chaining), E0004 (float `1.e5`), E0005 (`else` on new
-line), E0006 (struct literal in condition), E0007 (interp nesting depth),
+line), E0006 (struct literal in condition; primary span = the opening `{`), E0007 (interp nesting depth),
 E0008 (keyword as identifier — names the keyword and suggests `r#`-free
 rename; wolf has no raw identifiers, pick another name).

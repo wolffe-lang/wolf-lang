@@ -148,6 +148,7 @@
     "gram.lex.ident": "01-grammar.md",
     "gram.lex.newline": "01-grammar.md",
     "gram.lex.number": "01-grammar.md",
+    "gram.lex.rails": "01-grammar.md",
     "gram.lex.source": "01-grammar.md",
     "gram.lex.str": "01-grammar.md",
     "gram.lex.str.escape": "01-grammar.md",
