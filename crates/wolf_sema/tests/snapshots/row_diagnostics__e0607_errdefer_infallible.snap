@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0607]: `errdefer` runs only on the error path, but `tidy` cannot fail
+ --> mem:///main.lu:2:5
+  |
+1 | fn tidy() -> int {
+  |           ------ the signature declares no error row
+2 |     errdefer print("undo")
+  |     ^^^^^^^^ this cleanup could never run
+  |
+  = note: use plain `defer` for cleanup that runs on every exit; keep `errdefer` only in a
+    function with an error row.
+help: run the cleanup on every exit: `defer`
+  |
+2 |     defer print("undo")
+  |

@@ -78,6 +78,33 @@
 //!   object-creation site (E0508/E0509/E0510), with the dyn-safe
 //!   method set recorded in canonical order in the interface.
 //!
+//! # Implemented today (s15)
+//!
+//! - **Error rows** ([`types`]/[`unify`]): `!T` carries a structural,
+//!   payload-carrying tag set (D30 — Koka's `exn` row made concrete in
+//!   Zig's syntax, with the payloads Zig lacks). Rows are *sets*
+//!   (duplicate labels E0601), unify by tag name with pointwise
+//!   payloads, and admit one polymorphic tail — a row entry naming a
+//!   generic parameter (`fn(T) -> U ! {E}`, the HOF `rethrows`
+//!   answer). **Width subtyping is checking-direction only**, at call
+//!   and return boundaries — never subsumption inside the unifier.
+//! - **`?` / `else`** ([`check`]): `expr?` is a `R_callee ⊆ R_caller`
+//!   width check plus re-tagging by injection — no `From`, ever
+//!   (coarsening is an explicit trait impl invoked by name). Failures
+//!   name exactly the missing tags (E0602, signature-extending
+//!   fix-it; the structural diff rides the JSON schema as
+//!   `row_diff`). `else` defaults, `else |err| …` binds the row.
+//! - **Sealing** ([`rows`]): private `-> !T` rows resolve to concrete
+//!   tag sets at signature elaboration (cycle-aware fixpoint over the
+//!   module call graph), so inferred-row functions recurse and have
+//!   their addresses taken; `wolf interface` shows the sealed rows
+//!   (never hashed — private items are not interface surface).
+//!   Exported inferred rows are E0605 with a state-the-row fix-it.
+//! - **`errdefer`** ([`check`]): fallible-function-only (E0607),
+//!   recorded with `defer` in declaration order in the typed HIR for
+//!   s27's strict-LIFO lowering; every `?`/`else`/raise site is an
+//!   error-trace hook point for s32 (debug-only, [abi.err.trace]).
+//!
 //! The std/prelude stub tables ([`prelude`]) carry *names only* until
 //! the real standard library lands (s05/s51).
 
@@ -87,6 +114,7 @@ pub mod interface;
 pub mod prelude;
 pub mod resolve;
 pub mod rewrite;
+pub mod rows;
 pub mod sig;
 pub mod traits;
 pub mod typecheck;

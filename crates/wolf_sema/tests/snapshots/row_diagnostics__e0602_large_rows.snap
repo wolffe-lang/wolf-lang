@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0602]: this can also fail with `A`, `B`, `C`, `D`, `E2`, `F`, `G`, which `shallow`'s row does not include
+ --> mem:///main.lu:6:5
+  |
+5 | fn shallow() -> int ! {H, I, J, K, L, M} {
+  |              --------------------------- the receiving row is declared here
+6 |     deep()?
+  |     ^^^^^^^ the missing tags escape here
+  |
+  = note: rows compose by union: `?` re-tags errors into the wider row by injection — there is no
+    conversion to write, only tags to admit.
+help: extend the row with `A`, `B`, `C`, `D`, `E2`, `F`, `G`
+  |
+5 | fn shallow() -> int ! {H, I, J, K, L, M, A, B, C, D, E2, F, G} {
+  |

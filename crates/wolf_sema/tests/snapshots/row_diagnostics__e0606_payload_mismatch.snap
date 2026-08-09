@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0606]: the tag `NotFound` carries `NotFound(int)` here, but the receiving row declares `NotFound(str)`
+ --> mem:///main.lu:6:5
+  |
+5 | fn show() -> int ! {NotFound(str)} {
+  |           ------------------------ the receiving row is declared here
+6 |     read()?
+  |     ^^^^^^^ the payloads disagree
+  |
+  = note: tag names are structural, so a shared name is the same tag — its payload types must
+    agree everywhere it appears; align them, or use two different tag names.

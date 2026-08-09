@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0604]: `?` propagates an error, but `calm` cannot fail
+ --> mem:///main.lu:6:5
+  |
+5 | fn calm() -> int {
+  |           ------ the signature declares no error row
+6 |     may()?
+  |     ^^^^^^ the error would have nowhere to go
+  |
+  = note: errors travel in the declared row, never a side channel: make the function fallible (`->
+    !T`, or an explicit row), or handle the error here with `else`.
+help: make `calm` fallible: `! {Bad}`
+  |
+5 | fn calm() -> int ! {Bad} {
+  |

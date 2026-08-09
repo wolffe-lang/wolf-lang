@@ -133,9 +133,30 @@ pub enum TyKind {
     Tuple(Vec<TyId>),
     /// `fn(params) -> ret`.
     Fn(Vec<TyId>, TyId),
-    /// `!T` — the error channel. The row side is OPAQUE at s13: no
-    /// tags, no composition; the row engine is s15 (D30).
-    ErrUnion(TyId),
+    /// `!T` / `T ! {row}` — the error channel (D30, s15): the ok type
+    /// plus the row. The row position holds a [`TyKind::Row`], a
+    /// [`TyKind::Rigid`] row variable (a generic signature's tail), a
+    /// [`TyKind::Var`] (instantiation), or — transiently, inside
+    /// signature elaboration only — a [`TyKind::InferredRow`] marker.
+    ErrUnion(TyId, TyId),
+    /// A structural error row: payload-carrying tags, canonically
+    /// sorted by tag name (wolf rows are *sets* — duplicate labels are
+    /// rejected at elaboration, E0601), plus an optional polymorphic
+    /// tail (`{A, B | e}` internally; the surface spells tails as a
+    /// row entry naming a generic parameter). The row also serves as
+    /// the type of a caught error value (`else |err| …`).
+    Row {
+        tags: Vec<(String, Vec<TyId>)>,
+        tail: Option<TyId>,
+    },
+    /// The pre-sealing marker of a `-> !T` inferred row (private
+    /// items only). Replaced by the sealed concrete [`TyKind::Row`]
+    /// during signature elaboration's cycle-aware fixpoint
+    /// ([`crate::rows`]); it never survives into body checking.
+    InferredRow {
+        module: u32,
+        name: String,
+    },
     /// A range expression's builtin type (closed family — `for` iterates
     /// it without any trait machinery; D25).
     Range(TyId),
@@ -236,6 +257,125 @@ impl TypeTable {
     pub fn prim(&mut self, p: Prim) -> TyId {
         self.intern(TyKind::Prim(p))
     }
+
+    /// The empty (closed, tagless) row — the row of a fallible value
+    /// that cannot actually fail.
+    pub fn empty_row(&mut self) -> TyId {
+        self.intern(TyKind::Row {
+            tags: Vec::new(),
+            tail: None,
+        })
+    }
+
+    /// Intern a row in canonical form: tags sorted by name. Callers
+    /// reject duplicates before this point (E0601); a duplicate that
+    /// slips through keeps its first payload.
+    pub fn row(&mut self, mut tags: Vec<(String, Vec<TyId>)>, tail: Option<TyId>) -> TyId {
+        tags.sort_by(|a, b| a.0.cmp(&b.0));
+        tags.dedup_by(|a, b| a.0 == b.0);
+        self.intern(TyKind::Row { tags, tail })
+    }
+
+    /// Intern `ok ! row`.
+    pub fn err_union(&mut self, ok: TyId, row: TyId) -> TyId {
+        self.intern(TyKind::ErrUnion(ok, row))
+    }
+}
+
+/// Render one row tag as source would spell it: `Tag` or
+/// `Tag(payload, …)`.
+pub fn render_tag(
+    table: &TypeTable,
+    name: &str,
+    payload: &[TyId],
+    resolve: &dyn Fn(u32) -> Result<TyId, &'static str>,
+) -> String {
+    if payload.is_empty() {
+        name.to_string()
+    } else {
+        let parts: Vec<String> = payload.iter().map(|t| render(table, *t, resolve)).collect();
+        format!("{name}({})", parts.join(", "))
+    }
+}
+
+/// Render a row: `{A, B(int) | e}`. The empty closed row renders `{}`.
+pub fn render_row(
+    table: &TypeTable,
+    row: TyId,
+    resolve: &dyn Fn(u32) -> Result<TyId, &'static str>,
+) -> String {
+    match table.kind(row) {
+        TyKind::Row { tags, tail } => {
+            let mut parts: Vec<String> = tags
+                .iter()
+                .map(|(n, p)| render_tag(table, n, p, resolve))
+                .collect();
+            let tail_str = tail.map(|t| render(table, t, resolve));
+            match tail_str {
+                Some(t) if parts.is_empty() => format!("{{{t}}}"),
+                Some(t) => format!("{{{} | {t}}}", parts.join(", ")),
+                None => {
+                    if parts.is_empty() {
+                        "{}".to_string()
+                    } else {
+                        parts.sort();
+                        format!("{{{}}}", parts.join(", "))
+                    }
+                }
+            }
+        }
+        TyKind::InferredRow { .. } => "{..inferred}".to_string(),
+        _ => format!("{{{}}}", render(table, row, resolve)),
+    }
+}
+
+/// The structural row delta (D22/E0602): tags of `a` absent from `b`,
+/// tags of `b` absent from `a`, and shared tags whose payloads differ —
+/// each rendered as source spells it. Never renders whole rows.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RowDelta {
+    pub only_in_a: Vec<String>,
+    pub only_in_b: Vec<String>,
+    pub payload_conflicts: Vec<String>,
+}
+
+impl RowDelta {
+    pub fn is_empty(&self) -> bool {
+        self.only_in_a.is_empty() && self.only_in_b.is_empty() && self.payload_conflicts.is_empty()
+    }
+}
+
+/// Compute the [`RowDelta`] between two concrete rows. `None` when
+/// either side is not a concrete `Row`.
+pub fn row_delta(
+    table: &TypeTable,
+    a: TyId,
+    b: TyId,
+    resolve: &dyn Fn(u32) -> Result<TyId, &'static str>,
+) -> Option<RowDelta> {
+    let (TyKind::Row { tags: ta, .. }, TyKind::Row { tags: tb, .. }) =
+        (table.kind(a).clone(), table.kind(b).clone())
+    else {
+        return None;
+    };
+    let mut delta = RowDelta::default();
+    for (n, p) in &ta {
+        match tb.iter().find(|(m, _)| m == n) {
+            None => delta.only_in_a.push(render_tag(table, n, p, resolve)),
+            Some((_, q)) if p != q => {
+                delta
+                    .payload_conflicts
+                    .push(render_tag(table, n, p, resolve));
+            }
+            Some(_) => {}
+        }
+    }
+    for (n, p) in &tb {
+        if !ta.iter().any(|(m, _)| m == n) {
+            delta.only_in_b.push(render_tag(table, n, p, resolve));
+        }
+    }
+    Some(delta)
 }
 
 /// Render `id` for humans. Unresolved inference variables render by
@@ -265,7 +405,17 @@ pub fn render(
                 render(table, *ret, resolve)
             )
         }
-        TyKind::ErrUnion(t) => format!("!{}", render(table, *t, resolve)),
+        TyKind::ErrUnion(t, row) => {
+            let ok = render(table, *t, resolve);
+            match table.kind(*row) {
+                // The bare/inferred spellings render as written.
+                TyKind::Row { tags, tail: None } if tags.is_empty() => format!("!{ok}"),
+                TyKind::InferredRow { .. } => format!("!{ok}"),
+                _ => format!("{ok} ! {}", render_row(table, *row, resolve)),
+            }
+        }
+        TyKind::Row { .. } => render_row(table, id, resolve),
+        TyKind::InferredRow { .. } => "{..inferred}".to_string(),
         TyKind::Range(t) => format!("range[{}]", render(table, *t, resolve)),
         TyKind::Nominal { name, .. } => name.clone(),
         TyKind::Rigid(name) => name.clone(),
@@ -345,8 +495,40 @@ pub fn diff(
         (TyKind::Wrapping(x), TyKind::Wrapping(y)) => {
             diff(table, *x, *y, resolve, out, "the wrapped type");
         }
-        (TyKind::ErrUnion(x), TyKind::ErrUnion(y)) => {
+        (TyKind::ErrUnion(x, rx), TyKind::ErrUnion(y, ry)) => {
             diff(table, *x, *y, resolve, out, "the success type");
+            if rx != ry {
+                // Row mismatches render tags-missing/tags-extra only —
+                // never a dump of both full rows (D22, the Koka
+                // degradation s15 exists to beat).
+                match row_delta(table, *rx, *ry, resolve) {
+                    Some(d) if !d.is_empty() => {
+                        if !d.only_in_a.is_empty() {
+                            out.push(format!(
+                                "the error row: `{}` only on the first side",
+                                d.only_in_a.join("`, `")
+                            ));
+                        }
+                        if !d.only_in_b.is_empty() {
+                            out.push(format!(
+                                "the error row: `{}` only on the second side",
+                                d.only_in_b.join("`, `")
+                            ));
+                        }
+                        for c in &d.payload_conflicts {
+                            out.push(format!(
+                                "the error row: the shared tag `{c}` carries different payloads"
+                            ));
+                        }
+                    }
+                    Some(_) => {}
+                    None => out.push(format!(
+                        "the error row: `{}` vs `{}`",
+                        render_row(table, *rx, resolve),
+                        render_row(table, *ry, resolve)
+                    )),
+                }
+            }
         }
         (TyKind::Range(x), TyKind::Range(y)) => {
             diff(table, *x, *y, resolve, out, "the element type");
@@ -370,9 +552,30 @@ pub fn subst(
             let s = subst(table, t, map);
             table.intern(TyKind::Wrapping(s))
         }
-        TyKind::ErrUnion(t) => {
+        TyKind::ErrUnion(t, row) => {
             let s = subst(table, t, map);
-            table.intern(TyKind::ErrUnion(s))
+            let r = subst(table, row, map);
+            table.intern(TyKind::ErrUnion(s, r))
+        }
+        TyKind::Row { tags, tail } => {
+            let stags: Vec<(String, Vec<TyId>)> = tags
+                .into_iter()
+                .map(|(n, p)| (n, p.into_iter().map(|t| subst(table, t, map)).collect()))
+                .collect();
+            let stail = tail.map(|t| subst(table, t, map));
+            // A tail substituted to a concrete row merges into the
+            // host row (row-variable instantiation is union).
+            match stail.map(|t| table.kind(t).clone()) {
+                Some(TyKind::Row {
+                    tags: tt,
+                    tail: inner,
+                }) => {
+                    let mut merged = stags;
+                    merged.extend(tt);
+                    table.row(merged, inner)
+                }
+                _ => table.row(stags, stail),
+            }
         }
         TyKind::Range(t) => {
             let s = subst(table, t, map);
@@ -445,8 +648,19 @@ mod tests {
         let f64_ = t.prim(Prim::F64);
         let f = t.intern(TyKind::Fn(vec![int, f64_], int));
         assert_eq!(render(&t, f, &no_vars), "fn(int, f64) -> int");
-        let e = t.intern(TyKind::ErrUnion(int));
+        let row = t.empty_row();
+        let e = t.intern(TyKind::ErrUnion(int, row));
         assert_eq!(render(&t, e, &no_vars), "!int");
+        let str_ = t.prim(Prim::Str);
+        let tagged = t.row(
+            vec![
+                ("TooShort".to_string(), vec![]),
+                ("BadDigit".to_string(), vec![str_]),
+            ],
+            None,
+        );
+        let e2 = t.err_union(int, tagged);
+        assert_eq!(render(&t, e2, &no_vars), "int ! {BadDigit(str), TooShort}");
         let w = t.intern(TyKind::Wrapping(int));
         assert_eq!(render(&t, w, &no_vars), "wrapping[int]");
     }

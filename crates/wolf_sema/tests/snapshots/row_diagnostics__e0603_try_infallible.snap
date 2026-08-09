@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0603]: `?` needs a fallible operand, but this is `int`
+ --> mem:///main.lu:6:5
+  |
+6 |     seven()?
+  |     ^^^^^^^^ `int` cannot fail
+  |
+  = note: `?` unwraps a `!T` value, propagating its error; this value has no error row — delete
+    the `?`, or check the callee's signature if you expected it to be fallible.

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0608]: `else` defaulting needs a fallible operand, but this is `int`
+ --> mem:///main.lu:6:5
+  |
+6 |     seven() else 0
+  |     ^^^^^^^^^^^^^^ `int` cannot fail, so the `else` never fires
+  |
+  = note: postfix `else` substitutes a fallback for a `!T` value's error; this value has no error
+    row — delete the `else`, or attach it to the fallible call itself.

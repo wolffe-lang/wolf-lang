@@ -68,13 +68,26 @@ fn deps<'t>(table: &'t TypeTable, base: TyId, ty: TyId, out: &mut Vec<&'t str>) 
         TyKind::Proj(b, name) if *b == base => out.push(name.as_str()),
         TyKind::Proj(b, _) => deps(table, base, *b, out),
         TyKind::Wrapping(t)
-        | TyKind::ErrUnion(t)
         | TyKind::Range(t)
         | TyKind::Ptr(t)
         | TyKind::Shared(t)
         | TyKind::Handle(t)
         | TyKind::Weak(t)
         | TyKind::Distinct(t) => deps(table, base, *t, out),
+        TyKind::ErrUnion(t, row) => {
+            deps(table, base, *t, out);
+            deps(table, base, *row, out);
+        }
+        TyKind::Row { tags, tail } => {
+            for (_, payload) in tags {
+                for t in payload {
+                    deps(table, base, *t, out);
+                }
+            }
+            if let Some(t) = tail {
+                deps(table, base, *t, out);
+            }
+        }
         TyKind::Tuple(ts) => {
             for t in ts {
                 deps(table, base, *t, out);
@@ -188,9 +201,28 @@ fn apply_once(table: &mut TypeTable, base: TyId, rules: &Rules, ty: TyId) -> TyI
             let s = apply_once(table, base, rules, t);
             table.intern(TyKind::Wrapping(s))
         }
-        TyKind::ErrUnion(t) => {
+        TyKind::ErrUnion(t, row) => {
             let s = apply_once(table, base, rules, t);
-            table.intern(TyKind::ErrUnion(s))
+            let r = apply_once(table, base, rules, row);
+            table.intern(TyKind::ErrUnion(s, r))
+        }
+        TyKind::Row { tags, tail } => {
+            let stags: Vec<(String, Vec<TyId>)> = tags
+                .into_iter()
+                .map(|(n, p)| {
+                    (
+                        n,
+                        p.into_iter()
+                            .map(|t| apply_once(table, base, rules, t))
+                            .collect(),
+                    )
+                })
+                .collect();
+            let stail = tail.map(|t| apply_once(table, base, rules, t));
+            table.intern(TyKind::Row {
+                tags: stags,
+                tail: stail,
+            })
         }
         TyKind::Range(t) => {
             let s = apply_once(table, base, rules, t);

@@ -73,6 +73,9 @@ pub struct FnSig {
     /// The `-> …` node's span (the "because" locus of return-type
     /// provenance), if written.
     pub ret_span: Option<Span>,
+    /// The explicit `! {row}` node's span, if written (E0602 fix-its
+    /// insert new tags just before its closing `}`).
+    pub row_span: Option<Span>,
     /// Generic parameters, in order, with resolved bounds. Non-empty
     /// ⇒ calls instantiate (s14: fresh existentials per parameter,
     /// argument-driven, bounds checked at the call site only).
@@ -153,9 +156,14 @@ pub struct SigTables {
     pub traits: BTreeMap<crate::traits::TraitRef, crate::traits::TraitDef>,
     /// Every impl block, coherence-checked (s14).
     pub impls: Vec<crate::traits::ImplDef>,
-    /// Signature-elaboration + trait/coherence diagnostics (E0407,
-    /// E05xx), deterministic order.
+    /// Signature-elaboration + trait/coherence + row-sealing
+    /// diagnostics (E0407, E05xx, E06xx), deterministic order.
     pub diagnostics: Vec<Diagnostic>,
+    /// Sealed inferred rows (s15): `(module, fn name, rendered sealed
+    /// signature)` — module-private facts, shown by `wolf interface`
+    /// but never serialized or hashed (private items are not
+    /// interface surface).
+    pub sealed: Vec<(usize, String, String)>,
 }
 
 impl SigTables {
@@ -186,16 +194,22 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // The s14 layer: trait declarations, impls, coherence, dyn use
     // checks — all elaborating into the same base table.
     let (traits, impls) = crate::traits::build(&mut lower);
-    let mut diagnostics = lower.diags;
-    wolf_diag::sort_diagnostics(&mut diagnostics);
-    SigTables {
+    let diagnostics = lower.diags;
+    let mut sigs = SigTables {
         table: lower.table,
         modules,
         module_names: pkg.modules.iter().map(|md| md.dotted()).collect(),
         traits,
         impls,
         diagnostics,
-    }
+        sealed: Vec::new(),
+    };
+    // The s15 layer: seal every inferred row to its concrete tag set
+    // (cycle-aware fixpoint over each module's call graph) and reject
+    // inferred rows on exported items (E0605).
+    crate::rows::seal(pkg, &mut sigs);
+    wolf_diag::sort_diagnostics(&mut sigs.diagnostics);
+    sigs
 }
 
 /// The import bindings of `file` within `module`.
@@ -249,7 +263,14 @@ impl<'a> Lower<'a> {
         let node = item_node(self.pkg, item);
         let file = item.file;
         match node.kind {
-            SyntaxKind::FnDecl => ItemSig::Fn(self.fn_sig(module, file, node, item.name_span)),
+            SyntaxKind::FnDecl => ItemSig::Fn(self.fn_sig_core(
+                module,
+                file,
+                node,
+                item.name_span,
+                &[],
+                Some(&item.name),
+            )),
             SyntaxKind::StructDecl => {
                 let d = StructDecl::cast(node).expect("kind");
                 let generics = generic_names(self, file, node);
@@ -397,18 +418,11 @@ impl<'a> Lower<'a> {
         self.diags.push(d);
     }
 
-    pub(crate) fn fn_sig(
-        &mut self,
-        module: usize,
-        file: usize,
-        node: &GreenNode,
-        name_span: Span,
-    ) -> FnSig {
-        self.fn_sig_in(module, file, node, name_span, &[])
-    }
-
-    /// [`Lower::fn_sig`] with `outer` rigid names already in scope
-    /// (an impl's generics + `Self` when elaborating members).
+    /// Elaborate a fn signature with `outer` rigid names already in scope
+    /// (an impl's generics + `Self` when elaborating members). Member
+    /// signatures never carry inferred-row markers: a trait/impl
+    /// member's bare `-> !T` is the empty row (conformance compares
+    /// these types structurally).
     pub(crate) fn fn_sig_in(
         &mut self,
         module: usize,
@@ -416,6 +430,21 @@ impl<'a> Lower<'a> {
         node: &GreenNode,
         name_span: Span,
         outer: &[String],
+    ) -> FnSig {
+        self.fn_sig_core(module, file, node, name_span, outer, None)
+    }
+
+    /// The shared elaboration. `owner` is `Some(item name)` for
+    /// module-level fn items — the only position where a bare `-> !T`
+    /// is an *inferred* row (marked here, sealed by [`crate::rows`]).
+    pub(crate) fn fn_sig_core(
+        &mut self,
+        module: usize,
+        file: usize,
+        node: &GreenNode,
+        name_span: Span,
+        outer: &[String],
+        owner: Option<&str>,
     ) -> FnSig {
         let d = FnDecl::cast(node).expect("kind");
         let own = self.generic_defs(module, file, node);
@@ -459,30 +488,117 @@ impl<'a> Lower<'a> {
                 });
             }
         }
-        let (ret, ret_span) = match d.ret_ty() {
+        let (ret, ret_span, row_span) = match d.ret_ty() {
             Some(r) => {
                 let base = r
                     .ty()
                     .map(|t| self.lower_type(module, file, &generics, t))
                     .unwrap_or_else(|| self.table.error());
-                // An explicit `! {row}` also makes an error union; the
-                // row side stays opaque until s15 (D30).
-                let ty = if r.error_row().is_some() {
-                    self.table.intern(TyKind::ErrUnion(base))
-                } else {
-                    base
-                };
-                (ty, Some(r.syntax().span))
+                match r.error_row() {
+                    // Explicit `T ! {row}` — the stated row (D30/s15).
+                    Some(row) => {
+                        let row_ty = self.lower_row(module, file, &generics, row);
+                        let ty = self.table.err_union(base, row_ty);
+                        (ty, Some(r.syntax().span), Some(row.syntax().span))
+                    }
+                    None => {
+                        // Bare `-> !T` on a module fn item is an
+                        // *inferred* row: mark it for sealing (s15,
+                        // the Zig-trap fix). Everywhere else the bare
+                        // form is the empty row.
+                        let ty = match (owner, self.table.kind(base).clone()) {
+                            (Some(name), TyKind::ErrUnion(inner, _)) => {
+                                let marker = self.table.intern(TyKind::InferredRow {
+                                    module: module as u32,
+                                    name: name.to_string(),
+                                });
+                                self.table.err_union(inner, marker)
+                            }
+                            _ => base,
+                        };
+                        (ty, Some(r.syntax().span), None)
+                    }
+                }
             }
-            None => (self.table.unit(), None),
+            None => (self.table.unit(), None, None),
         };
         FnSig {
             params,
             ret,
             name_span,
             ret_span,
+            row_span,
             generics: own,
         }
+    }
+
+    /// Elaborate an explicit `! {…}` row (D30/s15). Tags are a *set*:
+    /// duplicate labels are E0601. A payload-less entry naming a
+    /// generic parameter in scope is the row's polymorphic tail (the
+    /// HOF `rethrows` answer); a second tail is E0601. A row ending in
+    /// `..` (the open marker) elaborates opaquely — rest-rows are
+    /// s17's pattern work, and the checker never guesses.
+    pub(crate) fn lower_row(
+        &mut self,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        row: wolf_ast::ErrorRow<'_>,
+    ) -> TyId {
+        if row.is_open() {
+            return self.opaque(file, row.syntax());
+        }
+        let mut tags: Vec<(String, Vec<TyId>)> = Vec::new();
+        let mut tail: Option<TyId> = None;
+        for entry in row.entries() {
+            let Some(path) = entry.path() else { continue };
+            let segs: Vec<String> = path.segments().map(|t| self.text(file, t.span)).collect();
+            let name = segs.join(".");
+            let span = path.syntax().span;
+            let payload: Vec<TyId> = entry
+                .payload()
+                .map(|t| self.lower_type(module, file, generics, t))
+                .collect();
+            // A payload-less single segment naming a generic in scope
+            // is a row variable, not a tag.
+            if payload.is_empty() && segs.len() == 1 && generics.contains(&name) {
+                if tail.is_some() {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0601,
+                            span,
+                            format!("this row already has a row variable, so `{name}` cannot be a second one"),
+                        )
+                        .with_label("second row variable")
+                        .with_note(
+                            "a row extends exactly one tail; merge the two type \
+                             parameters, or spell one side's tags out.",
+                        ),
+                    );
+                    continue;
+                }
+                tail = Some(self.table.intern(TyKind::Rigid(name)));
+                continue;
+            }
+            if tags.iter().any(|(n, _)| *n == name) {
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0601,
+                        span,
+                        format!("the tag `{name}` appears twice in this error row"),
+                    )
+                    .with_label("second appearance")
+                    .with_note(
+                        "an error row is a set of tags, not a list — each tag \
+                         appears once (its payload is part of that one entry); \
+                         delete the duplicate.",
+                    ),
+                );
+                continue;
+            }
+            tags.push((name, payload));
+        }
+        self.table.row(tags, tail)
     }
 
     /// Elaborate an item's generic parameter list into [`GenericSig`]s
@@ -633,7 +749,12 @@ impl<'a> Lower<'a> {
                     .find(|n| is_type_kind(n.kind))
                     .map(|t| self.lower_type(module, file, generics, t))
                     .unwrap_or_else(|| self.table.error());
-                self.table.intern(TyKind::ErrUnion(inner))
+                // Bare `!T` outside a fn item's return position has no
+                // body to infer a row from: it is the empty row. Item
+                // returns replace this with the inferred-row marker
+                // ([`Lower::fn_sig_core`]).
+                let row = self.table.empty_row();
+                self.table.err_union(inner, row)
             }
             SyntaxKind::TupleType => {
                 let elems: Vec<TyId> = node
@@ -659,10 +780,12 @@ impl<'a> Lower<'a> {
                             .ty()
                             .map(|t| self.lower_type(module, file, generics, t))
                             .unwrap_or_else(|| self.table.error());
-                        if r.error_row().is_some() {
-                            self.table.intern(TyKind::ErrUnion(base))
-                        } else {
-                            base
+                        match r.error_row() {
+                            Some(row) => {
+                                let row_ty = self.lower_row(module, file, generics, row);
+                                self.table.err_union(base, row_ty)
+                            }
+                            None => base,
                         }
                     }
                     None => self.table.unit(),

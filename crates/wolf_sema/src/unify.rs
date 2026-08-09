@@ -289,7 +289,6 @@ fn occurs_adjust(
             Ok(())
         }
         TyKind::Wrapping(t)
-        | TyKind::ErrUnion(t)
         | TyKind::Range(t)
         | TyKind::Ptr(t)
         | TyKind::Shared(t)
@@ -297,6 +296,21 @@ fn occurs_adjust(
         | TyKind::Weak(t)
         | TyKind::Distinct(t)
         | TyKind::Proj(t, _) => occurs_adjust(store, table, var, level, t),
+        TyKind::ErrUnion(t, row) => {
+            occurs_adjust(store, table, var, level, t)?;
+            occurs_adjust(store, table, var, level, row)
+        }
+        TyKind::Row { tags, tail } => {
+            for (_, payload) in tags {
+                for t in payload {
+                    occurs_adjust(store, table, var, level, t)?;
+                }
+            }
+            if let Some(t) = tail {
+                occurs_adjust(store, table, var, level, t)?;
+            }
+            Ok(())
+        }
         TyKind::Tuple(ts) => {
             for t in ts {
                 occurs_adjust(store, table, var, level, t)?;
@@ -384,8 +398,21 @@ pub fn unify(
         // solver): same associated name, unifiable bases.
         (TyKind::Proj(ba, na), TyKind::Proj(bb, nb)) if na == nb => unify(table, store, ba, bb),
         (TyKind::RegionTy, TyKind::RegionTy) | (TyKind::TypeTy, TyKind::TypeTy) => Ok(()),
+        (TyKind::ErrUnion(x, rx), TyKind::ErrUnion(y, ry)) => {
+            unify(table, store, x, y)?;
+            unify(table, store, rx, ry)
+        }
+        (
+            TyKind::Row {
+                tags: ta,
+                tail: tla,
+            },
+            TyKind::Row {
+                tags: tb,
+                tail: tlb,
+            },
+        ) => unify_rows(table, store, ta, tla, tb, tlb),
         (TyKind::Wrapping(x), TyKind::Wrapping(y))
-        | (TyKind::ErrUnion(x), TyKind::ErrUnion(y))
         | (TyKind::Range(x), TyKind::Range(y))
         | (TyKind::Ptr(x), TyKind::Ptr(y))
         | (TyKind::Shared(x), TyKind::Shared(y))
@@ -411,6 +438,96 @@ pub fn unify(
             unify(table, store, rx, ry)
         }
         _ => Err(UnifyErr::Mismatch),
+    }
+}
+
+/// Row unification, Koka-style but over *sets* (duplicate labels were
+/// rejected at elaboration): shared tags unify pointwise on payloads;
+/// a one-sided remainder must be absorbed by the other side's tail
+/// *variable* (a rigid tail never absorbs — rigids are the caller's
+/// row, not ours to grow). A two-sided remainder would need fresh row
+/// variables on both tails; no s15 surface produces that shape, so it
+/// is a mismatch — deliberately, not accidentally.
+fn unify_rows(
+    table: &mut TypeTable,
+    store: &mut VarStore,
+    ta: Vec<(String, Vec<TyId>)>,
+    tla: Option<TyId>,
+    tb: Vec<(String, Vec<TyId>)>,
+    tlb: Option<TyId>,
+) -> Result<(), UnifyErr> {
+    // Resolve solved tails into their rows first.
+    let resolve_tail = |store: &VarStore, table: &TypeTable, t: Option<TyId>| -> Option<TyId> {
+        t.map(|t| store.shallow(table, t))
+    };
+    let (tla, tlb) = (
+        resolve_tail(store, table, tla),
+        resolve_tail(store, table, tlb),
+    );
+    // A tail solved to a concrete row folds into its host side.
+    if let Some(t) = tla
+        && let TyKind::Row { tags, tail } = table.kind(t).clone()
+    {
+        let mut merged = ta;
+        merged.extend(tags);
+        let host = table.row(merged, tail);
+        let other = table.row(tb, tlb);
+        return unify(table, store, host, other);
+    }
+    if let Some(t) = tlb
+        && let TyKind::Row { tags, tail } = table.kind(t).clone()
+    {
+        let mut merged = tb;
+        merged.extend(tags);
+        let host = table.row(merged, tail);
+        let other = table.row(ta, tla);
+        return unify(table, store, other, host);
+    }
+    // Shared tags: pointwise payload unification (arity is part of
+    // the tag's identity — a mismatch is a mismatch).
+    for (n, pa) in &ta {
+        if let Some((_, pb)) = tb.iter().find(|(m, _)| m == n) {
+            if pa.len() != pb.len() {
+                return Err(UnifyErr::Mismatch);
+            }
+            for (x, y) in pa.iter().zip(pb.iter()) {
+                unify(table, store, *x, *y)?;
+            }
+        }
+    }
+    let only_a: Vec<(String, Vec<TyId>)> = ta
+        .iter()
+        .filter(|(n, _)| !tb.iter().any(|(m, _)| m == n))
+        .cloned()
+        .collect();
+    let only_b: Vec<(String, Vec<TyId>)> = tb
+        .iter()
+        .filter(|(n, _)| !ta.iter().any(|(m, _)| m == n))
+        .cloned()
+        .collect();
+    let empty = table.row(Vec::new(), None);
+    match (only_a.is_empty(), only_b.is_empty()) {
+        (true, true) => match (tla, tlb) {
+            (None, None) => Ok(()),
+            (Some(x), Some(y)) => unify(table, store, x, y),
+            (Some(x), None) | (None, Some(x)) => unify(table, store, x, empty),
+        },
+        (false, true) => {
+            // b needs the tags only a has: its tail must absorb them.
+            let Some(t) = tlb else {
+                return Err(UnifyErr::Mismatch);
+            };
+            let remainder = table.row(only_a, tla);
+            unify(table, store, t, remainder)
+        }
+        (true, false) => {
+            let Some(t) = tla else {
+                return Err(UnifyErr::Mismatch);
+            };
+            let remainder = table.row(only_b, tlb);
+            unify(table, store, t, remainder)
+        }
+        (false, false) => Err(UnifyErr::Mismatch),
     }
 }
 
@@ -535,6 +652,89 @@ mod tests {
         assert_ne!(before, s, "the trial mutated the store");
         s.rollback(snap);
         assert_eq!(before, s, "rollback restores the arena bit-for-bit");
+    }
+
+    #[test]
+    fn rows_unify_by_tag_sets_with_pointwise_payloads() {
+        let mut t = TypeTable::new();
+        let mut s = VarStore::new();
+        let int = t.prim(Prim::Int);
+        let str_ = t.prim(Prim::Str);
+        // Same set, different source order: hash-consing already made
+        // them equal (canonical sorted order at interning).
+        let a = t.row(
+            vec![("B".into(), vec![str_]), ("A".into(), vec![int])],
+            None,
+        );
+        let b = t.row(
+            vec![("A".into(), vec![int]), ("B".into(), vec![str_])],
+            None,
+        );
+        assert_eq!(a, b, "rows are sets: interning canonicalizes");
+        // Shared tag, payload disagreement: mismatch (invariant).
+        let c = t.row(vec![("A".into(), vec![str_])], None);
+        let a1 = t.row(vec![("A".into(), vec![int])], None);
+        assert!(unify(&mut t, &mut s, a1, c).is_err());
+        // A payload var solves pointwise.
+        let v = s.fresh(&mut t, 0, NumKind::Any, sp());
+        let open_payload = t.row(vec![("A".into(), vec![v])], None);
+        assert!(unify(&mut t, &mut s, open_payload, a1).is_ok());
+        assert_eq!(s.shallow(&t, v), int);
+    }
+
+    #[test]
+    fn row_tail_variable_absorbs_the_remainder() {
+        let mut t = TypeTable::new();
+        let mut s = VarStore::new();
+        let int = t.prim(Prim::Int);
+        let v = s.fresh(&mut t, 0, NumKind::Any, sp());
+        // {A | v} ~ {A, B(int)} ⇒ v := {B(int)}
+        let open = t.row(vec![("A".into(), vec![])], Some(v));
+        let closed = t.row(vec![("A".into(), vec![]), ("B".into(), vec![int])], None);
+        assert!(unify(&mut t, &mut s, open, closed).is_ok());
+        let expected = t.row(vec![("B".into(), vec![int])], None);
+        let TyKind::Var(idx) = *t.kind(v) else {
+            panic!("var")
+        };
+        assert_eq!(s.probe(idx), Some(expected));
+        // A rigid tail never absorbs: {A | e} ~ {A, B} is a mismatch.
+        let e = t.intern(TyKind::Rigid("e".into()));
+        let open_rigid = t.row(vec![("A".into(), vec![])], Some(e));
+        assert!(unify(&mut t, &mut s, open_rigid, closed).is_err());
+        // But {A | e} ~ {A | e} holds.
+        let open_rigid2 = t.row(vec![("A".into(), vec![])], Some(e));
+        assert!(unify(&mut t, &mut s, open_rigid2, open_rigid).is_ok());
+    }
+
+    #[test]
+    fn err_unions_require_equal_rows_inside_the_unifier() {
+        // Width subtyping lives at check boundaries, NEVER here.
+        let mut t = TypeTable::new();
+        let mut s = VarStore::new();
+        let int = t.prim(Prim::Int);
+        let small = t.row(vec![("A".into(), vec![])], None);
+        let big = t.row(vec![("A".into(), vec![]), ("B".into(), vec![])], None);
+        let ua = t.err_union(int, small);
+        let ub = t.err_union(int, big);
+        assert!(unify(&mut t, &mut s, ua, ub).is_err());
+        let ua2 = t.err_union(int, small);
+        assert!(unify(&mut t, &mut s, ua2, ua).is_ok());
+    }
+
+    #[test]
+    fn row_unification_rolls_back_bit_identical() {
+        let mut t = TypeTable::new();
+        let mut s = VarStore::new();
+        let int = t.prim(Prim::Int);
+        let v = s.fresh(&mut t, 0, NumKind::Any, sp());
+        let before = s.clone();
+        let snap = s.snapshot();
+        let open = t.row(vec![("A".into(), vec![])], Some(v));
+        let closed = t.row(vec![("A".into(), vec![]), ("B".into(), vec![int])], None);
+        assert!(unify(&mut t, &mut s, open, closed).is_ok());
+        assert_ne!(before, s);
+        s.rollback(snap);
+        assert_eq!(before, s, "row trials roll back cleanly");
     }
 
     #[test]

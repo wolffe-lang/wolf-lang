@@ -14,14 +14,21 @@
 //! chain, with structural type diffs for large types and one concrete
 //! hint per message.
 //!
-//! **The ledger-honesty contract:** constructs s13 cannot type yet
+//! **The ledger-honesty contract:** constructs not yet typeable
 //! return [`BodyResult::NotYetCheckable`] — never a guess. That set
-//! includes method calls, generic instantiation, `?`, `else`
-//! defaulting, trait anything, region/concurrency expressions, and the
+//! still includes method calls (receiver syntax, s17), match over row
+//! values (s17 patterns), region/concurrency expressions, and the
 //! unsafe tier. String-interpolation holes are accepted at any sized
 //! primitive/`str` type; full format-spec validation is s16 (D26).
-//! `!T` supports implicit ok-injection in check mode; the row side
-//! stays opaque until s15.
+//!
+//! Since s15 the error channel types for real: `!T` carries a
+//! structural row, ok-injection generalizes to row-typed contexts,
+//! `?` propagates by width check + injection re-tagging (E0602/E0606),
+//! `else`/`else |err|` default and handle, `errdefer` is
+//! fallible-only, and each `?`/`else`/raise site is a trace point
+//! recorded in [`TypedBody`] (the s32 hook). Width subtyping lives in
+//! the CHECKING direction here ([`Checker::expect_unify`],
+//! [`Checker::row_subset`]) — never inside the unifier.
 //!
 //! Checking is `(&SigTables, body) → BodyResult` with no shared
 //! mutable state — each body is an independent inference problem
@@ -76,6 +83,15 @@ pub struct TypedBody {
     pub exprs: Vec<(Span, TyId)>,
     /// (name, span, type) per local binding.
     pub locals: Vec<(String, Span, TyId)>,
+    /// Every `defer`/`errdefer` in declaration order (s15): `true` =
+    /// `errdefer` (error-path-only). s27 lowers the strict-LIFO
+    /// interleave from exactly this record; no unwinding anywhere.
+    pub cleanups: Vec<(Span, bool)>,
+    /// Error-trace hook points (s15 → s32): every `?` propagation,
+    /// `else` observation, and error-tag injection site, in visit
+    /// order. Debug builds write one trace entry per point ([abi.err.
+    /// trace]); the runtime buffer is s32's.
+    pub trace_points: Vec<Span>,
 }
 
 impl TypedBody {
@@ -129,6 +145,13 @@ pub enum Reason {
     LoopBody,
     ClosureBody,
     GlobalInit(String),
+    /// An error tag's declared payload type (s15).
+    TagPayload {
+        tag: String,
+        index: usize,
+    },
+    /// The `else` fallback produces the ok half of the fallible value.
+    ElseFallback,
 }
 
 impl Reason {
@@ -155,6 +178,13 @@ impl Reason {
             Reason::LoopBody => "a loop body produces".to_string(),
             Reason::ClosureBody => "the closure's context needs".to_string(),
             Reason::GlobalInit(n) => format!("`{n}` is declared as"),
+            Reason::TagPayload { tag, index } => {
+                format!(
+                    "the tag `{tag}` declares its {} payload as",
+                    ordinal(*index + 1)
+                )
+            }
+            Reason::ElseFallback => "the `else` fallback must produce".to_string(),
         }
     }
 
@@ -176,6 +206,8 @@ impl Reason {
             Reason::LoopBody => "the loop starts here",
             Reason::ClosureBody => "the closure starts here",
             Reason::GlobalInit(_) => "the annotation is here",
+            Reason::TagPayload { .. } => "the row is declared here",
+            Reason::ElseFallback => "the fallible expression is here",
         }
     }
 }
@@ -260,6 +292,77 @@ struct Checker<'a> {
     level: u32,
     in_closure: bool,
     loops: Vec<LoopCtx>,
+    /// `defer`/`errdefer` sites in declaration order (s15 → s27).
+    cleanups: Vec<(Span, bool)>,
+    /// `?` / `else` / tag-injection trace hook points (s15 → s32).
+    trace_points: Vec<Span>,
+    /// Row-sealing mode (s15): tags raised or propagated by this body
+    /// are absorbed here instead of width-checked; diagnostics are
+    /// discarded by the caller ([`collect_body_rows`]).
+    collect: Option<RowSink>,
+    /// Where an extend-the-row fix-it inserts, for this function.
+    row_fix: Option<RowFix>,
+}
+
+/// The sink of a row-collection pass (s15 sealing): every tag the
+/// body raises or propagates, with payload types in the body's table.
+#[derive(Debug, Default)]
+pub(crate) struct RowSink {
+    pub tags: Vec<(String, Vec<TyId>)>,
+}
+
+impl RowSink {
+    fn add(&mut self, name: &str, payload: Vec<TyId>) {
+        if !self.tags.iter().any(|(n, _)| n == name) {
+            self.tags.push((name.to_string(), payload));
+        }
+    }
+}
+
+/// How to machine-extend the enclosing function's error row.
+#[derive(Clone, Copy, Debug)]
+enum RowFix {
+    /// An explicit `! {…}` exists: insert `, Tag` before its `}`.
+    ExtendRow { insert_at: Span },
+    /// A `-> T` with no row: append ` ! {Tag}` after the return type.
+    AddRow { insert_at: Span },
+}
+
+/// What a width check found lacking: the tags the receiving row does
+/// not include (name + payload types, for exact rendering), payload
+/// conflicts on shared tags `(tag, found, wanted)`, and an abstract
+/// tail that blocked the check.
+#[derive(Debug, Default)]
+struct RowLack {
+    missing: Vec<(String, Vec<TyId>)>,
+    conflicts: Vec<(String, String, String)>,
+    abstract_tail: Option<String>,
+}
+
+impl RowLack {
+    fn is_empty(&self) -> bool {
+        self.missing.is_empty() && self.conflicts.is_empty() && self.abstract_tail.is_none()
+    }
+}
+
+/// The extend-the-row fix-it site of a signature, if one exists. An
+/// inferred (`-> !T`) row absorbs everything, so it never needs one.
+fn row_fix_of(sig: &FnSig, table: &TypeTable) -> Option<RowFix> {
+    if let Some(rs) = sig.row_span {
+        // Insert just before the row's closing `}`.
+        let at = rs.hi.saturating_sub(1);
+        return Some(RowFix::ExtendRow {
+            insert_at: Span::new(rs.file, at, at),
+        });
+    }
+    let ret_span = sig.ret_span?;
+    match table.kind(sig.ret) {
+        // `-> !T` (inferred or member empty-row): nothing to extend.
+        TyKind::ErrUnion(..) => None,
+        _ => Some(RowFix::AddRow {
+            insert_at: Span::new(ret_span.file, ret_span.hi, ret_span.hi),
+        }),
+    }
 }
 
 /// Check one body against the elaborated signatures. Pure in
@@ -300,6 +403,10 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         level: 0,
         in_closure: false,
         loops: Vec::new(),
+        cleanups: Vec::new(),
+        trace_points: Vec::new(),
+        collect: None,
+        row_fix: None,
     };
     let outcome = match body.member {
         None => c.run(node, body),
@@ -338,12 +445,79 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     table: c.lo.table,
                     exprs,
                     locals,
+                    cleanups: c.cleanups,
+                    trace_points: c.trace_points,
                 })
             } else {
                 BodyResult::Errors(diags)
             }
         }
     }
+}
+
+/// Row-collection entry (s15 sealing): run the checker over `body` in
+/// absorb mode — tags raised into the function's own (marked) row and
+/// rows propagated into it by `?`/return are recorded instead of
+/// width-checked. Diagnostics are discarded: the final per-body check
+/// re-runs against the sealed row and owns all reports. A
+/// NotYetCheckable refusal yields whatever was collected up to it (the
+/// refusal already stops the file's rung). Returns the tags (payload
+/// types zonked and defaulted) plus the table they live in.
+pub(crate) fn collect_body_rows(
+    pkg: &Package,
+    sigs: &SigTables,
+    body: &BodyRef,
+) -> (Vec<(String, Vec<TyId>)>, TypeTable) {
+    let node = pkg.files[body.file]
+        .parse
+        .root
+        .nodes()
+        .filter(|n| n.kind.is_item())
+        .nth(body.decl)
+        .expect("body decl index valid");
+    let mut c = Checker {
+        sigs,
+        module: body.module,
+        file: body.file,
+        lo: Lower::new(pkg, sigs.table.clone()),
+        vars: VarStore::new(),
+        scopes: Vec::new(),
+        diags: Vec::new(),
+        exprs: Vec::new(),
+        locals: Vec::new(),
+        ret: None,
+        generics: Vec::new(),
+        bounds: traits::Bounds::new(),
+        generic_info: BTreeMap::new(),
+        self_ty: None,
+        obligations: Vec::new(),
+        sat_cache: HashMap::new(),
+        level: 0,
+        in_closure: false,
+        loops: Vec::new(),
+        cleanups: Vec::new(),
+        trace_points: Vec::new(),
+        collect: Some(RowSink::default()),
+        row_fix: None,
+    };
+    let _ = c.run(node, body);
+    // Solve what the body pinned, then default the rest so payload
+    // types leave as concrete as they will ever be.
+    c.finish_defaulting();
+    let sink = c.collect.take().unwrap_or_default();
+    let tags: Vec<(String, Vec<TyId>)> = sink
+        .tags
+        .into_iter()
+        .map(|(n, p)| {
+            (
+                n,
+                p.into_iter()
+                    .map(|t| zonk(&mut c.lo.table, &c.vars, t))
+                    .collect(),
+            )
+        })
+        .collect();
+    (tags, c.lo.table)
 }
 
 /// Deep-resolve every solved variable in `ty`; unresolved vars remain.
@@ -354,9 +528,29 @@ fn zonk(table: &mut TypeTable, vars: &VarStore, ty: TyId) -> TyId {
             let z = zonk(table, vars, t);
             table.intern(TyKind::Wrapping(z))
         }
-        TyKind::ErrUnion(t) => {
+        TyKind::ErrUnion(t, row) => {
             let z = zonk(table, vars, t);
-            table.intern(TyKind::ErrUnion(z))
+            let r = zonk(table, vars, row);
+            table.intern(TyKind::ErrUnion(z, r))
+        }
+        TyKind::Row { tags, tail } => {
+            let ztags: Vec<(String, Vec<TyId>)> = tags
+                .into_iter()
+                .map(|(n, p)| (n, p.into_iter().map(|t| zonk(table, vars, t)).collect()))
+                .collect();
+            let ztail = tail.map(|t| zonk(table, vars, t));
+            // A tail solved to a concrete row folds into the host.
+            match ztail.map(|t| table.kind(t).clone()) {
+                Some(TyKind::Row {
+                    tags: tt,
+                    tail: inner,
+                }) => {
+                    let mut merged = ztags;
+                    merged.extend(tt);
+                    table.row(merged, inner)
+                }
+                _ => table.row(ztags, ztail),
+            }
         }
         TyKind::Range(t) => {
             let z = zonk(table, vars, t);
@@ -502,6 +696,7 @@ impl<'a> Checker<'a> {
         self.validate_sig_projections(&sig);
         let because = sig.ret_span.unwrap_or(sig.name_span);
         self.ret = Some((sig.ret, body.name.clone(), because));
+        self.row_fix = row_fix_of(&sig, &self.lo.table);
         self.push_scope();
         for p in &sig.params {
             self.bind(p.name.clone(), p.span, p.ty);
@@ -550,6 +745,7 @@ impl<'a> Checker<'a> {
                 self.validate_sig_projections(&m.sig);
                 let because = m.sig.ret_span.unwrap_or(m.sig.name_span);
                 self.ret = Some((m.sig.ret, m.name.clone(), because));
+                self.row_fix = row_fix_of(&m.sig, &self.lo.table);
                 self.push_scope();
                 for p in &m.sig.params {
                     self.bind(p.name.clone(), p.span, p.ty);
@@ -637,13 +833,26 @@ impl<'a> Checker<'a> {
                 self.validate_projections_in(base, span);
             }
             TyKind::Wrapping(t)
-            | TyKind::ErrUnion(t)
             | TyKind::Range(t)
             | TyKind::Ptr(t)
             | TyKind::Shared(t)
             | TyKind::Handle(t)
             | TyKind::Weak(t)
             | TyKind::Distinct(t) => self.validate_projections_in(t, span),
+            TyKind::ErrUnion(t, row) => {
+                self.validate_projections_in(t, span);
+                self.validate_projections_in(row, span);
+            }
+            TyKind::Row { tags, tail } => {
+                for (_, payload) in tags {
+                    for t in payload {
+                        self.validate_projections_in(t, span);
+                    }
+                }
+                if let Some(t) = tail {
+                    self.validate_projections_in(t, span);
+                }
+            }
             TyKind::Tuple(ts) => {
                 for t in ts {
                     self.validate_projections_in(t, span);
@@ -735,18 +944,36 @@ impl<'a> Checker<'a> {
 
     // ---------------------------------------------- expectations ------
 
-    /// `actual ⇐ exp`, with the `!T` ok-injection trial: in check mode
-    /// a `T` is accepted where `!T` is expected (D30). The trial runs
-    /// on a unifier snapshot — the s14/s17 speculative machinery,
-    /// exercised from day one.
+    /// `actual ⇐ exp`, with the `!T` rules of the checking direction
+    /// (D30/s15): ok-injection (`T ⇐ !T`), and **width-only row
+    /// subtyping** at this boundary — a narrower fallible value flows
+    /// into a wider row. Subtyping lives HERE, never inside the
+    /// unifier. The trials run on a unifier snapshot — the s14/s17
+    /// speculative machinery, exercised from day one.
     fn expect_unify(&mut self, span: Span, actual: TyId, exp: &Expect) {
         let expected = self.shallow(exp.ty);
-        if let TyKind::ErrUnion(inner) = self.lo.table.kind(expected).clone() {
+        if let TyKind::ErrUnion(inner, erow) = self.lo.table.kind(expected).clone() {
             let snap = self.vars.snapshot();
             if unify(&mut self.lo.table, &mut self.vars, actual, expected).is_ok() {
                 return;
             }
             self.vars.rollback(snap);
+            let act = self.shallow(actual);
+            if let TyKind::ErrUnion(a_ok, a_row) = self.lo.table.kind(act).clone() {
+                // Width at the checking boundary: the value's row must
+                // fit inside the expected row (tags-missing named
+                // exactly; E0602/E0606).
+                let inner_exp = Expect {
+                    ty: inner,
+                    reason: exp.reason.clone(),
+                    because: exp.because,
+                };
+                if let Err(e) = unify(&mut self.lo.table, &mut self.vars, a_ok, inner) {
+                    self.report_unify_err(span, a_ok, &inner_exp, e);
+                }
+                self.require_row_widening(span, a_row, erow, exp.because);
+                return;
+            }
             let inner_exp = Expect {
                 ty: inner,
                 reason: exp.reason.clone(),
@@ -892,6 +1119,406 @@ impl<'a> Checker<'a> {
             );
         }
         self.diags.push(d);
+    }
+
+    // ---------------------------------------------- error rows (s15) ---
+
+    /// The enclosing function's error row, if it is fallible.
+    fn caller_row(&self) -> Option<TyId> {
+        let (ret, _, _) = self.ret.as_ref()?;
+        match self.kind_of(*ret) {
+            TyKind::ErrUnion(_, row) => Some(row),
+            _ => None,
+        }
+    }
+
+    /// Render one tag as source spells it (`Io(IoError)`).
+    fn tag_str(&self, name: &str, payload: &[TyId]) -> String {
+        let vars = &self.vars;
+        crate::types::render_tag(&self.lo.table, name, payload, &|v| match vars.probe(v) {
+            Some(t) => Ok(t),
+            None => Err(vars.kind_of(v).placeholder()),
+        })
+    }
+
+    /// Normalize a row for width checking: resolve solved tails and
+    /// fold them into the host row.
+    fn resolve_row(&mut self, row: TyId) -> TyId {
+        let head = self.shallow(row);
+        zonk(&mut self.lo.table, &self.vars, head)
+    }
+
+    /// Width-only row subtyping (`sub ⊆ sup`), CHECKING direction only
+    /// — never inside the unifier. Payloads of shared tags unify
+    /// pointwise (they are invariant).
+    fn row_subset(&mut self, sub: TyId, sup: TyId) -> Result<(), RowLack> {
+        let sub = self.resolve_row(sub);
+        let sup = self.resolve_row(sup);
+        if sub == sup {
+            return Ok(());
+        }
+        let ks = self.lo.table.kind(sub).clone();
+        let kp = self.lo.table.kind(sup).clone();
+        match (ks, kp) {
+            (TyKind::Error | TyKind::Never, _) | (_, TyKind::Error | TyKind::Never) => Ok(()),
+            // Markers appear only for the fn being collected: its own
+            // row flowing into itself (recursion) is vacuously fine.
+            (TyKind::InferredRow { .. }, _) | (_, TyKind::InferredRow { .. }) => Ok(()),
+            // An unsolved row variable at a boundary assumes the
+            // boundary's row (checking direction pins it).
+            (TyKind::Var(_), _) => {
+                let _ = unify(&mut self.lo.table, &mut self.vars, sub, sup);
+                Ok(())
+            }
+            (_, TyKind::Var(_)) => {
+                let _ = unify(&mut self.lo.table, &mut self.vars, sup, sub);
+                Ok(())
+            }
+            (TyKind::Rigid(a), TyKind::Rigid(b)) if a == b => Ok(()),
+            (TyKind::Rigid(a), TyKind::Row { tail: Some(t), .. }) if matches!(self.kind_of(t), TyKind::Rigid(b) if b == a) => {
+                Ok(())
+            }
+            (TyKind::Rigid(a), _) => Err(RowLack {
+                abstract_tail: Some(a),
+                ..RowLack::default()
+            }),
+            (
+                TyKind::Row {
+                    tags: ta,
+                    tail: tla,
+                },
+                TyKind::Row {
+                    tags: tb,
+                    tail: tlb,
+                },
+            ) => {
+                let mut lack = RowLack::default();
+                for (n, pa) in &ta {
+                    match tb.iter().find(|(m, _)| m == n) {
+                        None => lack.missing.push((n.clone(), pa.clone())),
+                        Some((_, pb)) => {
+                            if pa.len() != pb.len() {
+                                lack.conflicts.push((
+                                    n.clone(),
+                                    self.tag_str(n, pa),
+                                    self.tag_str(n, pb),
+                                ));
+                                continue;
+                            }
+                            let snap = self.vars.snapshot();
+                            let mut ok = true;
+                            for (x, y) in pa.iter().zip(pb.iter()) {
+                                if unify(&mut self.lo.table, &mut self.vars, *x, *y).is_err() {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                            if !ok {
+                                self.vars.rollback(snap);
+                                lack.conflicts.push((
+                                    n.clone(),
+                                    self.tag_str(n, pa),
+                                    self.tag_str(n, pb),
+                                ));
+                            }
+                        }
+                    }
+                }
+                match tla.map(|t| self.kind_of(t)) {
+                    None => {}
+                    Some(TyKind::Rigid(e)) => {
+                        let sup_has_same_tail = tlb
+                            .is_some_and(|t| matches!(self.kind_of(t), TyKind::Rigid(f) if f == e));
+                        if !sup_has_same_tail {
+                            lack.abstract_tail = Some(e);
+                        }
+                    }
+                    Some(TyKind::Var(_)) => {
+                        // Pin the open remainder to what the boundary
+                        // still allows: sup's tags not already in sub.
+                        let remainder: Vec<(String, Vec<TyId>)> = tb
+                            .iter()
+                            .filter(|(m, _)| !ta.iter().any(|(n, _)| n == m))
+                            .cloned()
+                            .collect();
+                        let rem = self.lo.table.row(remainder, tlb);
+                        let tail = tla.expect("tail present");
+                        let _ = unify(&mut self.lo.table, &mut self.vars, tail, rem);
+                    }
+                    Some(_) => {}
+                }
+                if lack.is_empty() { Ok(()) } else { Err(lack) }
+            }
+            (
+                TyKind::Row {
+                    tags,
+                    tail: Some(t),
+                },
+                TyKind::Rigid(b),
+            ) if tags.is_empty() && matches!(self.kind_of(t), TyKind::Rigid(e) if e == b) => Ok(()),
+            (TyKind::Row { tags, .. }, TyKind::Rigid(b)) => {
+                let mut lack = RowLack {
+                    abstract_tail: Some(b),
+                    ..RowLack::default()
+                };
+                lack.missing
+                    .extend(tags.iter().map(|(n, p)| (n.clone(), p.clone())));
+                Err(lack)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// `sub ⊆ sup` at a boundary, reporting E0602/E0606 on failure —
+    /// or absorbing `sub` into the collection sink when `sup` is this
+    /// function's own inferred-row marker (sealing mode).
+    fn require_row_widening(&mut self, span: Span, sub: TyId, sup: TyId, because: Option<Span>) {
+        if matches!(self.kind_of(sup), TyKind::InferredRow { .. }) && self.collect.is_some() {
+            self.absorb_row(sub);
+            return;
+        }
+        match self.row_subset(sub, sup) {
+            Ok(()) => {}
+            Err(lack) => self.report_row_lack(span, lack, because),
+        }
+    }
+
+    /// Record every tag of `row` into the collection sink.
+    fn absorb_row(&mut self, row: TyId) {
+        let row = self.resolve_row(row);
+        if let TyKind::Row { tags, .. } = self.lo.table.kind(row).clone()
+            && let Some(sink) = self.collect.as_mut()
+        {
+            for (n, p) in tags {
+                sink.add(&n, p);
+            }
+        }
+    }
+
+    /// E0602 (tags the receiving row lacks — named exactly, with the
+    /// signature-extending fix-it) and E0606 (payload conflicts on
+    /// shared tags). Never renders whole rows.
+    fn report_row_lack(&mut self, span: Span, lack: RowLack, because: Option<Span>) {
+        if self.collect.is_some() {
+            return; // collection passes never report
+        }
+        let fn_name = self
+            .ret
+            .as_ref()
+            .map(|(_, n, _)| n.clone())
+            .unwrap_or_else(|| "this function".to_string());
+        if !lack.missing.is_empty() {
+            let rendered: Vec<String> = lack
+                .missing
+                .iter()
+                .map(|(n, p)| self.tag_str(n, p))
+                .collect();
+            let listed = rendered
+                .iter()
+                .map(|t| format!("`{t}`"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut d = Diagnostic::error(
+                codes::E0602,
+                span,
+                format!(
+                    "this can also fail with {listed}, which `{fn_name}`'s row does not include"
+                ),
+            )
+            .with_label(if rendered.len() == 1 {
+                "the missing tag escapes here"
+            } else {
+                "the missing tags escape here"
+            });
+            if let Some(b) = because {
+                d = d.with_secondary(b, "the receiving row is declared here");
+            }
+            d = d.with_note(
+                "rows compose by union: `?` re-tags errors into the wider row by \
+                 injection — there is no conversion to write, only tags to admit.",
+            );
+            match self.row_fix {
+                Some(RowFix::ExtendRow { insert_at }) => {
+                    d = d.with_suggestion(Suggestion::new(
+                        format!("extend the row with {listed}"),
+                        vec![(insert_at, format!(", {}", rendered.join(", ")))],
+                        Applicability::Maybe,
+                    ));
+                }
+                Some(RowFix::AddRow { insert_at }) => {
+                    d = d.with_suggestion(Suggestion::new(
+                        format!("declare the row: `! {{{}}}`", rendered.join(", ")),
+                        vec![(insert_at, format!(" ! {{{}}}", rendered.join(", ")))],
+                        Applicability::Maybe,
+                    ));
+                }
+                None => {}
+            }
+            d = d.with_row_diff(wolf_diag::RowDiff {
+                missing: rendered,
+                extra: Vec::new(),
+            });
+            self.diags.push(d);
+        }
+        for (tag, found, wanted) in &lack.conflicts {
+            let mut d = Diagnostic::error(
+                codes::E0606,
+                span,
+                format!(
+                    "the tag `{tag}` carries `{found}` here, but the receiving row \
+                     declares `{wanted}`"
+                ),
+            )
+            .with_label("the payloads disagree");
+            if let Some(b) = because {
+                d = d.with_secondary(b, "the receiving row is declared here");
+            }
+            d = d.with_note(
+                "tag names are structural, so a shared name is the same tag — its \
+                 payload types must agree everywhere it appears; align them, or \
+                 use two different tag names.",
+            );
+            self.diags.push(d);
+        }
+        if let Some(e) = &lack.abstract_tail {
+            let mut d = Diagnostic::error(
+                codes::E0602,
+                span,
+                format!(
+                    "these errors flow into the abstract row `{e}`, which cannot be \
+                     assumed to include them"
+                ),
+            )
+            .with_label("abstract row boundary");
+            if let Some(b) = because {
+                d = d.with_secondary(b, "the receiving row is declared here");
+            }
+            d = d.with_note(format!(
+                "`{e}` is a row variable — the caller chooses its tags, so a body \
+                 can only propagate `{e}` itself; give the receiving row the same \
+                 tail, or make the tags concrete on both sides."
+            ));
+            self.diags.push(d);
+        }
+    }
+
+    /// Inject an error tag into `row` (D30): a bit-level re-tag, never
+    /// a conversion. In sealing mode the tag is absorbed instead.
+    fn inject_tag(
+        &mut self,
+        span: Span,
+        tag: &str,
+        args: &[&GreenNode],
+        row: TyId,
+        because: Option<Span>,
+    ) -> R<()> {
+        self.trace_points.push(span);
+        let row = self.resolve_row(row);
+        match self.lo.table.kind(row).clone() {
+            TyKind::InferredRow { .. } => {
+                let mut ptys = Vec::new();
+                for a in args {
+                    ptys.push(self.synth_expr(a)?);
+                }
+                if let Some(sink) = self.collect.as_mut() {
+                    sink.add(tag, ptys);
+                }
+                Ok(())
+            }
+            TyKind::Row { tags, tail } => {
+                match tags.iter().find(|(n, _)| n == tag) {
+                    Some((_, payload)) => {
+                        let payload = payload.clone();
+                        if args.len() != payload.len() {
+                            let found =
+                                format!("{tag}({})", if args.is_empty() { "" } else { "…" });
+                            let declared = self.tag_str(tag, &payload);
+                            let mut d = Diagnostic::error(
+                                codes::E0606,
+                                span,
+                                format!(
+                                    "the tag `{tag}` carries {} payload{}, but this raise \
+                                     gives it {}",
+                                    payload.len(),
+                                    if payload.len() == 1 { "" } else { "s" },
+                                    args.len()
+                                ),
+                            )
+                            .with_label(format!("raised as `{found}`"))
+                            .with_note(format!(
+                                "the row declares `{declared}`; a tag's payload list is \
+                                 part of its identity — match it exactly."
+                            ));
+                            if let Some(b) = because {
+                                d = d.with_secondary(b, "the row is declared here");
+                            }
+                            self.diags.push(d);
+                            for a in args {
+                                self.synth_expr(a)?;
+                            }
+                            return Ok(());
+                        }
+                        for (i, (a, p)) in args.iter().zip(payload.iter()).enumerate() {
+                            let exp = Expect {
+                                ty: *p,
+                                reason: Reason::TagPayload {
+                                    tag: tag.to_string(),
+                                    index: i,
+                                },
+                                because,
+                            };
+                            self.check_expr(a, &exp)?;
+                        }
+                        Ok(())
+                    }
+                    None => {
+                        let mut ptys = Vec::new();
+                        for a in args {
+                            ptys.push(self.synth_expr(a)?);
+                        }
+                        // With an abstract tail, the one report is the
+                        // abstract-row story; otherwise it is the
+                        // missing tag with its fix-it.
+                        let mut lack = RowLack::default();
+                        match tail.map(|t| self.kind_of(t)) {
+                            Some(TyKind::Rigid(e)) => lack.abstract_tail = Some(e),
+                            _ => lack.missing.push((tag.to_string(), ptys)),
+                        }
+                        self.report_row_lack(span, lack, because);
+                        Ok(())
+                    }
+                }
+            }
+            TyKind::Rigid(e) => {
+                for a in args {
+                    self.synth_expr(a)?;
+                }
+                let lack = RowLack {
+                    abstract_tail: Some(e),
+                    ..RowLack::default()
+                };
+                self.report_row_lack(span, lack, because);
+                Ok(())
+            }
+            TyKind::Var(_) => {
+                // An open row variable (a closure checked against a
+                // row-polymorphic signature): the raise pins it to the
+                // closed row containing exactly this tag.
+                let mut ptys = Vec::new();
+                for a in args {
+                    ptys.push(self.synth_expr(a)?);
+                }
+                let closed = self.lo.table.row(vec![(tag.to_string(), ptys)], None);
+                let _ = unify(&mut self.lo.table, &mut self.vars, row, closed);
+                Ok(())
+            }
+            _ => {
+                for a in args {
+                    self.synth_expr(a)?;
+                }
+                Ok(())
+            }
+        }
     }
 
     // ---------------------------------------------- the golden rule ----
@@ -1135,9 +1762,50 @@ impl<'a> Checker<'a> {
             }
             SyntaxKind::AssignStmt => self.check_assign(s),
             SyntaxKind::DeferStmt => {
-                if let Some(e) = DeferStmt::cast(s).and_then(|d| d.expr()) {
+                let d = DeferStmt::cast(s);
+                let is_err = d.is_some_and(|d| d.is_errdefer());
+                // `errdefer` runs only on the error path, so it needs
+                // one to exist (E0607). Capture rules match `defer`.
+                if is_err && self.caller_row().is_none() && self.collect.is_none() {
+                    let fn_name = self
+                        .ret
+                        .as_ref()
+                        .map(|(_, n, _)| n.clone())
+                        .unwrap_or_else(|| "this function".to_string());
+                    let kw = s
+                        .tokens()
+                        .find(|t| t.kind == SyntaxKind::ErrdeferKw)
+                        .map(|t| t.span)
+                        .unwrap_or(s.span);
+                    let mut diag = Diagnostic::error(
+                        codes::E0607,
+                        kw,
+                        format!(
+                            "`errdefer` runs only on the error path, but `{fn_name}` cannot fail"
+                        ),
+                    )
+                    .with_label("this cleanup could never run");
+                    if let Some((_, _, because)) = self.ret.as_ref() {
+                        diag = diag.with_secondary(*because, "the signature declares no error row");
+                    }
+                    diag = diag
+                        .with_note(
+                            "use plain `defer` for cleanup that runs on every exit; keep \
+                             `errdefer` only in a function with an error row.",
+                        )
+                        .with_suggestion(Suggestion::new(
+                            "run the cleanup on every exit: `defer`",
+                            vec![(kw, "defer".to_string())],
+                            Applicability::Maybe,
+                        ));
+                    self.diags.push(diag);
+                }
+                if let Some(e) = d.and_then(|d| d.expr()) {
                     self.synth_expr(e)?;
                 }
+                // Declaration order recorded; s27 lowers the strict
+                // LIFO interleave of `defer`/`errdefer` from this.
+                self.cleanups.push((s.span, is_err));
                 Ok(())
             }
             SyntaxKind::AssumeStmt => Err(NotYet {
@@ -1393,23 +2061,41 @@ impl<'a> Checker<'a> {
             SyntaxKind::ReturnExpr | SyntaxKind::BreakExpr | SyntaxKind::ContinueExpr => {
                 self.synth_expr(e).map(|_| ())
             }
+            SyntaxKind::ElseExpr => {
+                self.record(e.span, exp.ty);
+                self.synth_else(e, Some(exp)).map(|_| ())
+            }
             _ => {
-                // The `!T` tag forms: a deferred (capitalized,
-                // unresolved) name checks against an opaque row (D30).
-                if let TyKind::ErrUnion(_) = self.kind_of(exp.ty) {
+                // The `!T` tag forms (D30/s15): a deferred
+                // (capitalized, unresolved) name checks against the
+                // expected row by membership — payloads pointwise,
+                // missing tags named exactly (E0602).
+                if let TyKind::ErrUnion(_, row) = self.kind_of(exp.ty) {
                     if let Some(span) = self.deferred_tag(e) {
+                        let name = self.text(span);
+                        self.inject_tag(span, &name, &[], row, exp.because)?;
                         self.record(span, exp.ty);
                         return Ok(());
                     }
                     if e.kind == SyntaxKind::CallExpr
                         && let Some(c) = CallExpr::cast(e)
                         && let Some(callee) = c.callee()
-                        && self.deferred_tag(callee).is_some()
+                        && let Some(cspan) = self.deferred_tag(callee)
                     {
-                        // Tag payloads synthesize; the row is opaque.
-                        if let Some(args) = c.args() {
-                            self.synth_args_loosely(args)?;
+                        let name = self.text(cspan);
+                        let mut args: Vec<&GreenNode> = Vec::new();
+                        for a in c.args().into_iter().flat_map(|a| a.args()) {
+                            if let Some(v) = Arg::value(a) {
+                                if is_type_kind(v.kind) {
+                                    return Err(NotYet {
+                                        construct: "a type-shaped argument (s16 comptime)",
+                                        span: v.span,
+                                    });
+                                }
+                                args.push(v);
+                            }
                         }
+                        self.inject_tag(e.span, &name, &args, row, exp.because)?;
                         self.record(e.span, exp.ty);
                         return Ok(());
                     }
@@ -1460,15 +2146,9 @@ impl<'a> Checker<'a> {
             SyntaxKind::ReturnExpr => self.synth_return(e),
             SyntaxKind::BreakExpr => self.synth_break(e),
             SyntaxKind::ContinueExpr => Ok(self.lo.table.never()),
+            SyntaxKind::TryExpr => self.synth_try(e),
+            SyntaxKind::ElseExpr => self.synth_else(e, None),
             // ---- outside the s13-checkable set: honest refusals ----
-            SyntaxKind::TryExpr => Err(NotYet {
-                construct: "`?` propagation (s15 rows)",
-                span: e.span,
-            }),
-            SyntaxKind::ElseExpr => Err(NotYet {
-                construct: "`else` defaulting (s15 rows)",
-                span: e.span,
-            }),
             SyntaxKind::BracketApply => Err(NotYet {
                 construct: "indexing / generic application (s17)",
                 span: e.span,
@@ -1984,6 +2664,180 @@ impl<'a> Checker<'a> {
             self.expect_unify(ep.span, t, &exp);
         }
         Ok(self.lo.table.intern(TyKind::Range(elem)))
+    }
+
+    // ---------------------------------------------- `?` / `else` (s15) --
+
+    /// Postfix `?` (D30): unwrap the ok half, propagate the error into
+    /// the enclosing function's row — a width check plus re-tagging by
+    /// injection, never a conversion.
+    fn synth_try(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = wolf_ast::TryExpr::cast(e).expect("kind");
+        let Some(operand) = d.expr() else {
+            return Ok(self.error_ty());
+        };
+        let t = self.synth_expr(operand)?;
+        match self.kind_of(t) {
+            TyKind::ErrUnion(ok, row) => {
+                if self.in_closure {
+                    return Err(NotYet {
+                        construct: "`?` inside a closure (s17 closure rows)",
+                        span: e.span,
+                    });
+                }
+                // Every `?` is an error-trace point ([abi.err.trace];
+                // the runtime buffer is s32).
+                self.trace_points.push(e.span);
+                match self.caller_row() {
+                    Some(crow) => {
+                        let because = self.ret.as_ref().map(|(_, _, b)| *b);
+                        self.require_row_widening(e.span, row, crow, because);
+                    }
+                    None => self.report_nonfallible_try(e.span, row),
+                }
+                Ok(ok)
+            }
+            TyKind::Error | TyKind::Never => Ok(self.error_ty()),
+            // A numeric-kinded variable is a number whatever it
+            // solves to — infallible for sure. Only a fully unknown
+            // type is honestly deferred.
+            TyKind::Var(v) if matches!(self.vars.kind_of(v), NumKind::Any) => Err(NotYet {
+                construct: "`?` on a value whose type is still being inferred",
+                span: operand.span,
+            }),
+            _ => {
+                let shown = self.show(t);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0603,
+                        e.span,
+                        format!("`?` needs a fallible operand, but this is `{shown}`"),
+                    )
+                    .with_label(format!("`{shown}` cannot fail"))
+                    .with_note(
+                        "`?` unwraps a `!T` value, propagating its error; this value \
+                         has no error row — delete the `?`, or check the callee's \
+                         signature if you expected it to be fallible.",
+                    ),
+                );
+                Ok(t)
+            }
+        }
+    }
+
+    /// E0604 — `?` in a function whose signature admits no errors.
+    fn report_nonfallible_try(&mut self, span: Span, callee_row: TyId) {
+        if self.collect.is_some() {
+            return;
+        }
+        let fn_name = self
+            .ret
+            .as_ref()
+            .map(|(_, n, _)| n.clone())
+            .unwrap_or_else(|| "this function".to_string());
+        let mut d = Diagnostic::error(
+            codes::E0604,
+            span,
+            format!("`?` propagates an error, but `{fn_name}` cannot fail"),
+        )
+        .with_label("the error would have nowhere to go");
+        if let Some((_, _, because)) = self.ret.as_ref() {
+            d = d.with_secondary(*because, "the signature declares no error row");
+        }
+        // When the callee's tags are concrete, offer the exact row.
+        let row = self.resolve_row(callee_row);
+        if let TyKind::Row { tags, tail: None } = self.lo.table.kind(row).clone()
+            && !tags.is_empty()
+            && let Some(RowFix::AddRow { insert_at }) = self.row_fix
+        {
+            let rendered: Vec<String> = tags.iter().map(|(n, p)| self.tag_str(n, p)).collect();
+            d = d.with_suggestion(Suggestion::new(
+                format!("make `{fn_name}` fallible: `! {{{}}}`", rendered.join(", ")),
+                vec![(insert_at, format!(" ! {{{}}}", rendered.join(", ")))],
+                Applicability::Maybe,
+            ));
+        }
+        d = d.with_note(
+            "errors travel in the declared row, never a side channel: make the \
+             function fallible (`-> !T`, or an explicit row), or handle the \
+             error here with `else`.",
+        );
+        self.diags.push(d);
+    }
+
+    /// Postfix `else` (D30): defaulting (`expr else fallback`) and the
+    /// handler form (`expr else |err| body`, the handler binding the
+    /// row value). The result is the fallible value's ok type.
+    fn synth_else(&mut self, e: &GreenNode, exp: Option<&Expect>) -> R<TyId> {
+        let d = wolf_ast::ElseExpr::cast(e).expect("kind");
+        let Some(scrut) = d.scrutinized() else {
+            return Ok(self.error_ty());
+        };
+        let t = self.synth_expr(scrut)?;
+        match self.kind_of(t) {
+            TyKind::ErrUnion(ok, row) => {
+                // `else` observation is an error-trace point
+                // ([abi.err.trace]).
+                self.trace_points.push(e.span);
+                self.push_scope();
+                if let Some(pat) = d.handler_pattern() {
+                    // The caught error's type is the row itself.
+                    self.bind_pattern(pat, row)?;
+                }
+                if let Some(fb) = d.fallback() {
+                    let fexp = Expect {
+                        ty: ok,
+                        reason: Reason::ElseFallback,
+                        because: Some(scrut.span),
+                    };
+                    self.check_expr(fb, &fexp)?;
+                }
+                self.pop_scope();
+                if let Some(exp) = exp {
+                    self.expect_unify(e.span, ok, exp);
+                }
+                Ok(ok)
+            }
+            TyKind::Error | TyKind::Never => {
+                if let Some(fb) = d.fallback() {
+                    self.push_scope();
+                    self.synth_expr(fb)?;
+                    self.pop_scope();
+                }
+                Ok(self.error_ty())
+            }
+            TyKind::Var(v) if matches!(self.vars.kind_of(v), NumKind::Any) => Err(NotYet {
+                construct: "`else` on a value whose type is still being inferred",
+                span: scrut.span,
+            }),
+            _ => {
+                let shown = self.show(t);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0608,
+                        e.span,
+                        format!(
+                            "`else` defaulting needs a fallible operand, but this is `{shown}`"
+                        ),
+                    )
+                    .with_label(format!("`{shown}` cannot fail, so the `else` never fires"))
+                    .with_note(
+                        "postfix `else` substitutes a fallback for a `!T` value's \
+                         error; this value has no error row — delete the `else`, or \
+                         attach it to the fallible call itself.",
+                    ),
+                );
+                if let Some(fb) = d.fallback() {
+                    self.push_scope();
+                    self.synth_expr(fb)?;
+                    self.pop_scope();
+                }
+                if let Some(exp) = exp {
+                    self.expect_unify(e.span, t, exp);
+                }
+                Ok(t)
+            }
+        }
     }
 
     // ---------------------------------------------------------- calls --
@@ -3345,7 +4199,7 @@ impl<'a> Checker<'a> {
                 self.record(e.span, expected);
                 Ok(())
             }
-            TyKind::ErrUnion(inner) => {
+            TyKind::ErrUnion(inner, _) => {
                 let sub = Expect {
                     ty: inner,
                     reason: exp.reason.clone(),

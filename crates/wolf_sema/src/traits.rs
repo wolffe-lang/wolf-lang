@@ -625,7 +625,6 @@ pub(crate) fn mentions_rigid(table: &TypeTable, ty: TyId, name: &str) -> bool {
             .split(|c: char| !c.is_alphanumeric() && c != '_')
             .any(|w| w == name),
         TyKind::Wrapping(t)
-        | TyKind::ErrUnion(t)
         | TyKind::Range(t)
         | TyKind::Ptr(t)
         | TyKind::Shared(t)
@@ -633,6 +632,14 @@ pub(crate) fn mentions_rigid(table: &TypeTable, ty: TyId, name: &str) -> bool {
         | TyKind::Weak(t)
         | TyKind::Distinct(t)
         | TyKind::Proj(t, _) => mentions_rigid(table, *t, name),
+        TyKind::ErrUnion(t, row) => {
+            mentions_rigid(table, *t, name) || mentions_rigid(table, *row, name)
+        }
+        TyKind::Row { tags, tail } => {
+            tags.iter()
+                .any(|(_, p)| p.iter().any(|&t| mentions_rigid(table, t, name)))
+                || tail.is_some_and(|t| mentions_rigid(table, t, name))
+        }
         TyKind::Tuple(ts) => ts.iter().any(|&t| mentions_rigid(table, t, name)),
         TyKind::Fn(ps, r) => {
             ps.iter().any(|&t| mentions_rigid(table, t, name)) || mentions_rigid(table, *r, name)
@@ -1307,9 +1314,28 @@ pub fn normalize_projections(
             let s = normalize_projections(sigs, table, vars, x);
             table.intern(TyKind::Wrapping(s))
         }
-        TyKind::ErrUnion(x) => {
+        TyKind::ErrUnion(x, row) => {
             let s = normalize_projections(sigs, table, vars, x);
-            table.intern(TyKind::ErrUnion(s))
+            let r = normalize_projections(sigs, table, vars, row);
+            table.intern(TyKind::ErrUnion(s, r))
+        }
+        TyKind::Row { tags, tail } => {
+            let stags: Vec<(String, Vec<TyId>)> = tags
+                .into_iter()
+                .map(|(n, p)| {
+                    (
+                        n,
+                        p.into_iter()
+                            .map(|x| normalize_projections(sigs, table, vars, x))
+                            .collect(),
+                    )
+                })
+                .collect();
+            let stail = tail.map(|x| normalize_projections(sigs, table, vars, x));
+            table.intern(TyKind::Row {
+                tags: stags,
+                tail: stail,
+            })
         }
         TyKind::Range(x) => {
             let s = normalize_projections(sigs, table, vars, x);

@@ -261,13 +261,20 @@ fn generic_instantiation_checks_since_s14() {
 }
 
 #[test]
-fn else_defaulting_and_try_are_not_yet_checkable() {
+fn else_defaulting_and_try_check_since_s15() {
+    // s13 refused these honestly; s15's row engine types them.
     let tc = check_one(
         "fn may() -> !int { 1 }\n\
          fn a() -> !int { may() else 0 }\n\
+         fn b() -> !int { may()? }\n\
          fn main() -> !int { 0 }\n",
     );
-    assert!(is_nyc(&tc, "a"));
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
 }
 
 #[test]

@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0602]: this can also fail with `Io(str)`, `NotFound(str)`, which `render`'s row does not include
+ --> mem:///main.lu:6:5
+  |
+5 | fn render(path: str) -> int ! {Empty} {
+  |                      ---------------- the receiving row is declared here
+6 |     read(path)?
+  |     ^^^^^^^^^^^ the missing tags escape here
+  |
+  = note: rows compose by union: `?` re-tags errors into the wider row by injection — there is no
+    conversion to write, only tags to admit.
+help: extend the row with `Io(str)`, `NotFound(str)`
+  |
+5 | fn render(path: str) -> int ! {Empty, Io(str), NotFound(str)} {
+  |

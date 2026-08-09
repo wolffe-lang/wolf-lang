@@ -756,6 +756,9 @@ fn render_ret(ctx: &SigCtx<'_>, ret: RetType<'_>) -> String {
         .map(|t| render_type(ctx, t))
         .unwrap_or_else(|| "<error>".to_string());
     if let Some(row) = ret.error_row() {
+        // Canonical tag-set order — sorted by name, `..` last — is
+        // fixed NOW in the interface format (s15): source-order churn
+        // inside a row never moves a hash.
         let mut entries: Vec<String> = row
             .entries()
             .map(|e| {
@@ -771,6 +774,7 @@ fn render_ret(ctx: &SigCtx<'_>, ret: RetType<'_>) -> String {
                 }
             })
             .collect();
+        entries.sort();
         if row.is_open() {
             entries.push("..".to_string());
         }

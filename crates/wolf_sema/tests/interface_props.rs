@@ -212,6 +212,80 @@ fn file_order_within_the_directory_changes_nothing() {
 }
 
 #[test]
+fn private_inferred_row_churn_moves_no_hash() {
+    // s15: a private `-> !T` function's *sealed* row is derived from
+    // its body — and bodies never serialize, private items never
+    // appear, so growing/shrinking/renaming its tags moves nothing.
+    let base = interfaces(&[
+        BASE_MAIN,
+        (
+            &["geometry"],
+            "shapes.lu",
+            "pub fn area(side: int) -> int {\n    side * side\n}\n\
+             pub(pkg) fn perimeter(side: int) -> int {\n    4 * side\n}\n\
+             fn hidden(side: int) -> !int {\n    if side == 0 { return Degenerate }\n    side\n}\n",
+        ),
+    ]);
+    let edited = interfaces(&[
+        BASE_MAIN,
+        (
+            &["geometry"],
+            "shapes.lu",
+            "pub fn area(side: int) -> int {\n    side * side\n}\n\
+             pub(pkg) fn perimeter(side: int) -> int {\n    4 * side\n}\n\
+             fn hidden(side: int) -> !int {\n    if side == 0 { return Collapsed }\n    if side < 0 { return Negative(side) }\n    side\n}\n",
+        ),
+    ]);
+    let (a, b) = (geometry(&base), geometry(&edited));
+    assert_eq!(
+        a.export_hash, b.export_hash,
+        "sealed-row churn is invisible"
+    );
+    assert_eq!(a.pkg_hash, b.pkg_hash, "in both partitions");
+    assert_eq!(
+        encode(a),
+        encode(b),
+        "the whole artifact is row-churn-blind"
+    );
+}
+
+#[test]
+fn explicit_row_source_order_is_canonicalized() {
+    // The tag-set canonical order (sorted by name) is fixed in the
+    // interface format NOW (s15): reordering a row's entries in
+    // source moves nothing.
+    let one = interfaces(&[
+        BASE_MAIN,
+        (
+            &["geometry"],
+            "shapes.lu",
+            "pub fn area(side: int) -> int {\n    side * side\n}\n\
+             pub fn load(p: str) -> int ! {NotFound(str), Locked, Io(str)} {\n    Locked\n}\n",
+        ),
+    ]);
+    let two = interfaces(&[
+        BASE_MAIN,
+        (
+            &["geometry"],
+            "shapes.lu",
+            "pub fn area(side: int) -> int {\n    side * side\n}\n\
+             pub fn load(p: str) -> int ! {Io(str), Locked, NotFound(str)} {\n    Locked\n}\n",
+        ),
+    ]);
+    let (a, b) = (geometry(&one), geometry(&two));
+    assert_eq!(
+        encode(a),
+        encode(b),
+        "rows hash in canonical sorted-tag order"
+    );
+    let load = a.items.iter().find(|i| i.name == "load").expect("load");
+    assert_eq!(
+        load.sig,
+        "fn load(p: str) -> int ! {Io(str), Locked, NotFound(str)}"
+    );
+}
+
+#[test]
 fn dep_signature_change_propagates_through_dep_hashes() {
     let base = interfaces(&[BASE_MAIN, BASE_GEO]);
     let edited = interfaces(&[
