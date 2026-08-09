@@ -117,8 +117,15 @@ is not separating statements within a single-line block
 Exceptions (grammar-level):
 - `else` must appear on the same line as the preceding `}` — the inserted
   terminator after `}` would otherwise orphan it. `[gram.amb.else]`
-- Inside `(…)`, `[…]`, and interpolations, newlines never terminate
-  (bracket depth > 0 suppresses insertion). `{…}` blocks do not suppress.
+- The *innermost* enclosing delimiter decides: when it is `(`, `[`, or an
+  interpolation, newlines never terminate. A `{…}` block re-enables
+  insertion inside itself whatever it is nested in — statements inside a
+  closure body passed as a call argument still terminate. `{…}` never
+  suppresses.
+- No terminator is inserted after the `]` that closes an attribute
+  (`#[…]`) — the attribute prefixes the construct on the next line.
+- A terminator may be omitted before a closing `}` (Go's rule 2): the
+  final statement of a single-line block needs no `;`.
 
 Counter-example (does not parse; diagnostic points at the break):
 
@@ -169,7 +176,7 @@ param     ::= param_mode? IDENT ':' type | param_mode? 'self' view_set?
 param_mode ::= 'mut' | 'take'
 view_set  ::= '.' '{' IDENT (',' IDENT)* '}'
 fn_ret    ::= '->' ret_type
-ret_type  ::= '!' type | type ('!' error_row)?
+ret_type  ::= type ('!' error_row)?   /* `-> !T` parses via type's '!' type */
 ```
 
 - Modes (D10 Tier 0): default is `read` (no keyword — the absence *is* the
@@ -200,7 +207,7 @@ statement-level share the grammar. `let (a, b) = pair` destructures.
 
 ```ebnf
 type_item   ::= 'type' IDENT generics? '=' type_def TERM?
-type_def    ::= struct_def | enum_def | 'distinct' type | type
+type_def    ::= struct_def | enum_def | type   /* `distinct T` via prefix_type_kw */
 struct_def  ::= 'struct' '{' field* '}'
 field       ::= attribute* visibility? IDENT ':' type ','?
 enum_def    ::= 'enum' '{' variant (',' variant)* ','? '}'
@@ -237,7 +244,7 @@ Nominal traits, checked generics (D28). Adapter types are ordinary
 attribute ::= '#[' attr (',' attr)* ']'
 attr      ::= path attr_input?
 attr_input ::= '(' attr_arg (',' attr_arg)* ')' | '=' literal
-attr_arg  ::= attr | literal | IDENT '=' literal
+attr_arg  ::= attr | literal   /* `key = "v"` is attr with '=' input */
 ```
 
 Closed, structured — attributes are not token soup (no macros at v1).
@@ -255,7 +262,8 @@ Assignment is a **statement**, not an expression (`[gram.expr.assign]`).
 
 ```ebnf
 block ::= '{' stmt* expr? '}'
-stmt  ::= let_item | var_item | const_item | assign_stmt | defer_stmt
+stmt  ::= attribute* stmt_base
+stmt_base ::= let_item | var_item | const_item | assign_stmt | defer_stmt
         | expr_stmt | item
 assign_stmt ::= place assign_op expr TERM
 assign_op   ::= '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>='
@@ -295,7 +303,7 @@ non-`Copy` value.
 ### 3.3 Primary expressions `[gram.expr.primary]`
 
 ```ebnf
-expr ::= else_expr
+expr ::= else_expr | jump_expr
 else_expr ::= range_expr ('else' (block | '|' pattern '|' (expr | block) | expr))?
 range_expr ::= r_end (('..' | '..=') r_end?)? | ('..' | '..=') r_end
 r_end ::= or_expr | '^' or_expr
@@ -304,8 +312,12 @@ r_end ::= or_expr | '^' or_expr
 postfix_expr ::= primary (call_args | index_args | '.' member | '?')*
 call_args  ::= '(' (call_arg (',' call_arg)* ','?)? ')'
 call_arg   ::= ('mut' | 'take')? expr
-index_args ::= '[' (call_arg (',' call_arg)* ','?)? ']'
-member     ::= IDENT | INT   /* tuple access: pair.0, pair.1 */
+index_args ::= '[' (index_arg (',' index_arg)* ','?)? ']'
+index_arg  ::= call_arg | prefix_type_kw type | 'region'
+member     ::= IDENT | INT | reserved_kw
+/* tuple access: pair.0, pair.1. Member position is keyword-transparent:
+   nothing competes with a member name after `.`, so `.take(n)` and
+   `s.spawn(…)` parse — member names live in their own namespace. */
 primary ::= literal | path | struct_lit | '(' expr (',' expr)* ','? ')' | block
           | if_expr | match_expr | loop_expr | closure | region_expr
           | scope_expr | select_expr | when_expr | unsafe_expr | spawn_expr
@@ -322,6 +334,9 @@ position without parens (`[gram.amb.structlit]`).
 
 - **Call-site modes (X1)**: `f(mut x)`, `pool[mut prev]` — `mut`/`take`
   are argument prefixes in both call and index argument lists.
+- `index_arg` also admits the type forms no expression can spell
+  (`List[handle Node]()`, `channel[region]`) — `e[…]` stays one postfix
+  shape and sema (D29) sees a single argument list (`[gram.amb.brackets]`).
 - `(e)` grouping; `(a, b)` tuple; `(a,)` one-tuple.
 - Parenthesized-vs-tuple: comma decides, standard.
 
@@ -332,7 +347,7 @@ if_expr    ::= 'if' expr block ('else' (if_expr | block))?
 match_expr ::= 'match' expr '{' arm* '}'
 match_arm  ::= pattern ('if' expr)? '=>' (expr | block)
 arm        ::= match_arm arm_sep?
-arm_sep    ::= ','
+arm_sep    ::= ',' | TERM
 loop_expr  ::= 'for' pattern 'in' expr block
              | 'while' expr block
              | 'loop' block
@@ -341,8 +356,10 @@ jump_expr  ::= 'return' expr? | 'break' expr? | 'continue'
 
 Arm separators (also for `select`): the comma is **required** after an
 expression-bodied arm that is followed by another arm, **optional** after a
-block-bodied arm (a newline suffices there). The formatter emits trailing
-commas in multiline arm lists either way (`[gram.fmt.commas]`).
+block-bodied arm (a newline suffices there — the terminator inserted after
+the arm's `}` per `[gram.lex.newline]` *is* the separator, hence TERM in
+`arm_sep`). The formatter emits trailing commas in multiline arm lists
+either way (`[gram.fmt.commas]`).
 
 The condition of `if`/`while` and the scrutinee of `match`/`for` use
 no-struct-literal expression mode (a `{` there begins the block —
@@ -388,7 +405,7 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
 ```ebnf
 scope_expr  ::= 'scope' IDENT? block
 spawn_expr  ::= 'spawn' 'proc' path call_args
-select_expr ::= 'select' '{' select_arm (',' select_arm)* ','? '}'
+select_expr ::= 'select' '{' select_arm (arm_sep select_arm)* arm_sep? '}'
 select_arm  ::= pattern 'from' expr '=>' (expr | block)
               | 'timeout' '(' expr ')' '=>' (expr | block)
 when_expr   ::= 'when' '(' expr (',' expr)+ ','? ')' block
@@ -432,13 +449,13 @@ is a `stmt`; `borrow_expr` is a `primary`.
 ```ebnf
 type ::= path type_args?
        | '!' type
-       | type '!' error_row          /* postfix row on return types */
        | prefix_type_kw type
        | '*' type                    /* raw pointer, unsafe tier */
        | 'dyn' path
        | '(' type (',' type)* ','? ')'
        | 'fn' '(' (type (',' type)*)? ')' ('->' ret_type)?
        | 'type'                      /* the type of types, comptime */
+       | 'region'                    /* the type of first-class regions (X4) */
 prefix_type_kw ::= 'shared' | 'handle' | 'weak' | 'distinct'
 type_args ::= '[' type_arg (',' type_arg)* ','? ']'
 type_arg  ::= type | expr            /* const generics; disambiguated in sema */
