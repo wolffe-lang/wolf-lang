@@ -4,7 +4,7 @@
 //! publish fix toolchain. v0 grows at s31 (`wolf build|run`); today the
 //! binary anchors the crate graph's top, serves the differential protocol
 //! (`conform-run`, spec/06 [proto.invoke]) with the deepest implemented
-//! phase (resolve, s12), and fronts the s10 diagnostics engine:
+//! phase (typecheck, s13), and fronts the s10 diagnostics engine:
 //! `wolf --explain E####` renders the registry entry, and `conform-run`
 //! reports diagnostics on stderr in the human CLI format (default) or
 //! the diag-schema JSON line format (`--error-format=json`) while stdout
@@ -227,13 +227,13 @@ fn is_member_file(src: &[u8]) -> bool {
 }
 
 /// Run s12 resolution from an entry file; registers every loaded file
-/// with `sources` and returns the full diagnostic set (parse + graph +
-/// resolution) in deterministic order.
+/// with `sources` and returns the resolution (package + the full
+/// parse/graph/resolution diagnostic set in deterministic order).
 fn resolve_from_entry(
     entry: &Path,
     sm: &mut wolf_span::SourceMap,
     sources: &mut Sources,
-) -> Result<Vec<Diagnostic>, String> {
+) -> Result<wolf_sema::Resolution, String> {
     let mut loader =
         wolf_sema::DiskLoader::from_entry(entry, sm, Box::new(|src: &[u8]| is_member_file(src)))
             .ok_or_else(|| format!("cannot open package around {}", entry.display()))?;
@@ -241,7 +241,7 @@ fn resolve_from_entry(
     for unit in &res.package.files {
         sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
     }
-    Ok(res.diagnostics)
+    Ok(res)
 }
 
 /// `wolf interface <file-or-dir>` — resolve the package and pretty-print
@@ -321,11 +321,11 @@ const PHASES: [&str; 8] = [
 ];
 
 /// Observation record ([proto.record]). The deepest implemented phase is
-/// `parse` (s09): `--phase=lex|parse` verdict `pass`/`fail(E….)` on the
-/// real front end; deeper (or absent) phase requests run the front end
-/// too but stay `unsupported` when it is clean — the conservatism ledger
-/// keeps showing exactly what the compiler cannot do yet. `--phase=none`
-/// remains the pre-s07 stub record.
+/// `typecheck` (s13): each rung either stops with `fail(code)`, passes at
+/// the requested rung, or falls through deeper; a file with any
+/// NotYetCheckable body stops at `resolve` + `unsupported` — the
+/// conservatism ledger keeps showing exactly what the compiler cannot do
+/// yet. `--phase=none` remains the pre-s07 stub record.
 ///
 /// Diagnostics ride stderr (s10): the human CLI format by default, one
 /// diag-schema JSON object per line with `--error-format=json`. The
@@ -426,13 +426,38 @@ fn conform_run(args: &[String]) {
                         eprintln!("wolf conform-run: {e}");
                         std::process::exit(2);
                     }
-                    Ok(all) => {
+                    Ok(res) => {
+                        let all = res.diagnostics.clone();
                         if let Some(code) = first_error(&all) {
                             ("resolve", format!("fail({code})"), all)
                         } else if phase.as_deref() == Some("resolve") {
                             ("resolve", "pass".to_string(), all)
                         } else {
-                            ("resolve", "unsupported".to_string(), all)
+                            // The typecheck rung (s13). The ledger
+                            // contract: every body Checked and clean ⇒
+                            // the rung completes; ANY NotYetCheckable
+                            // body ⇒ the rung was *not* completed —
+                            // phase stays `resolve`, verdict
+                            // `unsupported`, and partial type errors
+                            // are withheld (conservatism, not silence:
+                            // the file's verdict must not rest on a
+                            // half-checked run). Type errors on a
+                            // fully-checkable file fail here.
+                            let tc = wolf_sema::typecheck_package(&res);
+                            if !tc.not_yet.is_empty() {
+                                ("resolve", "unsupported".to_string(), all)
+                            } else {
+                                let mut all = all;
+                                all.extend(tc.diagnostics.iter().cloned());
+                                wolf_diag::sort_diagnostics(&mut all);
+                                if let Some(code) = first_error(&all) {
+                                    ("typecheck", format!("fail({code})"), all)
+                                } else if phase.as_deref() == Some("typecheck") {
+                                    ("typecheck", "pass".to_string(), all)
+                                } else {
+                                    ("typecheck", "unsupported".to_string(), all)
+                                }
+                            }
                         }
                     }
                 }
