@@ -98,7 +98,9 @@ fn corpus_cmd() -> ExitCode {
         };
         match corpus::parse_directives(&src) {
             Ok(d) => {
-                if d.phase.is_none() {
+                if d.member {
+                    // compiled through its module's entry file (s12)
+                } else if d.phase.is_none() {
                     eprintln!("corpus: {}: missing `//! phase:` directive", f.display());
                     bad += 1;
                 } else {
@@ -961,6 +963,13 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     let mut divergences = 0u32;
     let mut unsupported = 0u32;
     for f in &files {
+        let is_member = std::fs::read_to_string(f)
+            .ok()
+            .and_then(|src| corpus::parse_directives(&src).ok())
+            .is_some_and(|d| d.member);
+        if is_member {
+            continue; // compiled through its module's entry file (s12)
+        }
         let (ra, rb) = match (conform_run(&cmd_a, f), conform_run(&cmd_b, f)) {
             (Ok(a), Ok(b)) => (a, b),
             (Err(e), _) | (_, Err(e)) => {

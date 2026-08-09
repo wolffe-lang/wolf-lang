@@ -74,6 +74,10 @@ pub struct Directives {
     pub check: Option<Check>,
     pub phase: Option<String>,
     pub conforms: Vec<String>,
+    /// `member: true` — this file belongs to a multi-file module case and
+    /// is compiled through its entry file, never conform-run directly
+    /// (s12: directory = module).
+    pub member: bool,
 }
 
 /// Parse the leading `//!` block of `src`. Errors are human-readable and
@@ -110,6 +114,12 @@ pub fn parse_directives(src: &str) -> Result<Directives, String> {
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty()),
             );
+        } else if let Some(v) = rest.strip_prefix("member:") {
+            match v.trim() {
+                "true" => d.member = true,
+                "false" => {}
+                other => return Err(format!("line {lineno}: bad member value `{other}`")),
+            }
         }
         // any other `//!` line is prose
     }
