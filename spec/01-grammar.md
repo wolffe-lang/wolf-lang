@@ -237,8 +237,10 @@ impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item
 ```
 
-Nominal traits, checked generics (D28). Adapter types are ordinary
-`struct` + `impl` — no dedicated syntax. The impl subject is a *type*
+Nominal traits, checked generics (D28). Adapter types are `distinct`
+types (`type Cover = distinct Song`): same layout as the base, free
+bidirectional `as` casts, an *own* empty impl set — the sanctioned
+orphan-rule escape, with no dedicated keyword. The impl subject is a *type*
 (so `impl[T] List[T] { … }` works); when `for` is present the first
 type is the trait path applied to its arguments.
 
