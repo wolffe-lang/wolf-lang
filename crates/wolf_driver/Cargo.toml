@@ -13,7 +13,9 @@ path = "src/main.rs"
 [dependencies]
 wolf_span.workspace = true
 wolf_diag.workspace = true
+wolf_lex.workspace = true
 wolf_parse.workspace = true
+serde_json.workspace = true
 wolf_sema.workspace = true
 wolf_mem.workspace = true
 wolf_wir.workspace = true
