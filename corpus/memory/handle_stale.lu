@@ -1,0 +1,16 @@
+//! check: run(exit=trap(stale-handle))
+//! phase: none
+//! conforms: mem.shared.handle.2
+//! Stale handle access is a DETERMINISTIC fault in every profile —
+//! defined behavior, not UB (X5's contract).
+struct Node { value: int }
+fn main() -> !int {
+    region r: pool(Node) {
+        var pool = Pool[Node]()
+        let h = pool.reserve()
+        pool.init(h, Node { value: 1 })
+        pool.remove(h)             // slot freed; generation bumped
+        let v = pool[h].value      // TRAP stale-handle [mem.shared.handle.2]
+        v
+    }
+}

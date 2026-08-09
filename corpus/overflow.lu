@@ -1,6 +1,6 @@
-//! check: run(exit=trap)
+//! check: run(exit=trap(overflow))
 //! phase: none
-//! conforms: arith.checked, arith.wrapping
+//! conforms: arith.checked, arith.wrapping, mem.ub.defined
 //!
 //! Checked arithmetic in EVERY profile (X3): overflow is a bug and faults
 //! deterministically — debug and release behave identically (no Rust

@@ -1,0 +1,21 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.region.multiopen, mem.region.intra.1
+//! FLAGGED FOR is07: interleaved building into two pool regions; each
+//! handle stays valid for its own pool.
+struct Node { value: int }
+fn main() -> !int {
+    var sum = 0
+    region a: pool(Node) {
+        region b: pool(Node) {
+            var pa = Pool[Node]()
+            var pb = Pool[Node]()
+            let ha = pa.reserve()
+            let hb = pb.reserve()
+            in a { pa.init(ha, Node { value: 10 }) }
+            in b { pb.init(hb, Node { value: 20 }) }
+            sum = pa[ha].value + pb[hb].value
+        }
+    }
+    if sum == 30 { 0 } else { 1 }
+}

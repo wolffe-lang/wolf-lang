@@ -1,0 +1,13 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.shared.rc.1, mem.shared.rc.3
+//! Prefix `shared` creates the RC cell; clones share ownership; `weak`
+//! upgrade yields an option-shaped result handled with `else`.
+struct Cfg { limit: int }
+fn main() -> !int {
+    let a = shared (Cfg { limit: 7 })
+    let b = a.clone()
+    let w = a.downgrade()
+    let live = w.upgrade() else |_| { return 1 }
+    if b.limit == 7 && live.limit == 7 { 0 } else { 1 }
+}

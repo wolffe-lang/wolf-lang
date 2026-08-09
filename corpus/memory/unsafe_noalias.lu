@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.unsafe.raw.1, mem.unsafe.raw.2
+//! Raw pointers carry NO aliasing assumptions unless asserted. This
+//! assertion is true, so behavior is defined and O5 licensing applies.
+import c "stdlib.h"
+fn main() -> !int {
+    var out = 0
+    unsafe {
+        let p = c.malloc(8) as *u8
+        let q = c.malloc(8) as *u8
+        assume noalias p, q        // true here [mem.unsafe.raw.2]
+        p[0] = 1
+        q[0] = 2
+        out = (p[0] + q[0]) as int
+        c.free(p)
+        c.free(q)
+    }
+    if out == 3 { 0 } else { 1 }
+}

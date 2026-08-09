@@ -1,0 +1,11 @@
+//! check: fail(E1002)
+//! phase: none
+//! conforms: mem.tier0.excl.1, mem.tier0.excl.2
+//! A path and its prefix conflict: mut a with mut a.x is rejected.
+struct P { x: int, y: int }
+fn two(mut a: P, mut b: int) { a.y += b; b += 1 }
+fn main() -> !int {
+    var p = P { x: 1, y: 2 }
+    two(mut p, mut p.x)            // ERROR E1002: p is a prefix of p.x
+    0
+}

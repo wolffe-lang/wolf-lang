@@ -1,0 +1,12 @@
+//! check: fail(E1003)
+//! phase: none
+//! conforms: mem.tier0.borrow.1
+//! Local borrows never outlive their function activation: sending one
+//! into a channel (heap-tier storage) is rejected.
+fn main() -> !int {
+    let ch = channel[int](1)
+    let x = 41
+    let p = &x                     // local borrow: fine [mem.tier0.borrow.1]
+    ch.send(p)                     // ERROR E1003: borrow escapes activation
+    0
+}

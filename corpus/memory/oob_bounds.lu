@@ -1,0 +1,10 @@
+//! check: run(exit=trap(bounds))
+//! phase: none
+//! conforms: mem.ub.defined
+//! Out-of-bounds indexing traps in every profile (D25/X3 posture).
+fn main() -> !int {
+    var xs = List[int]()
+    xs.push(1)
+    let v = xs[3]                  // TRAP bounds
+    v
+}

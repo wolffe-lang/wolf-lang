@@ -1,0 +1,15 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.tier0.excl.2, mem.model.path.disjoint
+//! Disjoint paths may be mut simultaneously. (View-set litmus
+//! [mem.tier0.excl.3] is deferred: it needs impl-method receivers, whose
+//! call-site mut spelling is an open s05/s08 surface question — recorded
+//! in the s04 closeout notes.)
+struct P { x: int, y: int, z: int }
+fn bump(mut a: int, mut b: int) { a += 1; b += 1 }
+fn main() -> !int {
+    var p = P { x: 1, y: 2, z: 3 }
+    bump(mut p.x, mut p.y)         // disjoint: legal [mem.tier0.excl.2]
+    bump(mut p.y, mut p.z)         // overlapping across CALLS is fine too
+    if p.x == 2 && p.y == 4 && p.z == 4 { 0 } else { 1 }
+}

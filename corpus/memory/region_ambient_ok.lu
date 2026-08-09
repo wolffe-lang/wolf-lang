@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.region.create.3, mem.region.intra.2
+//! The callee allocates into the CALLER's region by default (D12): the
+//! list built in `fill` lives in `tmp` and dies with it.
+fn fill(n: int) -> List[int] {
+    var xs = List[int]()           // lands in the caller's current region
+    for i in 0..n { xs.push(i) }
+    xs
+}
+fn main() -> !int {
+    var total = 0
+    region tmp {
+        let xs = fill(100)         // allocated in tmp [mem.region.create.3]
+        for x in xs { total += x }
+    }                              // wholesale free [mem.region.intra.2]
+    if total == 4950 { 0 } else { 1 }
+}

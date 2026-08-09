@@ -1,0 +1,14 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.tier0.move.1, mem.tier0.move.3, mem.tier0.move.4
+//! Moves, explicit copy, and re-initialization — all conforming.
+struct Big { data: List[int] }
+fn consume(take b: Big) -> int { b.data.len }
+fn main() -> !int {
+    var b = Big { data: List[int]() }
+    b.data.push(1)
+    let n = consume(take b)        // b moves out [mem.tier0.move.1]
+    b = Big { data: List[int]() }  // re-init makes b live again [.4]
+    let c = copy b                 // explicit deep copy [.3]
+    if n == 1 && c.data.len == 0 { 0 } else { 1 }
+}

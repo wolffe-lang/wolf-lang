@@ -1,0 +1,13 @@
+//! check: fail(E1005)
+//! phase: none
+//! conforms: mem.region.open.1, mem.region.freeze.3
+//! A region cannot be transferred while it is open — the forest moves
+//! as closed subtrees only.
+fn main() -> !int {
+    let ch = channel[region](1)
+    region p {
+        let xs = List[int]()       // p is open here
+        ch.send(move p)            // ERROR E1005: p is open (we are inside it)
+    }
+    0
+}

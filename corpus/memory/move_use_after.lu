@@ -1,0 +1,13 @@
+//! check: fail(E1001)
+//! phase: none
+//! conforms: mem.tier0.move.2
+//! Use of a moved-from place is a compile error (dynamically: a
+//! use-after-move trap in the interpreter, which is is02's check).
+struct Big { data: List[int] }
+fn consume(take b: Big) -> int { b.data.len }
+fn main() -> !int {
+    let b = Big { data: List[int]() }
+    let n = consume(take b)
+    let m = b.data.len             // ERROR E1001: b was moved
+    n + m
+}

@@ -1,0 +1,7 @@
+//! check: fail(E1006)
+//! phase: none
+//! conforms: mem.shared.rc.2
+//! Strong `shared` cycles are a COMPILE error by type shape — wolf has no
+//! cycle collector and refuses to leak instead.
+struct S { next: shared S }        // ERROR E1006: strong path back to S
+fn main() -> !int { 0 }

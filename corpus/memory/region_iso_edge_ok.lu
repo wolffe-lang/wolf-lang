@@ -1,0 +1,13 @@
+//! check: run(exit=0)
+//! phase: none
+//! conforms: mem.region.edge.iso, mem.region.freeze.1, mem.region.edge.imm
+//! Cross-region structure the LEGAL ways: an owning (iso) child moved
+//! into a parent value, and frozen data referenced from anywhere.
+struct Holder { child: region }
+fn main() -> !int {
+    let c = region()
+    let n = in c { 21 }
+    let h = Holder { child: move c }   // iso edge: ≤1 owner [mem.region.edge.iso]
+    let cfg = freeze region { 2 }      // imm: shareable forever [.imm]
+    if n * cfg == 42 && h.child.is_closed() { 0 } else { 1 }
+}
