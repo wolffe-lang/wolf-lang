@@ -1,0 +1,20 @@
+[package]
+name = "wolf_driver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "wolf"
+path = "src/main.rs"
+
+[dependencies]
+wolf_span.workspace = true
+wolf_diag.workspace = true
+wolf_parse.workspace = true
+wolf_sema.workspace = true
+wolf_mem.workspace = true
+wolf_wir.workspace = true
+wolf_codegen_clif.workspace = true

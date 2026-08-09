@@ -1,0 +1,12 @@
+[package]
+name = "wolf_wir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+wolf_span.workspace = true
+wolf_sema.workspace = true
+wolf_mem.workspace = true

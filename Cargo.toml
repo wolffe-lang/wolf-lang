@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tenseleyFlow/wolf-lang"
+rust-version = "1.97"
+
+# Crate dependency direction is LOCKED (see .docs/sprints/compiler/00-scaffolding/s00):
+#   span <- diag <- {lex, ast} <- parse <- sema <- mem <- wir <- codegen_* <- driver
+# wolf_rt may depend on wolf_span at most — it links into user programs and
+# stays dependency-thin by law (D15). `cargo xtask deps-check` enforces this.
+
+[workspace.dependencies]
+wolf_span = { path = "crates/wolf_span" }
+wolf_diag = { path = "crates/wolf_diag" }
+wolf_lex = { path = "crates/wolf_lex" }
+wolf_ast = { path = "crates/wolf_ast" }
+wolf_parse = { path = "crates/wolf_parse" }
+wolf_sema = { path = "crates/wolf_sema" }
+wolf_mem = { path = "crates/wolf_mem" }
+wolf_wir = { path = "crates/wolf_wir" }
+wolf_codegen_clif = { path = "crates/wolf_codegen_clif" }
+wolf_codegen_llvm = { path = "crates/wolf_codegen_llvm" }
+wolf_rt = { path = "crates/wolf_rt" }
+serde_json = "1"
+
+[profile.release]
+debug = true
