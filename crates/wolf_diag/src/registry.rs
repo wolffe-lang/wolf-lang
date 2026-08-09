@@ -352,6 +352,23 @@ negative *computed* value, that is a bounds error at runtime; compute
 the offset explicitly instead.)
 "#);
 
+// ------------------------------------------------------------------------
+// W03xx — the formatter's family (s11).
+// ------------------------------------------------------------------------
+
+code!(W0301, "file only partially formatted: syntax errors present", r#"
+`wolf fmt` formats through the resilient parse tree, so a file with
+syntax errors still mostly formats: every well-formed declaration and
+statement is laid out canonically, while the regions the parser could
+not understand — plus one statement of margin on each side — pass
+through byte-for-byte untouched, so half-typed code is never mangled.
+This warning marks that partial result, and `wolf fmt` exits nonzero
+so scripts and editors know the file is not fully canonical yet. Fix
+the syntax errors it reports alongside this warning and run `wolf
+fmt` again; with a clean parse the whole file formats and the warning
+disappears.
+"#);
+
 }
 
 #[cfg(test)]

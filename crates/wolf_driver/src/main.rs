@@ -20,9 +20,170 @@ fn main() {
         Some("--version") => println!("wolf 0.0.1 (pre-alpha)"),
         Some("--explain") => explain(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
+        Some("fmt") => fmt(&args[1..]),
         _ => {
             eprintln!("wolf: pre-alpha scaffold; `wolf build|run` lands at sprint s31");
             std::process::exit(2);
+        }
+    }
+}
+
+/// `wolf fmt <paths…>` — the zero-option formatter (s11, D34).
+///
+/// Files and directories (recursing into `*.lu`) reformat in place;
+/// `-` formats stdin to stdout; `--check` rewrites nothing and exits
+/// nonzero listing files that are not canonical. There are no other
+/// flags, deliberately: one canonical style, fixed by spec/01 §7 and
+/// versioned per the D36 stability policy (`wolf_fmt::STYLE_VERSION`)
+/// — requests to configure are answered with the D34 rationale, not an
+/// option.
+fn fmt(args: &[String]) {
+    let mut check = false;
+    let mut paths: Vec<String> = Vec::new();
+    for a in args {
+        match a.as_str() {
+            "--check" => check = true,
+            "-" => paths.push("-".to_string()),
+            _ if a.starts_with("--") => {
+                eprintln!(
+                    "wolf fmt: unknown flag `{a}` — wolf fmt has no options (D34): \
+                     one canonical style, so no codebase ever argues about it"
+                );
+                std::process::exit(2);
+            }
+            _ => paths.push(a.clone()),
+        }
+    }
+    if paths.is_empty() {
+        eprintln!("usage: wolf fmt [--check] <file.lu|dir|->...");
+        std::process::exit(2);
+    }
+
+    let mut sm = wolf_span::SourceMap::new();
+    let mut sources = Sources::new();
+    let mut unformatted: Vec<String> = Vec::new();
+    let mut partials: Vec<Diagnostic> = Vec::new();
+    let mut failed = false;
+
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
+    let mut use_stdin = false;
+    for p in &paths {
+        if p == "-" {
+            use_stdin = true;
+            continue;
+        }
+        let path = std::path::PathBuf::from(p);
+        if path.is_dir() {
+            collect_lu(&path, &mut files);
+        } else if path.is_file() {
+            files.push(path);
+        } else {
+            eprintln!("wolf fmt: no such file or directory: {p}");
+            std::process::exit(2);
+        }
+    }
+    files.sort();
+
+    if use_stdin {
+        use std::io::Read;
+        let mut src = Vec::new();
+        if std::io::stdin().read_to_end(&mut src).is_err() {
+            eprintln!("wolf fmt: failed reading stdin");
+            std::process::exit(2);
+        }
+        let id = sm.intern(Path::new("<stdin>"));
+        sources.add(id, "<stdin>".to_string(), &src);
+        let out = wolf_fmt::format_source(id, &src);
+        if check {
+            if out.text != src || out.partial {
+                unformatted.push("<stdin>".to_string());
+            }
+        } else {
+            use std::io::Write;
+            let _ = std::io::stdout().write_all(&out.text);
+        }
+        if out.partial {
+            partials.push(partial_diag(id, &src));
+        }
+    }
+
+    for f in &files {
+        let display = f.display().to_string().replace('\\', "/");
+        let src = match std::fs::read(f) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("wolf fmt: read {display}: {e}");
+                failed = true;
+                continue;
+            }
+        };
+        let id = sm.intern(f);
+        sources.add(id, display.clone(), &src);
+        let out = wolf_fmt::format_source(id, &src);
+        // `--check` asks one question — is the file canonical? — so a
+        // file with syntax errors whose formattable parts are already
+        // canonical passes (the corpus keeps its deliberate
+        // counter-examples without tripping CI). Write mode reports
+        // partial work per the s11 contract.
+        if out.partial && !check {
+            partials.push(partial_diag(id, &src));
+        }
+        if out.text != src {
+            if check {
+                unformatted.push(display.clone());
+            } else if let Err(e) = std::fs::write(f, &out.text) {
+                eprintln!("wolf fmt: write {display}: {e}");
+                failed = true;
+            }
+        }
+    }
+
+    // Report partial formats through the diagnostics engine (s10).
+    if !partials.is_empty() {
+        let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+        for d in &partials {
+            reporter.report(d);
+        }
+        let rendered = reporter.take_output();
+        if !rendered.is_empty() {
+            eprint!("{rendered}");
+        }
+    }
+    if check && !unformatted.is_empty() {
+        for f in &unformatted {
+            eprintln!("wolf fmt --check: {f} is not canonically formatted");
+        }
+    }
+    if failed || !partials.is_empty() || (check && !unformatted.is_empty()) {
+        std::process::exit(1);
+    }
+}
+
+fn partial_diag(file: wolf_span::FileId, src: &[u8]) -> Diagnostic {
+    let span = wolf_span::Span::new(file, 0, src.len().min(1) as u32);
+    Diagnostic::warning(
+        wolf_fmt::codes::PARTIAL_FORMAT,
+        span,
+        "this file has syntax errors, so it was only partially formatted",
+    )
+    .with_note(
+        "regions with syntax errors (and one statement around them) were left \
+         byte-for-byte untouched; fix the parse errors and run `wolf fmt` again"
+            .to_string(),
+    )
+}
+
+fn collect_lu(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut items: Vec<_> = entries.flatten().map(|e| e.path()).collect();
+    items.sort();
+    for p in items {
+        if p.is_dir() {
+            collect_lu(&p, out);
+        } else if p.extension().is_some_and(|e| e == "lu") {
+            out.push(p);
         }
     }
 }
