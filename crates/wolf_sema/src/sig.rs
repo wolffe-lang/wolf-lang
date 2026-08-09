@@ -39,6 +39,11 @@ pub struct ParamSig {
     /// The parameter's span (the "declared here" secondary for E0401
     /// argument mismatches and E0402).
     pub span: Span,
+    /// The declared passing mode (X1): `None` is the default `read`.
+    /// On a `self` receiver this is the mode the call site must spell
+    /// — `(mut p).norm()` / `(take p).consume()` (E0804, s17); the
+    /// exclusivity/move *checking* behind the modes is c04's.
+    pub mode: Option<wolf_ast::ParamMode>,
 }
 
 /// A resolved trait bound on a generic parameter (`T: Show` — module
@@ -119,16 +124,27 @@ pub struct GlobalSig {
     pub name_span: Span,
 }
 
+/// One enum variant's elaborated signature (s17: variant construction
+/// `Color.Red` / `Color.Rgb(…)` and the exhaustiveness ctor universe).
+#[derive(Debug, Clone)]
+pub struct VariantSig {
+    pub name: String,
+    /// Payload types, in order (empty for payload-less variants).
+    pub payload: Vec<TyId>,
+    pub span: Span,
+}
+
 /// One module item's elaborated signature.
 #[derive(Debug, Clone)]
 pub enum ItemSig {
     Fn(FnSig),
     Struct(StructSig),
-    /// Enums elaborate their identity; variant typing is s17's
-    /// pattern/variant work.
+    /// An enum with its variant table (s17): construction and match
+    /// exhaustiveness both read `variants`.
     Enum {
         generic: bool,
         name_span: Span,
+        variants: Vec<VariantSig>,
     },
     /// A type alias; non-generic aliases expand during lowering.
     Alias {
@@ -300,10 +316,13 @@ impl<'a> Lower<'a> {
             }
             SyntaxKind::EnumDecl => {
                 let generics = generic_names(self, file, node);
-                let _ = EnumDecl::cast(node);
+                let variants = EnumDecl::cast(node)
+                    .map(|d| self.variant_sigs(module, file, &generics, d.variants()))
+                    .unwrap_or_default();
                 ItemSig::Enum {
                     generic: !generics.is_empty(),
                     name_span: item.name_span,
+                    variants,
                 }
             }
             SyntaxKind::TypeDecl => {
@@ -347,10 +366,25 @@ impl<'a> Lower<'a> {
                             name_span: item.name_span,
                         })
                     }
-                    Some(SyntaxKind::EnumDef) => ItemSig::Enum {
-                        generic,
-                        name_span: item.name_span,
-                    },
+                    Some(SyntaxKind::EnumDef) => {
+                        let generics = generic_names(self, file, node);
+                        let variants = d
+                            .def()
+                            .map(|def| {
+                                self.variant_sigs(
+                                    module,
+                                    file,
+                                    &generics,
+                                    def.nodes().filter_map(wolf_ast::EnumVariant::cast),
+                                )
+                            })
+                            .unwrap_or_default();
+                        ItemSig::Enum {
+                            generic,
+                            name_span: item.name_span,
+                            variants,
+                        }
+                    }
                     _ => ItemSig::Alias { generic },
                 }
             }
@@ -469,6 +503,7 @@ impl<'a> Lower<'a> {
                             name: "self".to_string(),
                             ty,
                             span: p.syntax().span,
+                            mode: p.mode(),
                         });
                     }
                     continue;
@@ -489,6 +524,7 @@ impl<'a> Lower<'a> {
                     name: pname,
                     ty,
                     span,
+                    mode: p.mode(),
                 });
             }
         }
@@ -537,12 +573,41 @@ impl<'a> Lower<'a> {
         }
     }
 
+    /// Elaborate an enum's variant table (s17): names + payload types.
+    fn variant_sigs<'n>(
+        &mut self,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        variants: impl Iterator<Item = wolf_ast::EnumVariant<'n>>,
+    ) -> Vec<VariantSig> {
+        variants
+            .map(|v| {
+                let name = v
+                    .name()
+                    .map(|t| self.text(file, t.span))
+                    .unwrap_or_default();
+                let span = v.name().map(|t| t.span).unwrap_or(v.syntax().span);
+                let payload: Vec<TyId> = v
+                    .payload()
+                    .map(|t| self.lower_type(module, file, generics, t))
+                    .collect();
+                VariantSig {
+                    name,
+                    payload,
+                    span,
+                }
+            })
+            .collect()
+    }
+
     /// Elaborate an explicit `! {…}` row (D30/s15). Tags are a *set*:
     /// duplicate labels are E0601. A payload-less entry naming a
     /// generic parameter in scope is the row's polymorphic tail (the
     /// HOF `rethrows` answer); a second tail is E0601. A row ending in
-    /// `..` (the open marker) elaborates opaquely — rest-rows are
-    /// s17's pattern work, and the checker never guesses.
+    /// `..` is *open* (s17): it declares at least the listed tags,
+    /// admits raises of new ones, and forces rest-arm matching
+    /// downstream ([`TyKind::OpenTail`]).
     pub(crate) fn lower_row(
         &mut self,
         module: usize,
@@ -550,11 +615,12 @@ impl<'a> Lower<'a> {
         generics: &[String],
         row: wolf_ast::ErrorRow<'_>,
     ) -> TyId {
-        if row.is_open() {
-            return self.opaque(file, row.syntax());
-        }
         let mut tags: Vec<(String, Vec<TyId>)> = Vec::new();
-        let mut tail: Option<TyId> = None;
+        let mut tail: Option<TyId> = if row.is_open() {
+            Some(self.table.intern(TyKind::OpenTail))
+        } else {
+            None
+        };
         for entry in row.entries() {
             let Some(path) = entry.path() else { continue };
             let segs: Vec<String> = path.segments().map(|t| self.text(file, t.span)).collect();

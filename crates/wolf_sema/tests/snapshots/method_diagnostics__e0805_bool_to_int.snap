@@ -1,0 +1,11 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0805]: `bool` does not cast to `int`
+ --> mem:///main.lu:3:13
+  |
+3 |     let n = b as int
+  |             ^^^^^^^^ outside the cast set
+  |
+  = note: there is no truthiness bridge: write the value out, e.g. `if b { 1 } else { 0 }`.

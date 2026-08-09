@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+warning[E0802]: this arm can never match — the arms above already cover it
+ --> mem:///main.lu:6:9
+  |
+5 |         false => 2,
+  |         ----- this arm already matches those values
+6 |         _ => 3,
+  |         ^ unreachable arm
+  |
+  = note: delete the arm, or reorder the arms so the more specific pattern comes first.

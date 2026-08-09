@@ -89,11 +89,13 @@ pub fn derive_eq(
                 name: "a".to_string(),
                 ty: self_ty,
                 span: prov.call_site,
+                mode: None,
             },
             ParamSig {
                 name: "b".to_string(),
                 ty: self_ty,
                 span: prov.call_site,
+                mode: None,
             },
         ],
         ret: bool_,

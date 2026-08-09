@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0806]: this pattern can fail to match, but a binding cannot
+ --> mem:///main.lu:3:9
+  |
+3 |     let 1 = n
+  |         ^ refutable pattern
+  |
+  = note: `let`, `var`, `for`, and parameters bind every value unconditionally; test and
+    destructure with `match` instead: `match value { Pattern(x) => …, _ => … }`.

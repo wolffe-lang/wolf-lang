@@ -102,5 +102,37 @@ fn main() {
     } else {
         0.0
     };
-    println!("{{\"bodies_per_sec\": {bps:.1}, \"bodies\": {bodies}}}");
+    // D9 (s17): single-body re-check latency — the per-body path an
+    // editor edit takes (signatures cached, one body re-checked).
+    // Measured on the largest checked body in the corpus.
+    let mut best: Option<(usize, wolf_sema::BodyRef)> = None;
+    let mut best_n = 0usize;
+    for (pi, res) in packages.iter().enumerate() {
+        let tc = typecheck_package_with(&res.package, false);
+        for b in &tc.bodies {
+            if let wolf_sema::BodyResult::Checked(tb) = &b.result
+                && tb.exprs.len() > best_n
+            {
+                best_n = tb.exprs.len();
+                best = Some((pi, b.body.clone()));
+            }
+        }
+    }
+    let recheck_us = match best {
+        Some((pi, body)) => {
+            let pkg = &packages[pi].package;
+            let sigs = wolf_sema::build_sigs(pkg);
+            const RECHECKS: usize = 200;
+            let t = Instant::now();
+            for _ in 0..RECHECKS {
+                std::hint::black_box(wolf_sema::check_body(pkg, &sigs, &body));
+            }
+            t.elapsed().as_secs_f64() * 1e6 / RECHECKS as f64
+        }
+        None => 0.0,
+    };
+    println!(
+        "{{\"bodies_per_sec\": {bps:.1}, \"bodies\": {bodies}, \
+         \"single_body_recheck_us\": {recheck_us:.1}}}"
+    );
 }

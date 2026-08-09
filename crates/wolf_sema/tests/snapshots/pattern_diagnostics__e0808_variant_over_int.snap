@@ -1,0 +1,21 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0808]: this pattern deconstructs a variant, but the value is `{integer}`
+ --> mem:///main.lu:4:9
+  |
+4 |         Io(x) => x,
+  |         ^^^^^ this pattern
+  |
+  = note: only enum variants and error-row tags carry payloads to match.
+
+warning[E0802]: this arm can never match — the arms above already cover it
+ --> mem:///main.lu:5:9
+  |
+4 |         Io(x) => x,
+  |         ----- this arm already matches those values
+5 |         _ => 0,
+  |         ^ unreachable arm
+  |
+  = note: delete the arm, or reorder the arms so the more specific pattern comes first.

@@ -1,0 +1,11 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0808]: `Rgb` carries 3 values, but this pattern binds 1
+  --> mem:///main.lu:10:9
+   |
+10 |         Rgb(r) => r,
+   |         ^^^ this pattern
+   |
+   = note: match the declared shape: `Rgb(_, _, _)`.

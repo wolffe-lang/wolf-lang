@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0801]: this `match` does not cover `Timeout`
+  --> mem:///main.lu:13:9
+   |
+13 |         match err {
+   |         ^^^^^^^^^^^
+14 |             Io(_) => 1,
+15 |         }
+   | ^^^^^^^^^ not every value is matched
+   |
+   = note: add arms for the missing cases, or end the `match` with a `_` arm to catch the rest
+     deliberately.

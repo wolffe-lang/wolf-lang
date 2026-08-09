@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0004]: `1.e5` reads as member access, not a float
+ --> mem:///main.lu:2:13
+  |
+2 |     let x = 1.e5
+  |             ^^^^ integers have no member `e5`
+  |
+  = note: a float literal needs digits on both sides of the dot ([gram.amb.intdot]).
+help: write the float out: `1.0e5`
+  |
+2 |     let x = 1.0e5
+  |

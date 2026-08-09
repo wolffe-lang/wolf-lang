@@ -1,0 +1,19 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0804]: `bump` takes its receiver `mut`, but the call site does not say so
+  --> mem:///main.lu:13:5
+   |
+ 6 |     fn bump(mut self) -> int {
+   |        ---- `bump` declares `mut self` here
+...
+13 |     p.bump()
+   |     ^ write the mode here: `(mut …)`
+   |
+   = note: the receiver mirrors argument modes (X1): exclusive or consuming access is spelled where
+     the reader can see it.
+help: spell the receiver mode: `(mut …)`
+   |
+13 |     (mut p).bump()
+   |

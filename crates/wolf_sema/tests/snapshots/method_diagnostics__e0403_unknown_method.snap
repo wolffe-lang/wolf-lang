@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0403]: `P` has no method named `dost`
+  --> mem:///main.lu:13:7
+   |
+13 |     p.dost()
+   |       ^^^^ unknown method
+   |
+help: did you mean `dist`?
+   |
+13 |     p.dist()
+   |

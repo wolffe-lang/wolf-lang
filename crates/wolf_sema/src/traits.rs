@@ -1232,6 +1232,19 @@ pub fn satisfies(
     }
 }
 
+/// Does impl `idx` cover `ty` (self type unifies, own bounds hold)?
+/// The s17 method-resolution trial; caller owns snapshot/rollback.
+pub(crate) fn impl_self_matches(
+    sigs: &SigTables,
+    table: &mut TypeTable,
+    vars: &mut VarStore,
+    idx: usize,
+    ty: TyId,
+) -> bool {
+    let imp = &sigs.impls[idx];
+    impl_matches(sigs, table, vars, imp, ty, 4)
+}
+
 /// One impl trial: instantiate the impl's generics as fresh
 /// existentials, unify the self type, then require the impl's own
 /// bounds recursively. Caller owns snapshot/rollback.

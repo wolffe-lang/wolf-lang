@@ -188,6 +188,13 @@ pub enum TyKind {
         module: u32,
         name: String,
     },
+    /// The `..` open-row marker (s17, D30): appears only as a
+    /// [`TyKind::Row`] tail. `! {A, B, ..}` declares *at least* these
+    /// tags — raises of new tags are admitted, any row widens into it,
+    /// and a `match` over the row value must bind a rest (`_` or a
+    /// name). The Roc growing-tag-union bar: adding a tag upstream
+    /// never breaks a rest-arm consumer.
+    OpenTail,
     /// A range expression's builtin type (closed family — `for` iterates
     /// it without any trait machinery; D25).
     Range(TyId),
@@ -346,6 +353,13 @@ pub fn render_row(
                 .iter()
                 .map(|(n, p)| render_tag(table, n, p, resolve))
                 .collect();
+            if tail.is_some_and(|t| matches!(table.kind(t), TyKind::OpenTail)) {
+                parts.sort();
+                if parts.is_empty() {
+                    return "{..}".to_string();
+                }
+                return format!("{{{}, ..}}", parts.join(", "));
+            }
             let tail_str = tail.map(|t| render(table, t, resolve));
             match tail_str {
                 Some(t) if parts.is_empty() => format!("{{{t}}}"),
@@ -452,6 +466,7 @@ pub fn render(
         }
         TyKind::Row { .. } => render_row(table, id, resolve),
         TyKind::InferredRow { .. } => "{..inferred}".to_string(),
+        TyKind::OpenTail => "..".to_string(),
         TyKind::Range(t) => format!("range[{}]", render(table, *t, resolve)),
         TyKind::Nominal { name, .. } => name.clone(),
         TyKind::Rigid(name) => name.clone(),

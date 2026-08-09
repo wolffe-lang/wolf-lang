@@ -1,0 +1,20 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0803]: both `Loud` and `Quiet` provide a `speak` for this receiver — say which you mean
+  --> mem:///main.lu:27:13
+   |
+27 |     print(d.speak())
+   |             ^^^^^ ambiguous method
+   |
+   = note: trait namespaces are isolated (D28): a silent winner would change meaning when imports
+     change, so the qualified form is the answer.
+help: qualify through `Loud`
+   |
+27 |     print(Loud.speak(d))
+   |
+help: qualify through `Quiet`
+   |
+27 |     print(Quiet.speak(d))
+   |

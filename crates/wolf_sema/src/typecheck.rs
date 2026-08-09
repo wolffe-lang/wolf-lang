@@ -93,17 +93,13 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
         sink.push(d.clone());
     }
     diagnostics.extend(sink.into_vec());
-    // Trait member *default bodies* are s17's receiver work: each is
-    // one honest NotYetCheckable (impl member bodies check for real
-    // now — s14).
-    for nyc in trait_default_bodies_not_yet(pkg) {
-        not_yet.push(nyc);
-    }
     for (body, result) in tasks.into_iter().zip(results) {
         match &result {
             BodyResult::Errors(ds) => diagnostics.extend(ds.iter().cloned()),
             BodyResult::NotYetCheckable(nyc) => not_yet.push(nyc.clone()),
-            BodyResult::Checked(_) => {}
+            // Warnings from clean bodies (E0802) surface too — a
+            // checked body is not a silent one.
+            BodyResult::Checked(tb) => diagnostics.extend(tb.warnings.iter().cloned()),
         }
         bodies.push(BodyOutcome { body, result });
     }
@@ -157,14 +153,18 @@ fn collect_bodies(pkg: &Package) -> Vec<BodyRef> {
             }
         }
     }
-    // Impl member bodies (s14): methods and associated-const
-    // initializers check like any other body, with `Self` bound to
-    // the impl's self type.
+    // Impl member bodies (s14) and trait default bodies (s17):
+    // methods and associated-const initializers check like any other
+    // body — `Self` is the impl's self type, or the trait's own
+    // archetype for a default body.
     for (m, md) in pkg.modules.iter().enumerate() {
         for &fi in &md.files {
             let root = &pkg.files[fi].parse.root;
             for (decl, node) in root.nodes().filter(|n| n.kind.is_item()).enumerate() {
-                if node.kind != wolf_ast::SyntaxKind::ImplDecl {
+                if !matches!(
+                    node.kind,
+                    wolf_ast::SyntaxKind::ImplDecl | wolf_ast::SyntaxKind::TraitDecl
+                ) {
                     continue;
                 }
                 for (member, mnode) in node.nodes().filter(|n| n.kind.is_item()).enumerate() {
@@ -209,31 +209,4 @@ fn collect_bodies(pkg: &Package) -> Vec<BodyRef> {
 
 fn text(src: &[u8], span: wolf_span::Span) -> String {
     String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]).into_owned()
-}
-
-/// Trait member *default* bodies: checking them against the trait's
-/// own archetype is s17's work — each is one honest NotYetCheckable.
-fn trait_default_bodies_not_yet(pkg: &Package) -> Vec<NotYet> {
-    let mut out = Vec::new();
-    for unit in &pkg.files {
-        for node in unit
-            .parse
-            .root
-            .nodes()
-            .filter(|n| n.kind == wolf_ast::SyntaxKind::TraitDecl)
-        {
-            for member in node.nodes().filter(|n| n.kind.is_item()) {
-                if member.kind == wolf_ast::SyntaxKind::FnDecl
-                    && let Some(d) = wolf_ast::FnDecl::cast(member)
-                    && d.body().is_some()
-                {
-                    out.push(NotYet {
-                        construct: "trait default method bodies (s17)",
-                        span: member.span,
-                    });
-                }
-            }
-        }
-    }
-    out
 }

@@ -15,11 +15,20 @@
 //! hint per message.
 //!
 //! **The ledger-honesty contract:** constructs not yet typeable
-//! return [`BodyResult::NotYetCheckable`] — never a guess. That set
-//! still includes method calls (receiver syntax, s17), match over row
-//! values (s17 patterns), region/concurrency expressions, and the
-//! unsafe tier. String-interpolation holes are accepted at any sized
+//! return [`BodyResult::NotYetCheckable`] — never a guess. After s17
+//! that set is: region/concurrency expressions (c04/c05), the unsafe
+//! tier (c04/c10), std generic data and builtin-type methods (s05),
+//! indexing/slicing (`e[…]`, `^n`), and the small c14-backlog tail
+//! (loop values, nested items, bound methods as values).
+//! String-interpolation holes are accepted at any sized
 //! primitive/`str` type; full format-spec validation is s16 (D26).
+//!
+//! Since s17 the surface is closed: full patterns with Maranget
+//! exhaustiveness (`exhaust`, E0801/E0802), method resolution with
+//! the X1 receiver-mode law (inherent → in-scope traits; E0803/E0804/
+//! E0807), enum variants, trait default bodies against archetype
+//! `Self`, the closed coercion set ([`crate::coerce`]) and completed
+//! `as` casts (E0805), and open error rows (`! {A, ..}`).
 //!
 //! Since s15 the error channel types for real: `!T` carries a
 //! structural row, ok-injection generalizes to row-typed contexts,
@@ -45,6 +54,7 @@ use wolf_ast::{
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
 
+use crate::exhaust;
 use crate::graph::{BindTarget, Package};
 use crate::prelude;
 use crate::sig::{FnSig, GenericSig, ItemSig, Lower, SigTables, StructSig, bindings_for};
@@ -64,6 +74,7 @@ pub struct NotYet {
 
 /// The per-body result contract (s13).
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // Checked is the overwhelmingly common case
 pub enum BodyResult {
     /// Fully typed: the body's own table and the recorded types.
     Checked(TypedBody),
@@ -71,6 +82,34 @@ pub enum BodyResult {
     NotYetCheckable(NotYet),
     /// The body is checkable and wrong.
     Errors(Vec<Diagnostic>),
+}
+
+/// How one `recv.method(args)` call dispatches (s17): resolution is
+/// fixed and recorded — c04 reads receivers/modes from here, c05
+/// lowers the call (static and `dyn` calls resolve identically by
+/// name; the strategy is invisible at this layer, D27).
+#[derive(Debug, Clone)]
+pub enum Dispatch {
+    /// An inherent-impl method of the receiver's own type.
+    Inherent { ty: String, method: String },
+    /// A trait method, through the coherence-unique impl (or the
+    /// witness table when `dyn_call`).
+    Trait {
+        module: usize,
+        name: String,
+        method: String,
+        dyn_call: bool,
+    },
+}
+
+/// Which rule admitted an `as` cast (s17). `Numeric` lowers to a real
+/// conversion in c05; `Adapter` and `Identity` are layout no-ops (the
+/// D28 layout-identity fact).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CastKind {
+    Numeric,
+    Adapter,
+    Identity,
 }
 
 /// The typed HIR of one body — minimal but real: every recorded
@@ -97,6 +136,21 @@ pub struct TypedBody {
     /// order. The package-level comptime pass evaluates exactly
     /// these ([`crate::ctfe::run_package`]).
     pub comptime_calls: Vec<Span>,
+    /// Warnings from an otherwise-clean body (E0802 unreachable arms):
+    /// the body still counts as `Checked` — warnings never fail a
+    /// rung — but every one is surfaced and snapshot-reviewed.
+    pub warnings: Vec<Diagnostic>,
+    /// Every method-call dispatch decision, in visit order (s17).
+    pub dispatch: Vec<(Span, Dispatch)>,
+    /// Every `as` cast: (site, source type, target type, kind).
+    pub casts: Vec<(Span, TyId, TyId, CastKind)>,
+    /// Every coercion the checker inserted, in visit order (s17): the
+    /// closed set of [`crate::coerce`], nothing else — c04 extends the
+    /// table (tier adjustments) without reopening the checker.
+    pub coercions: Vec<(Span, crate::coerce::Coercion)>,
+    /// Per-`match` facts: (span, exhaustive-without-default). s27's
+    /// decision trees start from exactly this annotation.
+    pub matches: Vec<(Span, bool)>,
 }
 
 impl TypedBody {
@@ -157,6 +211,8 @@ pub enum Reason {
     },
     /// The `else` fallback produces the ok half of the fallible value.
     ElseFallback,
+    /// A method call's receiver (s17).
+    Receiver(String),
 }
 
 impl Reason {
@@ -190,6 +246,7 @@ impl Reason {
                 )
             }
             Reason::ElseFallback => "the `else` fallback must produce".to_string(),
+            Reason::Receiver(m) => format!("`{m}`'s receiver must be"),
         }
     }
 
@@ -213,6 +270,7 @@ impl Reason {
             Reason::GlobalInit(_) => "the annotation is here",
             Reason::TagPayload { .. } => "the row is declared here",
             Reason::ElseFallback => "the fallible expression is here",
+            Reason::Receiver(_) => "the method is declared here",
         }
     }
 }
@@ -312,6 +370,28 @@ struct Checker<'a> {
     collect: Option<RowSink>,
     /// Where an extend-the-row fix-it inserts, for this function.
     row_fix: Option<RowFix>,
+    /// Method-dispatch decisions in visit order (s17).
+    dispatch: Vec<(Span, Dispatch)>,
+    /// `as` casts in visit order (s17).
+    casts: Vec<(Span, TyId, TyId, CastKind)>,
+    /// Inserted coercions in visit order (s17).
+    coercions: Vec<(Span, crate::coerce::Coercion)>,
+    /// Every `match` in the body, checked for exhaustiveness and
+    /// reachability at body end, once types are final (s17).
+    match_recs: Vec<MatchRec>,
+    /// Per-match exhaustiveness facts, filled by [`Checker::check_matches`].
+    match_facts: Vec<(Span, bool)>,
+}
+
+/// One `match` recorded for the body-end exhaustiveness pass (s17):
+/// patterns already lowered to the engine's IR during typing, the
+/// scrutinee zonked when the pass runs.
+struct MatchRec {
+    /// The `match` keyword-to-brace span (E0801's primary).
+    span: Span,
+    scrut: TyId,
+    /// (lowered pattern, has-guard, pattern span) per arm.
+    arms: Vec<(exhaust::Pat, bool, Span)>,
 }
 
 /// The sink of a row-collection pass (s15 sealing): every tag the
@@ -347,11 +427,17 @@ struct RowLack {
     missing: Vec<(String, Vec<TyId>)>,
     conflicts: Vec<(String, String, String)>,
     abstract_tail: Option<String>,
+    /// The value's row is open (`..`) but the receiving row is closed
+    /// (s17): the unlisted remainder has nowhere to go.
+    open_into_closed: bool,
 }
 
 impl RowLack {
     fn is_empty(&self) -> bool {
-        self.missing.is_empty() && self.conflicts.is_empty() && self.abstract_tail.is_none()
+        self.missing.is_empty()
+            && self.conflicts.is_empty()
+            && self.abstract_tail.is_none()
+            && !self.open_into_closed
     }
 }
 
@@ -419,9 +505,17 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         in_comptime_fn: false,
         collect: None,
         row_fix: None,
+        dispatch: Vec::new(),
+        casts: Vec::new(),
+        coercions: Vec::new(),
+        match_recs: Vec::new(),
+        match_facts: Vec::new(),
     };
     let outcome = match body.member {
         None => c.run(node, body),
+        Some(mi) if outer.kind == SyntaxKind::TraitDecl => {
+            c.run_trait_member(outer, node, body, mi)
+        }
         Some(mi) => c.run_impl_member(node, body, mi),
     };
     match outcome {
@@ -429,6 +523,9 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         Ok(()) => {
             c.finish_defaulting();
             c.discharge_obligations();
+            // Exhaustiveness/reachability runs once types are final
+            // (s17): E0801 errors, E0802 warnings.
+            c.check_matches();
             // Cascade suppression: diagnostics inside parse-wrecked
             // regions stay quiet (the s10 contract).
             let mut sink = wolf_diag::Diagnostics::new();
@@ -441,7 +538,12 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
             }
             diags.extend(sink.into_vec());
             wolf_diag::sort_diagnostics(&mut diags);
-            if diags.is_empty() {
+            // Warnings never fail a body: an error-free body checks,
+            // carrying its warnings in the typed HIR.
+            let has_errors = diags
+                .iter()
+                .any(|d| d.severity == wolf_diag::Severity::Error);
+            if !has_errors {
                 // Zonk the recorded types to their final solutions.
                 let exprs = c
                     .exprs
@@ -453,6 +555,18 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     .iter()
                     .map(|(n, s, t)| (n.clone(), *s, zonk(&mut c.lo.table, &c.vars, *t)))
                     .collect();
+                let casts = c
+                    .casts
+                    .iter()
+                    .map(|&(s, f, t, k)| {
+                        (
+                            s,
+                            zonk(&mut c.lo.table, &c.vars, f),
+                            zonk(&mut c.lo.table, &c.vars, t),
+                            k,
+                        )
+                    })
+                    .collect();
                 BodyResult::Checked(TypedBody {
                     table: c.lo.table,
                     exprs,
@@ -460,6 +574,11 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     cleanups: c.cleanups,
                     trace_points: c.trace_points,
                     comptime_calls: c.comptime_calls,
+                    warnings: diags,
+                    dispatch: c.dispatch,
+                    casts,
+                    coercions: c.coercions,
+                    matches: c.match_facts,
                 })
             } else {
                 BodyResult::Errors(diags)
@@ -514,6 +633,11 @@ pub(crate) fn collect_body_rows(
         in_comptime_fn: false,
         collect: Some(RowSink::default()),
         row_fix: None,
+        dispatch: Vec::new(),
+        casts: Vec::new(),
+        coercions: Vec::new(),
+        match_recs: Vec::new(),
+        match_facts: Vec::new(),
     };
     let _ = c.run(node, body);
     // Solve what the body pinned, then default the rest so payload
@@ -808,6 +932,107 @@ impl<'a> Checker<'a> {
                 span: node.span,
             }),
         }
+    }
+
+    /// A trait member's *default* body (s17): checked once against the
+    /// trait's own archetype — `Self` is rigid with exactly this trait
+    /// as its bound (the golden rule, D28), so everything the body
+    /// does must be provable from the trait's own surface.
+    fn run_trait_member(
+        &mut self,
+        outer: &GreenNode,
+        node: &GreenNode,
+        body: &BodyRef,
+        _member: usize,
+    ) -> R<()> {
+        let Some(tname_tok) = wolf_ast::TraitDecl::cast(outer).and_then(|d| d.name()) else {
+            return Err(NotYet {
+                construct: "a trait member without a named trait",
+                span: node.span,
+            });
+        };
+        let tname = self.text(tname_tok.span);
+        let tr = TraitRef {
+            module: self.module,
+            name: tname,
+        };
+        let Some(td) = self.sigs.traits.get(&tr).cloned() else {
+            return Err(NotYet {
+                construct: "a trait member without an elaborated trait",
+                span: node.span,
+            });
+        };
+        if !td.params.is_empty() {
+            return Err(NotYet {
+                construct: "default bodies of parameterized traits (c14 backlog)",
+                span: node.span,
+            });
+        }
+        self.install_generics(&[GenericSig {
+            name: "Self".to_string(),
+            span: td.name_span,
+            bounds: vec![crate::sig::BoundRef {
+                module: tr.module,
+                name: tr.name.clone(),
+                span: td.name_span,
+            }],
+        }]);
+        // An associated const's default initializer.
+        if node.kind == SyntaxKind::ConstDecl {
+            let c = td
+                .assoc_consts
+                .iter()
+                .find(|c| c.name == body.name)
+                .cloned();
+            let init = ConstDecl::cast(node).and_then(|c| c.init());
+            if let Some(init) = init {
+                self.push_scope();
+                match c {
+                    Some(c) => {
+                        let exp = Expect {
+                            ty: c.ty,
+                            reason: Reason::GlobalInit(c.name.clone()),
+                            because: Some(c.name_span),
+                        };
+                        self.check_expr(init, &exp)?;
+                    }
+                    None => {
+                        self.synth_expr(init)?;
+                    }
+                }
+                self.pop_scope();
+            }
+            return Ok(());
+        }
+        let Some(m) = td.methods.iter().find(|m| m.name == body.name).cloned() else {
+            return Err(NotYet {
+                construct: "a trait member without an elaborated signature",
+                span: node.span,
+            });
+        };
+        let d = FnDecl::cast(node).expect("kind");
+        self.in_comptime_fn = m.sig.comptime;
+        self.install_generics(&m.sig.generics);
+        self.validate_sig_projections(&m.sig);
+        let because = m.sig.ret_span.unwrap_or(m.sig.name_span);
+        self.ret = Some((m.sig.ret, m.name.clone(), because));
+        self.row_fix = row_fix_of(&m.sig, &self.lo.table);
+        self.push_scope();
+        for p in &m.sig.params {
+            self.bind(p.name.clone(), p.span, p.ty);
+        }
+        let Some(block) = d.body() else {
+            self.pop_scope();
+            return Ok(());
+        };
+        let exp = Expect {
+            ty: m.sig.ret,
+            reason: Reason::ReturnOfFn(m.name.clone()),
+            because: Some(because),
+        };
+        self.check_block(block, &exp)?;
+        self.pop_scope();
+        Ok(())
     }
 
     /// Bring a generic parameter list into scope: rigid names, bound
@@ -1243,8 +1468,16 @@ impl<'a> Checker<'a> {
                 },
             ) => {
                 let mut lack = RowLack::default();
+                let sup_open = tlb.is_some_and(|t| matches!(self.kind_of(t), TyKind::OpenTail));
+                let sub_open = tla.is_some_and(|t| matches!(self.kind_of(t), TyKind::OpenTail));
+                if sub_open && !sup_open {
+                    lack.open_into_closed = true;
+                }
                 for (n, pa) in &ta {
                     match tb.iter().find(|(m, _)| m == n) {
+                        // An open receiving row admits every tag; only
+                        // shared-tag payloads can still disagree.
+                        None if sup_open => {}
                         None => lack.missing.push((n.clone(), pa.clone())),
                         Some((_, pb)) => {
                             if pa.len() != pb.len() {
@@ -1276,6 +1509,7 @@ impl<'a> Checker<'a> {
                 }
                 match tla.map(|t| self.kind_of(t)) {
                     None => {}
+                    Some(TyKind::OpenTail) => {} // handled by sub_open above
                     Some(TyKind::Rigid(e)) => {
                         let sup_has_same_tail = tlb
                             .is_some_and(|t| matches!(self.kind_of(t), TyKind::Rigid(f) if f == e));
@@ -1430,6 +1664,29 @@ impl<'a> Checker<'a> {
             );
             self.diags.push(d);
         }
+        if lack.open_into_closed {
+            let mut d = Diagnostic::error(
+                codes::E0602,
+                span,
+                format!("this value's error row is open (`..`), but `{fn_name}`'s row is closed"),
+            )
+            .with_label("the `..` admits tags the receiving row does not");
+            if let Some(b) = because {
+                d = d.with_secondary(b, "the receiving row is declared here");
+            }
+            d = d.with_note(
+                "an open row declares *at least* its listed tags; only another \
+                 open row can absorb the unlisted remainder.",
+            );
+            if let Some(RowFix::ExtendRow { insert_at }) = self.row_fix {
+                d = d.with_suggestion(Suggestion::new(
+                    "open the receiving row: `..`".to_string(),
+                    vec![(insert_at, ", ..".to_string())],
+                    Applicability::Maybe,
+                ));
+            }
+            self.diags.push(d);
+        }
         if let Some(e) = &lack.abstract_tail {
             let mut d = Diagnostic::error(
                 codes::E0602,
@@ -1531,6 +1788,9 @@ impl<'a> Checker<'a> {
                         // missing tag with its fix-it.
                         let mut lack = RowLack::default();
                         match tail.map(|t| self.kind_of(t)) {
+                            // An open row admits raises of new tags —
+                            // the Roc growing-tag-union story (s17).
+                            Some(TyKind::OpenTail) => return Ok(()),
                             Some(TyKind::Rigid(e)) => lack.abstract_tail = Some(e),
                             _ => lack.missing.push((tag.to_string(), ptys)),
                         }
@@ -2002,10 +2262,24 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            _ => Err(NotYet {
-                construct: "a refutable pattern in a binding (s17)",
-                span: pat.span,
-            }),
+            _ => {
+                // E0806 — a refutable pattern where matching cannot
+                // fail (s17): `let`/`var`/`for`/params/`else |p|`.
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0806,
+                        pat.span,
+                        "this pattern can fail to match, but a binding cannot".to_string(),
+                    )
+                    .with_label("refutable pattern")
+                    .with_note(
+                        "`let`, `var`, `for`, and parameters bind every value \
+                         unconditionally; test and destructure with `match` \
+                         instead: `match value { Pattern(x) => …, _ => … }`.",
+                    ),
+                );
+                Ok(())
+            }
         }
     }
 
@@ -2660,9 +2934,12 @@ impl<'a> Checker<'a> {
                 let probe = self.fresh(NumKind::Num, e.span);
                 let _ = unify(&mut self.lo.table, &mut self.vars, src_ty, probe);
             }
+            self.casts.push((e.span, src_ty, target, CastKind::Numeric));
             return Ok(target);
         }
         if src_ty == target {
+            self.casts
+                .push((e.span, src_ty, target, CastKind::Identity));
             return Ok(target);
         }
         // Adapter casts (D28): between `type X = distinct B` and its
@@ -2670,15 +2947,66 @@ impl<'a> Checker<'a> {
         // recorded layout-identity fact; a no-op at c05 lowering).
         let src_res = self.shallow(src_ty);
         let tgt_res = self.shallow(target);
-        if self.distinct_base(src_res) == Some(tgt_res)
-            || self.distinct_base(tgt_res) == Some(src_res)
-        {
-            return Ok(target);
+        for (adapter, other) in [(src_res, target), (tgt_res, src_ty)] {
+            if let Some(bb) = self.distinct_base(adapter) {
+                let snap = self.vars.snapshot();
+                if unify(&mut self.lo.table, &mut self.vars, other, bb).is_ok() {
+                    self.casts.push((e.span, src_ty, target, CastKind::Adapter));
+                    return Ok(target);
+                }
+                self.vars.rollback(snap);
+            }
         }
-        Err(NotYet {
-            construct: "this `as` conversion (s17 coercions)",
-            span: e.span,
-        })
+        // Raw-pointer casts ride the unsafe tier (c04/c10), not the
+        // closed cast set — an honest refusal, not a rejection.
+        if matches!(sk, TyKind::Ptr(_)) || matches!(tk, TyKind::Ptr(_)) {
+            return Err(NotYet {
+                construct: "raw-pointer casts (unsafe tier, c04/c10)",
+                span: e.span,
+            });
+        }
+        // E0805 — outside the closed cast set (s17). Typed as the
+        // target so one report stands alone.
+        let shown_s = self.show(src_ty);
+        let shown_t = self.show(target);
+        let is_bool = |k: &TyKind| matches!(k, TyKind::Prim(Prim::Bool));
+        let is_str = |k: &TyKind| matches!(k, TyKind::Prim(Prim::Str));
+        let mut d = Diagnostic::error(
+            codes::E0805,
+            e.span,
+            format!("`{shown_s}` does not cast to `{shown_t}`"),
+        )
+        .with_label("outside the cast set");
+        d = if is_bool(&sk) && numeric(&tk, &self.vars) {
+            d.with_note(
+                "there is no truthiness bridge: write the value out, e.g. \
+                 `if b { 1 } else { 0 }`.",
+            )
+        } else if numeric(&sk, &self.vars) && is_bool(&tk) {
+            d.with_note("compare instead: `x != 0` is the `bool` you meant.")
+        } else if is_str(&tk) {
+            d.with_note("build strings with interpolation: \"{value}\" formats any primitive.")
+        } else if is_str(&sk) && numeric(&tk, &self.vars) {
+            d.with_note(
+                "parsing is an ordinary function, not a cast — reach for the \
+                 conversion the standard library names.",
+            )
+        } else if self.distinct_base(src_res).is_some()
+            && self.distinct_base(src_res) == self.distinct_base(tgt_res)
+        {
+            d.with_note(
+                "the two adapters share a base but not an identity; cast through \
+                 the base: `x as Base as Other`.",
+            )
+        } else {
+            d.with_note(
+                "`as` converts between numeric types, and between an adapter \
+                 (`type X = distinct B`) and its base — nothing else; build the \
+                 value with the operation that names it.",
+            )
+        };
+        self.diags.push(d);
+        Ok(target)
     }
 
     /// The recorded base of an adapter type (`type X = distinct B`).
@@ -2941,14 +3269,21 @@ impl<'a> Checker<'a> {
             && let Some(m) = MemberExpr::cast(callee)
         {
             // `Trait.method(args)` / `ns.Trait.method(args)` — the s14
-            // qualified call (isolated namespaces: this is the only
-            // method-call spelling until s17 receivers).
+            // qualified call (always available; the disambiguation
+            // E0803 points at).
             if let Some((tr, member_span, mname)) = self.qualified_trait_method(m) {
                 return self.call_trait_method(&tr, callee.span, &mname, member_span, e, d.args());
             }
             if let Some((module, item)) = self.namespace_member(m) {
                 return self.call_named(&item, module, callee.span, e, d.args());
             }
+            // `Type.Variant(args)` / `Type.assoc(args)` — enum
+            // construction and inherent statics (s17).
+            if let Some(res) = self.type_member_call(m, e, d.args())? {
+                return Ok(res);
+            }
+            // `recv.method(args)` — the s17 receiver call.
+            return self.method_call(m, e, d.args());
         }
         // Otherwise: call through the callee's type (closures, fn-typed
         // locals/fields, higher-order parameters).
@@ -3611,12 +3946,1071 @@ impl<'a> Checker<'a> {
         );
     }
 
+    // ---------------------------------------------- method calls (s17) --
+
+    /// `Type.Member(args)`: enum-variant construction (`Color.Rgb(…)`)
+    /// or an inherent associated function. `Ok(None)` ⇒ the callee is
+    /// not a type member; fall through to receiver resolution.
+    fn type_member_call(
+        &mut self,
+        m: MemberExpr<'_>,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<Option<TyId>> {
+        let Some((module, tyname)) = self.type_target(m) else {
+            return Ok(None);
+        };
+        let Some(member) = m.member() else {
+            return Ok(None);
+        };
+        let mname = self.text(member.span);
+        match self.sigs.get(module, &tyname).cloned() {
+            Some(ItemSig::Enum {
+                generic,
+                variants,
+                name_span,
+            }) => {
+                if generic {
+                    return Err(NotYet {
+                        construct: "a generic enum's variants (s16 generic data)",
+                        span: e.span,
+                    });
+                }
+                let Some(v) = variants.iter().find(|v| v.name == mname) else {
+                    let names: Vec<&str> = variants.iter().map(|v| v.name.as_str()).collect();
+                    let mut d = Diagnostic::error(
+                        codes::E0403,
+                        member.span,
+                        format!("`{tyname}` has no variant named `{mname}`"),
+                    )
+                    .with_label("unknown variant")
+                    .with_secondary(name_span, format!("`{tyname}` is defined here"));
+                    if let Some(hit) = wolf_diag::suggest::best_match(&mname, &names) {
+                        d = d.with_suggestion(Suggestion::new(
+                            format!("did you mean `{hit}`?"),
+                            vec![(member.span, hit.to_string())],
+                            Applicability::Maybe,
+                        ));
+                    } else if !names.is_empty() {
+                        d = d.with_note(format!("the variants are: {}", names.join(", ")));
+                    }
+                    self.diags.push(d);
+                    if let Some(a) = args {
+                        self.synth_args_loosely(a)?;
+                    }
+                    return Ok(Some(self.error_ty()));
+                };
+                let label = format!("{tyname}.{mname}");
+                let payload = v.payload.clone();
+                let v_span = v.span;
+                let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+                if arg_nodes.len() != payload.len() {
+                    self.wrong_arg_count(
+                        &label,
+                        e.span,
+                        Some(v_span),
+                        payload.len(),
+                        arg_nodes.len(),
+                    );
+                }
+                for (i, arg) in arg_nodes.iter().enumerate() {
+                    let Some(val) = Arg::value(*arg) else {
+                        continue;
+                    };
+                    match payload.get(i) {
+                        Some(&p) => {
+                            let exp = Expect {
+                                ty: p,
+                                reason: Reason::ArgOfCall {
+                                    callee: label.clone(),
+                                    index: i,
+                                },
+                                because: Some(v_span),
+                            };
+                            self.check_expr(val, &exp)?;
+                        }
+                        None => {
+                            self.synth_expr(val)?;
+                        }
+                    }
+                }
+                Ok(Some(self.lo.table.intern(TyKind::Nominal {
+                    module: module as u32,
+                    name: tyname,
+                })))
+            }
+            Some(ItemSig::Struct(_) | ItemSig::Distinct { .. }) => {
+                let self_ty = self.lo.table.intern(TyKind::Nominal {
+                    module: module as u32,
+                    name: tyname.clone(),
+                });
+                // An inherent associated function (no `self`).
+                if let Some(idx) = self.find_inherent_impl(self_ty, &mname, false) {
+                    let imp = &self.sigs.impls[idx];
+                    if !imp.generics.is_empty() {
+                        return Err(NotYet {
+                            construct: "associated functions of a generic impl (s16 generic data)",
+                            span: e.span,
+                        });
+                    }
+                    let method = imp
+                        .methods
+                        .iter()
+                        .find(|mm| mm.name == mname && !mm.has_self)
+                        .cloned()
+                        .expect("found above");
+                    let label = format!("{tyname}.{mname}");
+                    return Ok(Some(self.call_by_sig(&label, &method.sig, e, args)?));
+                }
+                if self.find_inherent_impl(self_ty, &mname, true).is_some() {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0403,
+                            member.span,
+                            format!("`{mname}` is a method, so it is called on a value"),
+                        )
+                        .with_label("called on the type itself")
+                        .with_note(format!(
+                            "make a `{tyname}` first, then call `value.{mname}(…)` on it."
+                        )),
+                    );
+                    if let Some(a) = args {
+                        self.synth_args_loosely(a)?;
+                    }
+                    return Ok(Some(self.error_ty()));
+                }
+                Ok(None)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The type item a member-expression base names, if any: a bare
+    /// type name or `ns.Type`.
+    fn type_target(&self, m: MemberExpr<'_>) -> Option<(usize, String)> {
+        let base = m.base()?;
+        let target = if base.kind == SyntaxKind::PathExpr {
+            let t = PathExpr::cast(base)?.ident()?;
+            let name = self.text(t.span);
+            if self.lookup_local(&name).is_some() {
+                return None;
+            }
+            self.named_struct_target(&name)?
+        } else if base.kind == SyntaxKind::MemberExpr {
+            self.namespace_member(MemberExpr::cast(base)?)?
+        } else {
+            return None;
+        };
+        match self.sigs.get(target.0, &target.1) {
+            Some(ItemSig::Enum { .. } | ItemSig::Struct(_) | ItemSig::Distinct { .. }) => {
+                Some(target)
+            }
+            _ => None,
+        }
+    }
+
+    /// `recv.method(args)` — the fixed resolution order (s17, D27):
+    /// (1) inherent methods of the receiver's type; (2) trait methods
+    /// from traits *in scope*, coherence making the impl unique per
+    /// trait; ambiguity across traits is E0803 (qualify), a method on
+    /// an out-of-scope trait is E0807 (import). No fallback chains, no
+    /// receiver auto-transform — the receiver is a place and its mode
+    /// is explicit (X1/E0804).
+    fn method_call(
+        &mut self,
+        m: MemberExpr<'_>,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let (Some(base), Some(member)) = (m.base(), m.member()) else {
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+            return Ok(self.error_ty());
+        };
+        let mname = self.text(member.span);
+        let recv_mode = if base.kind == SyntaxKind::ParenExpr {
+            ParenExpr::cast(base).and_then(|p| p.mode())
+        } else {
+            None
+        };
+        let recv_ty = self.synth_expr(base)?;
+        match self.kind_of(recv_ty) {
+            TyKind::Error | TyKind::Never => {
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(self.error_ty())
+            }
+            TyKind::Var(_) => Err(NotYet {
+                construct: "a method call on a value whose type is still being inferred",
+                span: e.span,
+            }),
+            TyKind::Unsupported(_) => Err(NotYet {
+                construct: "methods on generic std data (s05 std surface)",
+                span: e.span,
+            }),
+            TyKind::Rigid(param) => self.archetype_method_call(
+                &param,
+                base,
+                recv_ty,
+                recv_mode,
+                member.span,
+                &mname,
+                e,
+                args,
+            ),
+            TyKind::Dyn { module, name } => self.dyn_method_call(
+                TraitRef {
+                    module: module as usize,
+                    name,
+                },
+                base,
+                recv_ty,
+                recv_mode,
+                member.span,
+                &mname,
+                e,
+                args,
+            ),
+            _ => self.concrete_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args),
+        }
+    }
+
+    /// Is `tr` in scope here — defined in this module, or imported?
+    fn trait_in_scope(&self, tr: &TraitRef) -> bool {
+        if tr.module == self.module {
+            return true;
+        }
+        bindings_for(self.pkg(), self.module, self.file)
+            .iter()
+            .any(|b| {
+                matches!(&b.target, BindTarget::Item { module, name }
+                if *module == tr.module && *name == tr.name)
+            })
+    }
+
+    /// The first inherent impl of `recv` carrying `mname` (with or
+    /// without `self` per `want_self`). Trial-unified, rolled back.
+    fn find_inherent_impl(&mut self, recv: TyId, mname: &str, want_self: bool) -> Option<usize> {
+        for (i, imp) in self.sigs.impls.iter().enumerate() {
+            if imp.trait_ref.is_some() {
+                continue;
+            }
+            if !imp
+                .methods
+                .iter()
+                .any(|mm| mm.name == mname && mm.has_self == want_self)
+            {
+                continue;
+            }
+            let snap = self.vars.snapshot();
+            let ok =
+                traits::impl_self_matches(self.sigs, &mut self.lo.table, &mut self.vars, i, recv);
+            self.vars.rollback(snap);
+            if ok {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Commit an impl instantiation against the receiver: fresh vars
+    /// for the impl's generics (bounds become obligations), self type
+    /// unified with the receiver.
+    fn instantiate_impl(&mut self, idx: usize, recv: TyId, span: Span) -> BTreeMap<String, TyId> {
+        let generics = self.sigs.impls[idx].generics.clone();
+        let self_ty = self.sigs.impls[idx].self_ty;
+        let mut map = BTreeMap::new();
+        for g in &generics {
+            let v = self.fresh(NumKind::Any, span);
+            map.insert(g.name.clone(), v);
+            for b in &g.bounds {
+                self.obligate(
+                    v,
+                    TraitRef {
+                        module: b.module,
+                        name: b.name.clone(),
+                    },
+                    span,
+                    Some(b.span),
+                    OblOrigin::Instantiation {
+                        callee: "this impl".to_string(),
+                        param: g.name.clone(),
+                    },
+                );
+            }
+        }
+        let self_inst = subst(&mut self.lo.table, self_ty, &map);
+        let _ = unify(&mut self.lo.table, &mut self.vars, self_inst, recv);
+        map
+    }
+
+    /// Resolution step 2 for a concrete receiver.
+    #[allow(clippy::too_many_arguments)]
+    fn concrete_method_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        // (1) Inherent methods win — the type's own impl blocks.
+        if let Some(idx) = self.find_inherent_impl(recv_ty, mname, true) {
+            let map = self.instantiate_impl(idx, recv_ty, base.span);
+            let method = self.sigs.impls[idx]
+                .methods
+                .iter()
+                .find(|mm| mm.name == mname && mm.has_self)
+                .cloned()
+                .expect("found above");
+            self.dispatch.push((
+                e.span,
+                Dispatch::Inherent {
+                    ty: self.show(recv_ty),
+                    method: mname.to_string(),
+                },
+            ));
+            return self.dispatch_method(
+                mname,
+                &method.sig,
+                map,
+                method.name_span,
+                base,
+                recv_ty,
+                recv_mode,
+                e,
+                args,
+            );
+        }
+        // (2) Trait methods from impls whose trait the receiver's type
+        // implements; scope decides visibility, coherence uniqueness.
+        let mut hits: Vec<TraitRef> = Vec::new();
+        let mut out_of_scope: Vec<TraitRef> = Vec::new();
+        for i in 0..self.sigs.impls.len() {
+            let Some(tr) = self.sigs.impls[i].trait_ref.clone() else {
+                continue;
+            };
+            let Some(td) = self.sigs.traits.get(&tr) else {
+                continue;
+            };
+            if !td.params.is_empty() {
+                continue; // parameterized traits dispatch qualified (bracket surface)
+            }
+            if !td.method(mname).is_some_and(|mm| mm.has_self) {
+                continue;
+            }
+            let snap = self.vars.snapshot();
+            let ok = traits::impl_self_matches(
+                self.sigs,
+                &mut self.lo.table,
+                &mut self.vars,
+                i,
+                recv_ty,
+            );
+            self.vars.rollback(snap);
+            if !ok {
+                continue;
+            }
+            let bucket = if self.trait_in_scope(&tr) {
+                &mut hits
+            } else {
+                &mut out_of_scope
+            };
+            if !bucket.contains(&tr) {
+                bucket.push(tr);
+            }
+        }
+        match hits.len() {
+            1 => {
+                let tr = hits.remove(0);
+                let method = self
+                    .sigs
+                    .traits
+                    .get(&tr)
+                    .and_then(|td| td.method(mname))
+                    .cloned()
+                    .expect("candidate has the method");
+                let mut map = BTreeMap::new();
+                map.insert("Self".to_string(), recv_ty);
+                self.dispatch.push((
+                    e.span,
+                    Dispatch::Trait {
+                        module: tr.module,
+                        name: tr.name.clone(),
+                        method: mname.to_string(),
+                        dyn_call: false,
+                    },
+                ));
+                self.dispatch_method(
+                    mname,
+                    &method.sig,
+                    map,
+                    method.name_span,
+                    base,
+                    recv_ty,
+                    recv_mode,
+                    e,
+                    args,
+                )
+            }
+            0 => {
+                if !out_of_scope.is_empty() {
+                    self.report_out_of_scope_trait(member_span, mname, &out_of_scope);
+                    if let Some(a) = args {
+                        self.synth_args_loosely(a)?;
+                    }
+                    return Ok(self.error_ty());
+                }
+                // A callable field? `p.f(x)` calls through the field's
+                // type — fields and methods share no namespace magic,
+                // but the classic typo deserves the right answer.
+                if let TyKind::Nominal { module, name } = self.kind_of(recv_ty)
+                    && let Some(ItemSig::Struct(s)) = self.sigs.get(module as usize, &name).cloned()
+                    && let Some(f) = s.fields.iter().find(|f| f.name == mname)
+                {
+                    let m_node = e
+                        .nodes()
+                        .find(|n| n.kind == SyntaxKind::MemberExpr)
+                        .unwrap_or(e);
+                    return self.call_by_type(f.ty, m_node, e, args);
+                }
+                // Builtin receivers (str, int, ranges, …) grow their
+                // methods with the standard library — an honest
+                // refusal, not a typo report, until s05 lands.
+                if !matches!(self.kind_of(recv_ty), TyKind::Nominal { .. }) {
+                    return Err(NotYet {
+                        construct: "methods on builtin types (s05 std surface)",
+                        span: e.span,
+                    });
+                }
+                self.report_unknown_method(recv_ty, member_span, mname);
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(self.error_ty())
+            }
+            _ => {
+                self.report_method_ambiguity(base, member_span, mname, &hits, e, args)?;
+                Ok(self.error_ty())
+            }
+        }
+    }
+
+    /// A method call on an archetype receiver: the bounds are the
+    /// whole story (the golden rule, D28).
+    #[allow(clippy::too_many_arguments)]
+    fn archetype_method_call(
+        &mut self,
+        param: &str,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let bs = self.bounds.get(param).cloned().unwrap_or_default();
+        let mut hits: Vec<TraitRef> = Vec::new();
+        for b in &bs {
+            let tr = TraitRef {
+                module: b.module,
+                name: b.name.clone(),
+            };
+            if let Some(td) = self.sigs.traits.get(&tr)
+                && td.params.is_empty()
+                && td.method(mname).is_some_and(|mm| mm.has_self)
+                && !hits.contains(&tr)
+            {
+                hits.push(tr);
+            }
+        }
+        match hits.len() {
+            1 => {
+                let tr = hits.remove(0);
+                let method = self
+                    .sigs
+                    .traits
+                    .get(&tr)
+                    .and_then(|td| td.method(mname))
+                    .cloned()
+                    .expect("candidate has the method");
+                let mut map = BTreeMap::new();
+                map.insert("Self".to_string(), recv_ty);
+                self.dispatch.push((
+                    e.span,
+                    Dispatch::Trait {
+                        module: tr.module,
+                        name: tr.name.clone(),
+                        method: mname.to_string(),
+                        dyn_call: false,
+                    },
+                ));
+                self.dispatch_method(
+                    mname,
+                    &method.sig,
+                    map,
+                    method.name_span,
+                    base,
+                    recv_ty,
+                    recv_mode,
+                    e,
+                    args,
+                )
+            }
+            0 => {
+                let provider = {
+                    let mut ps = self
+                        .sigs
+                        .traits
+                        .values()
+                        .filter(|td| td.method(mname).is_some_and(|mm| mm.has_self))
+                        .map(|td| td.name.clone());
+                    let first = ps.next();
+                    match (first, ps.next()) {
+                        (Some(f), None) => Some(f),
+                        _ => None,
+                    }
+                };
+                self.golden_rule_missing(
+                    member_span,
+                    param,
+                    &format!("a method `{mname}`"),
+                    provider,
+                );
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(self.error_ty())
+            }
+            _ => {
+                self.report_method_ambiguity(base, member_span, mname, &hits, e, args)?;
+                Ok(self.error_ty())
+            }
+        }
+    }
+
+    /// A `dyn Trait` receiver dispatches through its own trait's
+    /// method set — resolution is identical to the static path (the
+    /// strategy is invisible here; witness layout is c05's).
+    #[allow(clippy::too_many_arguments)]
+    fn dyn_method_call(
+        &mut self,
+        tr: TraitRef,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let Some(td) = self.sigs.traits.get(&tr) else {
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+            return Ok(self.error_ty());
+        };
+        let Some(method) = td.method(mname).filter(|mm| mm.has_self).cloned() else {
+            let names: Vec<&str> = td
+                .methods
+                .iter()
+                .filter(|mm| mm.has_self)
+                .map(|mm| mm.name.as_str())
+                .collect();
+            let mut d = Diagnostic::error(
+                codes::E0403,
+                member_span,
+                format!("`dyn {}` has no method named `{mname}`", tr.name),
+            )
+            .with_label("unknown method")
+            .with_secondary(td.name_span, format!("`{}` is declared here", tr.name));
+            if let Some(hit) = wolf_diag::suggest::best_match(mname, &names) {
+                d = d.with_suggestion(Suggestion::new(
+                    format!("did you mean `{hit}`?"),
+                    vec![(member_span, hit.to_string())],
+                    Applicability::Maybe,
+                ));
+            }
+            self.diags.push(d);
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+            return Ok(self.error_ty());
+        };
+        let mut map = BTreeMap::new();
+        map.insert("Self".to_string(), recv_ty);
+        self.dispatch.push((
+            e.span,
+            Dispatch::Trait {
+                module: tr.module,
+                name: tr.name.clone(),
+                method: mname.to_string(),
+                dyn_call: true,
+            },
+        ));
+        self.dispatch_method(
+            mname,
+            &method.sig,
+            map,
+            method.name_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        )
+    }
+
+    /// The shared tail of every dispatch: the X1 receiver-mode law,
+    /// the receiver against the `self` parameter, arguments against
+    /// the rest, generics instantiated argument-first.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch_method(
+        &mut self,
+        label: &str,
+        sig: &FnSig,
+        mut map: BTreeMap<String, TyId>,
+        decl_span: Span,
+        recv: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        for g in &sig.generics {
+            if map.contains_key(&g.name) {
+                continue;
+            }
+            let v = self.fresh(NumKind::Any, e.span);
+            map.insert(g.name.clone(), v);
+            for b in &g.bounds {
+                self.obligate(
+                    v,
+                    TraitRef {
+                        module: b.module,
+                        name: b.name.clone(),
+                    },
+                    e.span,
+                    Some(b.span),
+                    OblOrigin::Instantiation {
+                        callee: label.to_string(),
+                        param: g.name.clone(),
+                    },
+                );
+            }
+        }
+        let Some(selfp) = sig.params.first().cloned() else {
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+            return Ok(self.error_ty());
+        };
+        self.receiver_mode_law(recv, recv_mode, selfp.mode, label, decl_span);
+        let pty = subst(&mut self.lo.table, selfp.ty, &map);
+        let exp = Expect {
+            ty: pty,
+            reason: Reason::Receiver(label.to_string()),
+            because: Some(decl_span),
+        };
+        self.expect_unify(recv.span, recv_ty, &exp);
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        let wants = sig.params.len().saturating_sub(1);
+        if arg_nodes.len() != wants {
+            self.wrong_arg_count(label, e.span, Some(decl_span), wants, arg_nodes.len());
+        }
+        for (i, arg) in arg_nodes.iter().enumerate() {
+            let Some(v) = Arg::value(*arg) else { continue };
+            match sig.params.get(i + 1) {
+                Some(p) => {
+                    let pty = subst(&mut self.lo.table, p.ty, &map);
+                    let exp = Expect {
+                        ty: pty,
+                        reason: Reason::ArgOfCall {
+                            callee: label.to_string(),
+                            index: i,
+                        },
+                        because: Some(p.span),
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+                None => {
+                    self.synth_expr(v)?;
+                }
+            }
+        }
+        let ret = subst(&mut self.lo.table, sig.ret, &map);
+        Ok(self.normalize(ret))
+    }
+
+    /// E0804 — the X1 receiver-mode law: the call site spells exactly
+    /// the mode the method declares (`(mut p).norm()`), and no mode
+    /// for `read self`. Syntax only; exclusivity itself is c04.
+    fn receiver_mode_law(
+        &mut self,
+        recv: &GreenNode,
+        given: Option<wolf_ast::ParamMode>,
+        declared: Option<wolf_ast::ParamMode>,
+        method: &str,
+        decl_span: Span,
+    ) {
+        use wolf_ast::ParamMode;
+        if given == declared {
+            return;
+        }
+        let word = |m: ParamMode| match m {
+            ParamMode::Mut => "mut",
+            ParamMode::Take => "take",
+        };
+        match (declared, given) {
+            (Some(dm), None) => {
+                let kw = word(dm);
+                let lo = Span::new(recv.span.file, recv.span.lo, recv.span.lo);
+                let hi = Span::new(recv.span.file, recv.span.hi, recv.span.hi);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0804,
+                        recv.span,
+                        format!(
+                            "`{method}` takes its receiver `{kw}`, but the call site does not say so"
+                        ),
+                    )
+                    .with_label(format!("write the mode here: `({kw} …)`"))
+                    .with_secondary(decl_span, format!("`{method}` declares `{kw} self` here"))
+                    .with_note(
+                        "the receiver mirrors argument modes (X1): exclusive or \
+                         consuming access is spelled where the reader can see it.",
+                    )
+                    .with_suggestion(Suggestion::new(
+                        format!("spell the receiver mode: `({kw} …)`"),
+                        vec![(lo, format!("({kw} ")), (hi, ")".to_string())],
+                        Applicability::MachineApplicable,
+                    )),
+                );
+            }
+            (None, Some(gm)) => {
+                let kw = word(gm);
+                let inner = ParenExpr::cast(recv)
+                    .and_then(|p| p.expr())
+                    .map(|n| self.text(n.span))
+                    .unwrap_or_default();
+                let mut d = Diagnostic::error(
+                    codes::E0804,
+                    recv.span,
+                    format!("`{method}` reads its receiver, so the call site writes no mode"),
+                )
+                .with_label(format!("`{kw}` marks nothing here"))
+                .with_secondary(decl_span, format!("`{method}` is declared here"))
+                .with_note(
+                    "a bare receiver is the `read` mode — absence is the syntax \
+                     ([mem.tier0.mode]).",
+                );
+                if !inner.is_empty() {
+                    d = d.with_suggestion(Suggestion::new(
+                        "drop the mode".to_string(),
+                        vec![(recv.span, inner)],
+                        Applicability::MachineApplicable,
+                    ));
+                }
+                self.diags.push(d);
+            }
+            (Some(dm), Some(_)) => {
+                let dkw = word(dm);
+                let mode_tok = recv
+                    .tokens()
+                    .find(|t| matches!(t.kind, SyntaxKind::MutKw | SyntaxKind::TakeKw))
+                    .map(|t| t.span)
+                    .unwrap_or(recv.span);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0804,
+                        mode_tok,
+                        format!(
+                            "`{method}` takes its receiver `{dkw}`, but the call site says otherwise"
+                        ),
+                    )
+                    .with_label("the modes disagree")
+                    .with_secondary(decl_span, format!("`{method}` declares `{dkw} self` here"))
+                    .with_suggestion(Suggestion::new(
+                        format!("match the declaration: `{dkw}`"),
+                        vec![(mode_tok, dkw.to_string())],
+                        Applicability::MachineApplicable,
+                    )),
+                );
+            }
+            (None, None) => unreachable!("given == declared was handled"),
+        }
+    }
+
+    /// E0803 — two or more in-scope traits provide the method for
+    /// this receiver: no precedence exists; qualify.
+    fn report_method_ambiguity(
+        &mut self,
+        base: &GreenNode,
+        member_span: Span,
+        mname: &str,
+        hits: &[TraitRef],
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<()> {
+        let names: Vec<String> = hits.iter().map(|t| t.name.clone()).collect();
+        let listed = names
+            .iter()
+            .map(|n| format!("`{n}`"))
+            .collect::<Vec<_>>()
+            .join(" and ");
+        let recv_text = self.text(base.span);
+        let args_text = e
+            .nodes()
+            .find_map(ArgList::cast)
+            .map(|a| {
+                a.args()
+                    .filter_map(Arg::value)
+                    .map(|v| self.text(v.span))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .unwrap_or_default();
+        let mut d = Diagnostic::error(
+            codes::E0803,
+            member_span,
+            format!("both {listed} provide a `{mname}` for this receiver — say which you mean"),
+        )
+        .with_label("ambiguous method");
+        for n in names.iter().take(2) {
+            let qualified = if args_text.is_empty() {
+                format!("{n}.{mname}({recv_text})")
+            } else {
+                format!("{n}.{mname}({recv_text}, {args_text})")
+            };
+            d = d.with_suggestion(Suggestion::new(
+                format!("qualify through `{n}`"),
+                vec![(e.span, qualified)],
+                Applicability::Maybe,
+            ));
+        }
+        d = d.with_note(
+            "trait namespaces are isolated (D28): a silent winner would change \
+             meaning when imports change, so the qualified form is the answer.",
+        );
+        self.diags.push(d);
+        if let Some(a) = args {
+            self.synth_args_loosely(a)?;
+        }
+        Ok(())
+    }
+
+    /// E0807 — the method exists, but only on traits never imported.
+    fn report_out_of_scope_trait(&mut self, member_span: Span, mname: &str, hits: &[TraitRef]) {
+        if let [tr] = hits {
+            let module_path = self
+                .sigs
+                .module_names
+                .get(tr.module)
+                .cloned()
+                .unwrap_or_default();
+            let use_line = if module_path.is_empty() {
+                format!("use {}", tr.name)
+            } else {
+                format!("use {module_path}.{}", tr.name)
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0807,
+                    member_span,
+                    format!(
+                        "`{mname}` exists on the trait `{}`, but the trait is not in scope",
+                        tr.name
+                    ),
+                )
+                .with_label("resolves through no in-scope trait")
+                .with_note(
+                    "method calls resolve through the traits in scope, so a new \
+                     dependency can never silently change what `.method()` means (D28).",
+                )
+                .with_suggestion(Suggestion::new(
+                    format!("import the trait: `{use_line}`"),
+                    vec![(Span::new(member_span.file, 0, 0), format!("{use_line}\n"))],
+                    Applicability::Maybe,
+                )),
+            );
+        } else {
+            let names = hits
+                .iter()
+                .map(|t| format!("`{}`", t.name))
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0807,
+                    member_span,
+                    format!("`{mname}` exists on {names}, but none of them are in scope"),
+                )
+                .with_label("resolves through no in-scope trait")
+                .with_note(format!(
+                    "bring the one you mean into scope with `use`, then call it — \
+                     qualified (`Trait.{mname}(…)`) or on the receiver."
+                )),
+            );
+        }
+    }
+
+    /// E0403 — no method anywhere: typo suggestions over everything
+    /// the receiver's type does offer.
+    fn report_unknown_method(&mut self, recv_ty: TyId, member_span: Span, mname: &str) {
+        let shown = self.show(recv_ty);
+        let mut candidates: Vec<String> = Vec::new();
+        for imp in &self.sigs.impls {
+            // Cheap filter: exact self-type match covers the common case.
+            if imp.self_ty == recv_ty || imp.trait_ref.is_some() {
+                for mm in &imp.methods {
+                    if imp.self_ty == recv_ty && !candidates.contains(&mm.name) {
+                        candidates.push(mm.name.clone());
+                    }
+                }
+            }
+        }
+        if let TyKind::Nominal { module, name } = self.kind_of(recv_ty)
+            && let Some(ItemSig::Struct(s)) = self.sigs.get(module as usize, &name)
+        {
+            for f in &s.fields {
+                if !candidates.contains(&f.name) {
+                    candidates.push(f.name.clone());
+                }
+            }
+        }
+        let refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
+        let mut d = Diagnostic::error(
+            codes::E0403,
+            member_span,
+            format!("`{shown}` has no method named `{mname}`"),
+        )
+        .with_label("unknown method");
+        if let Some(hit) = wolf_diag::suggest::best_match(mname, &refs) {
+            d = d.with_suggestion(Suggestion::new(
+                format!("did you mean `{hit}`?"),
+                vec![(member_span, hit.to_string())],
+                Applicability::Maybe,
+            ));
+        } else if !candidates.is_empty() {
+            d = d.with_note(format!("`{shown}` offers: {}", candidates.join(", ")));
+        }
+        self.diags.push(d);
+    }
+
     // ------------------------------------------------------- members ---
 
     fn synth_member(&mut self, e: &GreenNode) -> R<TyId> {
         let d = MemberExpr::cast(e).expect("kind");
         if let Some((module, item)) = self.namespace_member(d) {
             return self.item_value_ty(module, &item, e.span);
+        }
+        // E0004 — `1.e5` parses as member access on an integer; the
+        // float the user meant spells its fraction (s17, the c02
+        // handoff item).
+        if let (Some(base), Some(member)) = (d.base(), d.member())
+            && base.kind == SyntaxKind::LiteralExpr
+            && base
+                .tokens()
+                .next()
+                .is_some_and(|t| t.kind == SyntaxKind::Int)
+        {
+            let mtext = self.text(member.span);
+            if mtext.len() >= 2
+                && mtext.starts_with('e')
+                && mtext[1..].chars().all(|c| c.is_ascii_digit())
+            {
+                let btext = self.text(base.span);
+                let fix = format!("{btext}.0{mtext}");
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0004,
+                        e.span,
+                        format!("`{btext}.{mtext}` reads as member access, not a float"),
+                    )
+                    .with_label(format!("integers have no member `{mtext}`"))
+                    .with_note(
+                        "a float literal needs digits on both sides of the dot \
+                         ([gram.amb.intdot]).",
+                    )
+                    .with_suggestion(Suggestion::new(
+                        format!("write the float out: `{fix}`"),
+                        vec![(e.span, fix)],
+                        Applicability::MachineApplicable,
+                    )),
+                );
+                return Ok(self.fresh(NumKind::Float, e.span));
+            }
+        }
+        // `Type.Member` in value position (s17): enum variant values.
+        if let Some((module, tyname)) = self.type_target(d)
+            && let Some(ItemSig::Enum {
+                generic,
+                variants,
+                name_span,
+            }) = self.sigs.get(module, &tyname).cloned()
+        {
+            let Some(member) = d.member() else {
+                return Ok(self.error_ty());
+            };
+            let mname = self.text(member.span);
+            if generic {
+                return Err(NotYet {
+                    construct: "a generic enum's variants (s16 generic data)",
+                    span: e.span,
+                });
+            }
+            return match variants.iter().find(|v| v.name == mname) {
+                Some(v) if v.payload.is_empty() => Ok(self.lo.table.intern(TyKind::Nominal {
+                    module: module as u32,
+                    name: tyname,
+                })),
+                Some(v) => {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0402,
+                            member.span,
+                            format!(
+                                "the variant `{mname}` carries {} value{}, but none are given",
+                                v.payload.len(),
+                                if v.payload.len() == 1 { "" } else { "s" }
+                            ),
+                        )
+                        .with_label("payload-carrying variant")
+                        .with_secondary(v.span, format!("`{mname}` is declared here"))
+                        .with_note(format!(
+                            "construct it with its payload: `{tyname}.{mname}({})`.",
+                            vec!["_"; v.payload.len()].join(", ")
+                        )),
+                    );
+                    Ok(self.error_ty())
+                }
+                None => {
+                    let names: Vec<&str> = variants.iter().map(|v| v.name.as_str()).collect();
+                    let mut diag = Diagnostic::error(
+                        codes::E0403,
+                        member.span,
+                        format!("`{tyname}` has no variant named `{mname}`"),
+                    )
+                    .with_label("unknown variant")
+                    .with_secondary(name_span, format!("`{tyname}` is defined here"));
+                    if let Some(hit) = wolf_diag::suggest::best_match(&mname, &names) {
+                        diag = diag.with_suggestion(Suggestion::new(
+                            format!("did you mean `{hit}`?"),
+                            vec![(member.span, hit.to_string())],
+                            Applicability::Maybe,
+                        ));
+                    } else if !names.is_empty() {
+                        diag = diag.with_note(format!("the variants are: {}", names.join(", ")));
+                    }
+                    self.diags.push(diag);
+                    Ok(self.error_ty())
+                }
+            };
         }
         // s14: archetype member access (`T.N` — associated consts
         // through the bounds) and trait members outside call position.
@@ -3662,17 +5056,36 @@ impl<'a> Checker<'a> {
                         match s.fields.iter().find(|f| f.name == mname) {
                             Some(f) => Ok(f.ty),
                             None => {
+                                // The field/method crossover classic:
+                                // `p.len` when `len` is a method.
+                                if self.find_inherent_impl(base_ty, &mname, true).is_some() {
+                                    self.diags.push(
+                                        Diagnostic::error(
+                                            codes::E0403,
+                                            member.span,
+                                            format!("`{mname}` is a method, not a field"),
+                                        )
+                                        .with_label("no `()` call here")
+                                        .with_note(
+                                            format!(
+                                                "call it: `.{mname}(…)` — `p.{mname}` is a \
+                                             field access, `p.{mname}()` is a method call."
+                                            ),
+                                        ),
+                                    );
+                                    return Ok(self.error_ty());
+                                }
                                 self.unknown_field(&name, &s, member.span, &mname);
                                 Ok(self.error_ty())
                             }
                         }
                     }
                     Some(ItemSig::Enum { .. }) => Err(NotYet {
-                        construct: "enum variants and members (s17)",
+                        construct: "a method or variant used as a value (c14 backlog)",
                         span: e.span,
                     }),
                     _ => Err(NotYet {
-                        construct: "member access on this type (s17)",
+                        construct: "member access on this type (s05 std surface)",
                         span: e.span,
                     }),
                 }
@@ -3698,7 +5111,7 @@ impl<'a> Checker<'a> {
                         Ok(self.error_ty())
                     }
                     Err(_) => Err(NotYet {
-                        construct: "method calls (s17)",
+                        construct: "a method used as a value (c14 backlog)",
                         span: e.span,
                     }),
                 }
@@ -3717,11 +5130,11 @@ impl<'a> Checker<'a> {
                 }
             }
             TyKind::Var(_) => Err(NotYet {
-                construct: "member access on an inferred type (s17)",
+                construct: "member access on a value whose type is still being inferred",
                 span: e.span,
             }),
             _ => Err(NotYet {
-                construct: "methods/members on this type (s17)",
+                construct: "members on this type (s05 std surface)",
                 span: e.span,
             }),
         }
@@ -4112,19 +5525,34 @@ impl<'a> Checker<'a> {
     }
 
     /// `match`: synthesizes from its arms when `exp` is `None`, checks
-    /// each arm against `exp` otherwise. s13 patterns: irrefutable +
-    /// literal only; exhaustiveness is s17.
+    /// each arm against `exp` otherwise. Patterns are the full [gram.
+    /// pat] grammar (s17); each match is recorded for the body-end
+    /// exhaustiveness pass ([`Checker::check_matches`]).
     fn check_match(&mut self, e: &GreenNode, exp: Option<&Expect>) -> R<TyId> {
         let d = MatchExpr::cast(e).expect("kind");
         let scrut_ty = match d.scrutinee() {
             Some(s) => self.synth_expr(s)?,
             None => self.error_ty(),
         };
+        // Matching a fallible value directly is not a surface: `?`
+        // unwraps it, `else |err|` hands you the row value to match.
+        if let TyKind::ErrUnion(..) = self.kind_of(scrut_ty) {
+            return Err(NotYet {
+                construct: "`match` over a fallible value (unwrap with `?` or bind the error with `else |err|`)",
+                span: e.span,
+            });
+        }
+        let mut rec = MatchRec {
+            span: e.span,
+            scrut: scrut_ty,
+            arms: Vec::new(),
+        };
         let mut joined: Option<(TyId, Span)> = None;
         for arm in d.arms() {
             self.push_scope();
             if let Some(p) = arm.pattern() {
-                self.match_pattern(p, scrut_ty)?;
+                let lowered = self.match_pattern(p, scrut_ty)?;
+                rec.arms.push((lowered, arm.guard().is_some(), p.span));
             }
             if let Some(g) = arm.guard()
                 && let Some(cond) = g.nodes().find(|n| is_expr_kind(n.kind))
@@ -4155,6 +5583,7 @@ impl<'a> Checker<'a> {
             }
             self.pop_scope();
         }
+        self.match_recs.push(rec);
         match exp {
             Some(exp) => Ok(exp.ty),
             None => Ok(joined
@@ -4163,36 +5592,518 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// s13 match patterns: wildcard, binding, literal, and tuples of
-    /// those. Everything else (variants, or-patterns, ranges) is s17.
-    fn match_pattern(&mut self, pat: &GreenNode, scrut: TyId) -> R<()> {
+    /// Type one match pattern against the scrutinee and lower it to
+    /// the exhaustiveness IR (s17): wildcards, bindings, literals,
+    /// enum variants and error-row tags with payloads, tuples,
+    /// or-patterns, `@`-bindings.
+    fn match_pattern(&mut self, pat: &GreenNode, scrut: TyId) -> R<exhaust::Pat> {
+        use exhaust::{Ctor, Pat};
         match pat.kind {
-            SyntaxKind::WildcardPat
-            | SyntaxKind::IdentPat
-            | SyntaxKind::BindingPat
-            | SyntaxKind::TuplePat => self.bind_pattern(pat, scrut),
-            SyntaxKind::LiteralPat => {
-                let lit_ty = match pat.tokens().next().map(|t| t.kind) {
-                    Some(SyntaxKind::Int) => self.fresh(NumKind::Integer, pat.span),
-                    Some(SyntaxKind::Float) => self.fresh(NumKind::Float, pat.span),
-                    Some(SyntaxKind::TrueKw | SyntaxKind::FalseKw) => {
-                        self.lo.table.prim(Prim::Bool)
+            SyntaxKind::WildcardPat => Ok(Pat::Wild),
+            SyntaxKind::IdentPat => {
+                let Some(t) = pat.child_token(SyntaxKind::Ident) else {
+                    return Ok(Pat::Wild);
+                };
+                let name = self.text(t.span);
+                // A capitalized name over an enum or row scrutinee is
+                // a constructor, not a binding.
+                if name.chars().next().is_some_and(char::is_uppercase)
+                    && let Some(vs) = self.scrut_variants(scrut)
+                {
+                    {
+                        return Ok(match vs.iter().find(|v| v.0 == name) {
+                            Some((_, payload, _)) => {
+                                if !payload.is_empty() {
+                                    self.pattern_shape_err(
+                                        t.span,
+                                        format!(
+                                            "bare `{name}` names a variant that carries {} value{}",
+                                            payload.len(),
+                                            if payload.len() == 1 { "" } else { "s" }
+                                        ),
+                                        format!(
+                                            "match its payload too: `{name}({})`",
+                                            vec!["_"; payload.len()].join(", ")
+                                        ),
+                                    );
+                                }
+                                Pat::Ctor {
+                                    ctor: Ctor::Named(name),
+                                    args: vec![Pat::Wild; payload.len()],
+                                }
+                            }
+                            None => {
+                                self.unknown_case(scrut, t.span, &name);
+                                Pat::Wild
+                            }
+                        });
                     }
-                    _ => self.error_ty(),
-                };
-                let exp = Expect {
-                    ty: scrut,
-                    reason: Reason::Pattern,
-                    because: Some(pat.span),
-                };
-                self.expect_unify(pat.span, lit_ty, &exp);
-                Ok(())
+                }
+                self.bind(name, t.span, scrut);
+                Ok(Pat::Wild)
             }
-            _ => Err(NotYet {
-                construct: "this pattern form (s17 exhaustiveness/variants)",
-                span: pat.span,
-            }),
+            SyntaxKind::BindingPat => {
+                if let Some(t) = pat.child_token(SyntaxKind::Ident) {
+                    let name = self.text(t.span);
+                    self.bind(name, t.span, scrut);
+                }
+                match pat.nodes().find(|n| wolf_ast::is_pattern_kind(n.kind)) {
+                    Some(sub) => self.match_pattern(sub, scrut),
+                    None => Ok(Pat::Wild),
+                }
+            }
+            SyntaxKind::OrPat => {
+                let mut alts = Vec::new();
+                for sub in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
+                    alts.push(self.match_pattern(sub, scrut)?);
+                }
+                Ok(Pat::Or(alts))
+            }
+            SyntaxKind::TuplePat => {
+                let subs: Vec<&GreenNode> = pat
+                    .nodes()
+                    .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .collect();
+                let elem_tys: Vec<TyId> = match self.kind_of(scrut) {
+                    TyKind::Tuple(ts) if ts.len() == subs.len() => ts,
+                    TyKind::Error => vec![self.error_ty(); subs.len()],
+                    TyKind::Var(_) => {
+                        let fresh: Vec<TyId> = subs
+                            .iter()
+                            .map(|s| self.fresh(NumKind::Any, s.span))
+                            .collect();
+                        let tup = self.lo.table.intern(TyKind::Tuple(fresh.clone()));
+                        let exp = Expect {
+                            ty: tup,
+                            reason: Reason::Pattern,
+                            because: Some(pat.span),
+                        };
+                        self.expect_unify(pat.span, scrut, &exp);
+                        fresh
+                    }
+                    TyKind::Tuple(ts) => {
+                        self.pattern_shape_err(
+                            pat.span,
+                            format!(
+                                "this tuple pattern binds {} piece{}, but the value has {}",
+                                subs.len(),
+                                if subs.len() == 1 { "" } else { "s" },
+                                ts.len()
+                            ),
+                            format!(
+                                "write one sub-pattern per element — `_` for the {} you skip",
+                                if ts.len() > subs.len() {
+                                    "ones"
+                                } else {
+                                    "none"
+                                }
+                            ),
+                        );
+                        vec![self.error_ty(); subs.len()]
+                    }
+                    _ => {
+                        let shown = self.show(scrut);
+                        self.pattern_shape_err(
+                            pat.span,
+                            format!("this pattern unpacks a tuple, but the value is `{shown}`"),
+                            "match the value's own shape, or bind it to a name".to_string(),
+                        );
+                        vec![self.error_ty(); subs.len()]
+                    }
+                };
+                let mut args = Vec::new();
+                for (sub, t) in subs.into_iter().zip(elem_tys) {
+                    args.push(self.match_pattern(sub, t)?);
+                }
+                Ok(Pat::Ctor {
+                    ctor: Ctor::Tuple,
+                    args,
+                })
+            }
+            SyntaxKind::LiteralPat => self.literal_pattern(pat, scrut),
+            SyntaxKind::PathPat => self.path_pattern(pat, scrut),
+            _ => Ok(Pat::Wild), // broken tree: silence (D22)
         }
+    }
+
+    /// A literal pattern: types against the scrutinee, lowers to its
+    /// constructor.
+    fn literal_pattern(&mut self, pat: &GreenNode, scrut: TyId) -> R<exhaust::Pat> {
+        use exhaust::{Ctor, Pat};
+        // String literals arrive as a StringExpr node.
+        if let Some(s) = pat.nodes().find(|n| n.kind == SyntaxKind::StringExpr) {
+            if wolf_ast::StringExpr::cast(s).is_some_and(|d| d.interps().next().is_some()) {
+                self.pattern_shape_err(
+                    pat.span,
+                    "an interpolated string cannot be a pattern".to_string(),
+                    "patterns compare against fixed values; match a plain string \
+                     literal, or compare with `==` in a guard"
+                        .to_string(),
+                );
+                return Ok(Pat::Wild);
+            }
+            let str_ = self.lo.table.prim(Prim::Str);
+            let exp = Expect {
+                ty: scrut,
+                reason: Reason::Pattern,
+                because: Some(pat.span),
+            };
+            self.expect_unify(pat.span, str_, &exp);
+            return Ok(Pat::Ctor {
+                ctor: Ctor::Str(self.text(s.span)),
+                args: Vec::new(),
+            });
+        }
+        let tok = pat.tokens().next();
+        let (lit_ty, ctor) = match tok.map(|t| t.kind) {
+            Some(SyntaxKind::Int) => {
+                let text = self.text(tok.expect("token").span);
+                let ctor = match parse_int_text(&text) {
+                    Some(v) => Ctor::Int(v),
+                    // Unparseable spelling: a textual-identity ctor —
+                    // never claims wildcard coverage.
+                    None => Ctor::Named(text),
+                };
+                (self.fresh(NumKind::Integer, pat.span), Some(ctor))
+            }
+            Some(SyntaxKind::Float) => {
+                let text = self.text(tok.expect("token").span);
+                (
+                    self.fresh(NumKind::Float, pat.span),
+                    Some(Ctor::Float(text)),
+                )
+            }
+            Some(SyntaxKind::TrueKw) => (self.lo.table.prim(Prim::Bool), Some(Ctor::Bool(true))),
+            Some(SyntaxKind::FalseKw) => (self.lo.table.prim(Prim::Bool), Some(Ctor::Bool(false))),
+            _ => (self.error_ty(), None),
+        };
+        let exp = Expect {
+            ty: scrut,
+            reason: Reason::Pattern,
+            because: Some(pat.span),
+        };
+        self.expect_unify(pat.span, lit_ty, &exp);
+        Ok(match ctor {
+            Some(c) => Pat::Ctor {
+                ctor: c,
+                args: Vec::new(),
+            },
+            None => Pat::Wild,
+        })
+    }
+
+    /// A path pattern `Tag(p, …)` / `io.Error(e)` / `Color.Rgb(…)`:
+    /// an enum variant or an error-row tag with payload sub-patterns.
+    fn path_pattern(&mut self, pat: &GreenNode, scrut: TyId) -> R<exhaust::Pat> {
+        use exhaust::{Ctor, Pat};
+        let segs: Vec<(String, Span)> = pat
+            .nodes()
+            .find_map(wolf_ast::Path::cast)
+            .map(|p| p.segments().map(|t| (self.text(t.span), t.span)).collect())
+            .unwrap_or_default();
+        let subs: Vec<&GreenNode> = pat
+            .nodes()
+            .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+            .collect();
+        let name_span = segs.last().map(|(_, s)| *s).unwrap_or(pat.span);
+        let dotted = segs
+            .iter()
+            .map(|(n, _)| n.as_str())
+            .collect::<Vec<_>>()
+            .join(".");
+        // Resolve the constructor against the scrutinee's shape.
+        let payload: Option<(String, Vec<TyId>)> = match self.kind_of(scrut) {
+            TyKind::Row { tags, tail } => match tags.iter().find(|(n, _)| *n == dotted) {
+                Some((n, p)) => Some((n.clone(), p.clone())),
+                None => {
+                    let open = tail.is_some();
+                    if open {
+                        // An open row admits tags we cannot see;
+                        // sub-patterns bind at unknown types.
+                        Some((dotted.clone(), vec![self.error_ty(); subs.len()]))
+                    } else {
+                        self.unknown_case(scrut, name_span, &dotted);
+                        None
+                    }
+                }
+            },
+            TyKind::Nominal { .. } => match self.scrut_variants(scrut) {
+                Some(vs) => {
+                    // `Rgb(…)` or `Color.Rgb(…)` — the variant is the
+                    // last segment.
+                    let vname = segs.last().map(|(n, _)| n.clone()).unwrap_or_default();
+                    match vs.iter().find(|v| v.0 == vname) {
+                        Some((n, p, _)) => Some((n.clone(), p.clone())),
+                        None => {
+                            self.unknown_case(scrut, name_span, &vname);
+                            None
+                        }
+                    }
+                }
+                None => {
+                    let shown = self.show(scrut);
+                    self.pattern_shape_err(
+                        pat.span,
+                        format!("this pattern deconstructs a variant, but the value is `{shown}`"),
+                        "only enum variants and error-row tags carry payloads to match".to_string(),
+                    );
+                    None
+                }
+            },
+            TyKind::Error | TyKind::Never => None,
+            _ => {
+                let shown = self.show(scrut);
+                self.pattern_shape_err(
+                    pat.span,
+                    format!("this pattern deconstructs a variant, but the value is `{shown}`"),
+                    "only enum variants and error-row tags carry payloads to match".to_string(),
+                );
+                None
+            }
+        };
+        let Some((cname, ptys)) = payload else {
+            // Still walk the sub-patterns so their bindings exist.
+            for sub in subs {
+                let err = self.error_ty();
+                self.match_pattern(sub, err)?;
+            }
+            return Ok(Pat::Wild);
+        };
+        if subs.len() != ptys.len() {
+            self.pattern_shape_err(
+                name_span,
+                format!(
+                    "`{cname}` carries {} value{}, but this pattern binds {}",
+                    ptys.len(),
+                    if ptys.len() == 1 { "" } else { "s" },
+                    subs.len()
+                ),
+                format!(
+                    "match the declared shape: `{cname}({})`",
+                    vec!["_"; ptys.len()].join(", ")
+                ),
+            );
+        }
+        let mut args = Vec::new();
+        for (i, sub) in subs.iter().enumerate() {
+            let t = ptys.get(i).copied().unwrap_or_else(|| self.error_ty());
+            args.push(self.match_pattern(sub, t)?);
+        }
+        args.resize(ptys.len(), Pat::Wild);
+        Ok(Pat::Ctor {
+            ctor: Ctor::Named(cname),
+            args,
+        })
+    }
+
+    /// The scrutinee's enum variants, if it is a (non-generic) enum:
+    /// (name, payload types, declaration span).
+    fn scrut_variants(&self, ty: TyId) -> Option<Vec<(String, Vec<TyId>, Span)>> {
+        if let TyKind::Nominal { module, name } = self.kind_of(ty)
+            && let Some(ItemSig::Enum {
+                variants,
+                generic: false,
+                ..
+            }) = self.sigs.get(module as usize, &name)
+        {
+            return Some(
+                variants
+                    .iter()
+                    .map(|v| (v.name.clone(), v.payload.clone(), v.span))
+                    .collect(),
+            );
+        }
+        None
+    }
+
+    /// E0808 — a pattern that cannot fit the value's shape.
+    fn pattern_shape_err(&mut self, span: Span, what: String, next: String) {
+        self.diags.push(
+            Diagnostic::error(codes::E0808, span, what)
+                .with_label("this pattern")
+                .with_note(format!("{next}.")),
+        );
+    }
+
+    /// An unknown variant/tag in a pattern: E0403 with suggestions
+    /// over the scrutinee's cases (closed rows) — never a row dump.
+    fn unknown_case(&mut self, scrut: TyId, span: Span, name: &str) {
+        let (what, cases): (String, Vec<String>) = match self.kind_of(scrut) {
+            TyKind::Row { tags, .. } => (
+                "the value's error row".to_string(),
+                tags.iter().map(|(n, _)| n.clone()).collect(),
+            ),
+            _ => match self.scrut_variants(scrut) {
+                Some(vs) => (
+                    format!("`{}`", self.show(scrut)),
+                    vs.into_iter().map(|(n, _, _)| n).collect(),
+                ),
+                None => (format!("`{}`", self.show(scrut)), Vec::new()),
+            },
+        };
+        let is_row = matches!(self.kind_of(scrut), TyKind::Row { .. });
+        let code = if is_row { codes::E0602 } else { codes::E0403 };
+        let mut d = Diagnostic::error(
+            code,
+            span,
+            if is_row {
+                format!("this arm matches the tag `{name}`, but {what} does not include it")
+            } else {
+                format!("{what} has no variant named `{name}`")
+            },
+        )
+        .with_label(if is_row {
+            "the arm could never fire"
+        } else {
+            "unknown variant"
+        });
+        let refs: Vec<&str> = cases.iter().map(|s| s.as_str()).collect();
+        if let Some(hit) = wolf_diag::suggest::best_match(name, &refs) {
+            d = d.with_suggestion(Suggestion::new(
+                format!("did you mean `{hit}`?"),
+                vec![(span, hit.to_string())],
+                Applicability::Maybe,
+            ));
+        } else if !cases.is_empty() {
+            d = d.with_note(format!("the cases are: {}", cases.join(", ")));
+        }
+        self.diags.push(d);
+    }
+
+    // ------------------------------------------- exhaustiveness (s17) --
+
+    /// The body-end match pass: with types final, run the usefulness
+    /// engine over every recorded `match` — non-exhaustive is E0801
+    /// with concrete witnesses (≤3), a dead arm is E0802 (warning)
+    /// citing the arm(s) that subsume it.
+    fn check_matches(&mut self) {
+        let recs = std::mem::take(&mut self.match_recs);
+        for rec in recs {
+            let scrut = zonk(&mut self.lo.table, &self.vars, rec.scrut);
+            let Some(col) = self.col_ty(scrut, 0) else {
+                // Error/unresolved scrutinee: another diagnostic owns
+                // this body — one root cause, one report.
+                self.match_facts.push((rec.span, false));
+                continue;
+            };
+            let tys = [col];
+            let mut prior: Vec<Vec<exhaust::Pat>> = Vec::new();
+            let mut prior_spans: Vec<Span> = Vec::new();
+            let mut any_guarded = false;
+            for (p, guarded, span) in &rec.arms {
+                if !exhaust::is_useful(&prior, std::slice::from_ref(p), &tys) {
+                    // Find the minimal covering prefix; cite its last
+                    // arm as the subsumer.
+                    let mut cite = prior_spans.last().copied();
+                    for k in 1..=prior.len() {
+                        if !exhaust::is_useful(&prior[..k], std::slice::from_ref(p), &tys) {
+                            cite = Some(prior_spans[k - 1]);
+                            break;
+                        }
+                    }
+                    let mut d = Diagnostic::warning(
+                        codes::E0802,
+                        *span,
+                        "this arm can never match — the arms above already cover it".to_string(),
+                    )
+                    .with_label("unreachable arm");
+                    if let Some(c) = cite {
+                        d = d.with_secondary(c, "this arm already matches those values");
+                    }
+                    d = d.with_note(
+                        "delete the arm, or reorder the arms so the more specific \
+                         pattern comes first.",
+                    );
+                    self.diags.push(d);
+                }
+                if !*guarded {
+                    prior.push(vec![p.clone()]);
+                    prior_spans.push(*span);
+                } else {
+                    any_guarded = true;
+                }
+            }
+            let ws = exhaust::witnesses(&prior, &tys, 3);
+            let exhaustive = ws.is_empty();
+            self.match_facts.push((rec.span, exhaustive));
+            if !exhaustive {
+                let rendered: Vec<String> = ws
+                    .iter()
+                    .map(|w| format!("`{}`", exhaust::render_pat(w)))
+                    .collect();
+                let mut d = Diagnostic::error(
+                    codes::E0801,
+                    rec.span,
+                    format!("this `match` does not cover {}", rendered.join(", ")),
+                )
+                .with_label("not every value is matched");
+                if any_guarded {
+                    d = d.with_note(
+                        "arms with `if` guards do not count toward coverage — a \
+                         guard can be false.",
+                    );
+                }
+                d = d.with_note(
+                    "add arms for the missing cases, or end the `match` with a \
+                     `_` arm to catch the rest deliberately.",
+                );
+                self.diags.push(d);
+            }
+        }
+    }
+
+    /// One column's constructor universe from a zonked type. `None`
+    /// silences the pass (error/unresolved scrutinees).
+    fn col_ty(&mut self, ty: TyId, depth: u32) -> Option<exhaust::ColTy> {
+        use exhaust::ColTy;
+        if depth > 8 {
+            return Some(ColTy::Opaque);
+        }
+        let t = zonk(&mut self.lo.table, &self.vars, ty);
+        Some(match self.lo.table.kind(t).clone() {
+            TyKind::Error | TyKind::Never | TyKind::Var(_) => return None,
+            TyKind::Prim(Prim::Bool) => ColTy::Bool,
+            TyKind::Prim(Prim::Str) => ColTy::Str,
+            TyKind::Prim(p) if p.is_integer() => ColTy::Int,
+            TyKind::Prim(_) => ColTy::Float,
+            TyKind::Wrapping(_) => ColTy::Int,
+            TyKind::Tuple(ts) => {
+                let mut cols = Vec::new();
+                for t in ts {
+                    cols.push(self.col_ty(t, depth + 1)?);
+                }
+                ColTy::Tuple(cols)
+            }
+            TyKind::Nominal { .. } => match self.scrut_variants(t) {
+                Some(vs) => {
+                    let mut out = Vec::new();
+                    for (n, payload, _) in vs {
+                        let mut cols = Vec::new();
+                        for p in payload {
+                            cols.push(self.col_ty(p, depth + 1)?);
+                        }
+                        out.push((n, cols));
+                    }
+                    ColTy::Enum(out)
+                }
+                None => ColTy::Opaque,
+            },
+            TyKind::Row { tags, tail } => {
+                let mut out = Vec::new();
+                for (n, payload) in tags {
+                    let mut cols = Vec::new();
+                    for p in payload {
+                        cols.push(self.col_ty(p, depth + 1)?);
+                    }
+                    out.push((n, cols));
+                }
+                ColTy::Row {
+                    tags: out,
+                    open: tail.is_some(),
+                }
+            }
+            _ => ColTy::Opaque,
+        })
     }
 
     fn synth_for(&mut self, e: &GreenNode) -> R<TyId> {
@@ -4522,6 +6433,21 @@ fn meta_member_ty(m: MetaTy, member: &str) -> Option<TyKind> {
         (MetaTy::Field, "ty") => TyKind::TypeTy,
         _ => return None,
     })
+}
+
+/// Parse an integer literal's text (underscores, `0x`/`0o`/`0b`) into
+/// the exhaustiveness engine's value identity.
+fn parse_int_text(text: &str) -> Option<i128> {
+    let t: String = text.chars().filter(|c| *c != '_').collect();
+    if let Some(h) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        i128::from_str_radix(h, 16).ok()
+    } else if let Some(o) = t.strip_prefix("0o").or_else(|| t.strip_prefix("0O")) {
+        i128::from_str_radix(o, 8).ok()
+    } else if let Some(b) = t.strip_prefix("0b").or_else(|| t.strip_prefix("0B")) {
+        i128::from_str_radix(b, 2).ok()
+    } else {
+        t.parse().ok()
+    }
 }
 
 fn single_ident(pat: &GreenNode, src: &[u8]) -> Option<String> {

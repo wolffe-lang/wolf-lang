@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0804]: `dist` reads its receiver, so the call site writes no mode
+  --> mem:///main.lu:13:5
+   |
+ 6 |     fn dist(self) -> int {
+   |        ---- `dist` is declared here
+...
+13 |     (mut p).dist()
+   |     ^^^^^^^ `mut` marks nothing here
+   |
+   = note: a bare receiver is the `read` mode — absence is the syntax ([mem.tier0.mode]).
+help: drop the mode
+   |
+13 |     p.dist()
+   |

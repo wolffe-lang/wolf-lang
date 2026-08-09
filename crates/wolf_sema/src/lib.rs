@@ -105,11 +105,84 @@
 //!   s27's strict-LIFO lowering; every `?`/`else`/raise site is an
 //!   error-trace hook point for s32 (debug-only, [abi.err.trace]).
 //!
+//! # Implemented today (s17 — sema completion, the c03 closer)
+//!
+//! - **Patterns & exhaustiveness** ([`check`] + the crate-private
+//!   `exhaust` engine): the full
+//!   [gram.pat] grammar types against the scrutinee (variants, row
+//!   tags with payloads, tuples, or-patterns, `@`-bindings), and every
+//!   `match` runs through Maranget-style usefulness at body end —
+//!   non-exhaustive is E0801 with ≤3 *concrete witnesses*, a dead arm
+//!   is E0802 (warning) citing its subsumer; guards never count toward
+//!   coverage. Sealed rows are closed universes; open rows
+//!   (`! {A, ..}`, [`types::TyKind::OpenTail`]) elaborate for real,
+//!   admit new raises, and force rest arms — the growing-tag-union
+//!   bar. Refutable patterns in binding position are E0806.
+//! - **Method resolution** ([`check`]): `recv.method(args)` resolves
+//!   in a fixed order — inherent impls first, then trait methods from
+//!   traits *in scope* (coherence makes the impl unique per trait);
+//!   cross-trait ambiguity is E0803 (qualify), an out-of-scope trait's
+//!   method is E0807 (import fix-it). No auto-ref/deref, no fallback
+//!   chains (D27). The X1 receiver-mode law binds: `mut self` /
+//!   `take self` methods are called `(mut p).norm()` /
+//!   `(take p).consume()` (E0804, machine-applicable edits);
+//!   `read self` stays bare. `dyn` receivers dispatch through the s14
+//!   dyn-safe set, resolution identical by name. Enum variants
+//!   construct (`Color.Rgb(1, 2, 3)`), inherent associated functions
+//!   call on the type, and trait *default* bodies check once against
+//!   the trait's own archetype `Self`.
+//! - **The closed coercion set** ([`coerce`] — the list is the spec)
+//!   and the completed `as` cast checking: numeric casts,
+//!   adapter↔base free casts (layout identity), identity; everything
+//!   else is E0805. No implicit widening, no autoderef, no
+//!   user-defined conversions — deliberately.
+//!
+//! # The typed-HIR contract (what c04/s18 consumes)
+//!
+//! [`typecheck_package`] returns [`Typecheck`]; for every body that
+//! reached [`BodyResult::Checked`], the [`TypedBody`] is the c04
+//! input language — s18 starts from this list, not from spelunking:
+//!
+//! - **Names**: resolved by s12 ([`Resolution`]); no name in a
+//!   checked body is unresolved.
+//! - **Types**: `TypedBody::exprs` / `::locals` carry every recorded
+//!   expression and binding with its *final, defaulted* type in the
+//!   body's own [`TypeTable`] (zonked — no live inference vars).
+//! - **Dispatch**: `TypedBody::dispatch` records every method call's
+//!   resolution ([`check::Dispatch`]) — inherent vs trait, static vs
+//!   `dyn`. Receiver modes live in the signature tables
+//!   ([`sig::ParamSig::mode`]): c04 reads the declared mode of every
+//!   parameter and receiver from there; the call-site spelling was
+//!   enforced here (E0804), the exclusivity/move *semantics* are
+//!   s18–s21's to check.
+//! - **Matches**: `TypedBody::matches` annotates each `match` span
+//!   with its exhaustiveness fact; s27 lowers decision trees from it.
+//! - **Coercions**: `TypedBody::coercions` lists every inserted
+//!   coercion from the closed set ([`coerce::Coercion`]);
+//!   `TypedBody::casts` lists every `as` with its [`check::CastKind`]
+//!   (only `Numeric` lowers to a conversion). Tier adjustments are
+//!   c04's to add — new variant, new record, checker unopened.
+//! - **Control facts**: `TypedBody::cleanups` (defer/errdefer in
+//!   declaration order, strict-LIFO for s27), `::trace_points` (every
+//!   `?`/`else`/raise site, the s32 error-trace hooks),
+//!   `::comptime_calls` (the s16 ctfe roots), `::warnings` (E0802 et
+//!   al. from otherwise-clean bodies).
+//! - **Suppression**: parser error regions
+//!   (`Parse::error_regions`) were already applied — diagnostics in
+//!   `Typecheck::diagnostics` are cascade-suppressed and sorted; c04
+//!   feeds its own diagnostics through the same
+//!   `wolf_diag::Diagnostics` sink contract.
+//! - **Refusals**: anything sema could not type is in
+//!   `Typecheck::not_yet` — a body is either fully typed or honestly
+//!   refused, never half-guessed.
+//!
 //! The std/prelude stub tables ([`prelude`]) carry *names only* until
 //! the real standard library lands (s05/s51).
 
 pub mod check;
+pub mod coerce;
 pub mod ctfe;
+pub(crate) mod exhaust;
 pub mod graph;
 pub mod interface;
 pub mod prelude;
@@ -122,7 +195,8 @@ pub mod typecheck;
 pub mod types;
 pub mod unify;
 
-pub use check::{BodyRef, BodyResult, NotYet, TypedBody, check_body};
+pub use check::{BodyRef, BodyResult, CastKind, Dispatch, NotYet, TypedBody, check_body};
+pub use coerce::Coercion;
 pub use ctfe::{Budget, CtfeStats, Engine, ValueArena, ValueKind};
 pub use graph::{
     AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, MemoryLoader, ModuleData,

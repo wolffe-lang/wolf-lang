@@ -465,13 +465,28 @@ fn inherent_impl_bodies_and_self_receiver_check() {
 }
 
 #[test]
-fn trait_default_bodies_stay_not_yet_checkable() {
+fn trait_default_bodies_check_against_archetype() {
+    // s17: a default body checks once against the trait's own
+    // archetype Self — this one is fine…
     let tc = check_one(
         "trait Show {\n    fn show(x: Self) -> str {\n        \"default\"\n    }\n}\n\
          fn main() -> !int {\n    0\n}\n",
     );
-    assert!(!tc.not_yet.is_empty(), "default bodies are honest refusals");
+    assert!(tc.not_yet.is_empty(), "{:?}", tc.not_yet);
     assert!(tc.diagnostics.is_empty(), "{:?}", tc.diagnostics);
+    // …and one that uses a capability the trait does not grant is the
+    // golden rule firing at the definition (E0501).
+    let bad = check_one(
+        "trait Show {\n    fn show(x: Self) -> str {\n        \"{x + 1}\"\n    }\n}\n\
+         fn main() -> !int {\n    0\n}\n",
+    );
+    assert!(
+        bad.diagnostics
+            .iter()
+            .any(|d| format!("{:?}", d.code).contains("E0501")),
+        "{:?}",
+        bad.diagnostics
+    );
 }
 
 // ------------------------------------------------- hash properties -----
