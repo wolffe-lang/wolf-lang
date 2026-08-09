@@ -56,6 +56,8 @@ jobs:
         run: |
           cargo xtask bench --track=runtime --runs=10 --out=bench-results/runtime.jsonl
           cargo xtask bench --track=compile --runs=3 --out=bench-results/compile.jsonl
+      - name: conformance coverage report
+        run: cargo xtask conformance --out=bench-results/conformance.jsonl
       - name: commit to bench-data branch
         run: |
           set -e
@@ -71,7 +73,7 @@ jobs:
             git -C /tmp/bd rm -rf --quiet . || true
           fi
           mkdir -p "/tmp/bd/data/$day"
-          cp bench-results/runtime.jsonl bench-results/compile.jsonl "/tmp/bd/data/$day/"
+          cp bench-results/runtime.jsonl bench-results/compile.jsonl bench-results/conformance.jsonl "/tmp/bd/data/$day/"
           echo "$sha" > "/tmp/bd/data/$day/commit"
           git -C /tmp/bd add data
           git -C /tmp/bd commit -m "bench data $day ($sha)"
