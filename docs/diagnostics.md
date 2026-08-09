@@ -385,6 +385,132 @@ form.
 
 Fixtures: crates/wolf_sema/tests/snapshots/diagnostics__e0306_duplicate_import.snap
 
+## E0401 — the types do not match
+
+The workhorse type error: an expression has one type, and the place it
+sits requires another. Wolf tracks *why* the requirement exists — a
+return type declared on the function, a parameter of the called
+function, a `let` annotation, the other operand of an operator — and
+the message points at that origin as well as the mismatch, so you can
+decide which side is wrong. When an `if` or `match` is used as a value
+and its branches disagree, neither branch is reported as "expected":
+both are shown, because the fix may belong to either. For large types
+the message names only the differing parts (a structural diff) instead
+of making you eyeball two long renderings. Note that wolf never
+converts numbers implicitly — `int` and `i64` are simply different
+types, and the fix is an explicit `as` conversion.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+
+## E0402 — wrong number of arguments in a call
+
+The function exists and the call is well-formed, but the argument count
+does not match the function's parameter list — every wolf parameter is
+required (there are no optional or variadic parameters at v1), so a
+call must pass exactly as many arguments as the signature declares.
+The message shows where the function is defined so you can compare the
+lists side by side. Passing too many arguments often means an argument
+was meant for a different call; passing too few often means a value
+was dropped while refactoring. Check the order too: a swapped argument
+pair usually surfaces as a type mismatch on the *next* argument.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap
+
+## E0403 — no such field
+
+Member access resolved the value's type, but that type has no field
+with this name. When a near-miss exists ("did you mean `radius`?") the
+message suggests it — most unknown fields are typos. Otherwise the
+struct's actual fields are listed, and the struct's definition site is
+shown so you can check which version of the type you are holding.
+Methods are looked up separately from fields (s17 method resolution):
+if you meant to *call* something, the parentheses matter — `p.len` is
+a field access, `p.len()` is a method call.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap
+
+## E0404 — this would be an infinite type
+
+Unification found a type that would have to contain itself — the
+classic case is applying a function to itself (`f(f)`), which needs a
+type `t = fn(t) -> …` that expands forever. No finite type satisfies
+the constraint, so wolf stops and shows the cycle rather than looping.
+This almost always signals a confusion one level up: a closure passed
+where its *result* was meant, or a recursion through values where a
+named recursive *type* (a struct or enum, which may mention itself by
+name) was intended. Introduce a named type or an explicit annotation
+at the point where the cycle closes.
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0404_infinite.snap
+
+## E0405 — the type here cannot be inferred
+
+Nothing in the body pins this type down. Wolf infers freely *inside*
+function bodies, but the information must come from somewhere: literal
+types default by rule (`i32` for integers, `f64` for floats), closure
+parameters take their types from the context the closure is checked
+against, and everything else must flow from a use. A closure bound to
+a plain `let` and never given context is the common case — annotate
+its parameters (`fn(x: int) …`) or pass it directly to the call that
+gives it a type. This is deliberately an error, not a guess: an
+arbitrary default here would change meaning silently (D27).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__ambiguous.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0405_cannot_infer.snap
+
+## E0406 — this is not a function, so it cannot be called
+
+Call syntax `value(args)` applies only to functions and closures, and
+the thing being called here is neither — commonly a struct name (wolf
+constructs structs with braces: `Point { x: 1, y: 2 }`, not
+`Point(1, 2)`), a value that lost its function type to a shadowing
+binding, or a field that holds data rather than a closure. The message
+names the type the callee actually has. If you expected a method, note
+that s13 checks free functions only; method calls resolve in a later
+phase, and a field holding a closure *is* callable as `x.field(…)`.
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0406_not_callable.snap
+
+## E0407 — an item is missing its type annotation
+
+Items — functions, `const`s, module-level `let`/`var` bindings —
+declare their full signatures in wolf; inference happens only *inside*
+function bodies (D27). This is the separate-compilation firewall: a
+module's interface must be readable from its signatures alone, so an
+item's type may never depend on running inference over its body
+(SE-0244 calls the alternative "a mistake"). The compiler may well
+know the type — when the initializer makes it obvious, the suggested
+fix states it — but you still write it down: the annotation is what
+your callers, incremental rebuilds, and future readers depend on.
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0407_missing_annotation.snap
+
+## E0408 — struct literal fields do not match the struct
+
+A struct literal must initialize every field of the struct exactly
+once — wolf has no field defaults and no partial construction, so a
+missing field is an error here at the literal, and a repeated field is
+an error on the second write. The message lists what is missing (or
+flags the duplicate) and points at the struct's definition. If many
+call sites want a "default" shape, the wolf pattern is an ordinary
+function that builds one (`fn default_config() -> Config { … }`) —
+explicit, checkable, and versioned with the type.
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0408_missing_field.snap
+
+## E0409 — the operator does not work on this type
+
+Each operator family in wolf works on a fixed family of types:
+arithmetic (`+ - * / %`) and ordering (`< <= > >= <=>`) on numbers,
+logic (`&& || !`) on `bool` exactly, bitwise and shifts on integer
+types. This operand is outside the operator's family. Two classics:
+wolf has no truthiness, so `if x` on a number must be written as a
+comparison (`x != 0`); and `+` does not join strings — interpolation
+does (`"{first}{second}"`), which formats any primitive and never
+surprises you with a numeric `+` overload. Trait-based operators for
+user types arrive with the trait engine (s14).
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_string_plus.snap
+
 ## W0301 — file only partially formatted: syntax errors present
 
 `wolf fmt` formats through the resilient parse tree, so a file with
