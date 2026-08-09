@@ -504,10 +504,17 @@ fn recognize_cmd() -> ExitCode {
     let mut bad = 0u32;
     for f in &files {
         let src = std::fs::read_to_string(f).expect("read corpus file");
-        let expect_fail = matches!(
-            corpus::parse_directives(&src).ok().and_then(|d| d.check),
-            Some(corpus::Check::Fail(_))
-        );
+        // Error-code families (spec 02 §7 discipline): E0xxx are syntax-tier
+        // codes — the file must fail to PARSE. E1xxx and up are post-parse
+        // (sema/memory/runtime) — the file must parse cleanly; its failure
+        // is observed by later phases, not the recognizer.
+        let expect_fail = match corpus::parse_directives(&src).ok().and_then(|d| d.check) {
+            Some(corpus::Check::Fail(code)) => code
+                .strip_prefix('E')
+                .and_then(|n| n.parse::<u32>().ok())
+                .is_none_or(|n| n < 1000),
+            _ => false,
+        };
         let verdict: Result<xtask::recognize::Analysis, String> =
             match xtask::speclex::lex(&src, &kws) {
                 Ok(toks) => grammar.analyze(&toks),

@@ -46,8 +46,27 @@ pub struct RunExpect {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExitExpect {
     Code(i32),
-    Trap,
+    /// `exit=trap` (any kind) or `exit=trap(kind)` with a kind from the
+    /// closed s06 vocabulary (overflow, div-zero, bounds, use-after-move,
+    /// exclusivity, region-fault, stale-handle, alloc-contract, assert,
+    /// race, ub).
+    Trap(Option<String>),
 }
+
+/// The closed trap-kind vocabulary (s06; spec 02 §7 assigns them).
+pub const TRAP_KINDS: [&str; 11] = [
+    "overflow",
+    "div-zero",
+    "bounds",
+    "use-after-move",
+    "exclusivity",
+    "region-fault",
+    "stale-handle",
+    "alloc-contract",
+    "assert",
+    "race",
+    "ub",
+];
 
 /// Parsed header block of one corpus file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -123,7 +142,16 @@ fn parse_run(args: &str) -> Result<RunExpect, String> {
         let part = part.trim();
         if let Some(v) = part.strip_prefix("exit=") {
             exit = Some(if v == "trap" {
-                ExitExpect::Trap
+                ExitExpect::Trap(None)
+            } else if let Some(kind) = v.strip_prefix("trap(").and_then(|s| s.strip_suffix(')')) {
+                let kind = kind.trim();
+                if !TRAP_KINDS.contains(&kind) {
+                    return Err(format!(
+                        "unknown trap kind `{kind}` (closed set: {})",
+                        TRAP_KINDS.join(", ")
+                    ));
+                }
+                ExitExpect::Trap(Some(kind.to_string()))
             } else {
                 ExitExpect::Code(
                     v.parse::<i32>()
@@ -197,7 +225,7 @@ mod tests {
         assert_eq!(
             d.check,
             Some(Check::Run(RunExpect {
-                exit: ExitExpect::Trap,
+                exit: ExitExpect::Trap(None),
                 stdout: None
             }))
         );
