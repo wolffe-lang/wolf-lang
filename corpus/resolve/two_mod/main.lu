@@ -1,0 +1,13 @@
+//! check: run(exit=0)
+//! phase: resolve
+//! conforms: mod.dir, mod.use.pub
+//!
+//! The two-module happy case (D32): directory = module, so `geometry/`
+//! is a sibling module of this entry's directory; `use` binds it
+//! file-scoped and its `pub` items resolve as members.
+
+use geometry
+
+fn main() -> !int {
+    if geometry.area(3) == 9 { 0 } else { 1 }
+}

@@ -1,0 +1,13 @@
+//! check: fail(E0304)
+//! phase: parse
+//! conforms: mod.vis.private
+//!
+//! Private is the default (D32): `secret` exists in `vault`, but only
+//! `pub`/`pub(pkg)` items are visible across modules. The diagnostic
+//! names the visibility the access would need.
+
+use vault
+
+fn main() -> !int {
+    vault.secret()
+}

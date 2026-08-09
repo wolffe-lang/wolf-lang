@@ -4,8 +4,9 @@
 //! exactly its expected code — nothing more, nothing less.
 //!
 //! Expectations come from the corpus directive headers (`//! check:`).
-//! Codes E1000+ are post-parse tiers (sema/memory/runtime): those files
-//! must *parse* cleanly here; their failure belongs to later phases.
+//! Codes E0300+ are post-parse tiers (resolution, sema, memory,
+//! runtime): those files must *parse* cleanly here; their failure
+//! belongs to later phases.
 
 use std::path::{Path, PathBuf};
 use wolf_ast::{Child, GreenNode, SyntaxKind};
@@ -22,13 +23,13 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// The `fail(EXXXX)` code from the `//! check:` header, if the failure
-/// is syntax-tier (E0001–E0999).
+/// is syntax-tier (E0001–E0299 — E03xx is resolution's family, s12).
 fn expected_parse_failure(src: &str) -> Option<String> {
     let line = src.lines().find(|l| l.starts_with("//! check:"))?;
     let rest = line.split("fail(").nth(1)?;
     let code = rest.split(')').next()?.trim();
     let num: u32 = code.strip_prefix('E')?.parse().ok()?;
-    (num < 1000).then(|| code.to_string())
+    (num < 300).then(|| code.to_string())
 }
 
 fn count_error_nodes(node: &GreenNode) -> usize {

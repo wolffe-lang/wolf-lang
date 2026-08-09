@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.region.edge.iso, mem.region.freeze.1, mem.region.edge.imm
 //! Cross-region structure the LEGAL ways: an owning (iso) child moved
 //! into a parent value, and frozen data referenced from anywhere.

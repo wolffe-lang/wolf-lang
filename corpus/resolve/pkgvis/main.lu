@@ -1,0 +1,13 @@
+//! check: run(exit=0)
+//! phase: resolve
+//! conforms: mod.vis.pkg
+//!
+//! `pub(pkg)` is visible package-wide (D32): this entry and `store/`
+//! live in the same package, so the access resolves. Only `pkg_hash`
+//! covers items like this — `export_hash` never sees them.
+
+use store
+
+fn main() -> !int {
+    if store.limit() == 8 { 0 } else { 1 }
+}

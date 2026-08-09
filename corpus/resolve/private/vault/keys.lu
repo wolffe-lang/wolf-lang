@@ -1,0 +1,9 @@
+//! member: true
+
+fn secret() -> !int {
+    41
+}
+
+pub fn open() -> !int {
+    secret()
+}

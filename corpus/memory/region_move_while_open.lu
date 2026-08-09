@@ -1,5 +1,5 @@
 //! check: fail(E1005)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.region.open.1, mem.region.freeze.3
 //! A region cannot be transferred while it is open — the forest moves
 //! as closed subtrees only.

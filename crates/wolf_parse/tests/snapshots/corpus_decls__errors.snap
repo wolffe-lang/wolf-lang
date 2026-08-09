@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 392..433 name=ParseError fields=2
-FnDecl 435..619 name=digit body=Block
-FnDecl 621..843 name=parse_pair body=Block
-FnDecl 845..1063 name=load body=Block
-FnDecl 1065..1476 name=main body=Block
+StructDecl 394..435 name=ParseError fields=2
+FnDecl 437..621 name=digit body=Block
+FnDecl 623..845 name=parse_pair body=Block
+FnDecl 847..1065 name=load body=Block
+FnDecl 1067..1478 name=main body=Block

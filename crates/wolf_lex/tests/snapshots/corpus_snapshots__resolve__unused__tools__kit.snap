@@ -1,0 +1,25 @@
+---
+source: crates/wolf_lex/tests/corpus_snapshots.rs
+expression: lexed.dump(&bytes)
+---
+    lead  InnerDocComment 0..16 "//! member: true"
+    lead  Whitespace 16..18 "\n\n"
+Kw(Pub) 18..21 "pub"
+    trail Whitespace 21..22 " "
+Kw(Fn) 22..24 "fn"
+    trail Whitespace 24..25 " "
+Ident 25..32 "sharpen"
+Punct(LParen) 32..33 "("
+Punct(RParen) 33..34 ")"
+    trail Whitespace 34..35 " "
+Punct(Arrow) 35..37 "->"
+    trail Whitespace 37..38 " "
+Ident 38..41 "int"
+    trail Whitespace 41..42 " "
+Punct(LBrace) 42..43 "{"
+    lead  Whitespace 43..48 "\n    "
+Int 48..49 "1"
+Term 49..50 "\n"
+Punct(RBrace) 50..51 "}"
+Term 51..52 "\n"
+Eof 52..52 ""

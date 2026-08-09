@@ -1,0 +1,14 @@
+//! check: fail(E0303)
+//! phase: parse
+//! conforms: mod.cycle
+//!
+//! Imports between modules must form a DAG (D32): `alpha` and `beta`
+//! import each other, and the diagnostic draws the whole cycle with
+//! every participating `use`. The files all parse — parse is the
+//! deepest passing phase; resolution is where the cycle dies.
+
+use alpha
+
+fn main() -> !int {
+    alpha.ping(3)
+}

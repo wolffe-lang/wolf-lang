@@ -1,0 +1,5 @@
+//! member: true
+
+pub fn sharpen() -> int {
+    1
+}

@@ -1,0 +1,5 @@
+//! member: true
+
+fn later() -> int {
+    7
+}

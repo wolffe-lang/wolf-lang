@@ -1,5 +1,5 @@
 //! check: fail(E1003)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.tier0.borrow.1
 //! Local borrows never outlive their function activation: sending one
 //! into a channel (heap-tier storage) is rejected.

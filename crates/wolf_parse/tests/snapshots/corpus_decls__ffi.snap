@@ -2,7 +2,7 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-ImportCDecl 447..467 header="stdlib.h"
-ImportCDecl 467..487 header="string.h"
-FnDecl 558..603 name=wolf_answer extern body=Block
-FnDecl 605..1199 name=main body=Block
+ImportCDecl 449..469 header="stdlib.h"
+ImportCDecl 469..489 header="string.h"
+FnDecl 560..605 name=wolf_answer extern body=Block
+FnDecl 607..1201 name=main body=Block

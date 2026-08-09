@@ -1,0 +1,13 @@
+//! member: true
+//! conforms: mod.vis.pub
+//!
+//! The `geometry` module: one `pub` export and one private helper that
+//! stays out of the module's interface.
+
+pub fn area(side: int) -> int {
+    side * side
+}
+
+fn double(side: int) -> int {
+    side + side
+}

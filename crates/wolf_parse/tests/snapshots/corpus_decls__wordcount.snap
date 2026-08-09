@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-UseDecl 548..559 path=std.fs
-LetDecl 560..722 pat=USAGE init=StringExpr
-FnDecl 723..1081 name=count body=Block
-FnDecl 1083..1192 name=top body=Block
-FnDecl 1194..1790 name=main body=Block
+UseDecl 550..561 path=std.fs
+LetDecl 562..724 pat=USAGE init=StringExpr
+FnDecl 725..1083 name=count body=Block
+FnDecl 1085..1194 name=top body=Block
+FnDecl 1196..1792 name=main body=Block

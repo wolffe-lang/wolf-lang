@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.prov.state, mem.prov.tag
 //! The two-phase shape Tree Borrows tolerates (and SB rejects): the
 //! receiver's mut tag is Reserved while the argument reads the same

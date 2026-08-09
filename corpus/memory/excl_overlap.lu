@@ -1,5 +1,5 @@
 //! check: fail(E1002)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.tier0.excl.1, mem.tier0.excl.2
 //! A path and its prefix conflict: mut a with mut a.x is rejected.
 

@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: parse
+//! phase: resolve
 //! conforms: gram.amb.bang
 //! `!` in type position is the error-union constructor (D30).
 

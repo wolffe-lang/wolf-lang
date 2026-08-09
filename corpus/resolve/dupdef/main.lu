@@ -1,0 +1,15 @@
+//! check: fail(E0302)
+//! phase: parse
+//! conforms: mod.dup
+//!
+//! Every `.lu` file in a directory is ONE module (D32): `twice.lu`
+//! defines `helper` again, and the duplicate is reported with both
+//! definition sites — file boundaries create no scopes.
+
+fn helper() -> int {
+    1
+}
+
+fn main() -> !int {
+    helper()
+}

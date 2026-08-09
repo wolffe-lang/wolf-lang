@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-ImportCDecl 297..317 header="stdlib.h"
-FnDecl 318..572 name=main body=Block
+ImportCDecl 299..319 header="stdlib.h"
+FnDecl 320..574 name=main body=Block

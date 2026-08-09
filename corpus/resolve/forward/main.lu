@@ -1,0 +1,11 @@
+//! check: run(exit=0)
+//! phase: resolve
+//! conforms: mod.forward
+//!
+//! Within a module, forward references across files are unrestricted
+//! (D32): `later` lives in `other.lu`, a sibling file of this same
+//! directory, and needs no import at all.
+
+fn main() -> !int {
+    if later() == 7 { 0 } else { 1 }
+}

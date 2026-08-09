@@ -1,0 +1,7 @@
+//! member: true
+
+use beta
+
+pub fn ping(n: int) -> int {
+    if n == 0 { 0 } else { beta.pong(n - 1) }
+}

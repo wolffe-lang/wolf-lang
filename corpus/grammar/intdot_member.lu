@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: parse
+//! phase: resolve
 //! conforms: gram.amb.intdot
 //! `1.s` is member access on the int literal; floats need digits both sides.
 

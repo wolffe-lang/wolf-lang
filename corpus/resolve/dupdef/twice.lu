@@ -1,0 +1,5 @@
+//! member: true
+
+fn helper() -> int {
+    2
+}

@@ -1,0 +1,13 @@
+//! check: fail(E0305)
+//! phase: parse
+//! conforms: mod.use.unused
+//!
+//! An unused import is a hard error, not a lint (D32) — and the fix-it
+//! that deletes the line is machine-applicable, so `wolf fix` (D34)
+//! can apply it unattended.
+
+use tools
+
+fn main() -> !int {
+    0
+}

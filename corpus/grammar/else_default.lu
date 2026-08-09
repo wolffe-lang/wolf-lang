@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: parse
+//! phase: resolve
 //! conforms: gram.amb.else
 //! `else` after a complete expression is the defaulting operator (D30).
 

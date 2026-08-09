@@ -3,98 +3,98 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 122..278
-  FnDecl 122..277
-    FnKw 122..124 "fn"
-    Ident 125..129 "main"
-    ParamList 129..131
-      LParen 129..130 "("
-      RParen 130..131 ")"
-    RetType 132..139
-      Arrow 132..134 "->"
-      ErrorUnionType 135..139
-        Not 135..136 "!"
-        PathType 136..139
-          Path 136..139
-            Ident 136..139 "int"
-    Block 140..277
-      LBrace 140..141 "{"
-      VarDecl 146..158
-        VarKw 146..149 "var"
-        IdentPat 150..153
-          Ident 150..153 "sum"
-        Eq 154..155 "="
-        LiteralExpr 156..157
-          Int 156..157 "0"
-        Term 157..158 "\n"
-      ExprStmt 162..199
-        ForExpr 162..189
-          ForKw 162..165 "for"
-          IdentPat 166..167
-            Ident 166..167 "i"
-          InKw 168..170 "in"
-          RangeExpr 171..176
-            LiteralExpr 171..172
-              Int 171..172 "1"
-            DotDot 172..174 ".."
-            LiteralExpr 174..176
-              Int 174..176 "10"
-          Block 177..189
-            LBrace 177..178 "{"
-            AssignStmt 179..187
-              PathExpr 179..182
-                Ident 179..182 "sum"
-              PlusEq 183..185 "+="
-              PathExpr 186..187
-                Ident 186..187 "i"
-            RBrace 188..189 "}"
-        Term 198..199 "\n"
-      ExprStmt 203..241
-        ForExpr 203..231
-          ForKw 203..206 "for"
-          IdentPat 207..208
-            Ident 207..208 "i"
-          InKw 209..211 "in"
-          RangeExpr 212..218
-            LiteralExpr 212..213
-              Int 212..213 "1"
-            DotDotEq 213..216 "..="
-            LiteralExpr 216..218
-              Int 216..218 "10"
-          Block 219..231
-            LBrace 219..220 "{"
-            AssignStmt 221..229
-              PathExpr 221..224
-                Ident 221..224 "sum"
-              PlusEq 225..227 "+="
-              PathExpr 228..229
-                Ident 228..229 "i"
-            RBrace 230..231 "}"
-        Term 240..241 "\n"
-      ExprStmt 245..276
-        IfExpr 245..275
-          IfKw 245..247 "if"
-          BinExpr 248..258
-            PathExpr 248..251
-              Ident 248..251 "sum"
-            EqEq 252..254 "=="
-            LiteralExpr 255..258
-              Int 255..258 "100"
-          Block 259..264
-            LBrace 259..260 "{"
-            ExprStmt 261..262
-              LiteralExpr 261..262
-                Int 261..262 "0"
-            RBrace 263..264 "}"
-          ElseKw 265..269 "else"
-          Block 270..275
-            LBrace 270..271 "{"
-            ExprStmt 272..273
-              LiteralExpr 272..273
-                Int 272..273 "1"
-            RBrace 274..275 "}"
-        Term 275..276 "\n"
-      RBrace 276..277 "}"
-  Term 277..278 "\n"
-  Eof 278..278 ""
+SourceFile 124..280
+  FnDecl 124..279
+    FnKw 124..126 "fn"
+    Ident 127..131 "main"
+    ParamList 131..133
+      LParen 131..132 "("
+      RParen 132..133 ")"
+    RetType 134..141
+      Arrow 134..136 "->"
+      ErrorUnionType 137..141
+        Not 137..138 "!"
+        PathType 138..141
+          Path 138..141
+            Ident 138..141 "int"
+    Block 142..279
+      LBrace 142..143 "{"
+      VarDecl 148..160
+        VarKw 148..151 "var"
+        IdentPat 152..155
+          Ident 152..155 "sum"
+        Eq 156..157 "="
+        LiteralExpr 158..159
+          Int 158..159 "0"
+        Term 159..160 "\n"
+      ExprStmt 164..201
+        ForExpr 164..191
+          ForKw 164..167 "for"
+          IdentPat 168..169
+            Ident 168..169 "i"
+          InKw 170..172 "in"
+          RangeExpr 173..178
+            LiteralExpr 173..174
+              Int 173..174 "1"
+            DotDot 174..176 ".."
+            LiteralExpr 176..178
+              Int 176..178 "10"
+          Block 179..191
+            LBrace 179..180 "{"
+            AssignStmt 181..189
+              PathExpr 181..184
+                Ident 181..184 "sum"
+              PlusEq 185..187 "+="
+              PathExpr 188..189
+                Ident 188..189 "i"
+            RBrace 190..191 "}"
+        Term 200..201 "\n"
+      ExprStmt 205..243
+        ForExpr 205..233
+          ForKw 205..208 "for"
+          IdentPat 209..210
+            Ident 209..210 "i"
+          InKw 211..213 "in"
+          RangeExpr 214..220
+            LiteralExpr 214..215
+              Int 214..215 "1"
+            DotDotEq 215..218 "..="
+            LiteralExpr 218..220
+              Int 218..220 "10"
+          Block 221..233
+            LBrace 221..222 "{"
+            AssignStmt 223..231
+              PathExpr 223..226
+                Ident 223..226 "sum"
+              PlusEq 227..229 "+="
+              PathExpr 230..231
+                Ident 230..231 "i"
+            RBrace 232..233 "}"
+        Term 242..243 "\n"
+      ExprStmt 247..278
+        IfExpr 247..277
+          IfKw 247..249 "if"
+          BinExpr 250..260
+            PathExpr 250..253
+              Ident 250..253 "sum"
+            EqEq 254..256 "=="
+            LiteralExpr 257..260
+              Int 257..260 "100"
+          Block 261..266
+            LBrace 261..262 "{"
+            ExprStmt 263..264
+              LiteralExpr 263..264
+                Int 263..264 "0"
+            RBrace 265..266 "}"
+          ElseKw 267..271 "else"
+          Block 272..277
+            LBrace 272..273 "{"
+            ExprStmt 274..275
+              LiteralExpr 274..275
+                Int 274..275 "1"
+            RBrace 276..277 "}"
+        Term 277..278 "\n"
+      RBrace 278..279 "}"
+  Term 279..280 "\n"
+  Eof 280..280 ""
 == diagnostics ==

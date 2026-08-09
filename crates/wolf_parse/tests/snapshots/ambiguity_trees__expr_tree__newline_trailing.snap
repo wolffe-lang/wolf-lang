@@ -3,96 +3,96 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 155..278
-  FnDecl 155..277
-    FnKw 155..157 "fn"
-    Ident 158..162 "main"
-    ParamList 162..164
-      LParen 162..163 "("
-      RParen 163..164 ")"
-    RetType 165..172
-      Arrow 165..167 "->"
-      ErrorUnionType 168..172
-        Not 168..169 "!"
-        PathType 169..172
-          Path 169..172
-            Ident 169..172 "int"
-    Block 173..277
-      LBrace 173..174 "{"
-      LetDecl 179..197
-        LetKw 179..182 "let"
-        IdentPat 183..184
-          Ident 183..184 "a"
-        Eq 185..186 "="
-        BinExpr 187..196
-          BinExpr 187..192
-            LiteralExpr 187..188
-              Int 187..188 "1"
-            Plus 189..190 "+"
-            LiteralExpr 191..192
-              Int 191..192 "2"
-          Plus 193..194 "+"
-          LiteralExpr 195..196
-            Int 195..196 "3"
-        Term 196..197 "\n"
-      LetDecl 201..231
-        LetKw 201..204 "let"
-        IdentPat 205..206
-          Ident 205..206 "s"
-        Eq 207..208 "="
-        CallExpr 209..230
-          MemberExpr 209..228
-            CallExpr 209..222
-              MemberExpr 209..220
-                StringExpr 209..214
-                  StrBegin 209..210 "\""
-                  StrFragment 210..213 "abc"
-                  StrEnd 213..214 "\""
-                Dot 214..215 "."
-                Ident 215..220 "upper"
-              ArgList 220..222
-                LParen 220..221 "("
-                RParen 221..222 ")"
-            Dot 222..223 "."
-            Ident 223..228 "lower"
-          ArgList 228..230
-            LParen 228..229 "("
-            RParen 229..230 ")"
-        Term 230..231 "\n"
-      ExprStmt 235..276
-        IfExpr 235..275
-          IfKw 235..237 "if"
-          BinExpr 238..258
-            BinExpr 238..244
-              PathExpr 238..239
-                Ident 238..239 "a"
-              EqEq 240..242 "=="
-              LiteralExpr 243..244
-                Int 243..244 "6"
-            AmpAmp 245..247 "&&"
-            BinExpr 248..258
-              PathExpr 248..249
-                Ident 248..249 "s"
-              EqEq 250..252 "=="
-              StringExpr 253..258
-                StrBegin 253..254 "\""
-                StrFragment 254..257 "abc"
-                StrEnd 257..258 "\""
-          Block 259..264
-            LBrace 259..260 "{"
-            ExprStmt 261..262
-              LiteralExpr 261..262
-                Int 261..262 "0"
-            RBrace 263..264 "}"
-          ElseKw 265..269 "else"
-          Block 270..275
-            LBrace 270..271 "{"
-            ExprStmt 272..273
-              LiteralExpr 272..273
-                Int 272..273 "1"
-            RBrace 274..275 "}"
-        Term 275..276 "\n"
-      RBrace 276..277 "}"
-  Term 277..278 "\n"
-  Eof 278..278 ""
+SourceFile 157..280
+  FnDecl 157..279
+    FnKw 157..159 "fn"
+    Ident 160..164 "main"
+    ParamList 164..166
+      LParen 164..165 "("
+      RParen 165..166 ")"
+    RetType 167..174
+      Arrow 167..169 "->"
+      ErrorUnionType 170..174
+        Not 170..171 "!"
+        PathType 171..174
+          Path 171..174
+            Ident 171..174 "int"
+    Block 175..279
+      LBrace 175..176 "{"
+      LetDecl 181..199
+        LetKw 181..184 "let"
+        IdentPat 185..186
+          Ident 185..186 "a"
+        Eq 187..188 "="
+        BinExpr 189..198
+          BinExpr 189..194
+            LiteralExpr 189..190
+              Int 189..190 "1"
+            Plus 191..192 "+"
+            LiteralExpr 193..194
+              Int 193..194 "2"
+          Plus 195..196 "+"
+          LiteralExpr 197..198
+            Int 197..198 "3"
+        Term 198..199 "\n"
+      LetDecl 203..233
+        LetKw 203..206 "let"
+        IdentPat 207..208
+          Ident 207..208 "s"
+        Eq 209..210 "="
+        CallExpr 211..232
+          MemberExpr 211..230
+            CallExpr 211..224
+              MemberExpr 211..222
+                StringExpr 211..216
+                  StrBegin 211..212 "\""
+                  StrFragment 212..215 "abc"
+                  StrEnd 215..216 "\""
+                Dot 216..217 "."
+                Ident 217..222 "upper"
+              ArgList 222..224
+                LParen 222..223 "("
+                RParen 223..224 ")"
+            Dot 224..225 "."
+            Ident 225..230 "lower"
+          ArgList 230..232
+            LParen 230..231 "("
+            RParen 231..232 ")"
+        Term 232..233 "\n"
+      ExprStmt 237..278
+        IfExpr 237..277
+          IfKw 237..239 "if"
+          BinExpr 240..260
+            BinExpr 240..246
+              PathExpr 240..241
+                Ident 240..241 "a"
+              EqEq 242..244 "=="
+              LiteralExpr 245..246
+                Int 245..246 "6"
+            AmpAmp 247..249 "&&"
+            BinExpr 250..260
+              PathExpr 250..251
+                Ident 250..251 "s"
+              EqEq 252..254 "=="
+              StringExpr 255..260
+                StrBegin 255..256 "\""
+                StrFragment 256..259 "abc"
+                StrEnd 259..260 "\""
+          Block 261..266
+            LBrace 261..262 "{"
+            ExprStmt 263..264
+              LiteralExpr 263..264
+                Int 263..264 "0"
+            RBrace 265..266 "}"
+          ElseKw 267..271 "else"
+          Block 272..277
+            LBrace 272..273 "{"
+            ExprStmt 274..275
+              LiteralExpr 274..275
+                Int 274..275 "1"
+            RBrace 276..277 "}"
+        Term 277..278 "\n"
+      RBrace 278..279 "}"
+  Term 279..280 "\n"
+  Eof 280..280 ""
 == diagnostics ==

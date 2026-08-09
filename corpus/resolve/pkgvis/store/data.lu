@@ -1,0 +1,7 @@
+//! member: true
+//!
+//! A package-visible item: exported to the package, not the world.
+
+pub(pkg) fn limit() -> int {
+    8
+}

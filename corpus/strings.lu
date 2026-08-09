@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: parse
+//! phase: resolve
 //! conforms: str.multiline, str.slice, str.views, str.regex_literal, str.interp
 //!
 //! Strings (D24–D26): UTF-8 always, byte-offset checked slicing (never

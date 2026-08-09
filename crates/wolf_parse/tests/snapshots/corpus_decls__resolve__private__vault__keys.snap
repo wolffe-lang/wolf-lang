@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 18..48 name=secret body=Block
+FnDecl 50..88 name=open pub body=Block

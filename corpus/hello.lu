@@ -1,5 +1,5 @@
 //! check: run(exit=0, stdout="hello, wolf")
-//! phase: parse
+//! phase: resolve
 //! conforms: str.interp
 //!
 //! The first program. Every string literal is an f-string (D26/X9);

@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: parse
+//! phase: resolve
 //! conforms: gram.amb.brackets
 //! Same postfix shape as indexing: `f[int]()` — resolved in sema.
 

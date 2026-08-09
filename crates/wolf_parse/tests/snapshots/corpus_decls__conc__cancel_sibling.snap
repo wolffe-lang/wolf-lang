@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 388..419 name=fail_fast body=Block
-FnDecl 421..730 name=race_them body=Block
-FnDecl 732..825 name=main body=Block
+FnDecl 390..421 name=fail_fast body=Block
+FnDecl 423..732 name=race_them body=Block
+FnDecl 734..827 name=main body=Block

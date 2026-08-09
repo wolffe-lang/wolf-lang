@@ -3,85 +3,85 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 121..241
-  StructDecl 121..144
-    StructKw 121..127 "struct"
-    Ident 128..133 "Point"
-    LBrace 134..135 "{"
-    StructField 136..142
-      Ident 136..137 "x"
-      Colon 137..138 ":"
-      PathType 139..142
-        Path 139..142
-          Ident 139..142 "int"
-    RBrace 143..144 "}"
-  Term 144..145 "\n"
-  FnDecl 146..240
-    FnKw 146..148 "fn"
-    Ident 149..153 "main"
-    ParamList 153..155
-      LParen 153..154 "("
-      RParen 154..155 ")"
-    RetType 156..163
-      Arrow 156..158 "->"
-      ErrorUnionType 159..163
-        Not 159..160 "!"
-        PathType 160..163
-          Path 160..163
-            Ident 160..163 "int"
-    Block 164..240
-      LBrace 164..165 "{"
-      LetDecl 170..193
-        LetKw 170..173 "let"
-        IdentPat 174..175
-          Ident 174..175 "p"
-        Eq 176..177 "="
-        StructLit 178..192
-          PathExpr 178..183
-            Ident 178..183 "Point"
-          LBrace 184..185 "{"
-          FieldInit 186..190
-            Ident 186..187 "x"
-            Colon 187..188 ":"
-            LiteralExpr 189..190
-              Int 189..190 "0"
-          RBrace 191..192 "}"
-        Term 192..193 "\n"
-      ExprStmt 197..239
-        IfExpr 197..238
-          IfKw 197..199 "if"
-          BinExpr 200..221
-            PathExpr 200..201
-              Ident 200..201 "p"
-            EqEq 202..204 "=="
-            ParenExpr 205..221
-              LParen 205..206 "("
-              StructLit 206..220
-                PathExpr 206..211
-                  Ident 206..211 "Point"
-                LBrace 212..213 "{"
-                FieldInit 214..218
-                  Ident 214..215 "x"
-                  Colon 215..216 ":"
-                  LiteralExpr 217..218
-                    Int 217..218 "0"
-                RBrace 219..220 "}"
-              RParen 220..221 ")"
-          Block 222..227
-            LBrace 222..223 "{"
-            ExprStmt 224..225
-              LiteralExpr 224..225
-                Int 224..225 "0"
-            RBrace 226..227 "}"
-          ElseKw 228..232 "else"
-          Block 233..238
-            LBrace 233..234 "{"
-            ExprStmt 235..236
-              LiteralExpr 235..236
-                Int 235..236 "1"
-            RBrace 237..238 "}"
-        Term 238..239 "\n"
-      RBrace 239..240 "}"
-  Term 240..241 "\n"
-  Eof 241..241 ""
+SourceFile 123..243
+  StructDecl 123..146
+    StructKw 123..129 "struct"
+    Ident 130..135 "Point"
+    LBrace 136..137 "{"
+    StructField 138..144
+      Ident 138..139 "x"
+      Colon 139..140 ":"
+      PathType 141..144
+        Path 141..144
+          Ident 141..144 "int"
+    RBrace 145..146 "}"
+  Term 146..147 "\n"
+  FnDecl 148..242
+    FnKw 148..150 "fn"
+    Ident 151..155 "main"
+    ParamList 155..157
+      LParen 155..156 "("
+      RParen 156..157 ")"
+    RetType 158..165
+      Arrow 158..160 "->"
+      ErrorUnionType 161..165
+        Not 161..162 "!"
+        PathType 162..165
+          Path 162..165
+            Ident 162..165 "int"
+    Block 166..242
+      LBrace 166..167 "{"
+      LetDecl 172..195
+        LetKw 172..175 "let"
+        IdentPat 176..177
+          Ident 176..177 "p"
+        Eq 178..179 "="
+        StructLit 180..194
+          PathExpr 180..185
+            Ident 180..185 "Point"
+          LBrace 186..187 "{"
+          FieldInit 188..192
+            Ident 188..189 "x"
+            Colon 189..190 ":"
+            LiteralExpr 191..192
+              Int 191..192 "0"
+          RBrace 193..194 "}"
+        Term 194..195 "\n"
+      ExprStmt 199..241
+        IfExpr 199..240
+          IfKw 199..201 "if"
+          BinExpr 202..223
+            PathExpr 202..203
+              Ident 202..203 "p"
+            EqEq 204..206 "=="
+            ParenExpr 207..223
+              LParen 207..208 "("
+              StructLit 208..222
+                PathExpr 208..213
+                  Ident 208..213 "Point"
+                LBrace 214..215 "{"
+                FieldInit 216..220
+                  Ident 216..217 "x"
+                  Colon 217..218 ":"
+                  LiteralExpr 219..220
+                    Int 219..220 "0"
+                RBrace 221..222 "}"
+              RParen 222..223 ")"
+          Block 224..229
+            LBrace 224..225 "{"
+            ExprStmt 226..227
+              LiteralExpr 226..227
+                Int 226..227 "0"
+            RBrace 228..229 "}"
+          ElseKw 230..234 "else"
+          Block 235..240
+            LBrace 235..236 "{"
+            ExprStmt 237..238
+              LiteralExpr 237..238
+                Int 237..238 "1"
+            RBrace 239..240 "}"
+        Term 240..241 "\n"
+      RBrace 241..242 "}"
+  Term 242..243 "\n"
+  Eof 243..243 ""
 == diagnostics ==

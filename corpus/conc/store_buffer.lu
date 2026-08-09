@@ -1,5 +1,5 @@
 //! check: fail(E1101)
-//! phase: parse
+//! phase: resolve
 //! conforms: conc.task.spawn, conc.mm.advice
 //! The store-buffer litmus is INEXPRESSIBLE in safe wolf: two tasks
 //! capturing plain mutable state don't typecheck. This file is the

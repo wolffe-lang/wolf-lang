@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: parse
+//! phase: resolve
 //! conforms: gram.amb.brackets
 //! `e[…]` is ONE postfix form; index vs generic-apply is sema's call (D29).
 

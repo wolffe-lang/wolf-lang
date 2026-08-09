@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.unsafe.raw.1, mem.unsafe.raw.2
 //! Raw pointers carry NO aliasing assumptions unless asserted. This
 //! assertion is true, so behavior is defined and O5 licensing applies.

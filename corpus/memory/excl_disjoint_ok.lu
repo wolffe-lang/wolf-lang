@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: parse
+//! phase: resolve
 //! conforms: mem.tier0.excl.2, mem.model.path.disjoint
 //! Disjoint paths may be mut simultaneously. (View-set litmus
 //! [mem.tier0.excl.3] is deferred: it needs impl-method receivers, whose
