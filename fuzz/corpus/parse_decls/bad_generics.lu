@@ -1,0 +1,2 @@
+fn broken[[T]](x: int) -> int { x }
+fn ok[T](x: T) -> T { x }

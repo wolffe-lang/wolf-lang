@@ -16,6 +16,8 @@ libfuzzer-sys = "0.4"
 xtask = { path = "../xtask" }
 wolf_lex = { path = "../crates/wolf_lex" }
 wolf_span = { path = "../crates/wolf_span" }
+wolf_ast = { path = "../crates/wolf_ast" }
+wolf_parse = { path = "../crates/wolf_parse" }
 
 [[bin]]
 name = "fuzz_corpus_directives"
@@ -27,6 +29,13 @@ bench = false
 [[bin]]
 name = "lex"
 path = "fuzz_targets/lex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_decls"
+path = "fuzz_targets/parse_decls.rs"
 test = false
 doc = false
 bench = false

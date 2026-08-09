@@ -175,9 +175,18 @@ name = "wolf-fuzz"
 version = "0.0.1"
 dependencies = [
  "libfuzzer-sys",
+ "wolf_ast",
  "wolf_lex",
+ "wolf_parse",
  "wolf_span",
  "xtask",
+]
+
+[[package]]
+name = "wolf_ast"
+version = "0.0.1"
+dependencies = [
+ "wolf_span",
 ]
 
 [[package]]
@@ -193,6 +202,16 @@ version = "0.0.1"
 dependencies = [
  "unicode-ident",
  "wolf_diag",
+ "wolf_span",
+]
+
+[[package]]
+name = "wolf_parse"
+version = "0.0.1"
+dependencies = [
+ "wolf_ast",
+ "wolf_diag",
+ "wolf_lex",
  "wolf_span",
 ]
 
