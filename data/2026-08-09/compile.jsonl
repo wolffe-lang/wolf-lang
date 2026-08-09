@@ -1,0 +1,7 @@
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"clean_build_wall_s","track":"compile","unit":"s","value":0.297526271}
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"incr_rebuild_wall_s","track":"compile","unit":"s","value":0.100468979}
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"clean_build_wall_s","track":"compile","unit":"s","value":0.097775978}
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"incr_rebuild_wall_s","track":"compile","unit":"s","value":0.101961209}
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"clean_build_wall_s","track":"compile","unit":"s","value":0.098950159}
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"incr_rebuild_wall_s","track":"compile","unit":"s","value":0.099279205}
+{"bench":"driver","commit":"a6ba96d","config":"bootstrap-cargo-stub","lang":"rust","metric":"max_rss_kb","track":"compile","unit":"kB","value":225280.0}
