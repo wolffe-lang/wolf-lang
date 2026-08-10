@@ -58,6 +58,20 @@ fn cli_diagnostics(path: &Path) -> Vec<(String, u32, u32)> {
     diags
 }
 
+/// `file://` URI a server can parse on every platform — windows paths
+/// need slash normalization and the empty-authority third slash
+/// (`file:///D:/…`); `path.display()` alone produced `file://D:\…`,
+/// which never parsed, so the awaited publish never matched (the 3.7h
+/// windows wedge).
+fn file_uri(path: &std::path::Path) -> String {
+    let slashed = path.display().to_string().replace('\\', "/");
+    if slashed.starts_with('/') {
+        format!("file://{slashed}")
+    } else {
+        format!("file:///{slashed}")
+    }
+}
+
 // ------------------------------------------- a minimal framed client --
 
 struct LspChild {
@@ -105,6 +119,13 @@ impl LspChild {
             stdout,
             next_id: 0,
             disarm: Some(disarm_tx),
+        }
+    }
+
+    /// Stand the watchdog down — call before waiting on a clean exit.
+    fn disarm(&mut self) {
+        if let Some(tx) = self.disarm.take() {
+            let _ = tx.send(());
         }
     }
 
@@ -176,6 +197,7 @@ impl LspChild {
         let resp = self.wait_response(id);
         assert!(resp.get("error").is_none_or(|e| e.is_null()));
         self.notify("exit", serde_json::Value::Null);
+        self.disarm();
         let status = self.child.wait().expect("wolf lsp exits");
         assert!(status.success(), "clean exit, got {status:?}");
     }
@@ -217,7 +239,7 @@ fn one_truth_check(path: &Path) {
     );
     lsp.notify("initialized", serde_json::json!({}));
 
-    let uri = format!("file://{}", path.display());
+    let uri = file_uri(&path);
     lsp.notify(
         "textDocument/didOpen",
         serde_json::json!({
@@ -286,6 +308,7 @@ fn exit_without_shutdown_exits_one() {
     let _ = lsp.wait_response(id);
     lsp.notify("initialized", serde_json::json!({}));
     lsp.notify("exit", serde_json::Value::Null);
+    lsp.disarm();
     let status = lsp.child.wait().expect("wolf lsp exits");
     assert_eq!(status.code(), Some(1), "bare exit must not report success");
 }
