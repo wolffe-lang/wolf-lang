@@ -1043,7 +1043,9 @@ you do not need.
 // conflicting placement, E1010 escape of region-local data); s20 the
 // region-checker codes (E1005 transfer/freeze of an open region,
 // E1011 multiopen antichain violation, E1012 write through frozen
-// data); shared (E1006) is s21's, and the unsafe tier s22's. The
+// data); s21 the shared tier's E1006 (strong `shared` cycle at the
+// type level — acyclicity is what lets RC drops skip cycle detection
+// forever, [mem.ub.defined]); the unsafe tier is s22's. The
 // dynamic counterparts are normative: E1001 ⇄ trap(use-after-move),
 // E1002 ⇄ trap(exclusivity), E1004/E1005/E1010 ⇄ region-fault per
 // [conf.trap.map] — the interpreter checks at runtime what these
@@ -1106,6 +1108,21 @@ region whose *child* region is still open: the forest moves as
 closed subtrees, never around an open window. End the `region`/`in`
 block first and transfer after, or transfer first and open on the
 receiving side.
+"#);
+
+code!(E1006, "this type's `shared` references form a strong cycle", r#"
+`shared T` is reference-counted: the value is freed the moment its
+last strong reference drops. A cycle of strong references keeps
+itself alive forever — every cell waits on the others — and wolf has
+no cycle collector, because a leak is not an answer either. So strong
+`shared` edges must form a DAG, checked right here at the type
+definition ([mem.shared.rc.2]). Break the cycle at its back-edge:
+make that field `weak T` (upgrade to reach the value, it does not
+keep it alive) or `handle T` (a generational index that faults if the
+target is gone). If the structure is genuinely cyclic — a graph, a
+doubly-linked list — keep the whole structure inside one region
+instead: intra-region cycles are safe and free
+([mem.region.intra.1]), and the region frees them wholesale.
 "#);
 
 code!(E1007, "the argument's mode does not match the parameter's", r#"

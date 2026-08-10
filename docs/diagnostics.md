@@ -1135,6 +1135,23 @@ receiving side.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_freeze_open.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_move_while_open.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_transfer_open.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1005_freeze_while_open.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1005_move_while_open.snap
 
+## E1006 — this type's `shared` references form a strong cycle
+
+`shared T` is reference-counted: the value is freed the moment its
+last strong reference drops. A cycle of strong references keeps
+itself alive forever — every cell waits on the others — and wolf has
+no cycle collector, because a leak is not an answer either. So strong
+`shared` edges must form a DAG, checked right here at the type
+definition ([mem.shared.rc.2]). Break the cycle at its back-edge:
+make that field `weak T` (upgrade to reach the value, it does not
+keep it alive) or `handle T` (a generational index that faults if the
+target is gone). If the structure is genuinely cyclic — a graph, a
+doubly-linked list — keep the whole structure inside one region
+instead: intra-region cycles are safe and free
+([mem.region.intra.1]), and the region frees them wholesale.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__shared_cycle.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1006_cycle_through_list.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1006_direct_strong_cycle.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1006_two_type_cycle.snap
+
 ## E1007 — the argument's mode does not match the parameter's
 
 A parameter's mode is part of the deal between caller and callee, and
