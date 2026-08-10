@@ -1278,6 +1278,27 @@ every access.
 "#);
 
 // ------------------------------------------------------------------------
+// E14xx — the checked-execution family (s23): verdicts of the miri-lite
+// UB machine, reported when `--checked` runs a program dynamically.
+// ------------------------------------------------------------------------
+
+code!(E1401, "undefined behavior detected by the checked-build UB machine", r#"
+The `--checked` execution machine (the miri-lite UB checker) ran this
+program against the operational memory model and reached a state the
+spec's closed UB enumeration names: every finding cites its `[mem.ub]`
+row (P1-P6, L1, L2, T1), the raw-tier operation responsible, and the
+licensed optimization the D2 pairing attaches to that row — the
+transformation compiled code is entitled to make, which is exactly why
+the unchecked behavior is undefined rather than merely wrong. The
+static tier accepts this program by design: raw pointers carry no
+statically-checkable aliasing claims, so the unsafe tier's obligations
+are discharged dynamically, here or by the independent is04 oracle.
+Fix the operation the finding points at (the second span shows the
+provenance it violates); the near-miss corpus files show the closest
+defined shape for each row.
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — the formatter's family (s11).
 // ------------------------------------------------------------------------
 
