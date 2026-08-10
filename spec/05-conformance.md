@@ -75,7 +75,10 @@ parser contract):
   `trap` (kind unspecified), or `trap(kind)` with kind from the closed
   set: `overflow`, `div-zero`, `bounds`, `use-after-move`, `exclusivity`,
   `region-fault`, `stale-handle`, `alloc-contract`, `assert`, `race`,
-  `ub`. The set is closed; extension requires revising this spec.
+  `ub`, `deadlock`. The set is closed; extension requires revising this
+  spec. (Revised 2026-08-10, deliberately: `deadlock` added by the
+  spec/03 amendment `[conc.deadlock.trap]` — is06 finding S-3 showed
+  the vocabulary had no spelling for an all-tasks-blocked outcome.)
 - `[conf.trap.map]` Compiler, interpreter, and UB oracle map their
   runtime faults onto this single vocabulary — it is the comparison
   alphabet of spec 06. Sources: `overflow`/`div-zero`/`bounds` (s04
@@ -88,7 +91,10 @@ parser contract):
   violations in checked builds), `assert` (user assertions), `race`
   (`[conc.mm.race.3]` — detection permitted, not required), `ub`
   (oracle-detected UB; `[proto.record.ub]` gives it comparison
-  semantics).
+  semantics), `deadlock` (`[conc.deadlock.trap]` — every live task
+  blocked with no pending timer or I/O, and the self-acquisition case
+  `[conc.deadlock.self]`; detection required in deterministic test
+  modes, permitted elsewhere).
 - `[conf.trap.exit]` A trap terminates the process with a nonzero,
   implementation-specified exit status; conforming tools compare the
   *kind*, never the status number.

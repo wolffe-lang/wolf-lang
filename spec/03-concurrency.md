@@ -104,6 +104,14 @@ premise by construction.
   process lifetime; `spawn proc` targets it (or a nested supervisor).
   Daemon-shaped work is therefore named, supervised, and enumerable —
   never detached.
+- `[conc.task.fail.owner]` `[conc.task.fail]`'s cancellation reaches
+  the scope **owner** too: when a child fails, an owner blocked at a
+  `[conc.cancel.points]` blocking point it entered inside the scope's
+  extent is cancelled exactly like a sibling — the scope is the
+  cancellation unit, owner included (the Trio posture, adopted
+  2026-08-10 after is06's machine deadlocked `procs.lu`'s second
+  scope without it — finding S-4). The failure still re-raises at the
+  scope exit, after the join (`[conc.task.join]`).
 
 ## §3 Procs, channels, select, cancellation `[conc.proc]`
 
@@ -129,6 +137,29 @@ premise by construction.
   boundaries must be owned by channels/supervisors (release-on-exit
   messages), never by defers inside the proc. Contrast
   `[conc.cancel.defer]`.
+- `[conc.proc.cancel]` `w.cancel()` delivers **structured
+  cancellation** to a proc: its task tree is cancelled cooperatively
+  at `[conc.cancel.points]` blocking points, and its defers run
+  (`[conc.cancel.defer]` — contrast `[conc.proc.kill]`, which skips
+  them). A proc that exits because this cancellation reached it exits
+  with reason `cancelled`; one that completes its value despite it
+  keeps `normal(value)`. (Appended 2026-08-10: is06 found
+  `[conc.proc.exit]`'s `cancelled` label unreachable from the pinned
+  surface — finding S-6; this clause is the delivery mechanism.)
+- `[conc.proc.link.pair]` `a.link(b)` couples two procs symmetrically
+  — the two-proc spelling is06 found missing (finding S-7);
+  `w.link()` is `w.link(<the calling task's proc>)`. Linking is
+  idempotent per pair; delivery is `[conc.proc.2]`'s.
+- `[conc.proc.root]` The **root supervisor's domain is the process**:
+  `main`'s task tree runs in it, and `w.link()` called from `main`
+  couples `w` to it. The root domain's abnormal death — a linked
+  partner's abnormal exit, or a fault escaping `main` — runs the
+  killed-proc sequence (`[conc.proc.kill]`) for every live proc and
+  terminates the process with a nonzero, implementation-specified
+  status (`[conf.trap.exit]` discipline: conforming tools compare the
+  outcome class, never the number). (Appended 2026-08-10, finding
+  S-7's second half: the machine reported the root kill
+  `unsupported`; it is now specified.)
 
 ### Channels `[conc.chan]`
 
@@ -146,6 +177,27 @@ premise by construction.
   + `select` (03 Q3): there is no selective receive; a proc's message
   handlers are atomic and non-blocking (a handler that must block
   spawns/awaits inside its own task tree instead).
+- `[conc.chan.move]` Sending a region value **is its affine move**
+  (`[mem.region.freeze.2]`): the send transfers the whole owned
+  subtree to the receiver and publishes every prior write into it
+  (`[conc.mm.hb.move]`). The transferred subtree must be **closed**
+  (`[mem.region.freeze.3]`: sending an open region is a compile
+  error, E1005; dynamically `region-fault`) and **disconnected** — at
+  the send, no path from the sender's still-reachable graph leads
+  into the transferred region other than the moved value itself.
+  Static checkers get this from the forest invariant plus affine
+  moves; dynamic machines re-check it at the send. (Appended
+  2026-08-10, finding S-2 — the clause the sprint contract named.)
+- `[conc.chan.staleuse]` After a moving send, the donor's binding is
+  moved-from: any later use through it is `[mem.tier0.move.2]` —
+  compile error E1001, dynamically `trap(use-after-move)`. The
+  staleness is the *sender's* fault, reported at the use site, never
+  the receiver's. (Appended 2026-08-10, finding S-2: the
+  sender-stale-use fault the machine implements now has its clause.)
+- `[conc.chan.imm]` `imm` data sends **by reference**: no move, no
+  copy, and the sender's access survives the send
+  (`[mem.region.edge.imm]`, `[conc.mm.hb.freeze]`). `Copy` values
+  copy at the send. Only region values change hands on a send.
 
 ### Select `[conc.select]`
 
@@ -162,6 +214,76 @@ premise by construction.
 - `[conc.select.io]` Completion-based I/O (X6) surfaces exclusively as
   select-able completion operations; no clause anywhere may assume
   readiness polling. An I/O completion's delivery is a recorded event.
+- `[conc.select.closed]` A **drained-closed** channel makes its
+  receive arm **ready** (`[conc.select.ready]`): the arm runs and
+  receives the closed error value (`[conc.chan.close]`'s error, an
+  ordinary error value). Go's posture, adopted 2026-08-10 from is06's
+  machine (finding S-8): a `select` that blocked forever on a channel
+  that can never deliver would contradict `[conc.chan.close]`'s
+  never-a-fault discipline.
+
+### `when` — whole-set acquisition `[conc.when]`
+
+(Appended 2026-08-10. 03 Q6 decided `when` is a language construct;
+the corpus exercised it with no clauses behind it — finding S-1.
+is06's machine was the first executable evidence; these clauses adopt
+its sound choices, per the approximation contract §10.5, and deviate
+only where noted.)
+
+- `[conc.when.order]` `when (a, b, …) { … }` acquires the **entire
+  operand set** before the body runs, one object at a time in the
+  **canonical order** — a single total order over all sync objects in
+  the process (creation order; a recorded decision) — regardless of
+  the order written at the site. `when (a, b)` and `when (b, a)`
+  perform identical acquisitions. Each acquisition is an `acquire`
+  event (`[conc.det.events]`), and `[conc.mm.hb.mutex]`'s edge counts
+  per object.
+- `[conc.when.nodeadlock]` **No lock-order deadlock, by
+  construction:** every `when` acquires its whole set in the one
+  canonical order, so a task blocked mid-set holds only objects
+  earlier in that order than the one it awaits — no cycle of `when`
+  acquisitions can form. This argument is exactly why
+  `[conc.when.nonest]` forbids nesting: a nested `when` is
+  incremental acquisition by another spelling.
+- `[conc.when.body]` The body runs with **exclusive access** to every
+  operand's payload. Operands named by simple paths rebind to their
+  payloads inside the body (reads and writes go to the payload) and
+  write back at release, in reverse canonical order; block exit is
+  the release. Capturing or storing a payload path past the block is
+  the same error surface as `[conc.task.spawn]`'s capture rule.
+- `[conc.when.nonest]` A `when` lexically inside another `when` body
+  is a **compile error (E1103)**. Reaching an acquisition of a sync
+  object the task already holds *dynamically* (through a call) can
+  never complete and is `trap(deadlock)` — `[conc.deadlock.self]`.
+  (Deviation from the machine, with rationale: is06 trapped `assert`
+  here only because no fitting kind existed; this amendment adds one,
+  and `assert` was recorded as a stopgap, not a choice.)
+
+### Deadlock `[conc.deadlock]`
+
+(Appended 2026-08-10, findings S-3/S-4: a language whose concurrency
+is schedulable and explorable needs a stable spelling for "this
+schedule deadlocks"; `unsupported` was honest and insufficient.)
+
+- `[conc.deadlock.def]` An execution state in which **every live task
+  is blocked** at a `[conc.cancel.points]` blocking point, with no
+  pending timer and no in-flight I/O completion, is a **deadlock** —
+  a *defined outcome*, not UB and not silent nontermination: a
+  deterministic scheduler can detect it exactly.
+- `[conc.deadlock.trap]` A detected deadlock terminates the process
+  with trap kind `deadlock` (added to `[conf.trap.set]` by this
+  amendment — the deliberate spec/05 revision that clause's closure
+  demands), reporting the blocked-task roster (names and blocking
+  points; contents implementation-specified, existence contract,
+  `[conc.task.name]`'s discipline). Detection is **required** in
+  deterministic test modes (record/replay, the is07 explorer) and
+  permitted elsewhere. `trap(deadlock)` is the verdict spelling
+  is07 reports per schedule.
+- `[conc.deadlock.self]` Acquiring a sync object the acquiring task
+  already holds can never complete: the same defined outcome,
+  detected immediately — `trap(deadlock)`. (The lexical case is
+  E1103, `[conc.when.nonest]`; this clause covers the through-a-call
+  case no local check can see.)
 
 ### Cancellation `[conc.cancel]`
 
