@@ -1,0 +1,20 @@
+; every integer arithmetic variant: checked (X3), wrapping, saturating,
+; and the total bit ops.
+fn @arith(i64, i64) -> i64 {
+b0(%a: i64, %b: i64):
+  %c = iadd.chk %a, %b
+  %d = isub.wrap %c, %a
+  %e = imul.sat %d, %b
+  %f = idiv.chk %e, %b
+  %g = irem.chk %f, %b
+  %h = band %g, %a
+  %i = bor %h, %b
+  %j = bxor %i, %a
+  %k = shl %j, %b
+  %l = lshr %k, %b
+  %m = ashr %l, %b
+  %n = iadd.sat %m, %a
+  %o = imul.wrap %n, %b
+  %p = isub.chk %o, %a
+  ret %p
+}

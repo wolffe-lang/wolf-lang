@@ -1,0 +1,13 @@
+; all five fact kinds, each with its justification: theorem classes
+; from c04 (excl.mut, frozen.read, region.alloc) or a deriving op.
+fn @facty(mut ptr, read ptr, i64, mem.r0) -> i64 {
+  fact noalias %p %q : excl.mut
+  fact deref %p 64 : excl.mut
+  fact deref %q 8x%n : frozen.read
+  fact frozen %q : frozen.read
+  fact region %p r0 : region.alloc
+  fact range %k 0..=41 : op
+b0(%p: ptr, %q: ptr, %n: i64, %m: mem.r0):
+  %k = iconst.i64 41
+  ret %k
+}

@@ -1,0 +1,25 @@
+; dot product — the contract's flavor sketch, verifier-green:
+; loop with block parameters, token-reading loads, three facts.
+fn @dot(mut ptr, read ptr, i64, mem.r0) -> f64 {
+  fact noalias %a %b : excl.mut
+  fact deref %a 8x%n : excl.mut
+  fact deref %b 8x%n : frozen.read
+b0(%a: ptr, %b: ptr, %n: i64, %m: mem.r0):
+  %zero = iconst.i64 0
+  %fz = fconst.f64 0.0
+  jmp b1(%zero, %fz)
+b1(%i: i64, %acc: f64):
+  %c = icmp.slt %i, %n
+  br %c, b2, b3
+b2:
+  %pa = ptr.off %a, %i, 8
+  %x = load.f64 %pa, %m
+  %pb = ptr.off %b, %i, 8
+  %y = load.f64 %pb, %m
+  %acc2 = fma %x, %y, %acc
+  %one = iconst.i64 1
+  %i2 = iadd.chk %i, %one
+  jmp b1(%i2, %acc2)
+b3:
+  ret %acc
+}

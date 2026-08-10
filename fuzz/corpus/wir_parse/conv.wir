@@ -1,0 +1,8 @@
+; pointer offset + load: address math is explicit, the mem token is an
+; operand, never an annotation.
+fn @index(read ptr, i64, mem.r0) -> i32 {
+b0(%p: ptr, %i: i64, %m: mem.r0):
+  %q = ptr.off %p, %i, 4
+  %x = load.i32 %q, %m
+  ret %x
+}

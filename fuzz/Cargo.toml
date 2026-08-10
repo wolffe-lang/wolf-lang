@@ -19,6 +19,7 @@ wolf_span = { path = "../crates/wolf_span" }
 wolf_ast = { path = "../crates/wolf_ast" }
 wolf_parse = { path = "../crates/wolf_parse" }
 wolf_fmt = { path = "../crates/wolf_fmt" }
+wolf_wir = { path = "../crates/wolf_wir" }
 
 [[bin]]
 name = "fuzz_corpus_directives"
@@ -51,6 +52,13 @@ bench = false
 [[bin]]
 name = "fmt"
 path = "fuzz_targets/fmt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "wir_parse"
+path = "fuzz_targets/wir_parse.rs"
 test = false
 doc = false
 bench = false
