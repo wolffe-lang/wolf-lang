@@ -1,0 +1,9 @@
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":33.406794765}
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.534414858}
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.524080978}
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.534954418}
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.525623272}
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.549752017}
+{"bench":"sema","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"bodies_per_sec","style":"1","track":"compile","unit":"bodies/s","value":190.7}
+{"bench":"sema","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"ctfe_memo_hit_rate","style":"1","track":"compile","unit":"ratio","value":0.0275}
+{"bench":"driver","commit":"70bdd35","config":"bootstrap-cargo-stub","lang":"rust","metric":"max_rss_kb","style":"1","track":"compile","unit":"kB","value":325824.0}
