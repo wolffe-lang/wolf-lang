@@ -1033,6 +1033,23 @@ impl<'a> Lower<'a> {
                 if generics.contains(&first) || Prim::from_name(&first).is_some() {
                     // qualified/applied builtin form — not a s13 type
                     self.opaque(file, node)
+                } else if segs.len() == 1 && matches!(first.as_str(), "List" | "Pool") {
+                    // The two prelude containers the Tier-2 corpus
+                    // rests on (s21): typed as builtins so `handle`
+                    // pools and the region litmuses check. Every other
+                    // prelude generic stays opaque until s16/s37.
+                    let arg_tys: Vec<TyId> = d
+                        .args()
+                        .into_iter()
+                        .flat_map(|a| a.args())
+                        .filter(|a| is_type_kind(a.kind))
+                        .map(|a| self.lower_type(module, file, generics, a))
+                        .collect();
+                    match (first.as_str(), arg_tys.as_slice()) {
+                        ("List", &[elem]) => self.table.intern(TyKind::List(elem)),
+                        ("Pool", &[elem]) => self.table.intern(TyKind::Pool(elem)),
+                        _ => self.opaque(file, node),
+                    }
                 } else {
                     // Resolution already reported unresolved names; a
                     // prelude collection name lands here too.
@@ -1259,10 +1276,12 @@ mod tests {
 
     #[test]
     fn generic_instantiations_stay_opaque() {
+        // `Map[..]` (any non-builtin generic head) stays an opaque
+        // token; `List[int]`/`Pool[T]` became typed builtins in s21.
         let p = pkg(&[(
             &[],
             "main.lu",
-            "struct Big { data: List[int] }\nfn main() -> !int { 0 }\n",
+            "struct Big { data: Map[str, int] }\nfn main() -> !int { 0 }\n",
         )]);
         let sigs = build_sigs(&p);
         let ItemSig::Struct(s) = sigs.get(0, "Big").expect("Big") else {
@@ -1270,8 +1289,32 @@ mod tests {
         };
         assert!(matches!(
             sigs.table.kind(s.fields[0].ty),
-            TyKind::Unsupported(t) if t == "List[int]"
+            TyKind::Unsupported(t) if t == "Map[str, int]"
         ));
+    }
+
+    #[test]
+    fn prelude_containers_lower_as_builtins() {
+        // s21: the two Tier-2 prelude containers are structural types
+        // now — `List[int]` and `Pool[Node]` fields elaborate, and the
+        // element type is reachable (the E1006 walk needs the edges).
+        let p = pkg(&[(
+            &[],
+            "main.lu",
+            "struct Node { value: int }\n\
+             struct Big { xs: List[int], pool: Pool[Node], hs: List[handle Node] }\n\
+             fn main() -> !int { 0 }\n",
+        )]);
+        let sigs = build_sigs(&p);
+        let ItemSig::Struct(s) = sigs.get(0, "Big").expect("Big") else {
+            panic!("struct sig")
+        };
+        assert!(matches!(sigs.table.kind(s.fields[0].ty), TyKind::List(_)));
+        assert!(matches!(sigs.table.kind(s.fields[1].ty), TyKind::Pool(_)));
+        let TyKind::List(inner) = sigs.table.kind(s.fields[2].ty) else {
+            panic!("List[handle Node]")
+        };
+        assert!(matches!(sigs.table.kind(*inner), TyKind::Handle(_)));
     }
 
     #[test]

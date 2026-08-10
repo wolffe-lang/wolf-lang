@@ -263,6 +263,14 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
             let s = transfer(src, dst, t);
             dst.intern(TyKind::Distinct(s))
         }
+        TyKind::List(t) => {
+            let s = transfer(src, dst, t);
+            dst.intern(TyKind::List(s))
+        }
+        TyKind::Pool(t) => {
+            let s = transfer(src, dst, t);
+            dst.intern(TyKind::Pool(s))
+        }
         TyKind::Proj(base, name) => {
             let s = transfer(src, dst, base);
             dst.intern(TyKind::Proj(s, name))

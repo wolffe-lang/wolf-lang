@@ -299,6 +299,8 @@ fn occurs_adjust(
         | TyKind::Handle(t)
         | TyKind::Weak(t)
         | TyKind::Distinct(t)
+        | TyKind::List(t)
+        | TyKind::Pool(t)
         | TyKind::Proj(t, _) => occurs_adjust(store, table, var, level, t),
         TyKind::ErrUnion(t, row) => {
             occurs_adjust(store, table, var, level, t)?;
@@ -435,7 +437,9 @@ pub fn unify(
         | (TyKind::Shared(x), TyKind::Shared(y))
         | (TyKind::Handle(x), TyKind::Handle(y))
         | (TyKind::Weak(x), TyKind::Weak(y))
-        | (TyKind::Distinct(x), TyKind::Distinct(y)) => unify(table, store, x, y),
+        | (TyKind::Distinct(x), TyKind::Distinct(y))
+        | (TyKind::List(x), TyKind::List(y))
+        | (TyKind::Pool(x), TyKind::Pool(y)) => unify(table, store, x, y),
         (TyKind::Tuple(xs), TyKind::Tuple(ys)) => {
             if xs.len() != ys.len() {
                 return Err(UnifyErr::Mismatch);

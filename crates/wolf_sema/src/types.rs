@@ -219,6 +219,14 @@ pub enum TyKind {
     Handle(TyId),
     Weak(TyId),
     Distinct(TyId),
+    /// The two prelude containers the memory-tier corpus rests on
+    /// (s21): `List[T]` (growable sequence, `bounds`-trapping index)
+    /// and `Pool[T]` (generational slab behind `handle T`, X5). Typed
+    /// as builtins exactly like `Shared`/`Handle` — *not* the generic
+    /// std surface (s16 generic data / s37 std own that); every other
+    /// generic instantiation still lands in [`TyKind::Unsupported`].
+    List(TyId),
+    Pool(TyId),
     /// `dyn Trait` with the trait resolved to its defining module
     /// (s14). Dyn-safety is checked where the type is written; witness
     /// layout is c05's.
@@ -479,6 +487,8 @@ pub fn render(
         TyKind::Handle(t) => format!("handle {}", render(table, *t, resolve)),
         TyKind::Weak(t) => format!("weak {}", render(table, *t, resolve)),
         TyKind::Distinct(t) => format!("distinct {}", render(table, *t, resolve)),
+        TyKind::List(t) => format!("List[{}]", render(table, *t, resolve)),
+        TyKind::Pool(t) => format!("Pool[{}]", render(table, *t, resolve)),
         TyKind::Dyn { name, .. } => format!("dyn {name}"),
         TyKind::Proj(base, name) => format!("{}.{name}", render(table, *base, resolve)),
         TyKind::RegionTy => "region".to_string(),
@@ -652,6 +662,14 @@ pub fn subst(
         TyKind::Distinct(t) => {
             let s = subst(table, t, map);
             table.intern(TyKind::Distinct(s))
+        }
+        TyKind::List(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::List(s))
+        }
+        TyKind::Pool(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Pool(s))
         }
         TyKind::Proj(base, name) => {
             let s = subst(table, base, map);

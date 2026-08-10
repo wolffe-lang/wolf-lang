@@ -45,9 +45,9 @@
 
 use std::collections::{BTreeMap, HashMap};
 use wolf_ast::{
-    Arg, ArgList, AssignStmt, BinExpr, Block, CallExpr, CastExpr, ClosureExpr, ConstDecl,
-    DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, GreenNode, IfExpr, InBlock,
-    LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr,
+    Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
+    ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, GreenNode, IfExpr,
+    InBlock, LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr,
     RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr, VarDecl,
     WhileExpr, is_expr_kind, is_type_kind,
 };
@@ -58,7 +58,7 @@ use wolf_span::Span;
 use crate::exhaust;
 use crate::graph::{BindTarget, Package};
 use crate::prelude;
-use crate::sig::{FnSig, GenericSig, ItemSig, Lower, SigTables, StructSig, bindings_for};
+use crate::sig::{FnSig, GenericSig, ItemSig, Lower, ParamSig, SigTables, StructSig, bindings_for};
 use crate::traits::{self, TraitRef};
 use crate::types::{MetaTy, Prim, TyId, TyKind, TypeTable, diff, render, subst};
 use crate::unify::{NumKind, UnifyErr, VarStore, join, unify};
@@ -741,6 +741,37 @@ fn zonk(table: &mut TypeTable, vars: &VarStore, ty: TyId) -> TyId {
             let z = zonk(table, vars, t);
             table.intern(TyKind::Range(z))
         }
+        // The Tier-2 wrappers and the s21 builtin containers zonk
+        // through — a `shared T`/`List[T]` whose element carries a
+        // solved var must not reach `TypedBody` half-resolved.
+        TyKind::Ptr(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::Ptr(z))
+        }
+        TyKind::Shared(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::Shared(z))
+        }
+        TyKind::Handle(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::Handle(z))
+        }
+        TyKind::Weak(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::Weak(z))
+        }
+        TyKind::Distinct(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::Distinct(z))
+        }
+        TyKind::List(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::List(z))
+        }
+        TyKind::Pool(t) => {
+            let z = zonk(table, vars, t);
+            table.intern(TyKind::Pool(z))
+        }
         TyKind::Proj(base, name) => {
             let z = zonk(table, vars, base);
             table.intern(TyKind::Proj(z, name))
@@ -1126,7 +1157,9 @@ impl<'a> Checker<'a> {
             | TyKind::Shared(t)
             | TyKind::Handle(t)
             | TyKind::Weak(t)
-            | TyKind::Distinct(t) => self.validate_projections_in(t, span),
+            | TyKind::Distinct(t)
+            | TyKind::List(t)
+            | TyKind::Pool(t) => self.validate_projections_in(t, span),
             TyKind::ErrUnion(t, row) => {
                 self.validate_projections_in(t, span);
                 self.validate_projections_in(row, span);
@@ -2608,10 +2641,7 @@ impl<'a> Checker<'a> {
             SyntaxKind::TryExpr => self.synth_try(e),
             SyntaxKind::ElseExpr => self.synth_else(e, None),
             // ---- outside the s13-checkable set: honest refusals ----
-            SyntaxKind::BracketApply => Err(NotYet {
-                construct: "indexing / generic application (s17)",
-                span: e.span,
-            }),
+            SyntaxKind::BracketApply => self.synth_bracket(e),
             SyntaxKind::FromEndExpr => Err(NotYet {
                 construct: "end-relative `^n` position (s17)",
                 span: e.span,
@@ -2875,10 +2905,13 @@ impl<'a> Checker<'a> {
                 construct: "raw-pointer dereference (unsafe tier)",
                 span: e.span,
             }),
-            Some(SyntaxKind::SharedKw) => Err(NotYet {
-                construct: "`shared` allocation typing (c04)",
-                span: e.span,
-            }),
+            // s21: prefix `shared` builds the Tier-2 RC cell from an
+            // owned value ([mem.shared.rc.1]); the cell's type wraps
+            // the payload's.
+            Some(SyntaxKind::SharedKw) => {
+                let t = self.synth_expr(operand)?;
+                Ok(self.lo.table.intern(TyKind::Shared(t)))
+            }
             _ => Ok(self.error_ty()),
         }
     }
@@ -3352,6 +3385,266 @@ impl<'a> Checker<'a> {
         }
     }
 
+    // ------------------------------------- the Tier-2 surface (s21) ---
+
+    /// `e[…]` — indexing on the s21 builtin containers. `List[T]`
+    /// indexes by `int` (OOB is the `bounds` trap, never UB);
+    /// `pool[h]` / `pool[mut h]` index by `handle T` and are the
+    /// checked slot access of `[mem.shared.handle.3]` (staleness is
+    /// the `stale-handle` trap — dynamic by contract, X5). Generic
+    /// application in value position (`first[int]`) stays refused.
+    fn synth_bracket(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = BracketApply::cast(e).expect("kind");
+        let Some(recv) = d.callee() else {
+            return Ok(self.error_ty());
+        };
+        let recv_ty = self.synth_expr(recv)?;
+        let elem = match self.kind_of(recv_ty) {
+            TyKind::List(elem) => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                self.check_index_arg(d.args(), int_, "List index")?;
+                elem
+            }
+            TyKind::Pool(elem) => {
+                let h = self.lo.table.intern(TyKind::Handle(elem));
+                self.check_index_arg(d.args(), h, "pool access")?;
+                elem
+            }
+            TyKind::Error | TyKind::Never => self.error_ty(),
+            _ => {
+                return Err(NotYet {
+                    construct: "indexing / generic application (s17)",
+                    span: e.span,
+                });
+            }
+        };
+        Ok(elem)
+    }
+
+    /// The single index argument of a container `e[…]`, checked
+    /// against the expected index type. The X1 `mut` marker
+    /// (`pool[mut h]`) is legal surface; the exclusivity behind it is
+    /// wolf_mem's. Type-only arguments (`channel[region]` shapes) are
+    /// not indexing and refuse.
+    fn check_index_arg(&mut self, args: Option<ArgList<'_>>, want: TyId, what: &str) -> R<()> {
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        for (i, a) in arg_nodes.iter().enumerate() {
+            let Some(v) = Arg::value(*a) else { continue };
+            if is_type_kind(v.kind) {
+                return Err(NotYet {
+                    construct: "type arguments in bracket position (s17)",
+                    span: v.span,
+                });
+            }
+            if i == 0 && arg_nodes.len() == 1 {
+                let exp = Expect {
+                    ty: want,
+                    reason: Reason::ArgOfCall {
+                        callee: what.to_string(),
+                        index: 0,
+                    },
+                    because: None,
+                };
+                self.check_expr(v, &exp)?;
+            } else {
+                self.synth_expr(v)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `List[int]()` / `Pool[Node]()` — the container constructors
+    /// (s21). Zero value arguments; the bracket carries one type
+    /// argument. Recorded as a ctor call so the memory checker sites
+    /// the container's allocation ([mem.region.create.3]).
+    fn call_container_ctor(
+        &mut self,
+        name: &str,
+        b: BracketApply<'_>,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let ty_nodes: Vec<_> = b
+            .args()
+            .into_iter()
+            .flat_map(|a| a.args())
+            .filter_map(Arg::value)
+            .collect();
+        let elem = match ty_nodes.as_slice() {
+            [one] => match self.type_from_bracket_arg(one) {
+                Some(t) => t,
+                None => {
+                    return Err(NotYet {
+                        construct: "this prelude container instantiation (s16 generic data)",
+                        span: e.span,
+                    });
+                }
+            },
+            _ => {
+                return Err(NotYet {
+                    construct: "this prelude container instantiation (s16 generic data)",
+                    span: e.span,
+                });
+            }
+        };
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        if !arg_nodes.is_empty() {
+            self.wrong_arg_count(name, e.span, None, 0, arg_nodes.len());
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+        }
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: name.to_string(),
+                decl_span: None,
+                has_self: false,
+                ctor: true,
+                params: Vec::new(),
+            },
+        ));
+        Ok(match name {
+            "List" => self.lo.table.intern(TyKind::List(elem)),
+            _ => self.lo.table.intern(TyKind::Pool(elem)),
+        })
+    }
+
+    /// A bracket argument read as a *type* (D29: `e[…]` is one
+    /// postfix shape, so `Pool[Node]`'s element parses as an
+    /// expression — sema decides). Type-kind nodes lower directly
+    /// (`List[handle Node]`); a bare path resolves as a type head
+    /// (prims, generics, named items). Anything else: not a type.
+    fn type_from_bracket_arg(&mut self, node: &GreenNode) -> Option<TyId> {
+        if is_type_kind(node.kind) {
+            return Some(self.lower_ty(node));
+        }
+        if node.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        let t = PathExpr::cast(node)?.ident()?;
+        let name = self.text(t.span);
+        if self.lookup_local(&name).is_some() {
+            return None;
+        }
+        if let Some(p) = Prim::from_name(&name) {
+            return Some(self.lo.table.prim(p));
+        }
+        if self.generics.contains(&name) {
+            return Some(self.lo.table.intern(TyKind::Rigid(name)));
+        }
+        match self
+            .lo
+            .resolve_type_head(self.module, self.file, &[(name, t.span)])
+        {
+            crate::sig::TypeHead::Item { module, name } => {
+                Some(self.lo.named_item_type(module, &name, self.file, node))
+            }
+            _ => None,
+        }
+    }
+
+    /// Methods on the Tier-2 builtins: `shared`/`weak` cells
+    /// ([mem.shared.rc]) and the prelude containers. Typed stubs —
+    /// exactly the surface the memory corpus rests on; the real std
+    /// API (modes, capacity, iteration adapters) is s37's. Stub
+    /// receivers type as `read` (call sites stay bare, matching the
+    /// corpus); mutation discipline rides the region open rules until
+    /// std declares real receiver modes.
+    #[allow(clippy::too_many_arguments)]
+    fn tier2_method_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let p = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+        };
+        let (params, ret) = match (self.kind_of(recv_ty), mname) {
+            // `[mem.shared.rc.1]` clones share ownership — the dup site.
+            (TyKind::Shared(t), "clone") => {
+                let r = self.lo.table.intern(TyKind::Shared(t));
+                (vec![p("self", recv_ty)], r)
+            }
+            (TyKind::Shared(t), "downgrade") => {
+                let r = self.lo.table.intern(TyKind::Weak(t));
+                (vec![p("self", recv_ty)], r)
+            }
+            // `[mem.shared.rc.3]` upgrade is option-shaped: `T ! {gone}`
+            // — the caller must handle the miss (`else`, `?`, `match`).
+            (TyKind::Weak(t), "upgrade") => {
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("gone".to_string(), Vec::new())], None);
+                let r = self.lo.table.intern(TyKind::ErrUnion(t, row));
+                (vec![p("self", recv_ty)], r)
+            }
+            (TyKind::List(t), "push") => {
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty), p("value", t)], u)
+            }
+            // `[mem.shared.handle.1]` two-phase: reserve yields the
+            // handle, init fills the slot. No null handles exist.
+            (TyKind::Pool(t), "reserve") => {
+                let r = self.lo.table.intern(TyKind::Handle(t));
+                (vec![p("self", recv_ty)], r)
+            }
+            (TyKind::Pool(t), "init") => {
+                let h = self.lo.table.intern(TyKind::Handle(t));
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty), p("handle", h), p("value", t)], u)
+            }
+            (TyKind::Pool(t), "remove") => {
+                let h = self.lo.table.intern(TyKind::Handle(t));
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty), p("handle", h)], u)
+            }
+            _ => {
+                return Err(NotYet {
+                    construct: "methods on generic std data (s05 std surface)",
+                    span: e.span,
+                });
+            }
+        };
+        self.dispatch.push((
+            e.span,
+            Dispatch::Inherent {
+                ty: self.show(recv_ty),
+                method: mname.to_string(),
+            },
+        ));
+        let sig = FnSig {
+            params,
+            ret,
+            name_span: member_span,
+            ret_span: None,
+            row_span: None,
+            generics: Vec::new(),
+            comptime: false,
+        };
+        self.dispatch_method(
+            mname,
+            &sig,
+            BTreeMap::new(),
+            member_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        )
+    }
+
     // ---------------------------------------------------------- calls --
 
     fn synth_args_loosely(&mut self, args: ArgList<'_>) -> R<()> {
@@ -3419,6 +3712,19 @@ impl<'a> Checker<'a> {
             }
             // `recv.method(args)` — the s17 receiver call.
             return self.method_call(m, e, d.args());
+        }
+        // `List[int]()` / `Pool[Node]()` — the s21 container ctors:
+        // a bracket-applied prelude head in call position.
+        if callee.kind == SyntaxKind::BracketApply
+            && let Some(b) = BracketApply::cast(callee)
+            && let Some(head) = b.callee()
+            && head.kind == SyntaxKind::PathExpr
+            && let Some(t) = PathExpr::cast(head).and_then(|pp| pp.ident())
+        {
+            let name = self.text(t.span);
+            if self.lookup_local(&name).is_none() && matches!(name.as_str(), "List" | "Pool") {
+                return self.call_container_ctor(&name, b, e, d.args());
+            }
         }
         // Otherwise: call through the callee's type (closures, fn-typed
         // locals/fields, higher-order parameters).
@@ -4346,6 +4652,11 @@ impl<'a> Checker<'a> {
                 construct: "methods on generic std data (s05 std surface)",
                 span: e.span,
             }),
+            // The s21 Tier-2 builtins: shared/weak cells and the
+            // prelude containers carry their typed stub methods.
+            TyKind::Shared(_) | TyKind::Weak(_) | TyKind::List(_) | TyKind::Pool(_) => {
+                self.tier2_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
+            }
             TyKind::Rigid(param) => self.archetype_method_call(
                 &param,
                 base,
@@ -5323,6 +5634,47 @@ impl<'a> Checker<'a> {
                 }
             }
             TyKind::Error | TyKind::Never => Ok(self.error_ty()),
+            // s21: `xs.len` — the one field-shaped member the List
+            // stub carries (`b.data.len`, `xs.push(xs.len)` shapes).
+            TyKind::List(_) => {
+                let mname = self.text(member.span);
+                if mname == "len" {
+                    Ok(self.lo.table.prim(Prim::Int))
+                } else {
+                    Err(NotYet {
+                        construct: "members on generic std data (s05 std surface)",
+                        span: e.span,
+                    })
+                }
+            }
+            // s21: a `shared T` cell is referentially transparent for
+            // reads — `cfg.limit` reaches the payload's fields
+            // ([mem.shared.rc.4]: RC is unobservable; the cell adds no
+            // member namespace of its own).
+            TyKind::Shared(inner) => match self.kind_of(inner) {
+                TyKind::Nominal { module, name } => {
+                    match self.sigs.get(module as usize, &name).cloned() {
+                        Some(ItemSig::Struct(s)) if !s.generic => {
+                            let mname = self.text(member.span);
+                            match s.fields.iter().find(|f| f.name == mname) {
+                                Some(f) => Ok(f.ty),
+                                None => {
+                                    self.unknown_field(&name, &s, member.span, &mname);
+                                    Ok(self.error_ty())
+                                }
+                            }
+                        }
+                        _ => Err(NotYet {
+                            construct: "member access on this type (s05 std surface)",
+                            span: e.span,
+                        }),
+                    }
+                }
+                _ => Err(NotYet {
+                    construct: "member access on this type (s05 std surface)",
+                    span: e.span,
+                }),
+            },
             // Reflection values (s16): a closed member table per meta
             // kind — semantic values only, no syntax anywhere (D29).
             TyKind::Meta(m) => {
@@ -6326,6 +6678,11 @@ impl<'a> Checker<'a> {
                 let t = self.synth_expr(it)?;
                 match self.kind_of(t) {
                     TyKind::Range(elem) => elem,
+                    // s21: `for x in xs` over the builtin List stub —
+                    // elements in place order (the corpus region
+                    // litmuses iterate lists; the general iteration
+                    // protocol stays s17's).
+                    TyKind::List(elem) => elem,
                     TyKind::Error | TyKind::Never => self.error_ty(),
                     _ => {
                         return Err(NotYet {
