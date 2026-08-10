@@ -1120,6 +1120,21 @@ same two fixes apply.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_conflict_params.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_cross_region_store.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_params_independent.snap
 
+## E1005 — the region is open here, so its handle cannot move or freeze
+
+A region transfers as a closed subtree only: while a `region` block
+or `in` window is open, the region's affine value — its handle — is
+pinned in place, because the open window *is* a live borrow of that
+handle. Moving it, freezing it, sending it, or lending it `mut`
+while inside would leave the window standing on a region that
+belongs to someone else (or to nobody). The same rule covers a
+region whose *child* region is still open: the forest moves as
+closed subtrees, never around an open window. End the `region`/`in`
+block first and transfer after, or transfer first and open on the
+receiving side.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_freeze_open.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_move_while_open.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_transfer_open.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1005_freeze_while_open.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1005_move_while_open.snap
+
 ## E1007 — the argument's mode does not match the parameter's
 
 A parameter's mode is part of the deal between caller and callee, and
@@ -1179,6 +1194,35 @@ coming in later tiers for the cases that genuinely need to outlive
 the region.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
+
+## E1011 — this would open a region while a region that contains it is open
+
+Any number of regions may be open at once, provided none of them
+contains another: the open set must be an antichain in the region
+forest ([mem.region.multiopen]). Sibling regions have disjoint data,
+so mutating through both windows at once is safe — but an owner's
+window already reaches everything its child region holds, so opening
+the child (or the owner) while the other is open would put one
+location behind two live mutable windows. The diagnostic marks both
+open sites. Close the first block before opening the second, or
+restructure so the two regions are siblings — neither stored inside
+the other — and open them together freely.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_open_ancestor.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1011_ancestor_open.snap
+
+## E1012 — frozen data cannot be written
+
+`freeze` consumes a region and promotes everything in it to `imm`:
+deeply immutable, shareable from anywhere — across threads, without
+synchronization — and readable forever. That deal is permanent, and
+it is why frozen data needs no locks and no lifetimes; a single write
+anywhere would break every reader everywhere. This write reaches data
+that a `freeze` already promoted (the freeze site is marked). Do the
+mutation before freezing — build the value completely, freeze last —
+or keep a mutable `copy` alongside the frozen original for the part
+that must keep changing.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_freeze_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_reopen_frozen.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_write_through_frozen.snap
 
 ## W0301 — file only partially formatted: syntax errors present
 

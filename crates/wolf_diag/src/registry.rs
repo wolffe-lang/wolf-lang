@@ -1040,12 +1040,17 @@ you do not need.
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004
-// conflicting placement, E1010 escape of region-local data); the
-// open/transfer rule (E1005) lands with s20, shared (E1006) with s21,
-// and the unsafe tier with s22. The dynamic counterparts are
-// normative: E1001 ⇄ trap(use-after-move), E1002 ⇄ trap(exclusivity),
-// E1004/E1010 ⇄ region-fault per [conf.trap.map] — the interpreter
-// checks at runtime what these codes prove statically.
+// conflicting placement, E1010 escape of region-local data); s20 the
+// region-checker codes (E1005 transfer/freeze of an open region,
+// E1011 multiopen antichain violation, E1012 write through frozen
+// data); shared (E1006) is s21's, and the unsafe tier s22's. The
+// dynamic counterparts are normative: E1001 ⇄ trap(use-after-move),
+// E1002 ⇄ trap(exclusivity), E1004/E1005/E1010 ⇄ region-fault per
+// [conf.trap.map] — the interpreter checks at runtime what these
+// codes prove statically. E1011 and E1012 pair with region-fault
+// rules the dynamic machine already enforces ([mem.region.multiopen],
+// [mem.region.freeze.1]); their [conf.trap.map] rows ride the s23
+// conformance sprint.
 // ------------------------------------------------------------------------
 
 code!(E1001, "this value was moved away (or never given one) before this use", r#"
@@ -1088,6 +1093,19 @@ container lives. When the two sides are different *parameters*, their
 regions are independent by default (that independence is what lets
 callers pass arguments from anywhere without annotations), and the
 same two fixes apply.
+"#);
+
+code!(E1005, "the region is open here, so its handle cannot move or freeze", r#"
+A region transfers as a closed subtree only: while a `region` block
+or `in` window is open, the region's affine value — its handle — is
+pinned in place, because the open window *is* a live borrow of that
+handle. Moving it, freezing it, sending it, or lending it `mut`
+while inside would leave the window standing on a region that
+belongs to someone else (or to nobody). The same rule covers a
+region whose *child* region is still open: the forest moves as
+closed subtrees, never around an open window. End the `region`/`in`
+block first and transfer after, or transfer first and open on the
+receiving side.
 "#);
 
 code!(E1007, "the argument's mode does not match the parameter's", r#"
@@ -1140,6 +1158,31 @@ region, which is still the dying one. `freeze` (making the whole
 region immortal and immutable) and `shared` (counted escape) are
 coming in later tiers for the cases that genuinely need to outlive
 the region.
+"#);
+
+code!(E1011, "this would open a region while a region that contains it is open", r#"
+Any number of regions may be open at once, provided none of them
+contains another: the open set must be an antichain in the region
+forest ([mem.region.multiopen]). Sibling regions have disjoint data,
+so mutating through both windows at once is safe — but an owner's
+window already reaches everything its child region holds, so opening
+the child (or the owner) while the other is open would put one
+location behind two live mutable windows. The diagnostic marks both
+open sites. Close the first block before opening the second, or
+restructure so the two regions are siblings — neither stored inside
+the other — and open them together freely.
+"#);
+
+code!(E1012, "frozen data cannot be written", r#"
+`freeze` consumes a region and promotes everything in it to `imm`:
+deeply immutable, shareable from anywhere — across threads, without
+synchronization — and readable forever. That deal is permanent, and
+it is why frozen data needs no locks and no lifetimes; a single write
+anywhere would break every reader everywhere. This write reaches data
+that a `freeze` already promoted (the freeze site is marked). Do the
+mutation before freezing — build the value completely, freeze last —
+or keep a mutable `copy` alongside the frozen original for the part
+that must keep changing.
 "#);
 
 // ------------------------------------------------------------------------
