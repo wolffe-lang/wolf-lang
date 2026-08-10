@@ -933,6 +933,10 @@ name = "wolf_wir"
 version = "0.0.1"
 dependencies = [
  "insta",
+ "wolf_ast",
+ "wolf_diag",
+ "wolf_mem",
+ "wolf_sema",
  "wolf_span",
 ]
 
