@@ -65,6 +65,7 @@ struct LspChild {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: i64,
+    disarm: Option<std::sync::mpsc::Sender<()>>,
 }
 
 impl LspChild {
@@ -78,11 +79,32 @@ impl LspChild {
             .expect("wolf lsp starts");
         let stdin = child.stdin.take().unwrap();
         let stdout = BufReader::new(child.stdout.take().unwrap());
+        // Watchdog: libtest has no per-test timeout, so a lost response
+        // would otherwise block recv() until the CI job ceiling (it did:
+        // 3.7h wedged on windows). Kill the child after 60s unless
+        // disarmed by Drop; death turns the hang into a loud EOF assert.
+        let (disarm_tx, disarm_rx) = std::sync::mpsc::channel::<()>();
+        let pid = child.id();
+        std::thread::spawn(move || {
+            if matches!(
+                disarm_rx.recv_timeout(std::time::Duration::from_secs(60)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
+                eprintln!("watchdog: killing wedged wolf lsp (pid {pid})");
+                #[cfg(unix)]
+                let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+                #[cfg(windows)]
+                let _ = Command::new("taskkill")
+                    .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .status();
+            }
+        });
         LspChild {
             child,
             stdin,
             stdout,
             next_id: 0,
+            disarm: Some(disarm_tx),
         }
     }
 
