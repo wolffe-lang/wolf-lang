@@ -1,0 +1,24 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+assertion_line: 57
+expression: "wolf_wir::print_module(&m)"
+---
+fn @arena_sum() -> i64 {
+  fact deref %3 16 : op
+  fact region %3 r0 : op
+  fact region %8 r0 : op %3
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2 = iconst.i64 16
+  %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1
+  %5 = iconst.i64 7
+  %6 = store.i64 %5, %3, %4
+  %7 = iconst.i64 1
+  %8 = ptr.off %3, %7, 8
+  %9 = store.i64 %5, %8, %6
+  %10 = load.i64 %3, %9
+  %11 = load.i64 %8, %9
+  %12 = iadd.chk %10, %11
+  region.free %0, %9
+  ret %12
+}

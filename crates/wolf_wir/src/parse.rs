@@ -803,6 +803,11 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("iadd.sat", Opcode::IaddSat),
         ("isub.sat", Opcode::IsubSat),
         ("imul.sat", Opcode::ImulSat),
+        ("uadd.chk", Opcode::UaddChk),
+        ("usub.chk", Opcode::UsubChk),
+        ("umul.chk", Opcode::UmulChk),
+        ("udiv.chk", Opcode::UdivChk),
+        ("urem.chk", Opcode::UremChk),
         ("band", Opcode::Band),
         ("bor", Opcode::Bor),
         ("bxor", Opcode::Bxor),
@@ -829,6 +834,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("rc.dup", Opcode::RcDup),
         ("rc.drop", Opcode::RcDrop),
         ("sync.freeze", Opcode::SyncFreeze),
+        ("stack.alloc", Opcode::StackAlloc),
         ("sync.transfer", Opcode::SyncTransfer),
         ("eu.make.ok", Opcode::EuMakeOk),
         ("eu.make.err", Opcode::EuMakeErr),
@@ -1044,6 +1050,11 @@ fn parse_inst(
         | Opcode::IaddSat
         | Opcode::IsubSat
         | Opcode::ImulSat
+        | Opcode::UaddChk
+        | Opcode::UsubChk
+        | Opcode::UmulChk
+        | Opcode::UdivChk
+        | Opcode::UremChk
         | Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor
@@ -1186,9 +1197,16 @@ fn parse_inst(
             aux = Aux::Callee(ef);
             let sig_data = &p.module.sigs[sig];
             let mut tys = sig_data.results.clone();
-            for prm in &sig_data.params {
+            // Successor-token result types come from the ACTUAL token
+            // arguments (s26 region substitution: a callee's `mem.rF`
+            // params are formals bound by the caller's args), so they
+            // are read positionally from the argument list.
+            for (i, prm) in sig_data.params.iter().enumerate() {
                 if p.module.types.is_token(prm.ty) {
-                    tys.push(prm.ty);
+                    match args.get(i) {
+                        Some(&a) => tys.push(func.value_ty(a)),
+                        None => tys.push(prm.ty),
+                    }
                 }
             }
             tys
@@ -1213,9 +1231,10 @@ fn parse_inst(
             vec![]
         }
         Opcode::Trap => vec![],
-        // Reserved ops: generic form, result types must be explicit.
+        // The memory family and reserved ops: generic operand form,
+        // result types must be explicit (`%r: ptr = …`).
         _ => {
-            debug_assert!(op.is_reserved());
+            debug_assert!(op.explicit_results());
             args = parse_val_list(line, values, func)?;
             let mut tys = Vec::with_capacity(result_annots.len());
             for annot in &result_annots {
@@ -1223,7 +1242,7 @@ fn parse_inst(
                     Some(t) => tys.push(*t),
                     None => {
                         return line.fail(format!(
-                            "`{mname}` is reserved (s26/s27): its results need explicit types, e.g. `%r: ptr = {mname} …`"
+                            "`{mname}` results need explicit types, e.g. `%r: ptr = {mname} …`"
                         ));
                     }
                 }
@@ -1240,8 +1259,8 @@ fn parse_inst(
             result_names.len()
         ));
     }
-    // Non-reserved annotations must agree with the computed type.
-    if !op.is_reserved() {
+    // Elsewhere, annotations must agree with the computed type.
+    if !op.explicit_results() {
         for (annot, ty) in result_annots.iter().zip(&result_tys) {
             if let Some(a) = annot
                 && a != ty

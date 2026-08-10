@@ -13,9 +13,17 @@
 //! | c04 (wolf_mem)                       | WIR justification tag |
 //! |--------------------------------------|-----------------------|
 //! | exclusivity theorem for `mut` params | `excl.mut`            |
+//! | field-granular disjointness (s18)    | `excl.field`          |
 //! | Frozen immutability for `read` params| `frozen.read`         |
 //! | region attribution of allocations    | `region.alloc`        |
+//! | branch-refined index range (bounds)  | `bounds.br`           |
 //! | value derived from a specific op     | `op` / `op %v`        |
+//!
+//! s26 additionally admits OP-derived forms the verifier re-derives
+//! locally: `region`/`deref` citing a `region.alloc`/`stack.alloc`
+//! def, `frozen` citing a `sync.freeze` def, and `range` citing the
+//! subject's own defining op (checked-arith postconditions, X3's
+//! claw-back).
 //!
 //! Every fact carries a justification tag so checking is LOCAL, not
 //! whole-program re-proof, and an optional source span pointing back
@@ -88,20 +96,34 @@ impl FactKind {
 pub enum Theorem {
     /// Exclusivity of a `mut` parameter (⇒ noalias + deref).
     ExclMut,
+    /// Field-granular disjointness of two derived pointers (s18's
+    /// place-disjointness theorem; ⇒ noalias).
+    ExclField,
     /// Frozen immutability of a `read` parameter (⇒ frozen, noalias, deref).
     FrozenRead,
     /// Region attribution of an allocation (⇒ region, deref).
     RegionAlloc,
+    /// A dominating bounds-check branch refines an index range (⇒
+    /// range; the pass-side-of-the-branch theorem, s18/s26).
+    BoundsBr,
 }
 
 impl Theorem {
-    pub const ALL: [Theorem; 3] = [Theorem::ExclMut, Theorem::FrozenRead, Theorem::RegionAlloc];
+    pub const ALL: [Theorem; 5] = [
+        Theorem::ExclMut,
+        Theorem::ExclField,
+        Theorem::FrozenRead,
+        Theorem::RegionAlloc,
+        Theorem::BoundsBr,
+    ];
 
     pub fn tag(self) -> &'static str {
         match self {
             Theorem::ExclMut => "excl.mut",
+            Theorem::ExclField => "excl.field",
             Theorem::FrozenRead => "frozen.read",
             Theorem::RegionAlloc => "region.alloc",
+            Theorem::BoundsBr => "bounds.br",
         }
     }
 }

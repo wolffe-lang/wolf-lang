@@ -1,0 +1,19 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+assertion_line: 57
+expression: "wolf_wir::print_module(&m)"
+---
+fn @freeze_and_read() -> i64 {
+  fact frozen %0 : op %7
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2 = iconst.i64 8
+  %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1
+  %5 = iconst.i64 42
+  %6 = store.i64 %5, %3, %4
+  %7: mem.r0 = sync.freeze %0, %6
+  %8 = load.i64 %3, %7
+  %9 = load.i64 %3, %7
+  %10 = iadd.chk %8, %9
+  ret %10
+}

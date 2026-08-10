@@ -1,0 +1,31 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 125
+expression: out
+---
+fn @main() -> i64 {
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2: ptr, %3: mem.r1 = region.new
+  %4 = iconst.i64 0
+  %5 = iconst.i64 1
+  %6 = agg.make %5
+  %7 = iconst.i64 2
+  %8 = agg.make %7
+  %9 = agg.get %6, 0
+  %10 = agg.get %8, 0
+  %11 = iadd.chk %9, %10
+  %12 = iconst.i64 3
+  %13 = agg.make %12
+  %14 = agg.get %13, 0
+  %15 = iadd.chk %11, %14
+  %16 = iconst.i64 6
+  %17 = icmp.eq %15, %16
+  br %17, b1, b2
+b1:
+  jmp b3(%4)
+b2:
+  jmp b3(%5)
+b3(%18: i64):
+  ret %18
+}

@@ -1,0 +1,93 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 125
+expression: out
+---
+decl @bump(mut ptr, mem.r0, mut ptr, mem.r1)
+
+fn @bump(mut ptr, mem.r0, mut ptr, mem.r1) {
+  fact deref %0 8 : excl.mut
+  fact deref %2 8 : excl.mut
+  fact noalias %0 %2 : excl.mut
+b0(%0: ptr, %1: mem.r0, %2: ptr, %3: mem.r1):
+  %4 = iconst.i64 1
+  %5 = load.i64 %0, %1
+  %6 = iadd.chk %5, %4
+  %7 = store.i64 %6, %0, %1
+  %8 = load.i64 %2, %3
+  %9 = iadd.chk %8, %4
+  %10 = store.i64 %9, %2, %3
+  ret
+}
+
+fn @main() -> i64 {
+  fact deref %10 8 : op
+  fact deref %23 8 : op
+  fact deref %27 8 : op
+  fact deref %6 8 : op
+  fact noalias %23 %27 : excl.field
+  fact noalias %6 %10 : excl.field
+  fact region %10 r1 : op
+  fact region %23 r2 : op
+  fact region %27 r3 : op
+  fact region %6 r0 : op
+b0:
+  %0 = iconst.i64 1
+  %1 = iconst.i64 2
+  %2 = iconst.i64 3
+  %3 = agg.make %0, %1, %2
+  %4 = agg.get %3, 0
+  %5 = iconst.i64 8
+  %6: ptr, %7: mem.r0 = stack.alloc %5
+  %8 = store.i64 %4, %6, %7
+  %9 = agg.get %3, 1
+  %10: ptr, %11: mem.r1 = stack.alloc %5
+  %12 = store.i64 %9, %10, %11
+  %13, %14 = call @bump(%6, %8, %10, %12)
+  %15 = load.i64 %6, %13
+  %16 = agg.get %3, 2
+  %17 = agg.make %15, %9, %16
+  %18 = load.i64 %10, %14
+  %19 = agg.get %17, 0
+  %20 = agg.get %17, 2
+  %21 = agg.make %19, %18, %20
+  %22 = agg.get %21, 1
+  %23: ptr, %24: mem.r2 = stack.alloc %5
+  %25 = store.i64 %22, %23, %24
+  %26 = agg.get %21, 2
+  %27: ptr, %28: mem.r3 = stack.alloc %5
+  %29 = store.i64 %26, %27, %28
+  %30, %31 = call @bump(%23, %25, %27, %29)
+  %32 = load.i64 %23, %30
+  %33 = agg.get %21, 0
+  %34 = agg.make %33, %32, %26
+  %35 = load.i64 %27, %31
+  %36 = agg.get %34, 0
+  %37 = agg.get %34, 1
+  %38 = agg.make %36, %37, %35
+  %39 = agg.get %38, 0
+  %40 = icmp.eq %39, %1
+  %41 = bconst false
+  br %40, b1, b2(%41)
+b1:
+  %42 = agg.get %38, 1
+  %43 = iconst.i64 4
+  %44 = icmp.eq %42, %43
+  jmp b2(%44)
+b2(%45: bool):
+  br %45, b3, b4(%41)
+b3:
+  %46 = agg.get %38, 2
+  %47 = iconst.i64 4
+  %48 = icmp.eq %46, %47
+  jmp b4(%48)
+b4(%49: bool):
+  br %49, b5, b6
+b5:
+  %50 = iconst.i64 0
+  jmp b7(%50)
+b6:
+  jmp b7(%0)
+b7(%51: i64):
+  ret %51
+}

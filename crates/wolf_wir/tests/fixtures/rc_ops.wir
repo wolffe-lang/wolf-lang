@@ -1,0 +1,13 @@
+; the shared tier's faithful ops (s26): rc.dup / rc.drop are
+; token-threaded so RC traffic orders against loads and stores —
+; Perceus placement stays upstream (c04/s42); WIR only refuses to let
+; a drop float past a use.
+fn @share(read ptr, mem.r0) -> i64 {
+b0(%cell: ptr, %m: mem.r0):
+  %m2: mem.r0 = rc.dup %cell, %m
+  %v = load.i64 %cell, %m2
+  %m3: mem.r0 = rc.drop %cell, %m2
+  %w = load.i64 %cell, %m3
+  %s = iadd.chk %v, %w
+  ret %s
+}

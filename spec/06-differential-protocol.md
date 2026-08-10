@@ -27,7 +27,7 @@ One JSON object on stdout. Schema (`"protocol": 1`):
 ```json
 {
   "protocol": 1,
-  "impl": "wolfc",
+  "impl": "wolfgang",
   "impl_version": "0.0.1",
   "commit": "abc1234",
   "file": "corpus/hello.lu",

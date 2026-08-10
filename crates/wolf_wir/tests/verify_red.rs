@@ -47,8 +47,10 @@ fn terminator_mid_block() {
 
 #[test]
 fn reserved_op_rejected() {
+    // `region.*`/`rc.*` went live in s26; `sync.transfer` holds the
+    // reserved fence until c05.
     expect_reject(
-        "fn @f(mem.r0) {\nb0(%m: mem.r0):\n  %r: ptr, %m2: mem.r0 = region.alloc %m\n  ret\n}\n",
+        "fn @f(ptr) {\nb0(%p: ptr):\n  %q: ptr = sync.transfer %p\n  ret\n}\n",
         ErrClass::ReservedOp,
     );
 }
@@ -199,6 +201,109 @@ fn noalias_cannot_be_op_derived() {
     );
 }
 
+// ---- the s26 memory-family negatives -------------------------------
+
+#[test]
+fn load_after_region_free() {
+    // Use-after-free is STRUCTURAL: region.free consumed the token, so
+    // a later load through it is a token-order rejection, not a
+    // runtime hope.
+    let err = expect_reject(
+        "fn @f() -> i64 {\nb0:\n  %h: ptr, %m: mem.r0 = region.new\n  %n = iconst.i64 8\n  %p: ptr, %m2: mem.r0 = region.alloc %h, %n, %m\n  region.free %h, %m2\n  %v = load.i64 %p, %m2\n  ret %v\n}\n",
+        ErrClass::TokenOrder,
+    );
+    assert!(err.msg.contains("no live token, no loads"), "{}", err.msg);
+}
+
+#[test]
+fn load_of_stale_token_after_store() {
+    // Reading a token a store already consumed (the pre-store world)
+    // is the same staleness, same block.
+    expect_reject(
+        "fn @f(mut ptr, i64, mem.r0) -> i64 {\nb0(%p: ptr, %v: i64, %m: mem.r0):\n  %m2 = store.i64 %v, %p, %m\n  %x = load.i64 %p, %m\n  ret %x\n}\n",
+        ErrClass::TokenOrder,
+    );
+}
+
+#[test]
+fn cross_block_load_after_free() {
+    expect_reject(
+        "fn @f(bool) -> i64 {\nb0(%c: bool):\n  %h: ptr, %m: mem.r0 = region.new\n  %n = iconst.i64 8\n  %p: ptr, %m2: mem.r0 = region.alloc %h, %n, %m\n  region.free %h, %m2\n  br %c, b1, b2\nb1:\n  %v = load.i64 %p, %m2\n  ret %v\nb2:\n  %z = iconst.i64 0\n  ret %z\n}\n",
+        ErrClass::TokenOrder,
+    );
+}
+
+#[test]
+fn two_roots_for_one_region() {
+    // region.new minting a region the signature already owns.
+    expect_reject(
+        "fn @f(mem.r0) {\nb0(%m: mem.r0):\n  %h: ptr, %m1: mem.r0 = region.new\n  ret\n}\n",
+        ErrClass::RegionRoot,
+    );
+}
+
+#[test]
+fn frozen_token_cannot_be_consumed() {
+    // Stores/frees through a frozen region are unrepresentable.
+    let err = expect_reject(
+        "fn @f(i64) {\nb0(%v: i64):\n  %h: ptr, %m: mem.r0 = region.new\n  %f: mem.r0 = sync.freeze %h, %m\n  %m2: mem.r0 = store.i64 %v, %h, %f\n  ret\n}\n",
+        ErrClass::FrozenToken,
+    );
+    assert!(err.msg.contains("frozen token"), "{}", err.msg);
+}
+
+#[test]
+fn region_fact_forgery_rejected() {
+    // Claiming region r9 for a pointer whose allocation mints r0:
+    // provenance cannot be forged in safe-tier WIR.
+    let err = expect_reject(
+        "fn @f() -> i64 {\n  fact region %p r9 : op\nb0:\n  %h: ptr, %m: mem.r0 = region.new\n  %n = iconst.i64 8\n  %p: ptr, %m2: mem.r0 = region.alloc %h, %n, %m\n  %v = load.i64 %p, %m2\n  ret %v\n}\n",
+        ErrClass::FactJust,
+    );
+    assert!(err.msg.contains("forge"), "{}", err.msg);
+}
+
+#[test]
+fn region_fact_must_cite_an_allocation() {
+    // An arbitrary pointer (entry param) cannot claim region identity
+    // through `: op` — nothing local derives it.
+    expect_reject(
+        "fn @f(read ptr, mem.r0) -> ptr {\n  fact region %p r0 : op\nb0(%p: ptr, %m: mem.r0):\n  ret %p\n}\n",
+        ErrClass::FactJust,
+    );
+}
+
+#[test]
+fn deref_overclaim_rejected() {
+    // The allocation provides 8 bytes; the fact claims 64.
+    let err = expect_reject(
+        "fn @f() -> i64 {\n  fact deref %p 64 : op\nb0:\n  %h: ptr, %m: mem.r0 = region.new\n  %n = iconst.i64 8\n  %p: ptr, %m2: mem.r0 = region.alloc %h, %n, %m\n  %v = load.i64 %p, %m2\n  ret %v\n}\n",
+        ErrClass::FactDeref,
+    );
+    assert!(err.msg.contains("more bytes"), "{}", err.msg);
+}
+
+#[test]
+fn rem_range_fact_rederived() {
+    // urem.chk by 10 implies 0..=9; claiming 0..=3 must be rejected,
+    // and the true postcondition must be accepted.
+    expect_reject(
+        "fn @f(i64) -> i64 {\n  fact range %r 0..=3 : op\nb0(%x: i64):\n  %ten = iconst.i64 10\n  %r = urem.chk %x, %ten\n  ret %r\n}\n",
+        ErrClass::FactRange,
+    );
+    let good = "fn @f(i64) -> i64 {\n  fact range %r 0..=9 : op\nb0(%x: i64):\n  %ten = iconst.i64 10\n  %r = urem.chk %x, %ten\n  ret %r\n}\n";
+    let m = wolf_wir::parse_module(good).expect("parses");
+    verify_module(&m).expect("the true postcondition verifies");
+}
+
+#[test]
+fn stack_alloc_size_must_be_const() {
+    expect_reject(
+        "fn @f(i64) {\nb0(%n: i64):\n  %p: ptr, %m: mem.r0 = stack.alloc %n\n  ret\n}\n",
+        ErrClass::Type,
+    );
+}
+
 #[test]
 fn function_without_blocks() {
     // Not representable in text — built through the raw arena API.
@@ -247,6 +352,9 @@ fn every_rejection_class_is_exercised() {
         ErrClass::Unreachable,
         ErrClass::Dominance,
         ErrClass::TokenLinearity,
+        ErrClass::TokenOrder,
+        ErrClass::RegionRoot,
+        ErrClass::FrozenToken,
         ErrClass::FactType,
         ErrClass::FactRange,
         ErrClass::FactNoalias,
@@ -254,5 +362,5 @@ fn every_rejection_class_is_exercised() {
         ErrClass::FactJust,
         ErrClass::DroppedFact, // pass_facts.rs
     ];
-    assert_eq!(covered.len(), 18);
+    assert_eq!(covered.len(), 21);
 }

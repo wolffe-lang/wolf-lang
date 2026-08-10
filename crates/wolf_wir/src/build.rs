@@ -160,6 +160,10 @@ pub struct FuncBuilder<'m> {
     /// Effect-token variables, minted on demand.
     mem_tokens: HashMap<u32, Var>,
     io_token: Option<Var>,
+    /// The next fresh function-scoped region id (entry-token regions
+    /// from the signature are pre-claimed; `region.new`/`stack.alloc`
+    /// mint from here — one token root per region, verified).
+    next_region: u32,
     pub stats: Stats,
 }
 
@@ -176,7 +180,8 @@ impl<'m> FuncBuilder<'m> {
         let mut func = Function::new(name, sig);
         let param_tys: Vec<TypeId> = module.sigs[sig].params.iter().map(|p| p.ty).collect();
         let entry = func.make_block(&param_tys);
-        FuncBuilder {
+        let entry_params = func.block_params(entry);
+        let mut b = FuncBuilder {
             module,
             func,
             cur: entry,
@@ -193,8 +198,23 @@ impl<'m> FuncBuilder<'m> {
             gvn_scopes: vec![Vec::new()],
             mem_tokens: HashMap::new(),
             io_token: None,
+            next_region: 0,
             stats: Stats::default(),
+        };
+        // Signature token params seed their chains; their regions are
+        // pre-claimed so minted regions never collide.
+        for (i, &ty) in param_tys.iter().enumerate() {
+            match b.module.types.get(ty) {
+                TypeData::Mem(r) => {
+                    let r = *r;
+                    b.next_region = b.next_region.max(r.as_u32() + 1);
+                    b.def_mem(r, entry_params[i]);
+                }
+                TypeData::Io => b.def_io(entry_params[i]),
+                _ => {}
+            }
         }
+        b
     }
 
     /// Finish: every block must be sealed and filled. Returns the
@@ -814,6 +834,109 @@ impl<'m> FuncBuilder<'m> {
         .one()
     }
 
+    // ------------------------------------------- the memory family ----
+
+    /// Mint a fresh function-scoped region id.
+    pub fn fresh_region(&mut self) -> RegionId {
+        let r = RegionId::new(self.next_region);
+        self.next_region += 1;
+        r
+    }
+
+    /// `%h, %m = region.new` — create a fresh region; its token chain
+    /// is seeded, its handle returned.
+    pub fn ins_region_new(&mut self) -> (RegionId, Value) {
+        let r = self.fresh_region();
+        let tok_ty = self.module.types.mem(r);
+        let out = self.ins(
+            Opcode::RegionNew,
+            &[],
+            &[crate::types::PTR, tok_ty],
+            Aux::None,
+        );
+        let InsOut::Vals(vals) = out else {
+            unreachable!("region.new never folds");
+        };
+        self.def_mem(r, vals[1]);
+        (r, vals[0])
+    }
+
+    /// `%p, %m2 = region.alloc h, size, m` — allocate `size` bytes in
+    /// `region`; threads the region's token chain; returns the pointer.
+    pub fn ins_region_alloc(&mut self, region: RegionId, handle: Value, size: Value) -> Value {
+        let tok = self.use_mem(region);
+        let tok_ty = self.func.values[tok].ty;
+        let out = self.ins(
+            Opcode::RegionAlloc,
+            &[handle, size, tok],
+            &[crate::types::PTR, tok_ty],
+            Aux::None,
+        );
+        let InsOut::Vals(vals) = out else {
+            unreachable!("region.alloc never folds");
+        };
+        self.def_mem(region, vals[1]);
+        vals[0]
+    }
+
+    /// `region.free h, m` — wholesale free: consumes the region's
+    /// current token and produces NO successor (no live token, no
+    /// loads — the verifier's structural use-after-free rejection).
+    pub fn ins_region_free(&mut self, region: RegionId, handle: Value) {
+        let tok = self.use_mem(region);
+        let out = self.ins(Opcode::RegionFree, &[handle, tok], &[], Aux::None);
+        let InsOut::Vals(_) = out else {
+            unreachable!("region.free never folds");
+        };
+    }
+
+    /// `%m2 = rc.dup p, m` / `%m2 = rc.drop p, m` — token-threaded RC
+    /// traffic (drops order against loads/stores).
+    pub fn ins_rc(&mut self, dup: bool, ptr: Value, region: RegionId) {
+        let tok = self.use_mem(region);
+        let tok_ty = self.func.values[tok].ty;
+        let op = if dup { Opcode::RcDup } else { Opcode::RcDrop };
+        let out = self.ins(op, &[ptr, tok], &[tok_ty], Aux::None);
+        let InsOut::Vals(vals) = out else {
+            unreachable!("rc ops never fold");
+        };
+        self.def_mem(region, vals[0]);
+    }
+
+    /// `%f = sync.freeze h, m` — consume the region's mutable token and
+    /// install the frozen (never-invalidated, never-consumable) token
+    /// as its current one: subsequent loads read frozen data forever.
+    pub fn ins_sync_freeze(&mut self, region: RegionId, handle: Value) -> Value {
+        let tok = self.use_mem(region);
+        let tok_ty = self.func.values[tok].ty;
+        let out = self.ins(Opcode::SyncFreeze, &[handle, tok], &[tok_ty], Aux::None);
+        let InsOut::Vals(vals) = out else {
+            unreachable!("sync.freeze never folds");
+        };
+        self.def_mem(region, vals[0]);
+        vals[0]
+    }
+
+    /// `%p, %m = stack.alloc size` — one frame slot with its own
+    /// one-slot region (stack provenance; the s19 promotion landing
+    /// pad). Returns the slot's region and pointer.
+    pub fn ins_stack_alloc(&mut self, size_bytes: u64) -> (RegionId, Value) {
+        let size = self.iconst(crate::types::I64, size_bytes as i64);
+        let r = self.fresh_region();
+        let tok_ty = self.module.types.mem(r);
+        let out = self.ins(
+            Opcode::StackAlloc,
+            &[size],
+            &[crate::types::PTR, tok_ty],
+            Aux::None,
+        );
+        let InsOut::Vals(vals) = out else {
+            unreachable!("stack.alloc never folds");
+        };
+        self.def_mem(r, vals[1]);
+        (r, vals[0])
+    }
+
     // ------------------------------------------------------- calls ----
 
     /// `call @callee(args…)` with the mode-carrying signature: token
@@ -822,19 +945,35 @@ impl<'m> FuncBuilder<'m> {
     /// supplies the non-token arguments in order. Returns the declared
     /// results.
     pub fn ins_call(&mut self, callee: ExtFunc, args: &[Value]) -> Vec<Value> {
+        self.ins_call_regions(callee, args, &HashMap::new())
+    }
+
+    /// `ins_call` with region-polymorphic binding (s26): a callee sig's
+    /// `mem.rF` token params name FORMAL regions; `formal_regions` maps
+    /// each formal (by index) to the caller's ACTUAL region — the
+    /// spill-slot or arena the argument pointer lives in. Unbound
+    /// formals fall back to the identity (same-numbered caller region:
+    /// the s25 fixture behavior).
+    pub fn ins_call_regions(
+        &mut self,
+        callee: ExtFunc,
+        args: &[Value],
+        formal_regions: &HashMap<u32, RegionId>,
+    ) -> Vec<Value> {
         let sig = self.func.ext_funcs[callee].sig;
         let params = self.module.sigs[sig].params.clone();
         let declared: Vec<TypeId> = self.module.sigs[sig].results.clone();
         let mut full_args = Vec::with_capacity(params.len());
-        // Token params in order: Some(region) for mem, None for io.
+        // Token params in order: Some(actual region) for mem, None for io.
         let mut tokens: Vec<Option<RegionId>> = Vec::new();
         let mut next = 0usize;
         for p in &params {
             match self.module.types.get(p.ty).clone() {
-                TypeData::Mem(r) => {
-                    let tok = self.use_mem(r);
+                TypeData::Mem(f) => {
+                    let actual = formal_regions.get(&f.as_u32()).copied().unwrap_or(f);
+                    let tok = self.use_mem(actual);
                     full_args.push(tok);
-                    tokens.push(Some(r));
+                    tokens.push(Some(actual));
                 }
                 TypeData::Io => {
                     let tok = self.use_io();
@@ -850,9 +989,13 @@ impl<'m> FuncBuilder<'m> {
         debug_assert_eq!(next, args.len(), "call argument count mismatch");
         let n_declared = declared.len();
         let mut rtys = declared;
-        for p in &params {
-            if self.module.types.is_token(p.ty) {
-                rtys.push(p.ty);
+        for &region in &tokens {
+            match region {
+                Some(r) => {
+                    let t = self.module.types.mem(r);
+                    rtys.push(t);
+                }
+                None => rtys.push(crate::types::IO),
             }
         }
         let out = self.ins(Opcode::Call, &full_args, &rtys, Aux::Callee(callee));
@@ -995,6 +1138,53 @@ impl<'m> FuncBuilder<'m> {
                     a % b
                 };
                 Fold::Const(Const::Int(r))
+            }
+            Opcode::UaddChk
+            | Opcode::UsubChk
+            | Opcode::UmulChk
+            | Opcode::UdivChk
+            | Opcode::UremChk => {
+                // A constant zero divisor traps regardless of the lhs.
+                if matches!(data.op, Opcode::UdivChk | Opcode::UremChk)
+                    && matches!(cst(args[1]), Some(Const::Int(0)))
+                {
+                    return Fold::Trap;
+                }
+                let Some((a, b)) = ints() else {
+                    return Fold::None;
+                };
+                let bits = bits_of(results[0]).expect("int op");
+                let mask: u128 = if bits >= 64 {
+                    u64::MAX as u128
+                } else {
+                    (1u128 << bits) - 1
+                };
+                let (ua, ub) = ((a as u64 as u128) & mask, (b as u64 as u128) & mask);
+                let r: u128 = match data.op {
+                    Opcode::UaddChk => ua + ub,
+                    Opcode::UsubChk => {
+                        if ua < ub {
+                            return Fold::Trap; // borrow
+                        }
+                        ua - ub
+                    }
+                    Opcode::UmulChk => ua * ub,
+                    _ => {
+                        if ub == 0 {
+                            return Fold::Trap; // divide by zero
+                        }
+                        if data.op == Opcode::UdivChk {
+                            ua / ub
+                        } else {
+                            ua % ub
+                        }
+                    }
+                };
+                if r > mask {
+                    Fold::Trap // unsigned overflow IS the runtime trap (X3)
+                } else {
+                    Fold::Const(Const::Int(wrap_to(r as i128, bits)))
+                }
             }
             Opcode::IaddWrap | Opcode::IsubWrap | Opcode::ImulWrap => {
                 let Some((a, b)) = ints() else {
@@ -1150,6 +1340,11 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::IaddSat
                 | Opcode::IsubSat
                 | Opcode::ImulSat
+                | Opcode::UaddChk
+                | Opcode::UsubChk
+                | Opcode::UmulChk
+                | Opcode::UdivChk
+                | Opcode::UremChk
                 | Opcode::Band
                 | Opcode::Bor
                 | Opcode::Bxor
@@ -1190,6 +1385,8 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::ImulWrap
                 | Opcode::IaddSat
                 | Opcode::ImulSat
+                | Opcode::UaddChk
+                | Opcode::UmulChk
                 | Opcode::Band
                 | Opcode::Bor
                 | Opcode::Bxor

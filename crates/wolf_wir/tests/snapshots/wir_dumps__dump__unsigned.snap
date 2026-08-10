@@ -1,0 +1,21 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+assertion_line: 57
+expression: "wolf_wir::print_module(&m)"
+---
+fn @udigits(i64, i64) -> i64 {
+  fact range %4 0..=9 : op
+b0(%0: i64, %1: i64):
+  %2 = uadd.chk %0, %1
+  %3 = iconst.i64 10
+  %4 = urem.chk %2, %3
+  %5 = udiv.chk %2, %3
+  %6 = icmp.ult %4, %5
+  br %6, b1, b2
+b1:
+  %7 = usub.chk %5, %4
+  ret %7
+b2:
+  %8 = umul.chk %4, %3
+  ret %8
+}

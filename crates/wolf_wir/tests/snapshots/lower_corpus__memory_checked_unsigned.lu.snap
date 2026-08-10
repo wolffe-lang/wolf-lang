@@ -1,0 +1,38 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 125
+expression: out
+---
+decl @digit(i64) -> i64
+
+fn @digit(i64) -> i64 {
+  fact range %2 0..=9 : op
+b0(%0: i64):
+  %1 = iconst.i64 10
+  %2 = urem.chk %0, %1
+  ret %2
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 250
+  %1 = iconst.i64 5
+  %2 = iconst.i64 255
+  %3 = call @digit(%2)
+  %4 = icmp.eq %3, %1
+  %5 = bconst false
+  br %4, b1, b2(%5)
+b1:
+  %6 = bconst true
+  jmp b2(%6)
+b2(%7: bool):
+  br %7, b3, b4
+b3:
+  %8 = iconst.i64 0
+  jmp b5(%8)
+b4:
+  %9 = iconst.i64 1
+  jmp b5(%9)
+b5(%10: i64):
+  ret %10
+}

@@ -167,12 +167,12 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
     let results = f.vpool.get(data.results);
     let mut s = String::new();
     if !results.is_empty() {
-        // Reserved ops carry explicit result types (their typing rules
-        // land in s26/s27); everything else derives result types.
+        // The memory family (token-minting) and reserved ops carry
+        // explicit result types; everything else derives result types.
         let rendered: Vec<String> = results
             .iter()
             .map(|&v| {
-                if data.op.is_reserved() {
+                if data.op.explicit_results() {
                     format!("{}: {}", canon.value(v), m.types.display(f.value_ty(v)))
                 } else {
                     canon.value(v)

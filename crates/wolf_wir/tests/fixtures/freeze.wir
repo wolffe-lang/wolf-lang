@@ -1,0 +1,17 @@
+; sync.freeze consumes the mutable token and returns the FROZEN token:
+; loads may use it forever (it is never invalidated — the licence for
+; rematerialization in s42), and no consuming op may take it.
+fn @freeze_and_read() -> i64 {
+  fact frozen %h : op %f
+b0:
+  %h: ptr, %m: mem.r0 = region.new
+  %eight = iconst.i64 8
+  %p: ptr, %m2: mem.r0 = region.alloc %h, %eight, %m
+  %v = iconst.i64 42
+  %m3 = store.i64 %v, %p, %m2
+  %f: mem.r0 = sync.freeze %h, %m3
+  %a = load.i64 %p, %f
+  %b = load.i64 %p, %f
+  %s = iadd.chk %a, %b
+  ret %s
+}

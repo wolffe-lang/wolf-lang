@@ -1,0 +1,20 @@
+; the s26 unsigned decision in op form: one integer type per width,
+; signedness as an OP property — the u*.chk family traps on unsigned
+; overflow/borrow/zero-divide, compares pick icmp.u*, and iconst
+; payloads stay sign-extended bit patterns (255 as u8 is -1).
+fn @udigits(i64, i64) -> i64 {
+  fact range %r 0..=9 : op
+b0(%a: i64, %b: i64):
+  %sum = uadd.chk %a, %b
+  %ten = iconst.i64 10
+  %r = urem.chk %sum, %ten
+  %q = udiv.chk %sum, %ten
+  %c = icmp.ult %r, %q
+  br %c, b1, b2
+b1:
+  %d = usub.chk %q, %r
+  ret %d
+b2:
+  %p = umul.chk %r, %ten
+  ret %p
+}

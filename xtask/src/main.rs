@@ -1082,16 +1082,16 @@ fn conformance_cmd(args: &[String]) -> ExitCode {
 
 /// Reference differential harness ([proto.harness.differ]).
 ///
-/// Flags: `--self` diffs wolfc against itself (the CI protocol
-/// self-check). `--checked` drives impl A (wolfc) through the s23
+/// Flags: `--self` diffs wolfgang against itself (the CI protocol
+/// self-check). `--checked` drives impl A (wolfgang) through the s23
 /// miri-lite so the `run` rung is reached — the checker-vs-oracle
-/// differential of s23 Target 4; without it wolfc reports
+/// differential of s23 Target 4; without it wolfgang reports
 /// `unsupported` past `mem` and only the static rungs compare.
 /// `--corpus=<dir>` walks an alternate corpus root (e.g. the pinned
 /// interpreter's vendored tree, so both sides see files their pins
 /// share).
 /// The `[conf.trap.map]` correspondence: the dynamic trap kind a
-/// static memory-tier rejection code maps to. When wolfc rejects a
+/// static memory-tier rejection code maps to. When wolfgang rejects a
 /// file with `fail(CODE)` and the oracle traps with the paired kind,
 /// the two implementations *agree* — the static tier caught at compile
 /// time exactly the fault the dynamic tier would raise (the s23
@@ -1110,12 +1110,12 @@ fn static_code_to_trap(code: &str) -> Option<&'static str> {
 }
 
 fn differ_cmd(args: &[String]) -> ExitCode {
-    // s23 triage: cross-implementation runs classify a wolfc
+    // s23 triage: cross-implementation runs classify a wolfgang
     // `fail(CODE)` against the oracle's dynamic outcome by the
     // static-vs-dynamic contract, instead of calling every such pair
     // a raw verdict divergence (which is what `--self` needs but a
     // cross-impl run does not). Soundness-direction findings
-    // (wolfc-accepts + oracle-faults) stay hard failures; everything
+    // (wolfgang-accepts + oracle-faults) stay hard failures; everything
     // static-stricter is a logged completeness note.
     let triage = args.iter().any(|a| a == "--triage");
     let checked = args.iter().any(|a| a == "--checked");
@@ -1140,7 +1140,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         };
         ((*a).clone(), (*b).clone())
     };
-    // Impl A (wolfc) reaches the run rung under `--checked`; the flag
+    // Impl A (wolfgang) reaches the run rung under `--checked`; the flag
     // is carried via the environment so wolf-interp — which ignores
     // WOLF_CHECKED — is untouched, keeping the two implementations
     // independent (no shared code, s06).
@@ -1200,7 +1200,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         }
         let va = ra["verdict"].as_str().unwrap_or("");
         let vb = rb["verdict"].as_str().unwrap_or("");
-        // s23 triage of the fail-vs-run pair: wolfc (A) rejected
+        // s23 triage of the fail-vs-run pair: wolfgang (A) rejected
         // statically, the oracle (B) ran to a dynamic outcome.
         if triage && let Some(code) = va.strip_prefix("fail(").and_then(|s| s.strip_suffix(')')) {
             let classify = |note: &str| {

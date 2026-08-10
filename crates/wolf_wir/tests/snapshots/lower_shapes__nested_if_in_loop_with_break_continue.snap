@@ -1,10 +1,12 @@
 ---
 source: crates/wolf_wir/tests/lower_shapes.rs
+assertion_line: 180
 expression: "dump(\"fn collatz_steps(n0: int) -> int {\\n\\\n         \\x20   var n = n0\\n\\\n         \\x20   var steps = 0\\n\\\n         \\x20   loop {\\n\\\n         \\x20       if n == 1 { break }\\n\\\n         \\x20       if n % 2 == 0 { n = n / 2 } else { n = 3 * n + 1 }\\n\\\n         \\x20       steps = steps + 1\\n\\\n         \\x20   }\\n\\\n         \\x20   steps\\n\\\n         }\\n\\\n         fn main() -> !int {\\n\\\n         \\x20   collatz_steps(6) - 8\\n\\\n         }\\n\")"
 ---
 decl @collatz_steps(i64) -> i64
 
 fn @collatz_steps(i64) -> i64 {
+  fact range %7 -1..=1 : op
 b0(%0: i64):
   %1 = iconst.i64 0
   jmp b1(%0, %1)

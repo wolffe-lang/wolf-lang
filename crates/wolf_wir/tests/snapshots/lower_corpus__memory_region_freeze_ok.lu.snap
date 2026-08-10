@@ -1,0 +1,33 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 125
+expression: out
+---
+decl @build_config() -> {i64}
+
+fn @build_config() -> {i64} {
+b0:
+  %0 = iconst.i64 42
+  %1 = agg.make %0
+  ret %1
+}
+
+fn @main() -> i64 {
+  fact frozen %0 : op %3
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2 = call @build_config()
+  %3: mem.r0 = sync.freeze %0, %1
+  %4 = agg.get %2, 0
+  %5 = iconst.i64 42
+  %6 = icmp.eq %4, %5
+  br %6, b1, b2
+b1:
+  %7 = iconst.i64 0
+  jmp b3(%7)
+b2:
+  %8 = iconst.i64 1
+  jmp b3(%8)
+b3(%9: i64):
+  ret %9
+}

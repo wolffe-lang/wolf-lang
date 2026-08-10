@@ -1,0 +1,13 @@
+; stack.alloc: one frame slot, its OWN one-slot region — stack
+; provenance (the s19 escape-to-stack landing pad), and the slot's
+; region/deref facts are op-derived, not asserted.
+fn @slot_roundtrip(i64) -> i64 {
+  fact deref %p 8 : op
+  fact region %p r0 : op
+b0(%v: i64):
+  %eight = iconst.i64 8
+  %p: ptr, %m: mem.r0 = stack.alloc %eight
+  %m2 = store.i64 %v, %p, %m
+  %w = load.i64 %p, %m2
+  ret %w
+}

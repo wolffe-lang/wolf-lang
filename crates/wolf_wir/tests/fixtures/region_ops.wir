@@ -1,0 +1,23 @@
+; the s26 region story end to end: region.new mints the arena handle
+; and the region's FIRST token; region.alloc threads the chain and
+; carries op-derived region/deref facts; region.free consumes the last
+; token — no live token, no loads (temporal safety by linearity).
+fn @arena_sum() -> i64 {
+  fact deref %p 16 : op
+  fact region %p r0 : op
+  fact region %q r0 : op %p
+b0:
+  %h: ptr, %m: mem.r0 = region.new
+  %sixteen = iconst.i64 16
+  %p: ptr, %m2: mem.r0 = region.alloc %h, %sixteen, %m
+  %v = iconst.i64 7
+  %m3 = store.i64 %v, %p, %m2
+  %one = iconst.i64 1
+  %q = ptr.off %p, %one, 8
+  %m4 = store.i64 %v, %q, %m3
+  %a = load.i64 %p, %m4
+  %b = load.i64 %q, %m4
+  %s = iadd.chk %a, %b
+  region.free %h, %m4
+  ret %s
+}

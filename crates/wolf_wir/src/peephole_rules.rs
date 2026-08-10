@@ -106,6 +106,18 @@ pub static RULES: &[Rule] = &[
     // x / 1 and x % 1 (no zero, no MIN/-1: trap-free).
     rule!(IdivChk, ConstIs(Rhs, 1), Rewrite::Lhs),
     rule!(IremChk, ConstIs(Rhs, 1), Rewrite::ConstInt(0)),
+    // The unsigned checked family (s26): the same trap-free identities.
+    // u + 0, u - 0, u - u (no borrow), u * 1, u * 0, u / 1, u % 1.
+    rule!(UaddChk, ConstIs(Rhs, 0), Rewrite::Lhs),
+    rule!(UaddChk, ConstIs(Lhs, 0), Rewrite::Rhs),
+    rule!(UsubChk, ConstIs(Rhs, 0), Rewrite::Lhs),
+    rule!(UsubChk, Same, Rewrite::ConstInt(0)),
+    rule!(UmulChk, ConstIs(Rhs, 1), Rewrite::Lhs),
+    rule!(UmulChk, ConstIs(Lhs, 1), Rewrite::Rhs),
+    rule!(UmulChk, ConstIs(Rhs, 0), Rewrite::ConstInt(0)),
+    rule!(UmulChk, ConstIs(Lhs, 0), Rewrite::ConstInt(0)),
+    rule!(UdivChk, ConstIs(Rhs, 1), Rewrite::Lhs),
+    rule!(UremChk, ConstIs(Rhs, 1), Rewrite::ConstInt(0)),
     // Bitwise identity / absorption / annihilation.
     rule!(Band, Same, Rewrite::Lhs),
     rule!(Band, ConstIs(Rhs, 0), Rewrite::ConstInt(0)),

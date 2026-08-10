@@ -47,13 +47,40 @@
 //!   alone.
 //! - **Typed-HIR lowering** ([`lower`]): scalar expression bodies,
 //!   `let`/`var`/assignment, calls, `if`/`while`/`loop` with
-//!   `break`/`continue`, `assert`, casts. Anything beyond the s25
-//!   surface refuses with an honest `NotYet` naming its owning sprint
-//!   (regions/aggregates/facts s26, error unions/`match`/`defer` s27,
-//!   closures/concurrency c05).
+//!   `break`/`continue`, `assert`, casts. Anything beyond the current
+//!   surface refuses with an honest `NotYet` naming its owner (error
+//!   unions/`match`/`for`/`defer`/receivers s27, closures/concurrency
+//!   c05).
 //!
-//! Region/RC/sync op semantics and fact attachment are s26;
-//! error-union and control lowering is s27.
+//! s26 lowers the MEMORY STORY:
+//!
+//! - **The memory family goes live**: `region.new`/`region.alloc`/
+//!   `region.free` (wholesale free CONSUMES the token — no live token,
+//!   no loads: use-after-free is a verifier structural error),
+//!   `sync.freeze` (the frozen token is never invalidated and never
+//!   consumable), token-threaded `rc.dup`/`rc.drop`, and `stack.alloc`
+//!   (one-slot regions: stack provenance, the s19 promotion landing
+//!   pad). Only `sync.transfer` and `eu.*` stay reserved.
+//! - **The unsigned decision** (recorded in [`ops`]): one integer type
+//!   per width; the checked family grows `uadd.chk`/`usub.chk`/
+//!   `umul.chk`/`udiv.chk`/`urem.chk` — signedness is an op property.
+//! - **Pointer-shaped `mut`**: a `mut` param lowers to (ptr, `mem.rK`
+//!   token) with FORMAL regions bound per call site (verified
+//!   substitution); `mut` args spill to `stack.alloc` slots and
+//!   reload. By-value aggregates (`agg.make`/`agg.get`) carry
+//!   structs/tuples; `region`/`in`/`freeze` sugar lowers to the ops.
+//! - **Facts translation** (the c04 handoff): `excl.mut` entry facts
+//!   (pairwise noalias + deref), `excl.field` noalias between spilled
+//!   call-site slots, op-derived `region`/`deref` facts on
+//!   allocations, `frozen` citing its `sync.freeze` point, and `range`
+//!   postconditions on checked remainders (X3's claw-back) — every
+//!   one held to its justification by the verifier (D2): region-fact
+//!   forgery, deref overclaims, stale-token reads (token order), dual
+//!   token roots, and frozen-token consumption are rejection classes.
+//!
+//! Error-union and control lowering is s27; unsafe-tier WIR ops
+//! (`ptr.assume_prov`/`assume.noalias`/`prov.retag`) were deferred out
+//! of s26 — recorded in the campaign closeout.
 
 pub mod build;
 pub mod entity;

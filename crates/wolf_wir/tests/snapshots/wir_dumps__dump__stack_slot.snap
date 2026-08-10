@@ -1,0 +1,15 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+assertion_line: 57
+expression: "wolf_wir::print_module(&m)"
+---
+fn @slot_roundtrip(i64) -> i64 {
+  fact deref %2 8 : op
+  fact region %2 r0 : op
+b0(%0: i64):
+  %1 = iconst.i64 8
+  %2: ptr, %3: mem.r0 = stack.alloc %1
+  %4 = store.i64 %0, %2, %3
+  %5 = load.i64 %2, %4
+  ret %5
+}

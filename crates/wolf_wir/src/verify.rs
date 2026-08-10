@@ -13,6 +13,7 @@
 //! messages in canonical textual coordinates, with the offending
 //! function dumped inline.
 
+use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, BlockCall, FuncId, Function, Inst, Module, Value, ValueDef};
 use crate::ops::Opcode;
@@ -49,6 +50,17 @@ pub enum ErrClass {
     Dominance,
     /// An effect token consumed more than once (the chain is a spine).
     TokenLinearity,
+    /// An effect token read (by a load) at a point reachable after its
+    /// consumption — use-after-free and stale-token reads are
+    /// STRUCTURAL errors (s26: temporal safety by linearity).
+    TokenOrder,
+    /// A region with two token roots (entry param vs `region.new` /
+    /// `stack.alloc`), or a minted region colliding with an existing
+    /// one.
+    RegionRoot,
+    /// A frozen token (from `sync.freeze`) in a consuming position:
+    /// stores/frees through frozen data are unrepresentable.
+    FrozenToken,
     /// A fact whose operands have the wrong types (or don't exist).
     FactType,
     /// A range fact that is empty or not implied by its deriving op.
@@ -79,6 +91,9 @@ impl ErrClass {
             ErrClass::Unreachable => "unreachable-block",
             ErrClass::Dominance => "dominance",
             ErrClass::TokenLinearity => "token-linearity",
+            ErrClass::TokenOrder => "token-order",
+            ErrClass::RegionRoot => "region-root",
+            ErrClass::FrozenToken => "frozen-token",
             ErrClass::FactType => "fact-type",
             ErrClass::FactRange => "fact-range",
             ErrClass::FactNoalias => "fact-noalias",
@@ -423,6 +438,11 @@ impl<'a> Verifier<'a> {
             | Opcode::IaddSat
             | Opcode::IsubSat
             | Opcode::ImulSat
+            | Opcode::UaddChk
+            | Opcode::UsubChk
+            | Opcode::UmulChk
+            | Opcode::UdivChk
+            | Opcode::UremChk
             | Opcode::Band
             | Opcode::Bor
             | Opcode::Bxor
@@ -602,19 +622,57 @@ impl<'a> Verifier<'a> {
                         args.len()
                     )));
                 }
+                // A callee sig's `mem.rF` params name FORMAL regions
+                // (s26): each binds to the caller's actual region,
+                // CONSISTENTLY — the substitution is checked, and the
+                // successor results must come back under it.
+                let mut subst: HashMap<u32, crate::types::RegionId> = HashMap::new();
                 for (i, (p, &a)) in sig.params.iter().zip(&args).enumerate() {
-                    if p.ty != self.f.value_ty(a) {
-                        return Err(call_err(format!(
-                            "argument {i} has type {}, `@{name}` wants {}",
-                            self.ty(a),
-                            self.m.types.display(p.ty)
-                        )));
+                    let aty = self.f.value_ty(a);
+                    match (self.m.types.get(p.ty), self.m.types.get(aty)) {
+                        (TypeData::Mem(f), TypeData::Mem(actual)) => {
+                            let f = f.as_u32();
+                            let actual = *actual;
+                            if let Some(&prev) = subst.get(&f)
+                                && prev != actual
+                            {
+                                return Err(call_err(format!(
+                                    "token argument {i} binds `@{name}`'s formal region r{f} to {actual}, but it is already bound to {prev}",
+                                )));
+                            }
+                            subst.insert(f, actual);
+                        }
+                        _ if p.ty == aty => {}
+                        _ => {
+                            return Err(call_err(format!(
+                                "argument {i} has type {}, `@{name}` wants {}",
+                                self.ty(a),
+                                self.m.types.display(p.ty)
+                            )));
+                        }
                     }
                 }
                 let mut want: Vec<crate::types::TypeId> = sig.results.clone();
                 for p in &sig.params {
-                    if self.m.types.is_token(p.ty) {
-                        want.push(p.ty);
+                    match self.m.types.get(p.ty) {
+                        TypeData::Mem(f) => {
+                            let actual = subst
+                                .get(&f.as_u32())
+                                .copied()
+                                .expect("every token param was bound above");
+                            // The actual token type exists — the bound
+                            // argument carried it.
+                            let aty = args
+                                .iter()
+                                .map(|&a| self.f.value_ty(a))
+                                .find(|&t| {
+                                    matches!(self.m.types.get(t), TypeData::Mem(r) if *r == actual)
+                                })
+                                .expect("bound region came from an argument");
+                            want.push(aty);
+                        }
+                        TypeData::Io => want.push(p.ty),
+                        _ => {}
                     }
                 }
                 if results.len() != want.len() {
@@ -679,6 +737,103 @@ impl<'a> Verifier<'a> {
             }
             Opcode::Trap => {
                 self.expect_counts(inst, 0, 0)?;
+            }
+            // ---- the memory family (s26) ---------------------------
+            Opcode::RegionNew => {
+                self.expect_counts(inst, 0, 2)?;
+                if self.f.value_ty(results[0]) != crate::types::PTR {
+                    return Err(
+                        self.type_err(inst, "region.new's first result is the arena handle (ptr)")
+                    );
+                }
+                if !matches!(types.get(self.f.value_ty(results[1])), TypeData::Mem(_)) {
+                    return Err(self.type_err(
+                        inst,
+                        "region.new's second result is the region's first mem token",
+                    ));
+                }
+            }
+            Opcode::RegionAlloc => {
+                self.expect_counts(inst, 3, 2)?;
+                if self.f.value_ty(args[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "region.alloc's handle must be ptr"));
+                }
+                if self.f.value_ty(args[1]) != crate::types::I64 {
+                    return Err(self.type_err(inst, "region.alloc's size must be i64"));
+                }
+                let tok = self.f.value_ty(args[2]);
+                if !matches!(types.get(tok), TypeData::Mem(_)) {
+                    return Err(self.type_err(inst, "region.alloc needs a mem token operand"));
+                }
+                if self.f.value_ty(results[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "region.alloc's first result must be ptr"));
+                }
+                if self.f.value_ty(results[1]) != tok {
+                    return Err(self.type_err(
+                        inst,
+                        "region.alloc's second result must be the successor of its mem token",
+                    ));
+                }
+            }
+            Opcode::RegionFree => {
+                self.expect_counts(inst, 2, 0)?;
+                if self.f.value_ty(args[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "region.free's handle must be ptr"));
+                }
+                if !matches!(types.get(self.f.value_ty(args[1])), TypeData::Mem(_)) {
+                    return Err(self.type_err(inst, "region.free needs a mem token operand"));
+                }
+            }
+            Opcode::RcDup | Opcode::RcDrop => {
+                self.expect_counts(inst, 2, 1)?;
+                if self.f.value_ty(args[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "rc ops take a ptr to the cell"));
+                }
+                let tok = self.f.value_ty(args[1]);
+                if !matches!(types.get(tok), TypeData::Mem(_)) {
+                    return Err(self.type_err(inst, "rc ops need a mem token operand"));
+                }
+                if self.f.value_ty(results[0]) != tok {
+                    return Err(
+                        self.type_err(inst, "rc ops produce the successor of their mem token")
+                    );
+                }
+            }
+            Opcode::SyncFreeze => {
+                self.expect_counts(inst, 2, 1)?;
+                if self.f.value_ty(args[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "sync.freeze's handle must be ptr"));
+                }
+                let tok = self.f.value_ty(args[1]);
+                if !matches!(types.get(tok), TypeData::Mem(_)) {
+                    return Err(self.type_err(inst, "sync.freeze needs a mem token operand"));
+                }
+                if self.f.value_ty(results[0]) != tok {
+                    return Err(self.type_err(
+                        inst,
+                        "sync.freeze produces the frozen token of the same region",
+                    ));
+                }
+            }
+            Opcode::StackAlloc => {
+                self.expect_counts(inst, 1, 2)?;
+                if self.f.value_ty(args[0]) != crate::types::I64 {
+                    return Err(self.type_err(inst, "stack.alloc's size must be i64"));
+                }
+                let ValueDef::Result(di, 0) = self.f.values[args[0]].def else {
+                    return Err(self.type_err(inst, "stack.alloc's size must be an iconst"));
+                };
+                if self.f.insts[di].op != Opcode::Iconst {
+                    return Err(self.type_err(inst, "stack.alloc's size must be an iconst"));
+                }
+                if self.f.value_ty(results[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "stack.alloc's first result must be ptr"));
+                }
+                if !matches!(types.get(self.f.value_ty(results[1])), TypeData::Mem(_)) {
+                    return Err(
+                        self.type_err(inst, "stack.alloc's second result is the slot's mem token")
+                    );
+                }
             }
             _ => {
                 debug_assert!(data.op.is_reserved(), "unhandled opcode in type check");
@@ -797,59 +952,198 @@ impl<'a> Verifier<'a> {
 
     // ---- token linearity ----------------------------------------------
 
-    fn check_tokens(&self) -> VResult {
-        // Consuming positions: store's token operand, call's token
-        // arguments, and token values passed along branch edges. Loads
-        // READ their token — the chain stays a spine, not a DAG.
-        let mut consumed: HashMap<Value, Inst> = HashMap::new();
-        let mut consume = |v: Value, by: Inst| -> Option<Inst> {
-            if !self.m.types.is_token(self.f.value_ty(v)) {
-                return None;
+    /// The token operands `inst` CONSUMES (the chain is a spine):
+    /// store's token, call's token args, the memory family's token, and
+    /// token values passed along branch edges.
+    fn consumed_tokens(&self, inst: Inst) -> Vec<Value> {
+        let data = &self.f.insts[inst];
+        let args = self.f.vpool.get(data.args);
+        let is_tok = |v: Value| self.m.types.is_token(self.f.value_ty(v));
+        let mut out = Vec::new();
+        match data.op {
+            Opcode::Store => {
+                if let Some(&tok) = args.get(2) {
+                    out.push(tok);
+                }
             }
-            consumed.insert(v, by)
-        };
+            Opcode::Call => out.extend(args.iter().copied().filter(|&a| is_tok(a))),
+            Opcode::RegionAlloc => {
+                if let Some(&tok) = args.get(2) {
+                    out.push(tok);
+                }
+            }
+            Opcode::RegionFree | Opcode::RcDup | Opcode::RcDrop | Opcode::SyncFreeze => {
+                if let Some(&tok) = args.get(1) {
+                    out.push(tok);
+                }
+            }
+            _ => match data.aux {
+                Aux::Jump(e) => {
+                    out.extend(self.f.vpool.get(e.args).into_iter().filter(|&a| is_tok(a)));
+                }
+                Aux::Br(t, e) => {
+                    out.extend(
+                        self.f
+                            .vpool
+                            .get(t.args)
+                            .into_iter()
+                            .chain(self.f.vpool.get(e.args))
+                            .filter(|&a| is_tok(a)),
+                    );
+                }
+                _ => {}
+            },
+        }
+        out.retain(|&v| is_tok(v));
+        out
+    }
+
+    fn check_tokens(&self) -> VResult {
+        let mut consumed: HashMap<Value, Inst> = HashMap::new();
         for &b in &self.f.layout {
             for &inst in &self.f.blocks[b].insts {
-                let data = &self.f.insts[inst];
-                let args = self.f.vpool.get(data.args);
-                let mut clash = None;
-                match data.op {
-                    Opcode::Store => {
-                        if let Some(&tok) = args.get(2) {
-                            clash = consume(tok, inst);
-                        }
+                for tok in self.consumed_tokens(inst) {
+                    // Frozen tokens (sync.freeze results) are read-only
+                    // forever: consuming one is unrepresentable
+                    // mutation/free of frozen data.
+                    if let ValueDef::Result(di, _) = self.f.values[tok].def
+                        && self.f.insts[di].op == Opcode::SyncFreeze
+                    {
+                        return Err(self.fail(
+                            ErrClass::FrozenToken,
+                            format!(
+                                "frozen token {} (from {}) used in a consuming position: {}",
+                                self.canon.value(tok),
+                                self.at_inst(di),
+                                self.at_inst(inst)
+                            ),
+                        ));
                     }
-                    Opcode::Call => {
-                        for &a in &args {
-                            clash = clash.or(consume(a, inst));
-                        }
+                    if let Some(first) = consumed.insert(tok, inst) {
+                        return Err(self.fail(
+                            ErrClass::TokenLinearity,
+                            format!(
+                                "effect token consumed twice: first by {}, again by {}",
+                                self.at_inst(first),
+                                self.at_inst(inst)
+                            ),
+                        ));
                     }
-                    _ => match data.aux {
-                        Aux::Jump(e) => {
-                            for a in self.f.vpool.get(e.args) {
-                                clash = clash.or(consume(a, inst));
-                            }
-                        }
-                        Aux::Br(t, e) => {
-                            for a in self
-                                .f
-                                .vpool
-                                .get(t.args)
-                                .into_iter()
-                                .chain(self.f.vpool.get(e.args))
-                            {
-                                clash = clash.or(consume(a, inst));
-                            }
-                        }
-                        _ => {}
-                    },
                 }
-                if let Some(first) = clash {
+            }
+        }
+        self.check_token_order(&consumed)
+    }
+
+    /// No read of a token value at a point reachable AFTER its
+    /// consumption without passing through the value's (re)definition —
+    /// this is what makes load-after-`region.free` (and any stale-token
+    /// read) a structural rejection, not a runtime hope.
+    fn check_token_order(&self, consumed: &HashMap<Value, Inst>) -> VResult {
+        for &b in &self.f.layout {
+            for (pos, &inst) in self.f.blocks[b].insts.iter().enumerate() {
+                if self.f.insts[inst].op != Opcode::Load {
+                    continue;
+                }
+                let args = self.args(inst);
+                let Some(&tok) = args.get(1) else { continue };
+                let Some(&consumer) = consumed.get(&tok) else {
+                    continue;
+                };
+                let &(cb, cpos) = self.place.get(&consumer).expect("placed");
+                let def_block = match self.f.values[tok].def {
+                    ValueDef::Param(db, _) => db,
+                    ValueDef::Result(di, _) => {
+                        self.place.get(&di).map(|&(db, _)| db).expect("placed")
+                    }
+                };
+                let bad = if cb == b {
+                    // Same block: a read after the consume is stale
+                    // (within one block the value is never redefined).
+                    cpos < pos
+                } else {
+                    // The consumer's block reaches the reader's block
+                    // without re-entering the token's defining block
+                    // (re-entering redefines the value — loop-carried
+                    // tokens are per-iteration instances).
+                    self.reaches_avoiding(cb, b, def_block)
+                };
+                if bad {
                     return Err(self.fail(
-                        ErrClass::TokenLinearity,
+                        ErrClass::TokenOrder,
                         format!(
-                            "effect token consumed twice: first by {}, again by {}",
-                            self.at_inst(first),
+                            "token {} is read by {} after being consumed by {} — no live token, no loads",
+                            self.canon.value(tok),
+                            self.at_inst(inst),
+                            self.at_inst(consumer)
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Is `to` reachable from `from`'s successors along paths that
+    /// never pass through `avoid`?
+    fn reaches_avoiding(&self, from: Block, to: Block, avoid: Block) -> bool {
+        let mut seen = std::collections::HashSet::new();
+        let mut stack: Vec<Block> = successors(self.f, from)
+            .into_iter()
+            .filter(|&s| s != avoid)
+            .collect();
+        while let Some(b) = stack.pop() {
+            if !seen.insert(b) {
+                continue;
+            }
+            if b == to {
+                return true;
+            }
+            for s in successors(self.f, b) {
+                if s != avoid && !seen.contains(&s) {
+                    stack.push(s);
+                }
+            }
+        }
+        false
+    }
+
+    /// One token ROOT per region: a region's token chain begins at
+    /// exactly one of an entry token parameter, a `region.new`, or a
+    /// `stack.alloc` — two roots would let unrelated chains forge each
+    /// other's provenance.
+    fn check_region_roots(&self) -> VResult {
+        let mut roots: HashMap<u32, String> = HashMap::new();
+        let entry = self.f.entry().expect("layout checked");
+        for &v in &self.f.vpool.get(self.f.blocks[entry].params) {
+            if let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(v))
+                && let Some(prev) = roots.insert(
+                    r.as_u32(),
+                    format!("entry parameter {}", self.canon.value(v)),
+                )
+            {
+                return Err(self.fail(
+                    ErrClass::RegionRoot,
+                    format!("region {r} has two token roots: {prev} and another entry parameter"),
+                ));
+            }
+        }
+        for &b in &self.f.layout {
+            for &inst in &self.f.blocks[b].insts {
+                let op = self.f.insts[inst].op;
+                if !matches!(op, Opcode::RegionNew | Opcode::StackAlloc) {
+                    continue;
+                }
+                let results = self.results(inst);
+                let Some(&tok) = results.get(1) else { continue };
+                let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(tok)) else {
+                    continue; // ill-typed; the type check reports it
+                };
+                if let Some(prev) = roots.insert(r.as_u32(), self.at_inst(inst)) {
+                    return Err(self.fail(
+                        ErrClass::RegionRoot,
+                        format!(
+                            "region {r} has two token roots: {prev} and {}",
                             self.at_inst(inst)
                         ),
                     ));
@@ -860,6 +1154,42 @@ impl<'a> Verifier<'a> {
     }
 
     // ---- facts ---------------------------------------------------------
+
+    /// If `v` is the pointer result of an allocation op, the op and the
+    /// region its token result mints.
+    fn alloc_region_of(&self, v: Value) -> Option<(Inst, crate::types::RegionId)> {
+        let ValueDef::Result(di, 0) = self.f.values[v].def else {
+            return None;
+        };
+        if !matches!(
+            self.f.insts[di].op,
+            Opcode::RegionAlloc | Opcode::StackAlloc
+        ) {
+            return None;
+        }
+        let tok = *self.results(di).get(1)?;
+        match self.m.types.get(self.f.value_ty(tok)) {
+            TypeData::Mem(r) => Some((di, *r)),
+            _ => None,
+        }
+    }
+
+    /// Is `v` equal to `base`, or derived from it through `ptr.off`
+    /// steps (structural provenance inheritance)?
+    fn derived_from(&self, mut v: Value, base: Value) -> bool {
+        for _ in 0..64 {
+            if v == base {
+                return true;
+            }
+            match self.f.values[v].def {
+                ValueDef::Result(di, 0) if self.f.insts[di].op == Opcode::PtrOff => {
+                    v = self.args(di)[0];
+                }
+                _ => return false,
+            }
+        }
+        false
+    }
 
     fn fact_fail(&self, class: ErrClass, fact: crate::facts::FactId, msg: &str) -> VerifyError {
         let rendered = render_fact(&self.canon, &self.f.facts[fact]);
@@ -906,7 +1236,9 @@ impl<'a> Verifier<'a> {
                         ));
                     }
                     match fd.just {
-                        Just::Theorem(Theorem::ExclMut | Theorem::FrozenRead) => {}
+                        Just::Theorem(
+                            Theorem::ExclMut | Theorem::FrozenRead | Theorem::ExclField,
+                        ) => {}
                         _ => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
@@ -947,11 +1279,39 @@ impl<'a> Verifier<'a> {
                                     "deref fact cites a block parameter, not an allocation op",
                                 ));
                             };
-                            if self.f.insts[di].op != Opcode::RegionAlloc {
+                            let op = self.f.insts[di].op;
+                            if !matches!(op, Opcode::RegionAlloc | Opcode::StackAlloc) {
                                 return Err(self.fact_fail(
                                     ErrClass::FactDeref,
                                     id,
-                                    "deref fact cites a non-allocation op (size checks against `region.alloc` land in s26)",
+                                    "deref fact cites a non-allocation op (`region.alloc`/`stack.alloc`)",
+                                ));
+                            }
+                            // The claim may not exceed the allocation:
+                            // re-derive against the size operand when it
+                            // is a constant.
+                            let size_arg = match op {
+                                Opcode::RegionAlloc => self.args(di).get(1).copied(),
+                                _ => self.args(di).first().copied(),
+                            };
+                            let alloc_size = size_arg.and_then(|s| match self.f.values[s].def {
+                                ValueDef::Result(si, 0)
+                                    if self.f.insts[si].op == Opcode::Iconst =>
+                                {
+                                    match self.f.insts[si].aux {
+                                        Aux::Int(n) => Some(n),
+                                        _ => None,
+                                    }
+                                }
+                                _ => None,
+                            });
+                            if let (DerefSize::Const(n), Some(k)) = (size, alloc_size)
+                                && (k < 0 || n > k as u64)
+                            {
+                                return Err(self.fact_fail(
+                                    ErrClass::FactDeref,
+                                    id,
+                                    "deref fact claims more bytes than the cited allocation provides",
                                 ));
                             }
                         }
@@ -990,8 +1350,37 @@ impl<'a> Verifier<'a> {
                                     "op-justified range on a block parameter (cite a checker theorem instead)",
                                 ));
                             };
+                            let const_of = |val: Value| -> Option<i64> {
+                                match self.f.values[val].def {
+                                    ValueDef::Result(si, 0)
+                                        if self.f.insts[si].op == Opcode::Iconst =>
+                                    {
+                                        match self.f.insts[si].aux {
+                                            Aux::Int(n) => Some(n),
+                                            _ => None,
+                                        }
+                                    }
+                                    _ => None,
+                                }
+                            };
                             let (dlo, dhi) = match (self.f.insts[di].op, self.f.insts[di].aux) {
                                 (Opcode::Iconst, Aux::Int(c)) => (c as i128, c as i128),
+                                // Remainder postconditions (X3's
+                                // claw-back): a no-trap `irem.chk` by a
+                                // positive constant c lands in
+                                // -(c-1)..=c-1; `urem.chk` in 0..=c-1.
+                                (Opcode::IremChk, _) => {
+                                    match self.args(di).get(1).and_then(|&d| const_of(d)) {
+                                        Some(c) if c > 0 => (-(c as i128 - 1), c as i128 - 1),
+                                        _ => (tlo, thi),
+                                    }
+                                }
+                                (Opcode::UremChk, _) => {
+                                    match self.args(di).get(1).and_then(|&d| const_of(d)) {
+                                        Some(c) if c > 0 => (0, c as i128 - 1),
+                                        _ => (tlo, thi),
+                                    }
+                                }
                                 // Checked ops cannot wrap, so their
                                 // results stay within type bounds —
                                 // that is all that is derivable
@@ -1008,7 +1397,7 @@ impl<'a> Verifier<'a> {
                         }
                     }
                 }
-                FactKind::Region(v, _) => {
+                FactKind::Region(v, r) => {
                     if !is_ptr(v) {
                         return Err(self.fact_fail(
                             ErrClass::FactType,
@@ -1018,11 +1407,45 @@ impl<'a> Verifier<'a> {
                     }
                     match fd.just {
                         Just::Theorem(Theorem::RegionAlloc) => {}
-                        _ => {
+                        Just::DefOp | Just::Op(_) => {
+                            // Op-derived region identity is PROVENANCE,
+                            // re-derived structurally: the cited op must
+                            // be an allocation minting exactly region r,
+                            // and the subject must be its pointer result
+                            // or a `ptr.off`-derived pointer from it —
+                            // cross-region forgery is a rejection.
+                            let cited = match fd.just {
+                                Just::Op(c) => c,
+                                _ => v,
+                            };
+                            let Some((di, minted)) = self.alloc_region_of(cited) else {
+                                return Err(self.fact_fail(
+                                    ErrClass::FactJust,
+                                    id,
+                                    "op-derived region facts must cite a `region.alloc`/`stack.alloc` pointer result",
+                                ));
+                            };
+                            if minted != r {
+                                return Err(self.fact_fail(
+                                    ErrClass::FactJust,
+                                    id,
+                                    "region fact names a different region than the cited allocation mints — provenance cannot be forged in safe-tier WIR",
+                                ));
+                            }
+                            let ptr_result = self.results(di)[0];
+                            if !self.derived_from(v, ptr_result) {
+                                return Err(self.fact_fail(
+                                    ErrClass::FactJust,
+                                    id,
+                                    "region fact subject is not derived from the cited allocation's pointer",
+                                ));
+                            }
+                        }
+                        Just::Theorem(_) => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "region facts cite the region.alloc theorem (op-derived forms land in s26)",
+                                "region facts cite the region.alloc theorem or their allocating op",
                             ));
                         }
                     }
@@ -1037,11 +1460,27 @@ impl<'a> Verifier<'a> {
                     }
                     match fd.just {
                         Just::Theorem(Theorem::FrozenRead) => {}
+                        Just::Op(c) => {
+                            // Deep immutability by a freeze point: the
+                            // cited value must be a sync.freeze result.
+                            let frozen_by_op = matches!(
+                                self.f.values[c].def,
+                                ValueDef::Result(di, _)
+                                    if self.f.insts[di].op == Opcode::SyncFreeze
+                            );
+                            if !frozen_by_op {
+                                return Err(self.fact_fail(
+                                    ErrClass::FactJust,
+                                    id,
+                                    "op-justified frozen facts must cite a `sync.freeze` result",
+                                ));
+                            }
+                        }
                         _ => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "frozen facts cite the frozen.read theorem",
+                                "frozen facts cite the frozen.read theorem or a `sync.freeze` point",
                             ));
                         }
                     }
@@ -1091,6 +1530,7 @@ pub fn verify_function(m: &Module, f: &Function) -> VResult {
     }
     v.check_dominance()?;
     v.check_tokens()?;
+    v.check_region_roots()?;
     v.check_facts()?;
     Ok(())
 }

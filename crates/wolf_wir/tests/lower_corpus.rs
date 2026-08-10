@@ -172,6 +172,45 @@ fn golden_resolve_forward() {
     golden("resolve/forward/main.lu");
 }
 
+// ---- the s26 memory-surface goldens (fact-fidelity witnesses) ----
+
+/// The freeze flow: `region(rc)` value form, `in r { }`, `sync.freeze`
+/// with its op-justified `frozen` fact. The s26 demo artifact.
+#[test]
+fn golden_memory_region_freeze_ok() {
+    golden("memory/region_freeze_ok.lu");
+}
+
+/// Field-granular `mut` args: stack.alloc spill slots with op-derived
+/// region/deref facts and `excl.field` noalias edges — plus the
+/// callee's `excl.mut` entry facts (the hand-`restrict`-C killer).
+#[test]
+fn golden_memory_excl_disjoint_ok() {
+    golden("memory/excl_disjoint_ok.lu");
+}
+
+/// Sibling region values with interleaved use (the multiopen
+/// antichain), lowered to region.new pairs.
+#[test]
+fn golden_memory_region_multiopen_values_ok() {
+    golden("memory/region_multiopen_values_ok.lu");
+}
+
+/// Aggregate-heavy tree transform: struct literals and member reads as
+/// by-value `agg.make`/`agg.get` (the register-promotion story).
+#[test]
+fn golden_memory_region_infer_tree_transform() {
+    golden("memory/region_infer_tree_transform.lu");
+}
+
+/// The unsigned checked family (`u*.chk`) with the X3 claw-back: a
+/// remainder by a positive constant carries its `range` postcondition
+/// as a verified `: op` fact.
+#[test]
+fn golden_memory_checked_unsigned() {
+    golden("memory/checked_unsigned.lu");
+}
+
 // ------------------------------------------------- the whole corpus ----
 
 /// Which files lower today. Snapshot-pinned: every advance or retreat

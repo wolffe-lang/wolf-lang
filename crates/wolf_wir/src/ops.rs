@@ -10,9 +10,25 @@
 //! - There is deliberately NO unwind/invoke-shaped terminator (D30):
 //!   unwinding is unrepresentable, not just unused. Error unions lower
 //!   through the `eu.*` value ops plus ordinary `br` (s27).
-//! - `region.*` / `rc.*` / `sync.*` / `eu.*` mnemonics are RESERVED:
-//!   they parse and print (so the text format doesn't churn) but the
-//!   verifier rejects them until their semantics land (s26/s27).
+//! - `sync.transfer` / `eu.*` mnemonics are RESERVED: they parse and
+//!   print (so the text format doesn't churn) but the verifier rejects
+//!   them until their semantics land (s27/c05). The `region.*`, `rc.*`,
+//!   `sync.freeze`, and `stack.alloc` families are LIVE as of s26.
+//!
+//! # The s26 unsigned decision (recorded here, the op-set reference)
+//!
+//! WIR keeps ONE integer type per width (`i8..i64`, bit-typed two's
+//! complement) and grows the checked family with unsigned variants —
+//! `uadd.chk`/`usub.chk`/`umul.chk`/`udiv.chk`/`urem.chk` — mirroring
+//! the signed family exactly, the way `icmp` already carries both
+//! signed and unsigned conditions. Signedness is an OP property, not a
+//! type property (the LLVM/Cranelift posture): `u8..u64`/`uint` lower
+//! onto the same-width scalar with the `u*` ops selected, unsigned
+//! compares pick `icmp.u*`, and unsigned widening picks `zext`. The
+//! closed op set grows once, deliberately, by exactly these five
+//! mnemonics; wrap/sat forms need no unsigned twins (two's-complement
+//! wrapping and bitwise ops are sign-agnostic; unsigned saturation is
+//! deferred until a source construct demands it).
 
 /// Comparison condition for `icmp.*` (s = signed, u = unsigned order).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -129,6 +145,16 @@ pub enum Opcode {
     IsubSat,
     /// `%r = imul.sat %a, %b` — saturating multiply.
     ImulSat,
+    /// `%r = uadd.chk %a, %b` — unsigned add; TRAPS on carry-out (s26).
+    UaddChk,
+    /// `%r = usub.chk %a, %b` — unsigned subtract; traps on borrow.
+    UsubChk,
+    /// `%r = umul.chk %a, %b` — unsigned multiply; traps on overflow.
+    UmulChk,
+    /// `%r = udiv.chk %a, %b` — unsigned divide; traps on zero only.
+    UdivChk,
+    /// `%r = urem.chk %a, %b` — unsigned remainder; traps on zero only.
+    UremChk,
 
     // ---- bit operations (total, no variants needed) --------------------
     /// `%r = band %a, %b` — bitwise and.
@@ -202,20 +228,41 @@ pub enum Opcode {
     /// `trap` — abort the program (checked-arith overflow lowers here).
     Trap,
 
-    // ---- RESERVED mnemonics (parse/print now; semantics s26/s27) -------
-    /// RESERVED (s26): `%r, %m = region.new` — create a region + its token.
+    // ---- the memory story (s26; explicit result types in text) ---------
+    /// `%h: ptr, %m: mem.rN = region.new` — create region rN: the arena
+    /// handle and rN's FIRST token. rN is fresh within the function
+    /// (one root per region; the verifier holds it).
     RegionNew,
-    /// RESERVED (s26): `%p, %m2 = region.alloc.T %r, %m` — allocate in a region.
+    /// `%p: ptr, %m2: mem.rN = region.alloc %h, %size, %m` — allocate
+    /// `%size` bytes (i64) in the region whose token is %m; %p's
+    /// provenance is that region; consumes %m, produces the successor.
     RegionAlloc,
-    /// RESERVED (s26): `%m2 = region.free %r, %m` — free a whole region.
+    /// `region.free %h, %m` — free the whole region wholesale. CONSUMES
+    /// the token and produces NO successor: no live token, no loads —
+    /// use-after-free is a verifier structural error (temporal safety
+    /// by linearity).
     RegionFree,
-    /// RESERVED (s26): `%r = rc.dup %p` — shared-tier refcount increment.
+    /// `%m2: mem.rN = rc.dup %p, %m` — shared-tier refcount increment,
+    /// token-threaded so RC traffic orders against loads/stores.
     RcDup,
-    /// RESERVED (s26): `rc.drop %p` — shared-tier refcount decrement.
+    /// `%m2: mem.rN = rc.drop %p, %m` — refcount decrement; may free.
+    /// Token-threaded: drops order against loads/stores (Perceus
+    /// placement stays in c04/s42; this is the faithful op).
     RcDrop,
-    /// RESERVED (s26): `%q = sync.freeze %p` — freeze to deep-immutable.
+    /// `%f: mem.rN = sync.freeze %h, %m` — freeze region rN to deeply
+    /// immutable. Consumes the mutable token; the FROZEN token it
+    /// returns is read-only and never invalidated (loads may use it
+    /// forever — what licenses rematerialization in s42), and no
+    /// consuming op may take it (stores/free through frozen are
+    /// unrepresentable).
     SyncFreeze,
-    /// RESERVED (s26): `%q = sync.transfer %p` — region transfer to a task.
+    /// `%p: ptr, %m: mem.rN = stack.alloc %size` — one frame slot of
+    /// `%size` bytes (an iconst), its own one-slot region rN: stack
+    /// provenance, escape-to-stack promotion's landing pad (s19).
+    StackAlloc,
+
+    // ---- RESERVED mnemonics (parse/print now; semantics s27/c05) -------
+    /// RESERVED (c05): `%q = sync.transfer %p` — region transfer to a task.
     SyncTransfer,
     /// RESERVED (s27): `%e = eu.make.ok %v` — wrap a success value in `!T`.
     EuMakeOk,
@@ -235,24 +282,36 @@ impl Opcode {
         matches!(self, Opcode::Jmp | Opcode::Br | Opcode::Ret | Opcode::Trap)
     }
 
-    /// True for mnemonics reserved for s26/s27: representable in text,
-    /// rejected by the verifier until their semantics land.
+    /// True for mnemonics still reserved (s27/c05): representable in
+    /// text, rejected by the verifier until their semantics land.
     pub fn is_reserved(self) -> bool {
         matches!(
             self,
-            Opcode::RegionNew
-                | Opcode::RegionAlloc
-                | Opcode::RegionFree
-                | Opcode::RcDup
-                | Opcode::RcDrop
-                | Opcode::SyncFreeze
-                | Opcode::SyncTransfer
+            Opcode::SyncTransfer
                 | Opcode::EuMakeOk
                 | Opcode::EuMakeErr
                 | Opcode::EuIsErr
                 | Opcode::EuOk
                 | Opcode::EuErr
         )
+    }
+
+    /// Ops whose textual form carries EXPLICIT result types (`%r: ptr =
+    /// …`): the memory family mints region tokens (result types are not
+    /// derivable from operands alone), and reserved ops have no typing
+    /// rules yet.
+    pub fn explicit_results(self) -> bool {
+        self.is_reserved()
+            || matches!(
+                self,
+                Opcode::RegionNew
+                    | Opcode::RegionAlloc
+                    | Opcode::RegionFree
+                    | Opcode::RcDup
+                    | Opcode::RcDrop
+                    | Opcode::SyncFreeze
+                    | Opcode::StackAlloc
+            )
     }
 
     /// The fixed part of the mnemonic (type/cc suffixes are printed by
@@ -273,6 +332,11 @@ impl Opcode {
             Opcode::IaddSat => "iadd.sat",
             Opcode::IsubSat => "isub.sat",
             Opcode::ImulSat => "imul.sat",
+            Opcode::UaddChk => "uadd.chk",
+            Opcode::UsubChk => "usub.chk",
+            Opcode::UmulChk => "umul.chk",
+            Opcode::UdivChk => "udiv.chk",
+            Opcode::UremChk => "urem.chk",
             Opcode::Band => "band",
             Opcode::Bor => "bor",
             Opcode::Bxor => "bxor",
@@ -306,6 +370,7 @@ impl Opcode {
             Opcode::RcDup => "rc.dup",
             Opcode::RcDrop => "rc.drop",
             Opcode::SyncFreeze => "sync.freeze",
+            Opcode::StackAlloc => "stack.alloc",
             Opcode::SyncTransfer => "sync.transfer",
             Opcode::EuMakeOk => "eu.make.ok",
             Opcode::EuMakeErr => "eu.make.err",
