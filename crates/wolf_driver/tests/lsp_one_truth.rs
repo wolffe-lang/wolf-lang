@@ -239,7 +239,7 @@ fn one_truth_check(path: &Path) {
     );
     lsp.notify("initialized", serde_json::json!({}));
 
-    let uri = file_uri(&path);
+    let uri = file_uri(path);
     lsp.notify(
         "textDocument/didOpen",
         serde_json::json!({
