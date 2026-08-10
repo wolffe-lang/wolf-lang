@@ -317,6 +317,7 @@ mod fuzz {
                             mut_args: vec![(place, s)],
                             read_args: vec![(second, s)],
                             take_args: Vec::new(),
+                            c_call: false,
                         })
                     }
                 };
@@ -451,4 +452,54 @@ fn regions_dump_is_deterministic() {
             "{file} diverged between runs"
         );
     }
+}
+
+// ------------------------------------------- the unsafe tier (s22) ----
+
+#[test]
+fn dump_unsafe_noalias() {
+    // Provenance ops round-trip in the dump: unsafe-enter/exit,
+    // c-calls, assume-noalias, raw reads/writes.
+    insta::assert_snapshot!(
+        "dump_unsafe_noalias",
+        dump(&corpus("memory/unsafe_noalias.lu"))
+    );
+}
+
+#[test]
+fn dump_unsafe_door_borrow() {
+    // The re-entry door and the region->ptr expose, visible.
+    insta::assert_snapshot!(
+        "dump_unsafe_door_borrow",
+        dump(&corpus("memory/unsafe_door_borrow.lu"))
+    );
+}
+
+#[test]
+fn facts_unsafe_noalias() {
+    // The s22 attribution schema: the assume fact (O5 licence / P5
+    // obligation), raw accesses with their candidate UB rows, c-call
+    // attribution points, the ring span.
+    insta::assert_snapshot!(
+        "facts_unsafe_noalias",
+        facts(&corpus("memory/unsafe_noalias.lu"))
+    );
+}
+
+#[test]
+fn facts_unsafe_door_borrow() {
+    insta::assert_snapshot!(
+        "facts_unsafe_door_borrow",
+        facts(&corpus("memory/unsafe_door_borrow.lu"))
+    );
+}
+
+#[test]
+fn facts_unsafe_creation_not_use() {
+    // Derivations record nothing but the accesses: q's creation is
+    // absent from the raw-access list (creation is not a use).
+    insta::assert_snapshot!(
+        "facts_unsafe_creation_not_use",
+        facts(&corpus("memory/unsafe_creation_not_use.lu"))
+    );
 }

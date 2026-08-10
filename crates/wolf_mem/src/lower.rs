@@ -28,7 +28,7 @@ use wolf_ast::{
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
 
-use wolf_sema::check::CallSig;
+use wolf_sema::check::{CallSig, CastKind};
 use wolf_sema::sig::{ItemSig, ParamSig, SigTables};
 use wolf_sema::types::{Prim, TyId, TyKind, TypeTable, render};
 use wolf_sema::{NotYet, Package, TypedBody};
@@ -274,6 +274,14 @@ pub(crate) struct Lowerer<'t> {
     /// The cell sites proper (creation + `clone`/`downgrade`
     /// results), in mint order — the fact record's spine.
     rc_cells: Vec<SiteId>,
+
+    // ------------------------------------------ the unsafe tier (s22) ----
+    /// `unsafe { }` nesting depth: the ring the raw-tier operations
+    /// demand (E1301 outside; `[mem.unsafe.scope]`).
+    unsafe_depth: usize,
+    /// span → (source ty, target ty, kind), from [`TypedBody::casts`]
+    /// — raw pointer bridges gate on the ring and emit expose facts.
+    casts: HashMap<Span, (TyId, TyId, CastKind)>,
 }
 
 impl<'t> Lowerer<'t> {
@@ -1300,6 +1308,236 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    // ------------------------------------------- the unsafe tier (s22) ----
+
+    fn in_unsafe(&self) -> bool {
+        self.unsafe_depth > 0
+    }
+
+    /// E1301 — the missing-ring error. States the ring, never
+    /// moralizes: the raw tier is simpler, not scarier (D11).
+    fn require_unsafe(&mut self, what: &str, span: Span) {
+        if self.in_unsafe() {
+            return;
+        }
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1301,
+                span,
+                format!("{what} needs an `unsafe` block"),
+            )
+            .with_label("raw-tier operation in safe code")
+            .with_note(
+                "raw pointers are inert data anywhere — only the tier's operations \
+                 need the ring. Wrap this in `unsafe { }` and state the invariant in \
+                 a `# Safety:` comment; the rules inside are simpler than the safe \
+                 tier's, not stricter.",
+            ),
+        );
+    }
+
+    /// W1301 — the `# Safety:` style lint ([mem.boundary.doc],
+    /// advisory): an `unsafe` block should state the invariant it
+    /// maintains, either in the contiguous comment lines immediately
+    /// above it or inside the block itself.
+    fn lint_safety_comment(&mut self, span: Span) {
+        let block = String::from_utf8_lossy(&self.src[span.lo as usize..span.hi as usize]);
+        if block.contains("# Safety") {
+            return;
+        }
+        // Contiguous `//` lines immediately above the block (the
+        // partial line holding `unsafe` itself is cut first).
+        let head = String::from_utf8_lossy(&self.src[..span.lo as usize]);
+        let head = &head[..head.rfind('\n').unwrap_or(0)];
+        for line in head.lines().rev() {
+            let t = line.trim();
+            if t.is_empty() || !t.starts_with("//") {
+                break;
+            }
+            if t.contains("# Safety") {
+                return;
+            }
+        }
+        let kw = Span::new(span.file, span.lo, (span.lo + 6).min(span.hi));
+        self.diags.push(
+            Diagnostic::warning(
+                codes::W1301,
+                kw,
+                "this `unsafe` block does not state its invariant".to_string(),
+            )
+            .with_label("add a `# Safety:` comment")
+            .with_note(
+                "the block discharges a proof obligation the checker cannot; write \
+                 the invariant down for the auditors who will read this ring \
+                 (`// # Safety: …` above the block).",
+            ),
+        );
+    }
+
+    /// `assume noalias p, q` ([mem.unsafe.raw.2]): operands must be
+    /// raw pointers (E1304) inside the ring (E1301); the fact licenses
+    /// O5 and its violation is P5 — checked dynamically by s23/is04,
+    /// never approximated here.
+    fn lower_assume(&mut self, stmt: &'t GreenNode) -> R<()> {
+        self.require_unsafe("`assume noalias`", stmt.span);
+        let d = wolf_ast::AssumeStmt::cast(stmt).expect("kind");
+        let mut ops: Vec<String> = Vec::new();
+        for op in d.exprs() {
+            if let Some((place, _)) = self.as_place(op) {
+                self.emit_read(place, op.span);
+            } else {
+                self.eval_value(op)?;
+            }
+            let is_ptr = matches!(
+                self.expr_ty(op.span).map(|t| t.kind().clone()),
+                Some(TyKind::Ptr(_) | TyKind::Error | TyKind::Never)
+            );
+            if !is_ptr {
+                let shown = self.rendered_expr_ty(op.span);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E1304,
+                        op.span,
+                        format!(
+                            "`assume noalias` takes raw pointers, but this operand is `{shown}`"
+                        ),
+                    )
+                    .with_label("not a raw pointer")
+                    .with_note(
+                        "safe values already carry stronger, checked aliasing facts \
+                         (`mut` is exclusive, `read` is frozen) — `assume` exists only \
+                         for `*T` values the checker cannot see through.",
+                    ),
+                );
+            }
+            ops.push(self.text(op.span));
+        }
+        self.push(Stmt::Assume {
+            ops: ops.join(", "),
+            span: stmt.span,
+        });
+        Ok(())
+    }
+
+    /// `borrow r from p` — re-entry door 1 ([mem.unsafe.door]).
+    /// Static requirements, checked locally (D11: each op's rule is
+    /// short and local): the ring (E1301), a `region` left operand and
+    /// a `*T` right operand (E1305). The claim itself — p addresses
+    /// r's live allocation, correctly typed — is the P6 obligation,
+    /// dynamic by design.
+    fn eval_borrow_from(&mut self, e: &'t GreenNode) -> R<Val> {
+        self.require_unsafe("the `borrow … from …` door", e.span);
+        let d = wolf_ast::BorrowExpr::cast(e).expect("kind");
+        let mut door = ("<region>".to_string(), "<ptr>".to_string());
+        if let Some(r) = d.borrowed() {
+            if let Some((place, _)) = self.as_place(r) {
+                self.emit_read(place, r.span);
+            } else {
+                self.eval_value(r)?;
+            }
+            let is_region = matches!(
+                self.expr_ty(r.span).map(|t| t.kind().clone()),
+                Some(TyKind::RegionTy | TyKind::Error | TyKind::Never)
+            );
+            if !is_region {
+                let shown = self.rendered_expr_ty(r.span);
+                self.door_misuse(r.span, "a `region` value", &shown);
+            }
+            door.0 = self.text(r.span);
+        }
+        if let Some(p) = d.source() {
+            if let Some((place, _)) = self.as_place(p) {
+                self.emit_read(place, p.span);
+            } else {
+                self.eval_value(p)?;
+            }
+            let is_ptr = matches!(
+                self.expr_ty(p.span).map(|t| t.kind().clone()),
+                Some(TyKind::Ptr(_) | TyKind::Error | TyKind::Never)
+            );
+            if !is_ptr {
+                let shown = self.rendered_expr_ty(p.span);
+                self.door_misuse(p.span, "a raw pointer (`*T`)", &shown);
+            }
+            door.1 = self.text(p.span);
+        }
+        self.push(Stmt::Door {
+            region: door.0,
+            ptr: door.1,
+            span: e.span,
+        });
+        Ok(Val::none())
+    }
+
+    fn door_misuse(&mut self, span: Span, wanted: &str, got: &str) {
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1305,
+                span,
+                format!("`borrow … from …` needs {wanted} here, but this is `{got}`"),
+            )
+            .with_label("the door's claim has nothing to check against")
+            .with_note(
+                "door 1 asserts \"this pointer addresses that region's live \
+                 allocation\" — it needs the region on the left and the raw pointer \
+                 on the right. The other door is a checked `handle`, which \
+                 re-validates its generation at every access.",
+            ),
+        );
+    }
+
+    /// A raw-pointer element access `p[i]` ([mem.unsafe.raw.1]):
+    /// C-shaped, no bounds, no validity — statically only the ring is
+    /// required; the access is recorded for s23/is04 attribution
+    /// (P1/P3/P4/L1/L2, writes additionally P2/T2).
+    fn raw_index(&mut self, e: &'t GreenNode, write: bool) -> R<()> {
+        let verb = if write {
+            "a raw pointer write"
+        } else {
+            "a raw pointer read"
+        };
+        self.require_unsafe(verb, e.span);
+        let b = wolf_ast::BracketApply::cast(e).expect("kind");
+        let mut ptr = "<ptr>".to_string();
+        if let Some(recv) = b.callee() {
+            if let Some((place, _)) = self.as_place(recv) {
+                self.emit_read(place, recv.span);
+            } else {
+                self.eval_value(recv)?;
+            }
+            ptr = self.text(recv.span);
+        }
+        for a in b.args().into_iter().flat_map(|l| l.args()) {
+            if let Some(v) = wolf_ast::Arg::value(a)
+                && wolf_ast::is_expr_kind(v.kind)
+            {
+                if let Some((place, _)) = self.as_place(v) {
+                    self.emit_read(place, v.span);
+                } else {
+                    self.eval_value(v)?;
+                }
+            }
+        }
+        if write {
+            self.push(Stmt::RawWrite { ptr, span: e.span });
+        } else {
+            self.push(Stmt::RawRead { ptr, span: e.span });
+        }
+        Ok(())
+    }
+
+    /// Is `e` a `p[i]` access through a raw pointer? (The bracket
+    /// place machinery owns containers; the raw tier owns this.)
+    fn is_raw_index(&self, e: &GreenNode) -> bool {
+        if e.kind != SyntaxKind::BracketApply {
+            return false;
+        }
+        wolf_ast::BracketApply::cast(e)
+            .and_then(|b| b.callee())
+            .and_then(|recv| self.expr_ty(recv.span))
+            .is_some_and(|t| matches!(t.kind(), TyKind::Ptr(_)))
+    }
+
     // ---------------------------------------------------- defers ----
 
     /// Lower pending defers for scopes `[depth..]`, innermost first,
@@ -1362,6 +1600,12 @@ impl<'t> Lowerer<'t> {
         match e.kind {
             SyntaxKind::LiteralExpr => Ok(Val::none()),
             SyntaxKind::PathExpr | SyntaxKind::MemberExpr | SyntaxKind::BracketApply => {
+                // s22: `p[i]` through a raw pointer is a raw-tier
+                // access, not a container place.
+                if self.is_raw_index(e) {
+                    self.raw_index(e, false)?;
+                    return Ok(Val::none());
+                }
                 if let Some((place, _)) = self.as_place(e) {
                     // A `Copy` use duplicates a region-free scalar:
                     // no site flows (this is what keeps a Copy field
@@ -1439,10 +1683,41 @@ impl<'t> Lowerer<'t> {
             }
             SyntaxKind::PrefixExpr => self.eval_prefix(e),
             SyntaxKind::BinExpr => self.eval_bin(e),
-            SyntaxKind::CastExpr => match CastExpr::cast(e).and_then(|c| c.expr()) {
-                Some(inner) => self.eval_value(inner),
-                None => Ok(Val::none()),
-            },
+            SyntaxKind::CastExpr => {
+                let inner = CastExpr::cast(e).and_then(|c| c.expr());
+                // s22 — a raw pointer bridge ([mem.prov.expose]):
+                // ring-gated; the operand is *read*, never moved —
+                // deriving a pointer is not a use (Tree Borrows), and
+                // `r as *u8` must leave the region value live.
+                if let Some((src_t, tgt_t, CastKind::Raw)) = self.casts.get(&e.span).copied() {
+                    self.require_unsafe("a pointer cast", e.span);
+                    if let Some(x) = inner {
+                        if let Some((place, _)) = self.as_place(x) {
+                            self.emit_read(place, x.span);
+                        } else {
+                            self.eval_value(x)?;
+                        }
+                        let kind_of = |id: TyId| self.tb.table.kind(id).clone();
+                        let dir = match (kind_of(src_t), kind_of(tgt_t)) {
+                            (TyKind::Ptr(_), TyKind::Ptr(_)) => "ptr->ptr",
+                            (TyKind::Ptr(_), _) => "ptr->int",
+                            (TyKind::RegionTy, _) => "region->ptr",
+                            _ => "int->ptr",
+                        };
+                        let what = self.text(x.span);
+                        self.push(Stmt::Expose {
+                            what,
+                            dir,
+                            span: e.span,
+                        });
+                    }
+                    return Ok(Val::none());
+                }
+                match inner {
+                    Some(inner) => self.eval_value(inner),
+                    None => Ok(Val::none()),
+                }
+            }
             SyntaxKind::RangeExpr => {
                 for end in RangeExpr::cast(e).expect("kind").endpoints() {
                     self.eval_value(end)?;
@@ -1564,8 +1839,32 @@ impl<'t> Lowerer<'t> {
             SyntaxKind::RegionValue => self.eval_region_value(e),
             SyntaxKind::InBlock => self.eval_in_block(e),
             SyntaxKind::FreezeExpr => self.eval_freeze(e),
-            SyntaxKind::UnsafeBlock | SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
-                construct: "the unsafe tier (s22)",
+            // s22 — ring 1: the block's value crosses back into the
+            // safe tier, where every safe-tier invariant re-applies
+            // (the re-entry contract: what comes out is an ordinary,
+            // fully-typed value — doors and handle checks vouched for
+            // it inside).
+            SyntaxKind::UnsafeBlock => {
+                let d = wolf_ast::UnsafeBlock::cast(e).expect("kind");
+                self.lint_safety_comment(e.span);
+                let kw = Span::new(e.span.file, e.span.lo, (e.span.lo + 6).min(e.span.hi));
+                self.push(Stmt::UnsafeEnter { span: kw });
+                self.unsafe_depth += 1;
+                let val = match d.body() {
+                    Some(b) => self.walk_block(b, true),
+                    None => Ok(Val::none()),
+                };
+                self.unsafe_depth -= 1;
+                let val = val?;
+                self.push(Stmt::UnsafeExit {
+                    span: end_span(e.span),
+                });
+                Ok(val)
+            }
+            // Inline C and asm have no pinned semantics (c10: s48/s50)
+            // — only the rule that they are unsafe-tier.
+            SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
+                construct: "inline C / asm (unsafe tier, c10)",
                 span: e.span,
             }),
             SyntaxKind::ScopeExpr
@@ -1575,10 +1874,7 @@ impl<'t> Lowerer<'t> {
                 construct: "structured concurrency (c05)",
                 span: e.span,
             }),
-            SyntaxKind::BorrowExpr => Err(NotYet {
-                construct: "the unsafe tier's re-entry doors (s22)",
-                span: e.span,
-            }),
+            SyntaxKind::BorrowExpr => self.eval_borrow_from(e),
             _ => Err(NotYet {
                 construct: "this expression shape (memory tier)",
                 span: e.span,
@@ -2262,7 +2558,14 @@ impl<'t> Lowerer<'t> {
             mut_args: Vec::new(),
             read_args: Vec::new(),
             take_args: Vec::new(),
+            c_call: cs.map(|c| c.c_call).unwrap_or(false),
         };
+        // s22: a call through the `import c` namespace is unsafe-tier
+        // (D11) — the ring is required, and the call is always emitted
+        // as the FFI attribution point ([mem.boundary.ffi]).
+        if surface.c_call {
+            self.require_unsafe(&format!("the C call `{}`", surface.callee), e.span);
+        }
         // Sites whose data the callee receives by `take`/`mut`: it
         // may embed them in the result (the conservative carry).
         let mut carry: Vec<SiteId> = Vec::new();
@@ -2300,6 +2603,38 @@ impl<'t> Lowerer<'t> {
             {
                 self.push(Stmt::Dup {
                     place,
+                    span: e.span,
+                });
+            }
+            // s22: strict-provenance ops on a raw-pointer receiver
+            // (RFC 3559's shape) — ring-gated derivations, recorded
+            // for attribution; deriving is never an access
+            // (creation-is-not-a-use). `is_null` is a plain compare
+            // and stays free.
+            if matches!(
+                self.expr_ty(recv_expr.span).map(|t| t.kind().clone()),
+                Some(TyKind::Ptr(_))
+            ) && matches!(
+                cs.callee.as_str(),
+                "addr" | "with_addr" | "expose" | "with_exposed"
+            ) {
+                self.require_unsafe(&format!("the provenance op `{}`", cs.callee), e.span);
+                let ptr = self.text(recv_expr.span);
+                if matches!(cs.callee.as_str(), "expose" | "with_exposed") {
+                    let dir = if cs.callee == "expose" {
+                        "ptr->int"
+                    } else {
+                        "int->ptr"
+                    };
+                    self.push(Stmt::Expose {
+                        what: ptr.clone(),
+                        dir,
+                        span: e.span,
+                    });
+                }
+                self.push(Stmt::ProvOp {
+                    op: cs.callee.clone(),
+                    ptr,
                     span: e.span,
                 });
             }
@@ -2415,7 +2750,7 @@ impl<'t> Lowerer<'t> {
             || !surface.read_args.is_empty()
             || !surface.take_args.is_empty();
         let callee = surface.callee.clone();
-        if has_surface {
+        if has_surface || surface.c_call {
             self.push(Stmt::Call(surface));
         }
         let mut out = Val::none();
@@ -2760,12 +3095,7 @@ impl<'t> Lowerer<'t> {
                             .push(Cleanup::Defer(e, is_err));
                     }
                 }
-                SyntaxKind::AssumeStmt => {
-                    return Err(NotYet {
-                        construct: "the unsafe tier (s22)",
-                        span: stmt.span,
-                    });
-                }
+                SyntaxKind::AssumeStmt => self.lower_assume(stmt)?,
                 k if k.is_item() => {
                     return Err(NotYet {
                         construct: "nested item declarations (c14 backlog)",
@@ -2940,6 +3270,15 @@ impl<'t> Lowerer<'t> {
         let Some(place_expr) = d.place() else {
             return Ok(());
         };
+        // s22: `p[i] = v` / `p[i] op= v` through a raw pointer is a
+        // raw-tier write (compound also reads), not a place effect.
+        if self.is_raw_index(place_expr) {
+            if d.op().map(|t| t.kind != SyntaxKind::Eq).unwrap_or(false) {
+                self.raw_index(place_expr, false)?;
+            }
+            self.raw_index(place_expr, true)?;
+            return Ok(());
+        }
         let Some((place, _)) = self.as_place(place_expr) else {
             return Err(NotYet {
                 construct: "assignment through this place shape",
@@ -3052,6 +3391,11 @@ impl<'t> Lowerer<'t> {
         let calls = tb.calls.iter().map(|(s, c)| (*s, c)).collect();
         let local_tys = tb.locals.iter().map(|(_, s, t)| (*s, *t)).collect();
         let expr_tys = tb.exprs.iter().map(|(s, t)| (*s, *t)).collect();
+        let casts = tb
+            .casts
+            .iter()
+            .map(|(s, src_t, tgt_t, k)| (*s, (*src_t, *tgt_t, *k)))
+            .collect();
         // b0: entry, b1: exit.
         let blocks = vec![Block::default(), Block::default()];
         Lowerer {
@@ -3093,6 +3437,8 @@ impl<'t> Lowerer<'t> {
             shared_site: BTreeSet::new(),
             rc_cells: Vec::new(),
             region_field: HashMap::new(),
+            unsafe_depth: 0,
+            casts,
         }
     }
 

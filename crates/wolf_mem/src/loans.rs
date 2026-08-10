@@ -294,6 +294,16 @@ fn transfer(
         | Stmt::Alloc { .. }
         | Stmt::RegionOpen { .. }
         | Stmt::RegionClose { .. } => {}
+        // s22 — raw-tier attribution statements: no loan interaction
+        // (raw pointers are outside the loan discipline by design).
+        Stmt::UnsafeEnter { .. }
+        | Stmt::UnsafeExit { .. }
+        | Stmt::RawRead { .. }
+        | Stmt::RawWrite { .. }
+        | Stmt::Assume { .. }
+        | Stmt::Expose { .. }
+        | Stmt::Door { .. }
+        | Stmt::ProvOp { .. } => {}
     }
 }
 

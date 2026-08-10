@@ -196,6 +196,17 @@ fn transfer(
         | Stmt::Dup { .. }
         | Stmt::Drop { .. }
         | Stmt::HandleCheck { .. } => {}
+        // s22 — raw-tier statements are attribution facts, not place
+        // effects: raw memory has no move discipline (the pointer
+        // value's own reads are separate `Read` statements).
+        Stmt::UnsafeEnter { .. }
+        | Stmt::UnsafeExit { .. }
+        | Stmt::RawRead { .. }
+        | Stmt::RawWrite { .. }
+        | Stmt::Assume { .. }
+        | Stmt::Expose { .. }
+        | Stmt::Door { .. }
+        | Stmt::ProvOp { .. } => {}
     }
 }
 

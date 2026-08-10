@@ -736,3 +736,149 @@ fn clean_pool_two_phase() {
          }\n",
     );
 }
+
+// ------------------------------------------- the unsafe tier (s22) ----
+
+#[test]
+fn e1301_raw_ops_outside_unsafe() {
+    // The tier boundary: C calls, raw writes, raw reads all demand
+    // the ring — E1301 per operation, never a refusal (typing is
+    // permissive; the *rule* lives here).
+    snap(
+        "e1301_raw_outside",
+        "import c \"stdlib.h\"\n\
+         fn main() -> !int {\n    \
+             let p = c.malloc(8) as *u8\n    \
+             p[0] = 1\n    \
+             let v = p[0]\n    \
+             c.free(p)\n    \
+             v as int\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1301_provenance_op_and_cast_outside_unsafe() {
+    // Strict-provenance ops and non-identity pointer casts are
+    // ring-gated too; holding/copying the pointer itself stays free
+    // (creation is not a use).
+    snap(
+        "e1301_prov_outside",
+        "import c \"stdlib.h\"\n\
+         fn main() -> !int {\n    \
+             // # Safety: the allocation lives for the whole function.\n    \
+             let p = unsafe { c.malloc(8) as *u8 }\n    \
+             let a = p.addr() as int\n    \
+             // # Safety: freed exactly once.\n    \
+             unsafe { c.free(p) }\n    \
+             a - a\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1302_ptr_in_signature() {
+    // [mem.unsafe.scope]: no `unsafe fn`s — a `*T` parameter, return,
+    // or exported field is the boundary error.
+    snap(
+        "e1302_ptr_in_signature",
+        "fn peek(p: *u8) -> int { 0 }\n\
+         fn mint() -> *u8 { mint() }\n\
+         pub struct Held { raw: *u8 }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1302_private_struct_field_is_allowed() {
+    // The module is the audit granule: module-private data may hold
+    // raw pointers (allocator internals need a home).
+    snap(
+        "clean_private_ptr_field",
+        "struct Arena { base: *u8, len: int }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1304_assume_needs_pointers() {
+    snap(
+        "e1304_assume_malformed",
+        "fn main() -> !int {\n    \
+             var a = 1\n    \
+             var b = 2\n    \
+             // # Safety: nothing raw happens; the assume is the test.\n    \
+             unsafe {\n        \
+                 assume noalias a, b\n    \
+             }\n    \
+             a + b - 3\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1305_door_misuse() {
+    snap(
+        "e1305_door_misuse",
+        "fn main() -> !int {\n    \
+             let x = 7\n    \
+             var out = 0\n    \
+             // # Safety: nothing discharged; the misuse is the test.\n    \
+             unsafe {\n        \
+                 let v = borrow x from x\n        \
+                 out = v as int\n    \
+             }\n    \
+             out\n\
+         }\n",
+    );
+}
+
+#[test]
+fn w1301_unsafe_block_without_safety_comment() {
+    // Advisory, never load-bearing: the block still checks; the
+    // warning asks for the invariant in writing ([mem.boundary.doc]).
+    snap(
+        "w1301_missing_safety",
+        "import c \"stdlib.h\"\n\
+         fn main() -> !int {\n    \
+             var out = 0\n    \
+             unsafe {\n        \
+                 let p = c.malloc(8) as *u8\n        \
+                 p[0] = 3\n        \
+                 out = p[0] as int\n        \
+                 c.free(p)\n    \
+             }\n    \
+             out - 3\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_unsafe_tier_surface() {
+    // The whole s22 surface in one conforming shape: ring, C calls,
+    // casts, assume, raw accesses, provenance op, both door operands
+    // — statically silent; every dynamic risk is s23/is04's (P1–P6).
+    snap(
+        "clean_unsafe_surface",
+        "import c \"stdlib.h\"\n\
+         fn main() -> !int {\n    \
+             let r = region()\n    \
+             var out = 0\n    \
+             // # Safety: p/q are distinct live allocations; b is r's own\n    \
+             // base pointer, so the door's claim holds by construction.\n    \
+             unsafe {\n        \
+                 let p = c.malloc(8) as *u8\n        \
+                 let q = c.malloc(8) as *u8\n        \
+                 assume noalias p, q\n        \
+                 p[0] = 1\n        \
+                 q[0] = 2\n        \
+                 let b = r as *u8\n        \
+                 let v = borrow r from b\n        \
+                 out = (p[0] + q[0] + v) as int\n        \
+                 c.free(p)\n        \
+                 c.free(q)\n    \
+             }\n    \
+             out - out\n\
+         }\n",
+    );
+}

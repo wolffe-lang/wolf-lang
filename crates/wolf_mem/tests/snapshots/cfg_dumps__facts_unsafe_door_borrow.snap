@@ -1,0 +1,9 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "facts(&corpus(\"memory/unsafe_door_borrow.lu\"))"
+---
+facts fn main
+  promote region r @493..494 -> stack (create/free elided)
+  unsafe-block @664..670 -> D11 ring 1 (audit surface)
+  expose r (region->ptr) @689..697 -> [mem.prov.expose] event
+  door borrow r from p @757..772 -> P6 obligation at the door; O6 past it

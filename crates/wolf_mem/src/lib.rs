@@ -80,7 +80,28 @@
 //!   because handles are plain data whose validity is only decided at
 //!   the slot). The prelude containers `List[T]`/`Pool[T]` type as
 //!   sema builtins (enough for the Tier-2 corpus; std proper is s37).
-//! - **Honest refusals**: the unsafe tier (s22),
+//! - **The unsafe tier** ([`lower`]-integrated, s22): the floor,
+//!   with rules *simpler* than the safe tier's (D11, the
+//!   anti-Stacked-Borrows posture). Typing is permissive — raw
+//!   pointers are inert data, deriving/holding/passing them is free
+//!   (creation is not a use, Tree Borrows) — and each *operation*
+//!   checks one local rule: raw reads/writes (`p[i]`), non-identity
+//!   pointer casts ([`mem.prov.expose`] bridges), strict-provenance
+//!   ops (`addr`/`with_addr`/`expose`/`with_exposed`), `assume
+//!   noalias`, `borrow … from …`, and C calls all demand the
+//!   `unsafe` ring (E1301); signatures never carry `*T` and exported
+//!   types never mention it — module-private fields may (E1302,
+//!   `[mem.unsafe.scope]`); `assume` operands must be raw pointers
+//!   (E1304); door 1's operands must be `region` + `*T` (E1305, the
+//!   claim itself is the dynamic P6 obligation). Every raw op is
+//!   recorded as an **attribution fact** (see [`facts`]'s s22
+//!   schema) for s23's miri-lite and the is04 oracle — no aliasing
+//!   is assumed, no UB is approximated statically: a file this tier
+//!   accepts may still be `ub(mem.ub)` at run time, by design. The
+//!   `# Safety:` comment lint is W1301 (advisory). The `#[trusted]`
+//!   manifest rule (E1303) lives in `wolf_sema::audit` with `wolf
+//!   audit-surface`.
+//! - **Honest refusals**: inline C/asm (c10),
 //!   closures/concurrency (c05), region identity through conflicting
 //!   rebinds or multi-step paths (c05 backlog), `shared` acyclicity
 //!   through opaque generic std types (s16) return [`NotYet`] — the
@@ -88,7 +109,7 @@
 //!   actually checked.
 
 use wolf_ast::{GreenNode, SyntaxKind, is_expr_kind};
-use wolf_diag::Diagnostic;
+use wolf_diag::{Diagnostic, codes};
 use wolf_sema::sig::{ItemSig, SigTables};
 use wolf_sema::types::{TyId, TyKind, TypeTable};
 use wolf_sema::{BodyRef, BodyResult, NotYet, Package, Typecheck, TypedBody};
@@ -129,9 +150,9 @@ pub struct MemCheck {
 /// [`wolf_sema::typecheck_package`] over the same `pkg`.
 pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     let mut out = MemCheck::default();
-    // Tier guard: types from later sprints (the unsafe tier's `*T`)
-    // refuse the whole rung honestly.
-    tier_guard(&tc.sigs, &mut out.not_yet);
+    // s22: unsafety never crosses a signature ([mem.unsafe.scope],
+    // E1302) — checked over the signature tables before any body runs.
+    unsafe_sig_check(pkg, &tc.sigs, &mut out.diagnostics);
     // s21: strong `shared` edges must form a DAG at the type level
     // ([mem.shared.rc.2], E1006) — checked over the signature tables
     // before any body runs.
@@ -140,7 +161,6 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
         };
-        body_tier_guard(tb, &mut out.not_yet);
         match lower_body(pkg, &tc.sigs, tb, &outcome.body) {
             None => {}
             Some(Err(nyc)) => out.not_yet.push(nyc),
@@ -285,17 +305,16 @@ fn text(pkg: &Package, file: usize, span: Span) -> String {
     String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]).into_owned()
 }
 
-// ------------------------------------------------------ tier guards ----
+// ------------------------------------- the tier boundary (s22, E1302) ----
 
-/// Which later sprint owns a type, if any.
-fn later_tier(table: &TypeTable, id: TyId, depth: u32) -> Option<&'static str> {
+/// Does the type mention a raw pointer anywhere (through wrappers,
+/// aggregates, rows, fn types)?
+fn contains_ptr(table: &TypeTable, id: TyId, depth: u32) -> bool {
     if depth > 32 {
-        return None;
+        return false;
     }
     match table.kind(id) {
-        // `shared`/`weak`/`handle` and the prelude containers check
-        // here since s21; `region`-typed values since s19.
-        TyKind::Ptr(_) => Some("the unsafe tier (s22)"),
+        TyKind::Ptr(_) => true,
         TyKind::Wrapping(t)
         | TyKind::Distinct(t)
         | TyKind::Range(t)
@@ -303,83 +322,106 @@ fn later_tier(table: &TypeTable, id: TyId, depth: u32) -> Option<&'static str> {
         | TyKind::Weak(t)
         | TyKind::Handle(t)
         | TyKind::List(t)
-        | TyKind::Pool(t) => later_tier(table, *t, depth + 1),
-        TyKind::Tuple(elems) => elems.iter().find_map(|&t| later_tier(table, t, depth + 1)),
+        | TyKind::Pool(t) => contains_ptr(table, *t, depth + 1),
+        TyKind::Tuple(elems) => elems.iter().any(|&t| contains_ptr(table, t, depth + 1)),
         TyKind::Fn(params, ret) => params
             .iter()
             .chain(std::iter::once(ret))
-            .find_map(|&t| later_tier(table, t, depth + 1)),
+            .any(|&t| contains_ptr(table, t, depth + 1)),
         TyKind::ErrUnion(ok, row) => {
-            later_tier(table, *ok, depth + 1).or_else(|| later_tier(table, *row, depth + 1))
+            contains_ptr(table, *ok, depth + 1) || contains_ptr(table, *row, depth + 1)
         }
         TyKind::Row { tags, .. } => tags
             .iter()
             .flat_map(|(_, payload)| payload.iter())
-            .find_map(|&t| later_tier(table, t, depth + 1)),
-        _ => None,
+            .any(|&t| contains_ptr(table, t, depth + 1)),
+        _ => false,
     }
 }
 
-/// Signature-level guard: any item whose declared types belong to a
-/// later sprint refuses the rung ('shared_cycle.lu' stays honest
-/// until E1006 exists).
-fn tier_guard(sigs: &SigTables, not_yet: &mut Vec<NotYet>) {
-    for module in &sigs.modules {
-        for sig in module.values() {
+fn e1302(span: Span, what: &str) -> Diagnostic {
+    Diagnostic::error(
+        codes::E1302,
+        span,
+        format!("{what} carries a raw pointer, but this boundary stays fully safe"),
+    )
+    .with_label("`*T` crosses the boundary here")
+    .with_note(
+        "unsafety never appears in types crossing function boundaries — there are \
+         no `unsafe fn`s; the proof lives at the `unsafe` block and the module is \
+         the audit granule. Pass a `handle` (revalidated per access) or a region \
+         value, or keep the `*T` in a module-private field.",
+    )
+}
+
+/// The s22 boundary rule ([mem.unsafe.scope]): every *function
+/// signature* — module fns, impl methods, trait methods — is fully
+/// safe, and no *exported* type (struct field, enum payload, global)
+/// mentions `*T`. Module-private data may hold raw pointers: the
+/// module is the audit granule, and allocator internals need a home.
+fn unsafe_sig_check(pkg: &Package, sigs: &SigTables, diags: &mut Vec<Diagnostic>) {
+    let ptr = |id: TyId| contains_ptr(&sigs.table, id, 0);
+    let check_fn = |name: &str, f: &wolf_sema::sig::FnSig, diags: &mut Vec<Diagnostic>| {
+        for p in &f.params {
+            if ptr(p.ty) {
+                diags.push(e1302(p.span, &format!("`{name}`'s parameter `{}`", p.name)));
+            }
+        }
+        if ptr(f.ret) {
+            diags.push(e1302(
+                f.ret_span.unwrap_or(f.name_span),
+                &format!("`{name}`'s return type"),
+            ));
+        }
+    };
+    for (m, module) in sigs.modules.iter().enumerate() {
+        for (name, sig) in module {
+            let exported = pkg
+                .tables
+                .get(m)
+                .and_then(|t| t.get(name))
+                .is_some_and(|i| i.vis != wolf_sema::Vis::Private);
             match sig {
-                ItemSig::Struct(ss) => {
+                ItemSig::Fn(f) => check_fn(name, f, diags),
+                ItemSig::Struct(ss) if exported => {
                     for f in &ss.fields {
-                        if let Some(construct) = later_tier(&sigs.table, f.ty, 0) {
-                            not_yet.push(NotYet {
-                                construct,
-                                span: f.span,
-                            });
+                        if ptr(f.ty) {
+                            diags.push(e1302(
+                                f.span,
+                                &format!("the exported type `{name}`'s field `{}`", f.name),
+                            ));
                         }
                     }
                 }
-                ItemSig::Enum { variants, .. } => {
+                ItemSig::Enum { variants, .. } if exported => {
                     for v in variants {
-                        for &t in &v.payload {
-                            if let Some(construct) = later_tier(&sigs.table, t, 0) {
-                                not_yet.push(NotYet {
-                                    construct,
-                                    span: v.span,
-                                });
-                            }
+                        if v.payload.iter().any(|&t| ptr(t)) {
+                            diags.push(e1302(
+                                v.span,
+                                &format!("the exported enum `{name}`'s variant `{}`", v.name),
+                            ));
                         }
                     }
                 }
-                ItemSig::Fn(f) => {
-                    for p in &f.params {
-                        if let Some(construct) = later_tier(&sigs.table, p.ty, 0) {
-                            not_yet.push(NotYet {
-                                construct,
-                                span: p.span,
-                            });
-                        }
-                    }
-                    if let Some(construct) = later_tier(&sigs.table, f.ret, 0) {
-                        not_yet.push(NotYet {
-                            construct,
-                            span: f.name_span,
-                        });
+                ItemSig::Global(g) if exported => {
+                    if let Some(t) = g.ty
+                        && ptr(t)
+                    {
+                        diags.push(e1302(g.name_span, &format!("the exported item `{name}`")));
                     }
                 }
                 _ => {}
             }
         }
     }
-}
-
-/// Body-level guard: any local whose (zonked) type belongs to a later
-/// sprint.
-fn body_tier_guard(tb: &TypedBody, not_yet: &mut Vec<NotYet>) {
-    for (_, span, ty) in &tb.locals {
-        if let Some(construct) = later_tier(&tb.table, *ty, 0) {
-            not_yet.push(NotYet {
-                construct,
-                span: *span,
-            });
+    for imp in &sigs.impls {
+        for m in &imp.methods {
+            check_fn(&m.name, &m.sig, diags);
+        }
+    }
+    for td in sigs.traits.values() {
+        for m in &td.methods {
+            check_fn(&m.name, &m.sig, diags);
         }
     }
 }

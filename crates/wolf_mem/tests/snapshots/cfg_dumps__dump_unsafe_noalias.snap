@@ -1,0 +1,42 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/unsafe_noalias.lu\"))"
+---
+fn main
+  _0 out: int copy
+  _1 p: *u8 copy
+  _2 q: *u8 copy
+  b0:
+    init out @419..422
+    unsafe-enter @564..570
+    call c.malloc [] @589..600
+    init p @585..586
+    call c.malloc [] @624..635
+    init q @620..621
+    read p @666..667
+    read q @669..670
+    assume-noalias p, q @651..710
+    read p @718..719
+    raw-write p @718..722
+    read q @735..736
+    raw-write q @735..739
+    read p @759..760
+    raw-read p @759..763
+    read q @766..767
+    raw-read q @766..770
+    checked-op @759..770
+    init out @752..755
+    read p @794..795
+    call c.free [] @787..796
+    read q @812..813
+    call c.free [] @805..814
+    unsafe-exit @819..820
+    read out @828..831
+    -> b2, b4, trap
+  b1:
+  b2:
+    -> b3
+  b3:
+    -> b1
+  b4:
+    -> b3

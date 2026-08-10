@@ -172,6 +172,10 @@ pub struct CallSurface {
     /// `take` arguments: already moved by their evaluation-order
     /// `Move` statements; listed here for pairwise conflicts.
     pub take_args: Vec<(PlaceId, Span)>,
+    /// s22 — a call through the `import c` namespace: unsafe-tier by
+    /// D11, always emitted (even with an empty argument surface) as
+    /// the FFI attribution point ([mem.boundary.ffi]).
+    pub c_call: bool,
 }
 
 /// One effect statement.
@@ -234,6 +238,47 @@ pub enum Stmt {
     /// dynamic by design, no static half). Emitted as a checked-op
     /// fact so s42 can hoist/dedup within provably-unfreed windows.
     HandleCheck { place: PlaceId, span: Span },
+    // ------------------------------------------- the unsafe tier (s22) --
+    // Raw-tier statements carry *rendered* pointer expressions, not
+    // places: raw memory has no place discipline by design (the rules
+    // are simpler than the safe tier's, D11), and these statements
+    // exist for UB *attribution* — s23's miri-lite and the WIR trace
+    // every dynamic verdict back to one of them. The pointer value's
+    // own read is a separate `Read` statement when it is a place.
+    /// `unsafe {` — ring 1 opens (audit + attribution scope).
+    UnsafeEnter { span: Span },
+    /// The matching `}` — the ring closes; values crossing out
+    /// re-enter the safe tier's invariants.
+    UnsafeExit { span: Span },
+    /// A read through a raw pointer (`p[i]`, deref): can hit [mem.ub]
+    /// P1/P3/P4/L1/L2 dynamically — no static approximation exists.
+    RawRead { ptr: String, span: Span },
+    /// A write through a raw pointer: additionally P2 (Frozen) and T2.
+    RawWrite { ptr: String, span: Span },
+    /// `assume noalias p, q` — the asserted-UB fact ([mem.unsafe.raw.2]):
+    /// licenses O5; violation is P5, checked dynamically by s23/is04.
+    Assume { ops: String, span: Span },
+    /// A provenance-affecting bridge ([mem.prov.expose]): `dir` is one
+    /// of `ptr->ptr`, `ptr->int` (exposes the tag), `int->ptr`
+    /// (exposed/wildcard resolution), `region->ptr` (the region's
+    /// backing base).
+    Expose {
+        what: String,
+        dir: &'static str,
+        span: Span,
+    },
+    /// Re-entry door 1 — `borrow r from p` ([mem.unsafe.door]): the
+    /// claim is UB-if-false at the *door* (P6); s23 checks range +
+    /// liveness + tag compatibility dynamically.
+    Door {
+        region: String,
+        ptr: String,
+        span: Span,
+    },
+    /// A strict-provenance op (`addr`, `with_addr`, `expose`,
+    /// `with_exposed`) on a raw pointer — RFC 3559's shape; deriving
+    /// is never an access (creation-is-not-a-use, Tree Borrows).
+    ProvOp { op: String, ptr: String, span: Span },
 }
 
 #[derive(Debug, Default)]
@@ -400,6 +445,26 @@ impl Cfg {
                     }
                     Stmt::HandleCheck { place, span } => {
                         format!("handle-check {} {}", self.show_place(*place), sp(*span))
+                    }
+                    Stmt::UnsafeEnter { span } => format!("unsafe-enter {}", sp(*span)),
+                    Stmt::UnsafeExit { span } => format!("unsafe-exit {}", sp(*span)),
+                    Stmt::RawRead { ptr, span } => {
+                        format!("raw-read {ptr} {}", sp(*span))
+                    }
+                    Stmt::RawWrite { ptr, span } => {
+                        format!("raw-write {ptr} {}", sp(*span))
+                    }
+                    Stmt::Assume { ops, span } => {
+                        format!("assume-noalias {ops} {}", sp(*span))
+                    }
+                    Stmt::Expose { what, dir, span } => {
+                        format!("expose {what} ({dir}) {}", sp(*span))
+                    }
+                    Stmt::Door { region, ptr, span } => {
+                        format!("door borrow {region} from {ptr} {}", sp(*span))
+                    }
+                    Stmt::ProvOp { op, ptr, span } => {
+                        format!("prov {op} {ptr} {}", sp(*span))
                     }
                 };
                 let _ = writeln!(out, "    {line}");

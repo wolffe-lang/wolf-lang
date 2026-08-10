@@ -18,6 +18,31 @@
 //!   structural, never guessed), and generational handle checks as
 //!   checked-op facts (s42 hoists/dedups them within provably-unfreed
 //!   windows).
+//!
+//! # The s22 unsafe-tier fact schema (UB attribution)
+//!
+//! Every raw-tier operation records the fact s23's miri-lite and the
+//! WIR need to *attribute* a dynamic UB verdict back to a source
+//! operation — the D2 contract's other half (each [mem.ub] row names
+//! its licensed optimization; each recorded op names the rows it can
+//! reach). All entries carry the op's span and the rendered pointer
+//! expression:
+//!
+//! - `assume noalias p, q` → the O5 licence fact for s26 **and** the
+//!   P5 obligation s23 checks dynamically ([mem.unsafe.raw.2]);
+//! - raw reads/writes → P1/P2/P3/P4/L1/L2 candidates (reads) plus
+//!   P2/T2 (writes) — deliberately *unchecked* statically: raw
+//!   pointers carry no aliasing assumptions ([mem.unsafe.raw.1]);
+//! - expose bridges (`ptr->int`, `int->ptr`, `region->ptr`,
+//!   `ptr->ptr`) → the [mem.prov.expose] events the operational
+//!   model's angelic resolution starts from;
+//! - re-entry doors (`borrow r from p`) → the P6 obligation: false
+//!   discharge is UB *at the door*, so safe code past it keeps every
+//!   safe-tier entitlement (O6);
+//! - C calls → the FFI attribution point ([mem.boundary.ffi]: the
+//!   callee borrows an implicit region for the call's extent);
+//! - `unsafe` block spans → the audit ring (D11), counted per module
+//!   by `wolf audit-surface`.
 
 use wolf_span::Span;
 
@@ -56,6 +81,21 @@ pub struct FnFacts {
     pub cells: Vec<(String, Span, bool)>,
     /// s21 — generational checks at pool slot accesses.
     pub handle_checks: Vec<(String, Span)>,
+    /// s22 — `unsafe { }` block spans (ring 1, audit surface).
+    pub unsafe_blocks: Vec<Span>,
+    /// s22 — `assume noalias` facts: (rendered operands, span).
+    pub assumes: Vec<(String, Span)>,
+    /// s22 — raw accesses through pointers: (rendered ptr, is_write,
+    /// span).
+    pub raw_accesses: Vec<(String, bool, Span)>,
+    /// s22 — provenance bridges: (rendered value, direction, span).
+    pub exposes: Vec<(String, &'static str, Span)>,
+    /// s22 — re-entry doors: (region, rendered ptr, span).
+    pub doors: Vec<(String, String, Span)>,
+    /// s22 — strict-provenance ops: (op, rendered ptr, span).
+    pub prov_ops: Vec<(String, String, Span)>,
+    /// s22 — calls through the `import c` namespace: (callee, span).
+    pub c_calls: Vec<(String, Span)>,
 }
 
 pub fn collect(
@@ -76,6 +116,13 @@ pub fn collect(
         drops: Vec::new(),
         cells: Vec::new(),
         handle_checks: Vec::new(),
+        unsafe_blocks: Vec::new(),
+        assumes: Vec::new(),
+        raw_accesses: Vec::new(),
+        exposes: Vec::new(),
+        doors: Vec::new(),
+        prov_ops: Vec::new(),
+        c_calls: Vec::new(),
     };
     for &(site, atomic) in cells {
         let s = &cfg.sites[site.0 as usize];
@@ -122,6 +169,27 @@ pub fn collect(
                 }
                 Stmt::HandleCheck { place, span } => {
                     facts.handle_checks.push((cfg.show_place(*place), *span));
+                }
+                // ---- the s22 unsafe-tier attribution facts ----
+                Stmt::UnsafeEnter { span } => facts.unsafe_blocks.push(*span),
+                Stmt::Assume { ops, span } => facts.assumes.push((ops.clone(), *span)),
+                Stmt::RawRead { ptr, span } => {
+                    facts.raw_accesses.push((ptr.clone(), false, *span));
+                }
+                Stmt::RawWrite { ptr, span } => {
+                    facts.raw_accesses.push((ptr.clone(), true, *span));
+                }
+                Stmt::Expose { what, dir, span } => {
+                    facts.exposes.push((what.clone(), dir, *span));
+                }
+                Stmt::Door { region, ptr, span } => {
+                    facts.doors.push((region.clone(), ptr.clone(), *span));
+                }
+                Stmt::ProvOp { op, ptr, span } => {
+                    facts.prov_ops.push((op.clone(), ptr.clone(), *span));
+                }
+                Stmt::Call(c) if c.c_call => {
+                    facts.c_calls.push((c.callee.clone(), c.span));
                 }
                 _ => {}
             }
@@ -196,6 +264,62 @@ impl FnFacts {
             let _ = writeln!(
                 out,
                 "  handle-check {place} @{}..{} -> generation check (hoistable in unfreed window)",
+                span.lo, span.hi
+            );
+        }
+        // ---- the s22 unsafe-tier attribution facts ----
+        for span in &self.unsafe_blocks {
+            let _ = writeln!(
+                out,
+                "  unsafe-block @{}..{} -> D11 ring 1 (audit surface)",
+                span.lo, span.hi
+            );
+        }
+        for (ops, span) in &self.assumes {
+            let _ = writeln!(
+                out,
+                "  assume-noalias {ops} @{}..{} -> O5 licence; violation = UB P5 (s23 checks)",
+                span.lo, span.hi
+            );
+        }
+        for (ptr, write, span) in &self.raw_accesses {
+            let (verb, rows) = if *write {
+                ("raw-write", "P1/P2/P3/P4/L2/T2")
+            } else {
+                ("raw-read", "P1/P3/P4/L1/L2")
+            };
+            let _ = writeln!(
+                out,
+                "  {verb} {ptr} @{}..{} -> unchecked here; dynamic rows {rows} (s23/is04)",
+                span.lo, span.hi
+            );
+        }
+        for (what, dir, span) in &self.exposes {
+            let _ = writeln!(
+                out,
+                "  expose {what} ({dir}) @{}..{} -> [mem.prov.expose] event",
+                span.lo, span.hi
+            );
+        }
+        for (region, ptr, span) in &self.doors {
+            let _ = writeln!(
+                out,
+                "  door borrow {region} from {ptr} @{}..{} -> P6 obligation at the door; O6 past it",
+                span.lo, span.hi
+            );
+        }
+        for (op, ptr, span) in &self.prov_ops {
+            let _ = writeln!(
+                out,
+                "  prov {op} {ptr} @{}..{} -> derivation, not access (creation-is-not-a-use)",
+                span.lo, span.hi
+            );
+        }
+        for (callee, span) in &self.c_calls {
+            let _ = writeln!(
+                out,
+                "  c-call {callee} @{}..{} -> implicit region for the call's extent \
+                 ([mem.boundary.ffi])",
                 span.lo, span.hi
             );
         }

@@ -1,0 +1,43 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1301]: the C call `c.malloc` needs an `unsafe` block
+ --> mem:///main.lu:3:13
+  |
+3 |     let p = c.malloc(8) as *u8
+  |             ^^^^^^^^^^^ raw-tier operation in safe code
+  |
+  = note: raw pointers are inert data anywhere — only the tier's operations need the ring. Wrap
+    this in `unsafe { }` and state the invariant in a `# Safety:` comment; the rules inside
+    are simpler than the safe tier's, not stricter.
+
+error[E1301]: a raw pointer write needs an `unsafe` block
+ --> mem:///main.lu:4:5
+  |
+4 |     p[0] = 1
+  |     ^^^^ raw-tier operation in safe code
+  |
+  = note: raw pointers are inert data anywhere — only the tier's operations need the ring. Wrap
+    this in `unsafe { }` and state the invariant in a `# Safety:` comment; the rules inside
+    are simpler than the safe tier's, not stricter.
+
+error[E1301]: a raw pointer read needs an `unsafe` block
+ --> mem:///main.lu:5:13
+  |
+5 |     let v = p[0]
+  |             ^^^^ raw-tier operation in safe code
+  |
+  = note: raw pointers are inert data anywhere — only the tier's operations need the ring. Wrap
+    this in `unsafe { }` and state the invariant in a `# Safety:` comment; the rules inside
+    are simpler than the safe tier's, not stricter.
+
+error[E1301]: the C call `c.free` needs an `unsafe` block
+ --> mem:///main.lu:6:5
+  |
+6 |     c.free(p)
+  |     ^^^^^^^^^ raw-tier operation in safe code
+  |
+  = note: raw pointers are inert data anywhere — only the tier's operations need the ring. Wrap
+    this in `unsafe { }` and state the invariant in a `# Safety:` comment; the rules inside
+    are simpler than the safe tier's, not stricter.

@@ -1,0 +1,21 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1304]: `assume noalias` takes raw pointers, but this operand is `int`
+ --> mem:///main.lu:6:24
+  |
+6 |         assume noalias a, b
+  |                        ^ not a raw pointer
+  |
+  = note: safe values already carry stronger, checked aliasing facts (`mut` is exclusive, `read`
+    is frozen) — `assume` exists only for `*T` values the checker cannot see through.
+
+error[E1304]: `assume noalias` takes raw pointers, but this operand is `int`
+ --> mem:///main.lu:6:27
+  |
+6 |         assume noalias a, b
+  |                           ^ not a raw pointer
+  |
+  = note: safe values already carry stronger, checked aliasing facts (`mut` is exclusive, `read`
+    is frozen) — `assume` exists only for `*T` values the checker cannot see through.

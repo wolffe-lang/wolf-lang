@@ -1,0 +1,23 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1305]: `borrow … from …` needs a `region` value here, but this is `i32`
+ --> mem:///main.lu:6:24
+  |
+6 |         let v = borrow x from x
+  |                        ^ the door's claim has nothing to check against
+  |
+  = note: door 1 asserts "this pointer addresses that region's live allocation" — it needs the
+    region on the left and the raw pointer on the right. The other door is a checked
+    `handle`, which re-validates its generation at every access.
+
+error[E1305]: `borrow … from …` needs a raw pointer (`*T`) here, but this is `i32`
+ --> mem:///main.lu:6:31
+  |
+6 |         let v = borrow x from x
+  |                               ^ the door's claim has nothing to check against
+  |
+  = note: door 1 asserts "this pointer addresses that region's live allocation" — it needs the
+    region on the left and the raw pointer on the right. The other door is a checked
+    `handle`, which re-validates its generation at every access.

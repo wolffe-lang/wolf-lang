@@ -1,0 +1,36 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1302]: `peek`'s parameter `p` carries a raw pointer, but this boundary stays fully safe
+ --> mem:///main.lu:1:9
+  |
+1 | fn peek(p: *u8) -> int { 0 }
+  |         ^ `*T` crosses the boundary here
+  |
+  = note: unsafety never appears in types crossing function boundaries — there are no `unsafe
+    fn`s; the proof lives at the `unsafe` block and the module is the audit granule. Pass a
+    `handle` (revalidated per access) or a region value, or keep the `*T` in a
+    module-private field.
+
+error[E1302]: `mint`'s return type carries a raw pointer, but this boundary stays fully safe
+ --> mem:///main.lu:2:11
+  |
+2 | fn mint() -> *u8 { mint() }
+  |           ^^^^^^ `*T` crosses the boundary here
+  |
+  = note: unsafety never appears in types crossing function boundaries — there are no `unsafe
+    fn`s; the proof lives at the `unsafe` block and the module is the audit granule. Pass a
+    `handle` (revalidated per access) or a region value, or keep the `*T` in a
+    module-private field.
+
+error[E1302]: the exported type `Held`'s field `raw` carries a raw pointer, but this boundary stays fully safe
+ --> mem:///main.lu:3:19
+  |
+3 | pub struct Held { raw: *u8 }
+  |                   ^^^ `*T` crosses the boundary here
+  |
+  = note: unsafety never appears in types crossing function boundaries — there are no `unsafe
+    fn`s; the proof lives at the `unsafe` block and the module is the audit granule. Pass a
+    `handle` (revalidated per access) or a region value, or keep the `*T` in a
+    module-private field.

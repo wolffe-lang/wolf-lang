@@ -1,0 +1,27 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/unsafe_door_borrow.lu\"))"
+---
+fn main
+  _0 r: region
+  _1 out: int copy
+  _2 p: *u8 copy
+  _3 v: u8 copy
+  b0:
+    init r @493..494
+    init out @514..517
+    unsafe-enter @664..670
+    read r @689..690
+    expose r (region->ptr) @689..697
+    init p @685..686
+    read r @764..765
+    read p @771..772
+    door borrow r from p @757..772
+    init v @753..754
+    read v @821..822
+    init out @815..818
+    unsafe-exit @834..835
+    read out @840..843
+    region-close region r @844..845
+    -> b1
+  b1:
