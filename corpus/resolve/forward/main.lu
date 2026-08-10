@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: wir
 //! conforms: mod.forward
 //!
 //! Within a module, forward references across files are unrestricted
