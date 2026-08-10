@@ -1,0 +1,16 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1012]: `cfg.limit` is frozen, so it cannot be assigned through
+ --> mem:///main.lu:4:5
+  |
+3 |     var cfg = freeze region { Config { limit: 42 } }
+  |               -------------------------------------- the freeze happens here — the promotion to `imm` is deep and permanent
+4 |     cfg.limit = 7
+  |     ^^^^^^^^^ this needs the data to be mutable
+  |
+  = note: `freeze` promotes the whole graph to `imm`: shareable from anywhere, forever, and never
+    writable again. Build the value completely before freezing it, or keep a mutable copy
+    (`copy`) alongside the frozen one.

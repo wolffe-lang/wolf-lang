@@ -278,9 +278,11 @@ fn else_defaulting_and_try_check_since_s15() {
 }
 
 #[test]
-fn regions_type_since_s19_freeze_still_not_yet() {
+fn regions_type_since_s19_freeze_since_s20() {
     // s13 refused every region form; s19 types the creation/ambient
-    // surface (X4). `freeze` changes what a region is — s20.
+    // surface (X4); s20 types `freeze`: a frozen region block yields
+    // its body's value, `freeze r` on a region value yields `region`,
+    // and a non-region operand is a type error.
     let tc = check_one(
         "fn r() -> int { region tmp { 1 } }\n\
          fn v() -> int { let a = region(rc)\n    in a { 2 } }\n\
@@ -294,9 +296,17 @@ fn regions_type_since_s19_freeze_still_not_yet() {
     );
     let tc = check_one(
         "fn f() -> int { freeze region { 1 } }\n\
+         fn g() -> int { let a = region()\n    let b = freeze a\n    in b { 2 } }\n\
          fn main() -> !int { 0 }\n",
     );
-    assert!(is_nyc(&tc, "f"));
+    assert!(
+        tc.fully_checked() && !tc.has_errors(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let tc = check_one("fn main() -> !int { let x = 1\n    freeze x\n    0 }\n");
+    assert!(tc.has_errors(), "{:?}", tc.diagnostics);
 }
 
 #[test]

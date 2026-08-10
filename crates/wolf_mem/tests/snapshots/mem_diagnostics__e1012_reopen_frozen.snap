@@ -1,0 +1,16 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1012]: region `r` is frozen, so it cannot be opened for mutation
+ --> mem:///main.lu:4:13
+  |
+3 |     let f = freeze r
+  |             -------- the freeze happens here — the promotion to `imm` is deep and permanent
+4 |     let n = in f { 1 }
+  |             ^^^^^^^^^^ `in` opens a region for writing
+  |
+  = note: `freeze` promotes the whole graph to `imm`: readable and shareable from anywhere,
+    forever, and never writable again. Do the mutation before the freeze, or build a fresh
+    region and `copy` what you need.

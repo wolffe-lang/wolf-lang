@@ -46,10 +46,10 @@
 use std::collections::{BTreeMap, HashMap};
 use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, CallExpr, CastExpr, ClosureExpr, ConstDecl,
-    DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchArm,
-    MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue,
-    ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_expr_kind,
-    is_type_kind,
+    DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, GreenNode, IfExpr, InBlock,
+    LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr,
+    RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr, VarDecl,
+    WhileExpr, is_expr_kind, is_type_kind,
 };
 
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
@@ -246,6 +246,10 @@ pub enum Reason {
     Receiver(String),
     /// The target of `in r { … }` must be a region value (X4, s19).
     InTarget,
+    /// The operand of `freeze` must be a region value (s20,
+    /// `[mem.region.freeze.1]`) — or a region block, which types as
+    /// its body's value.
+    FreezeTarget,
 }
 
 impl Reason {
@@ -281,6 +285,7 @@ impl Reason {
             Reason::ElseFallback => "the `else` fallback must produce".to_string(),
             Reason::Receiver(m) => format!("`{m}`'s receiver must be"),
             Reason::InTarget => "the target of `in` must be".to_string(),
+            Reason::FreezeTarget => "the target of `freeze` must be".to_string(),
         }
     }
 
@@ -306,6 +311,7 @@ impl Reason {
             Reason::ElseFallback => "the fallible expression is here",
             Reason::Receiver(_) => "the method is declared here",
             Reason::InTarget => "the `in` block starts here",
+            Reason::FreezeTarget => "the `freeze` is here",
         }
     }
 }
@@ -2154,6 +2160,29 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// `freeze r` — promotion to `imm` (s20, `[mem.region.freeze.1]`).
+    /// Typing only: `freeze region { … }` yields the block's value
+    /// (now deeply immutable — the memory checker enforces that);
+    /// `freeze r` on a region value yields `region` (the state change
+    /// is the memory checker's fact, not a new type).
+    fn synth_freeze(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = FreezeExpr::cast(e).expect("kind");
+        let Some(operand) = d.expr() else {
+            return Ok(self.error_ty());
+        };
+        if operand.kind == SyntaxKind::RegionBlock {
+            return self.synth_region_block(operand);
+        }
+        let region = self.lo.table.intern(TyKind::RegionTy);
+        let exp = Expect {
+            ty: region,
+            reason: Reason::FreezeTarget,
+            because: Some(e.span),
+        };
+        self.check_expr(operand, &exp)?;
+        Ok(region)
+    }
+
     /// Validate a parsed `: rc` / `: pool(T)` strategy node: the pool
     /// element type elaborates (validation only); the strategy itself
     /// is a cost fact carried to the memory checker, not a type.
@@ -2594,10 +2623,7 @@ impl<'a> Checker<'a> {
             SyntaxKind::RegionBlock => self.synth_region_block(e),
             SyntaxKind::RegionValue => self.synth_region_value(e),
             SyntaxKind::InBlock => self.synth_in_block(e),
-            SyntaxKind::FreezeExpr => Err(NotYet {
-                construct: "`freeze` (s20 region checker)",
-                span: e.span,
-            }),
+            SyntaxKind::FreezeExpr => self.synth_freeze(e),
             SyntaxKind::ScopeExpr
             | SyntaxKind::SelectExpr
             | SyntaxKind::WhenExpr

@@ -470,3 +470,170 @@ fn clean_in_redirect_outlives_scratch() {
          }\n",
     );
 }
+
+// ------------------------------------------ the region checker (s20) --
+
+#[test]
+fn e1005_move_while_open() {
+    // The open window pins the handle: `move p` inside `region p { }`
+    // is the transfer-of-open error ([mem.region.freeze.3]).
+    snap(
+        "e1005_move_while_open",
+        "fn main() -> !int {\n    \
+             region p {\n        \
+                 let q = move p\n        \
+                 0\n    \
+             }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1005_freeze_while_open() {
+    // Freezing while open would let the open window outlive the
+    // immutability promise — same code, freeze spelling.
+    snap(
+        "e1005_freeze_while_open",
+        "fn main() -> !int {\n    \
+             region p {\n        \
+                 let f = freeze p\n        \
+                 0\n    \
+             }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1011_open_child_of_open_owner() {
+    // The multiopen antichain ([mem.region.multiopen]): p owns c
+    // (iso edge via the stash), so opening c inside p's window puts
+    // c's data behind two live mutable windows.
+    snap(
+        "e1011_ancestor_open",
+        "struct Holder { child: region }\n\
+         fn main() -> !int {\n    \
+             let c = region()\n    \
+             region p {\n        \
+                 let h = Holder { child: move c }\n        \
+                 let n = in h.child { 1 }\n        \
+                 n\n    \
+             }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1012_write_through_frozen() {
+    // `freeze` is deep and permanent: the write reaches data a
+    // freeze promoted ([mem.region.freeze.1]).
+    snap(
+        "e1012_write_through_frozen",
+        "struct Config { limit: int }\n\
+         fn main() -> !int {\n    \
+             var cfg = freeze region { Config { limit: 42 } }\n    \
+             cfg.limit = 7\n    \
+             cfg.limit\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1012_reopen_frozen_region() {
+    // A frozen region never reopens: `in f { }` asks for a mutable
+    // window on immutable-forever data.
+    snap(
+        "e1012_reopen_frozen",
+        "fn main() -> !int {\n    \
+             let r = region()\n    \
+             let f = freeze r\n    \
+             let n = in f { 1 }\n    \
+             n\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_freeze_then_read_forever() {
+    // The regions.lu head: build in r, freeze, read forever
+    // ([mem.region.freeze.1]) — silent.
+    snap(
+        "clean_freeze_read",
+        "struct Config { limit: int }\n\
+         fn build_config() -> Config {\n    \
+             Config { limit: 42 }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let r = region(rc)\n    \
+             let config = in r { build_config() }\n    \
+             let frozen = freeze r\n    \
+             if config.limit == 42 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_frozen_return_and_imm_edge() {
+    // Frozen data outlives everything and may be referenced from any
+    // region ([mem.region.edge.imm]): returning it and embedding it
+    // in another region's aggregate are both silent. (Both facts are
+    // per-body: a frozen result arriving through a call is a plain
+    // caller-region value on the other side until a signature surface
+    // for `imm` results exists — the scheme-carrying interface's
+    // recorded gap.)
+    snap(
+        "clean_frozen_imm_edge",
+        "struct Config { limit: int }\n\
+         struct Wrap { cfg: Config, tag: int }\n\
+         fn make() -> Config {\n    \
+             freeze region { Config { limit: 5 } }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let t = freeze region { Config { limit: 5 } }\n    \
+             region p {\n        \
+                 let w = Wrap { cfg: t, tag: 1 }\n        \
+                 if w.tag + w.cfg.limit == 6 { 0 } else { 1 }\n    \
+             }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_sibling_multiopen() {
+    // Sibling regions co-open freely — the legal direction of the
+    // antichain, pinned next to the illegal one above.
+    snap(
+        "clean_sibling_multiopen",
+        "fn main() -> !int {\n    \
+             let a = region()\n    \
+             let b = region()\n    \
+             var total = 0\n    \
+             in a {\n        \
+                 total += 1\n        \
+                 in b {\n            \
+                     total += 2\n        \
+                 }\n    \
+             }\n    \
+             if total == 3 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_iso_edge_then_open_after_close() {
+    // The same stash as the E1011 case, opened AFTER the owner's
+    // window ends: the open set is an antichain again — silent.
+    snap(
+        "clean_iso_open_after_close",
+        "struct Holder { child: region }\n\
+         fn main() -> !int {\n    \
+             let c = region()\n    \
+             var keep = 0\n    \
+             region p {\n        \
+                 keep = 1\n    \
+             }\n    \
+             let h = Holder { child: move c }\n    \
+             let n = in h.child { 41 }\n    \
+             if n + keep == 42 { 0 } else { 1 }\n\
+         }\n",
+    );
+}

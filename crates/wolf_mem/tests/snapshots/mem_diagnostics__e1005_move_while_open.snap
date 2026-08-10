@@ -1,0 +1,15 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1005]: region `p` is open, so its handle cannot move or freeze
+ --> mem:///main.lu:3:22
+  |
+2 |     region p {
+  |            - region `p` is open here, until its block ends
+3 |         let q = move p
+  |                      ^ the transfer happens inside the open window
+  |
+  = note: a region transfers or freezes as a closed subtree only — the open window pins its
+    handle. End the `region`/`in` block first, or move the value before opening the region.

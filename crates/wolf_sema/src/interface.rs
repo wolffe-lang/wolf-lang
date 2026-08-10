@@ -717,8 +717,81 @@ fn render_fn(ctx: &mut SigCtx<'_>, node: &GreenNode) -> String {
         out.push_str(" -> ");
         out.push_str(&render_ret(ctx, ret));
     }
+    if let Some(scheme) = region_scheme(ctx, d) {
+        out.push_str(&scheme);
+    }
     ctx.generics.truncate(saved);
     out
+}
+
+/// The fn's derived region scheme (s20 — the scheme-carrying
+/// interface). The Cyclone defaults, spelled explicitly and hashed
+/// with the signature: `-` is a Copy-shaped position (no region
+/// content), `ρN` a fresh generalized region per heap-reaching
+/// parameter, `ρN region` a first-class region value (the parameter
+/// *is* its region's handle), and a heap result lands in `ρ_caller`
+/// (D12); a returned region value is callee-created, fresh on the
+/// caller's side. Today every scheme IS the default — this makes the
+/// contract an interface artifact, so call-site instantiation errors
+/// have a signature-side fact to cite, and a future annotation
+/// surface moves the hash exactly like any signature edit. Derived
+/// from the *declared* type shape (spans-stripped render): a
+/// `distinct` alias of a Copy type conservatively derives a region
+/// nothing ever constrains, which is harmless. All-Copy signatures
+/// derive no scheme and render unchanged.
+fn region_scheme(ctx: &SigCtx<'_>, d: FnDecl<'_>) -> Option<String> {
+    fn copy_shaped(rendered: &str) -> bool {
+        crate::types::Prim::from_name(rendered).is_some()
+            || rendered.starts_with("fn(")
+            || rendered.starts_with("fn[")
+            || rendered.starts_with("handle ")
+            || rendered.starts_with('*')
+            || rendered.starts_with("wrapping[")
+            || rendered == "<error>"
+            || rendered.is_empty()
+    }
+    let mut fresh = 0u32;
+    let mut any = false;
+    let mut parts: Vec<String> = Vec::new();
+    if let Some(params) = d.params() {
+        for p in params.params() {
+            let rendered = p
+                .ty()
+                .map(|t| render_type(ctx, t))
+                .unwrap_or_else(|| "<error>".to_string());
+            let part = if rendered == "region" {
+                fresh += 1;
+                any = true;
+                format!("\u{3c1}{fresh} region")
+            } else if copy_shaped(&rendered) {
+                "-".to_string()
+            } else {
+                fresh += 1;
+                any = true;
+                format!("\u{3c1}{fresh}")
+            };
+            parts.push(part);
+        }
+    }
+    let ret = match d.ret_ty().and_then(|r| r.ty()) {
+        Some(t) => {
+            let rendered = render_type(ctx, t);
+            if rendered == "region" {
+                any = true;
+                "\u{3c1}_fresh region".to_string()
+            } else if copy_shaped(&rendered) || rendered == "()" {
+                "-".to_string()
+            } else {
+                any = true;
+                "\u{3c1}_caller".to_string()
+            }
+        }
+        None => "-".to_string(),
+    };
+    if !any {
+        return None;
+    }
+    Some(format!(" \u{b7} regions ({}) -> {ret}", parts.join(", ")))
 }
 
 fn render_params(ctx: &SigCtx<'_>, params: ParamList<'_>) -> String {
@@ -1073,7 +1146,12 @@ mod tests {
         let ifaces = build_interfaces(&p);
         let root = ifaces.last().expect("root last");
         let go = root.items.iter().find(|i| i.name == "go").expect("go");
-        assert_eq!(go.sig, "fn go(c: geometry.Circle) -> f64");
+        // s20: heap-reaching signatures carry their derived region
+        // scheme (the Cyclone defaults, made interface surface).
+        assert_eq!(
+            go.sig,
+            "fn go(c: geometry.Circle) -> f64 \u{b7} regions (\u{3c1}1) -> -"
+        );
         let wrap = root.items.iter().find(|i| i.name == "Wrap").expect("wrap");
         assert_eq!(wrap.sig, "struct Wrap { inner: self.Local }");
     }

@@ -1,0 +1,18 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1011]: this would open region `c` while region `p` is still open
+ --> mem:///main.lu:6:17
+  |
+4 |     region p {
+  |            - region `p` is opened here, and is still open
+5 |         let h = Holder { child: move c }
+6 |         let n = in h.child { 1 }
+  |                 ^^^^^^^^^^^^^^^^ the second open window starts here
+  |
+  = note: region `p` owns region `c`, so its open window already reaches this data. Two regions
+    may be open at once only when neither owns the other (they are siblings in the region
+    forest) — close the first block before opening this one, or open the child through its
+    own scope after the owner's window ends.

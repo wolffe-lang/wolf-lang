@@ -17,6 +17,8 @@
 
 use std::collections::{BTreeMap, HashMap};
 
+use wolf_ast::FreezeExpr;
+
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, CallExpr, CastExpr, DeferStmt, ElseExpr, ExprStmt,
     FieldInit, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchExpr, MemberExpr, ParamMode,
@@ -53,6 +55,10 @@ pub(crate) struct Val {
     region: Option<RegionId>,
     /// The span that produced the first site (diagnostic anchor).
     origin: Option<Span>,
+    /// s20: fields of this value that hold a region value with known
+    /// identity (`Holder { child: move c }` records `("child", c)`),
+    /// so `in h.child { }` can resolve the iso edge it opens through.
+    region_fields: Vec<(String, RegionId)>,
 }
 
 impl Val {
@@ -65,6 +71,7 @@ impl Val {
             sites: vec![id],
             region: None,
             origin: Some(span),
+            region_fields: Vec::new(),
         }
     }
 
@@ -85,6 +92,7 @@ impl Val {
             (None, Some(b)) => Some(b),
             _ => None,
         };
+        self.region_fields.extend(other.region_fields);
     }
 }
 
@@ -214,6 +222,30 @@ pub(crate) struct Lowerer<'t> {
     /// `ρ_static`, once demanded (fn bodies; item initializers use it
     /// as their ambient).
     static_region: Option<RegionId>,
+
+    // ------------------------------------------ region checker (s20) ----
+    /// The open set as a stack of (region, open-site) pairs — every
+    /// `region name {` / `in r {` entry, popped at its exit. The
+    /// ambient stack minus the caller/static base. Openness is
+    /// depth-counted: the same region may appear twice
+    /// (`[mem.region.open.1]`).
+    open_stack: Vec<(RegionId, Span)>,
+    /// The region forest's iso edges: child region -> the region of
+    /// the aggregate it was embedded into (`[mem.region.edge.iso]`).
+    /// Keyed by raw region index (rigid regions never merge).
+    region_parent: HashMap<u32, RegionId>,
+    /// Regions consumed by `freeze`: their data is `imm` forever
+    /// (`[mem.region.freeze.1]`), keyed by raw index, value = the
+    /// freeze site (diagnostic anchor).
+    frozen_region: HashMap<u32, Span>,
+    /// Allocation sites promoted to `imm` by a freeze: writes through
+    /// any path holding one are E1012; stores of one are exempt from
+    /// co-location (`[mem.region.edge.imm]`).
+    frozen_site: BTreeMap<SiteId, Span>,
+    /// Field paths with statically-known region identity:
+    /// `(root local, field name) -> region` (`h.child` after
+    /// `let h = Holder { child: move c }`).
+    region_field: HashMap<(u32, String), RegionId>,
 }
 
 impl<'t> Lowerer<'t> {
@@ -368,6 +400,7 @@ impl<'t> Lowerer<'t> {
             sites,
             region,
             origin: Some(span),
+            region_fields: Vec::new(),
         }
     }
 
@@ -453,6 +486,11 @@ impl<'t> Lowerer<'t> {
             if self.already_conflicted(s) {
                 continue;
             }
+            // Frozen (`imm`) data may be referenced from anywhere,
+            // forever ([mem.region.edge.imm]): no co-location demand.
+            if self.frozen_site.contains_key(&s) {
+                continue;
+            }
             let sr = self.sites[s.0 as usize].region;
             // Render both sides before unifying: after a merge they
             // resolve identically.
@@ -533,6 +571,12 @@ impl<'t> Lowerer<'t> {
             if self.already_conflicted(s) {
                 continue;
             }
+            // Frozen data outlives everything ([mem.region.freeze.1]:
+            // immutable forever — returning it is always legal).
+            if self.frozen_site.contains_key(&s) {
+                self.mark_escape(s, "returned");
+                continue;
+            }
             let sr = self.sites[s.0 as usize].region;
             match self.rt.binding(sr) {
                 Some(Binding::Static) | Some(Binding::Caller) => {
@@ -586,6 +630,12 @@ impl<'t> Lowerer<'t> {
     /// A store into module state: the target is `ρ_static`.
     fn demand_static(&mut self, val: &Val, span: Span) {
         for &s in &val.sites {
+            // Frozen data may live anywhere, forever
+            // ([mem.region.edge.imm]).
+            if self.frozen_site.contains_key(&s) {
+                self.mark_escape(s, "module state");
+                continue;
+            }
             let sr = self.sites[s.0 as usize].region;
             match self.rt.binding(sr) {
                 Some(Binding::Static) => {
@@ -706,6 +756,206 @@ impl<'t> Lowerer<'t> {
         );
         d = d.with_note(Self::ladder());
         self.diags.push(d);
+    }
+
+    // ------------------------------------------ region checker (s20) ----
+
+    /// The iso parent of a region, unification-aware (`region_parent`
+    /// keys are raw indices; rigid regions never merge, but lookups
+    /// resolve through the table to stay honest about `same`).
+    fn parent_of(&mut self, r: RegionId) -> Option<RegionId> {
+        let keys: Vec<u32> = self.region_parent.keys().copied().collect();
+        for k in keys {
+            if self.rt.same(RegionId(k), r) {
+                return self.region_parent.get(&k).copied();
+            }
+        }
+        None
+    }
+
+    /// Is `anc` an ancestor of `r` in the region forest (owner,
+    /// transitively via iso edges — `[mem.region.edge.iso]`)?
+    fn is_ancestor(&mut self, anc: RegionId, r: RegionId) -> bool {
+        let mut cur = r;
+        for _ in 0..64 {
+            let Some(p) = self.parent_of(cur) else {
+                return false;
+            };
+            if self.rt.same(p, anc) {
+                return true;
+            }
+            cur = p;
+        }
+        false
+    }
+
+    /// `[mem.region.multiopen]`: the open set must be an antichain in
+    /// the region forest. Opening a region while an ancestor or
+    /// descendant is open is E1011, naming both open sites.
+    /// Re-opening an already-open region is idempotent
+    /// (`[mem.region.open.1]`); sibling co-opens are always legal.
+    fn check_open_antichain(&mut self, rid: RegionId, span: Span) {
+        let opens: Vec<(RegionId, Span)> = self.open_stack.clone();
+        for (o, osite) in opens {
+            if self.rt.same(o, rid) {
+                continue; // depth-counted re-open
+            }
+            let other_is_ancestor = self.is_ancestor(o, rid);
+            let other_is_descendant = self.is_ancestor(rid, o);
+            if !other_is_ancestor && !other_is_descendant {
+                continue; // siblings: disjoint footprints, co-open away
+            }
+            self.conflicted = true;
+            let this = self.show_region(rid);
+            let other = self.show_region(o);
+            let relation = if other_is_ancestor {
+                format!("{other} owns {this}, so its open window already reaches this data")
+            } else {
+                format!(
+                    "{this} owns {other}, so this open window would reach data that is already open"
+                )
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1011,
+                    span,
+                    format!("this would open {this} while {other} is still open"),
+                )
+                .with_label("the second open window starts here")
+                .with_secondary(osite, format!("{other} is opened here, and is still open"))
+                .with_note(format!(
+                    "{relation}. Two regions may be open at once only when neither owns \
+                     the other (they are siblings in the region forest) — close the \
+                     first block before opening this one, or open the child through \
+                     its own scope after the owner's window ends."
+                )),
+            );
+            return;
+        }
+    }
+
+    /// `[mem.region.freeze.3]` (E1005): a region moves or freezes as a
+    /// *closed* subtree only. Fires when the region itself — or an
+    /// open region it owns transitively — is in the open set. Returns
+    /// whether it reported.
+    fn check_transfer_closed(&mut self, rid: RegionId, span: Span) -> bool {
+        let opens: Vec<(RegionId, Span)> = self.open_stack.clone();
+        for (o, osite) in opens {
+            let pinned = self.rt.same(o, rid) || self.is_ancestor(rid, o);
+            if !pinned {
+                continue;
+            }
+            self.conflicted = true;
+            self.tainted_region[rid.0 as usize] = true;
+            let region = self.show_region(rid);
+            let (which, why) = if self.rt.same(o, rid) {
+                (
+                    format!("{region} is open here"),
+                    format!("{region} is open, so its handle cannot move or freeze"),
+                )
+            } else {
+                let child = self.show_region(o);
+                (
+                    format!("{child} — owned by {region} — is open here"),
+                    format!(
+                        "{region} contains an open child region, so it cannot move \
+                         or freeze"
+                    ),
+                )
+            };
+            self.diags.push(
+                Diagnostic::error(codes::E1005, span, why)
+                    .with_label("the transfer happens inside the open window")
+                    .with_secondary(osite, format!("{which}, until its block ends"))
+                    .with_note(
+                        "a region transfers or freezes as a closed subtree only — the \
+                         open window pins its handle. End the `region`/`in` block \
+                         first, or move the value before opening the region.",
+                    ),
+            );
+            return true;
+        }
+        false
+    }
+
+    /// Mark a region — and everything it owns — frozen: its data is
+    /// `imm` forever (`[mem.region.freeze.1]`), never freed (frozen
+    /// is its end state, not a leak), referencable from anywhere
+    /// (`[mem.region.edge.imm]`), and rejects writes (E1012).
+    fn freeze_region(&mut self, rid: RegionId, span: Span) {
+        self.frozen_region.entry(rid.0).or_insert(span);
+        self.moved_region[rid.0 as usize] = true;
+        let children: Vec<u32> = (0..self.rt.regions.len() as u32)
+            .filter(|&i| i != rid.0 && self.is_ancestor(rid, RegionId(i)))
+            .collect();
+        for c in children {
+            self.frozen_region.entry(c).or_insert(span);
+            self.moved_region[c as usize] = true;
+        }
+        for i in 0..self.sites.len() {
+            let sr = self.sites[i].region;
+            if self.rt.same(sr, rid) || self.is_ancestor(rid, sr) {
+                self.frozen_site.entry(SiteId(i as u32)).or_insert(span);
+            }
+        }
+    }
+
+    /// `Some(freeze site)` when a place's value is (or contains)
+    /// frozen data, or the place is a frozen region value itself.
+    fn frozen_at(&mut self, place: PlaceId) -> Option<Span> {
+        for (s, _) in self.sites_of_place(place) {
+            if let Some(f) = self.frozen_site.get(&s) {
+                return Some(*f);
+            }
+        }
+        if let Base::Local(l) = self.places.get(place).base
+            && let Some(Some(rid)) = self.region_local.get(&l)
+            && let Some(f) = self.frozen_region.get(&rid.0)
+        {
+            return Some(*f);
+        }
+        None
+    }
+
+    /// Lending a region value `mut` while its window is open is the
+    /// same pin as moving it (`[mem.region.freeze.3]`'s spirit: the
+    /// callee could move or freeze the handle we are standing
+    /// inside) — E1005 through the shared reporter.
+    fn check_region_lend(&mut self, place: PlaceId, span: Span) {
+        if self.places.get(place).proj.is_empty()
+            && let Base::Local(l) = self.places.get(place).base
+            && let Some(Some(rid)) = self.region_local.get(&l).copied()
+        {
+            self.check_transfer_closed(rid, span);
+        }
+    }
+
+    /// A write reaching frozen data — E1012 (`[mem.region.freeze.1]`:
+    /// deep, forever; every path is checked, because immutability is
+    /// a fact about the data, not about one binding).
+    fn check_frozen_write(&mut self, place: PlaceId, span: Span, verb: &str) {
+        let Some(fspan) = self.frozen_at(place) else {
+            return;
+        };
+        self.conflicted = true;
+        let shown = self.show_place_now(place);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1012,
+                span,
+                format!("`{shown}` is frozen, so it cannot be {verb}"),
+            )
+            .with_label("this needs the data to be mutable")
+            .with_secondary(
+                fspan,
+                "the freeze happens here — the promotion to `imm` is deep and permanent",
+            )
+            .with_note(
+                "`freeze` promotes the whole graph to `imm`: shareable from anywhere, \
+                 forever, and never writable again. Build the value completely before \
+                 freezing it, or keep a mutable copy (`copy`) alongside the frozen one.",
+            ),
+        );
     }
 
     // ---------------------------------------------------- places ----
@@ -899,12 +1149,14 @@ impl<'t> Lowerer<'t> {
             return;
         }
         // Moving a region value whole: affine transfer — its free is
-        // no longer this frame's ([mem.region.freeze.2]; the open/
-        // closed rules are s20's E1005).
+        // no longer this frame's ([mem.region.freeze.2]). Moving it
+        // while its window is open is E1005 (s20,
+        // [mem.region.freeze.3]): the open pins the handle.
         if self.places.get(place).proj.is_empty()
             && let Base::Local(l) = self.places.get(place).base
-            && let Some(Some(rid)) = self.region_local.get(&l)
+            && let Some(Some(rid)) = self.region_local.get(&l).copied()
         {
+            self.check_transfer_closed(rid, span);
             self.moved_region[rid.0 as usize] = true;
         }
         self.push(Stmt::Move { place, span });
@@ -912,11 +1164,18 @@ impl<'t> Lowerer<'t> {
 
     fn emit_init(&mut self, place: PlaceId, span: Span) {
         self.check_view(place, span);
+        // A whole-place (re)binding replaces the value; a projected
+        // init writes *into* the value — frozen data rejects the
+        // latter (s20, [mem.region.freeze.1]).
+        if !self.places.get(place).proj.is_empty() {
+            self.check_frozen_write(place, span, "assigned through");
+        }
         self.push(Stmt::Init { place, span });
     }
 
     fn emit_mutate(&mut self, place: PlaceId, span: Span) {
         self.check_view(place, span);
+        self.check_frozen_write(place, span, "modified");
         self.push(Stmt::Mutate { place, span });
     }
 
@@ -1059,12 +1318,13 @@ impl<'t> Lowerer<'t> {
             SyntaxKind::CallExpr => self.eval_call(e),
             SyntaxKind::StructLit => {
                 let d = StructLit::cast(e).expect("kind");
-                let mut parts: Vec<(Val, Span)> = Vec::new();
+                let mut parts: Vec<(Option<String>, Val, Span)> = Vec::new();
                 for f in d.fields() {
                     if let Some(v) = FieldInit::value(f) {
                         // Field initializers consume their values.
                         let fv = self.eval_value(v)?;
-                        parts.push((fv, v.span));
+                        let fname = f.name().map(|t| self.text(t.span));
+                        parts.push((fname, fv, v.span));
                     }
                 }
                 // The construction is an allocation site in the
@@ -1074,15 +1334,24 @@ impl<'t> Lowerer<'t> {
                 let site = self.alloc_site(ty, SiteKind::Lit, e.span);
                 let region = self.sites[site.0 as usize].region;
                 let mut val = Val::site(site, e.span);
-                for (fv, sp) in parts {
+                for (fname, fv, sp) in parts {
                     if let Some(r) = fv.region {
                         // A region value moved into a field: the iso
-                        // edge (s20 owns its rules); its free is no
-                        // longer this frame's.
+                        // edge ([mem.region.edge.iso]) — the aggregate
+                        // becomes the owner (the parent edge in the
+                        // region forest), the free is no longer this
+                        // frame's, and the field path keeps the
+                        // identity so `in h.child { }` resolves.
                         self.moved_region[r.0 as usize] = true;
+                        self.region_parent.insert(r.0, region);
+                        if let Some(f) = fname {
+                            val.region_fields.push((f, r));
+                        }
                     }
                     self.demand_store(&fv, region, Some(e.span), sp);
+                    let fields = std::mem::take(&mut val.region_fields);
                     val.merge(fv);
+                    val.region_fields = fields;
                 }
                 val.region = None;
                 Ok(val)
@@ -1139,10 +1408,7 @@ impl<'t> Lowerer<'t> {
             SyntaxKind::RegionBlock => self.eval_region_block(e),
             SyntaxKind::RegionValue => self.eval_region_value(e),
             SyntaxKind::InBlock => self.eval_in_block(e),
-            SyntaxKind::FreezeExpr => Err(NotYet {
-                construct: "`freeze` (s20 region checker)",
-                span: e.span,
-            }),
+            SyntaxKind::FreezeExpr => self.eval_freeze(e),
             SyntaxKind::UnsafeBlock | SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
                 construct: "the unsafe tier (s22)",
                 span: e.span,
@@ -1177,6 +1443,7 @@ impl<'t> Lowerer<'t> {
             sites: Vec::new(),
             region: Some(rid),
             origin: Some(e.span),
+            region_fields: Vec::new(),
         })
     }
 
@@ -1199,6 +1466,8 @@ impl<'t> Lowerer<'t> {
             region: rid,
             span: intro,
         });
+        self.check_open_antichain(rid, intro);
+        self.open_stack.push((rid, intro));
         self.ambient.push(rid);
         self.push_scope();
         if let Some(t) = name_tok {
@@ -1230,6 +1499,7 @@ impl<'t> Lowerer<'t> {
         let close_span = end_span(e.span);
         self.close_scope(close_span)?;
         self.ambient.pop();
+        self.open_stack.pop();
         if !self.moved_region[rid.0 as usize] {
             self.sweep_region_close(rid, outer_mark, close_span, &mut val);
             self.push(Stmt::RegionClose {
@@ -1245,6 +1515,10 @@ impl<'t> Lowerer<'t> {
     /// (`[mem.region.create.3]`). Re-entering an already-open region
     /// is idempotent — openness is depth-counted
     /// (`[mem.region.open.1]`). Not a free: no escape sweep here.
+    /// Since s20, `r` may also be a one-step field path (`in h.child`)
+    /// — opening a region through the iso edge that stashes it; the
+    /// antichain check (`[mem.region.multiopen]`) decides whether the
+    /// open is legal, and a frozen region refuses to open at all.
     fn eval_in_block(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = InBlock::cast(e).expect("kind");
         let rid = match d.region() {
@@ -1257,13 +1531,23 @@ impl<'t> Lowerer<'t> {
                             Base::Global(..) => None,
                         }
                     }
+                    Some((place, _)) => {
+                        self.emit_read(place, rexpr.span);
+                        let p = self.places.get(place);
+                        match (&p.base, p.proj.as_slice()) {
+                            (Base::Local(l), [Proj::Field(f)]) => {
+                                self.region_field.get(&(*l, f.clone())).copied()
+                            }
+                            _ => None,
+                        }
+                    }
                     _ => None,
                 };
                 match known {
                     Some(rid) => rid,
                     None => {
                         return Err(NotYet {
-                            construct: "region flow beyond local bindings (s20)",
+                            construct: "region flow beyond bindings and one-step iso fields (s21)",
                             span: rexpr.span,
                         });
                     }
@@ -1271,20 +1555,130 @@ impl<'t> Lowerer<'t> {
             }
             None => self.ambient(),
         };
+        // A frozen region never reopens: its window closed forever
+        // when `freeze` promoted it ([mem.region.freeze.1]).
+        if let Some(&fspan) = self.frozen_region.get(&rid.0) {
+            self.conflicted = true;
+            let region = self.show_region(rid);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1012,
+                    e.span,
+                    format!("{region} is frozen, so it cannot be opened for mutation"),
+                )
+                .with_label("`in` opens a region for writing")
+                .with_secondary(
+                    fspan,
+                    "the freeze happens here — the promotion to `imm` is deep and permanent",
+                )
+                .with_note(
+                    "`freeze` promotes the whole graph to `imm`: readable and shareable \
+                     from anywhere, forever, and never writable again. Do the mutation \
+                     before the freeze, or build a fresh region and `copy` what you need.",
+                ),
+            );
+        }
         self.push(Stmt::RegionOpen {
             region: rid,
             span: e.span,
         });
+        self.check_open_antichain(rid, e.span);
+        self.open_stack.push((rid, e.span));
         self.ambient.push(rid);
         let val = match d.body() {
             Some(b) => self.walk_block(b, true)?,
             None => Val::none(),
         };
         self.ambient.pop();
+        self.open_stack.pop();
         self.push(Stmt::RegionClose {
             region: rid,
             span: end_span(e.span),
         });
+        Ok(val)
+    }
+
+    /// `freeze r` / `freeze region { … }` — promotion to `imm` (s20,
+    /// `[mem.region.freeze.1]`): consumes the affine region value (a
+    /// move — E1005 fires at the chokepoint if the window is open,
+    /// `[mem.region.freeze.3]`), then relabels the whole owned
+    /// subtree frozen: never freed, never written, referencable from
+    /// anywhere.
+    fn eval_freeze(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = FreezeExpr::cast(e).expect("kind");
+        let Some(operand) = d.expr() else {
+            return Ok(Val::none());
+        };
+        if operand.kind == SyntaxKind::RegionBlock {
+            return self.eval_frozen_block(operand, e.span);
+        }
+        let rid = match self.as_place(operand) {
+            Some((place, _)) if self.places.get(place).proj.is_empty() => {
+                let known = match self.places.get(place).base {
+                    Base::Local(l) => self.region_local.get(&l).copied().flatten(),
+                    Base::Global(..) => None,
+                };
+                // The freeze consumes the value (affine): the move
+                // statement carries use-after-freeze to E1001, and
+                // the open-window check to E1005.
+                self.use_value(place, operand.span);
+                known
+            }
+            _ => self.eval_value(operand)?.region,
+        };
+        let Some(rid) = rid else {
+            return Err(NotYet {
+                construct: "freezing a region whose identity is not statically known (s21)",
+                span: operand.span,
+            });
+        };
+        self.freeze_region(rid, e.span);
+        Ok(Val {
+            sites: Vec::new(),
+            region: Some(rid),
+            origin: Some(e.span),
+            region_fields: Vec::new(),
+        })
+    }
+
+    /// `freeze region { … }` — build-then-freeze: the block runs with
+    /// the region ambient, and the closing brace promotes instead of
+    /// freeing. Everything the block allocated — including its value
+    /// and anything stashed in outer bindings — is `imm` from here on
+    /// (`[mem.region.freeze.1]`; frozen is the region's end state,
+    /// not a leak). No escape sweep: escaping frozen data is the
+    /// point.
+    fn eval_frozen_block(&mut self, e: &'t GreenNode, freeze_span: Span) -> R<Val> {
+        let d = RegionBlock::cast(e).expect("kind");
+        let strategy = self.parse_strategy(d.strategy());
+        let name_tok = d.name();
+        let name = name_tok
+            .map(|t| self.text(t.span))
+            .unwrap_or_else(|| "<region>".to_string());
+        let intro = name_tok.map(|t| t.span).unwrap_or(e.span);
+        let rid = self.new_region(&name, RegionKind::Scope, strategy, intro);
+        self.push(Stmt::RegionOpen {
+            region: rid,
+            span: intro,
+        });
+        self.check_open_antichain(rid, intro);
+        self.open_stack.push((rid, intro));
+        self.ambient.push(rid);
+        self.push_scope();
+        let mut val = match d.body() {
+            Some(b) => self.walk_block(b, true)?,
+            None => Val::none(),
+        };
+        let close_span = end_span(e.span);
+        self.close_scope(close_span)?;
+        self.ambient.pop();
+        self.open_stack.pop();
+        self.push(Stmt::RegionClose {
+            region: rid,
+            span: close_span,
+        });
+        self.freeze_region(rid, freeze_span);
+        val.region = None;
         Ok(val)
     }
 
@@ -1781,7 +2175,11 @@ impl<'t> Lowerer<'t> {
             let mut val = Val::site(site, e.span);
             for (pv, sp) in ctor_parts {
                 if let Some(r) = pv.region {
+                    // The payload owns the region: an iso edge, with
+                    // the constructed value as parent
+                    // ([mem.region.edge.iso]).
                     self.moved_region[r.0 as usize] = true;
+                    self.region_parent.insert(r.0, region);
                 }
                 self.demand_store(&pv, region, Some(e.span), sp);
                 val.merge(pv);
@@ -1839,8 +2237,15 @@ impl<'t> Lowerer<'t> {
             }
         }
         if ret_region {
-            // A call returning a region value: identity unknown until
-            // s20's scheme-carrying interfaces; `in` on it refuses.
+            // A call returning a region value (s20, the
+            // scheme-carrying interface's shape): the callee hands
+            // over a region it created — a fresh, distinct identity
+            // on this side, whose affine value is the unique handle.
+            // Never promotion-eligible: its create happened in the
+            // callee, so the create/free pair is not frame-local.
+            let rid = self.new_region("<region>", RegionKind::Value, Strategy::Arena, e.span);
+            self.tainted_region[rid.0 as usize] = true;
+            out.region = Some(rid);
             out.origin = Some(e.span);
         }
         Ok(out)
@@ -1878,6 +2283,8 @@ impl<'t> Lowerer<'t> {
             }
             Some(ParamMode::Mut) => match self.as_place(recv) {
                 Some((place, ty)) => {
+                    self.check_frozen_write(place, recv_span, "passed as `mut`");
+                    self.check_region_lend(place, recv_span);
                     self.escape_to_callee(place, carry);
                     match &selfp.view {
                         Some(view) => {
@@ -1960,6 +2367,8 @@ impl<'t> Lowerer<'t> {
             }
             Some(ParamMode::Mut) => match self.as_place(v) {
                 Some((place, _)) => {
+                    self.check_frozen_write(place, v.span, "passed as `mut`");
+                    self.check_region_lend(place, v.span);
                     self.escape_to_callee(place, carry);
                     surface.mut_args.push((place, v.span));
                 }
@@ -2226,6 +2635,14 @@ impl<'t> Lowerer<'t> {
                     }
                     self.region_local.insert(local.0, Some(rid));
                 }
+                if single {
+                    // `let h = Holder { child: move c }`: the field
+                    // path `h.child` keeps the region identity (s20 —
+                    // `in h.child { }` opens through the iso edge).
+                    for (f, r) in &val.region_fields {
+                        self.region_field.insert((local.0, f.clone()), *r);
+                    }
+                }
             } else {
                 self.push(Stmt::Uninit { place, span });
             }
@@ -2332,9 +2749,18 @@ impl<'t> Lowerer<'t> {
                         // the container's own allocation(s).
                         if let Some(r) = val.region {
                             // A region value stored into a field: the
-                            // iso edge — s20 owns its rules; the free
-                            // is no longer this frame's.
+                            // iso edge ([mem.region.edge.iso]) — the
+                            // container's region becomes the parent,
+                            // the free is no longer this frame's, and
+                            // the field path keeps the identity.
                             self.moved_region[r.0 as usize] = true;
+                            if let Some(&(c, _)) = self.sites_of_place(place).first() {
+                                let target = self.sites[c.0 as usize].region;
+                                self.region_parent.insert(r.0, target);
+                            }
+                            if let [Proj::Field(f)] = self.places.get(place).proj.as_slice() {
+                                self.region_field.insert((l, f.clone()), r);
+                            }
                         }
                         let containers = self.sites_of_place(place);
                         if let Some(&(c, _)) = containers.first() {
@@ -2435,6 +2861,11 @@ impl<'t> Lowerer<'t> {
             promoted: Vec::new(),
             conflicted: false,
             static_region: None,
+            open_stack: Vec::new(),
+            region_parent: HashMap::new(),
+            frozen_region: HashMap::new(),
+            frozen_site: BTreeMap::new(),
+            region_field: HashMap::new(),
         }
     }
 

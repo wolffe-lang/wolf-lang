@@ -49,10 +49,24 @@
 //!   E1010. Escape analysis records stack-promotion facts (regions
 //!   whose create/free pair is frame-local; individual allocations
 //!   that never escape) for c05/s26 — facts only, no codegen.
-//! - **Honest refusals**: `freeze`/cross-region rules (s20),
-//!   `shared`/`handle` (s21), the unsafe tier (s22),
-//!   closures/concurrency (c05) return [`NotYet`] — the conform-run
-//!   `mem` rung completes only when every body was actually checked.
+//! - **The region checker** ([`lower`]-integrated, s20): `freeze`
+//!   consumes the affine value and promotes the owned subtree to
+//!   `imm` — writes through any path into frozen data are E1012,
+//!   frozen sites are exempt from co-location (`[mem.region.edge.imm]`)
+//!   and outlive every frame; transfer/freeze of an open region is
+//!   E1005 (`[mem.region.freeze.3]` — the open window pins the
+//!   handle, `mut`-lending included); the multiopen open set is
+//!   checked as an **antichain in the region forest**
+//!   (`[mem.region.multiopen]`, E1011 — iso parent edges recorded at
+//!   embedding stores, `in h.child { }` resolves one-step field
+//!   paths); a call returning `region` mints a fresh identity (the
+//!   scheme-carrying interface's shape — wolf_sema renders and hashes
+//!   the derived Cyclone scheme into every heap-reaching fn sig).
+//! - **Honest refusals**: `shared`/`handle` (s21), the unsafe tier
+//!   (s22), closures/concurrency (c05), region identity through
+//!   conflicting rebinds or multi-step paths (s21) return [`NotYet`]
+//!   — the conform-run `mem` rung completes only when every body was
+//!   actually checked.
 
 use wolf_ast::{GreenNode, SyntaxKind, is_expr_kind};
 use wolf_diag::Diagnostic;
