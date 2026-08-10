@@ -30,9 +30,13 @@ mod server;
 pub use server::main_loop;
 
 /// Serve LSP over stdio until `exit`. The driver's `wolf lsp` entry.
-pub fn run_stdio() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+///
+/// Returns the exit code the LSP lifecycle demands: `0` when `exit`
+/// followed `shutdown`, `1` for a bare `exit` — the driver passes it to
+/// `std::process::exit` unchanged.
+pub fn run_stdio() -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
     let (connection, io_threads) = lsp_server::Connection::stdio();
-    main_loop(connection)?;
+    let code = main_loop(connection)?;
     io_threads.join()?;
-    Ok(())
+    Ok(code)
 }

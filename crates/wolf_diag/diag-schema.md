@@ -25,6 +25,24 @@ compatibility test lives in `tests/json_schema.rs` next to the fixture
 | `notes`       | array of string | free-standing prose                        |
 | `suggestions` | array of suggestion obj | concrete fixes                     |
 | `row_diff`    | row-diff obj | *optional* (present on E06xx error-row diagnostics only) |
+| `files`       | array of string | *optional*: the index→path file table       |
+
+## File table (`files`)
+
+Span objects name files by integer index into the run's source map; a
+consumer resolving a span in a file other than the entry needs the
+index→path mapping. When the emitting surface has a source map —
+`wolf conform-run --error-format=json` always does — every line carries
+`files`: position `i` is the path (`/`-separated) of file index `i`, in
+source-map intern order. Index 0 is the entry file as given on the
+command line; the array covers every index any span in the run can
+reference.
+
+Added 2026-08-10 for the wolf-lsp conformance harness (its one-truth
+check could not positionally compare a diagnostic whose primary span
+lands in a sibling file). *Additive within schema version 1* per the
+compatibility contract above — consumers ignore unknown keys, no field
+was removed or re-typed, so `diag_schema` stays `1`.
 
 ## Row-diff object (s15, D30)
 

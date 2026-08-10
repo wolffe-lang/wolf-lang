@@ -14,7 +14,8 @@ use serde_json::{Value, json};
 
 pub struct Client {
     conn: Connection,
-    server: Option<std::thread::JoinHandle<()>>,
+    /// Joins to the loop's lifecycle exit code (0 = shutdown→exit).
+    server: Option<std::thread::JoinHandle<i32>>,
     next_id: i32,
     /// Notifications received while waiting for something else.
     pub notifications: Vec<Notification>,
@@ -44,7 +45,7 @@ impl Client {
     pub fn start(encodings: &[&str]) -> (Client, Value) {
         let (server_side, client_side) = Connection::memory();
         let server = std::thread::spawn(move || {
-            wolf_lsp::main_loop(server_side).expect("server loop failed");
+            wolf_lsp::main_loop(server_side).expect("server loop failed")
         });
         let mut client = Client {
             conn: client_side,
@@ -159,16 +160,30 @@ impl Client {
         );
     }
 
-    /// Clean shutdown: `shutdown` → `exit` → join the server thread.
+    /// Clean shutdown: `shutdown` → `exit` → join the server thread,
+    /// asserting the lifecycle's success code (0).
     pub fn shutdown(mut self) {
         let id = self.request("shutdown", Value::Null);
         let resp = self.wait_response(id);
         assert!(resp.is_ok(), "shutdown errored: {resp:?}");
         self.notify("exit", Value::Null);
-        self.server
+        let code = self
+            .server
             .take()
             .unwrap()
             .join()
             .expect("server thread exits cleanly");
+        assert_eq!(code, 0, "shutdown→exit is the success order");
+    }
+
+    /// Bare `exit` with no `shutdown` first; returns the loop's exit
+    /// code (the spec says 1).
+    pub fn exit_without_shutdown(mut self) -> i32 {
+        self.notify("exit", Value::Null);
+        self.server
+            .take()
+            .unwrap()
+            .join()
+            .expect("server thread exits cleanly")
     }
 }

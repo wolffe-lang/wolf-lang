@@ -243,6 +243,55 @@ fn utf16_default_and_translation() {
     client.shutdown();
 }
 
+/// A diagnostic whose PRIMARY span lives in a `member: true` sibling of
+/// the opened document reaches the SIBLING's URI (D32: every `.lu` in a
+/// directory is one module, so `wolf build` fails this package —
+/// resolve/dupdef, E0302 — and the editor must not show two clean
+/// files). The sibling is never opened; LSP permits publishing for
+/// documents the client does not have open.
+#[test]
+fn cross_file_diagnostic_reaches_the_siblings_uri() {
+    let (mut client, _) = Client::start(&["utf-8"]);
+    let main = support::corpus("resolve/dupdef/main.lu");
+    let sibling = support::corpus("resolve/dupdef/twice.lu");
+    let sib_uri = support::uri_of(&sibling);
+
+    let main_uri = client.open_from_disk(&main);
+
+    // The duplicate definition's primary span is in twice.lu: the E0302
+    // publish must arrive for the sibling's URI...
+    let sib_diags = client.wait_publish(&sib_uri);
+    assert_eq!(sib_diags.len(), 1, "{sib_diags:?}");
+    assert_eq!(sib_diags[0]["code"], "E0302");
+    assert_eq!(sib_diags[0]["severity"], 1);
+    // ...with the first definition site (in main.lu) riding as related
+    // information, so the entry document is still one hop away.
+    let related = sib_diags[0]["relatedInformation"]
+        .as_array()
+        .expect("cross-file related information");
+    assert!(
+        related
+            .iter()
+            .any(|r| r["location"]["uri"].as_str() == Some(main_uri.as_str())),
+        "related info points into the entry file: {related:?}"
+    );
+
+    // The entry file itself gets its own (empty) publish — no
+    // diagnostic's primary lands there.
+    let main_diags = client.wait_publish(&main_uri);
+    assert_eq!(main_diags, Vec::<Value>::new());
+    client.shutdown();
+}
+
+/// The lifecycle exit-code rule (LSP spec): `exit` without a prior
+/// `shutdown` request exits 1. The success order (shutdown → exit = 0)
+/// is asserted by `Client::shutdown` in every other test.
+#[test]
+fn bare_exit_without_shutdown_exits_one() {
+    let (client, _) = Client::start(&["utf-8"]);
+    assert_eq!(client.exit_without_shutdown(), 1);
+}
+
 /// Requests after shutdown are refused with InvalidRequest, unknown
 /// methods with MethodNotFound — every request gets *some* response.
 #[test]

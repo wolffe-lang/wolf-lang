@@ -42,9 +42,14 @@ fn lsp(args: &[String]) {
             std::process::exit(2);
         }
     }
-    if let Err(e) = wolf_lsp::run_stdio() {
-        eprintln!("wolf lsp: {e}");
-        std::process::exit(1);
+    match wolf_lsp::run_stdio() {
+        // The lifecycle's exit code: 0 only when `exit` followed
+        // `shutdown`; a bare `exit` is 1 (LSP spec).
+        Ok(code) => std::process::exit(code),
+        Err(e) => {
+            eprintln!("wolf lsp: {e}");
+            std::process::exit(1);
+        }
     }
 }
 
@@ -414,6 +419,10 @@ fn conform_run(args: &[String]) {
     }
 
     let mut sources = Sources::new();
+    // The index→path table for diag-schema `files` (SourceMap intern
+    // order): filled after the ladder runs, when every file the run
+    // loaded has been interned.
+    let mut files_table: Vec<String> = Vec::new();
     let (phase_reached, verdict, diagnostics) = if phase.as_deref() == Some("none") {
         ("none", "unsupported".to_string(), Vec::new())
     } else {
@@ -437,7 +446,7 @@ fn conform_run(args: &[String]) {
         // stops with fail(code) at that rung, passes at the requested rung,
         // or falls through deeper; past the last rung the verdict is
         // `unsupported` (conservatism ledger).
-        if let Some(code) = first_error(&lexed.diagnostics) {
+        let result = if let Some(code) = first_error(&lexed.diagnostics) {
             ("lex", format!("fail({code})"), lexed.diagnostics)
         } else if phase.as_deref() == Some("lex") {
             ("lex", "pass".to_string(), lexed.diagnostics)
@@ -521,13 +530,21 @@ fn conform_run(args: &[String]) {
                     }
                 }
             }
-        }
+        };
+        files_table = sm
+            .paths()
+            .map(|p| p.display().to_string().replace('\\', "/"))
+            .collect();
+        result
     };
 
     // The rich diagnostic stream (s10) — stderr only, stdout is the
     // protocol's.
     let mut reporter: Box<dyn Reporter> = if error_format == "json" {
-        Box::new(JsonReporter::new())
+        // Every line carries the run's index→path table, so span file
+        // indices are resolvable by consumers (the wolf-lsp harness's
+        // secondary-file-table request; additive within schema v1).
+        Box::new(JsonReporter::with_files(files_table))
     } else {
         Box::new(HumanReporter::new(&sources, RenderOptions::default()))
     };

@@ -87,6 +87,14 @@ impl SourceMap {
         &self.files[id.index()]
     }
 
+    /// Every interned path, in intern order — position `i` is the path
+    /// of `FileId` `i`. This is the index→path table machine outputs
+    /// embed (diag-schema `files`), so span file indices resolve
+    /// outside the process that interned them.
+    pub fn paths(&self) -> impl Iterator<Item = &Path> {
+        self.files.iter().map(PathBuf::as_path)
+    }
+
     pub fn len(&self) -> usize {
         self.files.len()
     }

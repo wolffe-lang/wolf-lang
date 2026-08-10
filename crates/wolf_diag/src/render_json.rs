@@ -19,6 +19,20 @@ pub const DIAG_SCHEMA_VERSION: u32 = 1;
 
 /// Render `d` as its one-line JSON object (no trailing newline).
 pub fn render_json_line(d: &Diagnostic) -> String {
+    render(d, None)
+}
+
+/// [`render_json_line`] plus the `files` member: the index→path table
+/// (SourceMap intern order), so a consumer can resolve a span whose
+/// `file` is not the entry. Additive within schema v1 — consumers
+/// ignore unknown keys — and driven by the wolf-lsp conformance
+/// harness, whose one-truth check could not positionally compare a
+/// diagnostic whose primary span lands in a sibling file.
+pub fn render_json_line_with_files(d: &Diagnostic, files: &[String]) -> String {
+    render(d, Some(files))
+}
+
+fn render(d: &Diagnostic, files: Option<&[String]>) -> String {
     let mut s = String::with_capacity(256);
     s.push_str("{\"diag_schema\":");
     s.push_str(&DIAG_SCHEMA_VERSION.to_string());
@@ -71,6 +85,18 @@ pub fn render_json_line(d: &Diagnostic) -> String {
             string(&mut s, t);
         }
         s.push_str("]}");
+    }
+    // Optional within schema v1, same rule as `row_diff`: the
+    // index→path file table, when the emitting surface has one.
+    if let Some(files) = files {
+        s.push_str(",\"files\":[");
+        for (i, f) in files.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            string(&mut s, f);
+        }
+        s.push(']');
     }
     s.push('}');
     s

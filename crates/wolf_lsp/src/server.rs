@@ -78,7 +78,12 @@ struct Cx {
 /// Serve one LSP session over `connection` until `exit`. The
 /// transport-generic entry: `run_stdio` wraps it for the real server
 /// and tests drive it over `Connection::memory()`.
-pub fn main_loop(connection: Connection) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+///
+/// Returns the process exit code the lifecycle demands: `0` when `exit`
+/// followed a `shutdown` request, `1` otherwise (the spec's rule — a
+/// bare `exit` is an abnormal end and must not look like success). A
+/// client that hangs up without `exit` is scored by the same rule.
+pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
     let (init_id, init_value) = connection.initialize_start()?;
     let init: InitializeParams = serde_json::from_value(init_value)?;
     let enc = positions::negotiate(&init);
@@ -116,7 +121,8 @@ pub fn main_loop(connection: Connection) -> Result<(), Box<dyn std::error::Error
         let msg = match connection.receiver.recv_timeout(timeout) {
             Ok(msg) => Some(msg),
             Err(e) if e.is_timeout() => None,
-            Err(_) => return Ok(()), // client hung up
+            // Client hung up without `exit`: same lifecycle scoring.
+            Err(_) => return Ok(i32::from(!shutdown_requested)),
         };
         // Flush every dirty doc whose debounce window elapsed.
         let now = Instant::now();
@@ -151,7 +157,9 @@ pub fn main_loop(connection: Connection) -> Result<(), Box<dyn std::error::Error
                 dispatch_request(&cx, req);
             }
             Message::Notification(note) => match note.method.as_str() {
-                "exit" => return Ok(()),
+                // The spec's exit-code rule: success only when a
+                // `shutdown` request came first.
+                "exit" => return Ok(i32::from(!shutdown_requested)),
                 "$/cancelRequest" => cancel_request(&cx, &note),
                 "textDocument/didOpen" => {
                     if let Some(path) = did_open(&cx, &note) {
@@ -319,7 +327,7 @@ fn spawn_publish(cx: &Cx, path: PathBuf) {
     let cx = cx.clone();
     std::thread::spawn(move || {
         let snapshot = cx.host.snapshot();
-        let uri = {
+        let requesting_uri = {
             let urls = cx.open_urls.lock().unwrap_or_else(|e| e.into_inner());
             match urls.get(&path) {
                 Some(u) => u.clone(),
@@ -334,16 +342,38 @@ fn spawn_publish(cx: &Cx, path: PathBuf) {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .clone();
-            let diagnostics = convert::diagnostics_for_file(&batch, &path, cx.enc, &open_urls);
-            let params = PublishDiagnosticsParams {
-                uri,
-                diagnostics,
-                version: None,
-            };
-            (cx.sender)(Message::Notification(Notification::new(
-                PublishDiagnostics::METHOD.to_string(),
-                params,
-            )));
+            // Publish per FILE of the analyzed set, keyed by each
+            // diagnostic's own primary span — not only for the
+            // requesting document. D32 makes every `.lu` in a directory
+            // one module, so a duplicate definition's primary span can
+            // land in a `member: true` sibling; a server that publishes
+            // only entry-primary diagnostics shows two clean files for a
+            // package that does not build. LSP permits publishing for
+            // documents the client never opened; unopened files get a
+            // `file://` URI for their overlay/disk path. A file with
+            // nothing to say gets an empty publish, which also clears
+            // its previously published state after a fix.
+            for file in &batch.files {
+                let uri = if file.path == path {
+                    requesting_uri.clone() // echo the client's own bytes
+                } else {
+                    match convert::url_for(&file.path, &open_urls) {
+                        Some(u) => u,
+                        None => continue,
+                    }
+                };
+                let diagnostics =
+                    convert::diagnostics_for_file(&batch, &file.path, cx.enc, &open_urls);
+                let params = PublishDiagnosticsParams {
+                    uri,
+                    diagnostics,
+                    version: None,
+                };
+                (cx.sender)(Message::Notification(Notification::new(
+                    PublishDiagnostics::METHOD.to_string(),
+                    params,
+                )));
+            }
         }
     });
 }

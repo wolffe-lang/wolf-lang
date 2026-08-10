@@ -253,3 +253,17 @@ fn one_truth_broken_fixture() {
 fn one_truth_unused_import() {
     one_truth_check(&fixture("unused/main.lu"));
 }
+
+/// The lifecycle exit-code rule over the real process (LSP spec): a
+/// bare `exit` without `shutdown` exits 1. The success order is
+/// asserted by `shutdown()` (status.success()) in every test above.
+#[test]
+fn exit_without_shutdown_exits_one() {
+    let mut lsp = LspChild::start();
+    let id = lsp.request("initialize", serde_json::json!({ "capabilities": {} }));
+    let _ = lsp.wait_response(id);
+    lsp.notify("initialized", serde_json::json!({}));
+    lsp.notify("exit", serde_json::Value::Null);
+    let status = lsp.child.wait().expect("wolf lsp exits");
+    assert_eq!(status.code(), Some(1), "bare exit must not report success");
+}

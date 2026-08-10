@@ -51,7 +51,7 @@ pub mod suggest;
 
 pub use registry::{Code, CodeInfo, codes, explain};
 pub use render::{RenderOptions, Sources, render_human};
-pub use render_json::{DIAG_SCHEMA_VERSION, render_json_line};
+pub use render_json::{DIAG_SCHEMA_VERSION, render_json_line, render_json_line_with_files};
 
 /// How bad it is. Lints/levels are a later design (s10 non-target);
 /// error vs. warning is the whole surface for now.
@@ -417,17 +417,33 @@ impl Reporter for HumanReporter<'_> {
 #[derive(Default)]
 pub struct JsonReporter {
     out: String,
+    files: Option<Vec<String>>,
 }
 
 impl JsonReporter {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// A reporter that stamps every line with the `files` member — the
+    /// index→path table in SourceMap intern order, so consumers can
+    /// resolve spans whose `file` is not the entry (additive within
+    /// schema v1).
+    pub fn with_files(files: Vec<String>) -> Self {
+        JsonReporter {
+            out: String::new(),
+            files: Some(files),
+        }
+    }
 }
 
 impl Reporter for JsonReporter {
     fn report(&mut self, d: &Diagnostic) {
-        self.out.push_str(&render_json_line(d));
+        let line = match &self.files {
+            Some(files) => render_json_line_with_files(d, files),
+            None => render_json_line(d),
+        };
+        self.out.push_str(&line);
         self.out.push('\n');
     }
 
