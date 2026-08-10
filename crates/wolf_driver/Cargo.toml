@@ -21,3 +21,5 @@ wolf_sema.workspace = true
 wolf_mem.workspace = true
 wolf_wir.workspace = true
 wolf_codegen_clif.workspace = true
+wolf_query.workspace = true
+wolf_lsp.workspace = true

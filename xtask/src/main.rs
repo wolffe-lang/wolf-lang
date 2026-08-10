@@ -1270,6 +1270,27 @@ fn deps_check() -> ExitCode {
             "wolf_codegen_llvm",
             Some(&["wolf_span", "wolf_diag", "wolf_wir"][..]),
         ),
+        // The editor stack (s52): wolf_query is the compiler-side query
+        // contract over the analysis pipeline; wolf_lsp is the
+        // transport-only shim and sees no compiler internals beyond it.
+        (
+            "wolf_query",
+            Some(
+                &[
+                    "wolf_span",
+                    "wolf_diag",
+                    "wolf_lex",
+                    "wolf_ast",
+                    "wolf_parse",
+                    "wolf_sema",
+                    "wolf_fmt",
+                ][..],
+            ),
+        ),
+        (
+            "wolf_lsp",
+            Some(&["wolf_span", "wolf_diag", "wolf_query"][..]),
+        ),
         // wolf_rt links into user programs: dependency-thin by law (D15).
         ("wolf_rt", Some(&["wolf_span"][..])),
         ("wolf_driver", None), // top of the graph: unrestricted

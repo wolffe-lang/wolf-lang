@@ -23,10 +23,28 @@ fn main() {
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
+        Some("lsp") => lsp(&args[1..]),
         _ => {
             eprintln!("wolf: pre-alpha scaffold; `wolf build|run` lands at sprint s31");
             std::process::exit(2);
         }
+    }
+}
+
+/// `wolf lsp` — the compiler serving the Language Server Protocol over
+/// stdio (s52 v0, D34: one process, one truth). `--stdio` is accepted
+/// for clients that pass the conventional channel flag; sockets are
+/// s57's attachment story.
+fn lsp(args: &[String]) {
+    for a in args {
+        if a != "--stdio" {
+            eprintln!("wolf lsp: unknown flag `{a}` (v0 serves stdio only)");
+            std::process::exit(2);
+        }
+    }
+    if let Err(e) = wolf_lsp::run_stdio() {
+        eprintln!("wolf lsp: {e}");
+        std::process::exit(1);
     }
 }
 
