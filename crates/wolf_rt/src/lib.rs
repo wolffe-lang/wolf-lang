@@ -5,3 +5,5 @@
 //! depend on `wolf_span` at most, nothing else in the workspace —
 //! `cargo xtask deps-check` enforces it. Deterministic-scheduler hooks
 //! (s36) are part of this crate's v1 spec surface.
+
+pub mod quarantine;
