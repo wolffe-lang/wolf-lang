@@ -12,8 +12,8 @@ fn main() -> !int {
             let r = region()
             let xs = in r {
                 var v = List[int]()
-                v.push(41)
-                v.push(1)
+                (mut v).push(41)
+                (mut v).push(1)
                 v
             }
             ch.send(move r)          // publishes both pushes [conc.mm.hb.move]

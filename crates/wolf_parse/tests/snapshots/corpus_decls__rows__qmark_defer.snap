@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 587..621 name=bump body=Block
+FnDecl 623..673 name=mark body=Block
+FnDecl 675..762 name=source body=Block
+FnDecl 764..1021 name=tally body=Block
+FnDecl 1023..1176 name=probe body=Block
+FnDecl 1178..1447 name=depth body=Block
+FnDecl 1449..1582 name=classify body=Block
+FnDecl 1584..2270 name=main body=Block

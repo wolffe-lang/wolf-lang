@@ -6,7 +6,7 @@
 
 fn fill(n: int) -> List[int] {
     var xs = List[int]()           // lands in the caller's current region
-    for i in 0..n { xs.push(i) }
+    for i in 0..n { (mut xs).push(i) }
     xs
 }
 

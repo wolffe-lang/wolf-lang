@@ -18,13 +18,14 @@ fn build_ring(n: int) -> int {
     region r {                          // sugar: create + scope + free (X4)
         var pool = Pool[Node]()         // handle pool lives in r
         var hs = List[handle Node]()
-        for _ in 0..n { hs.push(pool.reserve()) }   // two-phase: no null handles exist
+        for _ in 0..n { (mut hs).push((mut pool).reserve()) }   // two-phase: no null handles exist
         for i in 0..n {
-            pool.init(hs[i], Node {
+            let node = Node {
                 value: i,
                 next: hs[(i + 1) % n],              // closing the cycle — fine within a region
                 prev: hs[(i + n - 1) % n],
-            })
+            }
+            (mut pool).init(hs[i], node)
         }
         var sum = 0
         var cur = hs[0]

@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: wir
 //! conforms: err.rows.open
 //!
 //! The growing-tag-union bar (report 02 Done-well #10): `probe`'s row

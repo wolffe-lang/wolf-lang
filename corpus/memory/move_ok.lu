@@ -9,7 +9,7 @@ fn consume(take b: Big) -> int { b.data.len }
 
 fn main() -> !int {
     var b = Big { data: List[int]() }
-    b.data.push(1)
+    (mut b.data).push(1)
     let n = consume(take b)        // b moves out [mem.tier0.move.1]
     b = Big { data: List[int]() }  // re-init makes b live again [.4]
     let c = copy b                 // explicit deep copy [.3]

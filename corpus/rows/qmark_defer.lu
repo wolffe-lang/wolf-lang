@@ -1,0 +1,90 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: err.propagate, err.errdefer, mem.model.order
+//!
+//! The s27 control witness (D30): `?` is ordinary control flow — the
+//! err edge forms the propagated value FIRST, then runs the
+//! errdefer+defer chains LIFO, then returns. `errdefer` never runs on
+//! the ok exit; a `return` across a `region { }` boundary frees on
+//! every edge (X4); `break`-with-value crosses two defer scopes in
+//! strict LIFO order; or-patterns share their arm under a guard.
+//! Lowercase payload-free tags per API-CONVENTIONS §2 (wolf-std
+//! F-0003).
+
+fn bump(mut c: int) {
+    c += 1
+}
+
+fn mark(mut t: int, k: int) {
+    t = t * 10 + k
+}
+
+fn source(n: int) -> int ! {empty} {
+    if n == 0 {
+        return empty
+    }
+    n
+}
+
+fn tally(n: int, mut hits: int, mut misses: int) -> int ! {empty, negative} {
+    errdefer bump(mut misses)
+    defer bump(mut hits)
+    if n < 0 {
+        return negative
+    }
+    let v = source(n)?  // widening: {empty} into {empty, negative}
+    v * 2
+}
+
+fn probe(flag: bool) -> int {
+    region r {
+        if flag {
+            return 7  // early exit across the region boundary
+        }
+        3
+    }
+}
+
+fn depth() -> int {
+    var trail = 0
+    var got = 0
+    loop {
+        defer mark(mut trail, 1)
+        {
+            defer mark(mut trail, 2)
+            got = 5
+            break
+        }
+    }
+    got + trail  // 5 + 21: the break crosses two defer scopes, LIFO
+}
+
+fn classify(n: int, strict: bool) -> int {
+    match n {
+        0 | 1 if strict => 10,
+        0 | 1 => 20,
+        _ => 30,
+    }
+}
+
+fn main() -> !int {
+    var hits = 0
+    var misses = 0
+    let a = tally(21, mut hits, mut misses) else |err| {
+        match err {
+            empty => 90,
+            negative => 91,
+        }
+    }
+    let b = tally(0, mut hits, mut misses) else |_| 7
+    let c = tally(-1, mut hits, mut misses) else |err| {
+        match err {
+            empty => 90,
+            negative => 91,
+        }
+    }
+    let sums = a == 42 && b == 7 && c == 91 && hits == 3 && misses == 2
+    let flows = probe(true) == 7 && probe(false) == 3 && depth() == 26
+    let arms = classify(1, true) == 10 && classify(1, false) == 20 && classify(5, true) == 30
+    if sums && flows && arms { 0 } else { 1 }
+}

@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
 expression: dump
 ---
-FnDecl 302..746 name=main body=Block
+FnDecl 302..764 name=main body=Block

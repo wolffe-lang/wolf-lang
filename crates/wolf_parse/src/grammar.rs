@@ -502,7 +502,7 @@ fn ret_type(p: &mut Parser<'_>) {
     let m = p.start();
     p.bump(); // `->`
     let diags_before = p.diags.len();
-    type_required(p);
+    type_required_no_row(p);
     if p.diags.len() > diags_before {
         // The broken return type is this header's one report.
         p.fold_line_end();
@@ -1314,27 +1314,36 @@ pub(crate) fn path(p: &mut Parser<'_>, what: &str) {
 
 // ---------------------------------------------------------------- types --
 
-/// Parse a type per `[gram.type]`. Returns false (emitting nothing)
-/// when the current token cannot begin a type.
+/// Parse a type per `[gram.type]`, postfix `! {row}` tail included.
+/// Returns false (emitting nothing) when the current token cannot
+/// begin a type.
 pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
-    match p.current() {
+    type_general(p, true)
+}
+
+/// [`type_`] with the postfix row switchable: rows are first-class on
+/// every type position (#3) — `let v: int ! {None}`, parameter and
+/// payload types — except an item return, where [`ret_type`] owns the
+/// `! {row}` tail (keeping the header's tree shape).
+fn type_general(p: &mut Parser<'_>, postfix_row: bool) -> bool {
+    let cm = match p.current() {
         TokenKind::Punct(Punct::Not) => {
             let m = p.start();
             p.bump();
             type_required(p);
-            m.complete(p, SyntaxKind::ErrorUnionType);
+            m.complete(p, SyntaxKind::ErrorUnionType)
         }
         TokenKind::Punct(Punct::Star) => {
             let m = p.start();
             p.bump();
             type_required(p);
-            m.complete(p, SyntaxKind::PtrType);
+            m.complete(p, SyntaxKind::PtrType)
         }
         TokenKind::Kw(Keyword::Shared | Keyword::Handle | Keyword::Weak | Keyword::Distinct) => {
             let m = p.start();
             p.bump();
             type_required(p);
-            m.complete(p, SyntaxKind::PrefixType);
+            m.complete(p, SyntaxKind::PrefixType)
         }
         TokenKind::Kw(Keyword::Dyn) => {
             let m = p.start();
@@ -1349,7 +1358,7 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
                 );
                 p.missing();
             }
-            m.complete(p, SyntaxKind::DynType);
+            m.complete(p, SyntaxKind::DynType)
         }
         TokenKind::Kw(Keyword::Fn) => {
             let m = p.start();
@@ -1367,22 +1376,22 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
             if p.at_punct(Punct::Arrow) {
                 ret_type(p);
             }
-            m.complete(p, SyntaxKind::FnType);
+            m.complete(p, SyntaxKind::FnType)
         }
         TokenKind::Kw(Keyword::Type) => {
             let m = p.start();
             p.bump();
-            m.complete(p, SyntaxKind::TypeType);
+            m.complete(p, SyntaxKind::TypeType)
         }
         TokenKind::Kw(Keyword::Region) => {
             let m = p.start();
             p.bump();
-            m.complete(p, SyntaxKind::RegionType);
+            m.complete(p, SyntaxKind::RegionType)
         }
         TokenKind::Punct(Punct::LParen) => {
             let m = p.start();
             paren_type_list(p);
-            m.complete(p, SyntaxKind::TupleType);
+            m.complete(p, SyntaxKind::TupleType)
         }
         TokenKind::Ident => {
             let m = p.start();
@@ -1390,9 +1399,17 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
             if p.at_punct(Punct::LBracket) {
                 type_args(p);
             }
-            m.complete(p, SyntaxKind::PathType);
+            m.complete(p, SyntaxKind::PathType)
         }
         _ => return false,
+    };
+    // Only `!` immediately opening a row is a tail; a lone `!` belongs
+    // to whatever follows (a prefix `!T`, an expression).
+    if postfix_row && p.at_punct(Punct::Not) && p.nth(1) == TokenKind::Punct(Punct::LBrace) {
+        let m = cm.precede(p);
+        p.bump(); // `!`
+        error_row(p);
+        m.complete(p, SyntaxKind::ErrorUnionType);
     }
     true
 }
@@ -1400,6 +1417,15 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
 /// [`type_`], diagnosing E0206 + Missing when no type can start here.
 pub(crate) fn type_required(p: &mut Parser<'_>) {
     if !type_(p) {
+        p.error(codes::EXPECTED_TYPE, p.here(), "expected a type");
+        p.missing();
+    }
+}
+
+/// [`type_required`] minus the postfix row — return position, where
+/// [`ret_type`] parses the `! {row}` tail itself.
+fn type_required_no_row(p: &mut Parser<'_>) {
+    if !type_general(p, false) {
         p.error(codes::EXPECTED_TYPE, p.here(), "expected a type");
         p.missing();
     }

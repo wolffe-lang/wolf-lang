@@ -549,14 +549,15 @@ explicit, checkable, and versioned with the type.
 
 code!(E0409, "the operator does not work on this type", r#"
 Each operator family in wolf works on a fixed family of types:
-arithmetic (`+ - * / %`) and ordering (`< <= > >= <=>`) on numbers,
-logic (`&& || !`) on `bool` exactly, bitwise and shifts on integer
-types. This operand is outside the operator's family. Two classics:
-wolf has no truthiness, so `if x` on a number must be written as a
-comparison (`x != 0`); and `+` does not join strings — interpolation
-does (`"{first}{second}"`), which formats any primitive and never
-surprises you with a numeric `+` overload. Trait-based operators for
-user types arrive with the trait engine (s14).
+arithmetic (`+ - * / %`) on numbers, ordering (`< <= > >= <=>`) on
+numbers and on `str` (byte-lexicographic — lupin's byte order, no
+collation), logic (`&& || !`) on `bool` exactly, bitwise and shifts on
+integer types. This operand is outside the operator's family. Two
+classics: wolf has no truthiness, so `if x` on a number must be
+written as a comparison (`x != 0`); and `+` does not join strings —
+interpolation does (`"{first}{second}"`), which formats any primitive
+and never surprises you with a numeric `+` overload. Trait-based
+operators for user types arrive with the trait engine (s14).
 "#);
 
 code!(E0410, "a `let` binding cannot be assigned again", r#"

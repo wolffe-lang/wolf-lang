@@ -1,9 +1,10 @@
 ---
 source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
 expression: dump
 ---
 StructDecl 526..655 name=Node fields=3
-FnDecl 657..1444 name=build_ring body=Block
-StructDecl 1446..1474 name=Config fields=1
-FnDecl 1476..1583 name=build_config body=Block
-FnDecl 1585..2050 name=main body=Block
+FnDecl 657..1490 name=build_ring body=Block
+StructDecl 1492..1520 name=Config fields=1
+FnDecl 1522..1629 name=build_config body=Block
+FnDecl 1631..2096 name=main body=Block

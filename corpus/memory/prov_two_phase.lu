@@ -7,8 +7,8 @@
 
 fn main() -> !int {
     var xs = List[int]()
-    xs.push(10)
-    xs.push(xs.len)                // read xs while its mut receiver tag
+    (mut xs).push(10)
+    (mut xs).push(xs.len)          // read xs while its mut receiver tag
                                    // is Reserved [mem.prov.state]
     if xs[1] == 1 { 0 } else { 1 }
 }

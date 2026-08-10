@@ -7,7 +7,7 @@ fn first[T](xs: List[T]) -> T { xs[0] }
 
 fn main() -> !int {
     var xs = List[int]()
-    xs.push(7)
+    (mut xs).push(7)
     let a = first[int](xs)         // explicit generic application
     let b = xs[0]                  // indexing, same grammar production
     if a == b { 0 } else { 1 }

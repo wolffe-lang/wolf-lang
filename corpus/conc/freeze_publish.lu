@@ -7,7 +7,7 @@
 fn main() -> !int {
     let table = freeze region {
         var xs = List[int]()
-        for i in 0..10 { xs.push(i * i) }
+        for i in 0..10 { (mut xs).push(i * i) }
         xs
     }
     let ch = channel[int](2)

@@ -185,6 +185,55 @@ fn fn_return_types() {
     assert!(c_ret.error_row().is_some());
 }
 
+/// `! {row}` is first-class on every type position (#3), not only
+/// returns: a parameter type and a `let` annotation carry the row as
+/// an `ErrorUnionType` node wrapping the inner type + an `ErrorRow`.
+#[test]
+fn postfix_row_in_param_and_let_positions() {
+    fn find_kind(node: &GreenNode, kind: SyntaxKind) -> Option<&GreenNode> {
+        if node.kind == kind {
+            return Some(node);
+        }
+        node.nodes().find_map(|n| find_kind(n, kind))
+    }
+    let src = "fn or(v: int ! {None}, d: int) -> int { d }\n\
+               fn main() -> !int {\n    let v: int ! {None, Gone(int)} = None\n    0\n}\n";
+    let root = clean(src);
+    let fns: Vec<_> = root.nodes().filter_map(FnDecl::cast).collect();
+    let params: Vec<_> = fns[0].params().expect("params").params().collect();
+    let pty = params[0].ty().expect("ty");
+    assert_eq!(pty.kind, SyntaxKind::ErrorUnionType);
+    assert!(pty.nodes().any(|n| n.kind == SyntaxKind::PathType));
+    let prow = pty
+        .nodes()
+        .find_map(wolf_ast::ErrorRow::cast)
+        .expect("param row");
+    assert_eq!(prow.entries().count(), 1);
+    assert_eq!(
+        params[1].ty().expect("ty").kind,
+        SyntaxKind::PathType,
+        "the row binds to one parameter type only"
+    );
+    // Return position stays `ret_type`'s: no ErrorUnionType wrapper.
+    assert_eq!(
+        fns[0].ret_ty().expect("ret").ty().expect("ty").kind,
+        SyntaxKind::PathType
+    );
+    let let_decl = find_kind(fns[1].syntax(), SyntaxKind::LetDecl).expect("let");
+    let ann = LetDecl::cast(let_decl)
+        .expect("cast")
+        .ty()
+        .expect("annotation");
+    assert_eq!(ann.kind, SyntaxKind::ErrorUnionType);
+    let lrow = ann
+        .nodes()
+        .find_map(wolf_ast::ErrorRow::cast)
+        .expect("let row");
+    let entries: Vec<_> = lrow.entries().collect();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[1].payload().count(), 1);
+}
+
 // ----------------------------------------------------------- type items --
 
 #[test]

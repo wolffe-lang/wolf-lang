@@ -1,7 +1,8 @@
 ---
 source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
 expression: dump
 ---
 StructDecl 174..204 name=Big fields=1
 FnDecl 206..251 name=consume body=Block
-FnDecl 253..582 name=main body=Block
+FnDecl 253..588 name=main body=Block

@@ -438,7 +438,7 @@ was meant for a different call; passing too few often means a value
 was dropped while refactoring. Check the order too: a swapped argument
 pair usually surfaces as a type mismatch on the *next* argument.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
 
 ## E0403 — no such field
 
@@ -524,14 +524,15 @@ Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0408_missing_
 ## E0409 — the operator does not work on this type
 
 Each operator family in wolf works on a fixed family of types:
-arithmetic (`+ - * / %`) and ordering (`< <= > >= <=>`) on numbers,
-logic (`&& || !`) on `bool` exactly, bitwise and shifts on integer
-types. This operand is outside the operator's family. Two classics:
-wolf has no truthiness, so `if x` on a number must be written as a
-comparison (`x != 0`); and `+` does not join strings — interpolation
-does (`"{first}{second}"`), which formats any primitive and never
-surprises you with a numeric `+` overload. Trait-based operators for
-user types arrive with the trait engine (s14).
+arithmetic (`+ - * / %`) on numbers, ordering (`< <= > >= <=>`) on
+numbers and on `str` (byte-lexicographic — lupin's byte order, no
+collation), logic (`&& || !`) on `bool` exactly, bitwise and shifts on
+integer types. This operand is outside the operator's family. Two
+classics: wolf has no truthiness, so `if x` on a number must be
+written as a comparison (`x != 0`); and `+` does not join strings —
+interpolation does (`"{first}{second}"`), which formats any primitive
+and never surprises you with a numeric `+` overload. Trait-based
+operators for user types arrive with the trait engine (s14).
 
 Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_string_plus.snap
 
@@ -766,7 +767,7 @@ do it explicitly: handle the error (`else |err| …`) and raise your own
 tag. Functions with an inferred row (`-> !T`, private only) never hit
 this error — their rows grow to fit their bodies.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__missing_tag.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__open_into_closed.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_large_rows.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_missing_tag.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__missing_tag.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__open_into_closed.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_large_rows.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0602_missing_tag.snap
 
 ## E0603 — `?` needs a fallible operand
 
@@ -982,7 +983,7 @@ assertion with the comptime call backtrace attached. Make the
 asserted condition true, or delete the assertion if the invariant was
 wrong.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__assert_static.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0710_assert.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__assert_static.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0710_assert.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0710_assert_message.snap
 
 ## E0801 — this `match` does not cover every case
 
@@ -1033,7 +1034,7 @@ Wrap the receiver in the declared mode — the suggested edit inserts
 ask for. Whether the access is actually exclusive is checked by the
 memory tiers (c04); this rule is the syntax law only.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_bare_mut_receiver.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_superfluous_mode.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_wrong_mode.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_bare_mut_receiver.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_list_push_bare.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_superfluous_mode.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_wrong_mode.snap
 
 ## E0805 — this `as` cast is outside the cast set
 

@@ -12,10 +12,10 @@ fn main() -> !int {
         region b: pool(Node) {
             var pa = Pool[Node]()
             var pb = Pool[Node]()
-            let ha = pa.reserve()
-            let hb = pb.reserve()
-            in a { pa.init(ha, Node { value: 10 }) }
-            in b { pb.init(hb, Node { value: 20 }) }
+            let ha = (mut pa).reserve()
+            let hb = (mut pb).reserve()
+            in a { (mut pa).init(ha, Node { value: 10 }) }
+            in b { (mut pb).init(hb, Node { value: 20 }) }
             sum = pa[ha].value + pb[hb].value
         }
     }

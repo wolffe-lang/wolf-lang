@@ -13,7 +13,7 @@
 
 fn build_batch() -> List[int] {
     var xs = List[int]()
-    for i in 0..4 { xs.push(i * i) }
+    for i in 0..4 { (mut xs).push(i * i) }
     xs
 }
 

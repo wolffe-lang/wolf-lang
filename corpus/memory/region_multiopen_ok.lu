@@ -11,13 +11,13 @@ fn main() -> !int {
     var total = 0
     in a {
         var xs = List[int]()
-        xs.push(1)
+        (mut xs).push(1)
         in b {                     // both a and b open: [mem.region.multiopen]
             var ys = List[int]()
-            ys.push(2)
+            (mut ys).push(2)
             total += xs[0] + ys[0] // writes/reads cross both open regions
         }
-        xs.push(3)
+        (mut xs).push(3)
         total += xs[1]
     }
     if total == 6 { 0 } else { 1 }

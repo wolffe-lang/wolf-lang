@@ -5,7 +5,7 @@
 
 fn main() -> !int {
     var xs = List[int]()
-    xs.push(1)
+    (mut xs).push(1)
     let v = xs[3]                  // TRAP bounds
     v
 }
