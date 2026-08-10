@@ -1,0 +1,44 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: "dump(\"fn collatz_steps(n0: int) -> int {\\n\\\n         \\x20   var n = n0\\n\\\n         \\x20   var steps = 0\\n\\\n         \\x20   loop {\\n\\\n         \\x20       if n == 1 { break }\\n\\\n         \\x20       if n % 2 == 0 { n = n / 2 } else { n = 3 * n + 1 }\\n\\\n         \\x20       steps = steps + 1\\n\\\n         \\x20   }\\n\\\n         \\x20   steps\\n\\\n         }\\n\\\n         fn main() -> !int {\\n\\\n         \\x20   collatz_steps(6) - 8\\n\\\n         }\\n\")"
+---
+decl @collatz_steps(i64) -> i64
+
+fn @collatz_steps(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  jmp b1(%0, %1)
+b1(%2: i64, %3: i64):
+  %4 = iconst.i64 1
+  %5 = icmp.eq %2, %4
+  br %5, b2, b4
+b2:
+  jmp b3
+b3:
+  ret %3
+b4:
+  %6 = iconst.i64 2
+  %7 = irem.chk %2, %6
+  %8 = icmp.eq %7, %1
+  br %8, b5, b6
+b5:
+  %9 = idiv.chk %2, %6
+  jmp b7(%9)
+b6:
+  %10 = iconst.i64 3
+  %11 = imul.chk %10, %2
+  %12 = iadd.chk %11, %4
+  jmp b7(%12)
+b7(%13: i64):
+  %14 = iadd.chk %3, %4
+  jmp b1(%13, %14)
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 6
+  %1 = call @collatz_steps(%0)
+  %2 = iconst.i64 8
+  %3 = isub.chk %1, %2
+  ret %3
+}

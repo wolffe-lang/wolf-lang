@@ -1,0 +1,11 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+expression: out
+---
+fn @main() -> i64 {
+b0:
+  %0 = bconst true
+  %1 = bconst false
+  %2 = iconst.i64 0
+  ret %2
+}

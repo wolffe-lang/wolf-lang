@@ -1,0 +1,20 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: out
+---
+decl @sq3(i64) -> i64
+
+fn @sq3(i64) -> i64 {
+b0(%0: i64):
+  %1 = imul.chk %0, %0
+  %2 = iadd.chk %1, %1
+  %3 = iadd.chk %2, %1
+  ret %3
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 0
+  %1 = call @sq3(%0)
+  ret %1
+}

@@ -1,0 +1,18 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: "dump(\"fn main() -> !int {\\n\\\n         \\x20   let k = 3\\n\\\n         \\x20   var i = 0\\n\\\n         \\x20   while i < k {\\n\\\n         \\x20       i = i + k\\n\\\n         \\x20   }\\n\\\n         \\x20   i\\n\\\n         }\\n\")"
+---
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 3
+  %1 = iconst.i64 0
+  jmp b1(%1)
+b1(%2: i64):
+  %3 = icmp.slt %2, %0
+  br %3, b2, b3
+b2:
+  %4 = iadd.chk %2, %0
+  jmp b1(%4)
+b3:
+  ret %2
+}

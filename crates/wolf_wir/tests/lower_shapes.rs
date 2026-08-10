@@ -1,0 +1,403 @@
+//! Braun-correctness snapshots over inline programs: loop-carried
+//! values appear as block parameters with NO trivial parameters
+//! remaining, sealing works on nested control shapes, and every dump
+//! passes the verifier plus the print→parse→print fixpoint. Plus the
+//! reducible-CFG property suite: 200 seeded random nested if/while
+//! ASTs, lowered and checked for verifier-cleanliness, fixpoint, and
+//! the no-trivial-params invariant (the acceptance proptest).
+
+use wolf_wir::entity::EntityRef;
+use wolf_wir::ir::{Aux, ValueDef};
+use wolf_wir::{lower_package, print_module, verify_module};
+
+use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
+
+/// Lower one inline program (must pass every rung through `mem`).
+fn lower(src: &str) -> wolf_wir::Build {
+    let mut ml = MemoryLoader::new("wirlow");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    assert!(
+        res.diagnostics
+            .iter()
+            .all(|d| d.severity != wolf_diag::Severity::Error),
+        "input resolves clean: {:?}",
+        res.diagnostics
+    );
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(tc.not_yet.is_empty(), "typed fully: {:?}", tc.not_yet);
+    assert!(!tc.has_errors(), "typed clean: {:?}", tc.diagnostics);
+    let mem = wolf_mem::check_package(&res.package, &tc);
+    assert!(mem.not_yet.is_empty(), "mem surface: {:?}", mem.not_yet);
+    assert!(
+        mem.diagnostics
+            .iter()
+            .all(|d| d.severity != wolf_diag::Severity::Error),
+        "mem clean: {:?}",
+        mem.diagnostics
+    );
+    lower_package(&res.package, &tc)
+}
+
+/// Lower, demand zero refusals, verify, fixpoint, assert no trivial
+/// params; return the canonical dump.
+fn dump(src: &str) -> String {
+    let build = lower(src);
+    assert!(
+        build.not_yet.is_empty(),
+        "expected full lowering, refused: {:?}",
+        build.not_yet
+    );
+    verify_module(&build.module).expect("lowered module verifies");
+    let printed = print_module(&build.module);
+    let reparsed = wolf_wir::parse_module(&printed).expect("reparses");
+    verify_module(&reparsed).expect("reparsed verifies");
+    assert_eq!(print_module(&reparsed), printed, "fixpoint");
+    assert_no_trivial_params(&build.module);
+    printed
+}
+
+/// No non-entry block parameter may be trivial: for each param, the
+/// incoming branch args must include at least two distinct non-self
+/// values. (The Braun trivial-φ test as a global postcondition.)
+fn assert_no_trivial_params(module: &wolf_wir::Module) {
+    for func in module.funcs.values() {
+        let entry = func.entry().expect("entry");
+        // Collect incoming args per (block, param index).
+        let mut incoming: std::collections::HashMap<(u32, usize), Vec<wolf_wir::Value>> =
+            std::collections::HashMap::new();
+        for &b in &func.layout {
+            let Some(&last) = func.blocks[b].insts.last() else {
+                continue;
+            };
+            let mut edges = Vec::new();
+            match func.insts[last].aux {
+                Aux::Jump(e) => edges.push(e),
+                Aux::Br(t, e) => {
+                    edges.push(t);
+                    edges.push(e);
+                }
+                _ => {}
+            }
+            for edge in edges {
+                for (i, arg) in func.vpool.get(edge.args).into_iter().enumerate() {
+                    incoming
+                        .entry((edge.block.as_u32(), i))
+                        .or_default()
+                        .push(arg);
+                }
+            }
+        }
+        for &b in &func.layout {
+            if b == entry {
+                continue; // signature params
+            }
+            for (i, &p) in func.vpool.get(func.blocks[b].params).iter().enumerate() {
+                let args = incoming.get(&(b.as_u32(), i)).cloned().unwrap_or_default();
+                let distinct: std::collections::BTreeSet<u32> = args
+                    .iter()
+                    .filter(|&&a| a != p)
+                    .map(|a| a.as_u32())
+                    .collect();
+                assert!(
+                    distinct.len() >= 2 || is_single_pred_merge(func, b),
+                    "trivial block param {p:?} (block {b:?}, index {i}) in @{}:\n{}",
+                    func.name,
+                    print_module(module)
+                );
+            }
+        }
+    }
+    // A param on a single-predecessor block (a short-circuit merge
+    // whose other side diverged) carries one incoming value by
+    // construction; it is not a *trivial* φ in the Braun sense unless
+    // its one arg equals the value on every path — which single-pred
+    // params trivially satisfy, so exempt them explicitly.
+    fn is_single_pred_merge(func: &wolf_wir::Function, block: wolf_wir::ir::Block) -> bool {
+        let mut preds = 0;
+        for &b in &func.layout {
+            let Some(&last) = func.blocks[b].insts.last() else {
+                continue;
+            };
+            match func.insts[last].aux {
+                Aux::Jump(e) => {
+                    if e.block == block {
+                        preds += 1;
+                    }
+                }
+                Aux::Br(t, e) => {
+                    if t.block == block {
+                        preds += 1;
+                    }
+                    if e.block == block {
+                        preds += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        preds <= 1
+    }
+}
+
+// -------------------------------------------------------- snapshots ----
+
+#[test]
+fn loop_carried_value_is_a_block_param() {
+    // sum and i are loop-carried: both must surface as header params;
+    // no trivial params may remain.
+    insta::assert_snapshot!(dump(
+        "fn main() -> !int {\n\
+         \x20   var sum = 0\n\
+         \x20   var i = 0\n\
+         \x20   while i < 10 {\n\
+         \x20       sum = sum + i\n\
+         \x20       i = i + 1\n\
+         \x20   }\n\
+         \x20   sum\n\
+         }\n"
+    ));
+}
+
+#[test]
+fn loop_invariant_var_makes_no_param() {
+    // k is defined before the loop and only read inside: the Braun
+    // trivial-param test must eliminate any placeholder for it.
+    insta::assert_snapshot!(dump(
+        "fn main() -> !int {\n\
+         \x20   let k = 3\n\
+         \x20   var i = 0\n\
+         \x20   while i < k {\n\
+         \x20       i = i + k\n\
+         \x20   }\n\
+         \x20   i\n\
+         }\n"
+    ));
+}
+
+#[test]
+fn nested_if_in_loop_with_break_continue() {
+    insta::assert_snapshot!(dump(
+        "fn collatz_steps(n0: int) -> int {\n\
+         \x20   var n = n0\n\
+         \x20   var steps = 0\n\
+         \x20   loop {\n\
+         \x20       if n == 1 { break }\n\
+         \x20       if n % 2 == 0 { n = n / 2 } else { n = 3 * n + 1 }\n\
+         \x20       steps = steps + 1\n\
+         \x20   }\n\
+         \x20   steps\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   collatz_steps(6) - 8\n\
+         }\n"
+    ));
+}
+
+#[test]
+fn if_value_rides_a_merge_param() {
+    insta::assert_snapshot!(dump(
+        "fn pick(c: bool, a: int, b: int) -> int {\n\
+         \x20   if c { a } else { b }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   pick(true, 0, 1)\n\
+         }\n"
+    ));
+}
+
+#[test]
+fn short_circuit_and_or_not() {
+    insta::assert_snapshot!(dump(
+        "fn f(a: bool, b: bool, x: int) -> int {\n\
+         \x20   if a && (x > 3 || !b) { 1 } else { 2 }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   f(true, false, 0) - 1\n\
+         }\n"
+    ));
+}
+
+#[test]
+fn gvn_dedups_repeated_subexpressions() {
+    // x*x appears three times; the dump must contain exactly one imul.
+    let out = dump(
+        "fn sq3(x: int) -> int {\n\
+         \x20   x * x + x * x + x * x\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   sq3(0)\n\
+         }\n",
+    );
+    assert_eq!(out.matches("imul.chk").count(), 1, "{out}");
+    insta::assert_snapshot!(out);
+}
+
+#[test]
+fn gvn_misses_across_arms_but_dominating_entries_hit() {
+    // y+1 computed in both arms may NOT be unified (neither dominates
+    // the other); x+2 before the branch is reused inside both arms.
+    let out = dump(
+        "fn g(c: bool, x: int, y: int) -> int {\n\
+         \x20   let a = x + 2\n\
+         \x20   let r = if c { (x + 2) + (y + 1) } else { (y + 1) - (x + 2) }\n\
+         \x20   r + a\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   g(true, 0, 0) - 3\n\
+         }\n",
+    );
+    // x+2: exactly one instance, reused inside both arms AND after the
+    // merge (a dominating GVN entry survives the arm scopes). y+1: two
+    // instances (non-dominating arms must not share). Plus the arm's
+    // own + and the trailing r + a: five iadds, one x+2.
+    assert_eq!(out.matches("iadd.chk").count(), 5, "{out}");
+    assert_eq!(out.matches("iconst.i64 2").count(), 1, "{out}");
+    assert_eq!(out.matches("iconst.i64 1").count(), 2, "{out}");
+    insta::assert_snapshot!(out);
+}
+
+// ------------------------------------------ the reducible-CFG suite ----
+
+/// xorshift64* — deterministic seeds, no flaky randomness in CI.
+struct Rng(u64);
+
+impl Rng {
+    fn new(seed: u64) -> Rng {
+        Rng(seed.wrapping_mul(0x9E3779B97F4A7C15) | 1)
+    }
+    fn next(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.0 = x;
+        x.wrapping_mul(0x2545F4914F6CDD1D)
+    }
+    fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// Generate a random wolf function body of nested if/while over three
+/// always-initialized int vars — every program typechecks, mem-checks,
+/// and terminates statically-analyzably (conditions read vars; bodies
+/// mutate them). Loop conditions use a fuel var that only decreases,
+/// so `--checked` executions of these shapes would terminate too.
+fn gen_program(seed: u64) -> String {
+    let mut rng = Rng::new(seed);
+    let mut out =
+        String::from("fn main() -> !int {\n    var a = 1\n    var b = 2\n    var fuel = 20\n");
+    let depth = 0;
+    gen_stmts(&mut rng, &mut out, depth, 2 + (seed % 3) as u32);
+    out.push_str("    a + b\n}\n");
+    out
+}
+
+fn var_name(rng: &mut Rng) -> &'static str {
+    match rng.below(2) {
+        0 => "a",
+        _ => "b",
+    }
+}
+
+fn gen_stmts(rng: &mut Rng, out: &mut String, depth: u32, n: u32) {
+    for _ in 0..n {
+        let pad = "    ".repeat(depth as usize + 1);
+        match rng.below(if depth >= 3 { 2 } else { 4 }) {
+            // Assignment: v = v op small-const (kept within checked
+            // range by construction: operands stay tiny).
+            0 | 1 => {
+                let v = var_name(rng);
+                let w = var_name(rng);
+                let op = match rng.below(3) {
+                    0 => "+",
+                    1 => "-",
+                    _ => "*",
+                };
+                let c = rng.below(3);
+                out.push_str(&format!("{pad}{v} = ({v} {op} {w}) % 97 + {c}\n"));
+            }
+            // Nested if/else.
+            2 => {
+                let v = var_name(rng);
+                let c = rng.below(50);
+                out.push_str(&format!("{pad}if {v} < {c} {{\n"));
+                let n1 = 1 + (rng.below(2) as u32);
+                gen_stmts(rng, out, depth + 1, n1);
+                out.push_str(&format!("{pad}}} else {{\n"));
+                let n2 = 1 + (rng.below(2) as u32);
+                gen_stmts(rng, out, depth + 1, n2);
+                out.push_str(&format!("{pad}}}\n"));
+            }
+            // While over the fuel counter (strictly decreasing).
+            _ => {
+                out.push_str(&format!("{pad}while fuel > 0 {{\n"));
+                out.push_str(&format!("{pad}    fuel = fuel - 1\n"));
+                let n1 = 1 + (rng.below(2) as u32);
+                gen_stmts(rng, out, depth + 1, n1);
+                out.push_str(&format!("{pad}}}\n"));
+            }
+        }
+    }
+}
+
+#[test]
+fn reducible_cfg_property_200_seeds() {
+    for seed in 0..200 {
+        let src = gen_program(seed);
+        let build = lower(&src);
+        assert!(
+            build.not_yet.is_empty(),
+            "seed {seed} refused: {:?}\n{src}",
+            build.not_yet
+        );
+        if let Err(e) = verify_module(&build.module) {
+            panic!("seed {seed} fails verify: {e}\n{src}");
+        }
+        let printed = print_module(&build.module);
+        let reparsed =
+            wolf_wir::parse_module(&printed).unwrap_or_else(|e| panic!("seed {seed} reparse: {e}"));
+        verify_module(&reparsed).unwrap_or_else(|e| panic!("seed {seed} reverify: {e}"));
+        assert_eq!(print_module(&reparsed), printed, "seed {seed} fixpoint");
+        assert_no_trivial_params(&build.module);
+        // Determinism: an independent second build prints identically.
+        let again = lower(&src);
+        assert_eq!(
+            print_module(&again.module),
+            printed,
+            "seed {seed} determinism"
+        );
+    }
+}
+
+/// Every value printed in a dump is the result of construction-time
+/// SSA: sanity-check def sites exist for all values (guards against
+/// orphan leaks from trivial-param removal).
+#[test]
+fn no_dangling_param_defs_after_removal() {
+    let build = lower(
+        "fn main() -> !int {\n\
+         \x20   let k = 3\n\
+         \x20   var i = 0\n\
+         \x20   while i < k {\n\
+         \x20       i = i + k\n\
+         \x20   }\n\
+         \x20   i\n\
+         }\n",
+    );
+    assert!(build.not_yet.is_empty());
+    for func in build.module.funcs.values() {
+        for &b in &func.layout {
+            for (i, &p) in func.vpool.get(func.blocks[b].params).iter().enumerate() {
+                match func.values[p].def {
+                    ValueDef::Param(db, di) => {
+                        assert_eq!(db, b, "param def block");
+                        assert_eq!(di as usize, i, "param def index");
+                    }
+                    other => panic!("block param with non-param def {other:?}"),
+                }
+            }
+        }
+    }
+}

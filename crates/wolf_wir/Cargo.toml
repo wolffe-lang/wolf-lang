@@ -7,11 +7,19 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-# s24 crate hygiene: wolf_wir depends only on wolf_span. Sema/mem types
-# do NOT leak in — the fact vocabulary is re-declared here as IR-level
-# enums (facts.rs documents the mapping from c04's theorem classes).
-# wolf_diag joins in s25 when the driver wraps verifier failures as ICEs.
+# s24 kept wolf_wir on wolf_span alone; s25's builder consumes the
+# typed HIR, so wolf_ast/wolf_sema (the input language) join here.
+# The IR data model still re-declares its own vocabulary (facts.rs,
+# types.rs) — sema/mem types cross only inside `lower`, never into the
+# arenas, the ops, or the textual format.
 wolf_span.workspace = true
+wolf_ast.workspace = true
+wolf_sema.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
+# The golden-corpus and determinism gates lower only mem-clean files,
+# so the tests and the bench example (not the library) run the memory
+# checker and filter diagnostics by severity.
+wolf_mem.workspace = true
+wolf_diag.workspace = true

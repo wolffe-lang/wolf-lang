@@ -1,0 +1,34 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+expression: out
+---
+decl @area(i64) -> i64
+
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 3
+  %1 = call @area(%0)
+  %2 = iconst.i64 9
+  %3 = icmp.eq %1, %2
+  br %3, b1, b2
+b1:
+  %4 = iconst.i64 0
+  jmp b3(%4)
+b2:
+  %5 = iconst.i64 1
+  jmp b3(%5)
+b3(%6: i64):
+  ret %6
+}
+
+fn @area(i64) -> i64 {
+b0(%0: i64):
+  %1 = imul.chk %0, %0
+  ret %1
+}
+
+fn @double(i64) -> i64 {
+b0(%0: i64):
+  %1 = iadd.chk %0, %0
+  ret %1
+}

@@ -32,24 +32,48 @@
 //!   contract stub: a pass that loses a fact on a live value without a
 //!   justified invalidation fails verify-after-pass.
 //!
-//! Construction from sema's typed HIR (Braun on-the-fly SSA with
-//! peephole-at-construction) is s25; region/RC/sync op semantics are
-//! s26; error-union and control lowering is s27.
+//! s25 adds **construction**:
+//!
+//! - **The builder** ([`build`]): Braun on-the-fly SSA — `def_var`/
+//!   `use_var`, incomplete-block sealing with on-demand block
+//!   parameters (no dominance-frontier pass), trivial-param removal
+//!   with cascades — plus the Click §5 peephole gauntlet at every
+//!   `ins()`: constant fold (checked ops fold to `trap` on provable
+//!   overflow, X3 exactly), the data-driven identity table
+//!   ([`peephole_rules`]), scope-stacked GVN hash-consing, LIFO
+//!   arena rollback on every hit. Effect tokens are ordinary Braun
+//!   variables (one `mem` chain per region + one `io`), giving
+//!   store→load forwarding and redundant-load GVN through use-def
+//!   alone.
+//! - **Typed-HIR lowering** ([`lower`]): scalar expression bodies,
+//!   `let`/`var`/assignment, calls, `if`/`while`/`loop` with
+//!   `break`/`continue`, `assert`, casts. Anything beyond the s25
+//!   surface refuses with an honest `NotYet` naming its owning sprint
+//!   (regions/aggregates/facts s26, error unions/`match`/`defer` s27,
+//!   closures/concurrency c05).
+//!
+//! Region/RC/sync op semantics and fact attachment are s26;
+//! error-union and control lowering is s27.
 
+pub mod build;
 pub mod entity;
 pub mod facts;
 pub mod ir;
+pub mod lower;
 pub mod ops;
 pub mod parse;
+pub mod peephole_rules;
 pub mod print;
 pub mod types;
 pub mod verify;
 
+pub use build::{Const, FuncBuilder, InsOut, Stats, Var};
 pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
 pub use ir::{
     Aux, Block, BlockCall, ExtFunc, ExtFuncData, FuncId, Function, Inst, InstData, Mode, Module,
     Param, SigData, SigId, Value, ValueData, ValueDef,
 };
+pub use lower::{Build, lower_package};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
 pub use print::print_module;

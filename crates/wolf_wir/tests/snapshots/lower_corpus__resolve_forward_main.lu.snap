@@ -1,0 +1,27 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+expression: out
+---
+decl @later() -> i64
+
+fn @main() -> i64 {
+b0:
+  %0 = call @later()
+  %1 = iconst.i64 7
+  %2 = icmp.eq %0, %1
+  br %2, b1, b2
+b1:
+  %3 = iconst.i64 0
+  jmp b3(%3)
+b2:
+  %4 = iconst.i64 1
+  jmp b3(%4)
+b3(%5: i64):
+  ret %5
+}
+
+fn @later() -> i64 {
+b0:
+  %0 = iconst.i64 7
+  ret %0
+}

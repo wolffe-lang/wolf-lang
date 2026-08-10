@@ -1,0 +1,20 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: "dump(\"fn main() -> !int {\\n\\\n         \\x20   var sum = 0\\n\\\n         \\x20   var i = 0\\n\\\n         \\x20   while i < 10 {\\n\\\n         \\x20       sum = sum + i\\n\\\n         \\x20       i = i + 1\\n\\\n         \\x20   }\\n\\\n         \\x20   sum\\n\\\n         }\\n\")"
+---
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 0
+  jmp b1(%0, %0)
+b1(%1: i64, %2: i64):
+  %3 = iconst.i64 10
+  %4 = icmp.slt %1, %3
+  br %4, b2, b3
+b2:
+  %5 = iadd.chk %2, %1
+  %6 = iconst.i64 1
+  %7 = iadd.chk %1, %6
+  jmp b1(%7, %5)
+b3:
+  ret %2
+}
