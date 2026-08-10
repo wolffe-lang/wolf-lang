@@ -323,6 +323,17 @@ function boundaries; 02-memory-model). Prefix `*` is raw-pointer deref
 non-`Copy` value; `shared` creates a Tier-2 RC cell from a value
 (`let a = shared (Cfg { limit: 7 })`).
 
+**Operator↔trait bridge** (posture recorded 2026-08-10; wolf-std F-0004
+/ issue #5, contract F3). For user types the comparison operators
+desugar to in-scope trait impls by name — `==`/`!=` to `Eq.eq` (negated
+for `!=`), the `< <= > >= <=>` family to `Ord.cmp` — with `Ord requires
+Eq` as a supertrait clause once the trait engine grows supertraits;
+`<=>` yields `std.cmp.Ordering` when std lands (`int` is the v0 stopgap
+read). Enum structural `==` is language-side. The bare-literal `i32`
+defaulting vs `impl … for int` mismatch (F-0004 gap 3) is acknowledged
+and must be resolved by the bridge's clause set when the typing document
+lands; this paragraph records the decision, not the mechanism.
+
 ### 3.3 Primary expressions `[gram.expr.primary]`
 
 ```ebnf
@@ -491,6 +502,7 @@ is a `stmt`; `borrow_expr` is a `primary`.
 ```ebnf
 type ::= path type_args?
        | '!' type
+       | type '!' error_row          /* postfix row: T ! {row}, any type position */
        | prefix_type_kw type
        | '*' type                    /* raw pointer, unsafe tier */
        | 'dyn' path
@@ -508,6 +520,11 @@ row_entry ::= path ('(' type (',' type)* ')')?
 - `!T` and `T ! {row}` per D30. In *expression* position `!` is unary not;
   in *type* position it is the error-union constructor. The positions are
   syntactically disjoint (`[gram.amb.bang]`).
+- Postfix rows are first-class in **every** type position — parameter,
+  `let`/`var` annotation, field, variant payload — not just `ret_type`,
+  which stays as spelled in `[gram.item.fn]`. (Adopted 2026-08-10 from
+  wolf-std F-0002 / issue #3: `std.option`'s six helpers were unwritable
+  with rows confined to return position.)
 - `handle Node`, `shared Config`, `weak Parent`: prefix type keywords.
 - `Map[str, int]`, `List[(T, int)]`: `[]` type application.
 - `&T`-style reference *types* do not exist in the surface (borrows are

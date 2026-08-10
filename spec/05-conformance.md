@@ -98,6 +98,19 @@ parser contract):
 - `[conf.trap.exit]` A trap terminates the process with a nonzero,
   implementation-specified exit status; conforming tools compare the
   *kind*, never the status number.
+- `[conf.trap.assert]` `assert` is an **intrinsic** — one name in both
+  tiers: comptime witness (a failing comptime `assert` is a compile
+  error) and runtime user trap (the `assert` kind of
+  `[conf.trap.set]`), silent and effect-free when the condition holds,
+  trapping at its own span when not. It is not a library function and
+  is never shadowed by one — the name cannot be both library surface
+  and primitive (observed: a module-level `assert` severed callers from
+  the trap; wolf-std F-0009). The two-argument form `assert(cond, msg)`
+  is the intrinsic's own arity: `msg` is a `str` evaluated **only** on
+  the failing path; rendering is one line to stdout before the trap
+  once formatting lands — until then implementations may drop the
+  message. (Appended 2026-08-10, wolf-std F-0009 / issue #9, contract
+  F4.)
 
 ## §4 Coverage `[conf.cover]`
 

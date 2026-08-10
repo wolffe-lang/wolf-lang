@@ -375,6 +375,61 @@ Detection legend: **S** static checker (s18–s23) · **O** is04 oracle ·
   (01 Q7); mechanism in c10. Everything else a C function may do with a
   wolf pointer ends at the call's return.
 
+### Iteration — `for`, ranges, and `Iter[T]` `[mem.iter]`
+
+(Appended 2026-08-10, wolf-std F-0008 / issue #8: the protocol was
+prototyped executing in std.iter — range_iter/list_cursor driven by
+`while` + `else`, exhaustion-stays-exhausted proven — and these clauses
+adopt that design and give `for` its desugar.)
+
+- `[mem.iter.trait]` `Iter[T]` is a **nominal prelude trait** with a
+  single method `next(mut self) -> T ! {done}`. Yielded values are the
+  ok payload; exhaustion is the payload-free lowercase tag `done`.
+  Exhaustion is **stable**: after `next` raises `done`, every later
+  `next` raises `done`. Weighed and rejected: an absence tag (`none`)
+  as the end signal — iteration's end is its own noun, and `done` keeps
+  absence and exhaustion separable in rows carrying both.
+- `[mem.iter.for]` `for pat in e { body }` desugars by cases on `e`'s
+  type. Builtin ranges iterate directly, with no trait machinery (D25;
+  `[mem.iter.range]`). Otherwise `e`'s type must implement `Iter[T]`
+  and the loop desugars to the explicit drive loop:
+
+  ```text
+  var it = e
+  loop {
+      let pat = (mut it).next() else { break }
+      body
+  }
+  ```
+
+  `break`/`continue` in `body` target the desugared `loop`; evaluation
+  and `defer`/`errdefer` order per `[mem.model.order]`.
+- `[mem.iter.range]` `a..b` / `a..=b` are a **closed builtin family**:
+  `for` iterates ascending, `+1` steps, checked arithmetic (X3); both
+  endpoints are evaluated exactly once, left-to-right, before the first
+  test. An owned range value implements `Iter[int]` with identical
+  semantics.
+- `[mem.iter.impl]` `List[T]` and `Pool[T]` adopt `Iter` builtin-side
+  (std surface); user types implement the trait **by name** — no
+  structural conformance.
+
+### `str` ordering `[mem.str]`
+
+(Appended 2026-08-10, wolf-std F-0006 / issue #7. Interim home — a
+future strings document may take the namespace over. This ruling adopts
+lupin's executed byte-order behavior at the sc01 pins.)
+
+- `[mem.str.order]` The relational family `< <= > >= <=>` is
+  **defined** on `str` × `str`: byte-lexicographic over the UTF-8
+  bytes, unsigned byte compare, shorter string first on a shared
+  prefix. The order is total on all `str` values and consistent with
+  the byte-offset commitment of D25 (`[gram.lex.source]`). `==`/`!=`
+  remain byte equality. `<=>` on `str` yields the same ordering value
+  as on integers (the v0 `int` read).
+- `[mem.str.impl]` Consequence: `impl Ord for str` is shippable
+  in-library with **no bytes accessor**; the operator family and the
+  impl agree by definition.
+
 ---
 
 ## Appendix A — `corpus/regions.lu`, clause by clause `[mem.appendix]`

@@ -157,6 +157,7 @@ borrow_expr ::= 'borrow' expr 'from' expr
 
 type ::= path type_args?
        | '!' type
+       | type '!' error_row          /* postfix row: T ! {row}, any type position */
        | prefix_type_kw type
        | '*' type                    /* raw pointer, unsafe tier */
        | 'dyn' path
