@@ -68,6 +68,11 @@ pub struct StdModule {
 }
 
 /// The `std` stub tree behind `use std.…` — names only, no types.
+///
+/// Subordinated by F-0001: this table answers only when no std root is
+/// configured (`--std-root` / `WOLF_STD`). With a root, `use std.X`
+/// loads `<std-root>/X/` through the ordinary module machinery
+/// ([`crate::graph`]) and this table is never consulted.
 pub const STD_MODULES: &[StdModule] = &[
     StdModule {
         path: &["std"],

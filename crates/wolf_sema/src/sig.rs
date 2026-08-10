@@ -138,6 +138,10 @@ pub struct GlobalSig {
     /// of the item are then NotYetCheckable, never guessed).
     pub ty: Option<TyId>,
     pub name_span: Span,
+    /// For an item-level `let`: the `let` keyword's span — assignment
+    /// to the global is E0410, and the fix-it rewrites this token to
+    /// `var`. `None` for `var` and `const` globals.
+    pub let_kw: Option<Span>,
 }
 
 /// One enum variant's elaborated signature (s17: variant construction
@@ -414,6 +418,7 @@ impl<'a> Lower<'a> {
                 ItemSig::Global(GlobalSig {
                     ty,
                     name_span: item.name_span,
+                    let_kw: None,
                 })
             }
             SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
@@ -424,9 +429,14 @@ impl<'a> Lower<'a> {
                 if ty.is_none() {
                     self.missing_annotation(item, node, item.kind);
                 }
+                let let_kw = (node.kind == SyntaxKind::LetDecl)
+                    .then(|| node.tokens().find(|t| t.kind == SyntaxKind::LetKw))
+                    .flatten()
+                    .map(|t| t.span);
                 ItemSig::Global(GlobalSig {
                     ty,
                     name_span: item.name_span,
+                    let_kw,
                 })
             }
             _ => ItemSig::Trait,

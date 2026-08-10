@@ -974,6 +974,28 @@ mod tests {
     }
 
     #[test]
+    fn std_root_keeps_prelude_ambient_and_checks_real_members() {
+        // With a real std tree configured the prelude stays ambient
+        // (D31) and `std` member checks answer from the real item
+        // table: `fs.read_text` resolves, `fs.gone` is E0301.
+        let mut ml = MemoryLoader::new("t");
+        ml.add_file(
+            &[],
+            "main.lu",
+            "use std.fs\nfn main() -> !int {\n    print(\"hi\")\n    \
+             fs.read_text(\"x\")\n    fs.gone()\n    0\n}\n",
+        );
+        ml.add_std_file(&["fs"], "fs.lu", "pub fn read_text(p: str) -> str { p }\n");
+        let r = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+        assert_eq!(codes_of(&r), ["E0301"], "{:?}", r.diagnostics);
+        assert!(
+            r.diagnostics[0].message.contains("gone"),
+            "only the missing member errors: {}",
+            r.diagnostics[0].message
+        );
+    }
+
+    #[test]
     fn clean_single_file_resolves() {
         let r = resolve(&[(
             &[],

@@ -56,6 +56,21 @@ pub trait ModuleLoader {
     fn root_module_names(&mut self) -> Vec<String> {
         Vec::new()
     }
+
+    /// Does this loader serve a real std tree? When true, `use std.…`
+    /// resolves through [`load_module`](Self::load_module) with the
+    /// `std`-prefixed path, exactly like any package module; when
+    /// false, it resolves against the [`prelude::STD_MODULES`] stub
+    /// tables (the pre-std fallback).
+    fn has_std_root(&self) -> bool {
+        false
+    }
+
+    /// Dotted names of the std tree's top-level modules (`std.fs`, …)
+    /// — suggestion fodder for unresolved `std.…` imports.
+    fn std_module_names(&mut self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// A file-participation predicate for [`DiskLoader`]: given a file's
@@ -74,6 +89,10 @@ pub struct DiskLoader<'a> {
     entry: Option<PathBuf>,
     sm: &'a mut SourceMap,
     filter: FileFilter<'a>,
+    /// The std tree's root directory (F-0001): `use std.X` reads
+    /// `<std_root>/X/` — the tree is the namespace (D32). `None`
+    /// keeps the prelude-stub `std`.
+    std_root: Option<PathBuf>,
 }
 
 impl<'a> DiskLoader<'a> {
@@ -89,6 +108,7 @@ impl<'a> DiskLoader<'a> {
             entry: Some(entry.to_path_buf()),
             sm,
             filter,
+            std_root: None,
         })
     }
 
@@ -100,14 +120,34 @@ impl<'a> DiskLoader<'a> {
             entry: None,
             sm,
             filter: Box::new(|_| true),
+            std_root: None,
         }
+    }
+
+    /// Configure the std tree's root: `use std.X` reads `<root>/X/`.
+    /// `None` keeps the prelude-stub `std`.
+    pub fn with_std_root(mut self, root: Option<PathBuf>) -> Self {
+        self.std_root = root;
+        self
     }
 }
 
 impl ModuleLoader for DiskLoader<'_> {
     fn load_module(&mut self, path: &[String]) -> Option<Vec<RawFile>> {
-        let mut dir = self.root.clone();
-        for seg in path {
+        // A `std`-prefixed path reads from the std root (F-0001):
+        // `std.X` is `<std_root>/X/`. Every `.lu` file of a std module
+        // participates (a std tree is a whole package, not a conform
+        // case, so the entry-mode member filter does not apply), and
+        // displays use the deterministic `std://` scheme — the std
+        // root's location must never leak into diagnostics or
+        // interfaces (D7).
+        let is_std = self.std_root.is_some() && path.first().is_some_and(|s| s == "std");
+        let (mut dir, segs) = if is_std {
+            (self.std_root.clone().expect("checked above"), &path[1..])
+        } else {
+            (self.root.clone(), path)
+        };
+        for seg in segs {
             dir.push(seg);
         }
         let entries = std::fs::read_dir(&dir).ok()?;
@@ -121,15 +161,24 @@ impl ModuleLoader for DiskLoader<'_> {
         for p in names {
             let src = std::fs::read(&p).ok()?;
             let is_entry = self.entry.as_deref() == Some(p.as_path());
-            if !is_entry && !(self.filter)(&src) {
+            if !is_std && !is_entry && !(self.filter)(&src) {
                 continue;
             }
             let file = self.sm.intern(&p);
-            out.push(RawFile {
-                file,
-                display: p.display().to_string().replace('\\', "/"),
-                src,
-            });
+            let display = if is_std {
+                let base = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                if segs.is_empty() {
+                    format!("std://{base}")
+                } else {
+                    format!("std://{}/{base}", segs.join("/"))
+                }
+            } else {
+                p.display().to_string().replace('\\', "/")
+            };
+            out.push(RawFile { file, display, src });
         }
         if out.is_empty() { None } else { Some(out) }
     }
@@ -146,6 +195,27 @@ impl ModuleLoader for DiskLoader<'_> {
         names.sort();
         names
     }
+
+    fn has_std_root(&self) -> bool {
+        self.std_root.is_some()
+    }
+
+    fn std_module_names(&mut self) -> Vec<String> {
+        let Some(root) = &self.std_root else {
+            return Vec::new();
+        };
+        let Ok(entries) = std::fs::read_dir(root) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = entries
+            .flatten()
+            .filter(|e| e.path().is_dir())
+            .filter_map(|e| e.file_name().into_string().ok())
+            .map(|n| format!("std.{n}"))
+            .collect();
+        names.sort();
+        names
+    }
 }
 
 /// In-memory loader for tests (and, later, the resident compiler): a
@@ -155,6 +225,9 @@ pub struct MemoryLoader {
     package: String,
     modules: BTreeMap<Vec<String>, Vec<(String, Vec<u8>)>>,
     sm: SourceMap,
+    /// Set by [`add_std_file`](Self::add_std_file): the loader serves
+    /// a real std tree, so `use std.…` skips the prelude stub.
+    has_std: bool,
 }
 
 impl MemoryLoader {
@@ -172,6 +245,16 @@ impl MemoryLoader {
             .entry(module.iter().map(|s| s.to_string()).collect())
             .or_default()
             .push((name.to_string(), src.as_bytes().to_vec()));
+    }
+
+    /// Add one file to the std module `std.<module…>` and mark the
+    /// loader as serving a real std tree — `use std.…` then resolves
+    /// here instead of against the prelude stub.
+    pub fn add_std_file(&mut self, module: &[&str], name: &str, src: &str) {
+        self.has_std = true;
+        let mut key = vec!["std"];
+        key.extend(module);
+        self.add_file(&key, name, src);
     }
 }
 
@@ -200,6 +283,21 @@ impl ModuleLoader for MemoryLoader {
         self.modules
             .keys()
             .filter_map(|k| k.first().cloned())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    fn has_std_root(&self) -> bool {
+        self.has_std
+    }
+
+    fn std_module_names(&mut self) -> Vec<String> {
+        self.modules
+            .keys()
+            .filter(|k| k.first().is_some_and(|s| s == "std"))
+            .filter_map(|k| k.get(1))
+            .map(|n| format!("std.{n}"))
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect()
@@ -656,12 +754,21 @@ impl LoadState<'_> {
             remapped.extend(segments.into_iter().skip(1));
             segments = remapped;
         }
-        if segments[0].0 == "std" {
+        // `std.…` (F-0001): with a configured std root the path flows
+        // through the ordinary package machinery — the loader maps the
+        // `std` prefix onto the std tree, so std modules get real item
+        // tables, visibility, cycles, everything. Without one, the
+        // prelude stub tables answer (the pre-std fallback).
+        if segments[0].0 == "std" && !self.loader.has_std_root() {
             return self.resolve_std_use(u, &segments);
         }
         self.resolve_pkg_use(importer, u, &segments)
     }
 
+    /// Resolve `use std.…` against the [`prelude::STD_MODULES`] stub
+    /// tables — the fallback when no std root is configured (F-0001).
+    /// With a std root, [`resolve_pkg_use`](Self::resolve_pkg_use)
+    /// handles `std` like any other module tree.
     fn resolve_std_use(&mut self, u: &UseData, segments: &[(String, Span)]) -> Vec<Binding> {
         let texts: Vec<&str> = segments.iter().map(|(s, _)| s.as_str()).collect();
         let path_span = segments
@@ -765,6 +872,16 @@ impl LoadState<'_> {
         }
         self.chain.pop();
         let Some((target, k)) = hit else {
+            if texts[0] == "std" {
+                // A `std.…` path that reaches here had a real std root
+                // and missed it: name the full path and suggest from
+                // the std tree's top level, not the package root.
+                let path_span = segments.iter().fold(segments[0].1, |a, (_, b)| a.join(*b));
+                let cands = self.loader.std_module_names();
+                self.diags
+                    .push(unresolved_import(path_span, &texts.join("."), &cands));
+                return vec![poisoned(u, segments)];
+            }
             let first_span = segments[0].1;
             let mut cands: Vec<String> = self.loader.root_module_names();
             cands.push("std".to_string());
@@ -1301,6 +1418,124 @@ mod tests {
             (&["util"], "u.lu", "fn hidden() -> int { 1 }\n"),
         ]);
         assert!(pkg.diagnostics.iter().any(|d| d.code == codes::E0304));
+    }
+
+    fn load_with_std(files: &[(&[&str], &str, &str)], std: &[(&[&str], &str, &str)]) -> Package {
+        let mut ml = MemoryLoader::new("t");
+        for (m, n, s) in files {
+            ml.add_file(m, n, s);
+        }
+        for (m, n, s) in std {
+            ml.add_std_file(m, n, s);
+        }
+        load_package(&mut ml, &AliasTable::default()).expect("root loads")
+    }
+
+    #[test]
+    fn std_root_resolves_real_std_modules() {
+        let pkg = load_with_std(
+            &[(
+                &[],
+                "main.lu",
+                "use std.fs\nfn main() -> !int { fs.read_text(\"x\")\n0 }\n",
+            )],
+            &[(&["fs"], "fs.lu", "pub fn read_text(p: str) -> str { p }\n")],
+        );
+        assert!(pkg.diagnostics.is_empty(), "{:?}", pkg.diagnostics);
+        let BindTarget::PkgModule(m) = pkg.modules[0].bindings[0][0].target else {
+            panic!(
+                "std.fs must bind a real module: {:?}",
+                pkg.modules[0].bindings
+            );
+        };
+        assert_eq!(pkg.modules[m].path, ["std", "fs"]);
+        assert!(pkg.tables[m].get("read_text").is_some(), "real item table");
+    }
+
+    #[test]
+    fn std_root_item_import_binds() {
+        let pkg = load_with_std(
+            &[(
+                &[],
+                "main.lu",
+                "use std.fs.read_text\nfn main() -> !int { read_text(\"x\")\n0 }\n",
+            )],
+            &[(&["fs"], "fs.lu", "pub fn read_text(p: str) -> str { p }\n")],
+        );
+        assert!(pkg.diagnostics.is_empty(), "{:?}", pkg.diagnostics);
+        let BindTarget::Item { module, ref name } = pkg.modules[0].bindings[0][0].target else {
+            panic!("item import: {:?}", pkg.modules[0].bindings);
+        };
+        assert_eq!(name, "read_text");
+        assert_eq!(pkg.modules[module].path, ["std", "fs"]);
+    }
+
+    #[test]
+    fn std_root_nested_modules_resolve() {
+        let pkg = load_with_std(
+            &[(
+                &[],
+                "main.lu",
+                "use std.net.http\nfn main() -> !int { http.get(\"x\")\n0 }\n",
+            )],
+            &[(
+                &["net", "http"],
+                "h.lu",
+                "pub fn get(u: str) -> str { u }\n",
+            )],
+        );
+        assert!(pkg.diagnostics.is_empty(), "{:?}", pkg.diagnostics);
+        let BindTarget::PkgModule(m) = pkg.modules[0].bindings[0][0].target else {
+            panic!("std.net.http must bind: {:?}", pkg.modules[0].bindings);
+        };
+        assert_eq!(pkg.modules[m].path, ["std", "net", "http"]);
+    }
+
+    #[test]
+    fn std_root_missing_module_is_e0301() {
+        let pkg = load_with_std(
+            &[(&[], "main.lu", "use std.net\nfn main() -> !int { 0 }\n")],
+            &[(&["fs"], "fs.lu", "pub fn read_text(p: str) -> str { p }\n")],
+        );
+        let codes: Vec<&str> = pkg.diagnostics.iter().map(|d| d.code.as_str()).collect();
+        assert_eq!(codes, ["E0301"]);
+        assert!(
+            pkg.diagnostics[0].message.contains("std.net"),
+            "names the full std path: {}",
+            pkg.diagnostics[0].message
+        );
+    }
+
+    #[test]
+    fn std_root_private_item_is_e0304() {
+        let pkg = load_with_std(
+            &[(
+                &[],
+                "main.lu",
+                "use std.fs.hidden\nfn main() -> !int { hidden()\n0 }\n",
+            )],
+            &[(&["fs"], "fs.lu", "fn hidden() -> int { 1 }\n")],
+        );
+        assert!(
+            pkg.diagnostics.iter().any(|d| d.code == codes::E0304),
+            "{:?}",
+            pkg.diagnostics
+        );
+    }
+
+    #[test]
+    fn without_std_root_stub_fences_unknown_std() {
+        // The pre-std fallback: only the stub table's modules answer.
+        let pkg = load(&[(
+            &[],
+            "main.lu",
+            "use std.net.http\nfn main() -> !int { 0 }\n",
+        )]);
+        assert!(
+            pkg.diagnostics.iter().any(|d| d.code == codes::E0301),
+            "{:?}",
+            pkg.diagnostics
+        );
     }
 
     #[test]

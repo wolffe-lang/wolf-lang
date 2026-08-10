@@ -1,0 +1,19 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0410]: `limit` is bound with `let`, so it cannot be assigned again
+ --> mem:///main.lu:4:5
+  |
+1 | let limit: int = 8
+  | --- the binding is made immutable here
+...
+4 |     limit = 9
+  |     ^^^^^ this assignment needs a mutable binding
+  |
+  = note: `let` names a value once. Declare the binding with `var` to update it in place, or
+    shadow it with a second `let` if the next value is really a new thing.
+help: make the binding mutable: `var`
+  |
+1 | var limit: int = 8
+  |

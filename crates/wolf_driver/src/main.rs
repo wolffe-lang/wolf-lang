@@ -11,14 +11,15 @@
 //! keeps the spec/06-minimal observation record. `wolf interface`
 //! pretty-prints the s12 `wolfi` module interfaces of a package.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("--version") => println!("wolf 0.0.1 (pre-alpha)"),
+        // D38: the compiler is named wolfgang; the command stays `wolf`.
+        Some("--version") => println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION")),
         Some("--explain") => explain(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
@@ -250,6 +251,51 @@ fn is_member_file(src: &[u8]) -> bool {
     false
 }
 
+/// Split the std-root flag out of a subcommand's arguments (F-0001):
+/// `--std-root <dir>` or `--std-root=<dir>` names the directory whose
+/// subdirectories back `use std.…`. Returns the remaining arguments
+/// and the flag's value; a flag with no directory is an error.
+fn take_std_root(args: &[String]) -> Result<(Vec<String>, Option<PathBuf>), String> {
+    let mut rest = Vec::new();
+    let mut root = None;
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if let Some(v) = a.strip_prefix("--std-root=") {
+            root = Some(PathBuf::from(v));
+        } else if a == "--std-root" {
+            i += 1;
+            let Some(v) = args.get(i) else {
+                return Err("--std-root needs a directory".to_string());
+            };
+            root = Some(PathBuf::from(v));
+        } else {
+            rest.push(a.clone());
+        }
+        i += 1;
+    }
+    Ok((rest, root))
+}
+
+/// The effective std root: the `--std-root` flag wins, the `WOLF_STD`
+/// environment variable is the fallback, neither keeps the prelude
+/// stub answering `use std.…`. A configured root that is not a
+/// directory is an error, never a silent fall-through to the stub.
+fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
+    let root = flag.or_else(|| {
+        std::env::var_os("WOLF_STD")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    });
+    match root {
+        Some(r) if !r.is_dir() => Err(format!(
+            "std root is not a directory: {} (from --std-root or WOLF_STD)",
+            r.display()
+        )),
+        other => Ok(other),
+    }
+}
+
 /// Run s12 resolution from an entry file; registers every loaded file
 /// with `sources` and returns the resolution (package + the full
 /// parse/graph/resolution diagnostic set in deterministic order).
@@ -257,10 +303,12 @@ fn resolve_from_entry(
     entry: &Path,
     sm: &mut wolf_span::SourceMap,
     sources: &mut Sources,
+    std_root: Option<&Path>,
 ) -> Result<wolf_sema::Resolution, String> {
     let mut loader =
         wolf_sema::DiskLoader::from_entry(entry, sm, Box::new(|src: &[u8]| is_member_file(src)))
-            .ok_or_else(|| format!("cannot open package around {}", entry.display()))?;
+            .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
+            .with_std_root(std_root.map(Path::to_path_buf));
     let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
     for unit in &res.package.files {
         sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
@@ -274,8 +322,18 @@ fn resolve_from_entry(
 /// of its `.lu` files as the root module. Nothing is persisted — build
 /// artifacts arrive with the incremental driver (s31).
 fn interface(args: &[String]) {
+    let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
+        let root = effective_std_root(f)?;
+        Ok((a, root))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("wolf interface: {e}");
+            std::process::exit(2);
+        }
+    };
     let Some(path) = args.first() else {
-        eprintln!("usage: wolf interface <file.lu|dir>");
+        eprintln!("usage: wolf interface [--std-root <dir>] <file.lu|dir>");
         std::process::exit(2);
     };
     let p = Path::new(path);
@@ -290,10 +348,12 @@ fn interface(args: &[String]) {
         .unwrap_or_else(|| {
             eprintln!("wolf interface: cannot open package around {path}");
             std::process::exit(2);
-        });
+        })
+        .with_std_root(std_root.clone());
         wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())
     } else if p.is_dir() {
-        let mut loader = wolf_sema::DiskLoader::from_dir(p, &mut sm);
+        let mut loader =
+            wolf_sema::DiskLoader::from_dir(p, &mut sm).with_std_root(std_root.clone());
         wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())
     } else {
         eprintln!("wolf interface: no such file or directory: {path}");
@@ -358,8 +418,18 @@ fn interface(args: &[String]) {
 /// `#[trusted]` code must be declared in `wolf.pkg`'s `trusted` entry
 /// (E1303) — the mismatch is a build error (exit 1).
 fn audit_surface(args: &[String]) {
+    let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
+        let root = effective_std_root(f)?;
+        Ok((a, root))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("wolf audit-surface: {e}");
+            std::process::exit(2);
+        }
+    };
     let Some(path) = args.first() else {
-        eprintln!("usage: wolf audit-surface <file.lu|dir>");
+        eprintln!("usage: wolf audit-surface [--std-root <dir>] <file.lu|dir>");
         std::process::exit(2);
     };
     let p = Path::new(path);
@@ -374,13 +444,15 @@ fn audit_surface(args: &[String]) {
         .unwrap_or_else(|| {
             eprintln!("wolf audit-surface: cannot open package around {path}");
             std::process::exit(2);
-        });
+        })
+        .with_std_root(std_root.clone());
         (
             wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()),
             p.parent().unwrap_or(Path::new(".")).to_path_buf(),
         )
     } else if p.is_dir() {
-        let mut loader = wolf_sema::DiskLoader::from_dir(p, &mut sm);
+        let mut loader =
+            wolf_sema::DiskLoader::from_dir(p, &mut sm).with_std_root(std_root.clone());
         (
             wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()),
             p.to_path_buf(),
@@ -629,6 +701,19 @@ fn sha256_hex(data: &[u8]) -> String {
 /// (`{code, span, severity}`) — the record schema is frozen by the
 /// protocol, the stderr stream is the rich surface.
 fn conform_run(args: &[String]) {
+    // The std root (F-0001): `--std-root <dir>` wins, `WOLF_STD` is
+    // the fallback, neither keeps the prelude-stub `std`.
+    let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
+        let root = effective_std_root(f)?;
+        Ok((a, root))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("wolf conform-run: {e}");
+            std::process::exit(2);
+        }
+    };
+    let args = &args[..];
     let mut file = None;
     let mut phase: Option<String> = None;
     let mut error_format = "human".to_string();
@@ -691,7 +776,8 @@ fn conform_run(args: &[String]) {
     let Some(file) = file else {
         eprintln!(
             "usage: wolf conform-run <file.lu> [--phase=<p>] [--seed=N] [--json] \
-             [--error-format=human|json] [--dump=regions|cfg|wir] [--zstats]"
+             [--error-format=human|json] [--dump=regions|cfg|wir] [--zstats] \
+             [--std-root <dir>]"
         );
         std::process::exit(2);
     };
@@ -752,7 +838,12 @@ fn conform_run(args: &[String]) {
                 // when their header carries `member: true` (the corpus
                 // multi-file contract), sibling directories are child
                 // modules loaded on import.
-                match resolve_from_entry(Path::new(&file), &mut sm, &mut sources) {
+                match resolve_from_entry(
+                    Path::new(&file),
+                    &mut sm,
+                    &mut sources,
+                    std_root.as_deref(),
+                ) {
                     Err(e) => {
                         eprintln!("wolf conform-run: {e}");
                         std::process::exit(2);
@@ -859,7 +950,12 @@ fn conform_run(args: &[String]) {
     if let Some(kind) = &dump {
         let mut dump_sm = wolf_span::SourceMap::new();
         let mut dump_sources = Sources::new();
-        if let Ok(res) = resolve_from_entry(Path::new(&file), &mut dump_sm, &mut dump_sources) {
+        if let Ok(res) = resolve_from_entry(
+            Path::new(&file),
+            &mut dump_sm,
+            &mut dump_sources,
+            std_root.as_deref(),
+        ) {
             let tc = wolf_sema::typecheck_package(&res);
             let text = match kind.as_str() {
                 "regions" => wolf_mem::dump_regions_package(&res.package, &tc),
@@ -926,7 +1022,7 @@ fn conform_run(args: &[String]) {
     };
     let mut record = serde_json::json!({
         "protocol": 1,
-        "impl": "wolfc",
+        "impl": "wolfgang",
         "impl_version": env!("CARGO_PKG_VERSION"),
         "commit": option_env!("WOLF_COMMIT").unwrap_or("unknown"),
         "file": file.replace('\\', "/"),
