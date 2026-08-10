@@ -729,8 +729,8 @@ fn clean_pool_two_phase() {
          fn main() -> !int {\n    \
              region r: pool(Node) {\n        \
                  var pool = Pool[Node]()\n        \
-                 let h = pool.reserve()\n        \
-                 pool.init(h, Node { value: 41 })\n        \
+                 let h = (mut pool).reserve()\n        \
+                 (mut pool).init(h, Node { value: 41 })\n        \
                  pool[h].value + 1 - 42\n    \
              }\n\
          }\n",
@@ -879,6 +879,22 @@ fn clean_unsafe_tier_surface() {
                  c.free(q)\n    \
              }\n    \
              out - out\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_list_mut_receiver_len_and_index() {
+    // #6: the List mutators take `mut self` at the call site; `xs.len`
+    // is a copy read (never a move of the list); `xs[0]` bounds-checks.
+    // All statically silent.
+    snap(
+        "clean_list_mut_receiver",
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             let n = xs.len\n    \
+             xs[0] + n - 2\n\
          }\n",
     );
 }

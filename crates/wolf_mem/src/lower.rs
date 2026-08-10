@@ -1141,6 +1141,10 @@ impl<'t> Lowerer<'t> {
                     base: base_place.base,
                     proj,
                 };
+                // Builtin members (`xs.len`) are not in `fields_of`;
+                // the checker's recorded type answers for them, so a
+                // copy read never masquerades as a move (#6).
+                let field_ty = field_ty.or_else(|| self.expr_ty(e.span));
                 let copy = field_ty.map(|t| is_copy(t, 0)).unwrap_or(false);
                 Some((self.places.intern(place, copy), field_ty))
             }
@@ -2395,7 +2399,12 @@ impl<'t> Lowerer<'t> {
                 }
             }
             if let Some(guard) = arm.guard() {
-                self.eval_value(guard)?;
+                // The guard node wraps its condition expression (s27:
+                // feeding the wrapper to the walker refused honestly —
+                // now the condition itself evaluates).
+                if let Some(cond) = guard.nodes().find(|n| wolf_ast::is_expr_kind(n.kind)) {
+                    self.eval_value(cond)?;
+                }
             }
             if let Some(body) = arm.body() {
                 out.merge(self.eval_value(body)?);

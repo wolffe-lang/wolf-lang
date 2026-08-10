@@ -92,6 +92,16 @@ fn e0804_wrong_mode() {
     );
 }
 
+/// The Tier-2 builtin mutators declare `mut self` (#6): a bare
+/// `xs.push(v)` gets the machine-applicable `(mut …)` fix-it.
+#[test]
+fn e0804_builtin_list_push_bare_receiver() {
+    snap_one(
+        "e0804_list_push_bare",
+        "fn main() -> !int {\n    var xs = List[int]()\n    xs.push(1)\n    0\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0805 -----
 
 /// `bool as int` — no truthiness bridge.

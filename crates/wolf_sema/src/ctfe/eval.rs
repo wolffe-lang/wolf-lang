@@ -108,8 +108,9 @@ pub enum FaultKind {
     },
     /// Layout is c05's: `size_of`/offsets on non-trivial types (E0708).
     Layout { what: String },
-    /// A comptime `assert` failed (E0710).
-    AssertFailed,
+    /// A comptime `assert` failed (E0710). The message is `assert`'s
+    /// optional second argument when it evaluated to a string.
+    AssertFailed { msg: Option<String> },
     /// An honest engine gap: the construct is fine, the s16 evaluator
     /// subset does not cover it yet — reported as NotYetCheckable,
     /// never as a user error.

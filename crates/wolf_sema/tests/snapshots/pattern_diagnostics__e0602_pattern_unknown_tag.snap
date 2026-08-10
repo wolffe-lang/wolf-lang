@@ -1,7 +1,16 @@
 ---
 source: crates/wolf_sema/tests/pattern_diagnostics.rs
+assertion_line: 41
 expression: "render_types(&[(&[], \"main.lu\", src)])"
 ---
+error[E0602]: this arm matches the tag `Timeout`, but the value's error row does not include it
+  --> mem:///main.lu:12:13
+   |
+12 |             Timeout => 2,
+   |             ^^^^^^^ the arm could never fire
+   |
+   = note: the cases are: Io
+
 warning[E0802]: this arm can never match — the arms above already cover it
   --> mem:///main.lu:12:13
    |

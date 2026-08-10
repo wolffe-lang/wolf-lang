@@ -164,7 +164,16 @@ impl<'a> Engine<'a> {
                 };
                 match self.arena.kind(c) {
                     ValueKind::Bool(true) => Ok(self.arena.unit()),
-                    ValueKind::Bool(false) => Err(FaultKind::AssertFailed),
+                    ValueKind::Bool(false) => {
+                        // The optional second argument rides into the
+                        // E0710 rendering when it is a plain string;
+                        // anything else is silently dropped (#9).
+                        let msg = args.get(1).and_then(|&m| match self.arena.kind(m) {
+                            ValueKind::Str(s) => Some(s.clone()),
+                            _ => None,
+                        });
+                        Err(FaultKind::AssertFailed { msg })
+                    }
                     _ => Err(FaultKind::EngineGap {
                         construct: "a non-boolean `assert` at comptime",
                     }),

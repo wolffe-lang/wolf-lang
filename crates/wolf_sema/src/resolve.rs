@@ -37,6 +37,39 @@ use crate::prelude;
 /// The environment variable that forces single-threaded resolution.
 pub const SINGLE_THREAD_ENV: &str = "WOLF_SEMA_SINGLE_THREAD";
 
+/// Every tag name spelled in an `ErrorRow` anywhere under `node` — the
+/// lexical pre-scan behind the lowercase-tag deferral (#4): a lowercase
+/// miss that matches a row written in the enclosing fn (return row,
+/// parameter row, `let` annotation row) may be a tag, and only typing
+/// can decide. Plain misses keep their E0301.
+pub(crate) fn lexical_row_tags(node: &GreenNode, src: &[u8]) -> BTreeSet<String> {
+    fn walk(node: &GreenNode, src: &[u8], out: &mut BTreeSet<String>) {
+        if node.kind == SyntaxKind::ErrorRow
+            && let Some(row) = wolf_ast::ErrorRow::cast(node)
+        {
+            for entry in row.entries() {
+                if let Some(path) = entry.path() {
+                    let name = path
+                        .segments()
+                        .map(|t| {
+                            String::from_utf8_lossy(&src[t.span.lo as usize..t.span.hi as usize])
+                                .into_owned()
+                        })
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    out.insert(name);
+                }
+            }
+        }
+        for child in node.nodes() {
+            walk(child, src, out);
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(node, src, &mut out);
+    out
+}
+
 /// A fully resolved package: the loaded graph plus every diagnostic the
 /// front half of sema can produce (parse, graph, resolution), in the
 /// engine's deterministic order.
@@ -104,6 +137,7 @@ fn resolve_module(pkg: &Package, module: usize) -> Vec<Diagnostic> {
             bindings,
             used: vec![false; bindings.len()],
             scopes: Vec::new(),
+            row_tags: Vec::new(),
             sink: &mut sink,
         };
         r.run();
@@ -120,6 +154,10 @@ struct Resolver<'a> {
     bindings: &'a [Binding],
     used: Vec<bool>,
     scopes: Vec<BTreeSet<String>>,
+    /// Per enclosing fn (a stack, for nested items): every tag name
+    /// spelled in one of its error rows — the lowercase-deferral set
+    /// ([`lexical_row_tags`], #4).
+    row_tags: Vec<BTreeSet<String>>,
     sink: &'a mut Diagnostics,
 }
 
@@ -244,6 +282,7 @@ impl Resolver<'_> {
 
     fn resolve_fn(&mut self, node: &GreenNode) {
         let Some(d) = FnDecl::cast(node) else { return };
+        self.row_tags.push(lexical_row_tags(node, self.src()));
         self.push_scope();
         self.bind_generics(d.generics());
         if let Some(params) = d.params() {
@@ -265,6 +304,7 @@ impl Resolver<'_> {
         }
         self.pop_scope();
         self.pop_scope();
+        self.row_tags.pop();
     }
 
     fn resolve_field(&mut self, f: StructField<'_>) {
@@ -391,6 +431,13 @@ impl Resolver<'_> {
         }
         if defer_tags && name.chars().next().is_some_and(char::is_uppercase) {
             return; // candidate error-row tag (D30) — s13's call
+        }
+        // A lowercase miss can still be a tag when the enclosing fn
+        // spells it in some error row (#4): `return none` against
+        // `-> int ! {none}`. Purely lexical, so plain typos keep
+        // their report below.
+        if defer_tags && self.row_tags.iter().any(|s| s.contains(name)) {
+            return;
         }
         let cands = self.candidates();
         let mut d = Diagnostic::error(
@@ -1026,6 +1073,26 @@ mod tests {
              fn main() -> !int { may(false) else 0\n0 }\n",
         )]);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn lowercase_miss_defers_only_when_a_row_spells_it() {
+        // A lowercase miss spelled in the enclosing fn's error row is
+        // a candidate tag (#4) — deferred to typing.
+        let r = resolve(&[(
+            &[],
+            "main.lu",
+            "fn f(flag: bool) -> int ! {none} {\n    if flag { return none }\n    7\n}\n\
+             fn main() -> !int { f(true) else 0 }\n",
+        )]);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        // A plain lowercase miss keeps its E0301.
+        let r = resolve(&[(
+            &[],
+            "main.lu",
+            "fn main() -> !int {\n    let x = nowhere\n    x\n}\n",
+        )]);
+        assert_eq!(codes_of(&r), ["E0301"]);
     }
 
     #[test]

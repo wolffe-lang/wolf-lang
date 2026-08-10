@@ -1,0 +1,17 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+assertion_line: 36
+expression: render_ctfe(src)
+---
+error[E0710]: this comptime assertion failed: field count drifted
+  --> mem:///main.lu:2:5
+   |
+ 2 |     assert(typeinfo(T).fields.len == n, "field count drifted")
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluated to `false` at compile time
+...
+12 |     const OK = expect_fields(Pair, 3)
+   |                ---------------------- while evaluating `expect_fields`, entered here
+   |                ---------------------- while evaluating `main`, entered here
+   |
+   = note: a failed comptime `assert` stops compilation — it is the witness mechanism for facts the
+     checker cannot see on its own.

@@ -373,3 +373,53 @@ fn propagation_widens_across_module_hops() {
         tc.not_yet
     );
 }
+
+// --------------------------------------- first-class rows (#3, #4) ----
+
+#[test]
+fn let_annotation_row_types_bare_tag() {
+    // #3: `! {row}` on a `let` annotation is a real row — the tag
+    // checks against it by membership, and a plain value ok-injects.
+    let tc = check_one(
+        "fn main() -> !int {\n    let v: int ! {None} = None\n    let w: int ! {None} = 3\n    0\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+#[test]
+fn param_row_accepts_tag_at_call_site() {
+    // #3: a parameter-position row types the argument, so an option
+    // shape can be passed a bare tag.
+    let tc = check_one(
+        "fn or(v: int ! {None}, d: int) -> int { d }\n\
+         fn main() -> !int { or(None, 5) }\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+#[test]
+fn lowercase_declared_tag_raises_and_matches() {
+    // #4: a lowercase tag spelled in the declared row resolves at the
+    // raise site, and a bare lowercase arm over the row scrutinee is a
+    // tag test, not a binding.
+    let tc = check_one(
+        "fn f(flag: bool) -> int ! {none, gone} {\n    if flag { return none }\n    7\n}\n\
+         fn main() -> !int {\n    let v = f(true) else |err| match err {\n        none => 0,\n        _ => 1,\n    }\n    v\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}

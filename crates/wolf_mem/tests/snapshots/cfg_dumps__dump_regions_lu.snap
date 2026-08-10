@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 159
 expression: "dump(&corpus(\"regions.lu\"))"
 ---
 fn build_ring
@@ -8,8 +9,9 @@ fn build_ring
   _2 pool: Pool[Node]
   _3 hs: List[handle Node]
   _4 i: int copy
-  _5 sum: int copy
-  _6 cur: handle Node copy
+  _5 node: Node
+  _6 sum: int copy
+  _7 cur: handle Node copy
   b0:
     region-open region r @699..700
     init r @699..700
@@ -23,67 +25,69 @@ fn build_ring
   b2:
     -> b3, b4
   b3:
-    read hs @892..894
-    read pool @900..904
-    call reserve [read pool] @900..914
-    call push [read hs] @892..915
+    call reserve [mut pool] @906..926
+    alloc reserve(..) -> region r @906..926
+    call push [mut hs] @892..927
+    alloc push(..) -> region r @892..927
     -> b2
   b4:
-    read n @976..977
+    read n @988..989
     -> b5
   b5:
     -> b6, b7
   b6:
-    init i @968..969
-    read pool @992..996
-    read i @1005..1006
-    checked-op @1002..1007
-    read hs[_] @1002..1007
-    read i @1039..1040
-    read i @1068..1069
-    checked-op @1068..1073
-    read n @1077..1078
-    checked-op @1067..1078
-    checked-op @1064..1079
-    read hs[_] @1064..1079
-    read i @1166..1167
-    read n @1170..1171
-    checked-op @1166..1171
-    checked-op @1166..1175
-    read n @1179..1180
-    checked-op @1165..1180
-    checked-op @1162..1181
-    read hs[_] @1162..1181
-    alloc Node -> region r @1009..1196
-    call init [read pool] @992..1197
+    init i @980..981
+    read i @1045..1046
+    read i @1074..1075
+    checked-op @1074..1079
+    read n @1083..1084
+    checked-op @1073..1084
+    checked-op @1070..1085
+    read hs[_] @1070..1085
+    read i @1172..1173
+    read n @1176..1177
+    checked-op @1172..1177
+    checked-op @1172..1181
+    read n @1185..1186
+    checked-op @1171..1186
+    checked-op @1168..1187
+    read hs[_] @1168..1187
+    alloc Node -> region r @1015..1202
+    init node @1008..1012
+    read i @1234..1235
+    checked-op @1231..1236
+    read hs[_] @1231..1236
+    read node @1238..1242
+    call init [mut pool, read node] @1215..1243
+    alloc init(..) -> region r @1215..1243
     -> b5, trap
   b7:
-    init sum @1220..1223
-    checked-op @1246..1251
-    read hs[_] @1246..1251
-    init cur @1240..1243
-    read n @1272..1273
+    init sum @1266..1269
+    checked-op @1292..1297
+    read hs[_] @1292..1297
+    init cur @1286..1289
+    read n @1318..1319
     -> b8, trap
   b8:
     -> b9, b10
   b9:
-    read cur @1300..1303
-    handle-check pool[_] @1295..1304
-    read pool[_].value @1295..1310
-    mutate sum @1288..1291
-    read cur @1334..1337
-    handle-check pool[_] @1329..1338
-    read pool[_].next @1329..1343
-    init cur @1323..1326
+    read cur @1346..1349
+    handle-check pool[_] @1341..1350
+    read pool[_].value @1341..1356
+    mutate sum @1334..1337
+    read cur @1380..1383
+    handle-check pool[_] @1375..1384
+    read pool[_].next @1375..1389
+    init cur @1369..1372
     -> b8, trap
   b10:
-    read sum @1362..1365
-    region-close region r @1441..1442
+    read sum @1408..1411
+    region-close region r @1487..1488
     -> b1
 
 fn build_config
   b0:
-    alloc Config -> caller @1510..1530
+    alloc Config -> caller @1556..1576
     -> b1
   b1:
 
@@ -93,20 +97,20 @@ fn main
   _2 frozen: region
   _3 total: int copy
   b0:
-    init r @1684..1685
-    read r @1764..1765
-    region-open region r @1761..1784
-    alloc Config -> region r @1768..1782
-    region-close region r @1783..1784
-    init config @1752..1758
-    move r @1809..1810
-    init frozen @1793..1799
-    init total @1873..1878
-    read total @1996..2001
+    init r @1730..1731
+    read r @1810..1811
+    region-open region r @1807..1830
+    alloc Config -> region r @1814..1828
+    region-close region r @1829..1830
+    init config @1798..1804
+    move r @1855..1856
+    init frozen @1839..1845
+    init total @1919..1924
+    read total @2042..2047
     -> b2, b3
   b1:
   b2:
-    read config.limit @2013..2025
+    read config.limit @2059..2071
     -> b3
   b3:
     -> b4, b6

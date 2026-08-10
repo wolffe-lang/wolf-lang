@@ -342,3 +342,14 @@ fn main() -> !int { 0 }\n";
         "every refusal names its generator: {err:?}"
     );
 }
+
+#[test]
+fn two_arg_assert_passes_at_comptime() {
+    // #9: `assert(cond, msg)` — the message rides along; the passing
+    // path is unaffected.
+    let src = "comptime fn ok() -> bool {\n    assert(1 + 1 == 2, \"math holds\")\n    true\n}\n\n\
+               fn main() -> !int {\n    const K = ok()\n    if K { 0 } else { 1 }\n}\n";
+    let res = resolve_one(src);
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(tc.diagnostics.is_empty(), "{:?}", tc.diagnostics);
+}

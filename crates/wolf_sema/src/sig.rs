@@ -854,11 +854,15 @@ impl<'a> Lower<'a> {
                     .find(|n| is_type_kind(n.kind))
                     .map(|t| self.lower_type(module, file, generics, t))
                     .unwrap_or_else(|| self.table.error());
-                // Bare `!T` outside a fn item's return position has no
-                // body to infer a row from: it is the empty row. Item
-                // returns replace this with the inferred-row marker
-                // ([`Lower::fn_sig_core`]).
-                let row = self.table.empty_row();
+                // Postfix `T ! {row}` (#3) spells its row right here.
+                // Bare prefix `!T` outside a fn item's return position
+                // has no body to infer a row from: it is the empty
+                // row. Item returns replace this with the inferred-row
+                // marker ([`Lower::fn_sig_core`]).
+                let row = match node.nodes().find_map(wolf_ast::ErrorRow::cast) {
+                    Some(r) => self.lower_row(module, file, generics, r),
+                    None => self.table.empty_row(),
+                };
                 self.table.err_union(inner, row)
             }
             SyntaxKind::TupleType => {

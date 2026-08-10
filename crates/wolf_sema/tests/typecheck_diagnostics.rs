@@ -129,6 +129,15 @@ fn e0402_wrong_arg_count() {
     );
 }
 
+/// `assert` takes 1 or 2 arguments (#9) — the arity report says so.
+#[test]
+fn e0402_assert_arity() {
+    snap_one(
+        "e0402_assert_arity",
+        "fn main() -> !int {\n    assert(true, \"msg\", 3)\n    0\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0403 -----
 
 /// Catalog case 10: field typo with suggestion and definition site.

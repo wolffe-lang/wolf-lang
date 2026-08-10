@@ -517,3 +517,57 @@ fn suppressed_regions_stay_quiet_in_typecheck() {
         tc.diagnostics
     );
 }
+
+// ----------------------------------------------- str ordering (#7) ----
+
+#[test]
+fn str_relational_operators_type() {
+    // The #7 ruling: `str` orders byte-lexicographically — `<` family
+    // yields `bool`, `<=>` yields `int`.
+    let tc = check_one(
+        "fn main() -> !int {\n    let a = \"apple\" < \"banana\"\n    let o = \"a\" <=> \"b\"\n    if a { o } else { 1 }\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let BodyResult::Checked(t) = body(&tc, "main") else {
+        panic!("main checks")
+    };
+    assert_eq!(t.local_type("a").as_deref(), Some("bool"));
+    assert_eq!(t.local_type("o").as_deref(), Some("int"));
+}
+
+#[test]
+fn str_compared_to_number_still_reports() {
+    let tc = check_one("fn main() -> !int {\n    let b = \"a\" < 3\n    0\n}\n");
+    assert!(!tc.diagnostics.is_empty(), "mixed operands still report");
+}
+
+// ------------------------------------------------ assert arity (#9) ----
+
+#[test]
+fn assert_takes_an_optional_message() {
+    let tc = check_one(
+        "fn main() -> !int {\n    let x = 3\n    assert(x > 0, \"positive\")\n    assert(x > 0)\n    0\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+#[test]
+fn assert_wrong_arity_is_e0402() {
+    let tc = check_one("fn main() -> !int {\n    assert(true, \"m\", 3)\n    0\n}\n");
+    assert_eq!(codes(&tc), ["E0402"]);
+    assert!(
+        tc.diagnostics[0].message.contains("1 or 2"),
+        "{}",
+        tc.diagnostics[0].message
+    );
+}

@@ -43,7 +43,7 @@
 //! mutable state — each body is an independent inference problem
 //! (Target 5; parallelized in [`crate::typecheck`]).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
     ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, GreenNode, IfExpr,
@@ -445,6 +445,11 @@ struct Checker<'a> {
     match_facts: Vec<(Span, bool)>,
     /// Resolved call-site mode surfaces in visit order (s18).
     calls: Vec<(Span, CallSig)>,
+    /// Every tag name spelled in an error row of the item under check
+    /// — the resolver's lowercase-deferral set, recomputed here so a
+    /// lowercase name it deferred is refused honestly instead of
+    /// silently ([`crate::resolve::lexical_row_tags`], #4).
+    row_tags: BTreeSet<String>,
 }
 
 /// One `match` recorded for the body-end exhaustiveness pass (s17):
@@ -576,6 +581,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         match_recs: Vec::new(),
         match_facts: Vec::new(),
         calls: Vec::new(),
+        row_tags: BTreeSet::new(),
     };
     let outcome = match body.member {
         None => c.run(node, body),
@@ -707,6 +713,7 @@ pub(crate) fn collect_body_rows(
         match_recs: Vec::new(),
         match_facts: Vec::new(),
         calls: Vec::new(),
+        row_tags: BTreeSet::new(),
     };
     let _ = c.run(node, body);
     // Solve what the body pinned, then default the rest so payload
@@ -916,6 +923,7 @@ impl<'a> Checker<'a> {
     // ------------------------------------------------------- entry ----
 
     fn run(&mut self, node: &GreenNode, body: &BodyRef) -> R<()> {
+        self.row_tags = crate::resolve::lexical_row_tags(node, self.src());
         match node.kind {
             SyntaxKind::FnDecl => self.run_fn(node, body),
             SyntaxKind::ConstDecl | SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
@@ -967,6 +975,7 @@ impl<'a> Checker<'a> {
     /// const inside an `impl` block. `Self` is the impl's self type;
     /// the archetype facts are the impl's bounds plus the method's.
     fn run_impl_member(&mut self, node: &GreenNode, body: &BodyRef, member: usize) -> R<()> {
+        self.row_tags = crate::resolve::lexical_row_tags(node, self.src());
         let Some(imp) = self
             .sigs
             .impls
@@ -1053,6 +1062,7 @@ impl<'a> Checker<'a> {
         body: &BodyRef,
         _member: usize,
     ) -> R<()> {
+        self.row_tags = crate::resolve::lexical_row_tags(node, self.src());
         let Some(tname_tok) = wolf_ast::TraitDecl::cast(outer).and_then(|d| d.name()) else {
             return Err(NotYet {
                 construct: "a trait member without a named trait",
@@ -2751,7 +2761,7 @@ impl<'a> Checker<'a> {
                 // expected row by membership — payloads pointwise,
                 // missing tags named exactly (E0602).
                 if let TyKind::ErrUnion(_, row) = self.kind_of(exp.ty) {
-                    if let Some(span) = self.deferred_tag(e) {
+                    if let Some(span) = self.deferred_tag(e, Some(row)) {
                         let name = self.text(span);
                         self.inject_tag(span, &name, &[], row, exp.because)?;
                         self.record(span, exp.ty);
@@ -2760,7 +2770,7 @@ impl<'a> Checker<'a> {
                     if e.kind == SyntaxKind::CallExpr
                         && let Some(c) = CallExpr::cast(e)
                         && let Some(callee) = c.callee()
-                        && let Some(cspan) = self.deferred_tag(callee)
+                        && let Some(cspan) = self.deferred_tag(callee, Some(row))
                     {
                         let name = self.text(cspan);
                         let mut args: Vec<&GreenNode> = Vec::new();
@@ -2924,15 +2934,25 @@ impl<'a> Checker<'a> {
 
     /// A capitalized name that resolves nowhere is a candidate
     /// error-row tag (D30) — resolution deferred it to us; we accept it
-    /// only against an opaque `!T` row and refuse elsewhere.
-    fn deferred_tag(&self, e: &GreenNode) -> Option<Span> {
+    /// only against an opaque `!T` row and refuse elsewhere. A
+    /// *lowercase* name is a candidate only when the expected `row`
+    /// declares it (#4) — or, with no expectation in sight, when the
+    /// enclosing item spells it in some error row ([`Self::row_tags`]),
+    /// which routes it to the honest refusal instead of silence.
+    fn deferred_tag(&self, e: &GreenNode, row: Option<TyId>) -> Option<Span> {
         if e.kind != SyntaxKind::PathExpr {
             return None;
         }
         let t = PathExpr::cast(e)?.ident()?;
         let name = self.text(t.span);
         if !name.chars().next().is_some_and(char::is_uppercase) {
-            return None;
+            let candidate = match row {
+                Some(r) => self.row_declares(r, &name),
+                None => self.row_tags.contains(&name),
+            };
+            if !candidate {
+                return None;
+            }
         }
         if self.lookup_local(&name).is_some()
             || self.generics.contains(&name)
@@ -2947,6 +2967,14 @@ impl<'a> Checker<'a> {
             return None;
         }
         Some(t.span)
+    }
+
+    /// Does this row type declare the tag?
+    fn row_declares(&self, row: TyId, name: &str) -> bool {
+        match self.kind_of(row) {
+            TyKind::Row { tags, .. } => tags.iter().any(|(n, _)| n == name),
+            _ => false,
+        }
     }
 
     fn synth_path(&mut self, e: &GreenNode) -> R<TyId> {
@@ -3012,7 +3040,7 @@ impl<'a> Checker<'a> {
             // A builtin type name is a `type`-kinded comptime value.
             return Ok(self.lo.table.intern(TyKind::TypeTy));
         }
-        if self.deferred_tag(e).is_some() {
+        if self.deferred_tag(e, None).is_some() {
             return Err(NotYet {
                 construct: "an error-row tag outside `!T` context (s15)",
                 span: e.span,
@@ -3168,6 +3196,21 @@ impl<'a> Checker<'a> {
                 if let Some(n) = self.rigid_name(lt) {
                     self.golden_rule_op(lhs.span, &n, &op_text);
                     return Ok(self.lo.table.prim(Prim::Bool));
+                }
+                // `str` orders too: byte-lexicographic, total, defined
+                // (the #7 ruling — lupin's byte order, no collation).
+                if matches!(self.kind_of(lt), TyKind::Prim(Prim::Str)) {
+                    let exp = Expect {
+                        ty: lt,
+                        reason: Reason::OpOperands(op_text),
+                        because: Some(lhs.span),
+                    };
+                    self.expect_unify(rhs.span, rt, &exp);
+                    return Ok(if op_kind == Some(SyntaxKind::Spaceship) {
+                        self.lo.table.prim(Prim::Int)
+                    } else {
+                        self.lo.table.prim(Prim::Bool)
+                    });
                 }
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
@@ -3782,10 +3825,10 @@ impl<'a> Checker<'a> {
     /// Methods on the Tier-2 builtins: `shared`/`weak` cells
     /// ([mem.shared.rc]) and the prelude containers. Typed stubs —
     /// exactly the surface the memory corpus rests on; the real std
-    /// API (modes, capacity, iteration adapters) is s37's. Stub
-    /// receivers type as `read` (call sites stay bare, matching the
-    /// corpus); mutation discipline rides the region open rules until
-    /// std declares real receiver modes.
+    /// API (capacity, iteration adapters) is s37's. Receivers carry
+    /// their honest X1 modes (#6): the mutators (`push`, `reserve`,
+    /// `init`, `remove`) take `mut self`, so call sites spell
+    /// `(mut xs).push(v)`; the readers stay bare.
     #[allow(clippy::too_many_arguments)]
     fn tier2_method_call(
         &mut self,
@@ -3802,6 +3845,14 @@ impl<'a> Checker<'a> {
             ty,
             span: member_span,
             mode: None,
+            view: None,
+        };
+        // `mut self` — the mutating receivers.
+        let pm = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: Some(wolf_ast::ParamMode::Mut),
             view: None,
         };
         let (params, ret) = match (self.kind_of(recv_ty), mname) {
@@ -3826,23 +3877,23 @@ impl<'a> Checker<'a> {
             }
             (TyKind::List(t), "push") => {
                 let u = self.lo.table.unit();
-                (vec![p("self", recv_ty), p("value", t)], u)
+                (vec![pm("self", recv_ty), p("value", t)], u)
             }
             // `[mem.shared.handle.1]` two-phase: reserve yields the
             // handle, init fills the slot. No null handles exist.
             (TyKind::Pool(t), "reserve") => {
                 let r = self.lo.table.intern(TyKind::Handle(t));
-                (vec![p("self", recv_ty)], r)
+                (vec![pm("self", recv_ty)], r)
             }
             (TyKind::Pool(t), "init") => {
                 let h = self.lo.table.intern(TyKind::Handle(t));
                 let u = self.lo.table.unit();
-                (vec![p("self", recv_ty), p("handle", h), p("value", t)], u)
+                (vec![pm("self", recv_ty), p("handle", h), p("value", t)], u)
             }
             (TyKind::Pool(t), "remove") => {
                 let h = self.lo.table.intern(TyKind::Handle(t));
                 let u = self.lo.table.unit();
-                (vec![p("self", recv_ty), p("handle", h)], u)
+                (vec![pm("self", recv_ty), p("handle", h)], u)
             }
             _ => {
                 return Err(NotYet {
@@ -3995,7 +4046,7 @@ impl<'a> Checker<'a> {
                     if let Some((module, item)) = self.named_fn_target(&name) {
                         return self.call_named(&item, module, callee.span, e, d.args());
                     }
-                    if self.deferred_tag(callee).is_some() {
+                    if self.deferred_tag(callee, None).is_some() {
                         return Err(NotYet {
                             construct: "an error-row tag outside `!T` context (s15)",
                             span: callee.span,
@@ -4416,8 +4467,52 @@ impl<'a> Checker<'a> {
         match i {
             I::Assert => {
                 // Runtime asserts stay runtime ([conf.trap.map]); the
-                // evaluator owns comptime failures (E0710).
-                self.call_fixed(name, &[bool_], unit, e, args)
+                // evaluator owns comptime failures (E0710). One or two
+                // arguments: the condition, and an optional `str`
+                // message carried into the failure report (#9).
+                let str_ = self.lo.table.prim(Prim::Str);
+                let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+                if arg_nodes.is_empty() || arg_nodes.len() > 2 {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0402,
+                            e.span,
+                            format!(
+                                "`{name}` takes 1 or 2 arguments, but this call passes {}",
+                                arg_nodes.len()
+                            ),
+                        )
+                        .with_label(format!(
+                            "{} argument{} here",
+                            arg_nodes.len(),
+                            if arg_nodes.len() == 1 { "" } else { "s" }
+                        ))
+                        .with_note(
+                            "`assert(condition)` checks the condition; \
+                             `assert(condition, message)` adds a `str` shown on failure.",
+                        ),
+                    );
+                }
+                for (i, arg) in arg_nodes.iter().enumerate() {
+                    let Some(v) = Arg::value(*arg) else { continue };
+                    match i {
+                        0 | 1 => {
+                            let exp = Expect {
+                                ty: if i == 0 { bool_ } else { str_ },
+                                reason: Reason::ArgOfCall {
+                                    callee: name.to_string(),
+                                    index: i,
+                                },
+                                because: None,
+                            };
+                            self.check_expr(v, &exp)?;
+                        }
+                        _ => {
+                            self.synth_expr(v)?;
+                        }
+                    }
+                }
+                Ok(unit)
             }
             I::TypeInfo => {
                 self.note_comptime_call(e.span);
@@ -6571,38 +6666,44 @@ impl<'a> Checker<'a> {
                     return Ok(Pat::Wild);
                 };
                 let name = self.text(t.span);
-                // A capitalized name over an enum or row scrutinee is
-                // a constructor, not a binding.
-                if name.chars().next().is_some_and(char::is_uppercase)
-                    && let Some(vs) = self.scrut_variants(scrut)
-                {
-                    {
-                        return Ok(match vs.iter().find(|v| v.0 == name) {
-                            Some((_, payload, _)) => {
-                                if !payload.is_empty() {
-                                    self.pattern_shape_err(
-                                        t.span,
-                                        format!(
-                                            "bare `{name}` names a variant that carries {} value{}",
-                                            payload.len(),
-                                            if payload.len() == 1 { "" } else { "s" }
-                                        ),
-                                        format!(
-                                            "match its payload too: `{name}({})`",
-                                            vec!["_"; payload.len()].join(", ")
-                                        ),
-                                    );
-                                }
-                                Pat::Ctor {
-                                    ctor: Ctor::Named(name),
-                                    args: vec![Pat::Wild; payload.len()],
-                                }
-                            }
-                            None => {
-                                self.unknown_case(scrut, t.span, &name);
-                                Pat::Wild
-                            }
+                // Type-directed (#4): a bare name that spells one of
+                // the scrutinee's cases — enum variant or row tag,
+                // either letter case — is a test, not a binding
+                // (`match err { gone => … }` over `T ! {gone}`). An
+                // uppercase non-case still reports (E0403/E0602)
+                // rather than silently binding.
+                if let Some((cases, open)) = self.scrut_cases(scrut) {
+                    if let Some((_, payload)) = cases.iter().find(|(n, _)| *n == name) {
+                        if !payload.is_empty() {
+                            self.pattern_shape_err(
+                                t.span,
+                                format!(
+                                    "bare `{name}` names a variant that carries {} value{}",
+                                    payload.len(),
+                                    if payload.len() == 1 { "" } else { "s" }
+                                ),
+                                format!(
+                                    "match its payload too: `{name}({})`",
+                                    vec!["_"; payload.len()].join(", ")
+                                ),
+                            );
+                        }
+                        let arity = payload.len();
+                        return Ok(Pat::Ctor {
+                            ctor: Ctor::Named(name),
+                            args: vec![Pat::Wild; arity],
                         });
+                    }
+                    if name.chars().next().is_some_and(char::is_uppercase) {
+                        if open {
+                            // An open row admits tags we cannot see.
+                            return Ok(Pat::Ctor {
+                                ctor: Ctor::Named(name),
+                                args: Vec::new(),
+                            });
+                        }
+                        self.unknown_case(scrut, t.span, &name);
+                        return Ok(Pat::Wild);
                     }
                 }
                 self.bind(name, t.span, scrut);
@@ -6860,6 +6961,19 @@ impl<'a> Checker<'a> {
             ctor: Ctor::Named(cname),
             args,
         })
+    }
+
+    /// The scrutinee's named cases — enum variants or row tags — as
+    /// `(name, payload types)` plus whether the row is open. `None`
+    /// when the type has no case shape at all.
+    #[allow(clippy::type_complexity)]
+    fn scrut_cases(&self, ty: TyId) -> Option<(Vec<(String, Vec<TyId>)>, bool)> {
+        match self.kind_of(ty) {
+            TyKind::Row { tags, tail } => Some((tags, tail.is_some())),
+            _ => self
+                .scrut_variants(ty)
+                .map(|vs| (vs.into_iter().map(|(n, p, _)| (n, p)).collect(), false)),
+        }
     }
 
     /// The scrutinee's enum variants, if it is a (non-generic) enum:

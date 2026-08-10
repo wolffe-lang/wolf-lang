@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+assertion_line: 40
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0804]: `push` takes its receiver `mut`, but the call site does not say so
+ --> mem:///main.lu:3:5
+  |
+3 |     xs.push(1)
+  |     ^^ write the mode here: `(mut …)`
+  |        ---- `push` declares `mut self` here
+  |
+  = note: the receiver mirrors argument modes (X1): exclusive or consuming access is spelled where
+    the reader can see it.
+help: spell the receiver mode: `(mut …)`
+  |
+3 |     (mut xs).push(1)
+  |

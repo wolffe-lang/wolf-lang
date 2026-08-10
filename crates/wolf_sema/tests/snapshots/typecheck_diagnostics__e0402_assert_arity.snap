@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+assertion_line: 37
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0402]: `assert` takes 1 or 2 arguments, but this call passes 3
+ --> mem:///main.lu:2:5
+  |
+2 |     assert(true, "msg", 3)
+  |     ^^^^^^^^^^^^^^^^^^^^^^ 3 arguments here
+  |
+  = note: `assert(condition)` checks the condition; `assert(condition, message)` adds a `str`
+    shown on failure.

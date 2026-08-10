@@ -196,6 +196,20 @@ fn e0710_comptime_assert_failed() {
     );
 }
 
+/// The two-argument form (#9): the `str` message rides into the E0710
+/// rendering.
+#[test]
+fn e0710_comptime_assert_failed_with_message() {
+    snap_one(
+        "e0710_assert_message",
+        "comptime fn expect_fields(T: type, n: int) -> bool {\n    \
+         assert(typeinfo(T).fields.len == n, \"field count drifted\")\n    true\n}\n\n\
+         struct Pair {\n    a: int,\n    b: int,\n}\n\n\
+         fn main() -> !int {\n    const OK = expect_fields(Pair, 3)\n    \
+         if OK { 0 } else { 1 }\n}\n",
+    );
+}
+
 // --------------------------------------- staged diagnostics (E0507) ----
 
 /// An error inside *generated* code renders the generator's provenance

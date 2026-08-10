@@ -362,8 +362,12 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
              type checker; comptime can answer for fixed-width primitives today \
              and for aggregates once c05 lands.",
         ),
-        FaultKind::AssertFailed => {
-            Diagnostic::error(codes::E0710, f.span, "this comptime assertion failed")
+        FaultKind::AssertFailed { msg } => {
+            let message = match msg {
+                Some(m) => format!("this comptime assertion failed: {m}"),
+                None => "this comptime assertion failed".to_string(),
+            };
+            Diagnostic::error(codes::E0710, f.span, message)
                 .with_label("evaluated to `false` at compile time")
                 .with_note(
                     "a failed comptime `assert` stops compilation — it is the \

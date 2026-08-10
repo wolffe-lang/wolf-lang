@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 144
 expression: "dump(&corpus(\"memory/handle_stale.lu\"))"
 ---
 fn main
@@ -12,21 +13,21 @@ fn main
     init r @265..266
     alloc Pool[Node] -> region r @300..312
     init pool @293..297
-    read pool @329..333
-    call reserve [read pool] @329..343
+    call reserve [mut pool] @329..349
+    alloc reserve(..) -> region r @329..349
     init h @325..326
-    read pool @352..356
-    read h @362..363
-    alloc Node -> region r @365..382
-    call init [read pool] @352..383
-    read pool @392..396
-    read h @404..405
-    call remove [read pool] @392..406
-    read h @473..474
-    handle-check pool[_] @468..475
-    read pool[_].value @468..481
-    init v @464..465
-    read v @538..539
-    region-close region r @544..545
+    read h @374..375
+    alloc Node -> region r @377..394
+    call init [mut pool] @358..395
+    alloc init(..) -> region r @358..395
+    read h @422..423
+    call remove [mut pool] @404..424
+    alloc remove(..) -> region r @404..424
+    read h @485..486
+    handle-check pool[_] @480..487
+    read pool[_].value @480..493
+    init v @476..477
+    read v @550..551
+    region-close region r @556..557
     -> b1, trap
   b1:

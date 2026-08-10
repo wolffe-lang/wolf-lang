@@ -1,19 +1,23 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 164
 expression: "facts(&corpus(\"regions.lu\"))"
 ---
 facts fn build_ring
   read n -> immutable-for-call (frozen)
   alloc Pool[Node] @784..796 -> region r
   alloc List[handle Node] @848..867 -> region r
-  alloc Node @1009..1196 -> region r
+  alloc reserve(..) @906..926 -> region r
+  alloc push(..) @892..927 -> region r
+  alloc Node @1015..1202 -> region r
+  alloc init(..) @1215..1243 -> region r
   promote region r @699..700 -> stack (create/free elided)
-  handle-check pool[_] @1295..1304 -> generation check (hoistable in unfreed window)
-  handle-check pool[_] @1329..1338 -> generation check (hoistable in unfreed window)
+  handle-check pool[_] @1341..1350 -> generation check (hoistable in unfreed window)
+  handle-check pool[_] @1375..1384 -> generation check (hoistable in unfreed window)
 
 facts fn build_config
-  alloc Config @1510..1530 -> caller
+  alloc Config @1556..1576 -> caller
 
 facts fn main
-  move r @1809..1810 -> memcpy-and-forget
-  alloc Config @1768..1782 -> region r
+  move r @1855..1856 -> memcpy-and-forget
+  alloc Config @1814..1828 -> region r

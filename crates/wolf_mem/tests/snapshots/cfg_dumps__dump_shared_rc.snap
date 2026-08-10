@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 130
 expression: "dump(&corpus(\"memory/shared_ok.lu\"))"
 ---
 fn main
@@ -32,7 +33,7 @@ fn main
     -> b1
   b3:
     init live @363..367
-    move b.limit @411..418
+    read b.limit @411..418
     -> b5, b6
   b4:
     -> b3
