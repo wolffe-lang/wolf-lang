@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.region.create.3, mem.region.intra.2, mem.region.promote.1
+//! Cyclone porting-study shape 1 (list-builder), s19's annotation-
+//! freedom demonstration: a batch of records built in a scratch
+//! region, folded, freed wholesale — ZERO region annotations, and the
+//! scratch region is promotion-eligible (frame-local create/free).
+
+struct Row { key: int, weight: int }
+
+fn build(i: int) -> Row {
+    Row { key: i, weight: i + 1 }  // allocates into the CALLER's region (D12)
+}
+
+fn score(r: Row) -> int {
+    r.key * r.weight
+}
+
+fn main() -> !int {
+    var total = 0
+    region batch {
+        for i in 1..4 {
+            let r = build(i)       // lands in batch: the ambient region here
+            total += score(r)
+        }
+    }                              // batch freed wholesale [mem.region.intra.2]
+    if total == 20 { 0 } else { 1 }
+}

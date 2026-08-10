@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 307..333 name=Leaf fields=1
+StructDecl 335..374 name=Fork fields=2
+FnDecl 376..479 name=grow body=Block
+FnDecl 481..636 name=scale body=Block
+FnDecl 638..857 name=main body=Block

@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 389..425 name=Row fields=2
+FnDecl 427..533 name=build body=Block
+FnDecl 535..583 name=score body=Block
+FnDecl 585..902 name=main body=Block

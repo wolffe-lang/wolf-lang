@@ -1,0 +1,27 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.region.create.3, mem.model.alloc
+//! Cyclone porting-study shape 2 (tree-transform): build a fixed-shape
+//! tree, transform it into a NEW tree — every allocation lands in the
+//! caller's region by default (D12), zero region annotations anywhere.
+
+struct Leaf { value: int }
+
+struct Fork { left: Leaf, right: Leaf }
+
+fn grow(seed: int) -> Fork {
+    Fork { left: Leaf { value: seed }, right: Leaf { value: seed * 2 } }
+}
+
+fn scale(f: Fork, by: int) -> Fork {
+    Fork {
+        left: Leaf { value: f.left.value * by },
+        right: Leaf { value: f.right.value * by },
+    }
+}
+
+fn main() -> !int {
+    let t = grow(3)                // allocated into main's region
+    let s = scale(t, 7)            // the transform allocates alongside
+    if s.left.value + s.right.value == 63 { 0 } else { 1 }
+}

@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 339..376 name=Request fields=2
+StructDecl 378..416 name=Response fields=2
+FnDecl 418..606 name=cost_of body=Block
+FnDecl 608..695 name=respond body=Block
+FnDecl 697..878 name=main body=Block

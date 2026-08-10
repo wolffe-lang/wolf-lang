@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 559..585 name=Item fields=1
+StructDecl 587..615 name=Holder fields=1
+FnDecl 617..737 name=stash body=Block
+FnDecl 739..935 name=main body=Block

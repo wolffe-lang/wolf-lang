@@ -1,0 +1,33 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.region.create.1, mem.region.create.3, mem.region.intra.2
+//! Cyclone porting-study shape 3 (request handler): per-request
+//! scratch region for the parse work; the response outlives it
+//! because it is built in the handler's own region — zero
+//! annotations, scratch promoted.
+
+struct Request { id: int, size: int }
+
+struct Response { id: int, cost: int }
+
+fn cost_of(size: int) -> int {
+    var cost = 0
+    region scratch {
+        let parts = Request { id: 0, size: size }  // scratch-local work
+        cost = parts.size * 3
+    }
+    cost
+}
+
+fn respond(r: Request) -> Response {
+    Response { id: r.id, cost: cost_of(r.size) }
+}
+
+fn main() -> !int {
+    var sum = 0
+    for i in 0..3 {
+        let resp = respond(Request { id: i, size: i + 1 })
+        sum += resp.cost
+    }
+    if sum == 18 { 0 } else { 1 }
+}
