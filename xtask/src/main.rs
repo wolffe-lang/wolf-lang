@@ -474,6 +474,40 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         }
         _ => eprintln!("bench: wolf_sema ctfe_bench unavailable — memo rate skipped"),
     }
+    // (c''') WIR construction metrics (s25, D5): instructions built
+    // per second plus the peephole hit-rate counters (fold/identity/
+    // gvn/forward) — the Click §5 claim, measured. Skips gracefully
+    // until the example exists.
+    let wb = Command::new("cargo")
+        .args([
+            "run",
+            "-p",
+            "wolf_wir",
+            "--example",
+            "wir_build_bench",
+            "--quiet",
+        ])
+        .output();
+    match wb {
+        Ok(out) if out.status.success() => {
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                for (metric, unit) in [
+                    ("wir_insts_per_sec", "insts/s"),
+                    ("wir_fold_hits", "hits"),
+                    ("wir_identity_hits", "hits"),
+                    ("wir_gvn_hits", "hits"),
+                    ("wir_forward_hits", "hits"),
+                ] {
+                    if let Some(x) = v[metric].as_f64() {
+                        records.push(record(
+                            "wir", "compile", "rust", metric, x, unit, commit, config,
+                        ));
+                    }
+                }
+            }
+        }
+        _ => eprintln!("bench: wolf_wir wir_build_bench unavailable — wir-build skipped"),
+    }
     // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v
     touch(Path::new("crates/wolf_driver/src/main.rs"));
     match max_rss_kb("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {

@@ -495,6 +495,52 @@ fn checked_run(
     }
 }
 
+/// The s25 `wir` rung: Braun-construct WIR from the typed HIR of a
+/// mem-clean package. Any honest refusal keeps the ladder at
+/// `mem`/`unsupported` (the conservatism ledger). A lowered module
+/// that fails the verifier or the print→parse→print fixpoint is a
+/// compiler bug — a deterministic ICE (exit 2), never a verdict.
+fn wir_rung(
+    pkg: &wolf_sema::Package,
+    tc: &wolf_sema::Typecheck,
+    phase: Option<&str>,
+    zstats: bool,
+    all: Vec<Diagnostic>,
+) -> (&'static str, String, Vec<Diagnostic>) {
+    let build = wolf_wir::lower_package(pkg, tc);
+    if !build.not_yet.is_empty() {
+        return ("mem", "unsupported".to_string(), all);
+    }
+    if let Err(e) = wolf_wir::verify_module(&build.module) {
+        eprintln!("wolf conform-run: ICE: lowered WIR failed verification\n{e}");
+        std::process::exit(2);
+    }
+    let printed = wolf_wir::print_module(&build.module);
+    match wolf_wir::parse_module(&printed) {
+        Ok(reparsed) if wolf_wir::print_module(&reparsed) == printed => {}
+        Ok(_) => {
+            eprintln!("wolf conform-run: ICE: WIR dump is not a print→parse→print fixpoint");
+            std::process::exit(2);
+        }
+        Err(e) => {
+            eprintln!("wolf conform-run: ICE: canonical WIR dump does not reparse: {e}");
+            std::process::exit(2);
+        }
+    }
+    if zstats {
+        let s = build.stats;
+        eprintln!(
+            "wir-build: insts={} fold={} identity={} gvn={} forward={}",
+            s.insts, s.fold, s.identity, s.gvn, s.forward
+        );
+    }
+    if phase == Some("wir") {
+        ("wir", "pass".to_string(), all)
+    } else {
+        ("wir", "unsupported".to_string(), all)
+    }
+}
+
 /// A minimal, dependency-free SHA-256 (FIPS 180-4) for the observation
 /// record's `stdout_sha256` — wolf stays build-script- and
 /// heavy-dependency-free (D33/D15), and the protocol needs one hash.
@@ -594,6 +640,9 @@ fn conform_run(args: &[String]) {
     let mut checked = std::env::var("WOLF_CHECKED")
         .map(|v| v == "1")
         .unwrap_or(false);
+    // `--zstats` (s25): peephole hit-rate counters from the wir rung's
+    // builder, dumped on stderr — the Click claim, measured.
+    let mut zstats = false;
     for a in args {
         if a == "--json" || a.starts_with("--seed=") {
             continue; // accepted per [proto.invoke.cli]
@@ -610,9 +659,13 @@ fn conform_run(args: &[String]) {
             error_format = f.to_string();
             continue;
         }
+        if a == "--zstats" {
+            zstats = true;
+            continue;
+        }
         if let Some(d) = a.strip_prefix("--dump=") {
-            if d != "regions" && d != "cfg" {
-                eprintln!("wolf conform-run: unknown dump `{d}` (regions, cfg)");
+            if d != "regions" && d != "cfg" && d != "wir" {
+                eprintln!("wolf conform-run: unknown dump `{d}` (regions, cfg, wir)");
                 std::process::exit(2);
             }
             dump = Some(d.to_string());
@@ -638,7 +691,7 @@ fn conform_run(args: &[String]) {
     let Some(file) = file else {
         eprintln!(
             "usage: wolf conform-run <file.lu> [--phase=<p>] [--seed=N] [--json] \
-             [--error-format=human|json] [--dump=regions|cfg]"
+             [--error-format=human|json] [--dump=regions|cfg|wir] [--zstats]"
         );
         std::process::exit(2);
     };
@@ -759,6 +812,10 @@ fn conform_run(args: &[String]) {
                                             // under the UB machine;
                                             // refusals stay in the
                                             // conservatism ledger.
+                                            // (It interprets the typed
+                                            // HIR directly; the wir
+                                            // rung below serves the
+                                            // default ladder.)
                                             checked_run(
                                                 &res.package,
                                                 &tc,
@@ -768,7 +825,18 @@ fn conform_run(args: &[String]) {
                                                 &mut x_ext,
                                             )
                                         } else {
-                                            ("mem", "unsupported".to_string(), all)
+                                            // The wir rung (s25):
+                                            // lower what typechecked
+                                            // and mem-passed; any
+                                            // refusal keeps the
+                                            // ladder at mem.
+                                            wir_rung(
+                                                &res.package,
+                                                &tc,
+                                                phase.as_deref(),
+                                                zstats,
+                                                all,
+                                            )
                                         }
                                     }
                                 }
@@ -795,6 +863,20 @@ fn conform_run(args: &[String]) {
             let tc = wolf_sema::typecheck_package(&res);
             let text = match kind.as_str() {
                 "regions" => wolf_mem::dump_regions_package(&res.package, &tc),
+                // The lowered WIR of every lowerable body (s25);
+                // refusals are listed so the dump is never silently
+                // partial.
+                "wir" => {
+                    let build = wolf_wir::lower_package(&res.package, &tc);
+                    let mut text = wolf_wir::print_module(&build.module);
+                    for nyc in &build.not_yet {
+                        text.push_str(&format!(
+                            "; not lowered: {} @{}..{}\n",
+                            nyc.construct, nyc.span.lo, nyc.span.hi
+                        ));
+                    }
+                    text
+                }
                 _ => wolf_mem::dump_package(&res.package, &tc),
             };
             eprint!("{text}");
