@@ -1,0 +1,38 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/excl_disjoint_ok.lu\"))"
+---
+fn bump
+  _0 a: int copy param(mut)
+  _1 b: int copy param(mut)
+  b0:
+    mutate a @411..412
+    mutate b @419..420
+    -> b1
+  b1:
+
+fn main
+  _0 p: P
+  b0:
+    init p @457..458
+    call bump [mut p.x, mut p.y] @488..510
+    call bump [mut p.y, mut p.z] @561..583
+    read p.x @639..642
+    -> b2, b3
+  b1:
+  b2:
+    read p.y @651..654
+    -> b3
+  b3:
+    -> b4, b5
+  b4:
+    read p.z @663..666
+    -> b5
+  b5:
+    -> b6, b8
+  b6:
+    -> b7
+  b7:
+    -> b1
+  b8:
+    -> b7

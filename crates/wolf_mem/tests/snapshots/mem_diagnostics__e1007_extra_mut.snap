@@ -1,0 +1,17 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1007]: `look` takes `n` as plain `read` — no mode is written for it
+ --> mem:///main.lu:4:22
+  |
+1 | fn look(n: int) -> int { n + 1 }
+  |         - the parameter is declared here
+...
+4 |     let y = look(mut x)
+  |                      ^ this argument
+  |
+help: remove the `mut`
+  |
+4 |     let y = look(x)
+  |

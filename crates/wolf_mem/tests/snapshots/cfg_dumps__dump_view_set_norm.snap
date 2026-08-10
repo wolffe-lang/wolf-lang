@@ -1,0 +1,34 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/view_set_norm.lu\"))"
+---
+fn norm
+  _0 self: P param(mut)
+  b0:
+    read self.x @530..536
+    read self.y @539..545
+    checked-op @530..545
+    init self.x @521..527
+    init self.y @554..560
+    read self.x @573..579
+    -> b1, trap
+  b1:
+
+fn main
+  _0 p: P
+  _1 n: int copy
+  b0:
+    init p @617..618
+    call norm [mut p.x, mut p.y] @657..671
+    read p.z @674..677
+    checked-op @657..677
+    init n @653..654
+    read n @725..726
+    -> b2, b4, trap
+  b1:
+  b2:
+    -> b3
+  b3:
+    -> b1
+  b4:
+    -> b3

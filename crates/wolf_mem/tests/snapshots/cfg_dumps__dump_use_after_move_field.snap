@@ -1,0 +1,32 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"faults/use_after_move_field.lu\"))"
+---
+fn eat
+  _0 i: Inner param(take)
+  b0:
+    read i.n @530..533
+    -> b1
+  b1:
+
+fn main
+  _0 p: P
+  _1 a: int copy
+  _2 b: int copy
+  _3 c: int copy
+  b0:
+    init p @565..566
+    move p.x @633..636
+    call eat [take p.x] @624..637
+    init a @620..621
+    read p.y.n @693..698
+    init b @689..690
+    read p.x.n @757..762
+    init c @753..754
+    read a @807..808
+    read b @811..812
+    checked-op @807..812
+    read c @815..816
+    checked-op @807..816
+    -> b1, trap
+  b1:

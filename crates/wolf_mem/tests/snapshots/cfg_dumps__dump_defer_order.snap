@@ -1,0 +1,8 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/defer_order.lu\"))"
+---
+fn main
+  b0:
+    -> b1
+  b1:

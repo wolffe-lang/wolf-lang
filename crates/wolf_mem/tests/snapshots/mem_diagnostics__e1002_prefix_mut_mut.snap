@@ -1,0 +1,13 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `p.x` cannot go `mut` here: it overlaps `p`, already passed `mut` in this call
+ --> mem:///main.lu:5:20
+  |
+5 |     two(mut p, mut p.x)
+  |             - `p` is passed `mut` here
+  |                    ^^^ second exclusive claim on the same place
+  |
+  = note: `p.x` is inside `p` — a path and its prefix conflict [mem.model.path.disjoint]. Disjoint
+    fields (`x.a` with `x.b`) are fine together.

@@ -1,0 +1,24 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `p` is used here after its value moved away
+ --> mem:///main.lu:5:22
+  |
+5 |     let n = grab(mut p, take p)
+  |                      ^ used after the move
+  |                              - `p` moved here
+  |
+  = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+  |
+5 |     let n = grab(mut p, take copy p)
+  |
+
+error[E1002]: `p` moves away in this call while `p` goes `mut` in it
+ --> mem:///main.lu:5:30
+  |
+5 |     let n = grab(mut p, take p)
+  |                      - `p` is passed `mut` here
+  |                              ^ moved while being mutated
+  |

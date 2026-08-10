@@ -1,0 +1,89 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/exclusivity.lu\"))"
+---
+fn norm
+  _0 self: V param(mut)
+  b0:
+    read self.x @748..754
+    read self.y @757..763
+    checked-op @748..763
+    init self.x @739..745
+    init self.y @772..778
+    read self.x @791..797
+    -> b1, trap
+  b1:
+
+fn set_x
+  _0 self: V param(mut)
+  _1 n: int copy param(read)
+  b0:
+    read n @850..851
+    init self.x @841..847
+    -> b1
+  b1:
+
+fn swap_fields
+  _0 a: int copy param(mut)
+  _1 b: int copy param(mut)
+  _2 t: int copy
+  b0:
+    read a @910..911
+    init t @906..907
+    read b @920..921
+    init a @916..917
+    read t @930..931
+    init b @926..927
+    -> b1
+  b1:
+
+fn eat
+  _0 v: V param(take)
+  b0:
+    read v.x @962..965
+    read v.y @968..971
+    checked-op @962..971
+    read v.z @974..977
+    checked-op @962..977
+    -> b1, trap
+  b1:
+
+fn main
+  _0 p: Pair
+  _1 n: int copy
+  _2 m: int copy
+  _3 k: int copy
+  _4 r: int copy
+  b0:
+    init p @1009..1010
+    call swap_fields [mut p.a.x, mut p.a.y] @1079..1112
+    call swap_fields [mut p.a.x, mut p.b.x] @1162..1195
+    call norm [mut p.a.x, mut p.a.y] @1234..1250
+    read p.b.x @1253..1258
+    checked-op @1234..1258
+    init n @1230..1231
+    read p.a.z @1320..1325
+    call set_x [mut p.a.x] @1304..1326
+    move p.a @1463..1466
+    call eat [take p.a] @1454..1467
+    init m @1450..1451
+    read p.b.y @1532..1537
+    init k @1528..1529
+    init p.a @1595..1598
+    read p.a.x @1676..1681
+    read n @1684..1685
+    checked-op @1676..1685
+    read m @1688..1689
+    checked-op @1676..1689
+    read k @1692..1693
+    checked-op @1676..1693
+    init r @1672..1673
+    read r @1701..1702
+    -> b2, b4, trap
+  b1:
+  b2:
+    -> b3
+  b3:
+    -> b1
+  b4:
+    -> b3

@@ -1,0 +1,9 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "facts(&corpus(\"memory/move_use_after.lu\"))"
+---
+facts fn consume
+  take b -> owned
+
+facts fn main
+  move b @568..569 -> memcpy-and-forget

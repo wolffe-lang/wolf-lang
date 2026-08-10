@@ -1,0 +1,27 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/move_use_after.lu\"))"
+---
+fn consume
+  _0 b: Big param(take)
+  b0:
+    read b.data @485..491
+    -> b1
+  b1:
+
+fn main
+  _0 b: Big
+  _1 n: int copy
+  _2 m: int copy
+  b0:
+    init b @523..524
+    move b @568..569
+    call consume [take b] @555..570
+    init n @551..552
+    read b.data @583..589
+    init m @579..580
+    read n @638..639
+    read m @642..643
+    checked-op @638..643
+    -> b1, trap
+  b1:

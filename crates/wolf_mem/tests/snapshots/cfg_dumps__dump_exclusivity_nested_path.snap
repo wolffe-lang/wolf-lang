@@ -1,0 +1,29 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"faults/exclusivity_nested_path.lu\"))"
+---
+fn bump
+  _0 x: int copy param(mut)
+  _1 y: int copy param(mut)
+  b0:
+    mutate x @474..475
+    mutate y @482..483
+    -> b1
+  b1:
+
+fn wide
+  _0 i: Inner param(mut)
+  _1 n: int copy param(mut)
+  b0:
+    mutate n @528..529
+    -> b1
+  b1:
+
+fn main
+  _0 p: P
+  b0:
+    init p @566..567
+    call bump [mut p.a.n, mut p.b.n] @617..643
+    call wide [mut p.a, mut p.a.n] @671..695
+    -> b1
+  b1:

@@ -1,0 +1,17 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1007]: `bump` declares `n` as `mut`, but the call site does not say so
+ --> mem:///main.lu:4:10
+  |
+1 | fn bump(mut n: int) { n += 1 }
+  |             - the parameter is declared here
+...
+4 |     bump(x)
+  |          ^ this argument
+  |
+help: write the argument's mode: `mut …`
+  |
+4 |     bump(mut x)
+  |

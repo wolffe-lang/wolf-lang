@@ -1,0 +1,18 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `b.data` is used here after its value moved away
+ --> mem:///main.lu:7:13
+  |
+6 |     if b.data == 2 { n = consume(take b) } else { n = 0 }
+  |                                       - `b` moved here
+7 |     let m = b.data
+  |             ^^^^^^ used after the move
+  |
+  = note: `b.data` is part of `b`; moving one empties the other. Disjoint fields stay usable.
+  = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+  |
+6 |     if b.data == 2 { n = consume(take copy b) } else { n = 0 }
+  |

@@ -1,0 +1,17 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1007]: `consume` declares `b` as `take`, but the call site does not say so
+ --> mem:///main.lu:5:13
+  |
+2 | fn consume(take b: Big) -> int { b.data }
+  |                 - the parameter is declared here
+...
+5 |     consume(b)
+  |             ^ this argument
+  |
+help: write the argument's mode: `take …`
+  |
+5 |     consume(take b)
+  |

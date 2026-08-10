@@ -1,0 +1,21 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/excl_overlap.lu\"))"
+---
+fn two
+  _0 a: P param(mut)
+  _1 b: int copy param(mut)
+  b0:
+    read b @229..230
+    mutate a.y @222..225
+    mutate b @232..233
+    -> b1
+  b1:
+
+fn main
+  _0 p: P
+  b0:
+    init p @270..271
+    call two [mut p, mut p.x] @295..314
+    -> b1
+  b1:

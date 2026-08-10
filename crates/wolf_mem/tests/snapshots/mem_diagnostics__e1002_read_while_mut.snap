@@ -1,0 +1,12 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `p` is lent for this call while `p` goes `mut` in it
+ --> mem:///main.lu:5:16
+  |
+5 |     mix(mut p, p)
+  |             - `p` is passed `mut` here
+  |                ^ read of a place being mutated
+  |
+  = note: the same place twice is never disjoint.

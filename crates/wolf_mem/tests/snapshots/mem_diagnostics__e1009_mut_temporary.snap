@@ -1,0 +1,12 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1009]: a `mut` argument must name a place — a variable or a field path
+ --> mem:///main.lu:3:14
+  |
+3 |     bump(mut 41)
+  |              ^^ this is a temporary value
+  |
+  = note: the callee's writes would vanish with the temporary. Bind the value first: `var t = …`,
+    then pass `mut t`.

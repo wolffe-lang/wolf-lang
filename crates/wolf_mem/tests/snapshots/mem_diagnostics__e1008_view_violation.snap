@@ -1,0 +1,14 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1008]: this method declares a view of `self.{x, y}`, but touches `self.z`
+ --> mem:///main.lu:4:9
+  |
+3 |     fn norm(mut self.{x, y}) -> int {
+  |             --------------- the view set is declared here
+4 |         self.z = 0
+  |         ^^^^^^ outside the declared view
+  |
+  = note: callers rely on the view: they may use the other fields while this method runs. Add the
+    field to the view set, or take plain `mut self`.

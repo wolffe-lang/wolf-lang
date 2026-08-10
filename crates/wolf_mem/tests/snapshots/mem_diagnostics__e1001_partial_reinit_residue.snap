@@ -1,0 +1,19 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `p.y.n` is used here after its value moved away
+ --> mem:///main.lu:9:13
+  |
+6 |     let a = eat(take p)
+  |                      - `p.y` moved here
+...
+9 |     let c = p.y.n
+  |             ^^^^^ used after the move
+  |
+  = note: `p.y.n` is part of `p.y`; moving one empties the other. Disjoint fields stay usable.
+  = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+  |
+6 |     let a = eat(take copy p)
+  |

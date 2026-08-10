@@ -1,0 +1,19 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "facts(&corpus(\"memory/exclusivity.lu\"))"
+---
+facts fn norm
+  mut self -> noalias, dereferenceable
+
+facts fn set_x
+  mut self -> noalias, dereferenceable
+  read n -> immutable-for-call (frozen)
+
+facts fn swap_fields
+  mut a -> noalias, dereferenceable
+  mut b -> noalias, dereferenceable
+
+facts fn eat
+  take v -> owned
+
+facts fn main
