@@ -1,13 +1,17 @@
 //! check: run(exit=0)
-//! phase: resolve
+//! phase: mem
 //! conforms: mem.unsafe.raw.1, mem.unsafe.raw.2
 //! Raw pointers carry NO aliasing assumptions unless asserted. This
 //! assertion is true, so behavior is defined and O5 licensing applies.
+//! STATIC (s22): the tier accepts the surface — ring present, operands
+//! are pointers; the assertion's truth is dynamic (P5, s23/is04).
 
 import c "stdlib.h"
 
 fn main() -> !int {
     var out = 0
+    // # Safety: p and q are distinct live 8-byte allocations, so the
+    // noalias assertion is true; both are freed exactly once.
     unsafe {
         let p = c.malloc(8) as *u8
         let q = c.malloc(8) as *u8

@@ -1,0 +1,15 @@
+//! check: fail(E1302)
+//! phase: typecheck
+//! conforms: mem.unsafe.scope
+//! Unsafety never crosses a signature: there are no `unsafe fn`s at
+//! v1 — the proof obligation lives at the block, the module is the
+//! audit granule, and a `*T` parameter would smuggle the raw tier
+//! into every caller's audit surface.
+
+fn peek(p: *u8) -> int {           // E1302: `*T` in a signature
+    0
+}
+
+fn main() -> !int {
+    0
+}

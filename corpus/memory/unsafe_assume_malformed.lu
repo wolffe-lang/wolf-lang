@@ -1,0 +1,16 @@
+//! check: fail(E1304)
+//! phase: typecheck
+//! conforms: mem.unsafe.raw.2
+//! `assume noalias` takes raw pointers: safe values already carry
+//! stronger, checked aliasing facts, so an `int` operand has nothing
+//! to assert — the malformed-assume catalog error.
+
+fn main() -> !int {
+    var a = 1
+    var b = 2
+    // # Safety: nothing raw happens — the malformed assume IS the test.
+    unsafe {
+        assume noalias a, b        // E1304 (twice): `int`, not `*T`
+    }
+    a + b - 3
+}

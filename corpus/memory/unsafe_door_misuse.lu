@@ -1,0 +1,17 @@
+//! check: fail(E1305)
+//! phase: typecheck
+//! conforms: mem.unsafe.door
+//! Door misuse: `borrow … from …` needs a `region` on the left and a
+//! raw pointer on the right — an `int` on either side gives the claim
+//! nothing to check against, and nothing else converts raw to safe.
+
+fn main() -> !int {
+    let x = 7
+    var out = 0
+    // # Safety: nothing is discharged — the door misuse IS the test.
+    unsafe {
+        let v = borrow x from x    // E1305 (twice): not a region, not a `*T`
+        out = v as int
+    }
+    out
+}

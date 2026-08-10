@@ -1,0 +1,28 @@
+//! check: pass
+//! phase: mem
+//! conforms: mem.boundary.trusted, mem.unsafe.scope
+//! D11 ring 2: `#[trusted]` declares an unsafe-encapsulating contract
+//! the checker cannot see. The fn rosters in the module's `wolfi`
+//! interface (both hash partitions), `corpus/memory/wolf.pkg` declares
+//! the module (`trusted = root`), and `wolf audit-surface` prints the
+//! ring inventory — the s51 `wolf audit` supply-chain surface.
+
+import c "stdlib.h"
+
+#[trusted("the scratch pointer never leaves this frame; freed before return")]
+fn scratch() -> int {
+    var out = 0
+    // # Safety: p addresses a live 8-byte allocation for the whole
+    // block and is freed exactly once.
+    unsafe {
+        let p = c.malloc(8) as *u8
+        p[0] = 9
+        out = p[0] as int
+        c.free(p)
+    }
+    out
+}
+
+fn main() -> !int {
+    if scratch() == 9 { 0 } else { 1 }
+}

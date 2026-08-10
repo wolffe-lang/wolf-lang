@@ -1,0 +1,5 @@
+# wolf.pkg — s51-stub manifest for the memory corpus package (s22).
+# D11 ring 2: modules holding #[trusted] code are declared here, so a
+# dependency growing trusted code is a visible diff (`wolf audit`).
+# `unsafe_trusted.lu` carries the corpus's one #[trusted] fn.
+trusted = root

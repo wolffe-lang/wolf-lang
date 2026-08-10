@@ -1,0 +1,16 @@
+//! check: fail(E1301)
+//! phase: typecheck
+//! conforms: mem.unsafe.scope, mem.codes
+//! The tier boundary: the raw tier's OPERATIONS demand the `unsafe`
+//! ring — C calls, pointer casts, raw writes are all E1301 in safe
+//! code. (The pointer VALUE is inert: holding or copying `p` would be
+//! free; creation is not a use.)
+
+import c "stdlib.h"
+
+fn main() -> !int {
+    let p = c.malloc(8) as *u8     // E1301: C call + cast outside the ring
+    p[0] = 1                       // E1301: raw write outside the ring
+    c.free(p)                      // E1301
+    0
+}

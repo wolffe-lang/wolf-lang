@@ -1,13 +1,18 @@
 //! check: run(exit=trap(ub))
-//! phase: resolve
+//! phase: mem
 //! conforms: mem.ub, mem.prov.region
 //! §7/P1: use-after-free through a raw pointer. Compiled behavior is
 //! UNDEFINED (licenses O1); the is04 oracle and the D21 quarantine
 //! allocator both flag it — `trap(ub)` is the checked-build outcome.
+//! STATIC (s22): the tier ACCEPTS this file — UB is dynamic by design
+//! ([mem.unsafe.raw.1]: no static approximation of P1 exists), and the
+//! static tier only gates the surface (the ring, the operand shapes).
 
 import c "stdlib.h"
 
 fn main() -> !int {
+    // # Safety: DELIBERATELY UNSOUND — the read after free is this
+    // litmus's point; the oracle answers ub(mem.ub) with x-ub-row P1.
     unsafe {
         let p = c.malloc(8) as *u8
         p[0] = 7

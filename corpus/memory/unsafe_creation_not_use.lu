@@ -1,0 +1,25 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.prov.tag, mem.prov.state, mem.unsafe.raw.1
+//! Creation is not a use — the Stacked Borrows mistake Tree Borrows
+//! repairs (most SB libstd violations were creation-as-use false
+//! positives; TB's ReservedIM). Deriving `q` between two uses of `p`
+//! invalidates nothing: only ACCESSES touch the permission machine, so
+//! the interleave below is accepted statically and runs defined.
+
+import c "stdlib.h"
+
+fn main() -> !int {
+    var out = 0
+    // # Safety: p and q address the same live 8-byte allocation; every
+    // access is in bounds and the allocation is freed exactly once.
+    unsafe {
+        let p = c.malloc(8) as *u8
+        p[0] = 1
+        let q = p                  // derivation — NOT an access
+        p[1] = 2                   // p is still valid: q's creation used nothing
+        out = (q[0] + p[1]) as int // both siblings read — SB-stack poison, TB-fine
+        c.free(p)
+    }
+    if out == 3 { 0 } else { 1 }
+}
