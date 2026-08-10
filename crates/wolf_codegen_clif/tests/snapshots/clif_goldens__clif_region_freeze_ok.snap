@@ -1,0 +1,48 @@
+---
+source: crates/wolf_codegen_clif/tests/clif_goldens.rs
+expression: "clif_of(\"region_freeze_ok\")"
+---
+;; @build_config
+function u0:0(i64) system_v {
+    ss0 = explicit_slot 8, align = 8
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = stack_addr.i64 ss0
+    store notrap aligned v1, v2  ; v1 = 42
+    v3 = load.i64 notrap aligned v2
+    store notrap aligned v3, v0
+    return
+}
+
+;; @main
+function u0:1() -> i64 system_v {
+    ss0 = explicit_slot 8, align = 8
+    sig0 = () -> i64 system_v
+    sig1 = (i64) system_v
+    sig2 = (i64) system_v
+    fn0 = u0:2 sig0
+    fn1 = colocated u0:0 sig1
+    fn2 = u0:3 sig2
+
+block0:
+    v1 = call fn0()
+    v2 = stack_addr.i64 ss0
+    call fn1(v2)
+    call fn2(v1)
+    v3 = load.i64 notrap aligned v2
+    v4 = iconst.i64 42
+    v5 = icmp eq v3, v4  ; v4 = 42
+    brif v5, block1, block2
+
+block1:
+    v6 = iconst.i64 0
+    jump block3(v6)  ; v6 = 0
+
+block2:
+    v7 = iconst.i64 1
+    jump block3(v7)  ; v7 = 1
+
+block3(v0: i64):
+    return v0
+}

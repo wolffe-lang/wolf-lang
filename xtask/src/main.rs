@@ -1119,6 +1119,11 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     // static-stricter is a logged completeness note.
     let triage = args.iter().any(|a| a == "--triage");
     let checked = args.iter().any(|a| a == "--checked");
+    // `--native` (s28): impl A compiles each file to MACHINE CODE and
+    // reports the executed binary's verdict — the first
+    // compiled-vs-interpreted differential. Carried by environment for
+    // the same reason as `--checked`.
+    let native = args.iter().any(|a| a == "--native");
     let corpus_root = args
         .iter()
         .find_map(|a| a.strip_prefix("--corpus="))
@@ -1134,7 +1139,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         let free: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
         let [a, b] = free.as_slice() else {
             eprintln!(
-                "differ: need <implA-cmd> <implB-cmd> (or --self) [--checked] [--corpus=DIR]"
+                "differ: need <implA-cmd> <implB-cmd> (or --self) [--checked] [--native] [--corpus=DIR]"
             );
             return ExitCode::from(2);
         };
@@ -1154,6 +1159,9 @@ fn differ_cmd(args: &[String]) -> ExitCode {
             .arg("--json");
         if is_a && checked {
             command.env("WOLF_CHECKED", "1");
+        }
+        if is_a && native {
+            command.env("WOLF_NATIVE", "1");
         }
         let out = command.output().map_err(|e| format!("spawn {cmd}: {e}"))?;
         if !out.status.success() {
@@ -1471,13 +1479,35 @@ fn deps_check() -> ExitCode {
                 ][..],
             ),
         ),
+        // The backend interface (s28): the PERMANENT seam of the
+        // codegen story — `wir ← backend ← codegen_clif ← driver`.
+        // It must NEVER depend on Cranelift; the red-test for a
+        // deliberate wolf_backend → cranelift edge lives in the s28
+        // acceptance (external crates are caught by the crate's own
+        // dependency review, workspace direction by this list).
+        (
+            "wolf_backend",
+            Some(&["wolf_span", "wolf_diag", "wolf_wir"][..]),
+        ),
+        // wolf_rt appears here for the shared trap-kind/symbol tables
+        // (single authority for codegen and the runtime); wolf_rt
+        // itself stays dependency-thin (D15) and never sees the
+        // compiler.
         (
             "wolf_codegen_clif",
-            Some(&["wolf_span", "wolf_diag", "wolf_wir"][..]),
+            Some(
+                &[
+                    "wolf_span",
+                    "wolf_diag",
+                    "wolf_wir",
+                    "wolf_backend",
+                    "wolf_rt",
+                ][..],
+            ),
         ),
         (
             "wolf_codegen_llvm",
-            Some(&["wolf_span", "wolf_diag", "wolf_wir"][..]),
+            Some(&["wolf_span", "wolf_diag", "wolf_wir", "wolf_backend"][..]),
         ),
         // The editor stack (s52): wolf_query is the compiler-side query
         // contract over the analysis pipeline; wolf_lsp is the
@@ -1530,6 +1560,18 @@ fn deps_check() -> ExitCode {
             let dep_name = dep["name"].as_str().expect("dep name");
             if allowed.contains_key(dep_name) && !allow.contains(&dep_name) {
                 eprintln!("deps-check: ILLEGAL EDGE {name} -> {dep_name}");
+                violations += 1;
+            }
+            // The s28 backend seam: the interface crate must NEVER see
+            // Cranelift (any dependency kind — dev/build included).
+            // c12 replaces the Cranelift crate wholesale; an edge here
+            // would make the permanent artifact depend on the
+            // disposable one.
+            if name == "wolf_backend" && dep_name.starts_with("cranelift") {
+                eprintln!(
+                    "deps-check: ILLEGAL EDGE {name} -> {dep_name} \
+                     (the backend interface must never depend on Cranelift, s28)"
+                );
                 violations += 1;
             }
         }

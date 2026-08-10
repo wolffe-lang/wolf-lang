@@ -1,0 +1,54 @@
+---
+source: crates/wolf_codegen_clif/tests/clif_goldens.rs
+expression: "clif_of(\"overflow\")"
+---
+;; @main
+function u0:0() -> i64 system_v {
+    sig0 = (i32) system_v
+    fn0 = u0:1 sig0
+
+block0:
+    v2 = iconst.i32 -1640531527
+    v3 = iconst.i32 0
+    v4 = iconst.i32 8
+    jump block1(v3, v2)  ; v3 = 0, v2 = -1640531527
+
+block1(v0: i32, v1: i32):
+    v5 = icmp slt v0, v4  ; v4 = 8
+    brif v5, block2, block4
+
+block2:
+    v6 = iconst.i32 0x0019_660d
+    v7 = imul.i32 v1, v6  ; v6 = 0x0019_660d
+    v8 = iconst.i32 0x3c6e_f35f
+    v9 = iadd v7, v8  ; v8 = 0x3c6e_f35f
+    jump block3
+
+block3:
+    v10 = iconst.i32 1
+    v11 = sextend.i64 v0
+    v12 = sextend.i64 v10  ; v10 = 1
+    v13 = iadd v11, v12
+    v14 = iconst.i64 -2147483648
+    v15 = icmp slt v13, v14  ; v14 = -2147483648
+    v16 = iconst.i64 0x7fff_ffff
+    v17 = icmp sgt v13, v16  ; v16 = 0x7fff_ffff
+    v18 = bor v15, v17
+    brif v18, block5, block6
+
+block6:
+    v19 = ireduce.i32 v13
+    jump block1(v19, v9)
+
+block4:
+    v20 = iconst.i32 0x7fff_ffff
+    v21 = iconst.i32 1
+    v22 = iconst.i32 1
+    call fn0(v22)  ; v22 = 1
+    trap user1
+
+block5 cold:
+    v23 = iconst.i32 1
+    call fn0(v23)  ; v23 = 1
+    trap user1
+}

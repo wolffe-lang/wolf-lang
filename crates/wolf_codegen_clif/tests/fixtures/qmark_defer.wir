@@ -1,0 +1,313 @@
+decl @bump(mut ptr, mem.r0)
+decl @classify(i64, bool) -> i64
+decl @depth() -> i64
+decl @mark(mut ptr, mem.r0, i64)
+decl @probe(bool) -> i64
+decl @source(i64) -> eu{i64}
+decl @tally(i64, mut ptr, mem.r0, mut ptr, mem.r1) -> eu{i64}
+
+fn @bump(mut ptr, mem.r0) {
+  fact deref %0 8 : excl.mut
+b0(%0: ptr, %1: mem.r0):
+  %2 = iconst.i64 1
+  %3 = load.i64 %0, %1
+  %4 = iadd.chk %3, %2
+  %5 = store.i64 %4, %0, %1
+  ret
+}
+
+fn @mark(mut ptr, mem.r0, i64) {
+  fact deref %0 8 : excl.mut
+b0(%0: ptr, %1: mem.r0, %2: i64):
+  %3 = load.i64 %0, %1
+  %4 = iconst.i64 10
+  %5 = imul.chk %3, %4
+  %6 = iadd.chk %5, %2
+  %7 = store.i64 %6, %0, %1
+  ret
+}
+
+fn @source(i64) -> eu{i64} {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  %2 = icmp.eq %0, %1
+  br %2, b1, b2
+b1:
+  %3 = iconst.i64 1
+  %4: eu{i64} = eu.make.err %3
+  ret %4
+b2:
+  %5: eu{i64} = eu.make.ok %0
+  ret %5
+}
+
+fn @tally(i64, mut ptr, mem.r0, mut ptr, mem.r1) -> eu{i64} {
+  fact deref %1 8 : excl.mut
+  fact deref %3 8 : excl.mut
+  fact noalias %1 %3 : excl.mut
+b0(%0: i64, %1: ptr, %2: mem.r0, %3: ptr, %4: mem.r1):
+  %5 = iconst.i64 0
+  %6 = icmp.slt %0, %5
+  br %6, b1, b2
+b1:
+  %7 = iconst.i64 2
+  %8: eu{i64} = eu.make.err %7
+  %9 = call @bump(%1, %2)
+  %10 = call @bump(%3, %4)
+  ret %8
+b2:
+  %11 = call @source(%0)
+  %12: bool = eu.is_err %11
+  br %12, b3, b4
+b3:
+  %13 = call @bump(%1, %2)
+  %14 = call @bump(%3, %4)
+  ret %11
+b4:
+  %15: i64 = eu.ok %11
+  %16 = iconst.i64 2
+  %17 = imul.chk %15, %16
+  %18: eu{i64} = eu.make.ok %17
+  %19 = call @bump(%1, %2)
+  ret %18
+}
+
+fn @probe(bool) -> i64 {
+b0(%0: bool):
+  %1: ptr, %2: mem.r0 = region.new
+  br %0, b1, b2
+b1:
+  %3 = iconst.i64 7
+  region.free %1, %2
+  ret %3
+b2:
+  %4 = iconst.i64 3
+  region.free %1, %2
+  ret %4
+}
+
+fn @depth() -> i64 {
+  fact deref %3 8 : op
+  fact deref %9 8 : op
+  fact region %3 r0 : op
+  fact region %9 r1 : op
+b0:
+  %0 = iconst.i64 0
+  jmp b1
+b1:
+  %1 = iconst.i64 5
+  %2 = iconst.i64 8
+  %3: ptr, %4: mem.r0 = stack.alloc %2
+  %5 = store.i64 %0, %3, %4
+  %6 = iconst.i64 2
+  %7 = call @mark(%3, %5, %6)
+  %8 = load.i64 %3, %7
+  %9: ptr, %10: mem.r1 = stack.alloc %2
+  %11 = store.i64 %8, %9, %10
+  %12 = iconst.i64 1
+  %13 = call @mark(%9, %11, %12)
+  %14 = load.i64 %9, %13
+  jmp b2
+b2:
+  %15 = iadd.chk %1, %14
+  ret %15
+}
+
+fn @classify(i64, bool) -> i64 {
+b0(%0: i64, %1: bool):
+  %2 = iconst.i64 0
+  %3 = icmp.eq %0, %2
+  br %3, b2, b1
+b1:
+  %4 = iconst.i64 1
+  %5 = icmp.eq %0, %4
+  br %5, b2, b4
+b2:
+  br %1, b3, b4
+b3:
+  %6 = iconst.i64 10
+  jmp b8(%6)
+b4:
+  br %3, b6, b5
+b5:
+  %7 = iconst.i64 1
+  %8 = icmp.eq %0, %7
+  br %8, b6, b7
+b6:
+  %9 = iconst.i64 20
+  jmp b8(%9)
+b7:
+  %10 = iconst.i64 30
+  jmp b8(%10)
+b8(%11: i64):
+  ret %11
+}
+
+fn @main() -> i64 {
+  fact deref %23 8 : op
+  fact deref %26 8 : op
+  fact deref %3 8 : op
+  fact deref %40 8 : op
+  fact deref %43 8 : op
+  fact deref %6 8 : op
+  fact noalias %23 %26 : excl.field
+  fact noalias %3 %6 : excl.field
+  fact noalias %40 %43 : excl.field
+  fact region %23 r2 : op
+  fact region %26 r3 : op
+  fact region %3 r0 : op
+  fact region %40 r4 : op
+  fact region %43 r5 : op
+  fact region %6 r1 : op
+b0:
+  %0 = iconst.i64 0
+  %1 = iconst.i64 21
+  %2 = iconst.i64 8
+  %3: ptr, %4: mem.r0 = stack.alloc %2
+  %5 = store.i64 %0, %3, %4
+  %6: ptr, %7: mem.r1 = stack.alloc %2
+  %8 = store.i64 %0, %6, %7
+  %9, %10, %11 = call @tally(%1, %3, %5, %6, %8)
+  %12 = load.i64 %3, %10
+  %13 = load.i64 %6, %11
+  %14: bool = eu.is_err %9
+  br %14, b1, b5
+b1:
+  %15: i64 = eu.err %9
+  %16 = iconst.i64 1
+  %17 = icmp.eq %15, %16
+  br %17, b2, b3
+b2:
+  %18 = iconst.i64 90
+  jmp b4(%18)
+b3:
+  %19 = iconst.i64 91
+  jmp b4(%19)
+b4(%20: i64):
+  jmp b6(%20)
+b5:
+  %21: i64 = eu.ok %9
+  jmp b6(%21)
+b6(%22: i64):
+  %23: ptr, %24: mem.r2 = stack.alloc %2
+  %25 = store.i64 %12, %23, %24
+  %26: ptr, %27: mem.r3 = stack.alloc %2
+  %28 = store.i64 %13, %26, %27
+  %29, %30, %31 = call @tally(%0, %23, %25, %26, %28)
+  %32 = load.i64 %23, %30
+  %33 = load.i64 %26, %31
+  %34: bool = eu.is_err %29
+  br %34, b7, b8
+b7:
+  %35 = iconst.i64 7
+  jmp b9(%35)
+b8:
+  %36: i64 = eu.ok %29
+  jmp b9(%36)
+b9(%37: i64):
+  %38 = iconst.i64 1
+  %39 = iconst.i64 -1
+  %40: ptr, %41: mem.r4 = stack.alloc %2
+  %42 = store.i64 %32, %40, %41
+  %43: ptr, %44: mem.r5 = stack.alloc %2
+  %45 = store.i64 %33, %43, %44
+  %46, %47, %48 = call @tally(%39, %40, %42, %43, %45)
+  %49 = load.i64 %40, %47
+  %50 = load.i64 %43, %48
+  %51: bool = eu.is_err %46
+  br %51, b10, b14
+b10:
+  %52: i64 = eu.err %46
+  %53 = icmp.eq %52, %38
+  br %53, b11, b12
+b11:
+  %54 = iconst.i64 90
+  jmp b13(%54)
+b12:
+  %55 = iconst.i64 91
+  jmp b13(%55)
+b13(%56: i64):
+  jmp b15(%56)
+b14:
+  %57: i64 = eu.ok %46
+  jmp b15(%57)
+b15(%58: i64):
+  %59 = iconst.i64 42
+  %60 = icmp.eq %22, %59
+  %61 = bconst false
+  br %60, b16, b17(%61)
+b16:
+  %62 = iconst.i64 7
+  %63 = icmp.eq %37, %62
+  jmp b17(%63)
+b17(%64: bool):
+  br %64, b18, b19(%61)
+b18:
+  %65 = iconst.i64 91
+  %66 = icmp.eq %58, %65
+  jmp b19(%66)
+b19(%67: bool):
+  br %67, b20, b21(%61)
+b20:
+  %68 = iconst.i64 3
+  %69 = icmp.eq %49, %68
+  jmp b21(%69)
+b21(%70: bool):
+  br %70, b22, b23(%61)
+b22:
+  %71 = iconst.i64 2
+  %72 = icmp.eq %50, %71
+  jmp b23(%72)
+b23(%73: bool):
+  %74 = bconst true
+  %75 = call @probe(%74)
+  %76 = iconst.i64 7
+  %77 = icmp.eq %75, %76
+  br %77, b24, b25(%61)
+b24:
+  %78 = call @probe(%61)
+  %79 = iconst.i64 3
+  %80 = icmp.eq %78, %79
+  jmp b25(%80)
+b25(%81: bool):
+  br %81, b26, b27(%61)
+b26:
+  %82 = call @depth()
+  %83 = iconst.i64 26
+  %84 = icmp.eq %82, %83
+  jmp b27(%84)
+b27(%85: bool):
+  %86 = call @classify(%38, %74)
+  %87 = iconst.i64 10
+  %88 = icmp.eq %86, %87
+  br %88, b28, b29(%61)
+b28:
+  %89 = call @classify(%38, %61)
+  %90 = iconst.i64 20
+  %91 = icmp.eq %89, %90
+  jmp b29(%91)
+b29(%92: bool):
+  br %92, b30, b31(%61)
+b30:
+  %93 = iconst.i64 5
+  %94 = call @classify(%93, %74)
+  %95 = iconst.i64 30
+  %96 = icmp.eq %94, %95
+  jmp b31(%96)
+b31(%97: bool):
+  br %73, b32, b33(%61)
+b32:
+  jmp b33(%85)
+b33(%98: bool):
+  br %98, b34, b35(%61)
+b34:
+  jmp b35(%97)
+b35(%99: bool):
+  br %99, b36, b37
+b36:
+  jmp b38(%0)
+b37:
+  jmp b38(%38)
+b38(%100: i64):
+  ret %100
+}

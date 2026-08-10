@@ -1,0 +1,107 @@
+---
+source: crates/wolf_codegen_clif/tests/clif_goldens.rs
+expression: "clif_of(\"intdot_range\")"
+---
+;; @main
+function u0:0() -> i64 system_v {
+    sig0 = (i32) system_v
+    fn0 = u0:1 sig0
+
+block0:
+    v5 = iconst.i32 0
+    v6 = iconst.i32 1
+    v7 = iconst.i32 10
+    jump block1(v6, v5)  ; v6 = 1, v5 = 0
+
+block1(v0: i32, v1: i32):
+    v8 = icmp slt v0, v7  ; v7 = 10
+    brif v8, block2, block4
+
+block2:
+    v9 = sextend.i64 v1
+    v10 = sextend.i64 v0
+    v11 = iadd v9, v10
+    v12 = iconst.i64 -2147483648
+    v13 = icmp slt v11, v12  ; v12 = -2147483648
+    v14 = iconst.i64 0x7fff_ffff
+    v15 = icmp sgt v11, v14  ; v14 = 0x7fff_ffff
+    v16 = bor v13, v15
+    brif v16, block12, block13
+
+block13:
+    v17 = ireduce.i32 v11
+    jump block3
+
+block3:
+    v18 = sextend.i64 v0
+    v19 = sextend.i64 v6  ; v6 = 1
+    v20 = iadd v18, v19
+    v21 = iconst.i64 -2147483648
+    v22 = icmp slt v20, v21  ; v21 = -2147483648
+    v23 = iconst.i64 0x7fff_ffff
+    v24 = icmp sgt v20, v23  ; v23 = 0x7fff_ffff
+    v25 = bor v22, v24
+    brif v25, block12, block14
+
+block14:
+    v26 = ireduce.i32 v20
+    jump block1(v26, v17)
+
+block4:
+    jump block5(v6, v1)  ; v6 = 1
+
+block5(v2: i32, v3: i32):
+    v27 = sextend.i64 v3
+    v28 = sextend.i64 v2
+    v29 = iadd v27, v28
+    v30 = iconst.i64 -2147483648
+    v31 = icmp slt v29, v30  ; v30 = -2147483648
+    v32 = iconst.i64 0x7fff_ffff
+    v33 = icmp sgt v29, v32  ; v32 = 0x7fff_ffff
+    v34 = bor v31, v33
+    brif v34, block12, block15
+
+block15:
+    v35 = ireduce.i32 v29
+    jump block6
+
+block6:
+    v36 = icmp.i32 eq v2, v7  ; v7 = 10
+    brif v36, block7, block11
+
+block7:
+    v37 = iconst.i32 100
+    v38 = icmp.i32 eq v35, v37  ; v37 = 100
+    brif v38, block8, block9
+
+block8:
+    v39 = iconst.i64 0
+    jump block10(v39)  ; v39 = 0
+
+block9:
+    v40 = iconst.i64 1
+    jump block10(v40)  ; v40 = 1
+
+block10(v4: i64):
+    return v4
+
+block11:
+    v41 = sextend.i64 v2
+    v42 = sextend.i64 v6  ; v6 = 1
+    v43 = iadd v41, v42
+    v44 = iconst.i64 -2147483648
+    v45 = icmp slt v43, v44  ; v44 = -2147483648
+    v46 = iconst.i64 0x7fff_ffff
+    v47 = icmp sgt v43, v46  ; v46 = 0x7fff_ffff
+    v48 = bor v45, v47
+    brif v48, block12, block16
+
+block16:
+    v49 = ireduce.i32 v43
+    jump block5(v49, v35)
+
+block12 cold:
+    v50 = iconst.i32 1
+    call fn0(v50)  ; v50 = 1
+    trap user1
+}
