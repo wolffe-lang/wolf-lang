@@ -22,6 +22,7 @@ fn main() {
         Some("--explain") => explain(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
+        Some("audit-surface") => audit_surface(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
         Some("lsp") => lsp(&args[1..]),
         _ => {
@@ -346,6 +347,82 @@ fn interface(args: &[String]) {
                 println!("    {rendered}");
             }
         }
+    }
+}
+
+/// `wolf audit-surface <file-or-dir>` — the I13 precursor (s22): the
+/// package's complete unsafety inventory, one block per module —
+/// trusted fns with their obligations, `unsafe`-block counts, `assume`
+/// sites, re-entry doors, C imports, inline C/asm. Greppable,
+/// diffable, CI-logged. Enforces the D11 ring-2 rule: a module with
+/// `#[trusted]` code must be declared in `wolf.pkg`'s `trusted` entry
+/// (E1303) — the mismatch is a build error (exit 1).
+fn audit_surface(args: &[String]) {
+    let Some(path) = args.first() else {
+        eprintln!("usage: wolf audit-surface <file.lu|dir>");
+        std::process::exit(2);
+    };
+    let p = Path::new(path);
+    let mut sm = wolf_span::SourceMap::new();
+    let mut sources = Sources::new();
+    let (res, root) = if p.is_file() {
+        let mut loader = wolf_sema::DiskLoader::from_entry(
+            p,
+            &mut sm,
+            Box::new(|src: &[u8]| is_member_file(src)),
+        )
+        .unwrap_or_else(|| {
+            eprintln!("wolf audit-surface: cannot open package around {path}");
+            std::process::exit(2);
+        });
+        (
+            wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()),
+            p.parent().unwrap_or(Path::new(".")).to_path_buf(),
+        )
+    } else if p.is_dir() {
+        let mut loader = wolf_sema::DiskLoader::from_dir(p, &mut sm);
+        (
+            wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()),
+            p.to_path_buf(),
+        )
+    } else {
+        eprintln!("wolf audit-surface: no such file or directory: {path}");
+        std::process::exit(2);
+    };
+    let res = match res {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("wolf audit-surface: {e}");
+            std::process::exit(2);
+        }
+    };
+    for unit in &res.package.files {
+        sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
+    }
+    if res
+        .diagnostics
+        .iter()
+        .any(|d| d.severity == wolf_diag::Severity::Error)
+    {
+        eprintln!("wolf audit-surface: the package does not resolve; fix its errors first");
+        std::process::exit(1);
+    }
+    let surfaces = wolf_sema::audit::surface(&res.package);
+    print!("{}", wolf_sema::audit::render(&surfaces));
+    // The ring-2 manifest rule (E1303): `wolf.pkg` next to the
+    // package root, s51-stub format (`trusted = mod_a, mod_b`).
+    let manifest = std::fs::read_to_string(root.join("wolf.pkg")).ok();
+    let diags = wolf_sema::audit::manifest_check(&res.package, manifest.as_deref());
+    if !diags.is_empty() {
+        let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+        for d in &diags {
+            reporter.report(d);
+        }
+        eprint!("{}", reporter.take_output());
+        eprintln!(
+            "wolf audit-surface: undeclared `#[trusted]` module(s) — the manifest is the deal"
+        );
+        std::process::exit(1);
     }
 }
 

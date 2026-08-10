@@ -1,0 +1,4 @@
+# wolf.pkg — s51-stub manifest (s22 fixture). The `trusted` entry is
+# D11 ring 2: every module holding #[trusted] code is declared here,
+# so a dependency growing trusted code is a visible diff.
+trusted = root

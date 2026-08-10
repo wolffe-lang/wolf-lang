@@ -1,0 +1,2 @@
+# wolf.pkg — s51-stub manifest (s22 red fixture): no `trusted` entry,
+# so the #[trusted] fn in main.lu is an undeclared-trusted mismatch.

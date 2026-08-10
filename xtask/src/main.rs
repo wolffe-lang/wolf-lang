@@ -24,9 +24,10 @@ fn main() -> ExitCode {
         Some("print-gate") => print_gate(),
         Some("diag-catalog") => diag_catalog(args.iter().any(|a| a == "--check")),
         Some("fmt-lu") => fmt_lu(),
+        Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface>"
             );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
@@ -58,6 +59,7 @@ fn ci() -> ExitCode {
         ("print-gate", &["xtask", "print-gate"]),
         ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
         ("fmt-lu", &["xtask", "fmt-lu"]),
+        ("audit-surface", &["xtask", "audit-surface"]),
         ("differ-self", &["xtask", "differ", "--self"]),
     ];
     for (name, args) in steps {
@@ -818,6 +820,61 @@ fn fmt_lu() -> ExitCode {
         eprintln!("fmt-lu: unformatted .lu files — run `wolf fmt corpus`");
         ExitCode::FAILURE
     }
+}
+
+// --------------------------------------------------------- audit-surface --
+
+/// The D11 unsafety-inventory gate (s22, I13 precursor). Runs `wolf
+/// audit-surface` through the driver (xtask stays independent of
+/// compiler crates): the corpus's trusted litmus and the green fixture
+/// must audit clean; the undeclared-trusted fixture must FAIL — the
+/// ring-2 manifest rule (E1303) is a build error, red-tested here.
+fn audit_surface() -> ExitCode {
+    if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+        eprintln!("audit-surface: failed to build wolf");
+        return ExitCode::FAILURE;
+    }
+    let wolf = "target/debug/wolf";
+    // Green: the corpus memory package (its wolf.pkg declares `root`)
+    // and the declared fixture.
+    for target in ["corpus/memory/unsafe_trusted.lu", "xtask/fixtures/audit/ok"] {
+        let out = Command::new(wolf)
+            .args(["audit-surface", target])
+            .output()
+            .expect("run wolf audit-surface");
+        if !out.status.success() {
+            eprintln!(
+                "audit-surface: `{target}` should audit clean but failed:\n{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            return ExitCode::FAILURE;
+        }
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        if !stdout.contains("trusted fn") {
+            eprintln!(
+                "audit-surface: `{target}` inventory is missing its trusted roster:\n{stdout}"
+            );
+            return ExitCode::FAILURE;
+        }
+        eprint!("{stdout}");
+    }
+    // Red: an undeclared trusted module fails the build (E1303).
+    let out = Command::new(wolf)
+        .args(["audit-surface", "xtask/fixtures/audit/undeclared"])
+        .output()
+        .expect("run wolf audit-surface");
+    if out.status.success() {
+        eprintln!(
+            "audit-surface: the undeclared-trusted fixture must FAIL — E1303 is load-bearing"
+        );
+        return ExitCode::FAILURE;
+    }
+    if !String::from_utf8_lossy(&out.stderr).contains("E1303") {
+        eprintln!("audit-surface: the red fixture failed without citing E1303");
+        return ExitCode::FAILURE;
+    }
+    eprintln!("audit-surface: inventory green; undeclared-trusted red-test holds");
+    ExitCode::SUCCESS
 }
 
 // ------------------------------------------------------------ print-gate --

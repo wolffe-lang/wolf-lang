@@ -1,0 +1,16 @@
+// s22 audit fixture (green): a declared trusted module. The package's
+// `wolf.pkg` lists `trusted = root`, so `wolf audit-surface` prints the
+// ring inventory and exits 0.
+
+#[trusted("owns the arena base pointer; nothing outside this module sees it")]
+fn base() -> int {
+    // # Safety: the block touches no raw memory yet — the obligation
+    // text above is the roster surface this fixture pins.
+    unsafe {
+        0
+    }
+}
+
+fn main() -> !int {
+    base()
+}

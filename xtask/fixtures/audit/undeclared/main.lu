@@ -1,0 +1,14 @@
+// s22 audit fixture (red): the module holds #[trusted] code but the
+// manifest's `trusted` entry does not declare it — `wolf audit-surface`
+// reports E1303 and exits 1 (the undeclared-trusted build error).
+
+#[trusted]
+fn base() -> int {
+    unsafe {
+        0
+    }
+}
+
+fn main() -> !int {
+    base()
+}
