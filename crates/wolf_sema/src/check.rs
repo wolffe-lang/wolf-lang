@@ -102,6 +102,30 @@ pub enum Dispatch {
     },
 }
 
+/// The declared mode surface of one resolved call site (s18/c04):
+/// everything `wolf_mem`'s call-site mode agreement and exclusivity
+/// checking need, recorded here so the resolution logic lives in one
+/// place. Keyed by the call expression's span in [`TypedBody::calls`].
+#[derive(Debug, Clone)]
+pub struct CallSig {
+    /// The callee label as diagnostics render it (`f`, `P.norm`).
+    pub callee: String,
+    /// The declaration locus (the "declared here" secondary), when
+    /// the callee is a declared item (fn-typed values have none).
+    pub decl_span: Option<Span>,
+    /// `params[0]` is the receiver: the call site spells it as
+    /// `recv.m(…)` / `(mut recv).m(…)`, not in the argument list.
+    pub has_self: bool,
+    /// Enum-variant construction (`Color.Rgb(1, 2, 3)`): arguments
+    /// are payload values (moved in), and call-site modes are not
+    /// part of the surface.
+    pub ctor: bool,
+    /// The callee's declared parameters (modes, spans, view sets).
+    /// For fn-typed callees these are synthesized mode-`read`
+    /// entries — a `fn` type cannot declare `mut`/`take`.
+    pub params: Vec<crate::sig::ParamSig>,
+}
+
 /// Which rule admitted an `as` cast (s17). `Numeric` lowers to a real
 /// conversion in c05; `Adapter` and `Identity` are layout no-ops (the
 /// D28 layout-identity fact).
@@ -151,6 +175,12 @@ pub struct TypedBody {
     /// Per-`match` facts: (span, exhaustive-without-default). s27's
     /// decision trees start from exactly this annotation.
     pub matches: Vec<(Span, bool)>,
+    /// Every resolved call site's declared mode surface, in visit
+    /// order (s18): direct calls, method calls (`has_self`),
+    /// qualified trait calls, fn-typed-value calls, and enum-variant
+    /// construction (`ctor`). `wolf_mem` reads argument modes and
+    /// view sets from here — never by re-resolving.
+    pub calls: Vec<(Span, CallSig)>,
 }
 
 impl TypedBody {
@@ -381,6 +411,8 @@ struct Checker<'a> {
     match_recs: Vec<MatchRec>,
     /// Per-match exhaustiveness facts, filled by [`Checker::check_matches`].
     match_facts: Vec<(Span, bool)>,
+    /// Resolved call-site mode surfaces in visit order (s18).
+    calls: Vec<(Span, CallSig)>,
 }
 
 /// One `match` recorded for the body-end exhaustiveness pass (s17):
@@ -510,6 +542,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         coercions: Vec::new(),
         match_recs: Vec::new(),
         match_facts: Vec::new(),
+        calls: Vec::new(),
     };
     let outcome = match body.member {
         None => c.run(node, body),
@@ -579,6 +612,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     casts,
                     coercions: c.coercions,
                     matches: c.match_facts,
+                    calls: c.calls,
                 })
             } else {
                 BodyResult::Errors(diags)
@@ -638,6 +672,7 @@ pub(crate) fn collect_body_rows(
         coercions: Vec::new(),
         match_recs: Vec::new(),
         match_facts: Vec::new(),
+        calls: Vec::new(),
     };
     let _ = c.run(node, body);
     // Solve what the body pinned, then default the rest so payload
@@ -3437,6 +3472,16 @@ impl<'a> Checker<'a> {
                 arg_nodes.len(),
             );
         }
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: full_name.clone(),
+                decl_span: Some(method.name_span),
+                has_self: false, // qualified: the receiver is argument 0
+                ctor: false,
+                params: method.sig.params.clone(),
+            },
+        ));
         // Blame span for the Self obligation: the argument that pins
         // `Self` (call-site errors point at the argument, D28).
         let mut self_blame = callee_span;
@@ -3729,6 +3774,16 @@ impl<'a> Checker<'a> {
         if sig.comptime {
             self.note_comptime_call(e.span);
         }
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: name.to_string(),
+                decl_span: Some(sig.name_span),
+                has_self: false,
+                ctor: false,
+                params: sig.params.clone(),
+            },
+        ));
         // s14 instantiation: each generic parameter becomes a fresh
         // existential; the *arguments* solve them, and the solutions
         // are checked against the bounds only (never the callee's
@@ -3824,6 +3879,28 @@ impl<'a> Checker<'a> {
                     self.wrong_arg_count(&name, e.span, None, params.len(), arg_nodes.len());
                 }
                 let callee_name = self.text(callee.span);
+                self.calls.push((
+                    e.span,
+                    CallSig {
+                        callee: callee_name.clone(),
+                        decl_span: None,
+                        has_self: false,
+                        ctor: false,
+                        // A `fn` type cannot declare modes: every
+                        // parameter is `read` (s18 rejects call-site
+                        // `mut`/`take` against these).
+                        params: params
+                            .iter()
+                            .map(|&ty| crate::sig::ParamSig {
+                                name: String::new(),
+                                ty,
+                                span: callee.span,
+                                mode: None,
+                                view: None,
+                            })
+                            .collect(),
+                    },
+                ));
                 for (i, arg) in arg_nodes.iter().enumerate() {
                     let Some(v) = Arg::value(*arg) else { continue };
                     match params.get(i) {
@@ -4013,6 +4090,25 @@ impl<'a> Checker<'a> {
                         arg_nodes.len(),
                     );
                 }
+                self.calls.push((
+                    e.span,
+                    CallSig {
+                        callee: label.clone(),
+                        decl_span: Some(v_span),
+                        has_self: false,
+                        ctor: true, // payloads move in; no call-site modes
+                        params: payload
+                            .iter()
+                            .map(|&ty| crate::sig::ParamSig {
+                                name: String::new(),
+                                ty,
+                                span: v_span,
+                                mode: None,
+                                view: None,
+                            })
+                            .collect(),
+                    },
+                ));
                 for (i, arg) in arg_nodes.iter().enumerate() {
                     let Some(val) = Arg::value(*arg) else {
                         continue;
@@ -4610,6 +4706,16 @@ impl<'a> Checker<'a> {
             }
             return Ok(self.error_ty());
         };
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: label.to_string(),
+                decl_span: Some(decl_span),
+                has_self: true,
+                ctor: false,
+                params: sig.params.clone(),
+            },
+        ));
         self.receiver_mode_law(recv, recv_mode, selfp.mode, label, decl_span);
         let pty = subst(&mut self.lo.table, selfp.ty, &map);
         let exp = Expect {

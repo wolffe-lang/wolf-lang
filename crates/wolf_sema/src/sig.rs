@@ -42,8 +42,16 @@ pub struct ParamSig {
     /// The declared passing mode (X1): `None` is the default `read`.
     /// On a `self` receiver this is the mode the call site must spell
     /// — `(mut p).norm()` / `(take p).consume()` (E0804, s17); the
-    /// exclusivity/move *checking* behind the modes is c04's.
+    /// exclusivity/move *checking* behind the modes is c04's
+    /// (`wolf_mem`, s18).
     pub mode: Option<wolf_ast::ParamMode>,
+    /// The `self.{a, b}` view set on a `mut self` receiver (s18,
+    /// [mem.tier0.excl.3]): the exact field set the method may touch,
+    /// in declaration order. `None` on ordinary parameters and on
+    /// unannotated receivers (the full view). Part of the signature
+    /// surface — `wolf interface` renders it and the interface hash
+    /// covers it (via the rendered param list).
+    pub view: Option<Vec<String>>,
 }
 
 /// A resolved trait bound on a generic parameter (`T: Show` — module
@@ -499,11 +507,17 @@ impl<'a> Lower<'a> {
                     // take `self`.
                     if generics.iter().any(|g| g == "Self") {
                         let ty = self.table.intern(TyKind::Rigid("Self".to_string()));
+                        let view = p.view_set().map(|vs| {
+                            vs.fields()
+                                .map(|t| self.text(file, t.span))
+                                .collect::<Vec<_>>()
+                        });
                         params.push(ParamSig {
                             name: "self".to_string(),
                             ty,
                             span: p.syntax().span,
                             mode: p.mode(),
+                            view,
                         });
                     }
                     continue;
@@ -525,6 +539,7 @@ impl<'a> Lower<'a> {
                     ty,
                     span,
                     mode: p.mode(),
+                    view: None,
                 });
             }
         }

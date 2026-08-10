@@ -157,6 +157,13 @@
 //!   s18–s21's to check.
 //! - **Matches**: `TypedBody::matches` annotates each `match` span
 //!   with its exhaustiveness fact; s27 lowers decision trees from it.
+//! - **Calls** (s18 addendum): `TypedBody::calls` records every
+//!   resolved call site's declared mode surface ([`check::CallSig`]) —
+//!   parameter modes, declaration spans, receiver view sets
+//!   ([`sig::ParamSig::view`]), and whether the call is enum-variant
+//!   construction (`ctor`: payloads move in). `wolf_mem`'s call-site
+//!   mode agreement (E1007) and exclusivity checks read from here and
+//!   never re-resolve.
 //! - **Coercions**: `TypedBody::coercions` lists every inserted
 //!   coercion from the closed set ([`coerce::Coercion`]);
 //!   `TypedBody::casts` lists every `as` with its [`check::CastKind`]
@@ -195,7 +202,7 @@ pub mod typecheck;
 pub mod types;
 pub mod unify;
 
-pub use check::{BodyRef, BodyResult, CastKind, Dispatch, NotYet, TypedBody, check_body};
+pub use check::{BodyRef, BodyResult, CallSig, CastKind, Dispatch, NotYet, TypedBody, check_body};
 pub use coerce::Coercion;
 pub use ctfe::{Budget, CtfeStats, Engine, ValueArena, ValueKind};
 pub use graph::{
