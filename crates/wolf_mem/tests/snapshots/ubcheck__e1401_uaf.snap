@@ -1,0 +1,17 @@
+---
+source: crates/wolf_mem/tests/ubcheck.rs
+expression: rendered
+---
+error[E1401]: undefined behavior: [mem.ub] row P1 — a raw pointer read through a Disabled tag (freed by `c.free`)
+ --> mem:///main.lu:7:9
+  |
+4 | let p = c.malloc(8) as *u8
+  |         ----------- the provenance this operation violates was created here
+...
+7 | let v = p[0]
+  |         ^^^^ the operation that reaches undefined behavior
+  |
+  = note: this row licenses O1: `mut` params lower to `noalias` + `dereferenceable`; unique-tag
+    stores forward without memory checks — compiled code may already have been transformed
+    under that assumption, so the behavior of an unchecked build is undefined
+    ([mem.prov.state]). The `--checked` machine reports it deterministically instead.

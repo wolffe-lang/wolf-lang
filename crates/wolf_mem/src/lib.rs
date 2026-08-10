@@ -124,6 +124,7 @@ mod moves;
 pub mod place;
 pub mod regions;
 mod shared;
+pub mod ubcheck;
 
 pub use facts::FnFacts;
 pub use lower::Lowered;
