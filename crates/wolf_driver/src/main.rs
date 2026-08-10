@@ -437,6 +437,138 @@ const PHASES: [&str; 8] = [
     "run",
 ];
 
+/// Execute a mem-clean package under the s23 miri-lite UB machine and
+/// shape the run-rung observation: verdicts per `[proto.record.verdict]`
+/// (`exit`/`trap`/`ub(mem.ub)`), UB details as `x-ub-*` extension keys
+/// (row, clause, spans — the is04-compatible surface), and the E1401
+/// diagnostic naming the row, the responsible operation, and the
+/// licensed optimization (the D2 pairing, executable). An honest
+/// refusal keeps the ladder at `mem`/`unsupported` — the conservatism
+/// ledger, never a guess.
+fn checked_run(
+    pkg: &wolf_sema::Package,
+    tc: &wolf_sema::Typecheck,
+    mem: &wolf_mem::MemCheck,
+    mut all: Vec<Diagnostic>,
+    run_stdout: &mut Option<String>,
+    x_ext: &mut Vec<(&'static str, serde_json::Value)>,
+) -> (&'static str, String, Vec<Diagnostic>) {
+    use wolf_mem::ubcheck::{self, Budget, Verdict};
+    match ubcheck::run_checked(pkg, tc, Budget::default()) {
+        Err(nyc) => {
+            // Surface the refusal on stderr (the rich channel); the
+            // record stays `unsupported` — the conservatism ledger.
+            eprintln!(
+                "wolf conform-run --checked: unsupported — {} @{}..{}",
+                nyc.construct, nyc.span.lo, nyc.span.hi
+            );
+            ("mem", "unsupported".to_string(), all)
+        }
+        Ok(outcome) => {
+            *run_stdout = Some(outcome.stdout);
+            match outcome.verdict {
+                Verdict::Exit(code) => ("run", format!("exit({code})"), all),
+                Verdict::Trap(t) => {
+                    x_ext.push(("x-trap-clause", serde_json::json!(t.clause)));
+                    x_ext.push(("x-trap-span", serde_json::json!([t.span.lo, t.span.hi])));
+                    ("run", format!("trap({})", t.kind), all)
+                }
+                Verdict::Ub(f) => {
+                    x_ext.push(("x-ub-row", serde_json::json!(f.row.as_str())));
+                    x_ext.push(("x-ub-clause", serde_json::json!(f.row.clause())));
+                    x_ext.push(("x-ub-span", serde_json::json!([f.span.lo, f.span.hi])));
+                    x_ext.push((
+                        "x-ub-tag-span",
+                        serde_json::json!([f.tag_span.lo, f.tag_span.hi]),
+                    ));
+                    // The s22 attribution fact the verdict traces to.
+                    if let Some((op, span)) = ubcheck::attribute(&f, &mem.facts) {
+                        x_ext.push(("x-ub-op", serde_json::json!(op)));
+                        x_ext.push(("x-ub-op-span", serde_json::json!([span.lo, span.hi])));
+                    }
+                    all.push(ubcheck::ub_diagnostic(&f));
+                    wolf_diag::sort_diagnostics(&mut all);
+                    ("run", "ub(mem.ub)".to_string(), all)
+                }
+            }
+        }
+    }
+}
+
+/// A minimal, dependency-free SHA-256 (FIPS 180-4) for the observation
+/// record's `stdout_sha256` — wolf stays build-script- and
+/// heavy-dependency-free (D33/D15), and the protocol needs one hash.
+fn sha256_hex(data: &[u8]) -> String {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
+    ];
+    let mut h: [u32; 8] = [
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+        0x5be0cd19,
+    ];
+    let mut msg = data.to_vec();
+    let bitlen = (data.len() as u64) * 8;
+    msg.push(0x80);
+    while msg.len() % 64 != 56 {
+        msg.push(0);
+    }
+    msg.extend_from_slice(&bitlen.to_be_bytes());
+    for chunk in msg.chunks(64) {
+        let mut w = [0u32; 64];
+        for (i, word) in chunk.chunks(4).enumerate() {
+            w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        }
+        for i in 16..64 {
+            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[i - 7])
+                .wrapping_add(s1);
+        }
+        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
+            (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
+        for i in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ (!e & g);
+            let t1 = hh
+                .wrapping_add(s1)
+                .wrapping_add(ch)
+                .wrapping_add(K[i])
+                .wrapping_add(w[i]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let maj = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = s0.wrapping_add(maj);
+            hh = g;
+            g = f;
+            f = e;
+            e = d.wrapping_add(t1);
+            d = c;
+            c = b;
+            b = a;
+            a = t1.wrapping_add(t2);
+        }
+        h[0] = h[0].wrapping_add(a);
+        h[1] = h[1].wrapping_add(b);
+        h[2] = h[2].wrapping_add(c);
+        h[3] = h[3].wrapping_add(d);
+        h[4] = h[4].wrapping_add(e);
+        h[5] = h[5].wrapping_add(f);
+        h[6] = h[6].wrapping_add(g);
+        h[7] = h[7].wrapping_add(hh);
+    }
+    h.iter().map(|x| format!("{x:08x}")).collect()
+}
+
 /// Observation record ([proto.record]). The deepest implemented phase is
 /// `mem` (s18): each rung either stops with `fail(code)`, passes at
 /// the requested rung, or falls through deeper; a file with any
@@ -455,9 +587,20 @@ fn conform_run(args: &[String]) {
     let mut phase: Option<String> = None;
     let mut error_format = "human".to_string();
     let mut dump: Option<String> = None;
+    // The s23 miri-lite routing stub: `--checked` (or WOLF_CHECKED=1,
+    // for harnesses that cannot add flags) executes a mem-clean file
+    // under the UB machine and reports the run rung. Full `wolf run
+    // --checked` integration lands s31.
+    let mut checked = std::env::var("WOLF_CHECKED")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     for a in args {
         if a == "--json" || a.starts_with("--seed=") {
             continue; // accepted per [proto.invoke.cli]
+        }
+        if a == "--checked" {
+            checked = true;
+            continue;
         }
         if let Some(f) = a.strip_prefix("--error-format=") {
             if f != "human" && f != "json" {
@@ -509,6 +652,10 @@ fn conform_run(args: &[String]) {
     // order): filled after the ladder runs, when every file the run
     // loaded has been interned.
     let mut files_table: Vec<String> = Vec::new();
+    // `--checked` run-rung observations (s23): the program's stdout
+    // and the UB/trap extension keys ([proto.record.ext]).
+    let mut run_stdout: Option<String> = None;
+    let mut x_ext: Vec<(&'static str, serde_json::Value)> = Vec::new();
     let (phase_reached, verdict, diagnostics) = if phase.as_deref() == Some("none") {
         ("none", "unsupported".to_string(), Vec::new())
     } else {
@@ -606,6 +753,20 @@ fn conform_run(args: &[String]) {
                                             ("mem", format!("fail({code})"), all)
                                         } else if phase.as_deref() == Some("mem") {
                                             ("mem", "pass".to_string(), all)
+                                        } else if checked {
+                                            // The s23 miri-lite: a
+                                            // mem-clean file executes
+                                            // under the UB machine;
+                                            // refusals stay in the
+                                            // conservatism ledger.
+                                            checked_run(
+                                                &res.package,
+                                                &tc,
+                                                &mem,
+                                                all,
+                                                &mut run_stdout,
+                                                &mut x_ext,
+                                            )
                                         } else {
                                             ("mem", "unsupported".to_string(), all)
                                         }
@@ -669,7 +830,19 @@ fn conform_run(args: &[String]) {
             })
         })
         .collect();
-    let record = serde_json::json!({
+    // `--checked` run observations: stdout hash/inline (required for
+    // `exit` verdicts with output) and the x- extension keys.
+    let (stdout_sha, stdout_inline) = match &run_stdout {
+        Some(s) if !s.is_empty() => {
+            let inline: String = s.chars().take(4096).collect();
+            (
+                serde_json::json!(sha256_hex(s.as_bytes())),
+                serde_json::json!(inline),
+            )
+        }
+        _ => (serde_json::Value::Null, serde_json::Value::Null),
+    };
+    let mut record = serde_json::json!({
         "protocol": 1,
         "impl": "wolfc",
         "impl_version": env!("CARGO_PKG_VERSION"),
@@ -679,8 +852,11 @@ fn conform_run(args: &[String]) {
         "seeded": false,
         "diagnostics": minimal,
         "verdict": verdict,
-        "stdout_sha256": serde_json::Value::Null,
-        "stdout_inline": serde_json::Value::Null,
+        "stdout_sha256": stdout_sha,
+        "stdout_inline": stdout_inline,
     });
+    for (k, v) in x_ext {
+        record[k] = v;
+    }
     println!("{record}");
 }

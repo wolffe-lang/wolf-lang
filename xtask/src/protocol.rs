@@ -106,6 +106,22 @@ pub fn compare(
             if x != y {
                 return Some((Class::Soundness, format!("ub({x}) vs ub({y})")));
             }
+            // Both detect UB and agree on the anchor: compare the row
+            // where both carry it ([proto.record.ext] — an x- key
+            // participates in equality only when both sides have it).
+            // A row disagreement is where the two independent s04
+            // implementations part on the closed enumeration — a
+            // spec-clarification trigger ([proto.cmp.triage]), the
+            // highest-severity class because the row names the
+            // licensed optimization.
+            fn row(r: &serde_json::Value) -> Option<&str> {
+                r.get("x-ub-row").and_then(|v| v.as_str())
+            }
+            if let (Some(rx), Some(ry)) = (row(a), row(b))
+                && rx != ry
+            {
+                return Some((Class::Soundness, format!("ub row mismatch: {rx} vs {ry}")));
+            }
         }
         (Verdict::Ub(x), other) => {
             return Some((Class::Soundness, format!("ub({x}) vs {other:?}")));

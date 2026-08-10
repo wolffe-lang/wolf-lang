@@ -1047,7 +1047,49 @@ fn conformance_cmd(args: &[String]) -> ExitCode {
 // ---------------------------------------------------------------- differ --
 
 /// Reference differential harness ([proto.harness.differ]).
+///
+/// Flags: `--self` diffs wolfc against itself (the CI protocol
+/// self-check). `--checked` drives impl A (wolfc) through the s23
+/// miri-lite so the `run` rung is reached — the checker-vs-oracle
+/// differential of s23 Target 4; without it wolfc reports
+/// `unsupported` past `mem` and only the static rungs compare.
+/// `--corpus=<dir>` walks an alternate corpus root (e.g. the pinned
+/// interpreter's vendored tree, so both sides see files their pins
+/// share).
+/// The `[conf.trap.map]` correspondence: the dynamic trap kind a
+/// static memory-tier rejection code maps to. When wolfc rejects a
+/// file with `fail(CODE)` and the oracle traps with the paired kind,
+/// the two implementations *agree* — the static tier caught at compile
+/// time exactly the fault the dynamic tier would raise (the s23
+/// static-vs-dynamic soundness relationship, consistent). A `None`
+/// entry means the code has no dynamic counterpart in the closed
+/// trap vocabulary (E1006 is a compile error by construction —
+/// `[mem.ub.defined]`), so an oracle that runs it clean is a
+/// completeness note, never a divergence.
+fn static_code_to_trap(code: &str) -> Option<&'static str> {
+    match code {
+        "E1001" => Some("use-after-move"),
+        "E1002" => Some("exclusivity"),
+        "E1004" | "E1005" | "E1010" | "E1011" | "E1012" => Some("region-fault"),
+        _ => None,
+    }
+}
+
 fn differ_cmd(args: &[String]) -> ExitCode {
+    // s23 triage: cross-implementation runs classify a wolfc
+    // `fail(CODE)` against the oracle's dynamic outcome by the
+    // static-vs-dynamic contract, instead of calling every such pair
+    // a raw verdict divergence (which is what `--self` needs but a
+    // cross-impl run does not). Soundness-direction findings
+    // (wolfc-accepts + oracle-faults) stay hard failures; everything
+    // static-stricter is a logged completeness note.
+    let triage = args.iter().any(|a| a == "--triage");
+    let checked = args.iter().any(|a| a == "--checked");
+    let corpus_root = args
+        .iter()
+        .find_map(|a| a.strip_prefix("--corpus="))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("corpus"));
     let (cmd_a, cmd_b): (String, String) = if args.iter().any(|a| a == "--self") {
         if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
             eprintln!("differ: failed to build wolf");
@@ -1057,29 +1099,41 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     } else {
         let free: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
         let [a, b] = free.as_slice() else {
-            eprintln!("differ: need <implA-cmd> <implB-cmd> (or --self)");
+            eprintln!(
+                "differ: need <implA-cmd> <implB-cmd> (or --self) [--checked] [--corpus=DIR]"
+            );
             return ExitCode::from(2);
         };
         ((*a).clone(), (*b).clone())
     };
-    let conform_run = |cmd: &str, file: &Path| -> Result<serde_json::Value, String> {
+    // Impl A (wolfc) reaches the run rung under `--checked`; the flag
+    // is carried via the environment so wolf-interp — which ignores
+    // WOLF_CHECKED — is untouched, keeping the two implementations
+    // independent (no shared code, s06).
+    let conform_run = |cmd: &str, file: &Path, is_a: bool| -> Result<serde_json::Value, String> {
         let parts: Vec<&str> = cmd.split_whitespace().collect();
-        let out = Command::new(parts[0])
+        let mut command = Command::new(parts[0]);
+        command
             .args(&parts[1..])
             .args(["conform-run"])
             .arg(file)
-            .arg("--json")
-            .output()
-            .map_err(|e| format!("spawn {cmd}: {e}"))?;
+            .arg("--json");
+        if is_a && checked {
+            command.env("WOLF_CHECKED", "1");
+        }
+        let out = command.output().map_err(|e| format!("spawn {cmd}: {e}"))?;
         if !out.status.success() {
             return Err(format!("{cmd}: conform-run exited nonzero"));
         }
         serde_json::from_slice(&out.stdout).map_err(|e| format!("{cmd}: bad record: {e}"))
     };
     let mut files = Vec::new();
-    collect_wolf_files(Path::new("corpus"), &mut files);
+    collect_wolf_files(&corpus_root, &mut files);
     files.sort();
     let mut divergences = 0u32;
+    let mut soundness = 0u32;
+    let mut completeness = 0u32;
+    let mut agreements = 0u32;
     let mut unsupported = 0u32;
     for f in &files {
         let is_member = std::fs::read_to_string(f)
@@ -1089,7 +1143,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         if is_member {
             continue; // compiled through its module's entry file (s12)
         }
-        let (ra, rb) = match (conform_run(&cmd_a, f), conform_run(&cmd_b, f)) {
+        let (ra, rb) = match (conform_run(&cmd_a, f, true), conform_run(&cmd_b, f, false)) {
             (Ok(a), Ok(b)) => (a, b),
             (Err(e), _) | (_, Err(e)) => {
                 eprintln!("differ: {}: {e}", f.display());
@@ -1110,6 +1164,54 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         {
             unsupported += 1;
         }
+        let va = ra["verdict"].as_str().unwrap_or("");
+        let vb = rb["verdict"].as_str().unwrap_or("");
+        // s23 triage of the fail-vs-run pair: wolfc (A) rejected
+        // statically, the oracle (B) ran to a dynamic outcome.
+        if triage && let Some(code) = va.strip_prefix("fail(").and_then(|s| s.strip_suffix(')')) {
+            let classify = |note: &str| {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "file": f.display().to_string(),
+                        "class": note,
+                        "a": va,
+                        "b": vb,
+                    })
+                );
+            };
+            // Agreement: the static code maps to the oracle's trap.
+            if let Some(k) = static_code_to_trap(code)
+                && vb == format!("trap({k})")
+            {
+                agreements += 1;
+                continue;
+            }
+            // Completeness note: static stricter, oracle runs clean
+            // or the code has no dynamic counterpart. Logged, not a
+            // divergence (the backlog that feeds rule refinement).
+            classify("Completeness");
+            completeness += 1;
+            continue;
+        }
+        // Soundness direction: A accepted (ran) but B faulted/UB'd.
+        if triage
+            && (va.starts_with("exit(") || va == "pass")
+            && (vb.starts_with("trap(") || vb.starts_with("ub("))
+        {
+            println!(
+                "{}",
+                serde_json::json!({
+                    "file": f.display().to_string(),
+                    "class": "SOUNDNESS",
+                    "a": va,
+                    "b": vb,
+                })
+            );
+            soundness += 1;
+            divergences += 1;
+            continue;
+        }
         if let Some((class, detail)) = xtask::protocol::compare(&ra, &rb, structural) {
             println!(
                 "{}",
@@ -1120,14 +1222,30 @@ fn differ_cmd(args: &[String]) -> ExitCode {
                 })
             );
             divergences += 1;
+        } else if va == vb
+            && (va.starts_with("exit(") || va.starts_with("trap(") || va.starts_with("ub("))
+        {
+            agreements += 1;
         }
     }
-    eprintln!(
-        "differ: {} file(s), {} divergence(s), {} in conservatism ledger (unsupported)",
-        files.len(),
-        divergences,
-        unsupported
-    );
+    if triage {
+        eprintln!(
+            "differ: {} file(s) — {} agreement(s), {} completeness note(s), {} SOUNDNESS finding(s), {} unsupported; {} hard divergence(s)",
+            files.len(),
+            agreements,
+            completeness,
+            soundness,
+            unsupported,
+            divergences,
+        );
+    } else {
+        eprintln!(
+            "differ: {} file(s), {} divergence(s), {} in conservatism ledger (unsupported)",
+            files.len(),
+            divergences,
+            unsupported
+        );
+    }
     if divergences > 0 {
         ExitCode::FAILURE
     } else {
