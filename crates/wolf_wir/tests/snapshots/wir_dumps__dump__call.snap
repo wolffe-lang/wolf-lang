@@ -1,0 +1,12 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+decl @sum(read ptr, i64, mem.r0) -> i64
+
+fn @caller(read ptr, i64, mem.r0) -> i64 {
+b0(%0: ptr, %1: i64, %2: mem.r0):
+  %3, %4 = call @sum(%0, %1, %2)
+  %5, %6 = call @sum(%0, %3, %4)
+  ret %5
+}

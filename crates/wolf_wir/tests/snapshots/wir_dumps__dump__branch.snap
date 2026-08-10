@@ -1,0 +1,11 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+fn @max(i64, i64) -> i64 {
+b0(%0: i64, %1: i64):
+  %2 = icmp.sge %0, %1
+  br %2, b1(%0), b1(%1)
+b1(%3: i64):
+  ret %3
+}

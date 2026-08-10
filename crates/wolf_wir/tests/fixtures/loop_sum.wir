@@ -1,0 +1,16 @@
+; an integer loop: checked adds in both tiers (X3).
+fn @sum_to(i64) -> i64 {
+b0(%n: i64):
+  %zero = iconst.i64 0
+  jmp b1(%zero, %zero)
+b1(%i: i64, %acc: i64):
+  %c = icmp.sle %i, %n
+  br %c, b2, b3
+b2:
+  %acc2 = iadd.chk %acc, %i
+  %one = iconst.i64 1
+  %i2 = iadd.chk %i, %one
+  jmp b1(%i2, %acc2)
+b3:
+  ret %acc
+}

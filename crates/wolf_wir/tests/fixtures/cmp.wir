@@ -1,0 +1,11 @@
+; compares: signed, unsigned, and ordered-float conditions.
+fn @cmp(i64, i64, f64, f64) -> bool {
+b0(%a: i64, %b: i64, %x: f64, %y: f64):
+  %c1 = icmp.eq %a, %b
+  %c2 = icmp.ult %a, %b
+  %c3 = fcmp.lt %x, %y
+  %c4 = fcmp.ne %x, %y
+  br %c1, b1(%c2), b1(%c3)
+b1(%r: bool):
+  ret %r
+}

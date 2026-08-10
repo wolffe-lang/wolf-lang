@@ -1,0 +1,14 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+fn @cmp(i64, i64, f64, f64) -> bool {
+b0(%0: i64, %1: i64, %2: f64, %3: f64):
+  %4 = icmp.eq %0, %1
+  %5 = icmp.ult %0, %1
+  %6 = fcmp.lt %2, %3
+  %7 = fcmp.ne %2, %3
+  br %4, b1(%5), b1(%6)
+b1(%8: bool):
+  ret %8
+}

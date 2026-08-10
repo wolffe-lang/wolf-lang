@@ -1,0 +1,19 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+fn @consts() -> i64 {
+b0:
+  %0 = iconst.i8 -128
+  %1 = iconst.i16 1234
+  %2 = iconst.i32 -5
+  %3 = iconst.i64 9007199254740991
+  %4 = fconst.f32 0x3f800000
+  %5 = fconst.f64 0x3ff8000000000000
+  %6 = bconst false
+  %7 = sext.i64 %0
+  %8 = zext.i32 %1
+  %9 = itrunc.i8 %2
+  %10 = iadd.chk %3, %7
+  ret %10
+}

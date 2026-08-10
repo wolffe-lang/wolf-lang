@@ -1,0 +1,12 @@
+; the io effect token is linear exactly like mem: each call consumes
+; it and binds the successor.
+decl @put(i64, io)
+
+fn @main(io) -> i64 {
+b0(%io: io):
+  %x = iconst.i64 42
+  %io2 = call @put(%x, %io)
+  %io3 = call @put(%x, %io2)
+  %z = iconst.i64 0
+  ret %z
+}

@@ -1,0 +1,10 @@
+; calls with mode-carrying signatures: the mem token is consumed and a
+; successor token is bound after the declared results.
+decl @sum(read ptr, i64, mem.r0) -> i64
+
+fn @caller(read ptr, i64, mem.r0) -> i64 {
+b0(%p: ptr, %n: i64, %m: mem.r0):
+  %r, %m2 = call @sum(%p, %n, %m)
+  %r2, %m3 = call @sum(%p, %r, %m2)
+  ret %r2
+}

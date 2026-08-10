@@ -1,0 +1,22 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+fn @arith(i64, i64) -> i64 {
+b0(%0: i64, %1: i64):
+  %2 = iadd.chk %0, %1
+  %3 = isub.wrap %2, %0
+  %4 = imul.sat %3, %1
+  %5 = idiv.chk %4, %1
+  %6 = irem.chk %5, %1
+  %7 = band %6, %0
+  %8 = bor %7, %1
+  %9 = bxor %8, %0
+  %10 = shl %9, %1
+  %11 = lshr %10, %1
+  %12 = ashr %11, %1
+  %13 = iadd.sat %12, %0
+  %14 = imul.wrap %13, %1
+  %15 = isub.chk %14, %0
+  ret %15
+}

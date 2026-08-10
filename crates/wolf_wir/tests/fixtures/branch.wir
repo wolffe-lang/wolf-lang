@@ -1,0 +1,8 @@
+; a two-way branch converging with block arguments — the no-phi shape.
+fn @max(i64, i64) -> i64 {
+b0(%a: i64, %b: i64):
+  %c = icmp.sge %a, %b
+  br %c, b1(%a), b1(%b)
+b1(%r: i64):
+  ret %r
+}

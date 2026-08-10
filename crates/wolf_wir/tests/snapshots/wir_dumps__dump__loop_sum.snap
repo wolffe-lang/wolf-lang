@@ -1,0 +1,19 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+fn @sum_to(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  jmp b1(%1, %1)
+b1(%2: i64, %3: i64):
+  %4 = icmp.sle %2, %0
+  br %4, b2, b3
+b2:
+  %5 = iadd.chk %3, %2
+  %6 = iconst.i64 1
+  %7 = iadd.chk %2, %6
+  jmp b1(%7, %5)
+b3:
+  ret %3
+}

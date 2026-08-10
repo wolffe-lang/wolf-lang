@@ -1,0 +1,17 @@
+; constants at every width; float constants are raw IEEE-754 bits in
+; canonical form (decimal accepted on the way in); conversions.
+fn @consts() -> i64 {
+b0:
+  %a = iconst.i8 -128
+  %b = iconst.i16 1234
+  %c = iconst.i32 -5
+  %d = iconst.i64 9007199254740991
+  %e = fconst.f32 0x3f800000
+  %f = fconst.f64 1.5
+  %g = bconst false
+  %h = sext.i64 %a
+  %i = zext.i32 %b
+  %j = itrunc.i8 %c
+  %k = iadd.chk %d, %h
+  ret %k
+}

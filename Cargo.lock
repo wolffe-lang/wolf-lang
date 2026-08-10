@@ -932,8 +932,7 @@ dependencies = [
 name = "wolf_wir"
 version = "0.0.1"
 dependencies = [
- "wolf_mem",
- "wolf_sema",
+ "insta",
  "wolf_span",
 ]
 

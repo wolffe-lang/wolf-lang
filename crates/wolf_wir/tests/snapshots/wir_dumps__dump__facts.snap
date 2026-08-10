@@ -1,0 +1,15 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+expression: "wolf_wir::print_module(&m)"
+---
+fn @facty(mut ptr, read ptr, i64, mem.r0) -> i64 {
+  fact deref %0 64 : excl.mut
+  fact deref %1 8x%2 : frozen.read
+  fact frozen %1 : frozen.read
+  fact noalias %0 %1 : excl.mut
+  fact range %4 0..=41 : op
+  fact region %0 r0 : region.alloc
+b0(%0: ptr, %1: ptr, %2: i64, %3: mem.r0):
+  %4 = iconst.i64 41
+  ret %4
+}

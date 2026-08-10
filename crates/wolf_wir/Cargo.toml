@@ -7,6 +7,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# s24 crate hygiene: wolf_wir depends only on wolf_span. Sema/mem types
+# do NOT leak in — the fact vocabulary is re-declared here as IR-level
+# enums (facts.rs documents the mapping from c04's theorem classes).
+# wolf_diag joins in s25 when the driver wraps verifier failures as ICEs.
 wolf_span.workspace = true
-wolf_sema.workspace = true
-wolf_mem.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
