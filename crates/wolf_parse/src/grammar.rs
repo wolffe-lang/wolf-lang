@@ -1434,6 +1434,14 @@ fn paren_type_list(p: &mut Parser<'_>) {
         }
         if p.at_punct(Punct::Comma) {
             p.bump();
+        } else if !p.at_punct(Punct::RParen) && p.pos() != before {
+            // the grammar requires the separator: `(int, int, int)`, never
+            // `(int int int)` — leniency here was DIV-001
+            p.error(
+                codes::EXPECTED_TOKEN,
+                p.current_span(),
+                "expected `,` or `)` after this type",
+            );
         }
         if p.pos() == before {
             unclosed(p, opener, "(");

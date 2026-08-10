@@ -364,7 +364,8 @@ position without parens (`[gram.amb.structlit]`).
   called through a parenthesized moded receiver — `(mut p).norm()`,
   `(take conn).close()` — mirroring call-argument modes exactly. The
   moded form is admitted only where a `.` member immediately follows the
-  closing `)`; anywhere else it is a parse error (E0210). `read self`
+  closing `)`; anywhere else it is a parse error (E0210; primary span = the
+  entire parenthesized moded receiver). `read self`
   receivers stay bare: `p.dist()`.
 - `index_arg` also admits the type forms no expression can spell
   (`List[handle Node]()`, `channel[region]`) — `e[…]` stays one postfix

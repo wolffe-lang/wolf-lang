@@ -2173,10 +2173,18 @@ impl<'a> Fmt<'a> {
     /// (the list re-adds separators).
     fn field(&self, f: &GreenNode, out: &mut Vec<Doc>) {
         let mut prev: Option<K> = None;
+        let mut depth = 0usize;
         for c in &f.children {
             match c {
                 Child::Token(t) => {
-                    if t.kind == K::Comma {
+                    match t.kind {
+                        K::LParen | K::LBracket => depth += 1,
+                        K::RParen | K::RBracket => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
+                    // only the list separator is stripped; a payload's
+                    // interior commas (`Rgb(int, int, int)`) are content
+                    if t.kind == K::Comma && depth == 0 {
                         self.tok_trivia_only(t, out);
                         continue;
                     }

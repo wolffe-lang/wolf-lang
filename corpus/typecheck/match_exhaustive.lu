@@ -9,7 +9,7 @@
 enum Color {
     Red,
     Green,
-    Rgb(int int int),
+    Rgb(int, int, int),
 }
 
 fn brightness(c: Color) -> int {
