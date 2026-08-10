@@ -1,0 +1,11 @@
+---
+source: crates/wolf_lsp/tests/transcript.rs
+expression: shaped
+---
+Point [kind 23] @0
+  x [kind 8] @1
+  y [kind 8] @2
+Color [kind 10] @5
+  Red [kind 22] @6
+  Blue [kind 22] @7
+dist [kind 12] @10

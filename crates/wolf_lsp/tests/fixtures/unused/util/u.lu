@@ -1,0 +1,4 @@
+//! member: true
+pub fn helper() -> int {
+    1
+}

@@ -1,0 +1,13 @@
+struct Point {
+    x: int
+    y: int
+}
+
+enum Color {
+    Red
+    Blue
+}
+
+fn dist(p: Point) -> int {
+    p.x + p.y
+}

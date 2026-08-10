@@ -1,0 +1,10 @@
+/// Adds two numbers.
+/// The docs ride the hover.
+fn add(a: int, b: int) -> int {
+    let s = a + b
+    s
+}
+
+fn main() -> int {
+    add(1, 2)
+}

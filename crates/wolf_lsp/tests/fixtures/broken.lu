@@ -1,0 +1,4 @@
+fn main() -> int {
+    lett x = 1
+    0
+}

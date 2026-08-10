@@ -1,0 +1,23 @@
+[package]
+name = "wolf_lsp"
+description = "transport-only LSP shim over the wolf_query contract (s52 v0, D34)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+wolf_span = { workspace = true }
+wolf_diag = { workspace = true }
+wolf_query = { workspace = true }
+# The transport bet is L1 (report 09): rust-analyzer's own sync
+# transport crate — framing, handshake, IoThreads — and nothing more.
+# tower-lsp is refused (unmaintained, abort-based cancellation that
+# never reaches the compute; report 09 §Needs work #8).
+lsp-server = "0.10"
+lsp-types = "0.95"
+serde_json = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
