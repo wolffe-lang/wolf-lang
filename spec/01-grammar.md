@@ -330,9 +330,9 @@ expr ::= else_expr | jump_expr
 else_expr ::= range_expr ('else' (block | '|' closed_pattern '|' (expr | block) | expr))?
 range_expr ::= r_end (('..' | '..=') r_end?)? | ('..' | '..=') r_end
 r_end ::= or_expr | '^' or_expr
-prefix_operand ::= /* a tier-3 prefix expression: see the climb table */ postfix_expr
 /* `^n` marks a from-end endpoint (D25): s[^1], s[^13..], s[..^1].       */
-/* …tiers 5–13 by the table; extraction includes the full climb… */
+/* tiers 3–13 (or_expr ↓ prefix_operand) are rendered into the extracted
+   grammar from the §3.2 climb table by `cargo xtask spec-extract`.      */
 postfix_expr ::= receiver (call_args | index_args | '.' member | '?')*
 receiver   ::= primary | '(' param_mode expr ')'
 /* the moded form is receiver position only: '.' member must follow.  */
