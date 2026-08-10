@@ -216,6 +216,24 @@ pub enum Stmt {
     /// also the wholesale free (`[mem.region.intra.2]`); `Value`
     /// regions free at their binding scope's end unless moved away.
     RegionClose { region: RegionId, span: Span },
+    /// s21 — a recorded RC increment on a `shared` cell (Perceus dup:
+    /// genuine fan-out only, today exactly the explicit `clone()`
+    /// sites). The insertion *plan*: c05/s26 lower these; reuse/fusion
+    /// analysis refines them later. Not a use for the moves pass.
+    Dup { place: PlaceId, span: Span },
+    /// s21 — a recorded RC decrement/drop of a `shared`/`weak`-typed
+    /// local at scope exit, LIFO with `defer`s (`[mem.shared.drop.1]`
+    /// — the declaration span is the anchor). Conditional semantics
+    /// (drop-if-live, Rust-drop-flag-shaped) so re-drops of moved-away
+    /// locals never fire; drop-at-last-use migration is recorded in
+    /// the facts, applied in c05.
+    Drop { place: PlaceId, span: Span },
+    /// s21 — a generational check at a `pool[h]` slot access
+    /// (`[mem.shared.handle.3]`): the containing block carries a trap
+    /// edge (`stale-handle`, X5's deterministic-fault contract —
+    /// dynamic by design, no static half). Emitted as a checked-op
+    /// fact so s42 can hoist/dedup within provably-unfreed windows.
+    HandleCheck { place: PlaceId, span: Span },
 }
 
 #[derive(Debug, Default)]
@@ -373,6 +391,15 @@ impl Cfg {
                     }
                     Stmt::RegionClose { region, span } => {
                         format!("region-close {} {}", self.show_region(*region), sp(*span))
+                    }
+                    Stmt::Dup { place, span } => {
+                        format!("dup {} {}", self.show_place(*place), sp(*span))
+                    }
+                    Stmt::Drop { place, span } => {
+                        format!("drop {} {}", self.show_place(*place), sp(*span))
+                    }
+                    Stmt::HandleCheck { place, span } => {
+                        format!("handle-check {} {}", self.show_place(*place), sp(*span))
                     }
                 };
                 let _ = writeln!(out, "    {line}");

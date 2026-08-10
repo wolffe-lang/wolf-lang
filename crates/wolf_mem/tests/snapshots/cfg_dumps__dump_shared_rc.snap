@@ -1,0 +1,52 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/shared_ok.lu\"))"
+---
+fn main
+  _0 a: shared Cfg
+  _1 b: shared Cfg
+  _2 w: weak Cfg
+  _3 live: Cfg
+  b0:
+    alloc Cfg -> caller @289..305
+    alloc shared Cfg -> caller @281..306
+    init a @277..278
+    read a @319..320
+    dup a @319..328
+    call clone [read a] @319..328
+    alloc shared Cfg -> caller @319..328
+    init b @315..316
+    read a @341..342
+    call downgrade [read a] @341..354
+    alloc weak Cfg -> caller @341..354
+    init w @337..338
+    read w @370..371
+    call upgrade [read w] @370..381
+    alloc Cfg ! {gone} -> caller @370..381
+    -> b3, b2
+  b1:
+  b2:
+    drop w @337..338
+    drop b @315..316
+    drop a @277..278
+    -> b1
+  b3:
+    init live @363..367
+    move b.limit @411..418
+    -> b5, b6
+  b4:
+    -> b3
+  b5:
+    read live.limit @427..437
+    -> b6
+  b6:
+    -> b7, b9
+  b7:
+    -> b8
+  b8:
+    drop w @337..338
+    drop b @315..316
+    drop a @277..278
+    -> b1
+  b9:
+    -> b8

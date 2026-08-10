@@ -117,6 +117,54 @@ fn facts_move_use_after() {
 }
 
 // ---------------------------------------------------------------------
+// s21 — the Tier-2 surface: RC dup/drop insertion plan, drop timing
+// (scope exit, LIFO with defers), the static atomicity bit, and the
+// generational handle checks — all pinned against the Tier-2 corpus
+// litmuses themselves.
+// ---------------------------------------------------------------------
+
+#[test]
+fn dump_shared_rc() {
+    // `shared` cell creation, `clone()` dup, `downgrade`/`upgrade`,
+    // and the LIFO drops of every rc-typed local on both exits.
+    insta::assert_snapshot!("dump_shared_rc", dump(&corpus("memory/shared_ok.lu")));
+}
+
+#[test]
+fn facts_shared_rc() {
+    insta::assert_snapshot!("facts_shared_rc", facts(&corpus("memory/shared_ok.lu")));
+}
+
+#[test]
+fn dump_handle_pool() {
+    // Two-phase reserve/init, `pool.remove`, and the generation check
+    // (trap edge) at every `pool[h]` access — including the one the
+    // interpreter faults on (`stale-handle`): statically clean by
+    // contract, the check IS the type's semantics (X5).
+    insta::assert_snapshot!("dump_handle_pool", dump(&corpus("memory/handle_stale.lu")));
+}
+
+#[test]
+fn facts_handle_pool() {
+    insta::assert_snapshot!(
+        "facts_handle_pool",
+        facts(&corpus("memory/handle_stale.lu"))
+    );
+}
+
+#[test]
+fn dump_regions_acceptance_file() {
+    // The X4/X5 acceptance program itself (`corpus/regions.lu`):
+    // pools, handle lists, ring cycle through handles, region freeze.
+    insta::assert_snapshot!("dump_regions_lu", dump(&corpus("regions.lu")));
+}
+
+#[test]
+fn facts_regions_acceptance_file() {
+    insta::assert_snapshot!("facts_regions_lu", facts(&corpus("regions.lu")));
+}
+
+// ---------------------------------------------------------------------
 // Fuzz-lite (the s18 acceptance's "checker never panics, verdicts
 // deterministic" gate, at the CFG level): seeded random effect CFGs.
 // ---------------------------------------------------------------------

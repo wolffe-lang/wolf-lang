@@ -15,7 +15,7 @@
 //! `[mem.tier0.excl.3]`). Path-sensitive rules (E1001, E1002) run as
 //! separate passes over the finished CFG.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use wolf_ast::FreezeExpr;
 
@@ -145,14 +145,32 @@ pub struct Lowered {
     pub cfg: Cfg,
     pub diags: Vec<Diagnostic>,
     pub regions: RegionSummary,
+    /// s21 — `shared`/`weak` cell allocation sites with the static
+    /// atomicity bit (true = a freeze/transfer point reaches the
+    /// cell; every other cell is provably thread-exclusive).
+    pub rc_cells: Vec<(SiteId, bool)>,
 }
 
 struct Scope<'t> {
     names: Vec<(String, LocalId)>,
-    defers: Vec<(&'t GreenNode, bool)>,
+    /// Scope-exit obligations in declaration order: `defer`s and s21
+    /// RC drops interleave in ONE LIFO sequence ([mem.shared.drop.1]
+    /// — a destructor-carrying value has an implicit use at scope
+    /// exit, LIFO with `defer`/`errdefer`).
+    cleanup: Vec<Cleanup<'t>>,
     /// `locals.len()` at scope entry: locals below this mark outlive
     /// the scope (the region-close escape sweep's boundary).
     locals_mark: usize,
+}
+
+/// One scope-exit cleanup obligation.
+#[derive(Clone, Copy)]
+enum Cleanup<'t> {
+    /// `defer` / `errdefer` (bool = errdefer).
+    Defer(&'t GreenNode, bool),
+    /// s21: a `shared`/`weak`-typed local's recorded RC drop
+    /// (drop-if-live; the c05 lowering owns the real decrement).
+    DropLocal(LocalId),
 }
 
 struct LoopFrame {
@@ -246,6 +264,16 @@ pub(crate) struct Lowerer<'t> {
     /// `(root local, field name) -> region` (`h.child` after
     /// `let h = Holder { child: move c }`).
     region_field: HashMap<(u32, String), RegionId>,
+
+    // ------------------------------------------ the shared tier (s21) ----
+    /// Allocation sites owned by a `shared` cell (the cell itself and
+    /// the payload it captured): RC frees them, not a region, so every
+    /// region demand exempts them exactly like `imm` data — the
+    /// `[mem.region.edge]` Tier-2 column's ✅.
+    shared_site: BTreeSet<SiteId>,
+    /// The cell sites proper (creation + `clone`/`downgrade`
+    /// results), in mint order — the fact record's spine.
+    rc_cells: Vec<SiteId>,
 }
 
 impl<'t> Lowerer<'t> {
@@ -308,7 +336,7 @@ impl<'t> Lowerer<'t> {
         let mark = self.locals.len();
         self.scopes.push(Scope {
             names: Vec::new(),
-            defers: Vec::new(),
+            cleanup: Vec::new(),
             locals_mark: mark,
         });
     }
@@ -443,6 +471,14 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// The checked type of an expression, when sema recorded one.
+    fn expr_ty(&self, span: Span) -> Option<Ty<'t>> {
+        self.expr_tys.get(&span).map(|&id| Ty {
+            table: &self.tb.table,
+            id,
+        })
+    }
+
     /// The rendered type of a checked expression (dump surface only).
     fn rendered_expr_ty(&self, span: Span) -> String {
         self.expr_tys
@@ -467,8 +503,9 @@ impl<'t> Lowerer<'t> {
         "to keep the value, allocate it where it must live: build it outside the \
          region block, or aim the allocation at a longer-lived region explicitly \
          (`let r = region()` … `in r { … }`); widening the region block to cover \
-         every use also works. `freeze` (s20) and `shared` (s21) will add \
-         keep-alive alternatives when they land."
+         every use also works. Two keep-alive alternatives change the ownership \
+         instead: `freeze` the region (immutable forever) or make the value a \
+         `shared` cell (reference-counted, never dangles)."
     }
 
     /// One report per site: a site whose placement already conflicted
@@ -489,6 +526,11 @@ impl<'t> Lowerer<'t> {
             // Frozen (`imm`) data may be referenced from anywhere,
             // forever ([mem.region.edge.imm]): no co-location demand.
             if self.frozen_site.contains_key(&s) {
+                continue;
+            }
+            // Tier-2 `shared` cells are the sanctioned cross-region
+            // edge (s21, X5: never dangles) — no co-location demand.
+            if self.shared_site.contains(&s) {
                 continue;
             }
             let sr = self.sites[s.0 as usize].region;
@@ -577,6 +619,12 @@ impl<'t> Lowerer<'t> {
                 self.mark_escape(s, "returned");
                 continue;
             }
+            // A `shared` cell outlives any frame while a strong count
+            // holds it (s21: RC frees it, never a region).
+            if self.shared_site.contains(&s) {
+                self.mark_escape(s, "returned");
+                continue;
+            }
             let sr = self.sites[s.0 as usize].region;
             match self.rt.binding(sr) {
                 Some(Binding::Static) | Some(Binding::Caller) => {
@@ -636,6 +684,11 @@ impl<'t> Lowerer<'t> {
                 self.mark_escape(s, "module state");
                 continue;
             }
+            // `shared` cells: RC-owned, storable anywhere (s21).
+            if self.shared_site.contains(&s) {
+                self.mark_escape(s, "module state");
+                continue;
+            }
             let sr = self.sites[s.0 as usize].region;
             match self.rt.binding(sr) {
                 Some(Binding::Static) => {
@@ -685,6 +738,12 @@ impl<'t> Lowerer<'t> {
         // The block's own value escaping the dying region.
         let mut kept = Vec::new();
         for &s in &val.sites.clone() {
+            // s21: shared cells survive their creation region — RC
+            // owns them (X5: `shared` never dangles).
+            if self.shared_site.contains(&s) {
+                kept.push(s);
+                continue;
+            }
             if self.rt.same(self.sites[s.0 as usize].region, rid) {
                 if !self.already_conflicted(s) {
                     self.report_close_escape(
@@ -708,6 +767,9 @@ impl<'t> Lowerer<'t> {
             .flat_map(|(&l, m)| m.iter().map(move |(&s, &sp)| (l, s, sp)))
             .collect();
         for (l, s, sp) in entries {
+            if self.shared_site.contains(&s) {
+                continue; // s21: RC-owned, outlives the region freely
+            }
             if self.rt.same(self.sites[s.0 as usize].region, rid) && !self.already_conflicted(s) {
                 let name = self.locals[l as usize].name.clone();
                 self.report_close_escape(rid, s, sp, close_span, Some(name));
@@ -1074,6 +1136,55 @@ impl<'t> Lowerer<'t> {
                 let copy = field_ty.map(|t| is_copy(t, 0)).unwrap_or(false);
                 Some((self.places.intern(place, copy), field_ty))
             }
+            // s21 — container element access: `pool[h]` / `xs[i]`.
+            // The container is the place base ([mem.shared.handle.3]);
+            // every element is one `Opaque` place. Index operands
+            // evaluate here (left-to-right law) and the access emits
+            // its check: a generational `handle-check` on pools (trap
+            // `stale-handle`, X5) or a bounds `checked-op` on lists
+            // (trap `bounds`, D25). A refusal inside the index returns
+            // `None`; the caller's value fallback re-raises it.
+            SyntaxKind::BracketApply => {
+                let b = wolf_ast::BracketApply::cast(e)?;
+                let recv = b.callee()?;
+                let (base_id, base_ty) = self.as_place(recv)?;
+                let container = base_ty.map(|t| t.kind().clone());
+                if !matches!(container, Some(TyKind::Pool(_) | TyKind::List(_))) {
+                    return None; // not a container place (s17 surface)
+                }
+                for a in b.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = wolf_ast::Arg::value(a)
+                        && wolf_ast::is_expr_kind(v.kind)
+                        && self.eval_value(v).is_err()
+                    {
+                        return None;
+                    }
+                }
+                let base_place = self.places.get(base_id).clone();
+                let mut proj = base_place.proj;
+                proj.push(Proj::Opaque);
+                let place = Place {
+                    base: base_place.base,
+                    proj,
+                };
+                let elem_ty = self.expr_ty(e.span);
+                let copy = elem_ty.map(|t| is_copy(t, 0)).unwrap_or(false);
+                let pid = self.places.intern(place, copy);
+                match container {
+                    Some(TyKind::Pool(_)) => {
+                        self.push(Stmt::HandleCheck {
+                            place: pid,
+                            span: e.span,
+                        });
+                        self.blocks[self.cur.0 as usize].trap = true;
+                    }
+                    _ => {
+                        self.push(Stmt::CheckedOp { span: e.span });
+                        self.blocks[self.cur.0 as usize].trap = true;
+                    }
+                }
+                Some((pid, elem_ty))
+            }
             _ => None,
         }
     }
@@ -1199,20 +1310,42 @@ impl<'t> Lowerer<'t> {
             return Ok(());
         }
         self.in_defer = true;
-        let mut pending: Vec<&'t GreenNode> = Vec::new();
+        let mut pending: Vec<Cleanup<'t>> = Vec::new();
         for scope in self.scopes[depth..].iter().rev() {
-            for (expr, is_err) in scope.defers.iter().rev() {
-                if *is_err && !error_path {
+            for c in scope.cleanup.iter().rev() {
+                if let Cleanup::Defer(_, is_err) = c
+                    && *is_err
+                    && !error_path
+                {
                     continue;
                 }
-                pending.push(expr);
+                pending.push(*c);
             }
         }
         let mut result = Ok(());
-        for expr in pending {
-            if let Err(nyc) = self.eval_value(expr) {
-                result = Err(nyc);
-                break;
+        for c in pending {
+            match c {
+                Cleanup::Defer(expr, _) => {
+                    if let Err(nyc) = self.eval_value(expr) {
+                        result = Err(nyc);
+                        break;
+                    }
+                }
+                // s21: the recorded RC drop, LIFO with the defers
+                // ([mem.shared.drop.1]); drop-if-live semantics, so a
+                // moved-away local's drop never re-fires. The
+                // declaration span is the anchor.
+                Cleanup::DropLocal(l) => {
+                    let span = self.locals[l.0 as usize].span;
+                    let place = self.places.intern(
+                        Place {
+                            base: Base::Local(l.0),
+                            proj: Vec::new(),
+                        },
+                        false,
+                    );
+                    self.push(Stmt::Drop { place, span });
+                }
             }
         }
         self.in_defer = false;
@@ -1228,7 +1361,7 @@ impl<'t> Lowerer<'t> {
     fn eval_value(&mut self, e: &'t GreenNode) -> R<Val> {
         match e.kind {
             SyntaxKind::LiteralExpr => Ok(Val::none()),
-            SyntaxKind::PathExpr | SyntaxKind::MemberExpr => {
+            SyntaxKind::PathExpr | SyntaxKind::MemberExpr | SyntaxKind::BracketApply => {
                 if let Some((place, _)) = self.as_place(e) {
                     // A `Copy` use duplicates a region-free scalar:
                     // no site flows (this is what keeps a Copy field
@@ -1247,6 +1380,28 @@ impl<'t> Lowerer<'t> {
                     && let Some(base) = MemberExpr::cast(e).and_then(|m| m.base())
                 {
                     return self.eval_value(base);
+                }
+                // s21: a bracket access that did not resolve to a
+                // container place (temporary receiver, or a refusal
+                // inside the index that `as_place` could not carry) —
+                // re-evaluate the constituents so the refusal
+                // surfaces; a temporary container's element read has
+                // no further place effects.
+                if e.kind == SyntaxKind::BracketApply
+                    && let Some(b) = wolf_ast::BracketApply::cast(e)
+                {
+                    let mut val = Val::none();
+                    if let Some(r) = b.callee() {
+                        val.merge(self.eval_value(r)?);
+                    }
+                    for a in b.args().into_iter().flat_map(|l| l.args()) {
+                        if let Some(v) = wolf_ast::Arg::value(a)
+                            && wolf_ast::is_expr_kind(v.kind)
+                        {
+                            val.merge(self.eval_value(v)?);
+                        }
+                    }
+                    return Ok(val);
                 }
                 Ok(Val::none()) // item reference (fn value, enum type, …)
             }
@@ -1401,8 +1556,8 @@ impl<'t> Lowerer<'t> {
                 construct: "closure capture analysis (c05 tasks)",
                 span: e.span,
             }),
-            SyntaxKind::BracketApply | SyntaxKind::FromEndExpr => Err(NotYet {
-                construct: "indexing/slicing places (s05 std surface)",
+            SyntaxKind::FromEndExpr => Err(NotYet {
+                construct: "end-relative `^n` slicing places (s05 std surface)",
                 span: e.span,
             }),
             SyntaxKind::RegionBlock => self.eval_region_block(e),
@@ -1547,7 +1702,7 @@ impl<'t> Lowerer<'t> {
                     Some(rid) => rid,
                     None => {
                         return Err(NotYet {
-                            construct: "region flow beyond bindings and one-step iso fields (s21)",
+                            construct: "region flow beyond bindings and one-step iso fields (c05 backlog)",
                             span: rexpr.span,
                         });
                     }
@@ -1628,7 +1783,7 @@ impl<'t> Lowerer<'t> {
         };
         let Some(rid) = rid else {
             return Err(NotYet {
-                construct: "freezing a region whose identity is not statically known (s21)",
+                construct: "freezing a region whose identity is not statically known (c05 backlog)",
                 span: operand.span,
             });
         };
@@ -1748,10 +1903,34 @@ impl<'t> Lowerer<'t> {
                 construct: "the unsafe tier (s22)",
                 span: e.span,
             }),
-            Some(SyntaxKind::SharedKw) => Err(NotYet {
-                construct: "`shared` allocation (s21)",
-                span: e.span,
-            }),
+            Some(SyntaxKind::SharedKw) => {
+                // `shared v` — the Tier-2 RC cell ([mem.shared.rc.1]).
+                // The payload moves into the cell (MVS), and from
+                // here on RC owns it: the cell and its payload are
+                // exempt from every region demand, exactly like `imm`
+                // data — the `[mem.region.edge]` Tier-2 column. The
+                // cell itself is an allocation at the creation site
+                // ([mem.model.alloc]).
+                let operand_val = if let Some((place, _)) = self.as_place(operand) {
+                    let v = if self.places.is_copy(place) {
+                        Val::none()
+                    } else {
+                        self.val_of_place(place, operand.span)
+                    };
+                    self.use_value(place, operand.span);
+                    v
+                } else {
+                    self.eval_value(operand)?
+                };
+                for &s in &operand_val.sites {
+                    self.shared_site.insert(s);
+                }
+                let ty = self.rendered_expr_ty(e.span);
+                let site = self.alloc_site(ty, SiteKind::Lit, e.span);
+                self.shared_site.insert(site);
+                self.rc_cells.push(site);
+                Ok(Val::site(site, e.span))
+            }
             _ => self.eval_value(operand),
         }
     }
@@ -2105,9 +2284,35 @@ impl<'t> Lowerer<'t> {
             if let Some(selfp) = selfp {
                 self.lower_receiver(recv_expr, base.span, &selfp, &mut surface, &mut carry)?;
             }
+            // s21: `clone()` on a `shared` receiver is the recorded
+            // dup — Perceus inserts RC ops at genuine fan-out only,
+            // and explicit clones are exactly that set today.
+            if cs.callee == "clone"
+                && matches!(
+                    self.expr_ty(recv_expr.span).map(|t| t.kind().clone()),
+                    Some(TyKind::Shared(_))
+                )
+                && matches!(
+                    recv_expr.kind,
+                    SyntaxKind::PathExpr | SyntaxKind::MemberExpr
+                )
+                && let Some((place, _)) = self.as_place(recv_expr)
+            {
+                self.push(Stmt::Dup {
+                    place,
+                    span: e.span,
+                });
+            }
             receiver_done = true;
         }
-        if !receiver_done && let Some(callee) = d.callee() {
+        // A constructor's callee is a type head (`Node`, or the s21
+        // `List[handle Node]` bracket form), not a value — nothing to
+        // evaluate.
+        let is_ctor = cs.map(|c| c.ctor).unwrap_or(false);
+        if !receiver_done
+            && !is_ctor
+            && let Some(callee) = d.callee()
+        {
             // Callee expressions with effects: a fn-typed place is
             // read; a member path's base may be one.
             match callee.kind {
@@ -2221,6 +2426,16 @@ impl<'t> Lowerer<'t> {
                 format!("{callee}(..)")
             };
             let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+            // s21: a call handing back a `shared`/`weak` cell
+            // (`clone`, `downgrade`) — the result is RC-owned, not
+            // region-owned.
+            if matches!(
+                ret_ty.map(|t| t.kind()),
+                Some(TyKind::Shared(_) | TyKind::Weak(_))
+            ) {
+                self.shared_site.insert(site);
+                self.rc_cells.push(site);
+            }
             if ret_heap {
                 out = Val::site(site, e.span);
                 for s in carry {
@@ -2541,8 +2756,8 @@ impl<'t> Lowerer<'t> {
                         self.scopes
                             .last_mut()
                             .expect("scope")
-                            .defers
-                            .push((e, is_err));
+                            .cleanup
+                            .push(Cleanup::Defer(e, is_err));
                     }
                 }
                 SyntaxKind::AssumeStmt => {
@@ -2613,6 +2828,16 @@ impl<'t> Lowerer<'t> {
                 id,
             });
             let local = self.declare(&name, span, ty);
+            // s21: a `shared`/`weak` local carries an RC drop
+            // obligation at its scope's exit, LIFO with the defers
+            // ([mem.shared.drop.1]).
+            if matches!(
+                ty.map(|t| t.kind()),
+                Some(TyKind::Shared(_) | TyKind::Weak(_))
+            ) && let Some(scope) = self.scopes.last_mut()
+            {
+                scope.cleanup.push(Cleanup::DropLocal(local));
+            }
             let place = self.places.intern(
                 Place {
                     base: Base::Local(local.0),
@@ -2865,6 +3090,8 @@ impl<'t> Lowerer<'t> {
             region_parent: HashMap::new(),
             frozen_region: HashMap::new(),
             frozen_site: BTreeMap::new(),
+            shared_site: BTreeSet::new(),
+            rc_cells: Vec::new(),
             region_field: HashMap::new(),
         }
     }
@@ -2951,6 +3178,16 @@ impl<'t> Lowerer<'t> {
 
     fn finish(self, name: &str) -> Lowered {
         let _ = (self.pkg, self.file);
+        // s21: the static atomicity bit — non-atomic unless a freeze
+        // (the one statically-visible sharing point checkable today;
+        // cross-thread transfer refuses until c05/c07) reaches the
+        // cell. Thread-exclusivity is structural, never a runtime
+        // test.
+        let rc_cells: Vec<(SiteId, bool)> = self
+            .rc_cells
+            .iter()
+            .map(|&s| (s, self.frozen_site.contains_key(&s)))
+            .collect();
         let regions = crate::regions::summarize(
             name,
             self.rt,
@@ -2973,6 +3210,7 @@ impl<'t> Lowerer<'t> {
             },
             diags: self.diags,
             regions,
+            rc_cells,
         }
     }
 }

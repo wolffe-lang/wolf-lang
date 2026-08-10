@@ -282,7 +282,13 @@ fn transfer(
         Stmt::Activate { loan, .. } => {
             flow.active |= 1 << loan.0;
         }
-        Stmt::Uninit { .. }
+        // s21 RC/handle bookkeeping statements are not accesses the
+        // loan sets constrain (their guarded access carries its own
+        // Read/Mutate).
+        Stmt::Dup { .. }
+        | Stmt::Drop { .. }
+        | Stmt::HandleCheck { .. }
+        | Stmt::Uninit { .. }
         | Stmt::UseBorrower { .. }
         | Stmt::CheckedOp { .. }
         | Stmt::Alloc { .. }

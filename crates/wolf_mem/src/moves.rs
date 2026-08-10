@@ -183,12 +183,19 @@ fn transfer(
         Stmt::Borrow { loan, span } => {
             check_use(state, cfg.loans[loan.0 as usize].place, *span);
         }
+        // s21: `Dup` rides its `clone()` call's own receiver read;
+        // `Drop` is conditional (drop-if-live — a moved-away local
+        // must not re-report); `HandleCheck` guards the access that
+        // carries its own `Read`. None are uses here.
         Stmt::UseBorrower { .. }
         | Stmt::Activate { .. }
         | Stmt::CheckedOp { .. }
         | Stmt::Alloc { .. }
         | Stmt::RegionOpen { .. }
-        | Stmt::RegionClose { .. } => {}
+        | Stmt::RegionClose { .. }
+        | Stmt::Dup { .. }
+        | Stmt::Drop { .. }
+        | Stmt::HandleCheck { .. } => {}
     }
 }
 

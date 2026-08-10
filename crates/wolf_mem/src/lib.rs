@@ -62,10 +62,29 @@
 //!   paths); a call returning `region` mints a fresh identity (the
 //!   scheme-carrying interface's shape — wolf_sema renders and hashes
 //!   the derived Cyclone scheme into every heap-reaching fn sig).
-//! - **Honest refusals**: `shared`/`handle` (s21), the unsafe tier
-//!   (s22), closures/concurrency (c05), region identity through
-//!   conflicting rebinds or multi-step paths (s21) return [`NotYet`]
-//!   — the conform-run `mem` rung completes only when every body was
+//! - **The shared tier** ([`shared`]-module + [`lower`]-integrated,
+//!   s21): strong `shared` edges must form a DAG at the type level —
+//!   a strong cycle (through embeds, `List`/`Pool` elements, tuples,
+//!   rows, or `shared` wrappers) is E1006 at the definition, with the
+//!   `weak`/`handle` rewrite prescribed; `shared` cells are the
+//!   sanctioned cross-region escape (exempt from co-location and
+//!   region-close sweeps — RC frees them, never a region); the
+//!   Perceus insertion *plan* is recorded as facts (dup at `clone()`
+//!   fan-out, drop at scope exit LIFO with defers per
+//!   `[mem.shared.drop.1]`, migratable to last use — c05 lowers it);
+//!   every cell carries the **static atomicity bit** (non-atomic
+//!   unless a freeze/transfer point reaches it — thread-exclusivity
+//!   is structural); `pool[h]` accesses emit generational
+//!   `handle-check` statements with trap edges (`stale-handle` is the
+//!   dynamic half by contract, X5 — no static approximation exists,
+//!   because handles are plain data whose validity is only decided at
+//!   the slot). The prelude containers `List[T]`/`Pool[T]` type as
+//!   sema builtins (enough for the Tier-2 corpus; std proper is s37).
+//! - **Honest refusals**: the unsafe tier (s22),
+//!   closures/concurrency (c05), region identity through conflicting
+//!   rebinds or multi-step paths (c05 backlog), `shared` acyclicity
+//!   through opaque generic std types (s16) return [`NotYet`] — the
+//!   conform-run `mem` rung completes only when every body was
 //!   actually checked.
 
 use wolf_ast::{GreenNode, SyntaxKind, is_expr_kind};
@@ -83,6 +102,7 @@ mod lower;
 mod moves;
 pub mod place;
 pub mod regions;
+mod shared;
 
 pub use facts::FnFacts;
 pub use lower::Lowered;
@@ -109,11 +129,13 @@ pub struct MemCheck {
 /// [`wolf_sema::typecheck_package`] over the same `pkg`.
 pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     let mut out = MemCheck::default();
-    // Tier guard: types from later sprints refuse the whole rung
-    // honestly (a `shared` field is exactly the E1006 surface s21
-    // owns — passing the file now would advance the ledger on a
-    // check nobody ran).
+    // Tier guard: types from later sprints (the unsafe tier's `*T`)
+    // refuse the whole rung honestly.
     tier_guard(&tc.sigs, &mut out.not_yet);
+    // s21: strong `shared` edges must form a DAG at the type level
+    // ([mem.shared.rc.2], E1006) — checked over the signature tables
+    // before any body runs.
+    shared::check(&tc.sigs, &mut out.diagnostics, &mut out.not_yet);
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
@@ -127,8 +149,11 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
                 moves::check(&lowered.cfg, &mut out.diagnostics);
                 excl::check(&lowered.cfg, &mut out.diagnostics);
                 loans::check(&lowered.cfg, &mut out.diagnostics);
-                out.facts
-                    .push(facts::collect(&lowered.cfg, &lowered.regions));
+                out.facts.push(facts::collect(
+                    &lowered.cfg,
+                    &lowered.regions,
+                    &lowered.rc_cells,
+                ));
                 out.regions.push(lowered.regions);
             }
         }
@@ -268,13 +293,17 @@ fn later_tier(table: &TypeTable, id: TyId, depth: u32) -> Option<&'static str> {
         return None;
     }
     match table.kind(id) {
-        TyKind::Shared(_) | TyKind::Weak(_) => Some("`shared` reference counting (s21)"),
-        TyKind::Handle(_) => Some("`handle` pools (s21)"),
-        // `region`-typed values check here since s19.
+        // `shared`/`weak`/`handle` and the prelude containers check
+        // here since s21; `region`-typed values since s19.
         TyKind::Ptr(_) => Some("the unsafe tier (s22)"),
-        TyKind::Wrapping(t) | TyKind::Distinct(t) | TyKind::Range(t) => {
-            later_tier(table, *t, depth + 1)
-        }
+        TyKind::Wrapping(t)
+        | TyKind::Distinct(t)
+        | TyKind::Range(t)
+        | TyKind::Shared(t)
+        | TyKind::Weak(t)
+        | TyKind::Handle(t)
+        | TyKind::List(t)
+        | TyKind::Pool(t) => later_tier(table, *t, depth + 1),
         TyKind::Tuple(elems) => elems.iter().find_map(|&t| later_tier(table, t, depth + 1)),
         TyKind::Fn(params, ret) => params
             .iter()

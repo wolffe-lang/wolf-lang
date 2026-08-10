@@ -1,0 +1,9 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "facts(&corpus(\"memory/handle_stale.lu\"))"
+---
+facts fn main
+  alloc Pool[Node] @300..312 -> region r
+  alloc Node @365..382 -> region r
+  promote region r @265..266 -> stack (create/free elided)
+  handle-check pool[_] @468..475 -> generation check (hoistable in unfreed window)

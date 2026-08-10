@@ -1,0 +1,32 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"memory/handle_stale.lu\"))"
+---
+fn main
+  _0 r: region
+  _1 pool: Pool[Node]
+  _2 h: handle Node copy
+  _3 v: int copy
+  b0:
+    region-open region r @265..266
+    init r @265..266
+    alloc Pool[Node] -> region r @300..312
+    init pool @293..297
+    read pool @329..333
+    call reserve [read pool] @329..343
+    init h @325..326
+    read pool @352..356
+    read h @362..363
+    alloc Node -> region r @365..382
+    call init [read pool] @352..383
+    read pool @392..396
+    read h @404..405
+    call remove [read pool] @392..406
+    read h @473..474
+    handle-check pool[_] @468..475
+    read pool[_].value @468..481
+    init v @464..465
+    read v @538..539
+    region-close region r @544..545
+    -> b1, trap
+  b1:

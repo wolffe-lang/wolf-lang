@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_mem/tests/mem_diagnostics.rs
-assertion_line: 54
 expression: render_mem(src)
 ---
 error[E1010]: this value is allocated in region `tmp`, which is freed when the block ends
@@ -14,5 +13,6 @@ error[E1010]: this value is allocated in region `tmp`, which is freed when the b
   |
   = note: to keep the value, allocate it where it must live: build it outside the region block, or
     aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { …
-    }`); widening the region block to cover every use also works. `freeze` (s20) and
-    `shared` (s21) will add keep-alive alternatives when they land.
+    }`); widening the region block to cover every use also works. Two keep-alive
+    alternatives change the ownership instead: `freeze` the region (immutable forever) or
+    make the value a `shared` cell (reference-counted, never dangles).

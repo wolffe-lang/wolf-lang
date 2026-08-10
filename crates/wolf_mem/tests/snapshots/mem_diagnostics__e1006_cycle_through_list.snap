@@ -1,0 +1,17 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1006]: `N` holds a strong `shared` path back to itself
+ --> mem:///main.lu:1:12
+  |
+1 | struct N { kids: List[shared N] }
+  |            ^^^^ this `shared` edge closes the cycle N → N
+  |
+  = note: strong `shared` references drop their target when the last count drops, so a strong
+    cycle would keep itself alive forever — and wolf has no cycle collector
+    ([mem.shared.rc.2]). Break the back-edge: make this field `weak N` (upgrade to reach the
+    value without keeping it alive) or `handle N` (a generational index that faults if the
+    target is gone). If the structure is genuinely cyclic, keep the whole graph in one
+    region instead — intra-region cycles are safe and freed wholesale
+    ([mem.region.intra.1]).

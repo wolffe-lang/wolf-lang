@@ -1,0 +1,22 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "facts(&corpus(\"memory/shared_ok.lu\"))"
+---
+facts fn main
+  alloc Cfg @289..305 -> caller
+  alloc shared Cfg @281..306 -> caller
+  alloc shared Cfg @319..328 -> caller
+  alloc weak Cfg @341..354 -> caller
+  alloc Cfg ! {gone} @370..381 -> caller
+  stack-alloc Cfg @289..305 (never escapes)
+  stack-alloc shared Cfg @281..306 (never escapes)
+  dup a @319..328 -> rc+1 (fan-out)
+  drop w @337..338 -> scope exit, LIFO with defers; migratable to last use
+  drop b @315..316 -> scope exit, LIFO with defers; migratable to last use
+  drop a @277..278 -> scope exit, LIFO with defers; migratable to last use
+  drop w @337..338 -> scope exit, LIFO with defers; migratable to last use
+  drop b @315..316 -> scope exit, LIFO with defers; migratable to last use
+  drop a @277..278 -> scope exit, LIFO with defers; migratable to last use
+  rc-cell shared Cfg @281..306 -> non-atomic (thread-exclusive by region structure)
+  rc-cell shared Cfg @319..328 -> non-atomic (thread-exclusive by region structure)
+  rc-cell weak Cfg @341..354 -> non-atomic (thread-exclusive by region structure)

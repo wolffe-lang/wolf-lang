@@ -1,0 +1,118 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+expression: "dump(&corpus(\"regions.lu\"))"
+---
+fn build_ring
+  _0 n: int copy param(read)
+  _1 r: region
+  _2 pool: Pool[Node]
+  _3 hs: List[handle Node]
+  _4 i: int copy
+  _5 sum: int copy
+  _6 cur: handle Node copy
+  b0:
+    region-open region r @699..700
+    init r @699..700
+    alloc Pool[Node] -> region r @784..796
+    init pool @777..781
+    alloc List[handle Node] -> region r @848..867
+    init hs @843..845
+    read n @888..889
+    -> b2
+  b1:
+  b2:
+    -> b3, b4
+  b3:
+    read hs @892..894
+    read pool @900..904
+    call reserve [read pool] @900..914
+    call push [read hs] @892..915
+    -> b2
+  b4:
+    read n @976..977
+    -> b5
+  b5:
+    -> b6, b7
+  b6:
+    init i @968..969
+    read pool @992..996
+    read i @1005..1006
+    checked-op @1002..1007
+    read hs[_] @1002..1007
+    read i @1039..1040
+    read i @1068..1069
+    checked-op @1068..1073
+    read n @1077..1078
+    checked-op @1067..1078
+    checked-op @1064..1079
+    read hs[_] @1064..1079
+    read i @1166..1167
+    read n @1170..1171
+    checked-op @1166..1171
+    checked-op @1166..1175
+    read n @1179..1180
+    checked-op @1165..1180
+    checked-op @1162..1181
+    read hs[_] @1162..1181
+    alloc Node -> region r @1009..1196
+    call init [read pool] @992..1197
+    -> b5, trap
+  b7:
+    init sum @1220..1223
+    checked-op @1246..1251
+    read hs[_] @1246..1251
+    init cur @1240..1243
+    read n @1272..1273
+    -> b8, trap
+  b8:
+    -> b9, b10
+  b9:
+    read cur @1300..1303
+    handle-check pool[_] @1295..1304
+    read pool[_].value @1295..1310
+    mutate sum @1288..1291
+    read cur @1334..1337
+    handle-check pool[_] @1329..1338
+    read pool[_].next @1329..1343
+    init cur @1323..1326
+    -> b8, trap
+  b10:
+    read sum @1362..1365
+    region-close region r @1441..1442
+    -> b1
+
+fn build_config
+  b0:
+    alloc Config -> caller @1510..1530
+    -> b1
+  b1:
+
+fn main
+  _0 r: region
+  _1 config: Config
+  _2 frozen: region
+  _3 total: int copy
+  b0:
+    init r @1684..1685
+    read r @1764..1765
+    region-open region r @1761..1784
+    alloc Config -> region r @1768..1782
+    region-close region r @1783..1784
+    init config @1752..1758
+    move r @1809..1810
+    init frozen @1793..1799
+    init total @1873..1878
+    read total @1996..2001
+    -> b2, b3
+  b1:
+  b2:
+    read config.limit @2013..2025
+    -> b3
+  b3:
+    -> b4, b6
+  b4:
+    -> b5
+  b5:
+    -> b1
+  b6:
+    -> b5

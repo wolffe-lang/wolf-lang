@@ -637,3 +637,102 @@ fn clean_iso_edge_then_open_after_close() {
          }\n",
     );
 }
+
+// ------------------------------------------ the shared tier (s21) --
+
+#[test]
+fn e1006_direct_strong_cycle() {
+    // [mem.shared.rc.2]: a type holding `shared` of itself is the
+    // smallest strong cycle — rejected at the definition, with the
+    // weak/handle rewrite prescribed (shared_cycle.lu's shape).
+    snap(
+        "e1006_direct_strong_cycle",
+        "struct S { next: shared S }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1006_two_type_cycle() {
+    // A strong cycle through a by-value embed: `A` embeds `B`, `B`
+    // holds `shared A` — the shared edge closes it and gets the
+    // report.
+    snap(
+        "e1006_two_type_cycle",
+        "struct A { b: B }\n\
+         struct B { back: shared A }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1006_cycle_through_list() {
+    // The container edge is strong: `List[shared N]` inside `N` is a
+    // cycle even though no field is literally `shared N`.
+    snap(
+        "e1006_cycle_through_list",
+        "struct N { kids: List[shared N] }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn clean_weak_backedge() {
+    // The prescribed rewrite: the back-edge as `weak` breaks the
+    // strong cycle ([mem.shared.rc.3]) — silent.
+    snap(
+        "clean_weak_backedge",
+        "struct A { b: B }\n\
+         struct B { back: weak A }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn clean_handle_backedge() {
+    // The other prescribed rewrite: a generational `handle` back-edge
+    // proves nothing until dereferenced — no strong cycle.
+    snap(
+        "clean_handle_backedge",
+        "struct S { next: handle S }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn clean_shared_clone_drop() {
+    // The conforming Tier-2 shape (shared_ok.lu): cell creation,
+    // clone fan-out, weak downgrade/upgrade — statically silent; the
+    // dup/drop plan lands in the facts, not in diagnostics.
+    snap(
+        "clean_shared_clone_drop",
+        "struct Cfg { limit: int }\n\
+         fn main() -> !int {\n    \
+             let a = shared (Cfg { limit: 7 })\n    \
+             let b = a.clone()\n    \
+             let w = a.downgrade()\n    \
+             let live = w.upgrade() else |_| { return 1 }\n    \
+             if b.limit == 7 && live.limit == 7 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_pool_two_phase() {
+    // [mem.shared.handle.1]/[mem.shared.handle.3]: two-phase
+    // reserve/init and checked slot access under the pool region's
+    // rules — statically silent (staleness is the interpreter's
+    // deterministic trap, X5's dynamic half by design).
+    snap(
+        "clean_pool_two_phase",
+        "struct Node { value: int }\n\
+         fn main() -> !int {\n    \
+             region r: pool(Node) {\n        \
+                 var pool = Pool[Node]()\n        \
+                 let h = pool.reserve()\n        \
+                 pool.init(h, Node { value: 41 })\n        \
+                 pool[h].value + 1 - 42\n    \
+             }\n\
+         }\n",
+    );
+}
