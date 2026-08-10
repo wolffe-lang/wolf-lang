@@ -2,10 +2,10 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-TraitDecl 265..304 name=Draw
-  FnDecl 282..303 name=draw
-StructDecl 306..332 name=Dot fields=1
-ImplDecl 334..402 path=Draw for=Dot
-  FnDecl 358..400 name=draw body=Block
-FnDecl 404..454 name=render body=Block
-FnDecl 456..483 name=main body=Block
+TraitDecl 259..298 name=Draw
+  FnDecl 276..297 name=draw
+StructDecl 300..326 name=Dot fields=1
+ImplDecl 328..396 path=Draw for=Dot
+  FnDecl 352..394 name=draw body=Block
+FnDecl 398..448 name=render body=Block
+FnDecl 450..477 name=main body=Block

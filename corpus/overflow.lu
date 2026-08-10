@@ -1,5 +1,5 @@
 //! check: run(exit=trap(overflow))
-//! phase: typecheck
+//! phase: mem
 //! conforms: arith.checked, arith.wrapping, mem.ub.defined
 //!
 //! Checked arithmetic in EVERY profile (X3): overflow is a bug and faults

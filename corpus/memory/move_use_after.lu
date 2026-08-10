@@ -1,16 +1,19 @@
 //! check: fail(E1001)
-//! phase: resolve
+//! phase: typecheck
 //! conforms: mem.tier0.move.2
 //! Use of a moved-from place is a compile error (dynamically: a
 //! use-after-move trap in the interpreter, which is is02's check).
+//! s18 note: the body sheds its `List` dependency — generic containers
+//! are s05's std surface, and this file's E1001 claim must not wait on
+//! them. The shape (take-consume, then read the corpse) is unchanged.
 
-struct Big { data: List[int] }
+struct Big { data: int }
 
-fn consume(take b: Big) -> int { b.data.len }
+fn consume(take b: Big) -> int { b.data }
 
 fn main() -> !int {
-    let b = Big { data: List[int]() }
+    let b = Big { data: 2 }
     let n = consume(take b)
-    let m = b.data.len             // ERROR E1001: b was moved
+    let m = b.data                 // ERROR E1001: b was moved
     n + m
 }

@@ -2,12 +2,12 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-TraitDecl 284..352 name=Seq
-  TypeDecl 300..316 name=Item def=TypeType
-  FnDecl 321..351 name=head
-StructDecl 354..388 name=Counter fields=1
-ImplDecl 390..492 path=Seq for=Counter
-  TypeDecl 417..433 name=Item def=PathType
-  FnDecl 437..490 name=head body=Block
-FnDecl 494..546 name=front body=Block
-FnDecl 548..634 name=main body=Block
+TraitDecl 278..346 name=Seq
+  TypeDecl 294..310 name=Item def=TypeType
+  FnDecl 315..345 name=head
+StructDecl 348..382 name=Counter fields=1
+ImplDecl 384..486 path=Seq for=Counter
+  TypeDecl 411..427 name=Item def=PathType
+  FnDecl 431..484 name=head body=Block
+FnDecl 488..540 name=front body=Block
+FnDecl 542..628 name=main body=Block

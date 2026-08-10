@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: typecheck
+//! phase: mem
 //! conforms: ty.trait.adapter
 //!
 //! The sanctioned orphan escape (D28): both the trait and the type

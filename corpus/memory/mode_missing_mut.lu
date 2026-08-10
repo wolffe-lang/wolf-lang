@@ -1,0 +1,16 @@
+//! check: fail(E1007)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut
+//! X1: call sites spell `mut` — mutation is visible where it happens,
+//! or the program does not compile. The declared mode and the call
+//! site disagree here, and the diagnostic points at the argument.
+
+struct P { x: int, y: int }
+
+fn bump(mut n: int) { n += 1 }
+
+fn main() -> !int {
+    var p = P { x: 1, y: 2 }
+    bump(p.x)                      // ERROR E1007: `mut` is missing
+    if p.x == 2 { 0 } else { 1 }
+}

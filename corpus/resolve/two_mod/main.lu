@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: mod.dir, mod.use.pub
 //!
 //! The two-module happy case (D32): directory = module, so `geometry/`

@@ -1,0 +1,13 @@
+//! check: fail(E1009)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut
+//! `mut` lends a location out to be written; a temporary has no
+//! location the caller could ever see again, so the writes would
+//! vanish with it.
+
+fn bump(mut n: int) { n += 1 }
+
+fn main() -> !int {
+    bump(mut 41)                   // ERROR E1009: not a place
+    0
+}

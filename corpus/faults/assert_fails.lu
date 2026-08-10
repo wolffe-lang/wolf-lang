@@ -1,5 +1,5 @@
 //! check: run(exit=trap(assert))
-//! phase: typecheck
+//! phase: mem
 //! conforms: mem.ub.defined
 //!
 //! `assert` is the one trap identity a *user* raises rather than the machine

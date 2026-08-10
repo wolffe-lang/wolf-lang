@@ -2,7 +2,7 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 435..470 name=P fields=3
-ImplDecl 472..593 path=P
-  FnDecl 485..591 name=norm body=Block
-FnDecl 595..757 name=main body=Block
+StructDecl 429..464 name=P fields=3
+ImplDecl 466..587 path=P
+  FnDecl 479..585 name=norm body=Block
+FnDecl 589..751 name=main body=Block

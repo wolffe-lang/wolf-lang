@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: comptime.reflect, comptime.types_as_values
 //!
 //! Reflection consumes and produces semantic values only (the D29

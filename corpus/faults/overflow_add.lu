@@ -1,5 +1,5 @@
 //! check: run(exit=trap(overflow))
-//! phase: typecheck
+//! phase: mem
 //! conforms: arith.checked, mem.ub.defined
 //!
 //! Checked arithmetic in every profile (X3): a `+` that leaves `i32`'s range

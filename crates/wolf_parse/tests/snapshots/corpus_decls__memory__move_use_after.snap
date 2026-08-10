@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 207..237 name=Big fields=1
-FnDecl 239..284 name=consume body=Block
-FnDecl 286..446 name=main body=Block
+StructDecl 426..450 name=Big fields=1
+FnDecl 452..493 name=consume body=Block
+FnDecl 495..645 name=main body=Block

@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: typecheck
+//! phase: mem
 //! conforms: gram.amb.else
 //! `} else` must share the line; the chain binds to the nearest `if`.
 

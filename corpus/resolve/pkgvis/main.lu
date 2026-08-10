@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: mod.vis.pkg
 //!
 //! `pub(pkg)` is visible package-wide (D32): this entry and `store/`

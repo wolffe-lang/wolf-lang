@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: err.rows, err.rows.tail
 //!
 //! Row-polymorphic tails for HOFs (D30/s15): the `rethrows` problem

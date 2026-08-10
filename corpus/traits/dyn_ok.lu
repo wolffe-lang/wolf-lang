@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: typecheck
+//! phase: mem
 //! conforms: ty.trait.dyn.safe
 //!
 //! A dyn-safe trait (receiver-only `Self`, no generics, no

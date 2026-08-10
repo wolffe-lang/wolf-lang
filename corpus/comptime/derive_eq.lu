@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: comptime.reflect, comptime.derive
 //!
 //! The derive-class shape, corpus side: reflection asserts at compile

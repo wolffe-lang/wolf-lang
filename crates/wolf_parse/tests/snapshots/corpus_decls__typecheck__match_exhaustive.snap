@@ -2,7 +2,7 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-EnumDecl 297..355 name=Color variants=3
-FnDecl 357..490 name=brightness body=Block
-FnDecl 492..634 name=risky body=Block
-FnDecl 636..863 name=main body=Block
+EnumDecl 291..349 name=Color variants=3
+FnDecl 351..484 name=brightness body=Block
+FnDecl 486..628 name=risky body=Block
+FnDecl 630..857 name=main body=Block

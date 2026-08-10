@@ -2,7 +2,7 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 333..399 name=apply body=Block
-FnDecl 401..483 name=half body=Block
-FnDecl 485..575 name=double body=Block
-FnDecl 577..711 name=main body=Block
+FnDecl 327..393 name=apply body=Block
+FnDecl 395..477 name=half body=Block
+FnDecl 479..569 name=double body=Block
+FnDecl 571..705 name=main body=Block

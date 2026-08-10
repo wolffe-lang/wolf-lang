@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 421..458 name=Buf fields=1
-FnDecl 460..518 name=shuffle body=Block
-FnDecl 520..580 name=widen body=Block
-FnDecl 582..626 name=closed body=Block
-FnDecl 628..655 name=main body=Block
+StructDecl 415..452 name=Buf fields=1
+FnDecl 454..512 name=shuffle body=Block
+FnDecl 514..574 name=widen body=Block
+FnDecl 576..620 name=closed body=Block
+FnDecl 622..649 name=main body=Block

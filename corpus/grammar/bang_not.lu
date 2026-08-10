@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: typecheck
+//! phase: mem
 //! conforms: gram.amb.bang
 //! `!` in expression position is unary not.
 

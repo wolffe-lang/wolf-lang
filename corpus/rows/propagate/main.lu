@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: err.rows, err.propagate, err.union
 //!
 //! Three-module propagation with widening at each hop (D30/s15):

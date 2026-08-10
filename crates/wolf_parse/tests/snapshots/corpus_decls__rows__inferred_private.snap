@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 394..509 name=countdown body=Block
-FnDecl 511..608 name=main body=Block
+FnDecl 388..503 name=countdown body=Block
+FnDecl 505..602 name=main body=Block

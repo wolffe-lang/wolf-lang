@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: typecheck
+//! phase: mem
 //! conforms: comptime.const_generics, comptime.norm
 //!
 //! Const-generic normalization (s16): linear `+`/`-` arithmetic over

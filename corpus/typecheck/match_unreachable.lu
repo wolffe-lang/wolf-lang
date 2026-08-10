@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: ty.match.reachable
 //!
 //! A dead arm is a WARNING (E0802) citing the covering arm — the

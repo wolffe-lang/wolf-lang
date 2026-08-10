@@ -1,0 +1,47 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.tier0.excl.2, mem.tier0.excl.3, mem.tier0.move.1, mem.tier0.move.4
+//!
+//! The s18 acceptance file: everything Tier-0 exclusivity must PERMIT,
+//! in one program. Disjoint nested fields go `mut` together (the MVS
+//! `swap(&p.fs, &p.sn)` case — RFC 2094's appendix begs for a
+//! refactor here; wolf just allows it), a view set narrows a
+//! receiver's exclusive footprint so the caller keeps the rest, the
+//! two-phase shape reads a disjoint field into a `mut` call, a partial
+//! move leaves siblings live, and re-initialization revives the moved
+//! path.
+
+struct V { x: int, y: int, z: int }
+
+struct Pair { a: V, b: V }
+
+impl V {
+    fn norm(mut self.{x, y}) -> int {
+        self.x = self.x + self.y
+        self.y = 0
+        self.x
+    }
+    fn set_x(mut self.{x}, n: int) { self.x = n }
+}
+
+fn swap_fields(mut a: int, mut b: int) {
+    let t = a
+    a = b
+    b = t
+}
+
+fn eat(take v: V) -> int { v.x + v.y + v.z }
+
+fn main() -> !int {
+    var p = Pair { a: V { x: 1, y: 2, z: 3 }, b: V { x: 4, y: 5, z: 6 } }
+    swap_fields(mut p.a.x, mut p.a.y)  // disjoint nested paths [mem.tier0.excl.2]
+    swap_fields(mut p.a.x, mut p.b.x)  // disjoint across bases
+    let n = (mut p.a).norm() + p.b.x   // view set narrows the footprint [.3]
+    (mut p.a).set_x(p.a.z)             // two-phase shape: a disjoint Copy read
+                                       // feeds the same call
+    let m = eat(take p.a)              // partial move: p.a leaves, p.b stays
+    let k = p.b.y                      // disjoint sibling: still live
+    p.a = V { x: 0, y: 0, z: 0 }       // re-initialization revives [.4]
+    let r = p.a.x + n + m + k
+    if r == 18 { 0 } else { 1 }
+}

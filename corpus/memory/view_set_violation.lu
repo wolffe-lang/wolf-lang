@@ -1,0 +1,21 @@
+//! check: fail(E1008)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.3
+//! The view set is a promise callers lean on: `norm(mut self.{x, y})`
+//! frees the caller to use `self.z` during the call — so the callee
+//! touching `self.z` is rejected where the promise is broken.
+
+struct P { x: int, y: int, z: int }
+
+impl P {
+    fn norm(mut self.{x, y}) -> int {
+        self.z = 0                 // ERROR E1008: outside the view
+        self.x + self.y
+    }
+}
+
+fn main() -> !int {
+    var p = P { x: 1, y: 2, z: 39 }
+    let n = (mut p).norm()
+    n - 3
+}

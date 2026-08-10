@@ -2,11 +2,11 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-TraitDecl 306..347 name=Speak
-  FnDecl 324..346 name=speak
-StructDecl 349..376 name=Dog fields=1
-ImplDecl 378..439 path=Dog
-  FnDecl 393..437 name=speak body=Block
-ImplDecl 441..524 path=Speak for=Dog
-  FnDecl 466..522 name=speak body=Block
-FnDecl 526..626 name=main body=Block
+TraitDecl 300..341 name=Speak
+  FnDecl 318..340 name=speak
+StructDecl 343..370 name=Dog fields=1
+ImplDecl 372..433 path=Dog
+  FnDecl 387..431 name=speak body=Block
+ImplDecl 435..518 path=Speak for=Dog
+  FnDecl 460..516 name=speak body=Block
+FnDecl 520..620 name=main body=Block

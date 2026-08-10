@@ -2,10 +2,10 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-TraitDecl 444..492 name=Eq
-  FnDecl 459..491 name=eq
-StructDecl 494..533 name=Pair fields=2
-ImplDecl 535..632 path=Eq for=Pair
-  FnDecl 558..630 name=eq body=Block
-FnDecl 634..755 name=eq_ready comptime body=Block
-FnDecl 757..914 name=main body=Block
+TraitDecl 438..486 name=Eq
+  FnDecl 453..485 name=eq
+StructDecl 488..527 name=Pair fields=2
+ImplDecl 529..626 path=Eq for=Pair
+  FnDecl 552..624 name=eq body=Block
+FnDecl 628..749 name=eq_ready comptime body=Block
+FnDecl 751..908 name=main body=Block

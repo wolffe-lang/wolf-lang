@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: typecheck
+//! phase: mem
 //! conforms: generics.golden.checked, ty.trait.qualified-call
 //!
 //! The happy path of D28: a nominal trait, an impl, a bounded generic
