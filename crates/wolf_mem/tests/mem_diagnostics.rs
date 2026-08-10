@@ -349,3 +349,124 @@ fn e1009_mut_temporary() {
          }\n",
     );
 }
+
+// ----------------------------------------------------- E1004 (s19) ----
+
+#[test]
+fn e1004_param_param_store() {
+    // The Cyclone equality-constraint case: storing one parameter's
+    // data into another's region. Rare by measurement; no annotation
+    // surface exists, so the demand reports with a restructure hint.
+    snap(
+        "e1004_params_independent",
+        "struct Item { value: int }\n\
+         struct Holder { item: Item }\n\
+         fn stash(mut holder: Holder, take item: Item) {\n    \
+             holder.item = item\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var h = Holder { item: Item { value: 1 } }\n    \
+             let i = Item { value: 2 }\n    \
+             stash(mut h, take i)\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1004_cross_region_store() {
+    // Region-local data embedded into a caller-region container: the
+    // [mem.region.edge] table's ❌ column, in allocation-site words.
+    snap(
+        "e1004_cross_region_store",
+        "struct Item { value: int }\n\
+         struct Holder { item: Item }\n\
+         fn main() -> !int {\n    \
+             var h = Holder { item: Item { value: 1 } }\n    \
+             region tmp {\n        \
+                 h.item = Item { value: 2 }\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+// ----------------------------------------------------- E1010 (s19) ----
+
+#[test]
+fn e1010_region_local_outlives_free() {
+    // The sprint's headline error shape: allocated in `tmp`, freed at
+    // the block end, still reachable from `out`.
+    snap(
+        "e1010_escape_via_binding",
+        "struct Node { value: int }\n\
+         fn main() -> !int {\n    \
+             var out = Node { value: 0 }\n    \
+             region tmp {\n        \
+                 out = Node { value: 7 }\n    \
+             }\n    \
+             if out.value == 7 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_region_block_value_escapes() {
+    // The block's own value is allocated in the dying region.
+    snap(
+        "e1010_escape_via_value",
+        "struct Node { value: int }\n\
+         fn main() -> !int {\n    \
+             let n = region tmp { Node { value: 3 } }\n    \
+             n.value\n\
+         }\n",
+    );
+}
+
+// ------------------------------------- conforming region shapes (s19) --
+
+#[test]
+fn clean_region_scratch_and_defaults() {
+    // The Cyclone-posture demonstration: caller-region results, a
+    // scratch region consumed in place, `in` on a region value —
+    // zero region annotations, zero diagnostics.
+    snap(
+        "clean_region_inference",
+        "struct Point { x: int, y: int }\n\
+         fn make(n: int) -> Point {\n    \
+             Point { x: n, y: n }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var total = 0\n    \
+             region tmp {\n        \
+                 let p = Point { x: 1, y: 2 }\n        \
+                 let q = make(3)\n        \
+                 total = p.x + q.y\n    \
+             }\n    \
+             let keep = region()\n    \
+             let n = in keep { 21 }\n    \
+             if total + n == 24 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_in_redirect_outlives_scratch() {
+    // The fix ladder's "aim the allocation at a longer-lived region"
+    // rung: `in dst { … }` inside the scratch block places the
+    // surviving value in `dst`, which outlives `tmp` — silent.
+    snap(
+        "clean_in_redirect",
+        "struct Node { value: int }\n\
+         fn main() -> !int {\n    \
+             var out = Node { value: 0 }\n    \
+             let dst = region()\n    \
+             region tmp {\n        \
+                 in dst {\n            \
+                     out = Node { value: 7 }\n        \
+                 }\n    \
+             }\n    \
+             if out.value == 7 { 0 } else { 1 }\n\
+         }\n",
+    );
+}

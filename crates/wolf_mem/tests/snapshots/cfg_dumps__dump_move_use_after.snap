@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 52
 expression: "dump(&corpus(\"memory/move_use_after.lu\"))"
 ---
 fn consume
@@ -14,6 +15,7 @@ fn main
   _1 n: int copy
   _2 m: int copy
   b0:
+    alloc Big -> caller @527..542
     init b @523..524
     move b @568..569
     call consume [take b] @555..570

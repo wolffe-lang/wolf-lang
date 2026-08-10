@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 108
 expression: "facts(&corpus(\"memory/exclusivity.lu\"))"
 ---
 facts fn norm
@@ -17,3 +18,8 @@ facts fn eat
   take v -> owned
 
 facts fn main
+  alloc V @1023..1045 -> caller
+  alloc V @1050..1072 -> caller
+  alloc Pair @1013..1074 -> caller
+  alloc V @1601..1623 -> caller
+  stack-alloc V @1601..1623 (never escapes)

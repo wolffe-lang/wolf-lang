@@ -1,0 +1,20 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1004]: this value is allocated in region `tmp`, but it is being stored into a value living in the caller's region
+ --> mem:///main.lu:6:9
+  |
+4 |     var h = Holder { item: Item { value: 1 } }
+  |                            ----------------- the container is allocated here, into the caller's region
+5 |     region tmp {
+  |            --- region `tmp` is created here
+6 |         h.item = Item { value: 2 }
+  |         ^^^^^^ the two regions must be one
+  |                  ----------------- allocated here, into region `tmp`
+  |
+  = note: to keep the value, allocate it where it must live: build it outside the region block, or
+    aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { …
+    }`); widening the region block to cover every use also works. `freeze` (s20) and
+    `shared` (s21) will add keep-alive alternatives when they land.

@@ -123,7 +123,8 @@ fn facts_move_use_after() {
 
 mod fuzz {
     use wolf_mem::cfg::{
-        Block, BlockId, CallSurface, Cfg, Loan, LoanId, LoanKind, Local, LocalId, Stmt,
+        AllocSite, Block, BlockId, CallSurface, Cfg, Loan, LoanId, LoanKind, Local, LocalId,
+        Region, RegionId, RegionKind, SiteId, SiteKind, Stmt, Strategy,
     };
     use wolf_mem::place::{Base, Place, PlaceTable, Proj};
     use wolf_span::Span;
@@ -170,6 +171,44 @@ mod fuzz {
         }
         let n_blocks = 2 + r.next(6) as usize;
         let mut blocks: Vec<Block> = (0..n_blocks).map(|_| Block::default()).collect();
+        // Region variables + allocation sites (s19): the caller
+        // ambient plus 0–2 scope/value regions, with sites spread
+        // over them.
+        let mut regions = vec![Region {
+            name: "caller".to_string(),
+            kind: RegionKind::Caller,
+            strategy: Strategy::Arena,
+            span: Span::new(file, 0, 0),
+        }];
+        for i in 0..r.next(3) {
+            regions.push(Region {
+                name: format!("r{i}"),
+                kind: if r.next(2) == 0 {
+                    RegionKind::Scope
+                } else {
+                    RegionKind::Value
+                },
+                strategy: match r.next(3) {
+                    0 => Strategy::Arena,
+                    1 => Strategy::Rc,
+                    _ => Strategy::Pool("T".to_string()),
+                },
+                span: span(&mut r),
+            });
+        }
+        let mut sites = Vec::new();
+        for _ in 0..r.next(4) {
+            sites.push(AllocSite {
+                span: span(&mut r),
+                ty: "S".to_string(),
+                region: RegionId(r.next(regions.len() as u64) as u32),
+                kind: if r.next(2) == 0 {
+                    SiteKind::Lit
+                } else {
+                    SiteKind::CallResult
+                },
+            });
+        }
         let mut loans = Vec::new();
         // A couple of loans with borrowers drawn from the local pool.
         for _ in 0..r.next(3) {
@@ -192,7 +231,7 @@ mod fuzz {
             for _ in 0..n_stmts {
                 let place = place_ids[r.next(place_ids.len() as u64) as usize];
                 let s = span(&mut r);
-                let stmt = match r.next(9) {
+                let stmt = match r.next(12) {
                     0 => Stmt::Read { place, span: s },
                     1 => Stmt::Move { place, span: s },
                     2 => Stmt::Init { place, span: s },
@@ -208,6 +247,18 @@ mod fuzz {
                     },
                     7 => Stmt::UseBorrower {
                         local: LocalId(r.next(n_locals as u64) as u32),
+                        span: s,
+                    },
+                    8 if !sites.is_empty() => Stmt::Alloc {
+                        site: SiteId(r.next(sites.len() as u64) as u32),
+                        span: s,
+                    },
+                    9 => Stmt::RegionOpen {
+                        region: RegionId(r.next(regions.len() as u64) as u32),
+                        span: s,
+                    },
+                    10 => Stmt::RegionClose {
+                        region: RegionId(r.next(regions.len() as u64) as u32),
                         span: s,
                     },
                     _ => {
@@ -253,6 +304,8 @@ mod fuzz {
                 .collect(),
             places,
             loans,
+            regions,
+            sites,
             entry: BlockId(0),
             exit: BlockId(n_blocks as u32 - 1),
         }
@@ -275,5 +328,79 @@ mod fuzz {
                 .collect();
             assert_eq!(first, second, "seed {seed} diverged between runs");
         }
+    }
+}
+
+// --------------------------------------------- region dumps (s19) ----
+
+/// The `--dump=regions` surface for one source: region table,
+/// per-allocation attribution, escape verdicts, promotion facts.
+fn regions_dump(src: &str) -> String {
+    let mut ml = MemoryLoader::new("snap");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty(),
+        "dump inputs typecheck: {:?}",
+        tc.not_yet
+    );
+    wolf_mem::dump_regions_package(&res.package, &tc)
+}
+
+#[test]
+fn regions_dump_list_builder() {
+    // The annotation-freedom demonstration: every allocation
+    // attributed, the scratch region promoted, zero annotations.
+    insta::assert_snapshot!(
+        "regions_list_builder",
+        regions_dump(&corpus("memory/region_infer_list_builder.lu"))
+    );
+}
+
+#[test]
+fn regions_dump_tree_transform() {
+    insta::assert_snapshot!(
+        "regions_tree_transform",
+        regions_dump(&corpus("memory/region_infer_tree_transform.lu"))
+    );
+}
+
+#[test]
+fn regions_dump_request_handler() {
+    // The promotion proof: `scratch`'s create/free pair is elided in
+    // the facts; the per-request temporaries get stack facts.
+    insta::assert_snapshot!(
+        "regions_request_handler",
+        regions_dump(&corpus("memory/region_infer_request_handler.lu"))
+    );
+}
+
+#[test]
+fn regions_facts_request_handler() {
+    insta::assert_snapshot!(
+        "regions_facts_request_handler",
+        facts(&corpus("memory/region_infer_request_handler.lu"))
+    );
+}
+
+/// Promotion decisions and the whole inference are deterministic:
+/// byte-identical dumps on repeated runs (the s19 fuzz gate's
+/// source-level face).
+#[test]
+fn regions_dump_is_deterministic() {
+    for file in [
+        "memory/region_infer_list_builder.lu",
+        "memory/region_infer_tree_transform.lu",
+        "memory/region_infer_request_handler.lu",
+        "memory/region_escape_local.lu",
+        "memory/region_conflict_params.lu",
+    ] {
+        let src = corpus(file);
+        assert_eq!(
+            regions_dump(&src),
+            regions_dump(&src),
+            "{file} diverged between runs"
+        );
     }
 }

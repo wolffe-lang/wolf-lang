@@ -1,0 +1,20 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 373
+expression: "regions_dump(&corpus(\"memory/region_infer_request_handler.lu\"))"
+---
+regions fn cost_of
+  ambient caller (implicit parameter)
+  region scratch @477..484 (scope) [promoted -> stack; create/free elided]
+  alloc Request @507..536 -> region scratch
+
+regions fn respond
+  ambient caller (implicit parameter)
+  param r -> own (generalized)
+  param-data Request @619..620 -> own (generalized)
+  alloc Response @649..693 -> caller (escapes: returned)
+
+regions fn main
+  ambient caller (implicit parameter)
+  alloc Request @780..810 -> caller [stack]
+  call-alloc Response @772..811 -> caller

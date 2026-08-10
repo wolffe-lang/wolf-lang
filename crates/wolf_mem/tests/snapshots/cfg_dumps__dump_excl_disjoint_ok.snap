@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 73
 expression: "dump(&corpus(\"memory/excl_disjoint_ok.lu\"))"
 ---
 fn bump
@@ -14,6 +15,7 @@ fn bump
 fn main
   _0 p: P
   b0:
+    alloc P -> caller @461..483
     init p @457..458
     call bump [mut p.x, mut p.y] @488..510
     call bump [mut p.y, mut p.z] @561..583

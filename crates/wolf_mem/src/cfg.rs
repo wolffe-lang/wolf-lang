@@ -30,6 +30,83 @@ use wolf_span::Span;
 
 use crate::place::{PlaceId, PlaceTable};
 
+/// A region variable (s19). Regions are type-level facts with zero
+/// runtime representation (`[mem.region.create.4]`): the table exists
+/// so every allocation in the dump is attributable to one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RegionId(pub u32);
+
+/// What introduced a region variable. The crate invariant s20 stands
+/// on: distinct `Scope`/`Value` regions that never unify denote
+/// provably distinct regions (`[mem.region.create.2]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionKind {
+    /// The function's implicit caller-region parameter — the ambient
+    /// default (D12, `[mem.region.create.3]`).
+    Caller,
+    /// Module state (`ρ_static`): item initializers allocate here.
+    Static,
+    /// A fresh, generalized parameter region (the Cyclone default:
+    /// one per heap-reaching parameter position).
+    Param,
+    /// A syntactic `region name { … }` block (create+open+scope+free).
+    Scope,
+    /// A first-class `region(…)` value (X4).
+    Value,
+}
+
+/// A region's allocation strategy (`[mem.region.create.1]`): cost,
+/// never safety. Parsed and carried here; `rc` semantics are s21's,
+/// `pool` internals are s21's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Strategy {
+    Arena,
+    Rc,
+    /// The rendered element type.
+    Pool(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct Region {
+    /// `caller`, `static`, the parameter's name, the block's name
+    /// (`<region>` for anonymous forms).
+    pub name: String,
+    pub kind: RegionKind,
+    pub strategy: Strategy,
+    /// The introduction site (function name span for `Caller`).
+    pub span: Span,
+}
+
+/// An allocation site (s19). There is no `new` keyword: allocation
+/// sites are struct literals, constructor calls, and (later)
+/// collection constructors and closures (`[mem.model.alloc]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SiteId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SiteKind {
+    /// A literal construction in this body (struct literal, enum
+    /// constructor): the per-site stack-promotion candidate.
+    Lit,
+    /// A non-`Copy` call result: allocated by the callee into its
+    /// caller's region — this function's ambient at the call site.
+    CallResult,
+    /// The pseudo-site of a non-`Copy` parameter: data received in
+    /// that parameter's generalized region.
+    Param,
+}
+
+#[derive(Debug, Clone)]
+pub struct AllocSite {
+    pub span: Span,
+    /// Rendered type (dump/debug surface only).
+    pub ty: String,
+    /// The inferred region: the ambient region at the site
+    /// (`[mem.region.create.3]`).
+    pub region: RegionId,
+    pub kind: SiteKind,
+}
+
 /// A function-local binding (parameters first, then bindings in walk
 /// order).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -127,6 +204,18 @@ pub enum Stmt {
     /// A checked arithmetic site: the containing block carries a trap
     /// edge (X3).
     CheckedOp { span: Span },
+    /// A heap allocation, attributed to its inferred region — the "no
+    /// hidden allocations" law (s19): every allocation is visible in
+    /// the dump.
+    Alloc { site: SiteId, span: Span },
+    /// A region becomes the ambient region (`region name {` /
+    /// `in r {` entry). Openness is depth-counted
+    /// (`[mem.region.open.1]`).
+    RegionOpen { region: RegionId, span: Span },
+    /// The matching exit. For `Scope` regions the sugar-block exit is
+    /// also the wholesale free (`[mem.region.intra.2]`); `Value`
+    /// regions free at their binding scope's end unless moved away.
+    RegionClose { region: RegionId, span: Span },
 }
 
 #[derive(Debug, Default)]
@@ -145,6 +234,11 @@ pub struct Cfg {
     pub locals: Vec<Local>,
     pub places: PlaceTable,
     pub loans: Vec<Loan>,
+    /// Region variables, walk order; `regions[0]` is always the
+    /// caller/static ambient (s19).
+    pub regions: Vec<Region>,
+    /// Allocation sites, walk order (s19).
+    pub sites: Vec<AllocSite>,
     pub entry: BlockId,
     /// The single normal/error exit (nothing is analyzed past it).
     pub exit: BlockId,
@@ -176,6 +270,18 @@ impl Cfg {
             }
         }
         out
+    }
+
+    /// Render a region for dumps/diagnostics: `caller`, `static`,
+    /// `param a`, `region tmp`.
+    pub fn show_region(&self, id: RegionId) -> String {
+        let r = &self.regions[id.0 as usize];
+        match r.kind {
+            RegionKind::Caller => "caller".to_string(),
+            RegionKind::Static => "static".to_string(),
+            RegionKind::Param => format!("param {}", r.name),
+            RegionKind::Scope | RegionKind::Value => format!("region {}", r.name),
+        }
     }
 
     /// The deterministic textual dump (the s01 IR-dump snapshot
@@ -253,6 +359,21 @@ impl Cfg {
                         format!("activate l{} {}", loan.0, sp(*span))
                     }
                     Stmt::CheckedOp { span } => format!("checked-op {}", sp(*span)),
+                    Stmt::Alloc { site, span } => {
+                        let s = &self.sites[site.0 as usize];
+                        format!(
+                            "alloc {} -> {} {}",
+                            s.ty,
+                            self.show_region(s.region),
+                            sp(*span)
+                        )
+                    }
+                    Stmt::RegionOpen { region, span } => {
+                        format!("region-open {} {}", self.show_region(*region), sp(*span))
+                    }
+                    Stmt::RegionClose { region, span } => {
+                        format!("region-close {} {}", self.show_region(*region), sp(*span))
+                    }
                 };
                 let _ = writeln!(out, "    {line}");
             }

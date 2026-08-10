@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 86
 expression: "dump(&corpus(\"faults/use_after_move_field.lu\"))"
 ---
 fn eat
@@ -15,6 +16,9 @@ fn main
   _2 b: int copy
   _3 c: int copy
   b0:
+    alloc Inner -> caller @576..590
+    alloc Inner -> caller @595..609
+    alloc P -> caller @569..611
     init p @565..566
     move p.x @633..636
     call eat [take p.x] @624..637

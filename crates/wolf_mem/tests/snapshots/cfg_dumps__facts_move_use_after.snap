@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 113
 expression: "facts(&corpus(\"memory/move_use_after.lu\"))"
 ---
 facts fn consume
@@ -7,3 +8,4 @@ facts fn consume
 
 facts fn main
   move b @568..569 -> memcpy-and-forget
+  alloc Big @527..542 -> caller

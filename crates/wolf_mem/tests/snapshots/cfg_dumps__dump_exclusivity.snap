@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 47
 expression: "dump(&corpus(\"memory/exclusivity.lu\"))"
 ---
 fn norm
@@ -55,6 +56,9 @@ fn main
   _3 k: int copy
   _4 r: int copy
   b0:
+    alloc V -> caller @1023..1045
+    alloc V -> caller @1050..1072
+    alloc Pair -> caller @1013..1074
     init p @1009..1010
     call swap_fields [mut p.a.x, mut p.a.y] @1079..1112
     call swap_fields [mut p.a.x, mut p.b.x] @1162..1195
@@ -69,6 +73,7 @@ fn main
     init m @1450..1451
     read p.b.y @1532..1537
     init k @1528..1529
+    alloc V -> caller @1601..1623
     init p.a @1595..1598
     read p.a.x @1676..1681
     read n @1684..1685

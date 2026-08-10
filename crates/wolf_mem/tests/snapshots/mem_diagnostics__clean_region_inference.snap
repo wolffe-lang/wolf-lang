@@ -1,0 +1,6 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+(clean)

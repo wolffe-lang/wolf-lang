@@ -183,7 +183,12 @@ fn transfer(
         Stmt::Borrow { loan, span } => {
             check_use(state, cfg.loans[loan.0 as usize].place, *span);
         }
-        Stmt::UseBorrower { .. } | Stmt::Activate { .. } | Stmt::CheckedOp { .. } => {}
+        Stmt::UseBorrower { .. }
+        | Stmt::Activate { .. }
+        | Stmt::CheckedOp { .. }
+        | Stmt::Alloc { .. }
+        | Stmt::RegionOpen { .. }
+        | Stmt::RegionClose { .. } => {}
     }
 }
 

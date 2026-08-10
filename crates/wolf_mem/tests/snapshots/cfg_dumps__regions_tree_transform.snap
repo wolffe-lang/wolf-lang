@@ -1,0 +1,23 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 363
+expression: "regions_dump(&corpus(\"memory/region_infer_tree_transform.lu\"))"
+---
+regions fn grow
+  ambient caller (implicit parameter)
+  alloc Leaf @422..442 -> caller (escapes: returned)
+  alloc Leaf @451..475 -> caller (escapes: returned)
+  alloc Fork @409..477 -> caller (escapes: returned)
+
+regions fn scale
+  ambient caller (implicit parameter)
+  param f -> own (generalized)
+  param-data Fork @490..491 -> own (generalized)
+  alloc Leaf @543..576 -> caller (escapes: returned)
+  alloc Leaf @593..627 -> caller (escapes: returned)
+  alloc Fork @522..634 -> caller (escapes: returned)
+
+regions fn main
+  ambient caller (implicit parameter)
+  call-alloc Fork @670..677 -> caller
+  call-alloc Fork @737..748 -> caller

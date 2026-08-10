@@ -1,0 +1,18 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 355
+expression: "regions_dump(&corpus(\"memory/region_infer_list_builder.lu\"))"
+---
+regions fn build
+  ambient caller (implicit parameter)
+  alloc Row @457..486 -> caller (escapes: returned)
+
+regions fn score
+  ambient caller (implicit parameter)
+  param r -> own (generalized)
+  param-data Row @544..545 -> own (generalized)
+
+regions fn main
+  ambient caller (implicit parameter)
+  region batch @634..639 (scope) [promoted -> stack; create/free elided]
+  call-alloc Row @686..694 -> region batch

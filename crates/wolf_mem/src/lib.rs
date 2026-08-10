@@ -39,10 +39,20 @@
 //! - **Fact export stubs** ([`facts`]): `mut` → noalias +
 //!   dereferenceable, `read` → frozen-for-call, whole-value move
 //!   sites — the s26 schema, snapshot-tested now.
-//! - **Honest refusals**: regions (s19–s20), `shared`/`handle`
-//!   (s21), the unsafe tier (s22), closures/concurrency (c05) return
-//!   [`NotYet`] — the conform-run `mem` rung completes only when
-//!   every body was actually checked.
+//! - **Region inference** ([`regions`], s19): every heap allocation
+//!   (struct literal, constructor, non-`Copy` call result) is
+//!   attributed to the ambient region (`[mem.region.create.3]`, D12)
+//!   with Cyclone-rule signature defaults — fresh generalized
+//!   parameter regions, results in `ρ_caller`, zero annotations in
+//!   the common shape. Conflicting placement demands are E1004;
+//!   region-local data outliving its region's wholesale free is
+//!   E1010. Escape analysis records stack-promotion facts (regions
+//!   whose create/free pair is frame-local; individual allocations
+//!   that never escape) for c05/s26 — facts only, no codegen.
+//! - **Honest refusals**: `freeze`/cross-region rules (s20),
+//!   `shared`/`handle` (s21), the unsafe tier (s22),
+//!   closures/concurrency (c05) return [`NotYet`] — the conform-run
+//!   `mem` rung completes only when every body was actually checked.
 
 use wolf_ast::{GreenNode, SyntaxKind, is_expr_kind};
 use wolf_diag::Diagnostic;
@@ -58,11 +68,13 @@ pub mod loans;
 mod lower;
 mod moves;
 pub mod place;
+pub mod regions;
 
 pub use facts::FnFacts;
 pub use lower::Lowered;
+pub use regions::RegionSummary;
 
-/// The package-level result of the s18 memory checker.
+/// The package-level result of the s18–s19 memory checker.
 #[derive(Debug, Default)]
 pub struct MemCheck {
     /// E1xxx diagnostics, deterministically sorted. Meaningful for
@@ -74,6 +86,9 @@ pub struct MemCheck {
     pub not_yet: Vec<NotYet>,
     /// Per-function fact summaries (s26's input schema).
     pub facts: Vec<FnFacts>,
+    /// Per-function region inference records (s19): the reviewable
+    /// dump surface behind `wolf conform-run --dump=regions`.
+    pub regions: Vec<RegionSummary>,
 }
 
 /// Check every fully-typed body of the package. `tc` must come from
@@ -98,7 +113,9 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
                 moves::check(&lowered.cfg, &mut out.diagnostics);
                 excl::check(&lowered.cfg, &mut out.diagnostics);
                 loans::check(&lowered.cfg, &mut out.diagnostics);
-                out.facts.push(facts::collect(&lowered.cfg));
+                out.facts
+                    .push(facts::collect(&lowered.cfg, &lowered.regions));
+                out.regions.push(lowered.regions);
             }
         }
     }
@@ -128,6 +145,22 @@ pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
         };
         if let Some(Ok(lowered)) = lower_body(pkg, &tc.sigs, tb, &outcome.body) {
             out.push_str(&lowered.cfg.dump());
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// The region-inference dumps of every lowerable body, in body order
+/// (the `--dump=regions` debug surface, snapshot-pinned).
+pub fn dump_regions_package(pkg: &Package, tc: &Typecheck) -> String {
+    let mut out = String::new();
+    for outcome in &tc.bodies {
+        let BodyResult::Checked(tb) = &outcome.result else {
+            continue;
+        };
+        if let Some(Ok(lowered)) = lower_body(pkg, &tc.sigs, tb, &outcome.body) {
+            out.push_str(&lowered.regions.render());
             out.push('\n');
         }
     }
@@ -223,7 +256,7 @@ fn later_tier(table: &TypeTable, id: TyId, depth: u32) -> Option<&'static str> {
     match table.kind(id) {
         TyKind::Shared(_) | TyKind::Weak(_) => Some("`shared` reference counting (s21)"),
         TyKind::Handle(_) => Some("`handle` pools (s21)"),
-        TyKind::RegionTy => Some("region checking (s19–s20)"),
+        // `region`-typed values check here since s19.
         TyKind::Ptr(_) => Some("the unsafe tier (s22)"),
         TyKind::Wrapping(t) | TyKind::Distinct(t) | TyKind::Range(t) => {
             later_tier(table, *t, depth + 1)

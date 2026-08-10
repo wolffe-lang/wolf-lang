@@ -15,13 +15,13 @@
 //! `[mem.tier0.excl.3]`). Path-sensitive rules (E1001, E1002) run as
 //! separate passes over the finished CFG.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, CallExpr, CastExpr, DeferStmt, ElseExpr, ExprStmt,
-    FieldInit, ForExpr, GreenNode, IfExpr, LetDecl, MatchExpr, MemberExpr, ParamMode, ParenExpr,
-    PathExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr,
-    VarDecl, WhileExpr, is_pattern_kind,
+    FieldInit, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchExpr, MemberExpr, ParamMode,
+    ParenExpr, PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr,
+    StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_pattern_kind,
 };
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
@@ -31,10 +31,62 @@ use wolf_sema::sig::{ItemSig, ParamSig, SigTables};
 use wolf_sema::types::{Prim, TyId, TyKind, TypeTable, render};
 use wolf_sema::{NotYet, Package, TypedBody};
 
-use crate::cfg::{Block, BlockId, CallSurface, Cfg, Local, LocalId, Stmt};
+use crate::cfg::{
+    AllocSite, Block, BlockId, CallSurface, Cfg, Local, LocalId, Region, RegionId, RegionKind,
+    SiteId, SiteKind, Stmt, Strategy,
+};
 use crate::place::{Base, Place, PlaceId, Proj};
+use crate::regions::{Binding, RegionSummary, RegionTable, Unify};
 
 type R<T> = Result<T, NotYet>;
+
+/// A value's region provenance, threaded through evaluation (s19):
+/// which allocation sites the value may contain (a may-set — never
+/// strong-updated, so joins are unions and the analysis stays sound
+/// over branches), and which first-class region it denotes, when one
+/// is statically known.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Val {
+    /// Sorted, deduped site ids.
+    sites: Vec<SiteId>,
+    /// `Some(r)`: this expression denotes region `r` (X4 value flow).
+    region: Option<RegionId>,
+    /// The span that produced the first site (diagnostic anchor).
+    origin: Option<Span>,
+}
+
+impl Val {
+    fn none() -> Val {
+        Val::default()
+    }
+
+    fn site(id: SiteId, span: Span) -> Val {
+        Val {
+            sites: vec![id],
+            region: None,
+            origin: Some(span),
+        }
+    }
+
+    fn merge(&mut self, other: Val) {
+        for s in other.sites {
+            if let Err(i) = self.sites.binary_search(&s) {
+                self.sites.insert(i, s);
+            }
+        }
+        if self.origin.is_none() {
+            self.origin = other.origin;
+        }
+        // Two different region values merging (branch arms) lose
+        // static identity.
+        self.region = match (self.region, other.region) {
+            (Some(a), Some(b)) if a == b => Some(a),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            _ => None,
+        };
+    }
+}
 
 /// A type reference that knows its interner: sema keeps signature
 /// types in [`SigTables::table`] and body types in the body's own
@@ -79,16 +131,20 @@ fn is_copy(t: Ty<'_>, depth: u32) -> bool {
     }
 }
 
-/// One lowered body: the CFG plus the context-free diagnostics found
-/// on the way.
+/// One lowered body: the CFG, the context-free diagnostics found on
+/// the way, and the region inference record (s19).
 pub struct Lowered {
     pub cfg: Cfg,
     pub diags: Vec<Diagnostic>,
+    pub regions: RegionSummary,
 }
 
 struct Scope<'t> {
     names: Vec<(String, LocalId)>,
     defers: Vec<(&'t GreenNode, bool)>,
+    /// `locals.len()` at scope entry: locals below this mark outlive
+    /// the scope (the region-close escape sweep's boundary).
+    locals_mark: usize,
 }
 
 struct LoopFrame {
@@ -128,6 +184,36 @@ pub(crate) struct Lowerer<'t> {
     /// nested error edges do not re-lower them.
     in_defer: bool,
     diags: Vec<Diagnostic>,
+
+    // ------------------------------------------ region inference ----
+    /// Region variables + unification state (s19).
+    rt: RegionTable,
+    /// The ambient-region stack: `[0]` is the caller (or static, for
+    /// item initializers); `region name {` / `in r {` push.
+    ambient: Vec<RegionId>,
+    /// Allocation sites, walk order.
+    sites: Vec<AllocSite>,
+    /// Per site: why the value may leave the frame (`None`: in-frame).
+    site_escape: Vec<Option<&'static str>>,
+    /// May-hold: root local -> the sites its value may contain, each
+    /// with the span where it flowed in (diagnostic anchor).
+    holds: BTreeMap<u32, BTreeMap<SiteId, Span>>,
+    /// Region-typed locals with statically-known identity (`None`:
+    /// bound on conflicting paths — `in` on it refuses).
+    region_local: HashMap<u32, Option<RegionId>>,
+    /// Per region: the region value moved away (returned, sent,
+    /// stored) — its free is no longer this frame's.
+    moved_region: Vec<bool>,
+    /// Per region: an escape/placement error involved it (no
+    /// promotion).
+    tainted_region: Vec<bool>,
+    /// Frame-local clean regions: the promotion fact.
+    promoted: Vec<RegionId>,
+    /// Any placement demand failed (E1004/E1010 fired).
+    conflicted: bool,
+    /// `ρ_static`, once demanded (fn bodies; item initializers use it
+    /// as their ambient).
+    static_region: Option<RegionId>,
 }
 
 impl<'t> Lowerer<'t> {
@@ -184,6 +270,442 @@ impl<'t> Lowerer<'t> {
             }
         }
         None
+    }
+
+    fn push_scope(&mut self) {
+        let mark = self.locals.len();
+        self.scopes.push(Scope {
+            names: Vec::new(),
+            defers: Vec::new(),
+            locals_mark: mark,
+        });
+    }
+
+    // --------------------------------------------------- regions ----
+
+    fn new_region(
+        &mut self,
+        name: &str,
+        kind: RegionKind,
+        strategy: Strategy,
+        span: Span,
+    ) -> RegionId {
+        let id = self.rt.new_region(Region {
+            name: name.to_string(),
+            kind,
+            strategy,
+            span,
+        });
+        self.moved_region.push(false);
+        self.tainted_region.push(false);
+        id
+    }
+
+    /// The current ambient region (`[mem.region.create.3]`).
+    fn ambient(&self) -> RegionId {
+        *self.ambient.last().expect("ambient stack never empty")
+    }
+
+    /// Record an allocation at the ambient region and emit its CFG
+    /// statement — the no-hidden-allocations law: every allocation is
+    /// attributable in the dump.
+    fn alloc_site(&mut self, ty: String, kind: SiteKind, span: Span) -> SiteId {
+        let id = SiteId(self.sites.len() as u32);
+        self.sites.push(AllocSite {
+            span,
+            ty,
+            region: self.ambient(),
+            kind,
+        });
+        self.site_escape.push(None);
+        if kind != SiteKind::Param {
+            self.push(Stmt::Alloc { site: id, span });
+        }
+        id
+    }
+
+    fn mark_escape(&mut self, site: SiteId, why: &'static str) {
+        let slot = &mut self.site_escape[site.0 as usize];
+        if slot.is_none() {
+            *slot = Some(why);
+        }
+    }
+
+    fn mark_val_escape(&mut self, val: &Val, why: &'static str) {
+        for &s in &val.sites {
+            self.mark_escape(s, why);
+        }
+    }
+
+    /// Sites a place's value may contain (keyed by the root local; a
+    /// field projection conservatively shares the whole value's set).
+    fn sites_of_place(&self, place: PlaceId) -> Vec<(SiteId, Span)> {
+        match self.places.get(place).base {
+            Base::Local(l) => self
+                .holds
+                .get(&l)
+                .map(|m| m.iter().map(|(&s, &sp)| (s, sp)).collect())
+                .unwrap_or_default(),
+            Base::Global(..) => Vec::new(),
+        }
+    }
+
+    fn val_of_place(&self, place: PlaceId, span: Span) -> Val {
+        let mut sites: Vec<SiteId> = self
+            .sites_of_place(place)
+            .into_iter()
+            .map(|(s, _)| s)
+            .collect();
+        sites.sort_unstable();
+        sites.dedup();
+        let region = match self.places.get(place).base {
+            Base::Local(l) if self.places.get(place).proj.is_empty() => {
+                self.region_local.get(&l).copied().flatten()
+            }
+            _ => None,
+        };
+        Val {
+            sites,
+            region,
+            origin: Some(span),
+        }
+    }
+
+    fn hold(&mut self, local: u32, val: &Val, span: Span) {
+        if val.sites.is_empty() {
+            return;
+        }
+        let entry = self.holds.entry(local).or_default();
+        for &s in &val.sites {
+            entry.entry(s).or_insert(span);
+        }
+    }
+
+    /// Render a region for diagnostics — introductions, never
+    /// internal variable names.
+    fn show_region(&mut self, id: RegionId) -> String {
+        match self.rt.binding(id) {
+            Some(Binding::Caller) => "the caller's region".to_string(),
+            Some(Binding::Static) => "the static region (module state)".to_string(),
+            Some(Binding::Local(r)) => {
+                let r = &self.rt.regions[r.0 as usize];
+                format!("region `{}`", r.name)
+            }
+            None => {
+                let r = &self.rt.regions[id.0 as usize];
+                format!("`{}`'s region", r.name)
+            }
+        }
+    }
+
+    /// A region's introduction span (for the "created here"
+    /// secondary).
+    fn region_span(&mut self, id: RegionId) -> Option<(String, Span)> {
+        match self.rt.binding(id) {
+            Some(Binding::Local(r)) => {
+                let r = &self.rt.regions[r.0 as usize];
+                Some((r.name.clone(), r.span))
+            }
+            _ => None,
+        }
+    }
+
+    /// The rendered type of a checked expression (dump surface only).
+    fn rendered_expr_ty(&self, span: Span) -> String {
+        self.expr_tys
+            .get(&span)
+            .map(|&id| render(&self.tb.table, id, &|_| Err("_")))
+            .unwrap_or_else(|| "?".to_string())
+    }
+
+    /// The `ρ_static` variable, created on first demand (module state).
+    fn static_region(&mut self, span: Span) -> RegionId {
+        if let Some(id) = self.static_region {
+            return id;
+        }
+        let id = self.new_region("static", RegionKind::Static, Strategy::Arena, span);
+        self.static_region = Some(id);
+        id
+    }
+
+    /// The shared fix-ladder note (Target 6): allocation-site
+    /// vocabulary, never lifetimes or internal variable names.
+    fn ladder() -> &'static str {
+        "to keep the value, allocate it where it must live: build it outside the \
+         region block, or aim the allocation at a longer-lived region explicitly \
+         (`let r = region()` … `in r { … }`); widening the region block to cover \
+         every use also works. `freeze` (s20) and `shared` (s21) will add \
+         keep-alive alternatives when they land."
+    }
+
+    /// One report per site: a site whose placement already conflicted
+    /// stays quiet in later demands (no cascades off one bug).
+    fn already_conflicted(&self, site: SiteId) -> bool {
+        self.site_escape[site.0 as usize] == Some("conflicting placement")
+    }
+
+    /// An embedding store: moving a value into an aggregate demands
+    /// co-location — wolf has no safe cross-region references outside
+    /// `iso`/`imm` (which are s20), so the `[mem.region.edge]` table's
+    /// ❌ column reports here as E1004.
+    fn demand_store(&mut self, val: &Val, target: RegionId, container: Option<Span>, span: Span) {
+        for &s in &val.sites {
+            if self.already_conflicted(s) {
+                continue;
+            }
+            let sr = self.sites[s.0 as usize].region;
+            // Render both sides before unifying: after a merge they
+            // resolve identically.
+            let from = self.show_region(sr);
+            let into = self.show_region(target);
+            match self.rt.unify(target, sr) {
+                Unify::Ok => {}
+                Unify::ParamsMerged => {
+                    self.conflicted = true;
+                    self.mark_escape(s, "conflicting placement");
+                    let alloc = self.sites[s.0 as usize].span;
+                    let mut d = Diagnostic::error(
+                        codes::E1004,
+                        span,
+                        format!(
+                            "this stores a value from {from} into {into} — \
+                             parameter regions are independent by default"
+                        ),
+                    )
+                    .with_label("the store that would tie the two regions together")
+                    .with_secondary(alloc, format!("the value arrives here, in {from}"));
+                    if let Some(c) = container {
+                        d = d.with_secondary(c, format!("the container lives in {into}"));
+                    }
+                    d = d.with_note(
+                        "each parameter's data lives in its own (generalized) region — \
+                         the Cyclone default that keeps signatures annotation-free. A \
+                         signature surface for declaring two parameters share a region \
+                         is planned; today, `copy` the value into its container's \
+                         region, or restructure so the allocation happens alongside \
+                         the container.",
+                    );
+                    self.diags.push(d);
+                    return;
+                }
+                Unify::Conflict(a, b) => {
+                    self.conflicted = true;
+                    self.mark_escape(s, "conflicting placement");
+                    for side in [a, b] {
+                        if let Binding::Local(r) = side {
+                            self.tainted_region[r.0 as usize] = true;
+                        }
+                    }
+                    let alloc = self.sites[s.0 as usize].span;
+                    let mut d = Diagnostic::error(
+                        codes::E1004,
+                        span,
+                        format!(
+                            "this value is allocated in {from}, but it is being \
+                             stored into a value living in {into}"
+                        ),
+                    )
+                    .with_label("the two regions must be one")
+                    .with_secondary(alloc, format!("allocated here, into {from}"));
+                    if let Some(c) = container {
+                        d = d.with_secondary(
+                            c,
+                            format!("the container is allocated here, into {into}"),
+                        );
+                    }
+                    if let Some((name, intro)) = self.region_span(sr) {
+                        d = d.with_secondary(intro, format!("region `{name}` is created here"));
+                    }
+                    d = d.with_note(Self::ladder());
+                    self.diags.push(d);
+                    return;
+                }
+            }
+        }
+    }
+
+    /// A value leaves the frame (returned, or the function's trailing
+    /// value): its region must outlive the caller — `ρ_static` always
+    /// does, flexible parameter regions join `ρ_caller` (the default
+    /// effect), and a frame-local region is an escape (E1010).
+    fn demand_outlives_frame(&mut self, val: &Val, span: Span) {
+        for &s in &val.sites {
+            if self.already_conflicted(s) {
+                continue;
+            }
+            let sr = self.sites[s.0 as usize].region;
+            match self.rt.binding(sr) {
+                Some(Binding::Static) | Some(Binding::Caller) => {
+                    self.mark_escape(s, "returned");
+                }
+                None => {
+                    // Fresh parameter region: the default scheme's
+                    // "result is in the caller's region" binds it.
+                    let caller = self.ambient[0];
+                    let _ = self.rt.unify(caller, sr);
+                    self.mark_escape(s, "returned");
+                }
+                Some(Binding::Local(rid)) => {
+                    self.conflicted = true;
+                    self.tainted_region[rid.0 as usize] = true;
+                    self.mark_escape(s, "outlives its region");
+                    let region = self.show_region(sr);
+                    let alloc = self.sites[s.0 as usize].span;
+                    let mut d = Diagnostic::error(
+                        codes::E1010,
+                        span,
+                        format!(
+                            "this value is allocated in {region}, which is freed \
+                             before the caller could ever use it"
+                        ),
+                    )
+                    .with_label("the value would outlive its region")
+                    .with_secondary(alloc, format!("allocated here, into {region}"));
+                    if let Some((name, intro)) = self.region_span(sr) {
+                        d = d.with_secondary(
+                            intro,
+                            format!(
+                                "region `{name}` is created here and freed with its \
+                                 scope — everything in it is freed wholesale"
+                            ),
+                        );
+                    }
+                    d = d.with_note(Self::ladder());
+                    self.diags.push(d);
+                }
+            }
+        }
+        // A region value leaving the frame is a legal affine move
+        // (X4: region values outlive lexical scopes by design); its
+        // free is simply no longer ours.
+        if let Some(r) = val.region {
+            self.moved_region[r.0 as usize] = true;
+        }
+    }
+
+    /// A store into module state: the target is `ρ_static`.
+    fn demand_static(&mut self, val: &Val, span: Span) {
+        for &s in &val.sites {
+            let sr = self.sites[s.0 as usize].region;
+            match self.rt.binding(sr) {
+                Some(Binding::Static) => {
+                    self.mark_escape(s, "module state");
+                }
+                None => {
+                    let st = self.static_region(span);
+                    let _ = self.rt.unify(st, sr);
+                    self.mark_escape(s, "module state");
+                }
+                Some(Binding::Caller) | Some(Binding::Local(_)) => {
+                    self.conflicted = true;
+                    self.mark_escape(s, "module state");
+                    let region = self.show_region(sr);
+                    if let Some(Binding::Local(rid)) = self.rt.binding(sr) {
+                        self.tainted_region[rid.0 as usize] = true;
+                    }
+                    let alloc = self.sites[s.0 as usize].span;
+                    let mut d = Diagnostic::error(
+                        codes::E1010,
+                        span,
+                        format!(
+                            "module state outlives every call, but this value is \
+                             allocated in {region}, which does not"
+                        ),
+                    )
+                    .with_label("stored into module state here")
+                    .with_secondary(alloc, format!("allocated here, into {region}"));
+                    d = d.with_note(Self::ladder());
+                    self.diags.push(d);
+                }
+            }
+        }
+    }
+
+    /// `[mem.region.intra.2]`: the region dies as a unit at its
+    /// close. Anything declared outside it (or the closing block's
+    /// own value) still holding its data is E1010; a clean,
+    /// frame-local, unmoved region is the promotion fact (Target 5).
+    fn sweep_region_close(
+        &mut self,
+        rid: RegionId,
+        outer_mark: usize,
+        close_span: Span,
+        val: &mut Val,
+    ) {
+        // The block's own value escaping the dying region.
+        let mut kept = Vec::new();
+        for &s in &val.sites.clone() {
+            if self.rt.same(self.sites[s.0 as usize].region, rid) {
+                if !self.already_conflicted(s) {
+                    self.report_close_escape(
+                        rid,
+                        s,
+                        val.origin.unwrap_or(close_span),
+                        close_span,
+                        None,
+                    );
+                }
+            } else {
+                kept.push(s);
+            }
+        }
+        val.sites = kept;
+        // Bindings that outlive the region.
+        let entries: Vec<(u32, SiteId, Span)> = self
+            .holds
+            .iter()
+            .filter(|(l, _)| (**l as usize) < outer_mark)
+            .flat_map(|(&l, m)| m.iter().map(move |(&s, &sp)| (l, s, sp)))
+            .collect();
+        for (l, s, sp) in entries {
+            if self.rt.same(self.sites[s.0 as usize].region, rid) && !self.already_conflicted(s) {
+                let name = self.locals[l as usize].name.clone();
+                self.report_close_escape(rid, s, sp, close_span, Some(name));
+            }
+        }
+        if !self.tainted_region[rid.0 as usize] && !self.moved_region[rid.0 as usize] {
+            self.promoted.push(rid);
+        }
+    }
+
+    fn report_close_escape(
+        &mut self,
+        rid: RegionId,
+        site: SiteId,
+        escape_span: Span,
+        close_span: Span,
+        binding: Option<String>,
+    ) {
+        self.conflicted = true;
+        self.tainted_region[rid.0 as usize] = true;
+        self.mark_escape(site, "outlives its region");
+        let region = self.show_region(rid);
+        let alloc = self.sites[site.0 as usize].span;
+        let message = match &binding {
+            Some(name) => format!(
+                "`{name}` still holds a value allocated in {region} when the \
+                 region is freed"
+            ),
+            None => format!(
+                "this value is allocated in {region}, which is freed when the \
+                 block ends"
+            ),
+        };
+        let mut d = Diagnostic::error(codes::E1010, escape_span, message)
+            .with_label(match &binding {
+                Some(_) => "the value flows out of the region here",
+                None => "the block's value would outlive the region",
+            })
+            .with_secondary(alloc, format!("allocated here, into {region}"));
+        if let Some((name, intro)) = self.region_span(rid) {
+            d = d.with_secondary(intro, format!("region `{name}` is created here"));
+        }
+        d = d.with_secondary(
+            close_span,
+            "the region is freed here — everything in it is freed wholesale, as one unit",
+        );
+        d = d.with_note(Self::ladder());
+        self.diags.push(d);
     }
 
     // ---------------------------------------------------- places ----
@@ -376,6 +898,15 @@ impl<'t> Lowerer<'t> {
             self.push(Stmt::Read { place, span });
             return;
         }
+        // Moving a region value whole: affine transfer — its free is
+        // no longer this frame's ([mem.region.freeze.2]; the open/
+        // closed rules are s20's E1005).
+        if self.places.get(place).proj.is_empty()
+            && let Base::Local(l) = self.places.get(place).base
+            && let Some(Some(rid)) = self.region_local.get(&l)
+        {
+            self.moved_region[rid.0 as usize] = true;
+        }
         self.push(Stmt::Move { place, span });
     }
 
@@ -433,14 +964,23 @@ impl<'t> Lowerer<'t> {
 
     /// Evaluate an expression for its value: a place moves (or
     /// copies); everything else recurses structurally in evaluation
-    /// order (`[mem.model.order]`).
-    fn eval_value(&mut self, e: &'t GreenNode) -> R<()> {
+    /// order (`[mem.model.order]`). Returns the value's region
+    /// provenance (s19).
+    fn eval_value(&mut self, e: &'t GreenNode) -> R<Val> {
         match e.kind {
-            SyntaxKind::LiteralExpr => Ok(()),
+            SyntaxKind::LiteralExpr => Ok(Val::none()),
             SyntaxKind::PathExpr | SyntaxKind::MemberExpr => {
                 if let Some((place, _)) = self.as_place(e) {
+                    // A `Copy` use duplicates a region-free scalar:
+                    // no site flows (this is what keeps a Copy field
+                    // read from pinning its parent's region).
+                    let val = if self.places.is_copy(place) {
+                        Val::none()
+                    } else {
+                        self.val_of_place(place, e.span)
+                    };
                     self.use_value(place, e.span);
-                    return Ok(());
+                    return Ok(val);
                 }
                 // A field of a temporary: evaluate the base; the
                 // projection itself has no place effects.
@@ -449,7 +989,7 @@ impl<'t> Lowerer<'t> {
                 {
                     return self.eval_value(base);
                 }
-                Ok(()) // item reference (fn value, enum type, …)
+                Ok(Val::none()) // item reference (fn value, enum type, …)
             }
             SyntaxKind::StringExpr => {
                 let d = StringExpr::cast(e).expect("kind");
@@ -463,17 +1003,21 @@ impl<'t> Lowerer<'t> {
                         }
                     }
                 }
-                Ok(())
+                Ok(Val::none())
             }
             SyntaxKind::ParenExpr => match ParenExpr::cast(e).and_then(|p| p.expr()) {
                 Some(inner) => self.eval_value(inner),
-                None => Ok(()),
+                None => Ok(Val::none()),
             },
             SyntaxKind::TupleExpr => {
+                // Tuples aggregate by value; they are not allocation
+                // sites of their own (`[mem.model.alloc]` names
+                // struct literals, collection ctors, closures).
+                let mut val = Val::none();
                 for elem in TupleExpr::cast(e).expect("kind").elems() {
-                    self.eval_value(elem)?;
+                    val.merge(self.eval_value(elem)?);
                 }
-                Ok(())
+                Ok(val)
             }
             SyntaxKind::Block => {
                 let b = AstBlock::cast(e).expect("kind");
@@ -483,19 +1027,20 @@ impl<'t> Lowerer<'t> {
             SyntaxKind::BinExpr => self.eval_bin(e),
             SyntaxKind::CastExpr => match CastExpr::cast(e).and_then(|c| c.expr()) {
                 Some(inner) => self.eval_value(inner),
-                None => Ok(()),
+                None => Ok(Val::none()),
             },
             SyntaxKind::RangeExpr => {
                 for end in RangeExpr::cast(e).expect("kind").endpoints() {
                     self.eval_value(end)?;
                 }
-                Ok(())
+                Ok(Val::none())
             }
             SyntaxKind::TryExpr => {
                 let d = wolf_ast::TryExpr::cast(e).expect("kind");
-                if let Some(inner) = d.expr() {
-                    self.eval_value(inner)?;
-                }
+                let val = match d.expr() {
+                    Some(inner) => self.eval_value(inner)?,
+                    None => Val::none(),
+                };
                 // `?` is a branch (D30): the error edge leaves the
                 // function, running errdefers + defers (LIFO).
                 let err = self.new_block();
@@ -509,18 +1054,38 @@ impl<'t> Lowerer<'t> {
                 self.goto(self.cur, exit);
                 self.cur = resume;
                 self.cur = ok;
-                Ok(())
+                Ok(val)
             }
             SyntaxKind::CallExpr => self.eval_call(e),
             SyntaxKind::StructLit => {
                 let d = StructLit::cast(e).expect("kind");
+                let mut parts: Vec<(Val, Span)> = Vec::new();
                 for f in d.fields() {
                     if let Some(v) = FieldInit::value(f) {
                         // Field initializers consume their values.
-                        self.eval_value(v)?;
+                        let fv = self.eval_value(v)?;
+                        parts.push((fv, v.span));
                     }
                 }
-                Ok(())
+                // The construction is an allocation site in the
+                // ambient region ([mem.region.create.3]); embedded
+                // values must be co-located.
+                let ty = self.rendered_expr_ty(e.span);
+                let site = self.alloc_site(ty, SiteKind::Lit, e.span);
+                let region = self.sites[site.0 as usize].region;
+                let mut val = Val::site(site, e.span);
+                for (fv, sp) in parts {
+                    if let Some(r) = fv.region {
+                        // A region value moved into a field: the iso
+                        // edge (s20 owns its rules); its free is no
+                        // longer this frame's.
+                        self.moved_region[r.0 as usize] = true;
+                    }
+                    self.demand_store(&fv, region, Some(e.span), sp);
+                    val.merge(fv);
+                }
+                val.region = None;
+                Ok(val)
             }
             SyntaxKind::IfExpr => self.eval_if(e),
             SyntaxKind::MatchExpr => self.eval_match(e),
@@ -531,36 +1096,37 @@ impl<'t> Lowerer<'t> {
             SyntaxKind::ReturnExpr => {
                 let d = ReturnExpr::cast(e).expect("kind");
                 if let Some(v) = d.value() {
-                    self.eval_value(v)?;
+                    let val = self.eval_value(v)?;
+                    self.demand_outlives_frame(&val, v.span);
                 }
                 self.emit_defers(0, false)?;
                 let exit = self.exit;
                 self.goto(self.cur, exit);
                 let dead = self.new_block();
                 self.cur = dead;
-                Ok(())
+                Ok(Val::none())
             }
             SyntaxKind::BreakExpr => {
                 let Some(frame) = self.loops.last() else {
-                    return Ok(()); // parse-adjacent wreckage
+                    return Ok(Val::none()); // parse-adjacent wreckage
                 };
                 let (target, depth) = (frame.break_to, frame.scope_depth);
                 self.emit_defers(depth, false)?;
                 self.goto(self.cur, target);
                 let dead = self.new_block();
                 self.cur = dead;
-                Ok(())
+                Ok(Val::none())
             }
             SyntaxKind::ContinueExpr => {
                 let Some(frame) = self.loops.last() else {
-                    return Ok(());
+                    return Ok(Val::none());
                 };
                 let (target, depth) = (frame.continue_to, frame.scope_depth);
                 self.emit_defers(depth, false)?;
                 self.goto(self.cur, target);
                 let dead = self.new_block();
                 self.cur = dead;
-                Ok(())
+                Ok(Val::none())
             }
             SyntaxKind::ClosureExpr => Err(NotYet {
                 construct: "closure capture analysis (c05 tasks)",
@@ -570,11 +1136,11 @@ impl<'t> Lowerer<'t> {
                 construct: "indexing/slicing places (s05 std surface)",
                 span: e.span,
             }),
-            SyntaxKind::RegionBlock
-            | SyntaxKind::RegionValue
-            | SyntaxKind::InBlock
-            | SyntaxKind::FreezeExpr => Err(NotYet {
-                construct: "region checking (s19–s20)",
+            SyntaxKind::RegionBlock => self.eval_region_block(e),
+            SyntaxKind::RegionValue => self.eval_region_value(e),
+            SyntaxKind::InBlock => self.eval_in_block(e),
+            SyntaxKind::FreezeExpr => Err(NotYet {
+                construct: "`freeze` (s20 region checker)",
                 span: e.span,
             }),
             SyntaxKind::UnsafeBlock | SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
@@ -599,26 +1165,183 @@ impl<'t> Lowerer<'t> {
         }
     }
 
-    fn eval_prefix(&mut self, e: &'t GreenNode) -> R<()> {
+    // ---------------------------------------------- region forms ----
+
+    /// `region(strategy?)` — a first-class region value: created, not
+    /// opened; the ambient is untouched until `in` (X4).
+    fn eval_region_value(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = RegionValue::cast(e).expect("kind");
+        let strategy = self.parse_strategy(d.strategy());
+        let rid = self.new_region("<region>", RegionKind::Value, strategy, e.span);
+        Ok(Val {
+            sites: Vec::new(),
+            region: Some(rid),
+            origin: Some(e.span),
+        })
+    }
+
+    /// `region name? (: strategy)? { … }` — create + open + scope +
+    /// free (`[mem.region.create.1]`): the block body runs with the
+    /// region ambient; the exit frees it wholesale (unless the affine
+    /// value was moved away — then the free is no longer ours, and
+    /// s20 owns the rest of that story).
+    fn eval_region_block(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = RegionBlock::cast(e).expect("kind");
+        let strategy = self.parse_strategy(d.strategy());
+        let name_tok = d.name();
+        let name = name_tok
+            .map(|t| self.text(t.span))
+            .unwrap_or_else(|| "<region>".to_string());
+        let intro = name_tok.map(|t| t.span).unwrap_or(e.span);
+        let rid = self.new_region(&name, RegionKind::Scope, strategy, intro);
+        let outer_mark = self.locals.len();
+        self.push(Stmt::RegionOpen {
+            region: rid,
+            span: intro,
+        });
+        self.ambient.push(rid);
+        self.push_scope();
+        if let Some(t) = name_tok {
+            // The sugar name is an affine region-typed binding,
+            // usable by `in name { }` (and, illegally until s20's
+            // E1005, by `move`).
+            let ty = self.local_tys.get(&t.span).map(|&id| Ty {
+                table: &self.tb.table,
+                id,
+            });
+            let local = self.declare(&name, t.span, ty);
+            let place = self.places.intern(
+                Place {
+                    base: Base::Local(local.0),
+                    proj: Vec::new(),
+                },
+                false,
+            );
+            self.push(Stmt::Init {
+                place,
+                span: t.span,
+            });
+            self.region_local.insert(local.0, Some(rid));
+        }
+        let mut val = match d.body() {
+            Some(b) => self.walk_block(b, true)?,
+            None => Val::none(),
+        };
+        let close_span = end_span(e.span);
+        self.close_scope(close_span)?;
+        self.ambient.pop();
+        if !self.moved_region[rid.0 as usize] {
+            self.sweep_region_close(rid, outer_mark, close_span, &mut val);
+            self.push(Stmt::RegionClose {
+                region: rid,
+                span: close_span,
+            });
+        }
+        val.region = None;
+        Ok(val)
+    }
+
+    /// `in r { … }` — rebind the ambient region for the block
+    /// (`[mem.region.create.3]`). Re-entering an already-open region
+    /// is idempotent — openness is depth-counted
+    /// (`[mem.region.open.1]`). Not a free: no escape sweep here.
+    fn eval_in_block(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = InBlock::cast(e).expect("kind");
+        let rid = match d.region() {
+            Some(rexpr) => {
+                let known = match self.as_place(rexpr) {
+                    Some((place, _)) if self.places.get(place).proj.is_empty() => {
+                        self.emit_read(place, rexpr.span);
+                        match self.places.get(place).base {
+                            Base::Local(l) => self.region_local.get(&l).copied().flatten(),
+                            Base::Global(..) => None,
+                        }
+                    }
+                    _ => None,
+                };
+                match known {
+                    Some(rid) => rid,
+                    None => {
+                        return Err(NotYet {
+                            construct: "region flow beyond local bindings (s20)",
+                            span: rexpr.span,
+                        });
+                    }
+                }
+            }
+            None => self.ambient(),
+        };
+        self.push(Stmt::RegionOpen {
+            region: rid,
+            span: e.span,
+        });
+        self.ambient.push(rid);
+        let val = match d.body() {
+            Some(b) => self.walk_block(b, true)?,
+            None => Val::none(),
+        };
+        self.ambient.pop();
+        self.push(Stmt::RegionClose {
+            region: rid,
+            span: end_span(e.span),
+        });
+        Ok(val)
+    }
+
+    /// `: rc` / `: pool(T)` — parsed, carried; arena is the default
+    /// (`[mem.region.create.1]`: strategy changes cost, never safety).
+    fn parse_strategy(&self, strat: Option<&GreenNode>) -> Strategy {
+        let Some(s) = strat else {
+            return Strategy::Arena;
+        };
+        if let Some(ty) = s.nodes().next() {
+            return Strategy::Pool(self.text(ty.span));
+        }
+        let word = s
+            .tokens()
+            .find(|t| t.kind == SyntaxKind::Ident)
+            .map(|t| self.text(t.span));
+        match word.as_deref() {
+            Some("rc") => Strategy::Rc,
+            _ => Strategy::Arena,
+        }
+    }
+
+    fn eval_prefix(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = PrefixExpr::cast(e).expect("kind");
         let Some(operand) = d.operand() else {
-            return Ok(());
+            return Ok(Val::none());
         };
         match d.op().map(|t| t.kind) {
             Some(SyntaxKind::CopyKw) => {
                 // `copy x`: an independent value from any type —
-                // never a move ([mem.tier0.move.3]).
-                if let Some((place, _)) = self.as_place(operand) {
+                // never a move ([mem.tier0.move.3]). The duplicate is
+                // a fresh allocation in the ambient region: `copy`
+                // deliberately breaks region linkage (the fix
+                // ladder's first rung).
+                if let Some((place, ty)) = self.as_place(operand) {
                     self.emit_read(place, operand.span);
-                    Ok(())
+                    if !self.places.is_copy(place) {
+                        let rendered = ty
+                            .map(|t| render(t.table, t.id, &|_| Err("_")))
+                            .unwrap_or_else(|| "?".to_string());
+                        let site = self.alloc_site(rendered, SiteKind::Lit, e.span);
+                        return Ok(Val::site(site, e.span));
+                    }
+                    Ok(Val::none())
                 } else {
                     self.eval_value(operand)
                 }
             }
             Some(SyntaxKind::MoveKw) => {
                 if let Some((place, _)) = self.as_place(operand) {
+                    let val = if self.places.is_copy(place) {
+                        Val::none()
+                    } else {
+                        self.val_of_place(place, operand.span)
+                    };
                     self.use_value(place, operand.span);
-                    Ok(())
+                    Ok(val)
                 } else {
                     self.eval_value(operand)
                 }
@@ -639,7 +1362,7 @@ impl<'t> Lowerer<'t> {
         }
     }
 
-    fn eval_bin(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_bin(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = wolf_ast::BinExpr::cast(e).expect("kind");
         let (lhs, rhs) = (d.lhs(), d.rhs());
         let op = d.op().map(|t| t.kind);
@@ -659,7 +1382,7 @@ impl<'t> Lowerer<'t> {
                 }
                 self.goto(self.cur, join);
                 self.cur = join;
-                Ok(())
+                Ok(Val::none())
             }
             _ => {
                 if let Some(l) = lhs {
@@ -682,7 +1405,7 @@ impl<'t> Lowerer<'t> {
                     self.push(Stmt::CheckedOp { span: e.span });
                     self.blocks[self.cur.0 as usize].trap = true;
                 }
-                Ok(())
+                Ok(Val::none())
             }
         }
     }
@@ -703,7 +1426,7 @@ impl<'t> Lowerer<'t> {
         is_int(lhs) || is_int(rhs)
     }
 
-    fn eval_if(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_if(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = IfExpr::cast(e).expect("kind");
         if let Some(cond) = d.condition() {
             self.eval_value(cond)?;
@@ -713,8 +1436,9 @@ impl<'t> Lowerer<'t> {
         self.goto(self.cur, then_block);
         let cond_block = self.cur;
         self.cur = then_block;
+        let mut val = Val::none();
         if let Some(tb) = d.then_block() {
-            self.walk_block(tb, true)?;
+            val.merge(self.walk_block(tb, true)?);
         }
         self.goto(self.cur, join);
         match d.else_branch() {
@@ -725,9 +1449,9 @@ impl<'t> Lowerer<'t> {
                 match else_node.kind {
                     SyntaxKind::Block => {
                         let b = AstBlock::cast(else_node).expect("kind");
-                        self.walk_block(b, true)?;
+                        val.merge(self.walk_block(b, true)?);
                     }
-                    _ => self.eval_value(else_node)?,
+                    _ => val.merge(self.eval_value(else_node)?),
                 }
                 self.goto(self.cur, join);
             }
@@ -736,10 +1460,10 @@ impl<'t> Lowerer<'t> {
             }
         }
         self.cur = join;
-        Ok(())
+        Ok(val)
     }
 
-    fn eval_match(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_match(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = MatchExpr::cast(e).expect("kind");
         let scrut_place = match d.scrutinee() {
             Some(s) => match self.as_place(s) {
@@ -754,16 +1478,15 @@ impl<'t> Lowerer<'t> {
             },
             None => None,
         };
+        let scrut_val = scrut_place.map(|(p, sp)| self.val_of_place(p, sp));
         let fan = self.cur;
         let join = self.new_block();
+        let mut out = Val::none();
         for arm in d.arms() {
             let arm_block = self.new_block();
             self.goto(fan, arm_block);
             self.cur = arm_block;
-            self.scopes.push(Scope {
-                names: Vec::new(),
-                defers: Vec::new(),
-            });
+            self.push_scope();
             let mut moved_scrut = false;
             if let Some(pat) = arm.pattern() {
                 let mut binds = Vec::new();
@@ -783,6 +1506,11 @@ impl<'t> Lowerer<'t> {
                         self.locals[local.0 as usize].is_copy,
                     );
                     self.push(Stmt::Init { place, span });
+                    // A binding's piece stays in the scrutinee's
+                    // region: it inherits the site set.
+                    if let Some(sv) = scrut_val.clone() {
+                        self.hold(local.0, &sv, span);
+                    }
                     // A non-`Copy` binding takes its piece out of a
                     // place scrutinee: field-granular payload paths
                     // are a non-target, so the whole place moves in
@@ -801,16 +1529,16 @@ impl<'t> Lowerer<'t> {
                 self.eval_value(guard)?;
             }
             if let Some(body) = arm.body() {
-                self.eval_value(body)?;
+                out.merge(self.eval_value(body)?);
             }
-            self.close_scope()?;
+            self.close_scope(end_span(arm.syntax().span))?;
             self.goto(self.cur, join);
         }
         self.cur = join;
-        Ok(())
+        Ok(out)
     }
 
-    fn eval_while(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_while(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = WhileExpr::cast(e).expect("kind");
         let head = self.new_block();
         self.goto(self.cur, head);
@@ -834,16 +1562,13 @@ impl<'t> Lowerer<'t> {
         self.loops.pop();
         self.goto(self.cur, head);
         self.cur = exit;
-        Ok(())
+        Ok(Val::none())
     }
 
-    fn eval_for(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_for(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = ForExpr::cast(e).expect("kind");
         if let Some(iter) = d.iterable() {
-            match iter.kind {
-                SyntaxKind::RangeExpr => self.eval_value(iter)?,
-                _ => self.eval_value(iter)?,
-            }
+            self.eval_value(iter)?;
         }
         let head = self.new_block();
         self.goto(self.cur, head);
@@ -852,10 +1577,7 @@ impl<'t> Lowerer<'t> {
         self.goto(head, body);
         self.goto(head, exit);
         self.cur = body;
-        self.scopes.push(Scope {
-            names: Vec::new(),
-            defers: Vec::new(),
-        });
+        self.push_scope();
         if let Some(pat) = d.pattern() {
             let mut binds = Vec::new();
             collect_binding_spans(pat, &mut binds);
@@ -885,13 +1607,13 @@ impl<'t> Lowerer<'t> {
             self.walk_block(b, false)?;
         }
         self.loops.pop();
-        self.close_scope()?;
+        self.close_scope(end_span(e.span))?;
         self.goto(self.cur, head);
         self.cur = exit;
-        Ok(())
+        Ok(Val::none())
     }
 
-    fn eval_loop(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_loop(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = wolf_ast::LoopExpr::cast(e).expect("kind");
         let head = self.new_block();
         let exit = self.new_block();
@@ -908,23 +1630,21 @@ impl<'t> Lowerer<'t> {
         self.loops.pop();
         self.goto(self.cur, head);
         self.cur = exit;
-        Ok(())
+        Ok(Val::none())
     }
 
-    fn eval_else(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_else(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = ElseExpr::cast(e).expect("kind");
+        let mut out = Val::none();
         if let Some(s) = d.scrutinized() {
-            self.eval_value(s)?;
+            out.merge(self.eval_value(s)?);
         }
         let fallback = self.new_block();
         let join = self.new_block();
         self.goto(self.cur, join); // ok path
         self.goto(self.cur, fallback);
         self.cur = fallback;
-        self.scopes.push(Scope {
-            names: Vec::new(),
-            defers: Vec::new(),
-        });
+        self.push_scope();
         if let Some(pat) = d.handler_pattern() {
             let mut binds = Vec::new();
             collect_binding_spans(pat, &mut binds);
@@ -946,17 +1666,17 @@ impl<'t> Lowerer<'t> {
             }
         }
         if let Some(fb) = d.fallback() {
-            self.eval_value(fb)?;
+            out.merge(self.eval_value(fb)?);
         }
-        self.close_scope()?;
+        self.close_scope(end_span(e.span))?;
         self.goto(self.cur, join);
         self.cur = join;
-        Ok(())
+        Ok(out)
     }
 
     // ----------------------------------------------------- calls ----
 
-    fn eval_call(&mut self, e: &'t GreenNode) -> R<()> {
+    fn eval_call(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = CallExpr::cast(e).expect("kind");
         let cs = self.calls.get(&e.span).copied();
         let mut surface = CallSurface {
@@ -970,6 +1690,9 @@ impl<'t> Lowerer<'t> {
             read_args: Vec::new(),
             take_args: Vec::new(),
         };
+        // Sites whose data the callee receives by `take`/`mut`: it
+        // may embed them in the result (the conservative carry).
+        let mut carry: Vec<SiteId> = Vec::new();
         // The receiver, when the resolved callee takes `self` and the
         // call site spells `recv.method(…)`.
         let mut receiver_done = false;
@@ -986,7 +1709,7 @@ impl<'t> Lowerer<'t> {
                 _ => base,
             };
             if let Some(selfp) = selfp {
-                self.lower_receiver(recv_expr, base.span, &selfp, &mut surface)?;
+                self.lower_receiver(recv_expr, base.span, &selfp, &mut surface, &mut carry)?;
             }
             receiver_done = true;
         }
@@ -999,12 +1722,15 @@ impl<'t> Lowerer<'t> {
                         self.emit_read(place, callee.span);
                     }
                 }
-                _ => self.eval_value(callee)?,
+                _ => {
+                    self.eval_value(callee)?;
+                }
             }
         }
         // Arguments, left to right.
         let args: Vec<Arg<'_>> = d.args().into_iter().flat_map(|a| a.args()).collect();
         let offset = usize::from(cs.map(|c| c.has_self).unwrap_or(false));
+        let mut ctor_parts: Vec<(Val, Span)> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
             let site_mode = Arg::mode(*arg);
@@ -1014,10 +1740,11 @@ impl<'t> Lowerer<'t> {
                     if let Some(mode) = site_mode {
                         self.mode_mismatch(cs, param, *arg, v, Some(mode), None);
                     }
-                    self.eval_value(v)?; // payloads move in
+                    let pv = self.eval_value(v)?; // payloads move in
+                    ctor_parts.push((pv, v.span));
                 }
                 (Some(cs), Some(param)) => {
-                    self.lower_arg(cs, param, *arg, v, site_mode, &mut surface)?;
+                    self.lower_arg(cs, param, *arg, v, site_mode, &mut surface, &mut carry)?;
                 }
                 _ => {
                     // No resolved signature (builtin `print`, host
@@ -1043,9 +1770,90 @@ impl<'t> Lowerer<'t> {
             {
                 self.check_view(place, span);
             }
+        }
+        // -------------------------------- region attribution (s19) --
+        // Enum construction is an allocation site like a struct
+        // literal; payloads must be co-located.
+        if cs.map(|c| c.ctor).unwrap_or(false) {
+            let ty = self.rendered_expr_ty(e.span);
+            let site = self.alloc_site(ty, SiteKind::Lit, e.span);
+            let region = self.sites[site.0 as usize].region;
+            let mut val = Val::site(site, e.span);
+            for (pv, sp) in ctor_parts {
+                if let Some(r) = pv.region {
+                    self.moved_region[r.0 as usize] = true;
+                }
+                self.demand_store(&pv, region, Some(e.span), sp);
+                val.merge(pv);
+            }
+            val.region = None;
+            return Ok(val);
+        }
+        // A real call: the callee's default scheme (Cyclone rules)
+        // says its result — and anything it keeps — lands in *its*
+        // caller's region, which is this function's ambient at the
+        // call site ([mem.region.create.3], D12). A non-`Copy` result
+        // is therefore an ambient allocation here; `mut` arguments
+        // may legally be replaced with fresh ambient allocations, so
+        // they gain the call site too.
+        let ret_ty = self.expr_tys.get(&e.span).map(|&id| Ty {
+            table: &self.tb.table,
+            id,
+        });
+        let ret_region = matches!(ret_ty.map(|t| t.kind()), Some(TyKind::RegionTy));
+        let ret_heap = !ret_region && ret_ty.map(|t| !is_copy(t, 0)).unwrap_or(false);
+        let mut_targets: Vec<PlaceId> = surface
+            .mut_args
+            .iter()
+            .map(|(p, _)| *p)
+            .filter(|p| !self.places.is_copy(*p))
+            .collect();
+        let has_surface = !surface.mut_args.is_empty()
+            || !surface.read_args.is_empty()
+            || !surface.take_args.is_empty();
+        let callee = surface.callee.clone();
+        if has_surface {
             self.push(Stmt::Call(surface));
         }
-        Ok(())
+        let mut out = Val::none();
+        if ret_heap || !mut_targets.is_empty() {
+            let ty = if ret_heap {
+                self.rendered_expr_ty(e.span)
+            } else {
+                format!("{callee}(..)")
+            };
+            let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+            if ret_heap {
+                out = Val::site(site, e.span);
+                for s in carry {
+                    if let Err(i) = out.sites.binary_search(&s) {
+                        out.sites.insert(i, s);
+                    }
+                }
+            }
+            let call_val = Val::site(site, e.span);
+            for place in mut_targets {
+                if let Base::Local(l) = self.places.get(place).base {
+                    self.hold(l, &call_val, e.span);
+                }
+            }
+        }
+        if ret_region {
+            // A call returning a region value: identity unknown until
+            // s20's scheme-carrying interfaces; `in` on it refuses.
+            out.origin = Some(e.span);
+        }
+        Ok(out)
+    }
+
+    /// `take`/`mut` hand the callee data it may keep or replace: the
+    /// held sites escape this frame's certainty (no stack promotion)
+    /// and are carried into the call's result set.
+    fn escape_to_callee(&mut self, place: PlaceId, carry: &mut Vec<SiteId>) {
+        for (s, _) in self.sites_of_place(place) {
+            self.mark_escape(s, "passed to a call");
+            carry.push(s);
+        }
     }
 
     fn lower_receiver(
@@ -1054,6 +1862,7 @@ impl<'t> Lowerer<'t> {
         recv_span: Span,
         selfp: &ParamSig,
         surface: &mut CallSurface,
+        carry: &mut Vec<SiteId>,
     ) -> R<()> {
         match selfp.mode {
             None => {
@@ -1069,6 +1878,7 @@ impl<'t> Lowerer<'t> {
             }
             Some(ParamMode::Mut) => match self.as_place(recv) {
                 Some((place, ty)) => {
+                    self.escape_to_callee(place, carry);
                     match &selfp.view {
                         Some(view) => {
                             // The view set narrows the exclusive
@@ -1099,16 +1909,20 @@ impl<'t> Lowerer<'t> {
             },
             Some(ParamMode::Take) => {
                 if let Some((place, _)) = self.as_place(recv) {
+                    self.escape_to_callee(place, carry);
                     self.emit_move(place, recv_span);
                     surface.take_args.push((place, recv_span));
                 } else {
-                    self.eval_value(recv)?;
+                    let val = self.eval_value(recv)?;
+                    self.mark_val_escape(&val, "passed to a call");
+                    carry.extend(val.sites);
                 }
             }
         }
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lower_arg(
         &mut self,
         cs: &CallSig,
@@ -1117,6 +1931,7 @@ impl<'t> Lowerer<'t> {
         v: &'t GreenNode,
         site_mode: Option<ParamMode>,
         surface: &mut CallSurface,
+        carry: &mut Vec<SiteId>,
     ) -> R<()> {
         if site_mode != param.mode {
             self.mode_mismatch(cs, param, arg, v, site_mode, param.mode);
@@ -1144,7 +1959,10 @@ impl<'t> Lowerer<'t> {
                 }
             }
             Some(ParamMode::Mut) => match self.as_place(v) {
-                Some((place, _)) => surface.mut_args.push((place, v.span)),
+                Some((place, _)) => {
+                    self.escape_to_callee(place, carry);
+                    surface.mut_args.push((place, v.span));
+                }
                 None => {
                     self.mut_needs_place(v.span);
                     self.eval_value(v)?;
@@ -1152,12 +1970,15 @@ impl<'t> Lowerer<'t> {
             },
             Some(ParamMode::Take) => {
                 if let Some((place, _)) = self.as_place(v) {
+                    self.escape_to_callee(place, carry);
                     self.emit_move(place, v.span);
                     surface.take_args.push((place, v.span));
                 } else {
                     // Consuming a temporary is fine — it never had
                     // another owner.
-                    self.eval_value(v)?;
+                    let val = self.eval_value(v)?;
+                    self.mark_val_escape(&val, "passed to a call");
+                    carry.extend(val.sites);
                 }
             }
         }
@@ -1274,28 +2095,30 @@ impl<'t> Lowerer<'t> {
 
     // ------------------------------------------------ statements ----
 
-    fn walk_block(&mut self, b: AstBlock<'t>, want_value: bool) -> R<()> {
-        self.scopes.push(Scope {
-            names: Vec::new(),
-            defers: Vec::new(),
-        });
+    fn walk_block(&mut self, b: AstBlock<'t>, want_value: bool) -> R<Val> {
+        self.push_scope();
         let stmts: Vec<&GreenNode> = b.statements().collect();
         let last_value_stmt = if want_value {
             b.trailing_expr().map(|e| e.span)
         } else {
             None
         };
+        let mut out = Val::none();
         for stmt in stmts {
             match stmt.kind {
                 SyntaxKind::ExprStmt => {
                     let d = ExprStmt::cast(stmt).expect("kind");
                     if let Some(e) = d.expr() {
-                        let _is_value = Some(e.span) == last_value_stmt;
+                        let is_value = Some(e.span) == last_value_stmt;
                         // Value or discarded, the expression's effects
                         // are the same: a place in value position
                         // moves out (into the block's value or into a
-                        // dropped temporary).
-                        self.eval_value(e)?;
+                        // dropped temporary). Only the trailing value
+                        // flows onward.
+                        let val = self.eval_value(e)?;
+                        if is_value {
+                            out = val;
+                        }
                     }
                 }
                 SyntaxKind::LetDecl => self.lower_let(stmt)?,
@@ -1328,20 +2151,52 @@ impl<'t> Lowerer<'t> {
                 _ => {}
             }
         }
-        self.close_scope()
+        self.close_scope(end_span(b.syntax().span))?;
+        Ok(out)
     }
 
-    /// Emit the scope's own defers (normal path, LIFO) and pop it.
-    fn close_scope(&mut self) -> R<()> {
+    /// Emit the scope's own defers (normal path, LIFO), free the
+    /// first-class regions whose values die with it (s19: a region
+    /// value's last-use free is approximated by its binding scope's
+    /// end), and pop it.
+    fn close_scope(&mut self, close_span: Span) -> R<()> {
         let depth = self.scopes.len() - 1;
         let result = self.emit_defers(depth, false);
+        let (mark, owned): (usize, Vec<LocalId>) = {
+            let scope = self.scopes.last().expect("scope");
+            (
+                scope.locals_mark,
+                scope.names.iter().map(|(_, id)| *id).collect(),
+            )
+        };
+        for local in owned {
+            let Some(Some(rid)) = self.region_local.get(&local.0).copied() else {
+                continue;
+            };
+            if self.rt.regions[rid.0 as usize].kind != RegionKind::Value {
+                continue;
+            }
+            if self.moved_region[rid.0 as usize] {
+                continue; // the affine value left; the free is not ours
+            }
+            let mut dummy = Val::none();
+            self.sweep_region_close(rid, mark, close_span, &mut dummy);
+            self.push(Stmt::RegionClose {
+                region: rid,
+                span: close_span,
+            });
+            // One free per region: a second binding in an outer scope
+            // cannot free it again.
+            self.moved_region[rid.0 as usize] = true;
+        }
         self.scopes.pop();
         result
     }
 
-    fn bind_pattern_inits(&mut self, pat: &'t GreenNode, has_init: bool) {
+    fn bind_pattern_inits(&mut self, pat: &'t GreenNode, has_init: bool, val: &Val) {
         let mut binds = Vec::new();
         collect_binding_spans(pat, &mut binds);
+        let single = binds.len() == 1;
         for span in binds {
             let name = self.text(span);
             let ty = self.local_tys.get(&span).map(|&id| Ty {
@@ -1358,6 +2213,19 @@ impl<'t> Lowerer<'t> {
             );
             if has_init {
                 self.push(Stmt::Init { place, span });
+                // The binding holds whatever the initializer held (a
+                // destructuring conservatively gives every binding
+                // the whole set).
+                self.hold(local.0, val, span);
+                if single && let Some(rid) = val.region {
+                    // `let r = region()`: the value region takes the
+                    // binding's name (dump/diagnostic identity).
+                    if self.rt.regions[rid.0 as usize].name == "<region>" {
+                        self.rt.regions[rid.0 as usize].name = name.clone();
+                        self.rt.regions[rid.0 as usize].span = span;
+                    }
+                    self.region_local.insert(local.0, Some(rid));
+                }
             } else {
                 self.push(Stmt::Uninit { place, span });
             }
@@ -1366,30 +2234,24 @@ impl<'t> Lowerer<'t> {
 
     fn lower_let(&mut self, stmt: &'t GreenNode) -> R<()> {
         let d = LetDecl::cast(stmt).expect("kind");
-        let has_init = match d.init() {
-            Some(init) => {
-                self.eval_value(init)?;
-                true
-            }
-            None => false,
+        let (has_init, val) = match d.init() {
+            Some(init) => (true, self.eval_value(init)?),
+            None => (false, Val::none()),
         };
         if let Some(pat) = d.pattern() {
-            self.bind_pattern_inits(pat, has_init);
+            self.bind_pattern_inits(pat, has_init, &val);
         }
         Ok(())
     }
 
     fn lower_var(&mut self, stmt: &'t GreenNode) -> R<()> {
         let d = VarDecl::cast(stmt).expect("kind");
-        let has_init = match d.init() {
-            Some(init) => {
-                self.eval_value(init)?;
-                true
-            }
-            None => false,
+        let (has_init, val) = match d.init() {
+            Some(init) => (true, self.eval_value(init)?),
+            None => (false, Val::none()),
         };
         if let Some(pat) = d.pattern() {
-            self.bind_pattern_inits(pat, has_init);
+            self.bind_pattern_inits(pat, has_init, &val);
         }
         Ok(())
     }
@@ -1398,12 +2260,9 @@ impl<'t> Lowerer<'t> {
     /// the s16 pass; here it is a binding with an initializer).
     fn lower_const(&mut self, stmt: &'t GreenNode) -> R<()> {
         let d = wolf_ast::ConstDecl::cast(stmt).expect("kind");
-        let has_init = match d.init() {
-            Some(init) => {
-                self.eval_value(init)?;
-                true
-            }
-            None => false,
+        let (has_init, val) = match d.init() {
+            Some(init) => (true, self.eval_value(init)?),
+            None => (false, Val::none()),
         };
         if let Some(name) = d.name() {
             let span = name.span;
@@ -1422,6 +2281,7 @@ impl<'t> Lowerer<'t> {
             );
             if has_init {
                 self.push(Stmt::Init { place, span });
+                self.hold(local.0, &val, span);
             } else {
                 self.push(Stmt::Uninit { place, span });
             }
@@ -1431,9 +2291,10 @@ impl<'t> Lowerer<'t> {
 
     fn lower_assign(&mut self, stmt: &'t GreenNode) -> R<()> {
         let d = AssignStmt::cast(stmt).expect("kind");
-        if let Some(v) = d.value() {
-            self.eval_value(v)?;
-        }
+        let val = match d.value() {
+            Some(v) => self.eval_value(v)?,
+            None => Val::none(),
+        };
         let Some(place_expr) = d.place() else {
             return Ok(());
         };
@@ -1462,9 +2323,54 @@ impl<'t> Lowerer<'t> {
             }
         } else {
             self.emit_init(place, place_expr.span);
+            // ------------------------------- region flow (s19) ------
+            match self.places.get(place).base.clone() {
+                Base::Local(l) => {
+                    let whole = self.places.get(place).proj.is_empty();
+                    if !whole {
+                        // An embedding store demands co-location with
+                        // the container's own allocation(s).
+                        if let Some(r) = val.region {
+                            // A region value stored into a field: the
+                            // iso edge — s20 owns its rules; the free
+                            // is no longer this frame's.
+                            self.moved_region[r.0 as usize] = true;
+                        }
+                        let containers = self.sites_of_place(place);
+                        if let Some(&(c, _)) = containers.first() {
+                            let target = self.sites[c.0 as usize].region;
+                            let cspan = self.sites[c.0 as usize].span;
+                            self.demand_store(&val, target, Some(cspan), place_expr.span);
+                        }
+                    } else if let Some(rid) = val.region {
+                        match self.region_local.get(&l).copied() {
+                            Some(Some(prev)) if prev != rid => {
+                                // Rebound to a different region on
+                                // some path: identity is no longer
+                                // static — `in` on it refuses.
+                                self.region_local.insert(l, None);
+                            }
+                            _ => {
+                                self.region_local.insert(l, Some(rid));
+                            }
+                        }
+                    }
+                    self.hold(l, &val, place_expr.span);
+                }
+                Base::Global(..) => {
+                    // Module state outlives every frame: `ρ_static`.
+                    self.demand_static(&val, place_expr.span);
+                }
+            }
         }
         Ok(())
     }
+}
+
+/// The closing-brace span of a braced construct (the "freed here"
+/// anchor).
+fn end_span(span: Span) -> Span {
+    Span::new(span.file, span.hi.saturating_sub(1), span.hi)
 }
 
 /// Collect the binding-ident spans of a pattern, in source order
@@ -1518,6 +2424,17 @@ impl<'t> Lowerer<'t> {
             view: None,
             in_defer: false,
             diags: Vec::new(),
+            rt: RegionTable::default(),
+            ambient: Vec::new(),
+            sites: Vec::new(),
+            site_escape: Vec::new(),
+            holds: BTreeMap::new(),
+            region_local: HashMap::new(),
+            moved_region: Vec::new(),
+            tainted_region: Vec::new(),
+            promoted: Vec::new(),
+            conflicted: false,
+            static_region: None,
         }
     }
 
@@ -1529,10 +2446,16 @@ impl<'t> Lowerer<'t> {
         params: &[ParamSig],
         body: AstBlock<'t>,
     ) -> R<Lowered> {
-        self.scopes.push(Scope {
-            names: Vec::new(),
-            defers: Vec::new(),
-        });
+        // The implicit caller-region parameter: the ambient default
+        // (D12, [mem.region.create.3]).
+        let caller = self.new_region(
+            "caller",
+            RegionKind::Caller,
+            Strategy::Arena,
+            end_span(body.syntax().span),
+        );
+        self.ambient.push(caller);
+        self.push_scope();
         for p in params {
             let ty = Ty {
                 table: &self.sigs.table,
@@ -1545,23 +2468,51 @@ impl<'t> Lowerer<'t> {
             {
                 self.view = Some((local, view.clone(), p.span));
             }
+            // Cyclone defaults: every heap-reaching parameter position
+            // gets a fresh, generalized region variable — a C-shaped
+            // signature costs zero annotations.
+            match ty.kind() {
+                TyKind::RegionTy => {
+                    let rid = self.new_region(&p.name, RegionKind::Param, Strategy::Arena, p.span);
+                    self.region_local.insert(local.0, Some(rid));
+                }
+                _ if !is_copy(ty, 0) => {
+                    let rid = self.new_region(&p.name, RegionKind::Param, Strategy::Arena, p.span);
+                    let rendered = render(ty.table, ty.id, &|_| Err("_"));
+                    let sid = SiteId(self.sites.len() as u32);
+                    self.sites.push(AllocSite {
+                        span: p.span,
+                        ty: rendered,
+                        region: rid,
+                        kind: SiteKind::Param,
+                    });
+                    self.site_escape.push(None);
+                    self.holds.entry(local.0).or_default().insert(sid, p.span);
+                }
+                _ => {}
+            }
         }
-        self.walk_block(body, true)?;
-        self.close_scope()?; // the param scope (no defers of its own)
+        let val = self.walk_block(body, true)?;
+        // The trailing value is the function's result: the default
+        // scheme's "result lands in the caller's region".
+        let result_span = val.origin.unwrap_or_else(|| end_span(body.syntax().span));
+        self.demand_outlives_frame(&val, result_span);
+        self.close_scope(end_span(body.syntax().span))?; // the param scope
         let exit = self.exit;
         self.goto(self.cur, exit);
         Ok(self.finish(name))
     }
 
     /// Lower a module-level item initializer as a body with no
-    /// parameters.
+    /// parameters. Its ambient is `ρ_static`: module state allocates
+    /// in the static region and lives forever.
     pub(crate) fn lower_init(mut self, name: &str, init: &'t GreenNode) -> R<Lowered> {
-        self.scopes.push(Scope {
-            names: Vec::new(),
-            defers: Vec::new(),
-        });
+        let st = self.new_region("static", RegionKind::Static, Strategy::Arena, init.span);
+        self.static_region = Some(st);
+        self.ambient.push(st);
+        self.push_scope();
         self.eval_value(init)?;
-        self.close_scope()?;
+        self.close_scope(end_span(init.span))?;
         let exit = self.exit;
         self.goto(self.cur, exit);
         Ok(self.finish(name))
@@ -1569,6 +2520,14 @@ impl<'t> Lowerer<'t> {
 
     fn finish(self, name: &str) -> Lowered {
         let _ = (self.pkg, self.file);
+        let regions = crate::regions::summarize(
+            name,
+            self.rt,
+            &self.sites,
+            &self.site_escape,
+            &self.promoted,
+            self.conflicted,
+        );
         Lowered {
             cfg: Cfg {
                 name: name.to_string(),
@@ -1576,10 +2535,13 @@ impl<'t> Lowerer<'t> {
                 locals: self.locals,
                 places: self.places,
                 loans: Vec::new(),
+                regions: regions.regions.clone(),
+                sites: self.sites,
                 entry: BlockId(0),
                 exit: BlockId(1),
             },
             diags: self.diags,
+            regions,
         }
     }
 }

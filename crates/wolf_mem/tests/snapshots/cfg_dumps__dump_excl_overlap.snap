@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 60
 expression: "dump(&corpus(\"memory/excl_overlap.lu\"))"
 ---
 fn two
@@ -15,7 +16,9 @@ fn two
 fn main
   _0 p: P
   b0:
+    alloc P -> caller @274..290
     init p @270..271
     call two [mut p, mut p.x] @295..314
+    alloc two(..) -> caller @295..314
     -> b1
   b1:

@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 65
 expression: "dump(&corpus(\"memory/view_set_norm.lu\"))"
 ---
 fn norm
@@ -18,6 +19,7 @@ fn main
   _0 p: P
   _1 n: int copy
   b0:
+    alloc P -> caller @621..644
     init p @617..618
     call norm [mut p.x, mut p.y] @657..671
     read p.z @674..677

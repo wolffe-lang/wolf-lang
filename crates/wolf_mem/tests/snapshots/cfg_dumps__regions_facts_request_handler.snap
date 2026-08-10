@@ -1,0 +1,18 @@
+---
+source: crates/wolf_mem/tests/cfg_dumps.rs
+assertion_line: 381
+expression: "facts(&corpus(\"memory/region_infer_request_handler.lu\"))"
+---
+facts fn cost_of
+  read size -> immutable-for-call (frozen)
+  alloc Request @507..536 -> region scratch
+  promote region scratch @477..484 -> stack (create/free elided)
+
+facts fn respond
+  read r -> immutable-for-call (frozen)
+  alloc Response @649..693 -> caller
+
+facts fn main
+  alloc Request @780..810 -> caller
+  alloc Response @772..811 -> caller
+  stack-alloc Request @780..810 (never escapes)

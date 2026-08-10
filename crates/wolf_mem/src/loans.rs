@@ -282,7 +282,12 @@ fn transfer(
         Stmt::Activate { loan, .. } => {
             flow.active |= 1 << loan.0;
         }
-        Stmt::Uninit { .. } | Stmt::UseBorrower { .. } | Stmt::CheckedOp { .. } => {}
+        Stmt::Uninit { .. }
+        | Stmt::UseBorrower { .. }
+        | Stmt::CheckedOp { .. }
+        | Stmt::Alloc { .. }
+        | Stmt::RegionOpen { .. }
+        | Stmt::RegionClose { .. } => {}
     }
 }
 
@@ -346,6 +351,8 @@ mod tests {
                         .collect(),
                     places,
                     loans: Vec::new(),
+                    regions: Vec::new(),
+                    sites: Vec::new(),
                     entry: BlockId(0),
                     exit: BlockId(0),
                 },

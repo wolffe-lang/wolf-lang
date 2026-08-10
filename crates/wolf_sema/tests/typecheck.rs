@@ -278,12 +278,31 @@ fn else_defaulting_and_try_check_since_s15() {
 }
 
 #[test]
-fn concurrency_and_regions_are_not_yet_checkable() {
+fn regions_type_since_s19_freeze_still_not_yet() {
+    // s13 refused every region form; s19 types the creation/ambient
+    // surface (X4). `freeze` changes what a region is — s20.
     let tc = check_one(
         "fn r() -> int { region tmp { 1 } }\n\
+         fn v() -> int { let a = region(rc)\n    in a { 2 } }\n\
          fn main() -> !int { 0 }\n",
     );
-    assert!(is_nyc(&tc, "r"));
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let tc = check_one(
+        "fn f() -> int { freeze region { 1 } }\n\
+         fn main() -> !int { 0 }\n",
+    );
+    assert!(is_nyc(&tc, "f"));
+}
+
+#[test]
+fn in_target_must_be_a_region() {
+    let tc = check_one("fn main() -> !int {\n    let x = 1\n    in x { 2 }\n    0\n}\n");
+    assert!(tc.has_errors(), "{:?}", tc.diagnostics);
 }
 
 #[test]

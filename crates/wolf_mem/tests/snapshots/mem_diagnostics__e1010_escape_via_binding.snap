@@ -1,0 +1,20 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1010]: `out` still holds a value allocated in region `tmp` when the region is freed
+ --> mem:///main.lu:5:9
+  |
+4 |     region tmp {
+  |            --- region `tmp` is created here
+5 |         out = Node { value: 7 }
+  |         ^^^ the value flows out of the region here
+  |               ----------------- allocated here, into region `tmp`
+6 |     }
+  |     - the region is freed here — everything in it is freed wholesale, as one unit
+  |
+  = note: to keep the value, allocate it where it must live: build it outside the region block, or
+    aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { …
+    }`); widening the region block to cover every use also works. `freeze` (s20) and
+    `shared` (s21) will add keep-alive alternatives when they land.

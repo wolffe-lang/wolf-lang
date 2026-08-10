@@ -46,9 +46,10 @@
 use std::collections::{BTreeMap, HashMap};
 use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, CallExpr, CastExpr, ClosureExpr, ConstDecl,
-    DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, GreenNode, IfExpr, LetDecl, MatchArm,
-    MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr,
-    StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
+    DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchArm,
+    MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue,
+    ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_expr_kind,
+    is_type_kind,
 };
 
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
@@ -243,6 +244,8 @@ pub enum Reason {
     ElseFallback,
     /// A method call's receiver (s17).
     Receiver(String),
+    /// The target of `in r { … }` must be a region value (X4, s19).
+    InTarget,
 }
 
 impl Reason {
@@ -277,6 +280,7 @@ impl Reason {
             }
             Reason::ElseFallback => "the `else` fallback must produce".to_string(),
             Reason::Receiver(m) => format!("`{m}`'s receiver must be"),
+            Reason::InTarget => "the target of `in` must be".to_string(),
         }
     }
 
@@ -301,6 +305,7 @@ impl Reason {
             Reason::TagPayload { .. } => "the row is declared here",
             Reason::ElseFallback => "the fallible expression is here",
             Reason::Receiver(_) => "the method is declared here",
+            Reason::InTarget => "the `in` block starts here",
         }
     }
 }
@@ -2095,6 +2100,71 @@ impl<'a> Checker<'a> {
         b.trailing_expr().map(|e| e.span).unwrap_or(b.syntax().span)
     }
 
+    // ----------------------------------------------- regions (X4) ----
+
+    /// `region(strategy?)` — a first-class region value (s19). The
+    /// strategy (arena default, `rc`, `pool(T)`) changes cost, never
+    /// safety (`[mem.region.create.1]`), so the type is plain
+    /// `region`; the memory checker reads the strategy from syntax.
+    fn synth_region_value(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = RegionValue::cast(e).expect("kind");
+        self.check_region_strategy(d.strategy());
+        Ok(self.lo.table.intern(TyKind::RegionTy))
+    }
+
+    /// `region name? (: strategy)? { … }` — the block sugar:
+    /// create + open + scope + free (`[mem.region.create.1]`). The
+    /// name binds a `region`-typed value over the body; the block's
+    /// value is the body's value (allocation placement is the memory
+    /// checker's question, not typing's).
+    fn synth_region_block(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = RegionBlock::cast(e).expect("kind");
+        self.check_region_strategy(d.strategy());
+        self.push_scope();
+        if let Some(name) = d.name() {
+            let region = self.lo.table.intern(TyKind::RegionTy);
+            let nm = self.text(name.span);
+            self.bind(nm, name.span, region);
+        }
+        let ty = match d.body() {
+            Some(b) => self.synth_block(b)?,
+            None => self.error_ty(),
+        };
+        self.pop_scope();
+        Ok(ty)
+    }
+
+    /// `in r { … }` — rebind the ambient region over the block
+    /// (`[mem.region.create.3]`): the target must be a region value;
+    /// the block's value is the `in` expression's value.
+    fn synth_in_block(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = InBlock::cast(e).expect("kind");
+        if let Some(r) = d.region() {
+            let region = self.lo.table.intern(TyKind::RegionTy);
+            let exp = Expect {
+                ty: region,
+                reason: Reason::InTarget,
+                because: Some(e.span),
+            };
+            self.check_expr(r, &exp)?;
+        }
+        match d.body() {
+            Some(b) => self.synth_block(b),
+            None => Ok(self.error_ty()),
+        }
+    }
+
+    /// Validate a parsed `: rc` / `: pool(T)` strategy node: the pool
+    /// element type elaborates (validation only); the strategy itself
+    /// is a cost fact carried to the memory checker, not a type.
+    fn check_region_strategy(&mut self, strat: Option<&GreenNode>) {
+        if let Some(s) = strat
+            && let Some(ty_node) = s.nodes().find(|n| is_type_kind(n.kind))
+        {
+            let _ = self.lower_ty(ty_node);
+        }
+    }
+
     // --------------------------------------------------- statements ----
 
     fn check_stmt(&mut self, s: &GreenNode) -> R<()> {
@@ -2517,11 +2587,15 @@ impl<'a> Checker<'a> {
                 construct: "end-relative `^n` position (s17)",
                 span: e.span,
             }),
-            SyntaxKind::RegionBlock
-            | SyntaxKind::RegionValue
-            | SyntaxKind::InBlock
-            | SyntaxKind::FreezeExpr => Err(NotYet {
-                construct: "region typing (c04)",
+            // ---- the region surface (X4, s19): the three creation /
+            // ambient forms type here; inference and the region rules
+            // live in wolf_mem. `freeze` changes what a region *is*
+            // (deep imm promotion) and is s20's.
+            SyntaxKind::RegionBlock => self.synth_region_block(e),
+            SyntaxKind::RegionValue => self.synth_region_value(e),
+            SyntaxKind::InBlock => self.synth_in_block(e),
+            SyntaxKind::FreezeExpr => Err(NotYet {
+                construct: "`freeze` (s20 region checker)",
                 span: e.span,
             }),
             SyntaxKind::ScopeExpr

@@ -1,0 +1,18 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 54
+expression: render_mem(src)
+---
+error[E1004]: this stores a value from `item`'s region into `holder`'s region — parameter regions are independent by default
+ --> mem:///main.lu:4:5
+  |
+3 | fn stash(mut holder: Holder, take item: Item) {
+  |              ------ the container lives in `holder`'s region
+  |                                   ---- the value arrives here, in `item`'s region
+4 |     holder.item = item
+  |     ^^^^^^^^^^^ the store that would tie the two regions together
+  |
+  = note: each parameter's data lives in its own (generalized) region — the Cyclone default that
+    keeps signatures annotation-free. A signature surface for declaring two parameters share
+    a region is planned; today, `copy` the value into its container's region, or restructure
+    so the allocation happens alongside the container.
