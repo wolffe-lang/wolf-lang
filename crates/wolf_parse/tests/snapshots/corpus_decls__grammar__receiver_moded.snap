@@ -4,4 +4,4 @@ expression: dump
 ---
 FnDecl 201..248 name=main body=Block
 -- diagnostics --
-E0210 [Error] 234..237 `mut` marks a method receiver, but no method call follows the `)`
+E0210 [Error] 233..240 `mut` marks a method receiver, but no method call follows the `)`

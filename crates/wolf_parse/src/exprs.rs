@@ -934,16 +934,21 @@ fn paren_or_tuple(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
                 matches!(k, TokenKind::Punct(Punct::RParen)) || k == TokenKind::Term
             });
         }
+        let mut close_hi = mode_span.hi;
         if p.at_punct(Punct::RParen) {
+            close_hi = p.current_span().hi;
             p.bump();
         } else {
             grammar::unclosed(p, opener, "(");
         }
         let cm = m.complete(p, SyntaxKind::ParenExpr);
         if !p.at_punct(Punct::Dot) {
+            // spec pins the primary span to the whole parenthesized
+            // receiver, not the keyword (DIV-2026-007)
+            let whole = wolf_span::Span::new(mode_span.file, opener.lo, close_hi);
             p.error(
                 codes::RECEIVER_MODE,
-                mode_span,
+                whole,
                 format!(
                     "`{mode_text}` marks a method receiver, but no method call \
                      follows the `)`"

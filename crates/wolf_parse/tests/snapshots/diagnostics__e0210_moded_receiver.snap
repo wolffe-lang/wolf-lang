@@ -11,8 +11,8 @@ Diagnostic {
             file: FileId(
                 0,
             ),
-            lo: 18,
-            hi: 21,
+            lo: 17,
+            hi: 24,
         },
         label: "",
     },

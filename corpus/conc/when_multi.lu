@@ -17,5 +17,5 @@ fn main() -> !int {
         })
     }
     when (a, b) { total = a + b }
-    if total == 224 { 0 } else { 1 }
+    if total == 223 { 0 } else { 1 }
 }

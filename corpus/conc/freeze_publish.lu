@@ -10,11 +10,12 @@ fn main() -> !int {
         for i in 0..10 { xs.push(i * i) }
         xs
     }
-    var a = 0
-    var b = 0
+    let ch = channel[int](2)
     scope s {
-        s.spawn(fn() { a = table[3] })   // imm: capture by shared read
-        s.spawn(fn() { b = table[4] })
+        s.spawn(fn() { ch.send(table[3]) })   // imm: capture by shared read
+        s.spawn(fn() { ch.send(table[4]) })
     }
+    let a = ch.recv() else |_| { return 1 }
+    let b = ch.recv() else |_| { return 1 }
     if a + b == 25 { 0 } else { 1 }
 }
