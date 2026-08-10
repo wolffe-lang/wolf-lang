@@ -21,6 +21,7 @@ fn main() {
         // D38: the compiler is named wolfgang; the command stays `wolf`.
         Some("--version") => println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION")),
         Some("--explain") => explain(&args[1..]),
+        Some("build") => build(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("audit-surface") => audit_surface(&args[1..]),
@@ -498,6 +499,298 @@ fn audit_surface(args: &[String]) {
     }
 }
 
+/// Why a native compile did not produce an executable — every case an
+/// HONEST refusal or a user error, never a silent fallback.
+enum BuildStop {
+    /// Diagnostics were reported; the package does not compile.
+    Errors,
+    /// A construct the pipeline cannot handle yet (conservatism
+    /// ledger): the deepest phase that DID complete + the reason.
+    Refused { phase: &'static str, reason: String },
+    /// Environment problem (no cc, missing libwolf_rt.a) — exit 2.
+    Environment(String),
+}
+
+/// Compile one entry file to a native executable at `out` (s28: the
+/// v0 `wolf build` pipeline — sema → mem → wir → CLIF → object → cc).
+/// Diagnostics are rendered to stderr by the caller's `sources`.
+fn compile_native(
+    file: &Path,
+    std_root: Option<&Path>,
+    out: &Path,
+    sources: &mut Sources,
+) -> Result<(), BuildStop> {
+    let mut sm = wolf_span::SourceMap::new();
+    let res =
+        resolve_from_entry(file, &mut sm, sources, std_root).map_err(BuildStop::Environment)?;
+    let render = |sources: &Sources, diags: &[Diagnostic]| {
+        let mut reporter = HumanReporter::new(sources, RenderOptions::default());
+        for d in diags {
+            reporter.report(d);
+        }
+        eprint!("{}", reporter.take_output());
+    };
+    let has_errors =
+        |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
+    if has_errors(&res.diagnostics) {
+        render(sources, &res.diagnostics);
+        return Err(BuildStop::Errors);
+    }
+    let tc = wolf_sema::typecheck_package(&res);
+    if let Some(nyc) = tc.not_yet.first() {
+        return Err(BuildStop::Refused {
+            phase: "resolve",
+            reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
+        });
+    }
+    if has_errors(&tc.diagnostics) {
+        render(sources, &tc.diagnostics);
+        return Err(BuildStop::Errors);
+    }
+    let mem = wolf_mem::check_package(&res.package, &tc);
+    if let Some(nyc) = mem.not_yet.first() {
+        return Err(BuildStop::Refused {
+            phase: "typecheck",
+            reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
+        });
+    }
+    if has_errors(&mem.diagnostics) {
+        render(sources, &mem.diagnostics);
+        return Err(BuildStop::Errors);
+    }
+    let build = wolf_wir::lower_package(&res.package, &tc);
+    if let Some(nyc) = build.not_yet.first() {
+        return Err(BuildStop::Refused {
+            phase: "mem",
+            reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
+        });
+    }
+    let mut module = build.module;
+    if let Err(e) = wolf_wir::verify_module(&module) {
+        eprintln!("wolf build: ICE: lowered WIR failed verification\n{e}");
+        std::process::exit(2);
+    }
+    // Backend: the driver drives the TRAIT; ClifBackend is the s28
+    // implementation behind it (capabilities, never identity).
+    let refuse = |phase: &'static str, e: wolf_backend::BackendError| match e {
+        wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused { phase, reason },
+        wolf_backend::BackendError::Internal(msg) => {
+            eprintln!("wolf build: ICE: backend: {msg}");
+            std::process::exit(2);
+        }
+    };
+    let shim = wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?;
+    let mut backend: Box<dyn wolf_backend::Backend> =
+        Box::new(wolf_codegen_clif::ClifBackend::new().map_err(|e| refuse("wir", e))?);
+    wolf_codegen_clif::compile_module(backend.as_mut(), &module, Some(shim))
+        .map_err(|e| refuse("wir", e))?;
+    let product = backend.finish().map_err(|e| refuse("wir", e))?;
+    link_object(&product.bytes, out)
+}
+
+/// Link one relocatable object + `libwolf_rt.a` into an executable via
+/// the system C compiler (the v0 link step; s31 owns the real driver
+/// integration).
+fn link_object(object: &[u8], out: &Path) -> Result<(), BuildStop> {
+    let rt = find_rt_lib().ok_or_else(|| {
+        BuildStop::Environment(
+            "libwolf_rt.a not found next to the `wolf` binary (build it with \
+             `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)"
+                .to_string(),
+        )
+    })?;
+    let obj_path = out.with_extension("o");
+    std::fs::write(&obj_path, object)
+        .map_err(|e| BuildStop::Environment(format!("write {}: {e}", obj_path.display())))?;
+    let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    let status = std::process::Command::new(&cc)
+        .arg("-o")
+        .arg(out)
+        .arg(&obj_path)
+        .arg(&rt)
+        // What a Rust staticlib needs from the platform (linux x86-64,
+        // the s28 target).
+        .args(["-lpthread", "-ldl", "-lm"])
+        .status()
+        .map_err(|e| BuildStop::Environment(format!("cannot run `{cc}`: {e}")))?;
+    let _ = std::fs::remove_file(&obj_path);
+    if !status.success() {
+        return Err(BuildStop::Environment(format!(
+            "`{cc}` failed linking {}",
+            out.display()
+        )));
+    }
+    Ok(())
+}
+
+/// Locate `libwolf_rt.a`: `WOLF_RT_LIB` wins; otherwise next to the
+/// running `wolf` binary (cargo puts both in target/<profile>/).
+fn find_rt_lib() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("WOLF_RT_LIB").filter(|v| !v.is_empty()) {
+        let p = PathBuf::from(p);
+        return p.is_file().then_some(p);
+    }
+    let exe = std::env::current_exe().ok()?;
+    let p = exe.parent()?.join("libwolf_rt.a");
+    p.is_file().then_some(p)
+}
+
+/// `wolf build <file.lu> [-o OUT] [--std-root <dir>]` — the s28 v0
+/// build: an entry file becomes a native executable. Refusals name the
+/// construct and the deepest completed phase (the conservatism ledger
+/// extends to codegen; nothing is silently interpreted instead).
+fn build(args: &[String]) {
+    let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
+        let root = effective_std_root(f)?;
+        Ok((a, root))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("wolf build: {e}");
+            std::process::exit(2);
+        }
+    };
+    let mut file: Option<String> = None;
+    let mut out: Option<PathBuf> = None;
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "-o" {
+            i += 1;
+            match args.get(i) {
+                Some(v) => out = Some(PathBuf::from(v)),
+                None => {
+                    eprintln!("wolf build: -o needs a path");
+                    std::process::exit(2);
+                }
+            }
+        } else if let Some(v) = a.strip_prefix("-o") {
+            out = Some(PathBuf::from(v));
+        } else if a.starts_with('-') {
+            eprintln!("wolf build: unknown flag `{a}`");
+            std::process::exit(2);
+        } else {
+            file = Some(a.clone());
+        }
+        i += 1;
+    }
+    let Some(file) = file else {
+        eprintln!("usage: wolf build <file.lu> [-o OUT] [--std-root <dir>]");
+        std::process::exit(2);
+    };
+    let path = Path::new(&file);
+    if !path.is_file() {
+        eprintln!("wolf build: no such file: {file}");
+        std::process::exit(2);
+    }
+    let out = out.unwrap_or_else(|| {
+        PathBuf::from(
+            path.file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "a.out".to_string()),
+        )
+    });
+    let mut sources = Sources::new();
+    match compile_native(path, std_root.as_deref(), &out, &mut sources) {
+        Ok(()) => {}
+        Err(BuildStop::Errors) => {
+            eprintln!("wolf build: the package does not compile; fix the errors above");
+            std::process::exit(1);
+        }
+        Err(BuildStop::Refused { phase, reason }) => {
+            eprintln!(
+                "wolf build: cannot compile this yet — {reason} (pipeline is honest \
+                 through `{phase}`; the conservatism ledger, not a bug in your program)"
+            );
+            std::process::exit(1);
+        }
+        Err(BuildStop::Environment(msg)) => {
+            eprintln!("wolf build: {msg}");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// The s28 native rung for `conform-run --native`: compile the
+/// mem-clean file to a real executable, run it, and report the run
+/// verdict — `exit(N)`, or `trap(kind)` recovered from the
+/// `wolf-trap:` stderr contract ([`wolf_rt::native`]). Refusals keep
+/// the honest phase: `mem` when lowering refused, `wir` when the
+/// backend did.
+fn native_run(
+    file: &Path,
+    std_root: Option<&Path>,
+    all: Vec<Diagnostic>,
+    run_stdout: &mut Option<String>,
+) -> (&'static str, String, Vec<Diagnostic>) {
+    let dir = std::env::temp_dir().join(format!(
+        "wolf-native-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0)
+    ));
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("wolf conform-run: cannot create {}: {e}", dir.display());
+        std::process::exit(2);
+    }
+    let exe = dir.join("a.out");
+    let mut scratch_sources = Sources::new();
+    let result = compile_native(file, std_root, &exe, &mut scratch_sources);
+    let outcome = match result {
+        Ok(()) => {
+            let run = std::process::Command::new(&exe).output();
+            match run {
+                Err(e) => {
+                    eprintln!("wolf conform-run: cannot run {}: {e}", exe.display());
+                    std::process::exit(2);
+                }
+                Ok(o) => {
+                    *run_stdout = Some(String::from_utf8_lossy(&o.stdout).into_owned());
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    let trap_kind = stderr.lines().find_map(|l| {
+                        l.trim()
+                            .strip_prefix("wolf-trap:")
+                            .map(|k| k.trim().to_string())
+                    });
+                    match (o.status.code(), trap_kind) {
+                        (Some(code), Some(kind)) if code == wolf_rt::native::TRAP_EXIT_CODE => {
+                            ("run", format!("trap({kind})"), all)
+                        }
+                        (Some(code), _) => ("run", format!("exit({code})"), all),
+                        (None, _) => {
+                            // Killed by a signal: not a defined wolf
+                            // outcome — a compiler/runtime bug, never a
+                            // verdict.
+                            eprintln!(
+                                "wolf conform-run: ICE: native binary died without an exit code"
+                            );
+                            std::process::exit(2);
+                        }
+                    }
+                }
+            }
+        }
+        Err(BuildStop::Errors) => {
+            // The static ladder already ran clean before this rung; an
+            // error here is a pipeline inconsistency.
+            eprintln!("wolf conform-run: ICE: native rung found errors after a clean ladder");
+            std::process::exit(2);
+        }
+        Err(BuildStop::Refused { phase, reason }) => {
+            eprintln!("wolf conform-run --native: unsupported — {reason}");
+            (phase, "unsupported".to_string(), all)
+        }
+        Err(BuildStop::Environment(msg)) => {
+            eprintln!("wolf conform-run: {msg}");
+            std::process::exit(2);
+        }
+    };
+    let _ = std::fs::remove_dir_all(&dir);
+    outcome
+}
+
 const PHASES: [&str; 8] = [
     "none",
     "lex",
@@ -725,6 +1018,13 @@ fn conform_run(args: &[String]) {
     let mut checked = std::env::var("WOLF_CHECKED")
         .map(|v| v == "1")
         .unwrap_or(false);
+    // The s28 native rung: `--native` (or WOLF_NATIVE=1) compiles a
+    // mem-clean file through wir → Cranelift → cc and reports the RUN
+    // verdict of the real binary — M1's first light. Refusals keep the
+    // honest phase, exactly like `--checked`.
+    let mut native = std::env::var("WOLF_NATIVE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     // `--zstats` (s25): peephole hit-rate counters from the wir rung's
     // builder, dumped on stderr — the Click claim, measured.
     let mut zstats = false;
@@ -734,6 +1034,10 @@ fn conform_run(args: &[String]) {
         }
         if a == "--checked" {
             checked = true;
+            continue;
+        }
+        if a == "--native" {
+            native = true;
             continue;
         }
         if let Some(f) = a.strip_prefix("--error-format=") {
@@ -777,7 +1081,7 @@ fn conform_run(args: &[String]) {
         eprintln!(
             "usage: wolf conform-run <file.lu> [--phase=<p>] [--seed=N] [--json] \
              [--error-format=human|json] [--dump=regions|cfg|wir] [--zstats] \
-             [--std-root <dir>]"
+             [--checked] [--native] [--std-root <dir>]"
         );
         std::process::exit(2);
     };
@@ -914,6 +1218,15 @@ fn conform_run(args: &[String]) {
                                                 all,
                                                 &mut run_stdout,
                                                 &mut x_ext,
+                                            )
+                                        } else if native {
+                                            // The s28 native rung:
+                                            // machine code, executed.
+                                            native_run(
+                                                Path::new(&file),
+                                                std_root.as_deref(),
+                                                all,
+                                                &mut run_stdout,
                                             )
                                         } else {
                                             // The wir rung (s25):

@@ -6,4 +6,5 @@
 //! `cargo xtask deps-check` enforces it. Deterministic-scheduler hooks
 //! (s36) are part of this crate's v1 spec surface.
 
+pub mod native;
 pub mod quarantine;

@@ -5,3 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+
+# `staticlib` (s28): compiled wolf programs link `libwolf_rt.a` — the
+# driver's v0 link step finds it next to the `wolf` binary. `rlib`
+# stays for the compiler-side users of the symbol/kind tables.
+[lib]
+crate-type = ["rlib", "staticlib"]
