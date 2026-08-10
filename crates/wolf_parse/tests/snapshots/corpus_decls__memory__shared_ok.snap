@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 226..251 name=Cfg fields=1
-FnDecl 253..465 name=main body=Block
+StructDecl 222..247 name=Cfg fields=1
+FnDecl 249..461 name=main body=Block

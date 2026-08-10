@@ -1,5 +1,5 @@
 //! check: run(exit=trap(bounds))
-//! phase: resolve
+//! phase: mem
 //! conforms: mem.ub.defined
 //! Out-of-bounds indexing traps in every profile (D25/X3 posture).
 

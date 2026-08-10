@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: resolve
+//! phase: mem
 //! conforms: mem.shared.rc.1, mem.shared.rc.3
 //! Prefix `shared` creates the RC cell; clones share ownership; `weak`
 //! upgrade yields an option-shaped result handled with `else`.
