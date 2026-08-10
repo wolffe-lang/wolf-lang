@@ -183,9 +183,26 @@
 //!   `Typecheck::not_yet` — a body is either fully typed or honestly
 //!   refused, never half-guessed.
 //!
+//! # The s22 addendum to the typed-HIR contract (the unsafe tier)
+//!
+//! - **Raw casts**: [`check::CastKind::Raw`] marks every pointer
+//!   bridge (`*T ↔ *U`, int↔ptr with expose semantics, region→ptr);
+//!   `wolf_mem` gates them to `unsafe` blocks (E1301) and records the
+//!   expose facts — typing is permissive by design (the raw tier's
+//!   rules are *simpler* than the safe tier's, D11).
+//! - **C calls**: [`CallSig::c_call`] marks calls through the
+//!   `import c` namespace (the modelled intrinsic set: `malloc`,
+//!   `calloc`, `free`, `memset`, `memcpy` — mirroring the is04
+//!   oracle); other imported names refuse until c10.
+//! - **Trust**: [`sig::FnSig::trusted`] carries the `#[trusted]`
+//!   obligation; the per-module roster rides the `wolfi` interface
+//!   (both hash partitions) and [`audit`] renders the D11 ring
+//!   inventory + enforces the manifest rule (E1303).
+//!
 //! The std/prelude stub tables ([`prelude`]) carry *names only* until
 //! the real standard library lands (s05/s51).
 
+pub mod audit;
 pub mod check;
 pub mod coerce;
 pub mod ctfe;

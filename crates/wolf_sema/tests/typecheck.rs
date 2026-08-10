@@ -316,8 +316,20 @@ fn in_target_must_be_a_region() {
 }
 
 #[test]
-fn unsafe_tier_is_not_yet_checkable() {
+fn unsafe_blocks_typecheck_since_s22_but_asm_still_refuses() {
+    // s22: `unsafe { }` types as its body's value inside a fully safe
+    // signature ([mem.unsafe.scope]); the ring *rules* are wolf_mem's.
     let tc = check_one("fn main() -> !int { unsafe { 0 } }\n");
+    assert!(
+        tc.not_yet.is_empty(),
+        "unsafe blocks type now: {:?}",
+        tc.not_yet
+    );
+    assert!(!tc.has_errors(), "{:?}", tc.diagnostics);
+    // Inline asm has no pinned semantics until c10 — still honest.
+    let tc = check_one(
+        "fn main() -> !int {\n    var t = 0\n    unsafe {\n        asm {\n            \"nop\",\n        }\n    }\n    t\n}\n",
+    );
     assert!(is_nyc(&tc, "main"));
 }
 

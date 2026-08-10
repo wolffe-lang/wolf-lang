@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/audit_surface.rs
+expression: rendered
+---
+error[E1303]: module `root` holds `#[trusted]` code, but the package manifest does not declare it
+ --> mem:///main.lu:3:4
+  |
+3 | fn scratch() -> int {
+  |    ^^^^^^^ the first trusted function is here
+  |
+  = note: add `trusted = root` to `wolf.pkg` — the trusted roster is the supply-chain surface
+    `wolf audit` diffs (D11 ring 2), so every trusted module is declared, visibly.

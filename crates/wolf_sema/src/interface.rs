@@ -98,6 +98,14 @@ pub struct Interface {
     /// Dyn-safety records for the module's exported traits (s14),
     /// sorted by name.
     pub dyns: Vec<IfaceTraitDyn>,
+    /// s22 — the module's `#[trusted]` roster (D11 ring 2): every
+    /// trusted function with its declared obligation, sorted by name.
+    /// **All visibilities appear** — trust is supply-chain surface,
+    /// not signature surface — and the roster rides in BOTH hash
+    /// partitions, so a dependency growing trusted code is an
+    /// interface change (`wolf audit`'s diff event,
+    /// [mem.boundary.trusted]).
+    pub trusted: Vec<(String, String)>,
     pub export_hash: [u8; 32],
     pub pkg_hash: [u8; 32],
 }
@@ -150,10 +158,13 @@ fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>)
         .collect();
     let impls = render_impls(pkg, m);
     let dyns = render_dyns(pkg, m, &rows);
+    let trusted = trusted_roster(pkg, m);
     let mut head = Vec::new();
     write_header(&mut head, pkg, module, &deps);
-    // Impls and dyn records ride in BOTH partitions: coherence makes
-    // an impl addition anywhere an interface change (s14).
+    // Impls, dyn records, and the trusted roster ride in BOTH
+    // partitions: coherence makes an impl addition anywhere an
+    // interface change (s14), and trust marks are supply-chain
+    // surface regardless of visibility (s22, [mem.boundary.trusted]).
     let mut export_bytes = head.clone();
     write_items(
         &mut export_bytes,
@@ -161,10 +172,12 @@ fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>)
     );
     write_impls(&mut export_bytes, &impls);
     write_dyns(&mut export_bytes, &dyns);
+    write_trusted(&mut export_bytes, &trusted);
     let mut pkg_bytes = head;
     write_items(&mut pkg_bytes, items.iter());
     write_impls(&mut pkg_bytes, &impls);
     write_dyns(&mut pkg_bytes, &dyns);
+    write_trusted(&mut pkg_bytes, &trusted);
     Interface {
         package: pkg.name.clone(),
         module_path: module.path.clone(),
@@ -174,9 +187,30 @@ fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>)
         items,
         impls,
         dyns,
+        trusted,
         export_hash: *blake3::hash(&export_bytes).as_bytes(),
         pkg_hash: *blake3::hash(&pkg_bytes).as_bytes(),
     }
+}
+
+/// The module's `#[trusted]` function roster (s22): every trusted fn
+/// — any visibility — with its declared obligation, sorted by name.
+fn trusted_roster(pkg: &Package, m: usize) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = pkg.tables[m]
+        .items
+        .iter()
+        .filter(|i| i.kind == ItemKind::Fn)
+        .filter_map(|item| {
+            let node = crate::sig::item_node(pkg, item);
+            let src = &pkg.files[item.file].raw.src;
+            let text = |sp: wolf_span::Span| {
+                String::from_utf8_lossy(&src[sp.lo as usize..sp.hi as usize]).into_owned()
+            };
+            crate::sig::trusted_attr(node, text).map(|obl| (item.name.clone(), obl))
+        })
+        .collect();
+    out.sort();
+    out
 }
 
 /// Render every impl of module `m` (headers + assoc rewrites),
@@ -321,6 +355,14 @@ fn write_impls(out: &mut Vec<u8>, impls: &[IfaceImpl]) {
     }
 }
 
+fn write_trusted(out: &mut Vec<u8>, trusted: &[(String, String)]) {
+    w_u32(out, trusted.len() as u32);
+    for (name, obligation) in trusted {
+        w_str(out, name);
+        w_str(out, obligation);
+    }
+}
+
 fn write_dyns(out: &mut Vec<u8>, dyns: &[IfaceTraitDyn]) {
     w_u32(out, dyns.len() as u32);
     for d in dyns {
@@ -353,6 +395,7 @@ pub fn encode(iface: &Interface) -> Vec<u8> {
     write_items(&mut out, iface.items.iter());
     write_impls(&mut out, &iface.impls);
     write_dyns(&mut out, &iface.dyns);
+    write_trusted(&mut out, &iface.trusted);
     out.extend_from_slice(&iface.export_hash);
     out.extend_from_slice(&iface.pkg_hash);
     out
@@ -459,6 +502,13 @@ pub fn decode(bytes: &[u8]) -> Result<Interface, String> {
             methods,
         });
     }
+    let ntrusted = r.u32()?;
+    let mut trusted = Vec::new();
+    for _ in 0..ntrusted {
+        let name = r.str()?;
+        let obligation = r.str()?;
+        trusted.push((name, obligation));
+    }
     let export_hash = r.hash()?;
     let pkg_hash = r.hash()?;
     if r.pos != bytes.len() {
@@ -473,6 +523,7 @@ pub fn decode(bytes: &[u8]) -> Result<Interface, String> {
         items,
         impls,
         dyns,
+        trusted,
         export_hash,
         pkg_hash,
     })
@@ -543,6 +594,16 @@ pub fn pretty(iface: &Interface) -> String {
                 );
             } else {
                 let _ = writeln!(out, "    {} not dyn-safe", d.name);
+            }
+        }
+    }
+    if !iface.trusted.is_empty() {
+        let _ = writeln!(out, "  trusted (D11 ring 2, hashed):");
+        for (name, obligation) in &iface.trusted {
+            if obligation.is_empty() {
+                let _ = writeln!(out, "    fn {name} — (no stated obligation)");
+            } else {
+                let _ = writeln!(out, "    fn {name} — \"{obligation}\"");
             }
         }
     }

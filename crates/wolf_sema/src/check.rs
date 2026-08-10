@@ -48,8 +48,8 @@ use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
     ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, GreenNode, IfExpr,
     InBlock, LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr,
-    RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr, VarDecl,
-    WhileExpr, is_expr_kind, is_type_kind,
+    RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr,
+    UnsafeBlock, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
 };
 
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
@@ -125,6 +125,10 @@ pub struct CallSig {
     /// For fn-typed callees these are synthesized mode-`read`
     /// entries — a `fn` type cannot declare `mut`/`take`.
     pub params: Vec<crate::sig::ParamSig>,
+    /// s22 — a call through the `import c` namespace (`c.malloc(…)`):
+    /// unsafe-tier by D11, gated to `unsafe` blocks by wolf_mem
+    /// (E1301) and recorded as an attribution fact for s23/c10.
+    pub c_call: bool,
 }
 
 /// Which rule admitted an `as` cast (s17). `Numeric` lowers to a real
@@ -135,6 +139,14 @@ pub enum CastKind {
     Numeric,
     Adapter,
     Identity,
+    /// s22 — a raw-tier pointer bridge: `*T ↔ *U` (free retyping,
+    /// same tag), integer→pointer (provenance resolved among exposed
+    /// tags, `[mem.prov.expose]`), pointer→integer (exposes the tag),
+    /// or region→pointer (the region's backing base, for FFI and
+    /// allocator work). Typing admits the cast anywhere; `wolf_mem`
+    /// gates it to `unsafe` blocks (E1301) and records the expose
+    /// fact.
+    Raw,
 }
 
 /// The typed HIR of one body — minimal but real: every recorded
@@ -2216,6 +2228,43 @@ impl<'a> Checker<'a> {
         Ok(region)
     }
 
+    // ----------------------------------------- the unsafe tier (s22) ----
+
+    /// `unsafe { … }` — the tier-3 ring. Typing-wise it is a plain
+    /// block (its value is the body's value); the boundary rules —
+    /// which operations demand the ring, what re-enters the safe
+    /// world — are wolf_mem's (E1301/E1304/E1305), so typing stays
+    /// permissive and the escape hatch stays *simpler* than the tier
+    /// being escaped (the anti-Stacked-Borrows posture, D11).
+    fn synth_unsafe(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = UnsafeBlock::cast(e).expect("kind");
+        match d.body() {
+            Some(b) => self.synth_block(b),
+            None => Ok(self.error_ty()),
+        }
+    }
+
+    /// `borrow r from p` — re-entry door 1 ([mem.unsafe.door]): the
+    /// claim "p points into region r's live allocation" yields the
+    /// pointee as a safe value governed by r's rules. Operands
+    /// synthesize *loosely*: wrong operand shapes are the door-misuse
+    /// catalog error (E1305, wolf_mem), never a bare type mismatch —
+    /// one door, one diagnostic.
+    fn synth_borrow_from(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = wolf_ast::BorrowExpr::cast(e).expect("kind");
+        if let Some(r) = d.borrowed() {
+            self.synth_expr(r)?;
+        }
+        let src_ty = match d.source() {
+            Some(p) => self.synth_expr(p)?,
+            None => self.error_ty(),
+        };
+        match self.kind_of(src_ty) {
+            TyKind::Ptr(t) => Ok(t),
+            _ => Ok(self.error_ty()),
+        }
+    }
+
     /// Validate a parsed `: rc` / `: pool(T)` strategy node: the pool
     /// element type elaborates (validation only); the strategy itself
     /// is a cost fact carried to the memory checker, not a type.
@@ -2285,10 +2334,18 @@ impl<'a> Checker<'a> {
                 self.cleanups.push((s.span, is_err));
                 Ok(())
             }
-            SyntaxKind::AssumeStmt => Err(NotYet {
-                construct: "`assume` (unsafe tier, c04)",
-                span: s.span,
-            }),
+            // s22: `assume noalias p, q` — operands synthesize
+            // loosely; "not raw pointers" is the malformed-assume
+            // catalog error (E1304, wolf_mem), and the `unsafe` ring
+            // requirement is E1301 there too.
+            SyntaxKind::AssumeStmt => {
+                if let Some(a) = wolf_ast::AssumeStmt::cast(s) {
+                    for op in a.exprs() {
+                        self.synth_expr(op)?;
+                    }
+                }
+                Ok(())
+            }
             SyntaxKind::LetDecl => self
                 .check_binding_stmt(LetDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
             SyntaxKind::VarDecl => self
@@ -2516,6 +2573,26 @@ impl<'a> Checker<'a> {
                 Some(inner) => self.place_type(inner),
                 None => Ok(self.error_ty()),
             },
+            // s22 — a raw-pointer write target `p[i] = v`: the one
+            // bracket place the raw tier adds (container-element
+            // assignment stays s17's). wolf_mem gates the write to
+            // `unsafe` blocks (E1301).
+            SyntaxKind::BracketApply
+                if BracketApply::cast(place)
+                    .and_then(|b| b.callee())
+                    .is_some_and(|recv| {
+                        // A cheap pre-probe would re-synth the
+                        // receiver; instead, peek the recorded type
+                        // when the receiver is a plain local path.
+                        PathExpr::cast(recv)
+                            .and_then(|p| p.ident())
+                            .map(|t| self.text(t.span))
+                            .and_then(|n| self.lookup_local(&n))
+                            .is_some_and(|ty| matches!(self.kind_of(ty), TyKind::Ptr(_)))
+                    }) =>
+            {
+                self.synth_bracket(place)
+            }
             _ => Err(NotYet {
                 construct: "assignment through this place (s17)",
                 span: place.span,
@@ -2537,6 +2614,17 @@ impl<'a> Checker<'a> {
                 let b = Block::cast(e).expect("kind");
                 self.record(e.span, exp.ty);
                 self.check_block(b, exp)
+            }
+            // s22: `unsafe { … }` in checking position checks its body
+            // against the expectation — coercions (`int` ⇒ `!int` at a
+            // fn tail) work exactly as for a plain block.
+            SyntaxKind::UnsafeBlock => {
+                let d = UnsafeBlock::cast(e).expect("kind");
+                self.record(e.span, exp.ty);
+                match d.body() {
+                    Some(b) => self.check_block(b, exp),
+                    None => Ok(()),
+                }
             }
             SyntaxKind::IfExpr => {
                 self.record(e.span, exp.ty);
@@ -2661,11 +2749,17 @@ impl<'a> Checker<'a> {
                 construct: "concurrency typing (c05)",
                 span: e.span,
             }),
-            SyntaxKind::UnsafeBlock
-            | SyntaxKind::InlineC
-            | SyntaxKind::AsmExpr
-            | SyntaxKind::BorrowExpr => Err(NotYet {
-                construct: "unsafe-tier typing (c04/c10)",
+            // ---- the unsafe tier (s22): `unsafe { }` types as its
+            // body's value inside a fully safe signature
+            // ([mem.unsafe.scope]); `borrow r from p` is re-entry
+            // door 1 ([mem.unsafe.door]). The ring *rules* (E13xx)
+            // are wolf_mem's — typing is permissive by design.
+            SyntaxKind::UnsafeBlock => self.synth_unsafe(e),
+            SyntaxKind::BorrowExpr => self.synth_borrow_from(e),
+            // Inline C and asm have no pinned semantics yet (c10:
+            // s48/s50) — only the rule that they are unsafe-tier.
+            SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
+                construct: "inline C / asm typing (c10)",
                 span: e.span,
             }),
             // Broken trees type as `<error>`, silently (D22).
@@ -3125,13 +3219,43 @@ impl<'a> Checker<'a> {
                 self.vars.rollback(snap);
             }
         }
-        // Raw-pointer casts ride the unsafe tier (c04/c10), not the
-        // closed cast set — an honest refusal, not a rejection.
-        if matches!(sk, TyKind::Ptr(_)) || matches!(tk, TyKind::Ptr(_)) {
-            return Err(NotYet {
-                construct: "raw-pointer casts (unsafe tier, c04/c10)",
-                span: e.span,
-            });
+        // Raw-tier pointer bridges (s22, `[mem.prov.expose]`): typing
+        // admits them anywhere — the pointer is inert data — and
+        // `wolf_mem` gates the *operation* to `unsafe` blocks (E1301).
+        //   *T as *U          free retyping, same tag
+        //   int as *T         wildcard/exposed provenance (RFC 3559)
+        //   *T as int         exposes the tag, yields the address
+        //   region as *T      the region's backing base pointer
+        let src_ptr = matches!(sk, TyKind::Ptr(_));
+        let tgt_ptr = matches!(tk, TyKind::Ptr(_));
+        if src_ptr || tgt_ptr {
+            let int_side = |k: &TyKind, vars: &VarStore| match k {
+                TyKind::Prim(p) => p.is_integer(),
+                TyKind::Var(v) => matches!(
+                    vars.kind_of(*v),
+                    NumKind::Integer | NumKind::Num | NumKind::Any
+                ),
+                _ => false,
+            };
+            let bridged = (src_ptr && tgt_ptr)
+                || (src_ptr && int_side(&tk, &self.vars))
+                || (tgt_ptr && int_side(&sk, &self.vars))
+                || (tgt_ptr && matches!(sk, TyKind::RegionTy));
+            if bridged {
+                // An integer side that is still an inference var pins
+                // to an integer (the address is data, never a float).
+                for (side_ptr, side_ty) in [(src_ptr, target), (tgt_ptr, src_ty)] {
+                    if !side_ptr {
+                        continue;
+                    }
+                    if let TyKind::Var(_) = self.kind_of(side_ty) {
+                        let probe = self.fresh(NumKind::Integer, e.span);
+                        let _ = unify(&mut self.lo.table, &mut self.vars, side_ty, probe);
+                    }
+                }
+                self.casts.push((e.span, src_ty, target, CastKind::Raw));
+                return Ok(target);
+            }
         }
         // E0805 — outside the closed cast set (s17). Typed as the
         // target so one report stands alone.
@@ -3410,6 +3534,15 @@ impl<'a> Checker<'a> {
                 self.check_index_arg(d.args(), h, "pool access")?;
                 elem
             }
+            // s22 — raw-pointer indexing `p[i]`: C-shaped element
+            // access, no bounds, no validity ([mem.unsafe.raw.1]).
+            // Typing admits it; wolf_mem gates the access to `unsafe`
+            // blocks (E1301).
+            TyKind::Ptr(elem) => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                self.check_index_arg(d.args(), int_, "raw pointer index")?;
+                elem
+            }
             TyKind::Error | TyKind::Never => self.error_ty(),
             _ => {
                 return Err(NotYet {
@@ -3502,6 +3635,7 @@ impl<'a> Checker<'a> {
                 has_self: false,
                 ctor: true,
                 params: Vec::new(),
+                c_call: false,
             },
         ));
         Ok(match name {
@@ -3631,6 +3765,82 @@ impl<'a> Checker<'a> {
             row_span: None,
             generics: Vec::new(),
             comptime: false,
+            trusted: None,
+        };
+        self.dispatch_method(
+            mname,
+            &sig,
+            BTreeMap::new(),
+            member_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        )
+    }
+
+    /// s22 — the builtin method surface of `*T` ([mem.unsafe.raw],
+    /// spec/02 §6). The strict-provenance ops exist so unsafe code can
+    /// be written *without* wildcard provenance (RFC 3559's shape):
+    /// `addr`/`with_addr` never expose; `expose`/`with_exposed` are
+    /// the documented int-round-trip escape ([mem.prov.expose], same
+    /// semantics as the `as` casts). `is_null` is a plain comparison.
+    /// Typing admits them anywhere; wolf_mem gates the provenance ops
+    /// to `unsafe` blocks (E1301).
+    #[allow(clippy::too_many_arguments)]
+    fn ptr_method_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let p = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+        };
+        let uint_ = self.lo.table.prim(Prim::Uint);
+        let bool_ = self.lo.table.prim(Prim::Bool);
+        let (params, ret) = match mname {
+            "is_null" => (vec![p("self", recv_ty)], bool_),
+            // p.addr() — the address, provenance *not* exposed.
+            "addr" => (vec![p("self", recv_ty)], uint_),
+            // p.with_addr(a) — new address, same provenance.
+            "with_addr" => (vec![p("self", recv_ty), p("addr", uint_)], recv_ty),
+            // p.expose() / p.with_exposed(a) — the exposed round-trip.
+            "expose" => (vec![p("self", recv_ty)], uint_),
+            "with_exposed" => (vec![p("self", recv_ty), p("addr", uint_)], recv_ty),
+            _ => {
+                return Err(NotYet {
+                    construct: "this raw-pointer operation (the s22 surface is \
+                                is_null/addr/with_addr/expose/with_exposed)",
+                    span: e.span,
+                });
+            }
+        };
+        self.dispatch.push((
+            e.span,
+            Dispatch::Inherent {
+                ty: self.show(recv_ty),
+                method: mname.to_string(),
+            },
+        ));
+        let sig = FnSig {
+            params,
+            ret,
+            name_span: member_span,
+            ret_span: None,
+            row_span: None,
+            generics: Vec::new(),
+            comptime: false,
+            trusted: None,
         };
         self.dispatch_method(
             mname,
@@ -3701,6 +3911,12 @@ impl<'a> Checker<'a> {
             // E0803 points at).
             if let Some((tr, member_span, mname)) = self.qualified_trait_method(m) {
                 return self.call_trait_method(&tr, callee.span, &mname, member_span, e, d.args());
+            }
+            // `c.malloc(…)` — a call through the `import c` namespace
+            // (s22): the modelled intrinsic set types here; the full
+            // header importer is c10's.
+            if let Some((mname, member_span)) = self.c_namespace_member(m) {
+                return self.c_call(&mname, member_span, e, d.args());
             }
             if let Some((module, item)) = self.namespace_member(m) {
                 return self.call_named(&item, module, callee.span, e, d.args());
@@ -3886,6 +4102,7 @@ impl<'a> Checker<'a> {
                 has_self: false, // qualified: the receiver is argument 0
                 ctor: false,
                 params: method.sig.params.clone(),
+                c_call: false,
             },
         ));
         // Blame span for the Self obligation: the argument that pins
@@ -3951,6 +4168,87 @@ impl<'a> Checker<'a> {
         };
         let member = m.member()?;
         Some((module, self.text(member.span)))
+    }
+
+    /// `c.name` where `c` is the contextual namespace an `import c`
+    /// declaration binds (s22; header contents are c10's).
+    fn c_namespace_member(&self, m: MemberExpr<'_>) -> Option<(String, Span)> {
+        let base = m.base()?;
+        let t = PathExpr::cast(base)?.ident()?;
+        let name = self.text(t.span);
+        if self.lookup_local(&name).is_some() {
+            return None;
+        }
+        let b = bindings_for(self.pkg(), self.module, self.file)
+            .iter()
+            .find(|b| b.name == name)?;
+        if b.target != BindTarget::CNamespace {
+            return None;
+        }
+        let member = m.member()?;
+        Some((self.text(member.span), member.span))
+    }
+
+    /// A call through the `c` namespace (s22). The typed set is
+    /// exactly the five allocator/memory intrinsics the is04 oracle
+    /// models (`c.malloc`, `c.calloc`, `c.free`, `c.memset`,
+    /// `c.memcpy` — its approximation contract §8); every other
+    /// imported name waits for the c10 header importer, honestly.
+    /// Results and pointer parameters are `*u8` — C's `void*`/`char*`
+    /// floor — retyped by `as` where needed ([mem.unsafe.raw.1]).
+    /// The `unsafe`-ring requirement is wolf_mem's E1301.
+    fn c_call(
+        &mut self,
+        mname: &str,
+        member_span: Span,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let uint_ = self.lo.table.prim(Prim::Uint);
+        let int_ = self.lo.table.prim(Prim::Int);
+        let u8p = {
+            let u8_ = self.lo.table.prim(Prim::U8);
+            self.lo.table.intern(TyKind::Ptr(u8_))
+        };
+        let unit = self.lo.table.unit();
+        let (param_tys, ret): (Vec<TyId>, TyId) = match mname {
+            "malloc" => (vec![uint_], u8p),
+            "calloc" => (vec![uint_, uint_], u8p),
+            "free" => (vec![u8p], unit),
+            "memset" => (vec![u8p, int_, uint_], u8p),
+            "memcpy" => (vec![u8p, u8p, uint_], u8p),
+            _ => {
+                return Err(NotYet {
+                    construct: "imported C beyond the modelled intrinsic set (c10's \
+                                header importer)",
+                    span: e.span,
+                });
+            }
+        };
+        let label = format!("c.{mname}");
+        let params: Vec<ParamSig> = param_tys
+            .iter()
+            .enumerate()
+            .map(|(i, &ty)| ParamSig {
+                name: format!("a{i}"),
+                ty,
+                span: member_span,
+                mode: None,
+                view: None,
+            })
+            .collect();
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: label.clone(),
+                decl_span: None,
+                has_self: false,
+                ctor: false,
+                params,
+                c_call: true,
+            },
+        ));
+        self.call_fixed(&label, &param_tys, ret, e, args)
     }
 
     fn call_print(&mut self, name: &str, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
@@ -4188,6 +4486,7 @@ impl<'a> Checker<'a> {
                 has_self: false,
                 ctor: false,
                 params: sig.params.clone(),
+                c_call: false,
             },
         ));
         // s14 instantiation: each generic parameter becomes a fresh
@@ -4305,6 +4604,7 @@ impl<'a> Checker<'a> {
                                 view: None,
                             })
                             .collect(),
+                        c_call: false,
                     },
                 ));
                 for (i, arg) in arg_nodes.iter().enumerate() {
@@ -4513,6 +4813,7 @@ impl<'a> Checker<'a> {
                                 view: None,
                             })
                             .collect(),
+                        c_call: false,
                     },
                 ));
                 for (i, arg) in arg_nodes.iter().enumerate() {
@@ -4656,6 +4957,11 @@ impl<'a> Checker<'a> {
             // prelude containers carry their typed stub methods.
             TyKind::Shared(_) | TyKind::Weak(_) | TyKind::List(_) | TyKind::Pool(_) => {
                 self.tier2_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
+            }
+            // s22 — the raw tier's builtin pointer methods (strict
+            // provenance ops + the null probe).
+            TyKind::Ptr(_) => {
+                self.ptr_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
             TyKind::Rigid(param) => self.archetype_method_call(
                 &param,
@@ -5125,6 +5431,7 @@ impl<'a> Checker<'a> {
                 has_self: true,
                 ctor: false,
                 params: sig.params.clone(),
+                c_call: false,
             },
         ));
         self.receiver_mode_law(recv, recv_mode, selfp.mode, label, decl_span);

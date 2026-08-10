@@ -106,6 +106,7 @@ pub fn derive_eq(
         row_span: None,
         generics: Vec::new(),
         comptime: false,
+        trusted: None,
     };
     let impl_def = ImplDef {
         module,

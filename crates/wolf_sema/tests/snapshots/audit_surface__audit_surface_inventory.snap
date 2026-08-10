@@ -1,0 +1,8 @@
+---
+source: crates/wolf_sema/tests/audit_surface.rs
+expression: "audit::render(&s)"
+---
+unsafety surface (D11 rings; s22)
+module root:
+  trusted fn scratch — "the scratch pointer never leaves this frame"
+  unsafe blocks: 1 · assume sites: 0 · re-entry doors: 0 · import c: 1 · inline c/asm: 0

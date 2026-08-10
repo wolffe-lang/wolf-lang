@@ -97,6 +97,14 @@ pub struct FnSig {
     /// evaluate during checking; the body itself checks like any
     /// other body.
     pub comptime: bool,
+    /// s22 — `#[trusted]` (D11 ring 2): this function's unsafe blocks
+    /// assert invariants the checker cannot see. `Some(obligation)`
+    /// carries the declared contract text (`#[trusted("…")]`; empty
+    /// for the bare attribute). Trusted functions roster per-module in
+    /// the `wolfi` interface (both hash partitions) and must be
+    /// declared in the package manifest (E1303, `wolf audit`'s
+    /// supply-chain surface).
+    pub trusted: Option<String>,
 }
 
 impl FnSig {
@@ -585,6 +593,7 @@ impl<'a> Lower<'a> {
             row_span,
             generics: own,
             comptime: d.is_comptime(),
+            trusted: trusted_attr(node, |sp| self.text(file, sp)),
         }
     }
 
@@ -1210,6 +1219,39 @@ fn generic_names(lower: &Lower<'_>, file: usize, node: &GreenNode) -> Vec<String
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// The `#[trusted]` / `#[trusted("obligation")]` attribute on an item
+/// node (s22, D11 ring 2). Returns the declared obligation text —
+/// empty for the bare form — or `None` when the item is not trusted.
+/// Shared by signature elaboration, the `wolfi` roster, and the audit
+/// surface, so the three never disagree.
+pub(crate) fn trusted_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> Option<String> {
+    for attr in node.nodes().filter_map(wolf_ast::Attribute::cast) {
+        for item in attr.items() {
+            let named = item
+                .path()
+                .map(|p| text(p.syntax().span))
+                .is_some_and(|n| n.trim() == "trusted");
+            if !named {
+                continue;
+            }
+            let obligation = item
+                .input()
+                .map(|input| {
+                    let raw = text(input.span);
+                    let inner = raw
+                        .trim()
+                        .trim_start_matches('(')
+                        .trim_end_matches(')')
+                        .trim();
+                    inner.trim_matches('"').to_string()
+                })
+                .unwrap_or_default();
+            return Some(obligation);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
