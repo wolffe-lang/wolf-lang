@@ -38,7 +38,7 @@
 
 use crate::entity::EntityRef;
 use crate::ir::{Aux, Block, BlockCall, ExtFunc, Function, Inst, Value, ValueDef};
-use crate::ops::{IntCc, Opcode};
+use crate::ops::{IntCc, Opcode, TrapKind};
 use crate::peephole_rules::{self, Rewrite};
 use crate::types::{RegionId, TypeData, TypeId, TypeInterner};
 use std::collections::{HashMap, HashSet};
@@ -695,10 +695,10 @@ impl<'m> FuncBuilder<'m> {
                 self.stats.fold += 1;
                 return InsOut::Vals(vec![self.emit_const(result_tys[0], c)]);
             }
-            Fold::Trap => {
+            Fold::Trap(kind) => {
                 self.func.truncate_to_mark(mark);
                 self.stats.fold += 1;
-                self.ins_trap();
+                self.ins_trap(kind);
                 return InsOut::Trapped;
             }
         }
@@ -1116,11 +1116,12 @@ impl<'m> FuncBuilder<'m> {
         self.fill(inst, &[]);
     }
 
-    /// `trap`. Fills the current block.
-    pub fn ins_trap(&mut self) {
+    /// `trap` with its kind (s28: which check fired — the identity
+    /// conformance verdicts report). Fills the current block.
+    pub fn ins_trap(&mut self, kind: TrapKind) {
         let (inst, _) = self
             .func
-            .append_inst(self.cur, Opcode::Trap, &[], &[], Aux::None);
+            .append_inst(self.cur, Opcode::Trap, &[], &[], Aux::Trap(kind));
         self.stats.insts += 1;
         self.fill(inst, &[]);
     }
@@ -1164,7 +1165,8 @@ impl<'m> FuncBuilder<'m> {
                 };
                 let (lo, hi) = bounds_of(results[0]).expect("int op");
                 if r < lo || r > hi {
-                    Fold::Trap // X3: a provable overflow IS the runtime trap
+                    // X3: a provable overflow IS the runtime trap.
+                    Fold::Trap(TrapKind::Overflow)
                 } else {
                     Fold::Const(Const::Int(r as i64))
                 }
@@ -1172,14 +1174,14 @@ impl<'m> FuncBuilder<'m> {
             Opcode::IdivChk | Opcode::IremChk => {
                 // A constant zero divisor traps regardless of the lhs.
                 if let Some(Const::Int(0)) = cst(args[1]) {
-                    return Fold::Trap;
+                    return Fold::Trap(TrapKind::DivZero);
                 }
                 let Some((a, b)) = ints() else {
                     return Fold::None;
                 };
                 let (lo, _) = bounds_of(results[0]).expect("int op");
                 if (a as i128) == lo && b == -1 {
-                    return Fold::Trap; // MIN / -1 overflows
+                    return Fold::Trap(TrapKind::Overflow); // MIN / -1 overflows
                 }
                 let r = if data.op == Opcode::IdivChk {
                     a / b
@@ -1197,7 +1199,7 @@ impl<'m> FuncBuilder<'m> {
                 if matches!(data.op, Opcode::UdivChk | Opcode::UremChk)
                     && matches!(cst(args[1]), Some(Const::Int(0)))
                 {
-                    return Fold::Trap;
+                    return Fold::Trap(TrapKind::DivZero);
                 }
                 let Some((a, b)) = ints() else {
                     return Fold::None;
@@ -1213,14 +1215,14 @@ impl<'m> FuncBuilder<'m> {
                     Opcode::UaddChk => ua + ub,
                     Opcode::UsubChk => {
                         if ua < ub {
-                            return Fold::Trap; // borrow
+                            return Fold::Trap(TrapKind::Overflow); // borrow
                         }
                         ua - ub
                     }
                     Opcode::UmulChk => ua * ub,
                     _ => {
                         if ub == 0 {
-                            return Fold::Trap; // divide by zero
+                            return Fold::Trap(TrapKind::DivZero);
                         }
                         if data.op == Opcode::UdivChk {
                             ua / ub
@@ -1230,7 +1232,8 @@ impl<'m> FuncBuilder<'m> {
                     }
                 };
                 if r > mask {
-                    Fold::Trap // unsigned overflow IS the runtime trap (X3)
+                    // Unsigned overflow IS the runtime trap (X3).
+                    Fold::Trap(TrapKind::Overflow)
                 } else {
                     Fold::Const(Const::Int(wrap_to(r as i128, bits)))
                 }
@@ -1492,8 +1495,9 @@ impl<'m> FuncBuilder<'m> {
             Aux::IntCc(cc) => (4, cc as u64),
             Aux::FloatCc(cc) => (5, cc as u64),
             Aux::Scale(s) => (6, s),
-            // Edge- or callee-carrying ops never reach here.
-            Aux::Callee(_) | Aux::Jump(_) | Aux::Br(..) => return None,
+            // Edge- or callee-carrying ops (and terminators) never
+            // reach here.
+            Aux::Callee(_) | Aux::Jump(_) | Aux::Br(..) | Aux::Trap(_) => return None,
         };
         Some(GvnKey {
             op: data.op as u16,
@@ -1514,7 +1518,7 @@ pub enum Const {
 enum Fold {
     None,
     Const(Const),
-    Trap,
+    Trap(TrapKind),
 }
 
 enum Rewritten {

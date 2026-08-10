@@ -13,7 +13,7 @@
 
 use crate::entity::{EntityList, EntityRef, ListPool, Mark, PrimaryMap, entity_id};
 use crate::facts::{FactData, FactId};
-use crate::ops::{FloatCc, IntCc, Opcode};
+use crate::ops::{FloatCc, IntCc, Opcode, TrapKind};
 use crate::types::{TypeId, TypeInterner};
 
 entity_id!(
@@ -124,6 +124,9 @@ pub enum Aux {
     Jump(BlockCall),
     /// `br` targets (then, else).
     Br(BlockCall, BlockCall),
+    /// `trap` kind — which check this trap reports (s28; `Assert`
+    /// prints as bare `trap`, the pre-s28 form).
+    Trap(TrapKind),
 }
 
 /// A branch edge: target block plus the arguments passed to its params.

@@ -222,6 +222,42 @@ fn pick_mutation(rng: &mut Rng, src: &[u8], tokens: &[wolf_lex::Token]) -> Optio
     })
 }
 
+/// The exact #20 counter-example, pinned deterministically (no seed):
+/// replacing the `:` of `fn sneak[N: type]` in
+/// `corpus/comptime/norm_witness.lu` with `1` draws four parser
+/// diagnostics — one per enclosing recovery tier. A `:` mutation
+/// re-keys binding structure, so it is STRUCTURAL (max 5); before #20
+/// it was misclassified into the tight bound and only checkout-path-
+/// dependent seeding kept CI from seeing it.
+#[test]
+fn colon_mutation_in_generics_is_structural() {
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/comptime/norm_witness.lu");
+    let src = std::fs::read(&f).expect("read norm_witness.lu");
+    let colon = b"fn sneak[N: type]";
+    let start = src
+        .windows(colon.len())
+        .position(|w| w == colon)
+        .expect("norm_witness.lu still declares `fn sneak[N: type]`")
+        + b"fn sneak[N".len();
+    let mut mutated = src.clone();
+    mutated.splice(start..start + 1, b" 1 ".iter().copied());
+
+    let mut sm = wolf_span::SourceMap::new();
+    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(&f), &src), &src);
+    let mfile = sm.intern(&f.with_extension("mut_colon"));
+    let parse = wolf_parse::parse_tokens(&wolf_lex::lex(mfile, &mutated), &mutated);
+    wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
+    let added = parse
+        .diagnostics
+        .len()
+        .saturating_sub(baseline.diagnostics.len());
+    assert!(
+        added <= 5,
+        "#20 regression: {added} added parser diagnostics (max 5): {:?}",
+        parse.diagnostics
+    );
+}
+
 #[test]
 fn single_token_mutations_have_bounded_blast_radius() {
     let budget: usize = std::env::var("MUTATE_BUDGET")
@@ -252,9 +288,14 @@ fn single_token_mutations_have_bounded_blast_radius() {
             .collect();
 
         for iteration in 0..budget {
-            // Path separators normalized so the seed — and therefore the
-            // explored mutation set — is identical on every platform.
-            let seed = fnv(f.to_string_lossy().replace('\\', "/").as_bytes())
+            // Seed from the CORPUS-RELATIVE path (separators
+            // normalized): the explored mutation set must be identical
+            // on every platform AND in every checkout location.
+            // Seeding from the absolute path made CI and local runs
+            // explore different mutations — a red `cargo test
+            // --workspace` at a green-CI sha (#20).
+            let rel = f.strip_prefix(&root).unwrap_or(f);
+            let seed = fnv(rel.to_string_lossy().replace('\\', "/").as_bytes())
                 ^ (iteration as u64).wrapping_mul(0x9e37);
             let mut rng = Rng::new(seed);
             let Some(m) = pick_mutation(&mut rng, &src, &lexed.tokens) else {
@@ -300,18 +341,41 @@ fn single_token_mutations_have_bounded_blast_radius() {
             };
             let removed = &src[m.lo as usize..m.hi as usize];
             // Structural: the mutation touches the delimiter skeleton,
-            // a declaration keyword, a `;`, or an `=`/`=>` — the
-            // constructs that key nesting, statement, and binding
+            // a declaration keyword, a `;`, an `=`/`=>`, or a `:` —
+            // the constructs that key nesting, statement, and binding
             // structure (moving or changing any of them shifts
-            // everything downstream). Everything else must stay within
-            // the tight bound.
+            // everything downstream; `:` keys `name: type` in params,
+            // generic params, fields and lets — losing it inside
+            // `fn f[N: type]` legitimately draws one report per
+            // enclosing tier, the #20 finding). Everything else must
+            // stay within the tight bound.
             let keyed = |bytes: &[u8]| {
                 !delims(bytes).is_empty()
                     || !decl_kw(bytes).is_empty()
                     || bytes.contains(&b';')
                     || bytes.contains(&b'=')
+                    || bytes.contains(&b':')
             };
-            let structural = keyed(removed) || keyed(&m.text);
+            // Damage INSIDE a generic parameter list re-keys the whole
+            // declaration header (`fn f[N: type](…) -> …`): parameter
+            // name, bracket balance, parameter list and return type
+            // each report once — one per enclosing tier, the module-doc
+            // allowance. Classified structurally by the ORIGINAL tree,
+            // not by mutation bytes (#20: deleting the bare `N` is as
+            // structural as replacing the `:`).
+            let in_generics = |node: &GreenNode| {
+                fn hit(n: &GreenNode, lo: u32, hi: u32) -> bool {
+                    if n.kind == wolf_ast::SyntaxKind::GenericParamList
+                        && lo < n.span.hi
+                        && hi > n.span.lo
+                    {
+                        return true;
+                    }
+                    n.nodes().any(|c| hit(c, lo, hi))
+                }
+                hit(node, m.lo, m.hi)
+            };
+            let structural = keyed(removed) || keyed(&m.text) || in_generics(&original.root);
             let max = if structural { 5 } else { 3 };
             // Baseline diagnostics (the corpus counter-example files)
             // are pre-existing; the property bounds the *added* ones.

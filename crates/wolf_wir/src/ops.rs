@@ -123,6 +123,62 @@ impl FloatCc {
     }
 }
 
+/// The identity a `trap` terminator carries (s28): WHICH check fired.
+///
+/// X3 makes traps deterministic OUTCOMES, so the kind is part of the
+/// program's observable behavior — it must survive constant folding
+/// (a provably-overflowing `iadd.chk` folds to `trap.overflow`, not an
+/// anonymous trap) and lowering (codegen reports the kind at runtime so
+/// conformance verdicts `trap(overflow)`/`trap(div-zero)` match the
+/// reference interpreter's). The checked-arith ops carry their kinds
+/// implicitly (overflow / div-zero per op class); this enum is only for
+/// the explicit `trap` terminator. `Assert` is the default and prints
+/// as bare `trap` (the pre-s28 textual form); other kinds print as a
+/// dotted suffix (`trap.overflow`). `Bounds` is reserved vocabulary for
+/// `bounds.br` (c06 containers).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TrapKind {
+    /// A user assertion failed (`[conf.trap.assert]`) — also the kind
+    /// of sema-licensed unreachable residual edges (never executable).
+    Assert,
+    /// Checked integer arithmetic overflowed (X3).
+    Overflow,
+    /// Integer division/remainder by zero.
+    DivZero,
+    /// A bounds check failed (reserved: `bounds.br`, c06).
+    Bounds,
+}
+
+impl TrapKind {
+    pub const ALL: [TrapKind; 4] = [
+        TrapKind::Assert,
+        TrapKind::Overflow,
+        TrapKind::DivZero,
+        TrapKind::Bounds,
+    ];
+
+    /// Textual-format suffix (`trap.overflow`); `Assert` prints bare.
+    pub fn mnemonic(self) -> &'static str {
+        match self {
+            TrapKind::Assert => "assert",
+            TrapKind::Overflow => "overflow",
+            TrapKind::DivZero => "div_zero",
+            TrapKind::Bounds => "bounds",
+        }
+    }
+
+    /// The conformance vocabulary name (s06 closed trap kinds) — what
+    /// verdicts spell: `trap(div-zero)`.
+    pub fn verdict_name(self) -> &'static str {
+        match self {
+            TrapKind::Assert => "assert",
+            TrapKind::Overflow => "overflow",
+            TrapKind::DivZero => "div-zero",
+            TrapKind::Bounds => "bounds",
+        }
+    }
+}
+
 /// Every WIR opcode. One doc line of semantics each — this is the
 /// reference.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

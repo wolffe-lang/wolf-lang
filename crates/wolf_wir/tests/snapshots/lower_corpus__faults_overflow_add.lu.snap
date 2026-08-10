@@ -7,5 +7,5 @@ b0:
   %0 = iconst.i32 2147483647
   %1 = iconst.i32 1
   %2 = iconst.i32 -2147483648
-  trap
+  trap.overflow
 }

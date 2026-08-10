@@ -1,0 +1,19 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: mem.ub.defined
+//!
+//! The #19 regression witness: a two-argument `assert` whose condition
+//! HOLDS is silent — the message is not a second condition and is
+//! never evaluated on the passing path ([conf.trap.assert]). One
+//! constant-folded assert and one dynamic (loop-carried) assert, so
+//! both the fold path and the br+trap shape are pinned.
+
+fn main() -> !int {
+    let k = 2
+    assert(k == 2, "k must be 2")      // holds, constant-folded away
+
+    var n = 0
+    for _ in 0..3 { n += 1 }
+    assert(n == 3, "loop ran 3 times") // holds, dynamic br+trap shape
+    0
+}

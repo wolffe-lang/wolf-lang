@@ -60,7 +60,7 @@ use crate::build::{FuncBuilder, InsOut, Stats, Var};
 use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactData, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, ExtFunc, Mode, Module, Param, SigId};
-use crate::ops::{FloatCc, IntCc, Opcode};
+use crate::ops::{FloatCc, IntCc, Opcode, TrapKind};
 use crate::types::{self, RegionId, TypeId};
 
 type R<T> = Result<T, NotYet>;
@@ -2159,7 +2159,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         .expect("negation folds on integers");
                     return if neg < lo || neg > hi {
                         // Negating MIN traps in checked arithmetic (X3).
-                        self.b.ins_trap();
+                        self.b.ins_trap(TrapKind::Overflow);
                         Ok(Flow::Diverged)
                     } else {
                         Ok(Flow::Val(Some(self.b.iconst(ty, neg as i64))))
@@ -4091,7 +4091,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // A live residual edge (guards on the closing arms): sema
             // proved the value space covered, so this edge is
             // unreachable at runtime — the licensed trap.
-            self.b.ins_trap();
+            self.b.ins_trap(TrapKind::Assert);
         }
         match merge {
             Some((mb, param)) => {
@@ -4648,7 +4648,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             Some(false) => {
                 self.b.stats.fold += 1;
-                self.b.ins_trap();
+                self.b.ins_trap(TrapKind::Assert);
                 return Ok(Flow::Diverged);
             }
             None => {
@@ -4657,7 +4657,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.ins_br(v, cont, &[], trap_bb, &[]);
                 self.b.seal_block(trap_bb);
                 self.b.switch_to_block(trap_bb);
-                self.b.ins_trap();
+                self.b.ins_trap(TrapKind::Assert);
                 self.b.seal_block(cont);
                 self.b.switch_to_block(cont);
             }

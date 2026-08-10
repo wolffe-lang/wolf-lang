@@ -2772,12 +2772,23 @@ impl<'t> Machine<'t> {
                 return Ok(Flow::Val(Value::Unit));
             }
             "assert" => {
-                for a in d.args().into_iter().flat_map(|l| l.args()) {
-                    if let Some(v) = Arg::value(a) {
-                        let x = val!(self.eval(v));
-                        if !matches!(x, Value::Bool(true)) {
-                            return self.trap("assert", "mem.ub.defined", e.span);
+                // Only the FIRST argument is the condition; the
+                // optional second is the message, evaluated ONLY on
+                // the failing path ([conf.trap.assert]). Treating the
+                // message as a condition made every holding two-arg
+                // assert trap (#19).
+                let mut rest = d.args().into_iter().flat_map(|l| l.args());
+                if let Some(first) = rest.next()
+                    && let Some(v) = Arg::value(first)
+                {
+                    let x = val!(self.eval(v));
+                    if !matches!(x, Value::Bool(true)) {
+                        for a in rest {
+                            if let Some(m) = Arg::value(a) {
+                                val!(self.eval(m));
+                            }
                         }
+                        return self.trap("assert", "mem.ub.defined", e.span);
                     }
                 }
                 return Ok(Flow::Val(Value::Unit));

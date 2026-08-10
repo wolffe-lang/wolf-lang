@@ -209,6 +209,15 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
                 write!(s, ".{}", cc.mnemonic()).unwrap();
             }
         }
+        Opcode::Trap => {
+            // `Assert` is the default kind and prints as bare `trap`
+            // (the pre-s28 form); other kinds carry a dotted suffix.
+            if let Aux::Trap(k) = data.aux
+                && k != crate::ops::TrapKind::Assert
+            {
+                write!(s, ".{}", k.mnemonic()).unwrap();
+            }
+        }
         _ => {}
     }
     // Operands.
@@ -258,7 +267,7 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
             )
             .unwrap();
         }
-        Aux::None | Aux::IntCc(_) | Aux::FloatCc(_) => {
+        Aux::None | Aux::IntCc(_) | Aux::FloatCc(_) | Aux::Trap(_) => {
             if !args.is_empty() {
                 write!(s, " {}", render_args(canon, &args)).unwrap();
             }

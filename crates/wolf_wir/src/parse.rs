@@ -18,7 +18,7 @@
 use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactData, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, Function, Mode, Module, Param, SigId, Value};
-use crate::ops::{FloatCc, IntCc, Opcode};
+use crate::ops::{FloatCc, IntCc, Opcode, TrapKind};
 use crate::types::{self, RegionId, TypeData, TypeId};
 use std::collections::HashMap;
 
@@ -819,6 +819,7 @@ struct Mnemonic {
     ty: Option<TypeId>,
     icc: Option<IntCc>,
     fcc: Option<FloatCc>,
+    trap: Option<TrapKind>,
 }
 
 fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
@@ -881,6 +882,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
             ty: None,
             icc: None,
             fcc: None,
+            trap: None,
         });
     }
     if let Some((prefix, suffix)) = name.rsplit_once('.') {
@@ -904,6 +906,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
                 ty: Some(ty),
                 icc: None,
                 fcc: None,
+                trap: None,
             });
         }
         if prefix == "icmp" {
@@ -913,9 +916,24 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
                     ty: None,
                     icc: Some(*cc),
                     fcc: None,
+                    trap: None,
                 });
             }
             return line.fail(format!("unknown icmp condition `{suffix}`"));
+        }
+        if prefix == "trap" {
+            // `trap.overflow` / `trap.div_zero` / `trap.bounds`; the
+            // default kind (`assert`) is the bare `trap` fixed form.
+            if let Some(k) = TrapKind::ALL.iter().find(|k| k.mnemonic() == suffix) {
+                return Ok(Mnemonic {
+                    op: Opcode::Trap,
+                    ty: None,
+                    icc: None,
+                    fcc: None,
+                    trap: Some(*k),
+                });
+            }
+            return line.fail(format!("unknown trap kind `{suffix}`"));
         }
         if prefix == "fcmp" {
             if let Some(cc) = FloatCc::ALL.iter().find(|cc| cc.mnemonic() == suffix) {
@@ -924,6 +942,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
                     ty: None,
                     icc: None,
                     fcc: Some(*cc),
+                    trap: None,
                 });
             }
             return line.fail(format!("unknown fcmp condition `{suffix}`"));
@@ -1263,7 +1282,10 @@ fn parse_inst(
             args = parse_val_list(line, values, func)?;
             vec![]
         }
-        Opcode::Trap => vec![],
+        Opcode::Trap => {
+            aux = Aux::Trap(mn.trap.unwrap_or(TrapKind::Assert));
+            vec![]
+        }
         Opcode::EuErr => {
             // `eu.err %e` (tag) or `eu.err %e, K` (payload slot K).
             let n = line.val_name()?;

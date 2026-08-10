@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 333
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -33,6 +32,7 @@ conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: not mem-clean (pre-wir rungs own it)
 errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
+faults/assert_msg_holds.lu: lowers
 faults/bounds_slice.lu: not mem-clean (pre-wir rungs own it)
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
