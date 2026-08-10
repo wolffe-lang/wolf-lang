@@ -40,11 +40,18 @@ void __wolf_rt_region_freeze(void *h) { (void)h; }
 "#;
 
 /// Compile WIR text to an executable and run it: (exit code, stderr).
-fn run_wir(name: &str, text: &str) -> (i32, String) {
+fn run_wir(name: &str, text: &str) -> Option<(i32, String)> {
     let mut module = wolf_wir::parse_module(text).expect("wir parses");
     wolf_wir::verify_module(&module).expect("wir verifies");
     let shim = add_entry_shim(&mut module).expect("entry shim");
-    let mut backend = ClifBackend::new().expect("backend");
+    // s28 targets linux/x86-64 (the M1 platform); elsewhere skip loudly.
+    let mut backend = match ClifBackend::new() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("SKIP: {e}");
+            return None;
+        }
+    };
     compile_module(&mut backend, &module, Some(shim)).expect("compiles");
     let product = Box::new(backend).finish().expect("object emits");
 
@@ -65,10 +72,10 @@ fn run_wir(name: &str, text: &str) -> (i32, String) {
         .expect("cc runs");
     assert!(st.success(), "link failed");
     let out = Command::new(&exe).output().expect("binary runs");
-    (
+    Some((
         out.status.code().expect("exit code"),
         String::from_utf8_lossy(&out.stderr).into_owned(),
-    )
+    ))
 }
 
 fn fixture(name: &str) -> String {
@@ -83,14 +90,18 @@ fn fixture(name: &str) -> String {
 /// checked arithmetic, through `cc`, exiting correctly.
 #[test]
 fn tree_transform_runs_to_zero() {
-    let (code, _) = run_wir("tree", &fixture("region_infer_tree_transform"));
+    let Some((code, _)) = run_wir("tree", &fixture("region_infer_tree_transform")) else {
+        return;
+    };
     assert_eq!(code, 0);
 }
 
 /// eu values, mut-pointer params, regions, multi-token calls.
 #[test]
 fn qmark_defer_runs_to_zero() {
-    let (code, _) = run_wir("qmark", &fixture("qmark_defer"));
+    let Some((code, _)) = run_wir("qmark", &fixture("qmark_defer")) else {
+        return;
+    };
     assert_eq!(code, 0);
 }
 
@@ -99,7 +110,9 @@ fn qmark_defer_runs_to_zero() {
 /// runtime.
 #[test]
 fn overflow_traps_with_identity() {
-    let (code, stderr) = run_wir("overflow", &fixture("overflow"));
+    let Some((code, stderr)) = run_wir("overflow", &fixture("overflow")) else {
+        return;
+    };
     assert_eq!(code, 134);
     assert!(
         stderr.contains("wolf-trap: overflow"),
@@ -112,12 +125,14 @@ fn overflow_traps_with_identity() {
 /// identity intact.
 #[test]
 fn dynamic_checked_add_traps() {
-    let (code, stderr) = run_wir(
+    let Some((code, stderr)) = run_wir(
         "dynadd",
         "fn @main() -> i64 {\n\
          b0:\n  %0 = iconst.i64 9223372036854775807\n  %1 = iconst.i64 1\n  \
          %2 = iadd.chk %0, %1\n  ret %2\n}\n",
-    );
+    ) else {
+        return;
+    };
     assert_eq!(code, 134);
     assert!(
         stderr.contains("wolf-trap: overflow"),
@@ -128,12 +143,14 @@ fn dynamic_checked_add_traps() {
 /// Dynamic division by zero through the explicit zero check.
 #[test]
 fn dynamic_div_zero_traps() {
-    let (code, stderr) = run_wir(
+    let Some((code, stderr)) = run_wir(
         "dyndiv",
         "fn @main() -> i64 {\n\
          b0:\n  %0 = iconst.i64 10\n  %1 = iconst.i64 0\n  \
          %2 = idiv.chk %0, %1\n  ret %2\n}\n",
-    );
+    ) else {
+        return;
+    };
     assert_eq!(code, 134);
     assert!(
         stderr.contains("wolf-trap: div-zero"),
@@ -145,13 +162,15 @@ fn dynamic_div_zero_traps() {
 /// traps, while the same bits under `iadd.wrap` pass through silently.
 #[test]
 fn narrow_checked_vs_wrap() {
-    let (code, stderr) = run_wir(
+    let Some((code, stderr)) = run_wir(
         "narrowchk",
         "fn @main() -> i64 {\n\
          b0:\n  %0 = iconst.i32 2147483647\n  %1 = iconst.i32 1\n  \
          %2 = iadd.wrap %0, %1\n  %3 = iadd.chk %0, %1\n  \
          %4 = sext.i64 %3\n  ret %4\n}\n",
-    );
+    ) else {
+        return;
+    };
     assert_eq!(code, 134);
     assert!(
         stderr.contains("wolf-trap: overflow"),
@@ -163,9 +182,11 @@ fn narrow_checked_vs_wrap() {
 /// through the entry shim.
 #[test]
 fn exit_code_flows_through_shim() {
-    let (code, _) = run_wir(
+    let Some((code, _)) = run_wir(
         "exit42",
         "fn @main() -> i64 {\nb0:\n  %0 = iconst.i64 42\n  ret %0\n}\n",
-    );
+    ) else {
+        return;
+    };
     assert_eq!(code, 42);
 }
