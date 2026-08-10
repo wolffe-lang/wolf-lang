@@ -1,39 +1,56 @@
-//! Typed HIR → WIR lowering (s25): sema's typed AST in, verified SSA
-//! out, in one forward walk through [`crate::build::FuncBuilder`].
+//! Typed HIR → WIR lowering (s25–s27): sema's typed AST in, verified
+//! SSA out, in one forward walk through [`crate::build::FuncBuilder`].
 //!
-//! The s25 surface (the Braun proving ground): scalar expression
-//! bodies, `let`/`var`/assignment, direct calls, `if`/`else` as
-//! expressions (result as block parameter), `while`/`loop` with
-//! `break`/`continue`, short-circuit `&&`/`||`/`!`, `assert`, numeric
-//! and adapter casts, and checked arithmetic to `.chk` ops (X3;
-//! `wrapping[T]` to `.wrap`). Everything else refuses with an honest
-//! [`NotYet`] naming its owning sprint — regions/aggregates/facts are
-//! s26, error unions/`defer`/`match`/`for` are s27, closures and
-//! concurrency are c05. A body is either fully lowered or refused,
-//! never half-guessed (the conservatism-ledger contract).
+//! s25 laid the scalar/control base (Braun SSA, checked arithmetic,
+//! `if`/`while`/`loop`); s26 added the memory story (regions,
+//! aggregates by value, pointer-shaped `mut`, facts). s27 finishes the
+//! CONTROL story — the organizing invariant is D30's: **error
+//! propagation is ordinary control flow.** No landing pads, no unwind
+//! tables, no implicit edges:
 //!
-//! Error-union RETURN TYPES with a statically empty row (`fn main() ->
-//! !int` with a sealed empty row) lower as their ok type: the error
-//! case is uninhabited, so ok-injection is the identity — no `eu.*`
-//! op is emitted or needed before s27.
+//! - **Error unions**: `!T` with a non-empty sealed row lowers to the
+//!   `eu{…}` pair type; tags are module-interned `i64`s (0 = ok), so
+//!   row widening is the identity on tag values and `?` is `eu.is_err`
+//!   plus `br` — the err edge forms the propagated value FIRST, runs
+//!   the errdefer chain (`[mem.model.order]`), then `ret`s. Empty-row
+//!   unions still lower as their ok type (the error case is
+//!   uninhabited).
+//! - **`defer`/`errdefer`**: build-time only. Each scope keeps its
+//!   entries (typed AST fragments + a visibility fence); every exit
+//!   edge — fall-through, `return`, `?`-err, `break`/`continue`
+//!   crossing the scope — re-lowers the applicable chain in LIFO order
+//!   at the exit site. `region name { }`'s wholesale free is an
+//!   ordinary (outermost) entry of its scope (X4), so early exits free
+//!   on every edge and the verifier's per-path token linearity proves
+//!   it independently.
+//! - **`match`**: single-scrutinee decision trees — one discriminant
+//!   read, shared tag tests in arm order, guards as ordinary branches
+//!   re-entering at the next candidate, bindings as ordinary locals.
+//!   Exhaustiveness is sema's theorem (s17): exhaustive matches lower
+//!   with NO default edge — the final arm is entered unconditionally.
+//! - **`for`**: ranges lower structurally (the closed builtin family,
+//!   `[mem.iter.range]`); other iterables await the `Iter[T]` drive
+//!   loop's std surface (`[mem.iter.for]`, c06/std).
+//! - **Methods**: inherent methods lower as ordinary functions named
+//!   `Type.method`; receiver modes reuse the s26 machinery (`read` by
+//!   value, `mut` pointer-shaped with flat-aggregate spills, `take` by
+//!   value).
 //!
-//! `mut`/`take` parameter MODES lower into the WIR signature (the s26
-//! fact vocabulary attaches to those slots then); what refuses today
-//! is the part with missing semantics: passing a `mut` argument and
-//! writing through a `mut` parameter are s26's pointer-shaped lowering.
-//!
-//! Coercions from the s17 closed set need no ops at this surface:
-//! ok-injection into an empty row and `NeverToAny` are identities;
-//! `RowWiden` only occurs on rows with tags, which refuse as s27.
+//! Everything still missing refuses with an honest [`NotYet`] naming
+//! its owner — strings/data segments, `List`/`Pool` runtime shapes,
+//! trait dispatch tables, closures and concurrency are c06/c05+. A
+//! body is either fully lowered or refused, never half-guessed (the
+//! conservatism-ledger contract).
 
 use std::collections::HashMap;
 
 use wolf_ast::{
-    Arg, AssignStmt, Block as AstBlock, BreakExpr, CallExpr, CastExpr, ConstDecl, ExprStmt,
-    GreenNode, IfExpr, LetDecl, LoopExpr, ParamMode, ParenExpr, PrefixExpr, ReturnExpr, SyntaxKind,
-    VarDecl, WhileExpr,
+    Arg, AssignStmt, Block as AstBlock, BreakExpr, CallExpr, CastExpr, ConstDecl, DeferStmt,
+    ElseExpr, ExprStmt, ForExpr, GreenNode, IfExpr, LetDecl, LoopExpr, MatchArm, MatchExpr,
+    ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, SyntaxKind, TryExpr, VarDecl,
+    WhileExpr,
 };
-use wolf_sema::check::{CallSig, CastKind};
+use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::{FnSig, ItemSig, SigTables};
 use wolf_sema::types::{Prim, TyId, TyKind, TypeTable};
 use wolf_sema::{BodyResult, NotYet, Package, Typecheck, TypedBody};
@@ -113,21 +130,75 @@ fn lower_body(
         return Ok(None);
     };
     let span = node.span;
-    if body.member.is_some() {
-        return Err(refuse("method body lowering (receiver modes, s27)", span));
-    }
-    match node.kind {
-        SyntaxKind::FnDecl => {}
-        SyntaxKind::LetDecl | SyntaxKind::VarDecl | SyntaxKind::ConstDecl => {
-            return Err(refuse("item-initializer lowering (globals, s27)", span));
+    // Resolve the fn node, signature, and WIR name: plain items
+    // directly; impl members (s27 methods) through the impl tables —
+    // an inherent method lowers as an ordinary function named
+    // `Type.method` (matching sema's diagnostic label, which is also
+    // the call sites' callee string).
+    let (fn_node, fsig, wir_name): (&GreenNode, &FnSig, String) = match body.member {
+        None => {
+            match node.kind {
+                SyntaxKind::FnDecl => {}
+                SyntaxKind::LetDecl | SyntaxKind::VarDecl | SyntaxKind::ConstDecl => {
+                    return Err(refuse("item-initializer lowering (globals, c06)", span));
+                }
+                _ => return Ok(None),
+            }
+            let Some(ItemSig::Fn(fsig)) = sigs.get(body.module, &body.name) else {
+                return Ok(None);
+            };
+            if fns.get(body.name.as_str()).map(|v| v.len()).unwrap_or(0) > 1 {
+                return Err(refuse(
+                    "two modules declare a function with this name (WIR name mangling)",
+                    span,
+                ));
+            }
+            (node, fsig, body.name.clone())
         }
-        _ => return Ok(None),
-    }
-    let d = wolf_ast::FnDecl::cast(node).expect("kind");
-    let Some(block) = d.body() else {
-        return Ok(None);
+        Some(mi) => {
+            if node.kind != SyntaxKind::ImplDecl {
+                // Trait default bodies check against the trait's own
+                // archetype; they lower per impl once dispatch tables
+                // land.
+                return Err(refuse(
+                    "trait default-body lowering (dispatch tables, c06)",
+                    span,
+                ));
+            }
+            let Some(imp) = sigs
+                .impls
+                .iter()
+                .find(|i| i.file == body.file && i.decl == body.decl)
+            else {
+                return Ok(None);
+            };
+            if imp.trait_ref.is_some() {
+                return Err(refuse(
+                    "trait-impl method lowering (dispatch tables, c06)",
+                    span,
+                ));
+            }
+            if !imp.generics.is_empty() {
+                return Err(refuse("generic-impl lowering (monomorphization)", span));
+            }
+            let Some(m) = imp.methods.iter().find(|m| m.member == mi) else {
+                return Ok(None);
+            };
+            let TyKind::Nominal { name: tyname, .. } = sigs.table.kind(imp.self_ty) else {
+                return Err(refuse("methods on non-nominal self types", span));
+            };
+            let Some(mnode) = node.nodes().filter(|n| n.kind.is_item()).nth(mi) else {
+                return Ok(None);
+            };
+            if mnode.kind != SyntaxKind::FnDecl {
+                return Ok(None); // associated consts have no body to lower
+            }
+            (mnode, &m.sig, format!("{tyname}.{}", m.name))
+        }
     };
-    let Some(ItemSig::Fn(fsig)) = sigs.get(body.module, &body.name) else {
+    let span = fn_node.span;
+    let d = wolf_ast::FnDecl::cast(fn_node).expect("kind");
+    let Some(block) = d.body() else {
         return Ok(None);
     };
     if !fsig.generics.is_empty() {
@@ -139,15 +210,9 @@ fn lower_body(
             span,
         ));
     }
-    if fns.get(body.name.as_str()).map(|v| v.len()).unwrap_or(0) > 1 {
-        return Err(refuse(
-            "two modules declare a function with this name (WIR name mangling)",
-            span,
-        ));
-    }
     // The WIR signature (modes carried; s26 attaches the fact slots).
-    let sig = wir_fn_sig(module, sig_cache, sigs, &body.name, fsig, span)?;
-    let mut b = FuncBuilder::new(module, body.name.clone(), sig);
+    let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, span)?;
+    let mut b = FuncBuilder::new(module, wir_name, sig);
     let mut lowerer = Lowerer {
         src: &pkg.files[body.file].raw.src,
         table: &tb.table,
@@ -162,8 +227,13 @@ fn lower_body(
             .map(|(s, f, t, k)| (*s, (*f, *t, *k)))
             .collect(),
         fns,
+        dispatch: tb.dispatch.iter().map(|(s, d)| (*s, d)).collect(),
+        matches: tb.matches.iter().copied().collect(),
         scopes: Vec::new(),
+        visible: None,
         loops: Vec::new(),
+        fn_eu: None,
+        fn_tail: None,
         callees: HashMap::new(),
         straight_line: false,
         b: &mut b,
@@ -218,7 +288,10 @@ fn wir_ty_depth(
             Prim::I64 | Prim::Int | Prim::U64 | Prim::Uint => Ok(Some(types::I64)),
             Prim::F32 => Ok(Some(types::F32)),
             Prim::F64 => Ok(Some(types::F64)),
-            Prim::Str | Prim::Byte => Err(refuse("string/byte lowering (s27 memory)", span)),
+            Prim::Str | Prim::Byte => Err(refuse(
+                "string/byte lowering (data segments + runtime str shape, c06)",
+                span,
+            )),
         },
         TyKind::Wrapping(inner) => match wir_ty_depth(it, table, sigs, *inner, span, depth + 1)? {
             Some(t) if types_is_int(t) => Ok(Some(t)),
@@ -229,15 +302,32 @@ fn wir_ty_depth(
             if row_is_empty(table, *row) {
                 wir_ty_depth(it, table, sigs, *ok, span, depth + 1)
             } else {
-                Err(refuse(
-                    "error-union lowering (eu.* control flow, s27)",
-                    span,
-                ))
+                // A fallible type with tags: the eu pair (s27). The ok
+                // half maps as usual; the row's payloads unify into
+                // positional slots.
+                let okw = wir_ty_depth(it, table, sigs, *ok, span, depth + 1)?;
+                let slots = row_slot_tys(it, table, sigs, *row, span, depth)?;
+                Ok(Some(it.eu(okw, slots)))
+            }
+        }
+        TyKind::Row { .. } => {
+            // A caught error value (`else |err|` binding, match
+            // scrutinee): the tag alone for payload-free rows, else
+            // tag + slots as a by-value aggregate mirroring the enum
+            // representation.
+            let slots = row_slot_tys(it, table, sigs, id, span, depth)?;
+            if slots.is_empty() {
+                Ok(Some(types::I64))
+            } else {
+                let mut fields = vec![types::I64];
+                fields.extend(slots);
+                Ok(Some(it.intern(types::TypeData::Agg(fields))))
             }
         }
         TyKind::Nominal { module, name } => {
             // Adapter types are scalars in disguise (layout identity);
-            // struct nominals are by-value aggregates (s26). Field
+            // struct nominals are by-value aggregates (s26); enums are
+            // tag scalars or tag+slots aggregates (s27). Field/variant
             // types live in the SIGNATURE table.
             match sigs.get(*module as usize, name) {
                 Some(ItemSig::Distinct { base, .. }) => {
@@ -258,7 +348,43 @@ fn wir_ty_depth(
                     }
                     Ok(Some(it.intern(types::TypeData::Agg(fields))))
                 }
-                _ => Err(refuse("enum/generic-nominal lowering (s27)", span)),
+                Some(ItemSig::Enum {
+                    generic: false,
+                    variants,
+                    ..
+                }) => {
+                    // Enum values: the variant tag (declaration index,
+                    // i64) alone when payload-free, else tag + the
+                    // position-unified payload slots.
+                    let mut slots: Vec<TypeId> = Vec::new();
+                    for v in variants {
+                        for (i, &p) in v.payload.iter().enumerate() {
+                            let Some(w) = wir_ty_depth(it, &sigs.table, sigs, p, span, depth + 1)?
+                            else {
+                                return Err(refuse("unit-typed enum payloads", span));
+                            };
+                            match slots.get(i) {
+                                None => slots.push(w),
+                                Some(&s) if s == w => {}
+                                Some(_) => {
+                                    return Err(refuse(
+                                        "enum payload slots with conflicting types across \
+                                         variants (spilled union layout, c06)",
+                                        span,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    if slots.is_empty() {
+                        Ok(Some(types::I64))
+                    } else {
+                        let mut fields = vec![types::I64];
+                        fields.extend(slots);
+                        Ok(Some(it.intern(types::TypeData::Agg(fields))))
+                    }
+                }
+                _ => Err(refuse("generic-nominal lowering (monomorphization)", span)),
             }
         }
         TyKind::Tuple(elems) => {
@@ -278,13 +404,16 @@ fn wir_ty_depth(
             "first-class region values beyond local bindings (c05)",
             span,
         )),
-        TyKind::Range(_) => Err(refuse("range-value lowering (for/ranges, s27)", span)),
+        TyKind::Range(_) => Err(refuse(
+            "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
+            span,
+        )),
         TyKind::Shared(_)
         | TyKind::Weak(_)
         | TyKind::Handle(_)
         | TyKind::List(_)
         | TyKind::Pool(_) => Err(refuse(
-            "shared-tier surface lowering (rc.* receivers, s27)",
+            "shared-tier surface lowering (rc receivers + runtime cells, c06)",
             span,
         )),
         TyKind::Ptr(_) => Err(refuse(
@@ -293,6 +422,49 @@ fn wir_ty_depth(
         )),
         _ => Err(refuse("this type in WIR lowering", span)),
     }
+}
+
+/// The position-unified error-payload slot types of a row (s27): slot
+/// `i` is the type every tag's `i`-th payload agrees on; disagreement
+/// refuses (spilled union layout is c06's). Open tails are admitted —
+/// unknown tags carry no payloads we could name; generic tails refuse.
+fn row_slot_tys(
+    it: &mut types::TypeInterner,
+    table: &TypeTable,
+    sigs: &SigTables,
+    row: TyId,
+    span: Span,
+    depth: u32,
+) -> R<Vec<TypeId>> {
+    let TyKind::Row { tags, tail } = table.kind(row) else {
+        return Err(refuse("a non-row error channel (generic rows)", span));
+    };
+    if let Some(t) = tail
+        && !matches!(table.kind(*t), TyKind::OpenTail)
+    {
+        return Err(refuse("generic row tails (monomorphization)", span));
+    }
+    let tags = tags.clone();
+    let mut slots: Vec<TypeId> = Vec::new();
+    for (_, payloads) in &tags {
+        for (i, &p) in payloads.iter().enumerate() {
+            let Some(w) = wir_ty_depth(it, table, sigs, p, span, depth + 1)? else {
+                return Err(refuse("unit-typed tag payloads", span));
+            };
+            match slots.get(i) {
+                None => slots.push(w),
+                Some(&s) if s == w => {}
+                Some(_) => {
+                    return Err(refuse(
+                        "row payload slots with conflicting types across tags \
+                         (spilled union layout, c06)",
+                        span,
+                    ));
+                }
+            }
+        }
+    }
+    Ok(slots)
 }
 
 /// Is the sema type an unsigned integer (through wrappers)? Decides
@@ -315,6 +487,38 @@ fn scalar_size(t: TypeId) -> Option<u64> {
         types::I64 | types::F64 | types::PTR => Some(8),
         _ => None,
     }
+}
+
+/// Byte size of a FLAT value: a scalar, or an aggregate of flat values
+/// packed sequentially with no padding — the v0 SPILL layout `mut`
+/// arguments and receivers use (s27; c06 finalizes real layout, and
+/// the spill slots are private to one call, so only self-consistency
+/// matters).
+fn flat_size(it: &types::TypeInterner, t: TypeId) -> Option<u64> {
+    if let Some(s) = scalar_size(t) {
+        return Some(s);
+    }
+    match it.get(t) {
+        types::TypeData::Agg(fields) => {
+            let mut sum = 0u64;
+            for f in fields.clone() {
+                sum += flat_size(it, f)?;
+            }
+            Some(sum)
+        }
+        _ => None,
+    }
+}
+
+/// The packed byte offset of each field of a flat aggregate.
+fn flat_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<Vec<u64>> {
+    let mut out = Vec::with_capacity(fields.len());
+    let mut off = 0u64;
+    for &f in fields {
+        out.push(off);
+        off += flat_size(it, f)?;
+    }
+    Some(out)
 }
 
 fn types_is_int(t: TypeId) -> bool {
@@ -371,9 +575,9 @@ fn wir_sig_of(module: &mut Module, sigs: &SigTables, fsig: &FnSig, span: Span) -
                 mode: Mode::Take,
             }),
             Some(ParamMode::Mut) => {
-                if scalar_size(ty).is_none() {
+                if flat_size(&module.types, ty).is_none() {
                     return Err(refuse(
-                        "`mut` aggregate parameters (field addressing needs c06 layout)",
+                        "`mut` parameters of non-flat types (spill layout, c06)",
                         p.span,
                     ));
                 }
@@ -453,9 +657,73 @@ enum LocalBind {
     Unit,
 }
 
+/// One `defer`/`errdefer` entry: the typed AST fragment, re-lowered at
+/// every applicable exit edge (LIFO), plus a visibility fence so the
+/// re-lowering resolves names exactly as the declaration site saw them
+/// (captured SSA is read through Braun variables, so values are the
+/// CURRENT ones at the exit — `[mem.model.order]`: defers run as the
+/// frames return).
+#[derive(Clone, Copy)]
+struct DeferEntry<'t> {
+    expr: &'t GreenNode,
+    errdefer: bool,
+    /// (scope index, binds visible in that scope) at declaration.
+    fence: (usize, usize),
+}
+
+/// One lexical scope: its bindings, its cleanup entries, and — for
+/// `region name { }` sugar — the region to free wholesale on every
+/// exit edge (X4: the free is the scope's outermost cleanup entry).
+#[derive(Default)]
+struct ScopeFrame<'t> {
+    binds: Vec<(String, LocalBind)>,
+    defers: Vec<DeferEntry<'t>>,
+    region: Option<(RegionId, Value)>,
+}
+
 struct LoopFrame {
-    header: Block,
+    /// Jump target of `continue`: the header for `while`/`loop`, the
+    /// (lazily created) increment latch for `for`.
+    continue_to: ContinueTo,
     exit: Option<Block>,
+    /// The exit block's value parameter, minted by the first
+    /// break-with-value (`let x = loop { break 5 }`).
+    exit_param: Option<Value>,
+    /// Scope depth at loop entry: `break`/`continue` unwind the defer
+    /// chains of every deeper scope before jumping.
+    depth: usize,
+}
+
+#[derive(Clone, Copy)]
+enum ContinueTo {
+    Block(Block),
+    /// A `for` loop's latch, created on first use so a body that
+    /// always diverges leaves no unreachable block behind.
+    ForLatch(Option<Block>),
+}
+
+/// What a `match` scrutinee's discriminant ranges over (s27).
+enum MatchDomain {
+    /// An enum: variant name → (declaration index, payload arity).
+    Enum(Vec<(String, i64, usize)>),
+    /// An error row: tag name → payload arity (ids are module-interned
+    /// at test-emission time; open rows admit unlisted tags, which can
+    /// only be matched by a rest arm).
+    Row(Vec<(String, usize)>),
+    /// Integer/bool literals.
+    Scalar,
+}
+
+/// One lowered pattern's shape.
+enum PatShape {
+    /// Matches anything; `Some(name)` binds the whole scrutinee.
+    Irrefutable(Option<String>),
+    /// Discriminant equals one of these constants (or-alternatives);
+    /// payload bindings — (slot index, name) — only for the
+    /// single-alternative form.
+    Tests(Vec<i64>, Vec<(usize, String)>),
+    /// Bool literal (the discriminant IS the condition).
+    BoolTest(bool),
 }
 
 /// How one `mut` argument reaches the callee (s26).
@@ -475,12 +743,11 @@ enum MutArg {
 enum WriteBackShape {
     /// A whole local: reload and redefine.
     Var { var: Var, ty: TypeId },
-    /// One field of a by-value aggregate local: reload the field and
-    /// rebuild the aggregate around it.
+    /// A (possibly nested) field path of a by-value aggregate local:
+    /// reload the leaf and rebuild the aggregates around it.
     Field {
         var: Var,
-        agg_ty: TypeId,
-        index: usize,
+        path: Vec<usize>,
         fty: TypeId,
     },
 }
@@ -489,14 +756,16 @@ struct WriteBack {
     shape: WriteBackShape,
     slot: Value,
     region: RegionId,
+    span: Span,
 }
 
 impl WriteBackShape {
-    fn filled(self, slot: Value, region: RegionId) -> WriteBack {
+    fn filled(self, slot: Value, region: RegionId, span: Span) -> WriteBack {
         WriteBack {
             shape: self,
             slot,
             region,
+            span,
         }
     }
 }
@@ -514,8 +783,23 @@ struct Lowerer<'t, 'b, 'm> {
     local_tys: HashMap<Span, TyId>,
     casts: HashMap<Span, (TyId, TyId, CastKind)>,
     fns: &'t HashMap<&'t str, Vec<(usize, &'t FnSig)>>,
-    scopes: Vec<Vec<(String, LocalBind)>>,
+    /// Method dispatch decisions by call span (s17/s27).
+    dispatch: HashMap<Span, &'t Dispatch>,
+    /// Per-`match` exhaustiveness facts by span (s17).
+    matches: HashMap<Span, bool>,
+    scopes: Vec<ScopeFrame<'t>>,
+    /// In-force visibility fence while re-lowering a defer entry at an
+    /// exit site: (scope index, binds visible there, stack depth when
+    /// installed — the defer body's own deeper scopes stay visible).
+    visible: Option<(usize, usize, usize)>,
     loops: Vec<LoopFrame>,
+    /// The function's fallible shape: the eu WIR type of its return
+    /// (None when the return is not a tagged error union).
+    fn_eu: Option<TypeId>,
+    /// The function body's trailing-expression span when the function
+    /// is fallible: the tail routes through `emit_return` so errdefer
+    /// applicability is decided uniformly.
+    fn_tail: Option<Span>,
     /// Per-function callee import cache.
     callees: HashMap<String, ExtFunc>,
     /// Semi-pruned pre-scan verdict: a function whose body contains no
@@ -536,10 +820,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     fn lower_fn(&mut self, fsig: &FnSig, block: AstBlock<'t>) -> R<()> {
         self.straight_line = !contains_control(block.syntax());
+        // The fallible shape (s27): a tagged-row return means every
+        // return site produces the eu pair, and the body tail routes
+        // through `emit_return`.
+        if let TyKind::ErrUnion(_, row) = self.sig_table.kind(fsig.ret)
+            && !row_is_empty(self.sig_table, *row)
+        {
+            let eu = wir_ty(
+                &mut self.b.module.types,
+                self.sig_table,
+                self.sigs,
+                fsig.ret,
+                fsig.name_span,
+            )?
+            .expect("a tagged error union is a value");
+            self.fn_eu = Some(eu);
+            self.fn_tail = block.trailing_expr().map(|e| e.span);
+        }
         // Prologue: signature params are the entry block's params —
         // with each `mut` param expanded to (ptr, mem token) pairs.
         let entry_params = self.b.block_params(self.b.current_block());
-        self.scopes.push(Vec::new());
+        self.scopes.push(ScopeFrame::default());
         let mut wir_idx = 0usize;
         let mut mut_ptrs: Vec<(Value, TypeId)> = Vec::new();
         for p in &fsig.params {
@@ -590,6 +891,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             self.scopes
                 .last_mut()
                 .expect("scope")
+                .binds
                 .push((p.name.clone(), bind));
         }
         // The c04 handoff, at last (s26): the exclusivity theorem the
@@ -598,7 +900,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // (the hand-`restrict`-C killer). The wir rung only runs on
         // mem-clean packages, so the citation always has its theorem.
         for &(ptr, elem) in &mut_ptrs {
-            let size = scalar_size(elem).expect("mut params are scalars");
+            let size = flat_size(&self.b.module.types, elem).expect("mut params are flat");
             self.b.func.add_fact(FactData::new(
                 FactKind::Deref(ptr, DerefSize::Const(size)),
                 Just::Theorem(Theorem::ExclMut),
@@ -623,6 +925,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Flow::Diverged => {}
             Flow::Val(v) => match (ret, v) {
                 (Some(_), Some(val)) => self.b.ins_ret(&[val]),
+                (Some(eu), None) if self.fn_eu == Some(eu) => {
+                    // A unit-ok fallible fn falling through: the
+                    // implicit ok return wraps nothing.
+                    let ok = self.b.ins_eu_make_ok(eu, None);
+                    self.b.ins_ret(&[ok]);
+                }
                 (Some(_), None) => {
                     // Typed return with a unit trailing value: the
                     // checker guarantees this cannot happen on a
@@ -642,7 +950,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     // ---------------------------------------------------- blocks ----
 
     fn lower_block(&mut self, block: AstBlock<'t>, want_value: bool) -> R<Flow> {
-        self.scopes.push(Vec::new());
+        self.lower_block_in(block, want_value, None)
+    }
+
+    /// Lower a block in a fresh scope; `region` attaches the X4 sugar's
+    /// wholesale free as the scope's outermost cleanup entry.
+    fn lower_block_in(
+        &mut self,
+        block: AstBlock<'t>,
+        want_value: bool,
+        region: Option<(RegionId, Value)>,
+    ) -> R<Flow> {
+        self.scopes.push(ScopeFrame {
+            region,
+            ..ScopeFrame::default()
+        });
         let last_value = if want_value {
             block.trailing_expr().map(|e| e.span)
         } else {
@@ -663,8 +985,127 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
         }
+        // Normal fall-through: this scope's own cleanup chain (the
+        // trailing value is already an SSA value — formed before the
+        // defers run, [mem.model.order]).
+        let si = self.scopes.len() - 1;
+        let flowing = self.run_one_scope_exit(si, false);
         self.scopes.pop();
+        if !flowing? {
+            return Ok(Flow::Diverged);
+        }
         Ok(Flow::Val(out))
+    }
+
+    // ------------------------------------------- exit edges (s27) ----
+
+    /// Lower the LIFO cleanup chain for every scope deeper than
+    /// `down_to` (scopes `down_to..` unwind, innermost first) at the
+    /// CURRENT emission point — one call per exit edge. `errdefer`
+    /// entries run only on error edges. Returns false when a cleanup
+    /// provably diverged (the edge is already terminated).
+    fn run_exits(&mut self, down_to: usize, err_path: bool) -> R<bool> {
+        for si in (down_to..self.scopes.len()).rev() {
+            if !self.run_one_scope_exit(si, err_path)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn run_one_scope_exit(&mut self, si: usize, err_path: bool) -> R<bool> {
+        let entries = self.scopes[si].defers.clone();
+        for ent in entries.iter().rev() {
+            if ent.errdefer && !err_path {
+                continue;
+            }
+            // Re-lower the fragment behind a visibility fence (names
+            // resolve as the declaration saw them) with the loop stack
+            // masked (a `break` inside a defer never targets a loop
+            // outside it).
+            let saved_vis = self.visible;
+            let saved_loops = std::mem::take(&mut self.loops);
+            self.visible = Some((ent.fence.0, ent.fence.1, self.scopes.len()));
+            let r = self.lower_expr(ent.expr);
+            self.visible = saved_vis;
+            self.loops = saved_loops;
+            match r? {
+                Flow::Val(_) => {}
+                Flow::Diverged => return Ok(false),
+            }
+        }
+        if let Some((region, handle)) = self.scopes[si].region {
+            // The X4 free point: LIFO-outermost in its scope, present
+            // on EVERY exit edge; the verifier's per-path token
+            // linearity independently proves no edge misses or
+            // doubles it.
+            self.b.ins_region_free(region, handle);
+        }
+        Ok(true)
+    }
+
+    /// Emit one return: run the full cleanup chain, then `ret`. For a
+    /// fallible function returning a DYNAMIC union (not provably ok or
+    /// err at build time) with errdefer entries pending, the exit
+    /// forks on `eu.is_err` so the errdefer chain runs exactly on the
+    /// error edge.
+    fn emit_return(&mut self, v: Option<Value>) -> R<()> {
+        let vals: Vec<Value> = v.into_iter().collect();
+        if let Some(val) = v
+            && self.fn_eu.is_some()
+        {
+            let def_op = match self.b.func.values[val].def {
+                crate::ir::ValueDef::Result(di, _) => Some(self.b.func.insts[di].op),
+                _ => None,
+            };
+            let has_errdefers = self
+                .scopes
+                .iter()
+                .any(|s| s.defers.iter().any(|d| d.errdefer));
+            let err_path = match def_op {
+                Some(Opcode::EuMakeErr) => true,
+                Some(Opcode::EuMakeOk) => false,
+                _ if !has_errdefers => false,
+                _ => {
+                    // Dynamic: fork the exit.
+                    let is_err = self.b.ins_eu_is_err(val);
+                    if let Some(c) = self.b.as_bool_const(is_err) {
+                        if self.run_exits(0, c)? {
+                            self.b.ins_ret(&vals);
+                        }
+                        return Ok(());
+                    }
+                    let err_bb = self.b.create_block();
+                    let ok_bb = self.b.create_block();
+                    self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+                    self.b.seal_block(err_bb);
+                    self.b.seal_block(ok_bb);
+                    self.b.switch_to_block(err_bb);
+                    self.b.gvn_push_scope();
+                    let flowing = self.run_exits(0, true);
+                    self.b.gvn_pop_scope();
+                    if flowing? {
+                        self.b.ins_ret(&vals);
+                    }
+                    self.b.switch_to_block(ok_bb);
+                    self.b.gvn_push_scope();
+                    let flowing = self.run_exits(0, false);
+                    self.b.gvn_pop_scope();
+                    if flowing? {
+                        self.b.ins_ret(&vals);
+                    }
+                    return Ok(());
+                }
+            };
+            if self.run_exits(0, err_path)? {
+                self.b.ins_ret(&vals);
+            }
+            return Ok(());
+        }
+        if self.run_exits(0, false)? {
+            self.b.ins_ret(&vals);
+        }
+        Ok(())
     }
 
     fn lower_stmt(
@@ -678,6 +1119,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let d = ExprStmt::cast(stmt).expect("kind");
                 if let Some(e) = d.expr() {
                     let wanted = Some(e.span) == last_value;
+                    // A fallible function's body tail is a return site:
+                    // route it through `emit_return` so ok-wrapping and
+                    // errdefer applicability are decided uniformly.
+                    if wanted
+                        && self.fn_tail == Some(e.span)
+                        && let Some(eu) = self.fn_eu
+                    {
+                        let v = flow_val!(self.lower_fallible_expr(e, eu));
+                        self.emit_return(v)?;
+                        return Ok(Flow::Diverged);
+                    }
                     let v = flow_val!(self.lower_expr_w(e, wanted));
                     if wanted {
                         *out = v;
@@ -699,10 +1151,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.lower_binding_named(name, d.init(), stmt.span)
             }
             SyntaxKind::AssignStmt => self.lower_assign(stmt),
-            SyntaxKind::DeferStmt => Err(refuse(
-                "defer/errdefer lowering (strict LIFO, s27)",
-                stmt.span,
-            )),
+            SyntaxKind::DeferStmt => {
+                // Registration only — zero code here. The fragment
+                // re-lowers at every applicable exit edge (LIFO).
+                let d = DeferStmt::cast(stmt).expect("kind");
+                if let Some(expr) = d.expr() {
+                    let si = self.scopes.len() - 1;
+                    let fence = (si, self.scopes[si].binds.len());
+                    self.scopes[si].defers.push(DeferEntry {
+                        expr,
+                        errdefer: d.is_errdefer(),
+                        fence,
+                    });
+                }
+                Ok(Flow::Val(None))
+            }
             SyntaxKind::AssumeStmt => Err(refuse(
                 "assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)",
                 stmt.span,
@@ -729,7 +1192,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
-            _ => Err(refuse("destructuring bindings (s27)", pat.span)),
+            _ => Err(refuse(
+                "destructuring bindings (tuple/struct patterns, c06)",
+                pat.span,
+            )),
         }
     }
 
@@ -751,7 +1217,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if let Some(bind) = self.lower_region_init(init)? {
             if let Some(name_span) = name_span {
                 let name = self.text(name_span);
-                self.scopes.last_mut().expect("scope").push((name, bind));
+                self.scopes
+                    .last_mut()
+                    .expect("scope")
+                    .binds
+                    .push((name, bind));
             }
             return Ok(Flow::Val(None));
         }
@@ -794,7 +1264,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 return Err(refuse("a typed binding of a valueless expression", span));
             }
         };
-        self.scopes.last_mut().expect("scope").push((name, bind));
+        self.scopes
+            .last_mut()
+            .expect("scope")
+            .binds
+            .push((name, bind));
         Ok(Flow::Val(None))
     }
 
@@ -863,21 +1337,45 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return;
         }
         let name = self.text(e.span);
-        for scope in self.scopes.iter_mut().rev() {
-            for (n, b) in scope.iter_mut().rev() {
+        let mut frozen_region: Option<RegionId> = None;
+        'outer: for scope in self.scopes.iter_mut().rev() {
+            for (n, b) in scope.binds.iter_mut().rev() {
                 if *n == name
-                    && let LocalBind::Region { frozen, .. } = b
+                    && let LocalBind::Region { frozen, region, .. } = b
                 {
                     *frozen = true;
-                    return;
+                    frozen_region = Some(*region);
+                    break 'outer;
+                }
+            }
+        }
+        // A frozen region is RC-owned (X4): scope-end bookkeeping must
+        // not free it — clear any pending wholesale-free entry.
+        if let Some(r) = frozen_region {
+            for scope in self.scopes.iter_mut() {
+                if matches!(scope.region, Some((sr, _)) if sr == r) {
+                    scope.region = None;
                 }
             }
         }
     }
 
+    /// Name lookup, honoring the defer visibility fence: while a defer
+    /// fragment re-lowers at an exit site, scopes between its
+    /// declaration point and the exit are invisible (its own nested
+    /// scopes, pushed at or beyond the install depth, stay visible).
     fn lookup(&self, name: &str) -> Option<LocalBind> {
-        for scope in self.scopes.iter().rev() {
-            for (n, b) in scope.iter().rev() {
+        for (i, scope) in self.scopes.iter().enumerate().rev() {
+            let limit = match self.visible {
+                Some((fs, fb, depth)) if i < depth => {
+                    if i > fs {
+                        continue; // hidden: between the fence and the exit
+                    }
+                    if i == fs { fb } else { scope.binds.len() }
+                }
+                _ => scope.binds.len(),
+            };
+            for (n, b) in scope.binds[..limit].iter().rev() {
                 if n == name {
                     return Some(*b);
                 }
@@ -911,14 +1409,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return self.lower_member_assign(d, place, stmt.span);
         }
         if place.kind != SyntaxKind::PathExpr {
-            return Err(refuse("assignment through nested places (s27)", place.span));
+            return Err(refuse("assignment through nested places (c06)", place.span));
         }
         let name = self.text(place.span);
         let bind = match self.lookup(&name) {
             Some(b) => b,
             None => {
                 return Err(refuse(
-                    "assignment to a non-local name (globals, s27)",
+                    "assignment to a non-local name (globals, c06)",
                     place.span,
                 ));
             }
@@ -1020,16 +1518,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         if base.kind != SyntaxKind::PathExpr {
-            return Err(refuse("assignment through nested places (s27)", place.span));
+            return Err(refuse("assignment through nested places (c06)", place.span));
         }
         let name = self.text(base.span);
+        // `self.x = v` through a `mut` receiver: a store at the
+        // field's packed offset (s27 methods).
+        if let Some(LocalBind::MutRef {
+            ptr, region, elem, ..
+        }) = self.lookup(&name)
+        {
+            return self.lower_mut_member_assign(d, m, base, ptr, region, elem, span);
+        }
         let Some(LocalBind::Val {
             var,
             wir_ty: agg_ty,
             ..
         }) = self.lookup(&name)
         else {
-            return Err(refuse("assignment through nested places (s27)", place.span));
+            return Err(refuse("assignment through nested places (c06)", place.span));
         };
         let Some(base_sema) = self.expr_sema_ty(base.span) else {
             return Err(refuse("a member write without a recorded type", place.span));
@@ -1088,6 +1594,61 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(None))
     }
 
+    /// `self.f = v` / `self.f += v` where `self` is a pointer-shaped
+    /// `mut` receiver: a store at the field's packed offset, through
+    /// the slot region's token chain.
+    #[allow(clippy::too_many_arguments)]
+    fn lower_mut_member_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        m: wolf_ast::MemberExpr<'t>,
+        base: &'t GreenNode,
+        ptr: Value,
+        region: RegionId,
+        elem: TypeId,
+        span: Span,
+    ) -> R<Flow> {
+        let Some(base_sema) = self.expr_sema_ty(base.span) else {
+            return Err(refuse("a member write without a recorded type", span));
+        };
+        let (index, wrapping, unsigned) = self.member_index(base_sema, m, span)?;
+        let types::TypeData::Agg(fields) = self.b.module.types.get(elem).clone() else {
+            return Err(refuse("member writes on non-aggregate receivers", span));
+        };
+        let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+            return Err(refuse("member writes on non-flat receivers", span));
+        };
+        let Some(&fty) = fields.get(index) else {
+            return Err(refuse("a member the receiver does not carry", span));
+        };
+        let Some(value_expr) = d.value() else {
+            return Ok(Flow::Val(None));
+        };
+        let rhs = flow_val!(self.lower_expr(value_expr));
+        let Some(rhs) = rhs else {
+            return Err(refuse(
+                "assignment of a valueless expression",
+                value_expr.span,
+            ));
+        };
+        let addr = self.field_addr(ptr, offs[index]);
+        let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
+        let newval = if op == SyntaxKind::Eq {
+            rhs
+        } else {
+            let cur = self.load_flat(fty, addr, region, span)?;
+            let Some(bin) = Self::compound_bin(op) else {
+                return Err(refuse("this compound assignment operator", span));
+            };
+            match self.arith(bin, cur, rhs, wrapping, unsigned, fty, span)? {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
+        };
+        self.store_flat(newval, addr, region, span)?;
+        Ok(Flow::Val(None))
+    }
+
     /// Resolve a member access against the base's SEMA type: field
     /// index in declared order plus the field's wrapping/unsigned
     /// classification (struct fields live in the signature table,
@@ -1127,7 +1688,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         ty = *base;
                         table = self.sig_table;
                     }
-                    _ => return Err(refuse("member access on this type (s27)", span)),
+                    _ => return Err(refuse("member access on this type (c06/std)", span)),
                 },
                 TyKind::Tuple(elems) => {
                     let Ok(idx) = mname.parse::<usize>() else {
@@ -1140,7 +1701,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let unsigned = sema_unsigned(table, fty);
                     return Ok((idx, wrapping, unsigned));
                 }
-                _ => return Err(refuse("member access on this type (s27)", span)),
+                _ => return Err(refuse("member access on this type (c06/std)", span)),
             }
         }
     }
@@ -1170,13 +1731,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // keeps straight-line reads free).
                     Some(LocalBind::MutRef {
                         ptr, region, elem, ..
-                    }) => Ok(Flow::Val(Some(self.b.ins_load(elem, ptr, region)))),
+                    }) => Ok(Flow::Val(Some(
+                        self.read_mut_ref(ptr, region, elem, e.span)?,
+                    ))),
                     Some(LocalBind::Region { .. }) => Err(refuse(
                         "first-class region values beyond local bindings (c05)",
                         e.span,
                     )),
                     Some(LocalBind::Unit) => Ok(Flow::Val(None)),
-                    None => Err(refuse("module-item reads (globals, s27)", e.span)),
+                    None => {
+                        // An unresolved bare name whose recorded type
+                        // is a tagged union is an error-tag RAISE
+                        // (sema typed it by injection, D30): the value
+                        // is just the eu pair — errdefer applicability
+                        // is decided where it leaves the function.
+                        if let Some(eu) = self.raise_target(e.span)? {
+                            let id = self.b.module.tag_id(&name);
+                            let tag = self.b.iconst(types::I64, id);
+                            return Ok(Flow::Val(Some(self.b.ins_eu_make_err(eu, tag, &[]))));
+                        }
+                        Err(refuse("module-item reads (globals, c06)", e.span))
+                    }
                 }
             }
             SyntaxKind::Block => {
@@ -1192,23 +1767,32 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::CallExpr => self.lower_call(e),
             SyntaxKind::ReturnExpr => {
                 let d = ReturnExpr::cast(e).expect("kind");
-                let v = match d.value() {
-                    Some(x) => flow_val!(self.lower_expr(x)),
-                    None => None,
+                let v = match (d.value(), self.fn_eu) {
+                    (Some(x), Some(eu)) => match self.lower_fallible_expr(x, eu)? {
+                        Flow::Val(v) => v,
+                        Flow::Diverged => return Ok(Flow::Diverged),
+                    },
+                    (Some(x), None) => flow_val!(self.lower_expr(x)),
+                    (None, Some(eu)) => Some(self.b.ins_eu_make_ok(eu, None)),
+                    (None, None) => None,
                 };
-                match v {
-                    Some(val) => self.b.ins_ret(&[val]),
-                    None => self.b.ins_ret(&[]),
-                }
+                self.emit_return(v)?;
                 Ok(Flow::Diverged)
             }
             SyntaxKind::BreakExpr => {
                 let d = BreakExpr::cast(e).expect("kind");
-                if d.value().is_some() {
-                    return Err(refuse("break-with-value (loop results, s27)", e.span));
-                }
                 if self.loops.is_empty() {
                     return Err(refuse("break outside a loop", e.span));
+                }
+                // The carried value (if any) is formed BEFORE the
+                // defer chains of the scopes being left run.
+                let val = match d.value() {
+                    Some(x) => flow_val!(self.lower_expr(x)),
+                    None => None,
+                };
+                let depth = self.loops.last().expect("frame").depth;
+                if !self.run_exits(depth, false)? {
+                    return Ok(Flow::Diverged);
                 }
                 // The exit block is created lazily so a break-less
                 // `loop` has no unreachable exit.
@@ -1220,34 +1804,56 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         x
                     }
                 };
-                self.b.ins_jmp(exit, &[]);
+                let param = self.loops.last().expect("frame").exit_param;
+                match (val, param) {
+                    (Some(v), None) => {
+                        let ty = self.b.func.value_ty(v);
+                        let p = self.b.add_block_param(exit, ty);
+                        self.loops.last_mut().expect("frame").exit_param = Some(p);
+                        self.b.ins_jmp(exit, &[v]);
+                    }
+                    (Some(v), Some(_)) => self.b.ins_jmp(exit, &[v]),
+                    (None, None) => self.b.ins_jmp(exit, &[]),
+                    (None, Some(_)) => {
+                        return Err(refuse(
+                            "mixed break arities in one loop (checker contract)",
+                            e.span,
+                        ));
+                    }
+                }
                 Ok(Flow::Diverged)
             }
             SyntaxKind::ContinueExpr => {
                 let Some(frame) = self.loops.last() else {
                     return Err(refuse("continue outside a loop", e.span));
                 };
-                let header = frame.header;
-                self.b.ins_jmp(header, &[]);
+                let depth = frame.depth;
+                if !self.run_exits(depth, false)? {
+                    return Ok(Flow::Diverged);
+                }
+                let target = self.continue_target();
+                self.b.ins_jmp(target, &[]);
                 Ok(Flow::Diverged)
             }
-            SyntaxKind::TryExpr => Err(refuse("`?` propagation (eu.* control flow, s27)", e.span)),
-            SyntaxKind::ElseExpr => {
-                Err(refuse("`else` defaulting (eu.* control flow, s27)", e.span))
-            }
-            SyntaxKind::MatchExpr => Err(refuse("match lowering (decision trees, s27)", e.span)),
-            SyntaxKind::ForExpr => Err(refuse("for-loop lowering (ranges, s27)", e.span)),
-            SyntaxKind::StringExpr => Err(refuse("string lowering (s27 memory)", e.span)),
+            SyntaxKind::TryExpr => self.lower_try(e),
+            SyntaxKind::ElseExpr => self.lower_else(e, want),
+            SyntaxKind::MatchExpr => self.lower_match(e, want),
+            SyntaxKind::ForExpr => self.lower_for(e),
+            SyntaxKind::StringExpr => Err(refuse(
+                "string lowering (data segments + runtime str shape, c06)",
+                e.span,
+            )),
             SyntaxKind::StructLit => self.lower_struct_lit(e),
             SyntaxKind::TupleExpr => self.lower_tuple(e),
             SyntaxKind::MemberExpr => self.lower_member(e),
             SyntaxKind::BracketApply => Err(refuse(
-                "indexing lowering (List/Pool receivers, s27)",
+                "indexing lowering (List/Pool runtime shapes, c06)",
                 e.span,
             )),
-            SyntaxKind::RangeExpr | SyntaxKind::FromEndExpr => {
-                Err(refuse("range-value lowering (s27)", e.span))
-            }
+            SyntaxKind::RangeExpr | SyntaxKind::FromEndExpr => Err(refuse(
+                "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
+                e.span,
+            )),
             SyntaxKind::RegionBlock => self.lower_region_block(e, want),
             SyntaxKind::InBlock => self.lower_in_block(e, want),
             SyntaxKind::RegionValue => Err(refuse(
@@ -1301,10 +1907,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         let TyKind::Nominal { module, name } = table.kind(ty) else {
-            return Err(refuse("struct literals of this type (s27)", e.span));
+            return Err(refuse("struct literals of this type (c06)", e.span));
         };
         let Some(ItemSig::Struct(ss)) = self.sigs.get(*module as usize, name) else {
-            return Err(refuse("struct literals of this type (s27)", e.span));
+            return Err(refuse("struct literals of this type (c06)", e.span));
         };
         let declared: Vec<String> = ss.fields.iter().map(|f| f.name.clone()).collect();
         // Source-order evaluation.
@@ -1319,7 +1925,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Some(LocalBind::Val { var, .. }) => Some(self.b.use_var(var)),
                     Some(LocalBind::MutRef {
                         ptr, region, elem, ..
-                    }) => Some(self.b.ins_load(elem, ptr, region)),
+                    }) => Some(self.read_mut_ref(ptr, region, elem, fi.syntax().span)?),
                     _ => {
                         return Err(refuse("this field-init shorthand", fi.syntax().span));
                     }
@@ -1345,7 +1951,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for fname in &declared {
             let Some((_, v)) = by_name.iter().find(|(n, _)| n == fname) else {
                 return Err(refuse(
-                    "struct literals with defaulted fields (s27)",
+                    "struct literals with defaulted fields (c06)",
                     e.span,
                 ));
             };
@@ -1402,7 +2008,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let agg_ty = self.b.func.value_ty(agg);
         let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
-            return Err(refuse("member access on non-aggregates (s27)", e.span));
+            return Err(refuse("member access on non-aggregates (c06/std)", e.span));
         };
         let Some(&fty) = fields.get(index) else {
             return Err(refuse("a member the aggregate does not carry", e.span));
@@ -1425,17 +2031,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(body) = d.body() else {
             return Ok(Flow::Val(None));
         };
-        if contains_early_exit(body.syntax()) {
-            return Err(refuse(
-                "early exit across a region boundary (defer machinery, s27)",
-                e.span,
-            ));
-        }
         let (region, handle) = self.b.ins_region_new();
-        self.scopes.push(Vec::new());
+        // The name binding lives in a thin wrapper scope; the
+        // wholesale free rides the BODY scope's cleanup chain (X4: the
+        // sugar's free is an ordinary defer entry, so every exit edge
+        // — fall-through, `return`, `?`-err, `break`/`continue`
+        // crossing the boundary — frees in the right LIFO position;
+        // [mem.region.intra.2]).
+        self.scopes.push(ScopeFrame::default());
         if let Some(name_tok) = d.name() {
             let name = self.text(name_tok.span);
-            self.scopes.last_mut().expect("scope").push((
+            self.scopes.last_mut().expect("scope").binds.push((
                 name,
                 LocalBind::Region {
                     region,
@@ -1444,16 +2050,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 },
             ));
         }
-        let out = self.lower_block(body, want);
+        let out = self.lower_block_in(body, want, Some((region, handle)));
         self.scopes.pop();
-        let flow = out?;
-        if let Flow::Val(_) = flow {
-            // The wholesale free point ([mem.region.intra.2]): consumes
-            // the region's token — loads past this point are
-            // structurally rejected by the verifier.
-            self.b.ins_region_free(region, handle);
-        }
-        Ok(flow)
+        out
     }
 
     /// `in r { body }` — open a region value for ambient placement.
@@ -1680,7 +2279,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     )));
                 }
                 if !types_is_int(ty) {
-                    return Err(refuse("comparison outside integers/floats (s27)", e.span));
+                    return Err(refuse(
+                        "comparison outside integers/floats (str/enum compares, c06/std)",
+                        e.span,
+                    ));
                 }
                 // Order is a property of the OPERANDS' sema type:
                 // unsigned types compare with the `u*` conditions.
@@ -1939,10 +2541,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             None => want,
         };
+        // A fallible-typed if (its recorded type is a tagged union):
+        // arms may mix raises and plain ok values; both coerce into
+        // the eu pair at the merge (ok-injection is `eu.make.ok`).
+        let merge_eu = self.eu_ty_of_span(e.span)?;
         if let Some(c) = self.b.as_bool_const(cond) {
             // Branch-on-const: lower only the taken arm.
             self.b.stats.identity += 1;
-            return if c {
+            let flow = if c {
                 match d.then_block() {
                     Some(tb) => self.lower_block(tb, want_v),
                     None => Ok(Flow::Val(None)),
@@ -1955,6 +2561,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Some(el) => self.lower_expr_w(el, want_v),
                     None => Ok(Flow::Val(None)),
                 }
+            }?;
+            return match flow {
+                Flow::Val(v) if want_v => Ok(Flow::Val(self.arm_to_merge(v, merge_eu, e.span)?)),
+                f => Ok(f),
             };
         }
         let then_bb = self.b.create_block();
@@ -2003,13 +2613,40 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (Flow::Val(v), Flow::Diverged) => {
                 // Continue in the then arm's end block.
                 self.b.switch_to_block(then_end);
+                let v = if want_v {
+                    self.arm_to_merge(v, merge_eu, e.span)?
+                } else {
+                    v
+                };
                 Ok(Flow::Val(v))
             }
             (Flow::Diverged, Flow::Val(v)) => {
                 self.b.switch_to_block(else_end);
+                let v = if want_v {
+                    self.arm_to_merge(v, merge_eu, e.span)?
+                } else {
+                    v
+                };
                 Ok(Flow::Val(v))
             }
             (Flow::Val(tv), Flow::Val(ev)) => {
+                // Coerce each arm's value into a fallible merge type
+                // in that arm's own end block (may branch for row
+                // widening).
+                self.b.switch_to_block(then_end);
+                let tv = if want_v {
+                    self.arm_to_merge(tv, merge_eu, e.span)?
+                } else {
+                    tv
+                };
+                let then_end = self.b.current_block();
+                self.b.switch_to_block(else_end);
+                let ev = if want_v {
+                    self.arm_to_merge(ev, merge_eu, e.span)?
+                } else {
+                    ev
+                };
+                let else_end = self.b.current_block();
                 let merge = self.b.create_block();
                 // The result rides a merge parameter, typed off the
                 // arm value; equal arm values need no parameter (the
@@ -2041,12 +2678,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_jmp(header, &[]);
         self.b.switch_to_block(header);
         self.b.gvn_push_scope();
-        self.loops.push(LoopFrame { header, exit: None });
+        self.loops.push(LoopFrame {
+            continue_to: ContinueTo::Block(header),
+            exit: None,
+            exit_param: None,
+            depth: self.scopes.len(),
+        });
         let out = self.lower_while_inner(d, header);
         let frame = self.loops.pop().expect("frame");
         self.b.gvn_pop_scope();
         out?;
-        self.finish_loop(header, frame.exit)
+        self.finish_loop(header, frame)
     }
 
     fn lower_while_inner(&mut self, d: WhileExpr<'t>, header: Block) -> R<()> {
@@ -2098,12 +2740,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_jmp(header, &[]);
         self.b.switch_to_block(header);
         self.b.gvn_push_scope();
-        self.loops.push(LoopFrame { header, exit: None });
+        self.loops.push(LoopFrame {
+            continue_to: ContinueTo::Block(header),
+            exit: None,
+            exit_param: None,
+            depth: self.scopes.len(),
+        });
         let out = self.lower_loop_body(d.body(), header);
         let frame = self.loops.pop().expect("frame");
         self.b.gvn_pop_scope();
         out?;
-        self.finish_loop(header, frame.exit)
+        self.finish_loop(header, frame)
     }
 
     fn lower_loop_body(&mut self, body: Option<AstBlock<'t>>, header: Block) -> R<()> {
@@ -2127,15 +2774,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(())
     }
 
-    fn finish_loop(&mut self, header: Block, exit: Option<Block>) -> R<Flow> {
+    fn finish_loop(&mut self, header: Block, frame: LoopFrame) -> R<Flow> {
         self.b.seal_block(header);
-        match exit {
+        match frame.exit {
             Some(exit) => {
                 self.b.seal_block(exit);
                 self.b.switch_to_block(exit);
-                Ok(Flow::Val(None))
+                // `loop { break v }` results ride the exit parameter.
+                Ok(Flow::Val(frame.exit_param))
             }
             None => Ok(Flow::Diverged),
+        }
+    }
+
+    /// The current loop's `continue` target; a `for` loop's latch is
+    /// created on first demand (no unreachable blocks otherwise).
+    fn continue_target(&mut self) -> Block {
+        match self.loops.last().expect("frame").continue_to {
+            ContinueTo::Block(b) => b,
+            ContinueTo::ForLatch(Some(b)) => b,
+            ContinueTo::ForLatch(None) => {
+                let b = self.b.create_block();
+                if let ContinueTo::ForLatch(l) =
+                    &mut self.loops.last_mut().expect("frame").continue_to
+                {
+                    *l = Some(b);
+                }
+                b
+            }
         }
     }
 
@@ -2150,9 +2816,35 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
                 "print" | "print_raw" => {
-                    return Err(refuse("print lowering (strings + io calls, s27)", e.span));
+                    return Err(refuse(
+                        "print lowering (str data + io runtime calls, c06)",
+                        e.span,
+                    ));
                 }
-                _ => return Err(refuse("calls outside the resolved surface", e.span)),
+                _ => {
+                    // A call-shaped tag RAISE (`Io(9)` under a row
+                    // that declares Io with payloads): the callee is a
+                    // bare unresolved name and sema recorded the
+                    // enclosing union type on this call.
+                    if let Some(callee) = d.callee()
+                        && callee.kind == SyntaxKind::PathExpr
+                        && self.lookup(&callee_text).is_none()
+                        && let Some(eu) = self.raise_target(e.span)?
+                    {
+                        let mut payloads = Vec::new();
+                        for a in d.args().into_iter().flat_map(|l| l.args()) {
+                            let Some(vexpr) = Arg::value(a) else { continue };
+                            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                                return Err(refuse("unit-typed tag payloads", vexpr.span));
+                            };
+                            payloads.push(v);
+                        }
+                        let id = self.b.module.tag_id(&callee_text);
+                        let tag = self.b.iconst(types::I64, id);
+                        return Ok(Flow::Val(Some(self.b.ins_eu_make_err(eu, tag, &payloads))));
+                    }
+                    return Err(refuse("calls outside the resolved surface", e.span));
+                }
             }
         }
         let cs = cs.expect("checked");
@@ -2160,13 +2852,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("C calls (unsafe tier, c10)", e.span));
         }
         if cs.ctor {
-            return Err(refuse(
-                "enum-variant construction (decision trees, s27)",
-                e.span,
-            ));
+            return self.lower_ctor(d, cs, e);
         }
         if cs.has_self {
-            return Err(refuse("method calls (receiver lowering, s27)", e.span));
+            return self.lower_method_call(d, cs, e);
         }
         if cs.decl_span.is_none() {
             return Err(refuse("indirect calls through fn values (c05)", e.span));
@@ -2224,11 +2913,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             FactKind::Deref(slot, DerefSize::Const(size)),
                             Just::DefOp,
                         ));
-                        self.b.ins_store(cur, slot, slot_region);
+                        self.store_flat(cur, slot, slot_region, vexpr.span)?;
                         formal_regions.insert(formal, slot_region);
                         args.push(slot);
                         spilled_slots.push(slot);
-                        writebacks.push(writeback.filled(slot, slot_region));
+                        writebacks.push(writeback.filled(slot, slot_region, vexpr.span));
                     }
                     MutArg::Relend { ptr, region } => {
                         formal_regions.insert(formal, region);
@@ -2267,58 +2956,117 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         };
         let results = self.b.ins_call_regions(ext, &args, &formal_regions);
-        // Reload spilled places: the callee's writes are visible
-        // through the slot (the call minted the slot region's
-        // successor token, so these loads are ordered after it).
+        self.run_writebacks(writebacks)?;
+        Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// Reload spilled places after a call: the callee's writes are
+    /// visible through the slot (the call minted the slot region's
+    /// successor token, so these loads are ordered after it).
+    fn run_writebacks(&mut self, writebacks: Vec<WriteBack>) -> R<()> {
         for wb in writebacks {
             let WriteBack {
                 shape,
                 slot,
                 region,
+                span,
             } = wb;
             match shape {
                 WriteBackShape::Var { var, ty } => {
-                    let back = self.b.ins_load(ty, slot, region);
+                    let back = self.load_flat(ty, slot, region, span)?;
                     self.b.def_var(var, back);
                 }
-                WriteBackShape::Field {
-                    var,
-                    agg_ty,
-                    index,
-                    fty,
-                } => {
-                    let back = self.b.ins_load(fty, slot, region);
-                    let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone()
-                    else {
-                        unreachable!("field writeback on a non-aggregate");
-                    };
+                WriteBackShape::Field { var, path, fty } => {
+                    let back = self.load_flat(fty, slot, region, span)?;
                     let cur_agg = self.b.use_var(var);
-                    let mut parts = Vec::with_capacity(fields.len());
-                    for (k, &kt) in fields.iter().enumerate() {
-                        if k == index {
-                            parts.push(back);
-                        } else {
-                            parts.push(
-                                self.b
-                                    .ins(Opcode::AggGet, &[cur_agg], &[kt], Aux::Int(k as i64))
-                                    .one(),
-                            );
-                        }
-                    }
-                    let rebuilt = self
-                        .b
-                        .ins(Opcode::AggMake, &parts, &[agg_ty], Aux::None)
-                        .one();
+                    let rebuilt = self.rebuild_at(cur_agg, &path, back);
                     self.b.def_var(var, rebuilt);
                 }
             }
         }
-        Ok(Flow::Val(results.first().copied()))
+        Ok(())
     }
 
-    /// Classify one `mut` argument: a whole scalar local or a scalar
-    /// field of a by-value aggregate local spills; a re-lent `mut`
-    /// parameter passes through. Anything deeper refuses (s27).
+    /// Rebuild an aggregate value with the leaf at `path` replaced.
+    fn rebuild_at(&mut self, agg: Value, path: &[usize], newv: Value) -> Value {
+        let Some((&idx, rest)) = path.split_first() else {
+            return newv;
+        };
+        let aty = self.b.func.value_ty(agg);
+        let types::TypeData::Agg(fields) = self.b.module.types.get(aty).clone() else {
+            unreachable!("field writeback path over a non-aggregate");
+        };
+        let mut parts = Vec::with_capacity(fields.len());
+        for (k, &kt) in fields.iter().enumerate() {
+            if k == idx && rest.is_empty() {
+                parts.push(newv);
+                continue;
+            }
+            let cur = self
+                .b
+                .ins(Opcode::AggGet, &[agg], &[kt], Aux::Int(k as i64))
+                .one();
+            if k == idx {
+                parts.push(self.rebuild_at(cur, rest, newv));
+            } else {
+                parts.push(cur);
+            }
+        }
+        self.b.ins(Opcode::AggMake, &parts, &[aty], Aux::None).one()
+    }
+
+    /// Resolve a (possibly nested) member chain over a by-value local:
+    /// the base variable, the field index path (outer to inner), and
+    /// the leaf's WIR type.
+    fn resolve_member_chain(&mut self, e: &'t GreenNode) -> R<(Var, Vec<usize>, TypeId)> {
+        let mut members: Vec<wolf_ast::MemberExpr<'t>> = Vec::new();
+        let mut cur = e;
+        while cur.kind == SyntaxKind::MemberExpr {
+            let m = wolf_ast::MemberExpr::cast(cur).expect("kind");
+            let Some(base) = m.base() else {
+                return Err(refuse("a member chain without a base", e.span));
+            };
+            members.push(m);
+            cur = base;
+        }
+        if cur.kind != SyntaxKind::PathExpr {
+            return Err(refuse("`mut` places beyond local paths", e.span));
+        }
+        let name = self.text(cur.span);
+        let Some(LocalBind::Val {
+            var,
+            wir_ty: mut wt,
+            ..
+        }) = self.lookup(&name)
+        else {
+            return Err(refuse(
+                "`mut` places beyond local by-value bindings",
+                e.span,
+            ));
+        };
+        members.reverse(); // innermost (closest to the base) first
+        let mut path = Vec::with_capacity(members.len());
+        for m in members {
+            let base = m.base().expect("checked above");
+            let Some(base_sema) = self.expr_sema_ty(base.span) else {
+                return Err(refuse("a member place without a recorded type", e.span));
+            };
+            let (index, ..) = self.member_index(base_sema, m, e.span)?;
+            let types::TypeData::Agg(fields) = self.b.module.types.get(wt).clone() else {
+                return Err(refuse("member places over non-aggregates", e.span));
+            };
+            let Some(&fty) = fields.get(index) else {
+                return Err(refuse("a member the aggregate does not carry", e.span));
+            };
+            path.push(index);
+            wt = fty;
+        }
+        Ok((var, path, wt))
+    }
+
+    /// Classify one `mut` argument: a whole flat local or a flat field
+    /// path of a by-value aggregate local spills; a re-lent `mut`
+    /// parameter passes through.
     fn lower_mut_arg(&mut self, vexpr: &'t GreenNode) -> R<MutArg> {
         match vexpr.kind {
             SyntaxKind::PathExpr => {
@@ -2327,9 +3075,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Some(LocalBind::Val {
                         var, wir_ty: wty, ..
                     }) => {
-                        let Some(size) = scalar_size(wty) else {
+                        let Some(size) = flat_size(&self.b.module.types, wty) else {
                             return Err(refuse(
-                                "`mut` aggregate arguments (field addressing needs c06 layout)",
+                                "`mut` arguments of non-flat types (spill layout, c06)",
                                 vexpr.span,
                             ));
                         };
@@ -2344,108 +3092,1574 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         Ok(MutArg::Relend { ptr, region })
                     }
                     _ => Err(refuse(
-                        "`mut` arguments beyond local places (s27)",
+                        "`mut` arguments beyond local places (c06)",
                         vexpr.span,
                     )),
                 }
             }
             SyntaxKind::MemberExpr => {
-                let m = wolf_ast::MemberExpr::cast(vexpr).expect("kind");
-                let Some(base) = m.base() else {
+                let (var, path, fty) = self.resolve_member_chain(vexpr)?;
+                let Some(size) = flat_size(&self.b.module.types, fty) else {
                     return Err(refuse(
-                        "`mut` arguments beyond local places (s27)",
+                        "`mut` arguments of non-flat types (spill layout, c06)",
                         vexpr.span,
                     ));
                 };
-                if base.kind != SyntaxKind::PathExpr {
-                    return Err(refuse(
-                        "`mut` arguments through nested places (s27)",
-                        vexpr.span,
-                    ));
+                let mut cur = self.b.use_var(var);
+                for &idx in &path {
+                    let aty = self.b.func.value_ty(cur);
+                    let types::TypeData::Agg(fields) = self.b.module.types.get(aty).clone() else {
+                        return Err(refuse("`mut` fields of non-aggregates", vexpr.span));
+                    };
+                    cur = self
+                        .b
+                        .ins(Opcode::AggGet, &[cur], &[fields[idx]], Aux::Int(idx as i64))
+                        .one();
                 }
-                let name = self.text(base.span);
-                let Some(LocalBind::Val {
-                    var,
-                    wir_ty: agg_ty,
-                    ..
-                }) = self.lookup(&name)
-                else {
-                    return Err(refuse(
-                        "`mut` arguments beyond local places (s27)",
-                        vexpr.span,
-                    ));
-                };
-                let Some(base_sema) = self.expr_sema_ty(base.span) else {
-                    return Err(refuse(
-                        "a `mut` argument without a recorded type",
-                        vexpr.span,
-                    ));
-                };
-                let (index, ..) = self.member_index(base_sema, m, vexpr.span)?;
-                let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
-                    return Err(refuse("`mut` fields of non-aggregates", vexpr.span));
-                };
-                let Some(&fty) = fields.get(index) else {
-                    return Err(refuse("a member the aggregate does not carry", vexpr.span));
-                };
-                let Some(size) = scalar_size(fty) else {
-                    return Err(refuse(
-                        "`mut` aggregate arguments (field addressing needs c06 layout)",
-                        vexpr.span,
-                    ));
-                };
-                let cur_agg = self.b.use_var(var);
-                let cur = self
-                    .b
-                    .ins(Opcode::AggGet, &[cur_agg], &[fty], Aux::Int(index as i64))
-                    .one();
                 Ok(MutArg::Spill {
                     cur,
                     size,
-                    writeback: WriteBackShape::Field {
-                        var,
-                        agg_ty,
-                        index,
-                        fty,
-                    },
+                    writeback: WriteBackShape::Field { var, path, fty },
                 })
             }
             _ => Err(refuse(
-                "`mut` arguments beyond local places (s27)",
+                "`mut` arguments beyond local places (c06)",
                 vexpr.span,
             )),
         }
     }
 
-    /// `assert(cond)` — the one user-raised trap: `br cond, continue,
-    /// trap`. A constant condition folds to nothing (true) or a plain
-    /// `trap` (false) — X3 semantics exactly.
-    fn lower_assert(&mut self, d: CallExpr<'t>) -> R<Flow> {
+    /// Enum-variant construction (`Color.Rgb(1, 2, 3)`, s27): the
+    /// variant tag alone for payload-free enums, else tag + payloads
+    /// with unfilled slots zeroed.
+    fn lower_ctor(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        let Some(sema_ty) = self.expr_sema_ty(e.span) else {
+            return Err(refuse("a constructor without a recorded type", e.span));
+        };
+        let mut ty = sema_ty;
+        for _ in 0..32 {
+            match self.table.kind(ty) {
+                TyKind::Distinct(inner) => ty = *inner,
+                _ => break,
+            }
+        }
+        if matches!(
+            self.table.kind(ty),
+            TyKind::List(_) | TyKind::Pool(_) | TyKind::Shared(_)
+        ) {
+            return Err(refuse(
+                "List/Pool/shared constructor lowering (runtime shapes, c06)",
+                e.span,
+            ));
+        }
+        let TyKind::Nominal { module, name } = self.table.kind(ty) else {
+            return Err(refuse("constructing a non-enum type", e.span));
+        };
+        let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(*module as usize, name) else {
+            return Err(refuse("constructing a non-enum type", e.span));
+        };
+        let vname = cs.callee.rsplit('.').next().unwrap_or(&cs.callee);
+        let Some(index) = variants.iter().position(|v| v.name == vname) else {
+            return Err(refuse("a variant the enum does not declare", e.span));
+        };
+        let mut payloads = Vec::new();
         for a in d.args().into_iter().flat_map(|l| l.args()) {
             let Some(vexpr) = Arg::value(a) else { continue };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed enum payloads", vexpr.span));
+            };
+            payloads.push(v);
+        }
+        let Some(wty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            sema_ty,
+            e.span,
+        )?
+        else {
+            return Err(refuse("a unit-shaped enum", e.span));
+        };
+        let tag = self.b.iconst(types::I64, index as i64);
+        if wty == types::I64 {
+            // Payload-free enum: the tag IS the value.
+            return Ok(Flow::Val(Some(tag)));
+        }
+        let types::TypeData::Agg(fields) = self.b.module.types.get(wty).clone() else {
+            return Err(refuse("an enum without an aggregate shape", e.span));
+        };
+        let mut parts = vec![tag];
+        parts.extend(payloads.iter().copied());
+        for &fty in &fields[parts.len()..] {
+            let z = self.zero_of(fty, e.span)?;
+            parts.push(z);
+        }
+        Ok(Flow::Val(Some(
+            self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one(),
+        )))
+    }
+
+    /// An inherent method call (s27): the receiver marshals under its
+    /// declared mode (read/take by value, `mut` pointer-shaped via the
+    /// s26 spill machinery), then ordinary arguments; the callee is
+    /// the mangled `Type.method` function.
+    fn lower_method_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        let Some(disp) = self.dispatch.get(&e.span).copied() else {
+            return Err(refuse("a method call without a dispatch record", e.span));
+        };
+        let Dispatch::Inherent { ty, method } = disp else {
+            return Err(refuse(
+                "trait-method call lowering (dispatch tables, c06)",
+                e.span,
+            ));
+        };
+        // The receiver place: `recv.m(…)` / `(mut recv).m(…)`.
+        let Some(callee) = d.callee() else {
+            return Err(refuse("a method call without a callee", e.span));
+        };
+        let m = wolf_ast::MemberExpr::cast(callee)
+            .ok_or_else(|| refuse("a method call without a receiver", e.span))?;
+        let Some(base) = m.base() else {
+            return Err(refuse("a method call without a receiver", e.span));
+        };
+        let recv_place: &GreenNode = if base.kind == SyntaxKind::ParenExpr {
+            ParenExpr::cast(base).and_then(|p| p.expr()).unwrap_or(base)
+        } else {
+            base
+        };
+        // The method's signature, from the unique inherent impl.
+        let msig: &FnSig = self
+            .sigs
+            .impls
+            .iter()
+            .filter(|i| i.trait_ref.is_none())
+            .find_map(|i| {
+                let TyKind::Nominal { name, .. } = self.sig_table.kind(i.self_ty) else {
+                    return None;
+                };
+                if name != ty {
+                    return None;
+                }
+                i.methods
+                    .iter()
+                    .find(|mm| &mm.name == method)
+                    .map(|mm| &mm.sig)
+            })
+            .ok_or_else(|| refuse("a method call without an elaborated impl", e.span))?;
+        if !msig.generics.is_empty() {
+            return Err(refuse("generic-method calls (monomorphization)", e.span));
+        }
+        if msig.comptime {
+            return Err(refuse("comptime calls (D29 CTFE owns these)", e.span));
+        }
+        let mut args = Vec::new();
+        let mut formal_regions: HashMap<u32, RegionId> = HashMap::new();
+        let mut next_formal = 0u32;
+        let mut writebacks: Vec<WriteBack> = Vec::new();
+        let mut spilled_slots: Vec<Value> = Vec::new();
+        // Receiver first, under its declared mode.
+        let recv_mode = cs.params.first().and_then(|p| p.mode);
+        match recv_mode {
+            Some(ParamMode::Mut) => {
+                let formal = next_formal;
+                next_formal += 1;
+                match self.lower_mut_arg(recv_place)? {
+                    MutArg::Spill {
+                        cur,
+                        size,
+                        writeback,
+                    } => {
+                        let (slot_region, slot) = self.b.ins_stack_alloc(size);
+                        self.b.func.add_fact(FactData::new(
+                            FactKind::Region(slot, slot_region),
+                            Just::DefOp,
+                        ));
+                        self.b.func.add_fact(FactData::new(
+                            FactKind::Deref(slot, DerefSize::Const(size)),
+                            Just::DefOp,
+                        ));
+                        self.store_flat(cur, slot, slot_region, recv_place.span)?;
+                        formal_regions.insert(formal, slot_region);
+                        args.push(slot);
+                        spilled_slots.push(slot);
+                        writebacks.push(writeback.filled(slot, slot_region, recv_place.span));
+                    }
+                    MutArg::Relend { ptr, region } => {
+                        formal_regions.insert(formal, region);
+                        args.push(ptr);
+                    }
+                }
+            }
+            _ => {
+                // read / take: the receiver travels by value.
+                let Some(v) = flow_val!(self.lower_expr(recv_place)) else {
+                    return Err(refuse("a valueless receiver", recv_place.span));
+                };
+                args.push(v);
+            }
+        }
+        // Remaining arguments under their declared modes (params[0] is
+        // the receiver).
+        for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
+            let mode = cs.params.get(i + 1).and_then(|p| p.mode);
+            let Some(vexpr) = Arg::value(a) else { continue };
+            if mode == Some(ParamMode::Mut) {
+                let formal = next_formal;
+                next_formal += 1;
+                match self.lower_mut_arg(vexpr)? {
+                    MutArg::Spill {
+                        cur,
+                        size,
+                        writeback,
+                    } => {
+                        let (slot_region, slot) = self.b.ins_stack_alloc(size);
+                        self.b.func.add_fact(FactData::new(
+                            FactKind::Region(slot, slot_region),
+                            Just::DefOp,
+                        ));
+                        self.b.func.add_fact(FactData::new(
+                            FactKind::Deref(slot, DerefSize::Const(size)),
+                            Just::DefOp,
+                        ));
+                        self.store_flat(cur, slot, slot_region, vexpr.span)?;
+                        formal_regions.insert(formal, slot_region);
+                        args.push(slot);
+                        spilled_slots.push(slot);
+                        writebacks.push(writeback.filled(slot, slot_region, vexpr.span));
+                    }
+                    MutArg::Relend { ptr, region } => {
+                        formal_regions.insert(formal, region);
+                        args.push(ptr);
+                    }
+                }
+                continue;
+            }
             let v = flow_val!(self.lower_expr(vexpr));
             let Some(v) = v else {
-                return Err(refuse("assert of a valueless expression", vexpr.span));
+                return Err(refuse("unit-typed arguments", vexpr.span));
             };
-            match self.b.as_bool_const(v) {
-                Some(true) => {
-                    self.b.stats.fold += 1;
+            args.push(v);
+        }
+        for (i, &a) in spilled_slots.iter().enumerate() {
+            for &b in &spilled_slots[i + 1..] {
+                self.b.func.add_fact(FactData::new(
+                    FactKind::Noalias(a, b),
+                    Just::Theorem(Theorem::ExclField),
+                ));
+            }
+        }
+        // The WIR callee is the mangled `Type.method` — sema's callee
+        // label may be the bare method name, and bare names collide
+        // across types.
+        let callee_name = format!("{ty}.{method}");
+        let ext = match self.callees.get(&callee_name) {
+            Some(&ext) => ext,
+            None => {
+                let sig = wir_sig_of(self.b.module, self.sigs, msig, e.span)?;
+                let ext = self.b.func.import_func(callee_name.clone(), sig);
+                self.callees.insert(callee_name, ext);
+                ext
+            }
+        };
+        let results = self.b.ins_call_regions(ext, &args, &formal_regions);
+        self.run_writebacks(writebacks)?;
+        Ok(Flow::Val(results.first().copied()))
+    }
+
+    // ------------------------------------- error unions (s27, D30) ----
+
+    /// The recorded type at `span` as a tagged-union WIR type, when it
+    /// is one (the raise / fallible-merge target).
+    fn eu_ty_of_span(&mut self, span: Span) -> R<Option<TypeId>> {
+        let Some(t) = self.expr_sema_ty(span) else {
+            return Ok(None);
+        };
+        if let TyKind::ErrUnion(_, row) = self.table.kind(t)
+            && !row_is_empty(self.table, *row)
+        {
+            return wir_ty(&mut self.b.module.types, self.table, self.sigs, t, span);
+        }
+        Ok(None)
+    }
+
+    /// Alias with intent: is this span a tag-raise site (sema recorded
+    /// the enclosing union type on it via `inject_tag`)?
+    fn raise_target(&mut self, span: Span) -> R<Option<TypeId>> {
+        self.eu_ty_of_span(span)
+    }
+
+    /// Lower an expression whose value must be `eu`-typed (a fallible
+    /// return operand or fn tail): raises and calls already produce eu
+    /// values through their own arms; a plain ok value is injected.
+    fn lower_fallible_expr(&mut self, e: &'t GreenNode, eu: TypeId) -> R<Flow> {
+        let v = match self.lower_expr(e)? {
+            Flow::Val(v) => v,
+            Flow::Diverged => return Ok(Flow::Diverged),
+        };
+        Ok(Flow::Val(self.arm_to_merge(v, Some(eu), e.span)?))
+    }
+
+    /// Coerce one merge-arm value into the fallible merge type:
+    /// identity when already there, ok-injection (`eu.make.ok`)
+    /// otherwise, widening for a narrower union.
+    fn arm_to_merge(
+        &mut self,
+        v: Option<Value>,
+        want_eu: Option<TypeId>,
+        span: Span,
+    ) -> R<Option<Value>> {
+        let Some(eu) = want_eu else { return Ok(v) };
+        let types::TypeData::Eu { ok, .. } = self.b.module.types.get(eu).clone() else {
+            unreachable!("merge target is a union");
+        };
+        match v {
+            None => {
+                if ok.is_some() {
+                    return Err(refuse(
+                        "a valueless arm in a value-carrying fallible merge",
+                        span,
+                    ));
                 }
-                Some(false) => {
-                    self.b.stats.fold += 1;
-                    self.b.ins_trap();
-                    return Ok(Flow::Diverged);
+                Ok(Some(self.b.ins_eu_make_ok(eu, None)))
+            }
+            Some(v) => {
+                let vt = self.b.func.value_ty(v);
+                if vt == eu {
+                    return Ok(Some(v));
                 }
+                if matches!(self.b.module.types.get(vt), types::TypeData::Eu { .. }) {
+                    return self.coerce_eu(v, eu, span).map(Some);
+                }
+                Ok(Some(self.b.ins_eu_make_ok(eu, Some(v))))
+            }
+        }
+    }
+
+    /// Widen a union value into a wider union type (RowWiden, s15):
+    /// with module-interned tags the tag passes through unchanged; the
+    /// ok and payload halves rebuild. Emits a diamond when the err bit
+    /// is dynamic.
+    fn coerce_eu(&mut self, v: Value, target: TypeId, span: Span) -> R<Value> {
+        let src = self.b.func.value_ty(v);
+        if src == target {
+            return Ok(v);
+        }
+        let types::TypeData::Eu { ok: sok, .. } = self.b.module.types.get(src).clone() else {
+            return Err(refuse("widening a non-union value", span));
+        };
+        let types::TypeData::Eu { ok: tok, .. } = self.b.module.types.get(target).clone() else {
+            return Err(refuse("widening into a non-union type", span));
+        };
+        if sok != tok {
+            return Err(refuse("row widening across differing ok types", span));
+        }
+        let is_err = self.b.ins_eu_is_err(v);
+        if let Some(c) = self.b.as_bool_const(is_err) {
+            return if c {
+                self.propagate_err(v, target, span)
+            } else {
+                let okv = sok.map(|_| self.b.ins_eu_ok(v));
+                Ok(self.b.ins_eu_make_ok(target, okv))
+            };
+        }
+        let err_bb = self.b.create_block();
+        let ok_bb = self.b.create_block();
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, target);
+        self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+        self.b.seal_block(err_bb);
+        self.b.seal_block(ok_bb);
+        self.b.switch_to_block(err_bb);
+        self.b.gvn_push_scope();
+        let ev = self.propagate_err(v, target, span)?;
+        self.b.ins_jmp(merge, &[ev]);
+        self.b.gvn_pop_scope();
+        self.b.switch_to_block(ok_bb);
+        self.b.gvn_push_scope();
+        let okv = sok.map(|_| self.b.ins_eu_ok(v));
+        let rv = self.b.ins_eu_make_ok(target, okv);
+        self.b.ins_jmp(merge, &[rv]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        Ok(out)
+    }
+
+    /// Rebuild a union's error half at the target union type — D30's
+    /// "injection re-tagging" is the identity on module-interned tags;
+    /// only payload slots transfer (a prefix of the target's, by slot
+    /// unification).
+    fn propagate_err(&mut self, v: Value, target: TypeId, span: Span) -> R<Value> {
+        let src = self.b.func.value_ty(v);
+        if src == target {
+            return Ok(v);
+        }
+        let types::TypeData::Eu { slots: sslots, .. } = self.b.module.types.get(src).clone() else {
+            return Err(refuse("propagating a non-union value", span));
+        };
+        let types::TypeData::Eu { slots: tslots, .. } = self.b.module.types.get(target).clone()
+        else {
+            return Err(refuse("propagating into a non-union type", span));
+        };
+        if sslots.len() > tslots.len() || sslots[..] != tslots[..sslots.len()] {
+            return Err(refuse(
+                "row widening with non-prefix payload slots (spilled union layout, c06)",
+                span,
+            ));
+        }
+        let tag = self.b.ins_eu_err_tag(v);
+        let payloads: Vec<Value> = (0..sslots.len())
+            .map(|k| self.b.ins_eu_err_slot(v, k))
+            .collect();
+        Ok(self.b.ins_eu_make_err(target, tag, &payloads))
+    }
+
+    /// Postfix `?` (D30): `br eu.is_err, b_err, b_ok`. The ok path
+    /// continues with the payload; the err path forms the propagated
+    /// error FIRST, runs the errdefer+defer chains ([mem.model.order]),
+    /// and `ret`s — ordinary control flow, no unwinding, ever.
+    fn lower_try(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let d = TryExpr::cast(e).expect("kind");
+        let Some(inner) = d.expr() else {
+            return Ok(Flow::Val(None));
+        };
+        let v = flow_val!(self.lower_expr(inner));
+        let Some(v) = v else {
+            return Err(refuse("`?` on a valueless operand", e.span));
+        };
+        let vty = self.b.func.value_ty(v);
+        let types::TypeData::Eu { ok, .. } = self.b.module.types.get(vty).clone() else {
+            // The operand's row is statically empty: it lowered as its
+            // plain ok type, and `?` is the identity.
+            return Ok(Flow::Val(Some(v)));
+        };
+        let Some(fn_eu) = self.fn_eu else {
+            return Err(refuse(
+                "`?` outside a fallible fn (checker contract)",
+                e.span,
+            ));
+        };
+        let is_err = self.b.ins_eu_is_err(v);
+        if let Some(c) = self.b.as_bool_const(is_err) {
+            // A locally-built union: the split folds away entirely.
+            if c {
+                let out = self.propagate_err(v, fn_eu, e.span)?;
+                if self.run_exits(0, true)? {
+                    self.b.ins_ret(&[out]);
+                }
+                return Ok(Flow::Diverged);
+            }
+            let okv = ok.map(|_| self.b.ins_eu_ok(v));
+            return Ok(Flow::Val(okv));
+        }
+        let err_bb = self.b.create_block();
+        let ok_bb = self.b.create_block();
+        self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+        self.b.seal_block(err_bb);
+        self.b.seal_block(ok_bb);
+        self.b.switch_to_block(err_bb);
+        self.b.gvn_push_scope();
+        let out = self.propagate_err(v, fn_eu, e.span)?;
+        let flowing = self.run_exits(0, true);
+        self.b.gvn_pop_scope();
+        if flowing? {
+            self.b.ins_ret(&[out]);
+        }
+        self.b.switch_to_block(ok_bb);
+        let okv = ok.map(|_| self.b.ins_eu_ok(v));
+        Ok(Flow::Val(okv))
+    }
+
+    /// `expr else fallback` / `expr else |err| handler` (D30): branch
+    /// on the err bit; the handler runs with the caught row value
+    /// bound; both sides merge on the ok type.
+    fn lower_else(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
+        let d = ElseExpr::cast(e).expect("kind");
+        let Some(scrut) = d.scrutinized() else {
+            return Ok(Flow::Val(None));
+        };
+        let v = flow_val!(self.lower_expr(scrut));
+        let Some(v) = v else {
+            return Err(refuse("`else` on a valueless operand", e.span));
+        };
+        let vty = self.b.func.value_ty(v);
+        let types::TypeData::Eu { ok, slots } = self.b.module.types.get(vty).clone() else {
+            // Statically-empty row: the fallback is dead code.
+            return Ok(Flow::Val(Some(v)));
+        };
+        let Some(fb) = d.fallback() else {
+            return Err(refuse("an `else` without a fallback", e.span));
+        };
+        let want_v = match self.expr_sema_ty(e.span) {
+            Some(t) => {
+                wir_ty(&mut self.b.module.types, self.table, self.sigs, t, e.span)?.is_some()
+            }
+            None => want,
+        };
+        let is_err = self.b.ins_eu_is_err(v);
+        if let Some(c) = self.b.as_bool_const(is_err) {
+            if !c {
+                return Ok(Flow::Val(ok.map(|_| self.b.ins_eu_ok(v))));
+            }
+            return self.lower_else_handler(d, v, &slots, fb, want_v);
+        }
+        let err_bb = self.b.create_block();
+        let ok_bb = self.b.create_block();
+        self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+        self.b.seal_block(err_bb);
+        self.b.seal_block(ok_bb);
+        self.b.switch_to_block(ok_bb);
+        self.b.gvn_push_scope();
+        let okv = ok.map(|_| self.b.ins_eu_ok(v));
+        self.b.gvn_pop_scope();
+        let ok_end = self.b.current_block();
+        self.b.switch_to_block(err_bb);
+        self.b.gvn_push_scope();
+        let hres = self.lower_else_handler(d, v, &slots, fb, want_v);
+        let hflow = match hres {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        let err_end = self.b.current_block();
+        self.b.gvn_pop_scope();
+        match hflow {
+            Flow::Diverged => {
+                // The handler always diverges (`else |_| { break }`,
+                // the drive-loop shape): the ok value continues alone.
+                self.b.switch_to_block(ok_end);
+                Ok(Flow::Val(okv))
+            }
+            Flow::Val(hv) => {
+                let merge = self.b.create_block();
+                let (param, oargs, hargs): (Option<Value>, Vec<Value>, Vec<Value>) =
+                    match (want_v, okv, hv) {
+                        (true, Some(a), Some(b)) if a != b => {
+                            let ty = self.b.func.value_ty(a);
+                            let p = self.b.add_block_param(merge, ty);
+                            (Some(p), vec![a], vec![b])
+                        }
+                        (true, Some(a), Some(_)) => (Some(a), vec![], vec![]),
+                        _ => (None, vec![], vec![]),
+                    };
+                self.b.switch_to_block(ok_end);
+                self.b.ins_jmp(merge, &oargs);
+                self.b.switch_to_block(err_end);
+                self.b.ins_jmp(merge, &hargs);
+                self.b.seal_block(merge);
+                self.b.switch_to_block(merge);
+                Ok(Flow::Val(param))
+            }
+        }
+    }
+
+    /// The `else` handler side: bind `|err|` to the caught row value
+    /// (tag alone, or tag + payload slots as an aggregate — the enum
+    /// mirror), then lower the fallback.
+    fn lower_else_handler(
+        &mut self,
+        d: ElseExpr<'t>,
+        v: Value,
+        slots: &[TypeId],
+        fb: &'t GreenNode,
+        want_v: bool,
+    ) -> R<Flow> {
+        self.scopes.push(ScopeFrame::default());
+        if let Some(p) = d.handler_pattern() {
+            match p.kind {
+                SyntaxKind::IdentPat => {
+                    let name = self.text(p.span);
+                    let tag = self.b.ins_eu_err_tag(v);
+                    let rv = if slots.is_empty() {
+                        tag
+                    } else {
+                        let mut parts = vec![tag];
+                        for k in 0..slots.len() {
+                            parts.push(self.b.ins_eu_err_slot(v, k));
+                        }
+                        let mut fields = vec![types::I64];
+                        fields.extend_from_slice(slots);
+                        let aggt = self.b.module.types.intern(types::TypeData::Agg(fields));
+                        self.b
+                            .ins(Opcode::AggMake, &parts, &[aggt], Aux::None)
+                            .one()
+                    };
+                    let rty = self.b.func.value_ty(rv);
+                    let var = self.b.declare_var(rty);
+                    self.b.def_var(var, rv);
+                    self.scopes.last_mut().expect("scope").binds.push((
+                        name,
+                        LocalBind::Val {
+                            var,
+                            wrapping: false,
+                            unsigned: false,
+                            wir_ty: rty,
+                        },
+                    ));
+                }
+                SyntaxKind::WildcardPat => {}
+                _ => {
+                    self.scopes.pop();
+                    return Err(refuse("destructuring `else` handler patterns", p.span));
+                }
+            }
+        }
+        let flow = self.lower_expr_w(fb, want_v);
+        self.scopes.pop();
+        flow
+    }
+
+    // ------------------------------------- match lowering (s27) ----
+
+    /// What one scrutinee type's discriminant ranges over.
+    fn match_domain(&mut self, scrut_sema: TyId, span: Span) -> R<MatchDomain> {
+        let mut ty = scrut_sema;
+        for _ in 0..32 {
+            match self.table.kind(ty) {
+                TyKind::Distinct(inner) => ty = *inner,
+                _ => break,
+            }
+        }
+        match self.table.kind(ty) {
+            TyKind::Nominal { module, name } => match self.sigs.get(*module as usize, name) {
+                Some(ItemSig::Enum { variants, .. }) => Ok(MatchDomain::Enum(
+                    variants
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| (v.name.clone(), i as i64, v.payload.len()))
+                        .collect(),
+                )),
+                _ => Err(refuse("match over this nominal type", span)),
+            },
+            TyKind::Row { tags, .. } => Ok(MatchDomain::Row(
+                tags.iter().map(|(n, p)| (n.clone(), p.len())).collect(),
+            )),
+            TyKind::Prim(Prim::Bool) | TyKind::Prim(_) | TyKind::Wrapping(_) => {
+                Ok(MatchDomain::Scalar)
+            }
+            _ => Err(refuse("match over this scrutinee type", span)),
+        }
+    }
+
+    /// The tag constant a name tests for in `domain`, if it names one.
+    /// Enum variants and row tags match by full dotted name or last
+    /// segment (type-directed, case-blind — the #4 posture).
+    fn domain_test(&mut self, domain: &MatchDomain, name: &str) -> Option<(i64, usize)> {
+        let last = name.rsplit('.').next().unwrap_or(name);
+        match domain {
+            MatchDomain::Enum(vs) => vs
+                .iter()
+                .find(|(n, ..)| n == name || n == last)
+                .map(|(_, i, a)| (*i, *a)),
+            MatchDomain::Row(ts) => {
+                ts.iter()
+                    .find(|(n, _)| n == name || n == last)
+                    .map(|(n, a)| {
+                        let id = self.b.module.tag_id(n);
+                        (id, *a)
+                    })
+            }
+            MatchDomain::Scalar => None,
+        }
+    }
+
+    /// Classify one arm pattern against the domain.
+    fn pattern_shape(&mut self, pat: &'t GreenNode, domain: &MatchDomain) -> R<PatShape> {
+        match pat.kind {
+            SyntaxKind::WildcardPat => Ok(PatShape::Irrefutable(None)),
+            SyntaxKind::IdentPat => {
+                let name = self.text(pat.span);
+                match self.domain_test(domain, &name) {
+                    Some((c, _)) => Ok(PatShape::Tests(vec![c], vec![])),
+                    None => Ok(PatShape::Irrefutable(Some(name))),
+                }
+            }
+            SyntaxKind::LiteralPat => {
+                let text = self.text(pat.span);
+                if text == "true" {
+                    return Ok(PatShape::BoolTest(true));
+                }
+                if text == "false" {
+                    return Ok(PatShape::BoolTest(false));
+                }
+                match parse_int_literal(&text) {
+                    Some(n) => Ok(PatShape::Tests(vec![n], vec![])),
+                    None => Err(refuse("this literal pattern shape", pat.span)),
+                }
+            }
+            SyntaxKind::PathPat => {
+                // `Tag(subpats…)` / `Type.Variant(subpats…)`: the path
+                // names the tag; payload subpatterns bind slots. The
+                // path may be a nested node, so read it as the source
+                // text before the payload parenthesis.
+                let end = pat
+                    .nodes()
+                    .find(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .map(|n| n.span.lo)
+                    .unwrap_or(pat.span.hi);
+                let raw = String::from_utf8_lossy(&self.src[pat.span.lo as usize..end as usize])
+                    .into_owned();
+                let name: String = raw.trim_end().trim_end_matches('(').trim_end().to_string();
+                let Some((c, arity)) = self.domain_test(domain, &name) else {
+                    return Err(refuse(
+                        "a pattern tag the scrutinee does not carry",
+                        pat.span,
+                    ));
+                };
+                let subs: Vec<&GreenNode> = pat
+                    .nodes()
+                    .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .collect();
+                if subs.len() != arity {
+                    return Err(refuse(
+                        "payload arity in a pattern (checker contract)",
+                        pat.span,
+                    ));
+                }
+                let mut binds = Vec::new();
+                for (j, s) in subs.iter().enumerate() {
+                    match s.kind {
+                        SyntaxKind::IdentPat => binds.push((j, self.text(s.span))),
+                        SyntaxKind::WildcardPat => {}
+                        _ => {
+                            return Err(refuse(
+                                "nested refutable payload patterns (deep trees, c06)",
+                                s.span,
+                            ));
+                        }
+                    }
+                }
+                Ok(PatShape::Tests(vec![c], binds))
+            }
+            SyntaxKind::OrPat => {
+                let mut consts = Vec::new();
+                for alt in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
+                    match self.pattern_shape(alt, domain)? {
+                        PatShape::Irrefutable(_) => return Ok(PatShape::Irrefutable(None)),
+                        PatShape::Tests(cs, binds) => {
+                            if !binds.is_empty() {
+                                return Err(refuse(
+                                    "or-patterns with payload bindings (join params, c06)",
+                                    alt.span,
+                                ));
+                            }
+                            consts.extend(cs);
+                        }
+                        PatShape::BoolTest(_) => {
+                            return Err(refuse("or-patterns over bool", alt.span));
+                        }
+                    }
+                }
+                Ok(PatShape::Tests(consts, vec![]))
+            }
+            _ => Err(refuse(
+                "this pattern shape in match lowering (tuple/@-bindings, c06)",
+                pat.span,
+            )),
+        }
+    }
+
+    /// Compile a `match` to a decision chain over one discriminant
+    /// read: shared tests in arm order, guards re-entering at the next
+    /// candidate, no default edge when sema proved totality (s17).
+    fn lower_match(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
+        let d = MatchExpr::cast(e).expect("kind");
+        let Some(scrut_node) = d.scrutinee() else {
+            return Ok(Flow::Val(None));
+        };
+        let Some(scrut_sema) = self.expr_sema_ty(scrut_node.span) else {
+            return Err(refuse("a match without a recorded scrutinee type", e.span));
+        };
+        let sv = flow_val!(self.lower_expr(scrut_node));
+        let Some(sv) = sv else {
+            return Err(refuse("match on a valueless scrutinee", e.span));
+        };
+        let domain = self.match_domain(scrut_sema, e.span)?;
+        // ONE discriminant read: payload-carrying enum/row values are
+        // aggregates whose field 0 is the tag.
+        let sv_ty = self.b.func.value_ty(sv);
+        let disc = match (&domain, self.b.module.types.get(sv_ty).clone()) {
+            (MatchDomain::Enum(_) | MatchDomain::Row(_), types::TypeData::Agg(fields)) => self
+                .b
+                .ins(Opcode::AggGet, &[sv], &[fields[0]], Aux::Int(0))
+                .one(),
+            _ => sv,
+        };
+        let want_v = match self.expr_sema_ty(e.span) {
+            Some(t) => {
+                wir_ty(&mut self.b.module.types, self.table, self.sigs, t, e.span)?.is_some()
+            }
+            None => want,
+        };
+        let merge_eu = self.eu_ty_of_span(e.span)?;
+        let exhaustive = self.matches.get(&e.span).copied().unwrap_or(false);
+        let arms: Vec<MatchArm> = d.arms().collect();
+        let n = arms.len();
+        // The merge point, created on the first arm that completes.
+        let mut merge: Option<(Block, Option<Value>)> = None;
+        let mut open = true; // the current block still needs a decision
+        for (i, arm) in arms.iter().enumerate() {
+            if !open {
+                break; // an irrefutable arm ended the chain (E0802'd)
+            }
+            let Some(pat) = arm.pattern() else { continue };
+            let shape = self.pattern_shape(pat, &domain)?;
+            let is_last = i + 1 == n;
+            match shape {
+                PatShape::Irrefutable(bind) => {
+                    self.enter_match_arm(
+                        arm,
+                        sv,
+                        &[],
+                        bind,
+                        want_v,
+                        merge_eu,
+                        &mut merge,
+                        None,
+                        e.span,
+                    )?;
+                    open = false;
+                }
+                PatShape::BoolTest(b) => {
+                    // A constant discriminant selects statically —
+                    // untaken arms are never lowered (dead code costs
+                    // nothing, the if-const posture).
+                    if let Some(c) = self.b.as_bool_const(disc) {
+                        self.b.stats.identity += 1;
+                        if c != b {
+                            continue;
+                        }
+                        if arm.guard().is_some() {
+                            let next_bb = self.b.create_block();
+                            self.enter_match_arm(
+                                arm,
+                                sv,
+                                &[],
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                Some(next_bb),
+                                e.span,
+                            )?;
+                            self.b.seal_block(next_bb);
+                            self.b.switch_to_block(next_bb);
+                        } else {
+                            self.enter_match_arm(
+                                arm,
+                                sv,
+                                &[],
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                None,
+                                e.span,
+                            )?;
+                            open = false;
+                        }
+                        continue;
+                    }
+                    if is_last && exhaustive && arm.guard().is_none() {
+                        self.enter_match_arm(
+                            arm,
+                            sv,
+                            &[],
+                            None,
+                            want_v,
+                            merge_eu,
+                            &mut merge,
+                            None,
+                            e.span,
+                        )?;
+                        open = false;
+                    } else {
+                        let arm_bb = self.b.create_block();
+                        let next_bb = self.b.create_block();
+                        if b {
+                            self.b.ins_br(disc, arm_bb, &[], next_bb, &[]);
+                        } else {
+                            self.b.ins_br(disc, next_bb, &[], arm_bb, &[]);
+                        }
+                        self.b.seal_block(arm_bb);
+                        self.b.switch_to_block(arm_bb);
+                        self.enter_match_arm(
+                            arm,
+                            sv,
+                            &[],
+                            None,
+                            want_v,
+                            merge_eu,
+                            &mut merge,
+                            Some(next_bb),
+                            e.span,
+                        )?;
+                        self.b.seal_block(next_bb);
+                        self.b.switch_to_block(next_bb);
+                    }
+                }
+                PatShape::Tests(consts, binds) => {
+                    if let Some(n) = self.b.as_int_const(disc) {
+                        self.b.stats.identity += 1;
+                        if !consts.contains(&n) {
+                            continue;
+                        }
+                        if arm.guard().is_some() {
+                            let next_bb = self.b.create_block();
+                            self.enter_match_arm(
+                                arm,
+                                sv,
+                                &binds,
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                Some(next_bb),
+                                e.span,
+                            )?;
+                            self.b.seal_block(next_bb);
+                            self.b.switch_to_block(next_bb);
+                        } else {
+                            self.enter_match_arm(
+                                arm, sv, &binds, None, want_v, merge_eu, &mut merge, None, e.span,
+                            )?;
+                            open = false;
+                        }
+                        continue;
+                    }
+                    if is_last && exhaustive && arm.guard().is_none() {
+                        // Sema's totality theorem: the final test is an
+                        // unconditional edge — no default arm exists.
+                        self.enter_match_arm(
+                            arm, sv, &binds, None, want_v, merge_eu, &mut merge, None, e.span,
+                        )?;
+                        open = false;
+                    } else {
+                        let arm_bb = self.b.create_block();
+                        let next_bb = self.b.create_block();
+                        // Values born in the later chain blocks do not
+                        // dominate the arm or the next candidate: keep
+                        // them out of the enclosing GVN scope.
+                        let mut chain_scopes = 0usize;
+                        for (k, &c) in consts.iter().enumerate() {
+                            let cv = self.b.iconst(types::I64, c);
+                            let t = self
+                                .b
+                                .ins(
+                                    Opcode::Icmp,
+                                    &[disc, cv],
+                                    &[types::BOOL],
+                                    Aux::IntCc(IntCc::Eq),
+                                )
+                                .one();
+                            if k + 1 == consts.len() {
+                                self.b.ins_br(t, arm_bb, &[], next_bb, &[]);
+                            } else {
+                                let more = self.b.create_block();
+                                self.b.ins_br(t, arm_bb, &[], more, &[]);
+                                self.b.seal_block(more);
+                                self.b.switch_to_block(more);
+                                self.b.gvn_push_scope();
+                                chain_scopes += 1;
+                            }
+                        }
+                        for _ in 0..chain_scopes {
+                            self.b.gvn_pop_scope();
+                        }
+                        self.b.seal_block(arm_bb);
+                        self.b.switch_to_block(arm_bb);
+                        self.enter_match_arm(
+                            arm,
+                            sv,
+                            &binds,
+                            None,
+                            want_v,
+                            merge_eu,
+                            &mut merge,
+                            Some(next_bb),
+                            e.span,
+                        )?;
+                        self.b.seal_block(next_bb);
+                        self.b.switch_to_block(next_bb);
+                    }
+                }
+            }
+        }
+        if open {
+            // A live residual edge (guards on the closing arms): sema
+            // proved the value space covered, so this edge is
+            // unreachable at runtime — the licensed trap.
+            self.b.ins_trap();
+        }
+        match merge {
+            Some((mb, param)) => {
+                self.b.seal_block(mb);
+                self.b.switch_to_block(mb);
+                Ok(Flow::Val(param))
+            }
+            None => Ok(Flow::Diverged),
+        }
+    }
+
+    /// Enter one arm: bind payloads (or the whole scrutinee), run the
+    /// guard (failure re-enters the chain at `next_bb`), lower the
+    /// body, and jump to the merge.
+    #[allow(clippy::too_many_arguments)]
+    fn enter_match_arm(
+        &mut self,
+        arm: &MatchArm<'t>,
+        sv: Value,
+        payload_binds: &[(usize, String)],
+        whole_bind: Option<String>,
+        want_v: bool,
+        merge_eu: Option<TypeId>,
+        merge: &mut Option<(Block, Option<Value>)>,
+        next_bb: Option<Block>,
+        span: Span,
+    ) -> R<()> {
+        self.scopes.push(ScopeFrame::default());
+        self.b.gvn_push_scope();
+        let result = self.enter_match_arm_inner(
+            arm,
+            sv,
+            payload_binds,
+            whole_bind,
+            want_v,
+            merge_eu,
+            merge,
+            next_bb,
+            span,
+        );
+        self.b.gvn_pop_scope();
+        self.scopes.pop();
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn enter_match_arm_inner(
+        &mut self,
+        arm: &MatchArm<'t>,
+        sv: Value,
+        payload_binds: &[(usize, String)],
+        whole_bind: Option<String>,
+        want_v: bool,
+        merge_eu: Option<TypeId>,
+        merge: &mut Option<(Block, Option<Value>)>,
+        next_bb: Option<Block>,
+        span: Span,
+    ) -> R<()> {
+        // Payload bindings: field 1+slot of the scrutinee aggregate,
+        // licensed by the dominating tag test.
+        let sv_ty = self.b.func.value_ty(sv);
+        for (slot, name) in payload_binds {
+            let types::TypeData::Agg(fields) = self.b.module.types.get(sv_ty).clone() else {
+                return Err(refuse("payload bindings on a payload-free scrutinee", span));
+            };
+            let Some(&fty) = fields.get(slot + 1) else {
+                return Err(refuse("a payload slot the scrutinee does not carry", span));
+            };
+            let pv = self
+                .b
+                .ins(Opcode::AggGet, &[sv], &[fty], Aux::Int((slot + 1) as i64))
+                .one();
+            let var = self.b.declare_var(fty);
+            self.b.def_var(var, pv);
+            self.scopes.last_mut().expect("scope").binds.push((
+                name.clone(),
+                LocalBind::Val {
+                    var,
+                    wrapping: false,
+                    unsigned: false,
+                    wir_ty: fty,
+                },
+            ));
+        }
+        if let Some(name) = whole_bind {
+            let var = self.b.declare_var(sv_ty);
+            self.b.def_var(var, sv);
+            self.scopes.last_mut().expect("scope").binds.push((
+                name,
+                LocalBind::Val {
+                    var,
+                    wrapping: false,
+                    unsigned: false,
+                    wir_ty: sv_ty,
+                },
+            ));
+        }
+        // Guard: an ordinary branch; failure re-enters the decision
+        // chain at the next candidate.
+        if let Some(g) = arm.guard() {
+            let Some(next) = next_bb else {
+                return Err(refuse(
+                    "a guard on the closing unconditional arm (coverage came from it)",
+                    span,
+                ));
+            };
+            let gexpr = g.nodes().find(|n| wolf_ast::is_expr_kind(n.kind));
+            let Some(gexpr) = gexpr else {
+                return Err(refuse("a guard without a condition", span));
+            };
+            match self.lower_expr(gexpr)? {
+                Flow::Val(Some(gv)) => {
+                    let body_bb = self.b.create_block();
+                    self.b.ins_br(gv, body_bb, &[], next, &[]);
+                    self.b.seal_block(body_bb);
+                    self.b.switch_to_block(body_bb);
+                }
+                Flow::Val(None) => {
+                    return Err(refuse("a guard without a condition value", span));
+                }
+                Flow::Diverged => return Ok(()),
+            }
+        }
+        let Some(body) = arm.body() else {
+            return Ok(());
+        };
+        let flow = self.lower_expr_w(body, want_v)?;
+        match flow {
+            Flow::Diverged => Ok(()),
+            Flow::Val(v) => {
+                let v = if want_v {
+                    self.arm_to_merge(v, merge_eu, span)?
+                } else {
+                    v
+                };
+                let (mb, param) = match *merge {
+                    Some((mb, param)) => (mb, param),
+                    None => {
+                        let mb = self.b.create_block();
+                        let param = match (want_v, v) {
+                            (true, Some(val)) => {
+                                let ty = self.b.func.value_ty(val);
+                                Some(self.b.add_block_param(mb, ty))
+                            }
+                            _ => None,
+                        };
+                        *merge = Some((mb, param));
+                        (mb, param)
+                    }
+                };
+                match (param, v) {
+                    (Some(_), Some(val)) => self.b.ins_jmp(mb, &[val]),
+                    (None, _) => self.b.ins_jmp(mb, &[]),
+                    (Some(_), None) => {
+                        return Err(refuse("a valueless arm in a valued match", span));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    // --------------------------------------- for loops (s27, D25) ----
+
+    /// `for pat in a..b { body }` — the closed builtin range family
+    /// lowers structurally ([mem.iter.range]): bounds evaluated once,
+    /// ascending +1 steps, checked arithmetic. Other iterables await
+    /// the `Iter[T]` drive loop's std surface ([mem.iter.for]).
+    fn lower_for(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let d = ForExpr::cast(e).expect("kind");
+        let Some(iter) = d.iterable() else {
+            return Ok(Flow::Val(None));
+        };
+        if iter.kind != SyntaxKind::RangeExpr {
+            return Err(refuse(
+                "`for` over non-range iterables (the `Iter[T]` drive loop — List/Pool adopt \
+                 builtin-side, c06/std)",
+                e.span,
+            ));
+        }
+        let r = RangeExpr::cast(iter).expect("kind");
+        let eps: Vec<&GreenNode> = r.endpoints().collect();
+        if eps.len() != 2 || eps.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
+            return Err(refuse("`for` over open or end-relative ranges", iter.span));
+        }
+        let lo = flow_val!(self.lower_expr(eps[0]));
+        let Some(lo) = lo else {
+            return Err(refuse("a range without a start value", iter.span));
+        };
+        let hi = flow_val!(self.lower_expr(eps[1]));
+        let Some(hi) = hi else {
+            return Err(refuse("a range without an end value", iter.span));
+        };
+        let ity = self.b.func.value_ty(lo);
+        if !types_is_int(ity) || self.b.func.value_ty(hi) != ity {
+            return Err(refuse("non-integer `for` ranges", iter.span));
+        }
+        let unsigned = self
+            .expr_sema_ty(eps[0].span)
+            .map(|t| sema_unsigned(self.table, t))
+            .unwrap_or(false);
+        let bind_name = match d.pattern() {
+            None => None,
+            Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(p.span)),
+            Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+            Some(p) => {
+                return Err(refuse(
+                    "destructuring `for` patterns (tuple yields, c06/std)",
+                    p.span,
+                ));
+            }
+        };
+        if r.is_inclusive() {
+            self.lower_for_inclusive(d, lo, hi, ity, unsigned, bind_name)
+        } else {
+            self.lower_for_exclusive(d, lo, hi, ity, unsigned, bind_name)
+        }
+    }
+
+    /// `a..b`: `header(i): br i < b, body, exit; latch: i+1 → header`.
+    #[allow(clippy::too_many_arguments)]
+    fn lower_for_exclusive(
+        &mut self,
+        d: ForExpr<'t>,
+        lo: Value,
+        hi: Value,
+        ity: TypeId,
+        unsigned: bool,
+        bind_name: Option<String>,
+    ) -> R<Flow> {
+        let header = self.b.create_block();
+        let iparam = self.b.add_block_param(header, ity);
+        self.b.ins_jmp(header, &[lo]);
+        self.b.switch_to_block(header);
+        self.b.gvn_push_scope();
+        let cc = if unsigned { IntCc::Ult } else { IntCc::Slt };
+        let cond = self
+            .b
+            .ins(Opcode::Icmp, &[iparam, hi], &[types::BOOL], Aux::IntCc(cc))
+            .one();
+        let body_bb = self.b.create_block();
+        let exit = self.b.create_block();
+        self.b.ins_br(cond, body_bb, &[], exit, &[]);
+        self.b.seal_block(body_bb);
+        self.b.switch_to_block(body_bb);
+        let frame = self.run_for_body(d, iparam, ity, unsigned, bind_name, Some(exit));
+        let frame = match frame {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        // The latch: increment and loop (created only if some path
+        // continues).
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            self.b.gvn_push_scope();
+            let one = self.b.iconst(ity, 1);
+            let op = if unsigned {
+                Opcode::UaddChk
+            } else {
+                Opcode::IaddChk
+            };
+            match self.b.ins(op, &[iparam, one], &[ity], Aux::None) {
+                InsOut::Vals(v) => self.b.ins_jmp(header, &[v[0]]),
+                InsOut::Trapped => {}
+            }
+            self.b.gvn_pop_scope();
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(header);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        Ok(Flow::Val(None))
+    }
+
+    /// `a..=b`: pre-test `a <= b`, body-first header, latch tests
+    /// `i == b` before incrementing — `i + 1` never overflows.
+    #[allow(clippy::too_many_arguments)]
+    fn lower_for_inclusive(
+        &mut self,
+        d: ForExpr<'t>,
+        lo: Value,
+        hi: Value,
+        ity: TypeId,
+        unsigned: bool,
+        bind_name: Option<String>,
+    ) -> R<Flow> {
+        // Constant bounds decide the pre-test statically — no folded
+        // const left behind.
+        let static_pre = match (self.b.as_int_const(lo), self.b.as_int_const(hi)) {
+            (Some(a), Some(b)) if unsigned => Some((a as u64) <= (b as u64)),
+            (Some(a), Some(b)) => Some(a <= b),
+            _ => None,
+        };
+        if static_pre == Some(false) {
+            // The loop provably never runs.
+            self.b.stats.identity += 1;
+            return Ok(Flow::Val(None));
+        }
+        let header = self.b.create_block();
+        let iparam = self.b.add_block_param(header, ity);
+        // With a constant-true pre-test the exit is created lazily
+        // (breaks / the latch demand it) so no unreachable block
+        // survives.
+        let pre_exit = if static_pre == Some(true) {
+            self.b.stats.identity += 1;
+            self.b.ins_jmp(header, &[lo]);
+            None
+        } else {
+            let pre_cc = if unsigned { IntCc::Ule } else { IntCc::Sle };
+            let cond0 = self
+                .b
+                .ins(Opcode::Icmp, &[lo, hi], &[types::BOOL], Aux::IntCc(pre_cc))
+                .one();
+            let exit = self.b.create_block();
+            self.b.ins_br(cond0, header, &[lo], exit, &[]);
+            Some(exit)
+        };
+        self.b.switch_to_block(header);
+        self.b.gvn_push_scope();
+        let frame = self.run_for_body(d, iparam, ity, unsigned, bind_name, pre_exit);
+        let mut frame = match frame {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            self.b.gvn_push_scope();
+            let done = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[iparam, hi],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let exit = match frame.exit {
+                Some(x) => x,
                 None => {
-                    let cont = self.b.create_block();
-                    let trap_bb = self.b.create_block();
-                    self.b.ins_br(v, cont, &[], trap_bb, &[]);
-                    self.b.seal_block(trap_bb);
-                    self.b.switch_to_block(trap_bb);
-                    self.b.ins_trap();
-                    self.b.seal_block(cont);
-                    self.b.switch_to_block(cont);
+                    let x = self.b.create_block();
+                    frame.exit = Some(x);
+                    x
                 }
+            };
+            let inc_bb = self.b.create_block();
+            self.b.ins_br(done, exit, &[], inc_bb, &[]);
+            self.b.seal_block(inc_bb);
+            self.b.switch_to_block(inc_bb);
+            let one = self.b.iconst(ity, 1);
+            let op = if unsigned {
+                Opcode::UaddChk
+            } else {
+                Opcode::IaddChk
+            };
+            match self.b.ins(op, &[iparam, one], &[ity], Aux::None) {
+                InsOut::Vals(v) => self.b.ins_jmp(header, &[v[0]]),
+                InsOut::Trapped => {}
+            }
+            self.b.gvn_pop_scope();
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(header);
+        match frame.exit {
+            Some(exit) => {
+                self.b.seal_block(exit);
+                self.b.switch_to_block(exit);
+                Ok(Flow::Val(None))
+            }
+            None => Ok(Flow::Diverged),
+        }
+    }
+
+    /// The shared `for`-body walk: bind the induction variable, push
+    /// the loop frame (continue → latch, break → exit), lower the
+    /// body, and emit the fall-through edge to the latch.
+    fn run_for_body(
+        &mut self,
+        d: ForExpr<'t>,
+        iparam: Value,
+        ity: TypeId,
+        unsigned: bool,
+        bind_name: Option<String>,
+        exit: Option<Block>,
+    ) -> R<LoopFrame> {
+        self.scopes.push(ScopeFrame::default());
+        if let Some(name) = bind_name {
+            let var = self.b.declare_var(ity);
+            self.b.def_var(var, iparam);
+            self.scopes.last_mut().expect("scope").binds.push((
+                name,
+                LocalBind::Val {
+                    var,
+                    wrapping: false,
+                    unsigned,
+                    wir_ty: ity,
+                },
+            ));
+        }
+        self.loops.push(LoopFrame {
+            continue_to: ContinueTo::ForLatch(None),
+            exit,
+            exit_param: None,
+            depth: self.scopes.len(),
+        });
+        self.b.gvn_push_scope();
+        let flow = match d.body() {
+            Some(bl) => self.lower_block(bl, false),
+            None => Ok(Flow::Val(None)),
+        };
+        let flow = match flow {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                self.loops.pop();
+                self.scopes.pop();
+                return Err(x);
+            }
+        };
+        if let Flow::Val(_) = flow {
+            let latch = self.continue_target();
+            self.b.ins_jmp(latch, &[]);
+        }
+        self.b.gvn_pop_scope();
+        let frame = self.loops.pop().expect("frame");
+        self.scopes.pop();
+        Ok(frame)
+    }
+
+    // -------------------------------- flat memory helpers (s27) ----
+
+    /// `ptr + off` (byte offset) — the packed v0 spill layout.
+    fn field_addr(&mut self, ptr: Value, off: u64) -> Value {
+        if off == 0 {
+            return ptr;
+        }
+        let i = self.b.iconst(types::I64, off as i64);
+        self.b.ins_ptr_off(ptr, i, 1)
+    }
+
+    /// Load a flat value (scalar, or aggregate rebuilt field-wise).
+    fn load_flat(&mut self, ty: TypeId, ptr: Value, region: RegionId, span: Span) -> R<Value> {
+        if scalar_size(ty).is_some() {
+            return Ok(self.b.ins_load(ty, ptr, region));
+        }
+        let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
+            return Err(refuse("loading a non-flat type", span));
+        };
+        let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+            return Err(refuse("loading a non-flat aggregate", span));
+        };
+        let mut parts = Vec::with_capacity(fields.len());
+        for (k, &fty) in fields.iter().enumerate() {
+            let addr = self.field_addr(ptr, offs[k]);
+            parts.push(self.load_flat(fty, addr, region, span)?);
+        }
+        Ok(self.b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
+    }
+
+    /// Store a flat value field-wise (scalar loads/stores only — the
+    /// text format's typed mnemonics are scalar).
+    fn store_flat(&mut self, val: Value, ptr: Value, region: RegionId, span: Span) -> R<()> {
+        let ty = self.b.func.value_ty(val);
+        if scalar_size(ty).is_some() {
+            self.b.ins_store(val, ptr, region);
+            return Ok(());
+        }
+        let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
+            return Err(refuse("storing a non-flat type", span));
+        };
+        let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+            return Err(refuse("storing a non-flat aggregate", span));
+        };
+        for (k, &fty) in fields.iter().enumerate() {
+            let part = self
+                .b
+                .ins(Opcode::AggGet, &[val], &[fty], Aux::Int(k as i64))
+                .one();
+            let addr = self.field_addr(ptr, offs[k]);
+            self.store_flat(part, addr, region, span)?;
+        }
+        Ok(())
+    }
+
+    /// Read a whole `mut`-parameter value (scalars load directly;
+    /// aggregates rebuild field-wise).
+    fn read_mut_ref(&mut self, ptr: Value, region: RegionId, elem: TypeId, span: Span) -> R<Value> {
+        if scalar_size(elem).is_some() {
+            return Ok(self.b.ins_load(elem, ptr, region));
+        }
+        self.load_flat(elem, ptr, region, span)
+    }
+
+    /// The zero/default bit pattern of a flat type (enum payload slots
+    /// a variant does not fill).
+    fn zero_of(&mut self, t: TypeId, span: Span) -> R<Value> {
+        if types_is_int(t) {
+            return Ok(self.b.iconst(t, 0));
+        }
+        if t == types::BOOL {
+            return Ok(self.b.bconst(false));
+        }
+        if t == types::F32 || t == types::F64 {
+            return Ok(self.b.fconst(t, 0));
+        }
+        if let types::TypeData::Agg(fields) = self.b.module.types.get(t).clone() {
+            let mut parts = Vec::with_capacity(fields.len());
+            for &f in &fields {
+                parts.push(self.zero_of(f, span)?);
+            }
+            return Ok(self.b.ins(Opcode::AggMake, &parts, &[t], Aux::None).one());
+        }
+        Err(refuse("a zero value of this type", span))
+    }
+
+    /// `assert(cond)` / `assert(cond, msg)` — the one user-raised trap
+    /// (`[conf.trap.assert]`): `br cond, continue, trap`. A constant
+    /// condition folds to nothing (true) or a plain `trap` (false) —
+    /// X3 semantics exactly. The message renders once traps carry
+    /// payloads (fmt, c06); an effect-free literal is dropped today.
+    fn lower_assert(&mut self, d: CallExpr<'t>) -> R<Flow> {
+        let mut args = d.args().into_iter().flat_map(|l| l.args());
+        let Some(first) = args.next() else {
+            return Ok(Flow::Val(None));
+        };
+        // The optional message: evaluated only on the failing path —
+        // a literal has no effects, so dropping it is that evaluation.
+        for extra in args {
+            let Some(m) = Arg::value(extra) else { continue };
+            if !matches!(m.kind, SyntaxKind::StringExpr | SyntaxKind::LiteralExpr) {
+                return Err(refuse(
+                    "assert messages with effects (trap payload rendering, c06)",
+                    m.span,
+                ));
+            }
+        }
+        let Some(vexpr) = Arg::value(first) else {
+            return Ok(Flow::Val(None));
+        };
+        let v = flow_val!(self.lower_expr(vexpr));
+        let Some(v) = v else {
+            return Err(refuse("assert of a valueless expression", vexpr.span));
+        };
+        match self.b.as_bool_const(v) {
+            Some(true) => {
+                self.b.stats.fold += 1;
+            }
+            Some(false) => {
+                self.b.stats.fold += 1;
+                self.b.ins_trap();
+                return Ok(Flow::Diverged);
+            }
+            None => {
+                let cont = self.b.create_block();
+                let trap_bb = self.b.create_block();
+                self.b.ins_br(v, cont, &[], trap_bb, &[]);
+                self.b.seal_block(trap_bb);
+                self.b.switch_to_block(trap_bb);
+                self.b.ins_trap();
+                self.b.seal_block(cont);
+                self.b.switch_to_block(cont);
             }
         }
         Ok(Flow::Val(None))
@@ -2460,25 +4674,6 @@ fn int_bits(t: TypeId) -> Option<u32> {
         types::I64 => Some(64),
         _ => None,
     }
-}
-
-/// Does this subtree contain an early exit (`return`/`break`/
-/// `continue`) that would leave a region block without reaching its
-/// wholesale free point? (s27's defer machinery owns that interleave;
-/// nested loops with INTERNAL breaks are fine — the break cannot cross
-/// the region boundary — but the pre-scan stays conservative and
-/// refuses any early-exit construct inside the block.)
-fn contains_early_exit(node: &GreenNode) -> bool {
-    fn walk(n: &GreenNode) -> bool {
-        if matches!(
-            n.kind,
-            SyntaxKind::ReturnExpr | SyntaxKind::BreakExpr | SyntaxKind::ContinueExpr
-        ) {
-            return true;
-        }
-        n.nodes().any(walk)
-    }
-    walk(node)
 }
 
 /// Does this subtree contain any construct that forces new blocks?
@@ -2500,6 +4695,9 @@ fn contains_control(node: &GreenNode) -> bool {
                 | SyntaxKind::ContinueExpr
                 | SyntaxKind::CallExpr
                 | SyntaxKind::ClosureExpr
+                // Defers re-lower at exit edges (s27): their fragments
+                // may live in blocks other than their declaration's.
+                | SyntaxKind::DeferStmt
         )
     }
     fn walk(n: &GreenNode) -> bool {

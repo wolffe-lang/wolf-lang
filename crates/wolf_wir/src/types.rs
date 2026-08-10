@@ -45,6 +45,18 @@ pub enum TypeData {
     Io,
     /// A small aggregate passed by value list (field types in order).
     Agg(Vec<TypeId>),
+    /// An error union `!T` (s27, D30): a two-value pair — an `i64` tag
+    /// (0 = ok; nonzero = a module-interned error tag) plus the ok
+    /// payload, with optional error-payload slots. Never a heap box;
+    /// c06's ABI expands it to the register-pair contract
+    /// (`[abi.err.repr]`). Built and split ONLY by the `eu.*` ops.
+    Eu {
+        /// The ok payload's type; `None` when the ok half is unit.
+        ok: Option<TypeId>,
+        /// Error-payload slots, position-unified across the row's
+        /// tags (payload-free rows have none).
+        slots: Vec<TypeId>,
+    },
 }
 
 /// Deduplicating type interner. Scalars are pre-interned so their
@@ -115,6 +127,11 @@ impl TypeInterner {
         self.intern(TypeData::Mem(region))
     }
 
+    /// Intern an error-union type (s27).
+    pub fn eu(&mut self, ok: Option<TypeId>, slots: Vec<TypeId>) -> TypeId {
+        self.intern(TypeData::Eu { ok, slots })
+    }
+
     pub fn get(&self, id: TypeId) -> &TypeData {
         &self.types[id]
     }
@@ -171,6 +188,19 @@ impl TypeInterner {
             TypeData::Agg(fields) => {
                 let inner: Vec<String> = fields.iter().map(|&f| self.display(f)).collect();
                 format!("{{{}}}", inner.join(", "))
+            }
+            TypeData::Eu { ok, slots } => {
+                // `eu{OK}` / `eu{unit}` / `eu{OK, S0, S1}` — the first
+                // position is the ok type (`unit` when absent), the
+                // rest are error-payload slots.
+                let mut parts = vec![match ok {
+                    Some(t) => self.display(*t),
+                    None => "unit".into(),
+                }];
+                for &s in slots {
+                    parts.push(self.display(s));
+                }
+                format!("eu{{{}}}", parts.join(", "))
             }
         }
     }

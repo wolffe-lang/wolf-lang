@@ -1,0 +1,77 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 125
+expression: out
+---
+decl @may_fail(bool) -> eu{i64}
+decl @rowy() -> eu{i64}
+
+fn @may_fail(bool) -> eu{i64} {
+b0(%0: bool):
+  br %0, b1, b2
+b1:
+  %1 = iconst.i64 1
+  %2: eu{i64} = eu.make.err %1
+  ret %2
+b2:
+  %3 = iconst.i64 7
+  %4: eu{i64} = eu.make.ok %3
+  ret %4
+}
+
+fn @rowy() -> eu{i64} {
+b0:
+  %0 = iconst.i64 7
+  %1: eu{i64} = eu.make.ok %0
+  ret %1
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = bconst false
+  %1 = call @may_fail(%0)
+  %2: bool = eu.is_err %1
+  br %2, b1, b2
+b1:
+  %3 = iconst.i64 0
+  jmp b3(%3)
+b2:
+  %4: i64 = eu.ok %1
+  jmp b3(%4)
+b3(%5: i64):
+  %6 = call @rowy()
+  %7: bool = eu.is_err %6
+  br %7, b4, b5
+b4:
+  %8 = iconst.i64 0
+  jmp b6(%8)
+b5:
+  %9: i64 = eu.ok %6
+  jmp b6(%9)
+b6(%10: i64):
+  %11 = iconst.i64 7
+  %12 = icmp.eq %5, %11
+  br %12, b7, b8(%0)
+b7:
+  %13 = icmp.eq %10, %11
+  jmp b8(%13)
+b8(%14: bool):
+  br %14, b9, b11(%0)
+b9:
+  %15 = iconst.i64 0
+  %16 = icmp.eq %5, %15
+  %17 = bconst true
+  br %16, b10(%0), b10(%17)
+b10(%18: bool):
+  jmp b11(%18)
+b11(%19: bool):
+  br %19, b12, b13
+b12:
+  %20 = iconst.i64 0
+  jmp b14(%20)
+b13:
+  %21 = iconst.i64 1
+  jmp b14(%21)
+b14(%22: i64):
+  ret %22
+}

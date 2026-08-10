@@ -211,6 +211,98 @@ fn golden_memory_checked_unsigned() {
     golden("memory/checked_unsigned.lu");
 }
 
+// ---- the s27 control-surface goldens (the c05 closers) ----
+
+/// The sprint's own witness: `?` ok/err paths with the errdefer chain
+/// on the err edge only, defer LIFO through nested scopes at a
+/// break-with-value, region frees on every exit edge (token-verified),
+/// or-pattern + guard tree shape, lowercase payload-free tags, and
+/// row widening on propagation.
+#[test]
+fn golden_rows_qmark_defer() {
+    golden("rows/qmark_defer.lu");
+}
+
+/// `!T` at the smallest scale: raise, `?`, and `else` over a one-tag
+/// row — the eu pair ops in their minimal shape.
+#[test]
+fn golden_grammar_bang_errunion() {
+    golden("grammar/bang_errunion.lu");
+}
+
+/// Open-row growth: an unlisted raise (`Weird`) through an open row,
+/// caught by `else |err|` and consumed by a rest-arm match with an
+/// `Io(int)` payload extraction.
+#[test]
+fn golden_rows_open_row_growth() {
+    golden("rows/open_row_growth.lu");
+}
+
+/// Exhaustive matches with NO default edge: a payload-carrying enum
+/// (one discriminant read, payload binds licensed by the dominating
+/// tag test) and a payload row behind `else |err|`.
+#[test]
+fn golden_typecheck_match_exhaustive() {
+    golden("typecheck/match_exhaustive.lu");
+}
+
+/// A dead arm (E0802 warns) lowers as dead code: the constant
+/// discriminant selects its arm at build time.
+#[test]
+fn golden_typecheck_match_unreachable() {
+    golden("typecheck/match_unreachable.lu");
+}
+
+/// Both range forms of `for`: exclusive header-test shape and the
+/// inclusive body-first shape whose `i == hi` latch never overflows.
+#[test]
+fn golden_grammar_intdot_range() {
+    golden("grammar/intdot_range.lu");
+}
+
+/// The X3 flagship: a wrapping-typed hash loop lowers to `.wrap` ops
+/// under a `for`, then plain arithmetic provably overflows — the body
+/// folds to `trap` at build time.
+#[test]
+fn golden_overflow() {
+    golden("overflow.lu");
+}
+
+/// X1 receiver modes end to end: `read self` by value, `mut self`
+/// pointer-shaped with a flat-aggregate spill, `take self` by value —
+/// methods as ordinary `Type.method` functions.
+#[test]
+fn golden_typecheck_receiver_modes() {
+    golden("typecheck/receiver_modes.lu");
+}
+
+/// The s18 exclusivity acceptance file: nested `mut` field spills,
+/// view-set receivers, partial moves — all through the s26/s27 spill
+/// machinery with `excl.field` noalias facts.
+#[test]
+fn golden_memory_exclusivity() {
+    golden("memory/exclusivity.lu");
+}
+
+/// View sets narrow the footprint; the whole receiver still spills by
+/// value (fresh slots — no aliasing with the caller's copy).
+#[test]
+fn golden_memory_view_set_norm() {
+    golden("memory/view_set_norm.lu");
+}
+
+/// Region inference's list-builder shape, now with its `for` loop.
+#[test]
+fn golden_memory_region_infer_list_builder() {
+    golden("memory/region_infer_list_builder.lu");
+}
+
+/// The request-handler shape: regions + `for` + early exits.
+#[test]
+fn golden_memory_region_infer_request_handler() {
+    golden("memory/region_infer_request_handler.lu");
+}
+
 // ------------------------------------------------- the whole corpus ----
 
 /// Which files lower today. Snapshot-pinned: every advance or retreat

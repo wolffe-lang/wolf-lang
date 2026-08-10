@@ -937,6 +937,55 @@ impl<'m> FuncBuilder<'m> {
         (r, vals[0])
     }
 
+    // ------------------------------------------- error unions (s27) ----
+
+    /// `%e = eu.make.ok %v?` — wrap the ok payload (or nothing, for a
+    /// unit ok half) into `eu_ty`.
+    pub fn ins_eu_make_ok(&mut self, eu_ty: TypeId, v: Option<Value>) -> Value {
+        let args: Vec<Value> = v.into_iter().collect();
+        self.ins(Opcode::EuMakeOk, &args, &[eu_ty], Aux::None).one()
+    }
+
+    /// `%e = eu.make.err %tag, %payloads…` — wrap an error tag (and a
+    /// prefix of the union's payload slots) into `eu_ty`.
+    pub fn ins_eu_make_err(&mut self, eu_ty: TypeId, tag: Value, payloads: &[Value]) -> Value {
+        let mut args = vec![tag];
+        args.extend_from_slice(payloads);
+        self.ins(Opcode::EuMakeErr, &args, &[eu_ty], Aux::None)
+            .one()
+    }
+
+    /// `%b = eu.is_err %e`.
+    pub fn ins_eu_is_err(&mut self, e: Value) -> Value {
+        self.ins(Opcode::EuIsErr, &[e], &[crate::types::BOOL], Aux::None)
+            .one()
+    }
+
+    /// `%v = eu.ok %e` — the union's ok payload (the union must have a
+    /// non-unit ok half).
+    pub fn ins_eu_ok(&mut self, e: Value) -> Value {
+        let TypeData::Eu { ok: Some(t), .. } = *self.module.types.get(self.func.value_ty(e)) else {
+            panic!("eu.ok on a non-eu or unit-ok value");
+        };
+        self.ins(Opcode::EuOk, &[e], &[t], Aux::None).one()
+    }
+
+    /// `%t = eu.err %e` — the union's error tag.
+    pub fn ins_eu_err_tag(&mut self, e: Value) -> Value {
+        self.ins(Opcode::EuErr, &[e], &[crate::types::I64], Aux::None)
+            .one()
+    }
+
+    /// `%p = eu.err %e, K` — error-payload slot K.
+    pub fn ins_eu_err_slot(&mut self, e: Value, k: usize) -> Value {
+        let TypeData::Eu { ref slots, .. } = *self.module.types.get(self.func.value_ty(e)) else {
+            panic!("eu.err on a non-eu value");
+        };
+        let slot = slots[k];
+        self.ins(Opcode::EuErr, &[e], &[slot], Aux::Int(k as i64))
+            .one()
+    }
+
     // ------------------------------------------------------- calls ----
 
     /// `call @callee(args…)` with the mode-carrying signature: token
@@ -1293,6 +1342,37 @@ impl<'m> FuncBuilder<'m> {
     fn try_identity(&self, inst: Inst) -> Option<Rewritten> {
         let data = &self.func.insts[inst];
         let args = self.func.vpool.get(data.args);
+        // eu.* splits over a locally-built union fold to their
+        // ingredients (s27): `?` on an in-function raise costs nothing.
+        if matches!(data.op, Opcode::EuIsErr | Opcode::EuOk | Opcode::EuErr) {
+            if let ValueDef::Result(mi, 0) = self.func.values[args[0]].def {
+                let mop = self.func.insts[mi].op;
+                let margs = self.func.vpool.get(self.func.insts[mi].args);
+                match (data.op, mop) {
+                    (Opcode::EuIsErr, Opcode::EuMakeOk) => {
+                        return Some(Rewritten::ConstBool(false));
+                    }
+                    (Opcode::EuIsErr, Opcode::EuMakeErr) => {
+                        return Some(Rewritten::ConstBool(true));
+                    }
+                    (Opcode::EuOk, Opcode::EuMakeOk) if !margs.is_empty() => {
+                        return Some(Rewritten::Value(margs[0]));
+                    }
+                    (Opcode::EuErr, Opcode::EuMakeErr) => {
+                        let idx = match data.aux {
+                            Aux::None => 0,
+                            Aux::Int(k) => k as usize + 1,
+                            _ => return None,
+                        };
+                        if let Some(&v) = margs.get(idx) {
+                            return Some(Rewritten::Value(v));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            return None;
+        }
         if data.op == Opcode::Icmp && args.len() == 2 && args[0] == args[1] {
             let Aux::IntCc(cc) = data.aux else {
                 return None;
@@ -1366,6 +1446,11 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::Load
                 | Opcode::AggMake
                 | Opcode::AggGet
+                | Opcode::EuMakeOk
+                | Opcode::EuMakeErr
+                | Opcode::EuIsErr
+                | Opcode::EuOk
+                | Opcode::EuErr
         );
         if !pure {
             return None;

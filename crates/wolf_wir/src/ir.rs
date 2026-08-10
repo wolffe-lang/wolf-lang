@@ -347,6 +347,14 @@ pub struct Module {
     /// callee any function imports.
     pub decls: Vec<(String, SigId)>,
     pub funcs: PrimaryMap<FuncId, Function>,
+    /// Module-interned error-tag names (s27): tag id = index + 1
+    /// (id 0 is the ok discriminant, never a tag). GLOBAL interning is
+    /// what makes row widening the identity on tag values — D30's
+    /// "injection re-tagging" costs nothing. Interned in lowering
+    /// visit order (deterministic); compiler-internal, so the textual
+    /// format carries only the `i64` ids and round-trip does not
+    /// preserve the names (like fact spans).
+    pub tags: Vec<String>,
 }
 
 impl Default for Module {
@@ -362,7 +370,17 @@ impl Module {
             sigs: PrimaryMap::new(),
             decls: Vec::new(),
             funcs: PrimaryMap::new(),
+            tags: Vec::new(),
         }
+    }
+
+    /// Intern an error-tag name; ids start at 1 (0 = ok).
+    pub fn tag_id(&mut self, name: &str) -> i64 {
+        if let Some(i) = self.tags.iter().position(|t| t == name) {
+            return (i + 1) as i64;
+        }
+        self.tags.push(name.to_string());
+        self.tags.len() as i64
     }
 
     /// Record an external declaration.

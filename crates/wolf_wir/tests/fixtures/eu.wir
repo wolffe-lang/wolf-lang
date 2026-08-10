@@ -1,0 +1,31 @@
+; The s27 error-union family: pair make/split ops over the eu type
+; forms — ok payload, error tag, payload slots, and the unit-ok shape.
+fn @mk(i64) -> eu{i64, i64} {
+b0(%x: i64):
+  %t = iconst.i64 3
+  %e: eu{i64, i64} = eu.make.err %t, %x
+  %b: bool = eu.is_err %e
+  br %b, b1, b2
+b1:
+  %tag: i64 = eu.err %e
+  %p0: i64 = eu.err %e, 0
+  %s = iadd.chk %tag, %p0
+  %o: eu{i64, i64} = eu.make.err %s
+  ret %o
+b2:
+  %v: i64 = eu.ok %e
+  %o2: eu{i64, i64} = eu.make.ok %v
+  ret %o2
+}
+
+fn @unitok(bool) -> eu{unit} {
+b0(%c: bool):
+  br %c, b1, b2
+b1:
+  %e: eu{unit} = eu.make.ok
+  ret %e
+b2:
+  %t = iconst.i64 2
+  %f: eu{unit} = eu.make.err %t
+  ret %f
+}

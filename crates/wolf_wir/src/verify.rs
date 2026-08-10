@@ -30,8 +30,8 @@ pub enum ErrClass {
     EntrySig,
     /// A block without exactly one trailing terminator.
     Terminator,
-    /// A reserved mnemonic (`region.*`, `rc.*`, `sync.*`, `eu.*`) used
-    /// before its semantics land (s26/s27).
+    /// A reserved mnemonic (`sync.transfer`) used before its
+    /// semantics land (c05 concurrency).
     ReservedOp,
     /// An instruction is ill-typed.
     Type,
@@ -48,7 +48,9 @@ pub enum ErrClass {
     Unreachable,
     /// A value use not dominated by its definition.
     Dominance,
-    /// An effect token consumed more than once (the chain is a spine).
+    /// An effect token consumed more than once ON ONE PATH (the chain
+    /// is a spine per execution; s27 defer duplication legitimately
+    /// consumes one value on mutually exclusive edges).
     TokenLinearity,
     /// An effect token read (by a load) at a point reachable after its
     /// consumption — use-after-free and stale-token reads are
@@ -274,7 +276,7 @@ impl<'a> Verifier<'a> {
                     return Err(self.fail(
                         ErrClass::ReservedOp,
                         format!(
-                            "`{}` is reserved until its semantics land (s26/s27): {}",
+                            "`{}` is reserved until its semantics land (c05): {}",
                             op.base_mnemonic(),
                             self.at_inst(inst)
                         ),
@@ -835,6 +837,126 @@ impl<'a> Verifier<'a> {
                     );
                 }
             }
+            // ---- error unions (s27, D30) ---------------------------
+            Opcode::EuMakeOk => {
+                if results.len() != 1 {
+                    return Err(self.type_err(inst, "eu.make.ok produces exactly one result"));
+                }
+                let TypeData::Eu { ok, .. } = types.get(self.f.value_ty(results[0])) else {
+                    return Err(
+                        self.type_err(inst, "eu.make.ok's result must be an error-union type")
+                    );
+                };
+                match ok {
+                    Some(t) => {
+                        if args.len() != 1 {
+                            return Err(self.type_err(
+                                inst,
+                                "eu.make.ok takes exactly the ok payload as its operand",
+                            ));
+                        }
+                        if self.f.value_ty(args[0]) != *t {
+                            return Err(self.type_err(
+                                inst,
+                                "eu.make.ok's operand must have the union's ok type",
+                            ));
+                        }
+                    }
+                    None => {
+                        if !args.is_empty() {
+                            return Err(self.type_err(
+                                inst,
+                                "eu.make.ok over a unit ok half takes no operand",
+                            ));
+                        }
+                    }
+                }
+            }
+            Opcode::EuMakeErr => {
+                if results.len() != 1 {
+                    return Err(self.type_err(inst, "eu.make.err produces exactly one result"));
+                }
+                let TypeData::Eu { slots, .. } = types.get(self.f.value_ty(results[0])).clone()
+                else {
+                    return Err(
+                        self.type_err(inst, "eu.make.err's result must be an error-union type")
+                    );
+                };
+                if args.is_empty() {
+                    return Err(self.type_err(inst, "eu.make.err takes the error tag (i64) first"));
+                }
+                if self.f.value_ty(args[0]) != crate::types::I64 {
+                    return Err(self.type_err(inst, "eu.make.err's tag operand must be i64"));
+                }
+                if args.len() - 1 > slots.len() {
+                    return Err(self.type_err(
+                        inst,
+                        "eu.make.err passes more payloads than the union has slots",
+                    ));
+                }
+                for (i, &a) in args[1..].iter().enumerate() {
+                    if self.f.value_ty(a) != slots[i] {
+                        return Err(self.type_err(
+                            inst,
+                            &format!("eu.make.err's payload {i} does not match slot {i}'s type"),
+                        ));
+                    }
+                }
+            }
+            Opcode::EuIsErr => {
+                self.expect_counts(inst, 1, 1)?;
+                if !matches!(types.get(self.f.value_ty(args[0])), TypeData::Eu { .. }) {
+                    return Err(self.type_err(inst, "eu.is_err's operand must be an error union"));
+                }
+                if self.f.value_ty(results[0]) != crate::types::BOOL {
+                    return Err(self.type_err(inst, "eu.is_err's result must be bool"));
+                }
+            }
+            Opcode::EuOk => {
+                self.expect_counts(inst, 1, 1)?;
+                let TypeData::Eu { ok, .. } = types.get(self.f.value_ty(args[0])) else {
+                    return Err(self.type_err(inst, "eu.ok's operand must be an error union"));
+                };
+                let Some(t) = ok else {
+                    return Err(self.type_err(inst, "eu.ok on a unit ok half extracts nothing"));
+                };
+                if self.f.value_ty(results[0]) != *t {
+                    return Err(self.type_err(inst, "eu.ok's result must have the ok type"));
+                }
+            }
+            Opcode::EuErr => {
+                self.expect_counts(inst, 1, 1)?;
+                let TypeData::Eu { slots, .. } = types.get(self.f.value_ty(args[0])).clone() else {
+                    return Err(self.type_err(inst, "eu.err's operand must be an error union"));
+                };
+                match data.aux {
+                    Aux::None => {
+                        if self.f.value_ty(results[0]) != crate::types::I64 {
+                            return Err(self.type_err(inst, "eu.err's tag result must be i64"));
+                        }
+                    }
+                    Aux::Int(k) => {
+                        let Some(&slot) = usize::try_from(k).ok().and_then(|k| slots.get(k)) else {
+                            return Err(self.type_err(
+                                inst,
+                                &format!(
+                                    "eu.err names slot {k}, but the union has {} slot(s)",
+                                    slots.len()
+                                ),
+                            ));
+                        };
+                        if self.f.value_ty(results[0]) != slot {
+                            return Err(self.type_err(
+                                inst,
+                                &format!("eu.err's result must have slot {k}'s type"),
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(self.type_err(inst, "eu.err carries no such payload"));
+                    }
+                }
+            }
             _ => {
                 debug_assert!(data.op.is_reserved(), "unhandled opcode in type check");
             }
@@ -999,10 +1121,25 @@ impl<'a> Verifier<'a> {
     }
 
     fn check_tokens(&self) -> VResult {
-        let mut consumed: HashMap<Value, Inst> = HashMap::new();
+        // Linearity is PER PATH (s27): a token value may have several
+        // consumers when they sit on mutually exclusive CFG paths —
+        // defer/errdefer duplication puts the same `region.free` on
+        // the normal edge AND the error edge. What stays rejected:
+        // two consumers where one can REACH the other (sequential
+        // double-consumption), including two in one block. Reaching
+        // through the value's defining block does not count — re-
+        // entering the def re-defines the value (loop-carried tokens
+        // are per-iteration instances), same rule as `token-order`.
+        let mut consumed: HashMap<Value, Vec<Inst>> = HashMap::new();
         for &b in &self.f.layout {
             for &inst in &self.f.blocks[b].insts {
-                for tok in self.consumed_tokens(inst) {
+                let mut toks = self.consumed_tokens(inst);
+                // A `br` may pass one token along BOTH its edges (each
+                // arm owns it; only one edge runs) — dedupe within the
+                // instruction.
+                toks.sort_by_key(|v| v.as_u32());
+                toks.dedup();
+                for tok in toks {
                     // Frozen tokens (sync.freeze results) are read-only
                     // forever: consuming one is unrepresentable
                     // mutation/free of frozen data.
@@ -1019,13 +1156,32 @@ impl<'a> Verifier<'a> {
                             ),
                         ));
                     }
-                    if let Some(first) = consumed.insert(tok, inst) {
+                    consumed.entry(tok).or_default().push(inst);
+                }
+            }
+        }
+        for (&tok, insts) in &consumed {
+            if insts.len() < 2 {
+                continue;
+            }
+            let def_block = self.def_block_of(tok);
+            for (i, &a) in insts.iter().enumerate() {
+                for &b in &insts[i + 1..] {
+                    let &(ab, _) = self.place.get(&a).expect("placed");
+                    let &(bb, _) = self.place.get(&b).expect("placed");
+                    // One block runs top to bottom: two consumers in
+                    // it always both execute.
+                    let sequential = ab == bb
+                        || self.reaches_avoiding(ab, bb, def_block)
+                        || self.reaches_avoiding(bb, ab, def_block);
+                    if sequential {
                         return Err(self.fail(
                             ErrClass::TokenLinearity,
                             format!(
-                                "effect token consumed twice: first by {}, again by {}",
-                                self.at_inst(first),
-                                self.at_inst(inst)
+                                "effect token {} consumed twice on one path: by {} and by {}",
+                                self.canon.value(tok),
+                                self.at_inst(a),
+                                self.at_inst(b)
                             ),
                         ));
                     }
@@ -1035,11 +1191,19 @@ impl<'a> Verifier<'a> {
         self.check_token_order(&consumed)
     }
 
+    /// The block a value is defined in.
+    fn def_block_of(&self, v: Value) -> Block {
+        match self.f.values[v].def {
+            ValueDef::Param(db, _) => db,
+            ValueDef::Result(di, _) => self.place.get(&di).map(|&(db, _)| db).expect("placed"),
+        }
+    }
+
     /// No read of a token value at a point reachable AFTER its
     /// consumption without passing through the value's (re)definition —
     /// this is what makes load-after-`region.free` (and any stale-token
     /// read) a structural rejection, not a runtime hope.
-    fn check_token_order(&self, consumed: &HashMap<Value, Inst>) -> VResult {
+    fn check_token_order(&self, consumed: &HashMap<Value, Vec<Inst>>) -> VResult {
         for &b in &self.f.layout {
             for (pos, &inst) in self.f.blocks[b].insts.iter().enumerate() {
                 if self.f.insts[inst].op != Opcode::Load {
@@ -1047,37 +1211,34 @@ impl<'a> Verifier<'a> {
                 }
                 let args = self.args(inst);
                 let Some(&tok) = args.get(1) else { continue };
-                let Some(&consumer) = consumed.get(&tok) else {
+                let Some(consumers) = consumed.get(&tok) else {
                     continue;
                 };
-                let &(cb, cpos) = self.place.get(&consumer).expect("placed");
-                let def_block = match self.f.values[tok].def {
-                    ValueDef::Param(db, _) => db,
-                    ValueDef::Result(di, _) => {
-                        self.place.get(&di).map(|&(db, _)| db).expect("placed")
+                let def_block = self.def_block_of(tok);
+                for &consumer in consumers {
+                    let &(cb, cpos) = self.place.get(&consumer).expect("placed");
+                    let bad = if cb == b {
+                        // Same block: a read after the consume is stale
+                        // (within one block the value is never redefined).
+                        cpos < pos
+                    } else {
+                        // The consumer's block reaches the reader's block
+                        // without re-entering the token's defining block
+                        // (re-entering redefines the value — loop-carried
+                        // tokens are per-iteration instances).
+                        self.reaches_avoiding(cb, b, def_block)
+                    };
+                    if bad {
+                        return Err(self.fail(
+                            ErrClass::TokenOrder,
+                            format!(
+                                "token {} is read by {} after being consumed by {} — no live token, no loads",
+                                self.canon.value(tok),
+                                self.at_inst(inst),
+                                self.at_inst(consumer)
+                            ),
+                        ));
                     }
-                };
-                let bad = if cb == b {
-                    // Same block: a read after the consume is stale
-                    // (within one block the value is never redefined).
-                    cpos < pos
-                } else {
-                    // The consumer's block reaches the reader's block
-                    // without re-entering the token's defining block
-                    // (re-entering redefines the value — loop-carried
-                    // tokens are per-iteration instances).
-                    self.reaches_avoiding(cb, b, def_block)
-                };
-                if bad {
-                    return Err(self.fail(
-                        ErrClass::TokenOrder,
-                        format!(
-                            "token {} is read by {} after being consumed by {} — no live token, no loads",
-                            self.canon.value(tok),
-                            self.at_inst(inst),
-                            self.at_inst(consumer)
-                        ),
-                    ));
                 }
             }
         }

@@ -197,9 +197,21 @@ fn tokenize(src: &str) -> PResult<Vec<Spanned>> {
                 }
             }
             '%' | '@' => {
+                // Names admit interior dots (`@Counter.bump` — s27
+                // method mangling), like dotted idents.
                 let mut j = i + 1;
-                while j < bytes.len() && is_ident_cont(bytes[j]) {
-                    j += 1;
+                loop {
+                    while j < bytes.len() && is_ident_cont(bytes[j]) {
+                        j += 1;
+                    }
+                    if j + 1 < bytes.len()
+                        && bytes[j] == '.'
+                        && (is_ident_start(bytes[j + 1]) || bytes[j + 1].is_ascii_digit())
+                    {
+                        j += 1;
+                        continue;
+                    }
+                    break;
                 }
                 if j == i + 1 {
                     return err(line, start_col, format!("`{c}` needs a name after it"));
@@ -579,6 +591,27 @@ fn parse_type(line: &mut Line, module: &mut Module) -> PResult<TypeId> {
             }
             line.expect(Tok::RBrace)?;
             Ok(module.types.intern(TypeData::Agg(fields)))
+        }
+        Some(Tok::Ident(name)) if name == "eu" => {
+            // `eu{OK, SLOTS…}` — first position is the ok type
+            // (`unit` when the ok half carries no value), the rest
+            // are error-payload slots (s27).
+            line.next();
+            line.expect(Tok::LBrace)?;
+            let ok = match line.peek() {
+                Some(Tok::Ident(k)) if k == "unit" => {
+                    line.next();
+                    None
+                }
+                _ => Some(parse_type(line, module)?),
+            };
+            let mut slots = Vec::new();
+            while line.peek() == Some(&Tok::Comma) {
+                line.next();
+                slots.push(parse_type(line, module)?);
+            }
+            line.expect(Tok::RBrace)?;
+            Ok(module.types.eu(ok, slots))
         }
         Some(Tok::Ident(_)) => {
             let name = line.ident()?;
@@ -1231,6 +1264,28 @@ fn parse_inst(
             vec![]
         }
         Opcode::Trap => vec![],
+        Opcode::EuErr => {
+            // `eu.err %e` (tag) or `eu.err %e, K` (payload slot K).
+            let n = line.val_name()?;
+            args.push(resolve(line, values, func, &n)?);
+            if line.peek() == Some(&Tok::Comma) {
+                line.next();
+                let lex = line.num()?;
+                aux = Aux::Int(parse_u64(line, &lex)? as i64);
+            }
+            let mut tys = Vec::with_capacity(result_annots.len());
+            for annot in &result_annots {
+                match annot {
+                    Some(t) => tys.push(*t),
+                    None => {
+                        return line.fail(
+                            "`eu.err` results need explicit types, e.g. `%t: i64 = eu.err %e`",
+                        );
+                    }
+                }
+            }
+            tys
+        }
         // The memory family and reserved ops: generic operand form,
         // result types must be explicit (`%r: ptr = …`).
         _ => {

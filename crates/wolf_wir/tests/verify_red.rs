@@ -335,6 +335,68 @@ fn conflicting_callee_signatures() {
     assert_eq!(err.class, ErrClass::CallSig);
 }
 
+// ---- the s27 error-union family + per-path token linearity ----
+
+#[test]
+fn eu_make_err_tag_must_be_i64() {
+    expect_reject(
+        "fn @f() -> eu{i64} {\nb0:\n  %b = bconst true\n  %e: eu{i64} = eu.make.err %b\n  ret %e\n}\n",
+        ErrClass::Type,
+    );
+}
+
+#[test]
+fn eu_ok_on_unit_ok_extracts_nothing() {
+    expect_reject(
+        "fn @f(i64) -> i64 {\nb0(%x: i64):\n  %t = iconst.i64 1\n  %e: eu{unit} = eu.make.err %t\n  %v: i64 = eu.ok %e\n  ret %v\n}\n",
+        ErrClass::Type,
+    );
+}
+
+#[test]
+fn eu_is_err_needs_a_union() {
+    expect_reject(
+        "fn @f(i64) -> i64 {\nb0(%x: i64):\n  %b: bool = eu.is_err %x\n  ret %x\n}\n",
+        ErrClass::Type,
+    );
+}
+
+#[test]
+fn eu_err_slot_out_of_range() {
+    expect_reject(
+        "fn @f(i64) -> i64 {\nb0(%x: i64):\n  %t = iconst.i64 1\n  %e: eu{i64, i64} = eu.make.err %t, %x\n  %p: i64 = eu.err %e, 1\n  ret %p\n}\n",
+        ErrClass::Type,
+    );
+}
+
+#[test]
+fn eu_make_ok_payload_type_must_match() {
+    expect_reject(
+        "fn @f(f64) -> eu{i64} {\nb0(%x: f64):\n  %e: eu{i64} = eu.make.ok %x\n  ret %e\n}\n",
+        ErrClass::Type,
+    );
+}
+
+/// s27 defer duplication: one token value consumed on BOTH arms of a
+/// branch is legal — only one arm runs (per-path linearity).
+#[test]
+fn token_consumed_on_disjoint_arms_is_accepted() {
+    let src = "fn @f(bool) {\nb0(%c: bool):\n  %h: ptr, %m: mem.r0 = region.new\n  br %c, b1, b2\nb1:\n  region.free %h, %m\n  ret\nb2:\n  region.free %h, %m\n  ret\n}\n";
+    let m = wolf_wir::parse_module(src).expect("parses");
+    verify_module(&m).expect("disjoint-arm consumption is per-path linear");
+}
+
+/// Two consumers where one reaches the other stays a rejection: that
+/// path consumes the token twice.
+#[test]
+fn token_consumed_twice_across_sequential_blocks() {
+    let err = expect_reject(
+        "fn @f() {\nb0:\n  %h: ptr, %m: mem.r0 = region.new\n  jmp b1\nb1:\n  region.free %h, %m\n  jmp b2\nb2:\n  region.free %h, %m\n  ret\n}\n",
+        ErrClass::TokenLinearity,
+    );
+    assert!(err.msg.contains("on one path"), "{}", err.msg);
+}
+
 #[test]
 fn every_rejection_class_is_exercised() {
     // The suite above (plus pass_facts.rs for DroppedFact) covers every

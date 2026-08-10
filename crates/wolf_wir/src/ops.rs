@@ -10,10 +10,25 @@
 //! - There is deliberately NO unwind/invoke-shaped terminator (D30):
 //!   unwinding is unrepresentable, not just unused. Error unions lower
 //!   through the `eu.*` value ops plus ordinary `br` (s27).
-//! - `sync.transfer` / `eu.*` mnemonics are RESERVED: they parse and
-//!   print (so the text format doesn't churn) but the verifier rejects
-//!   them until their semantics land (s27/c05). The `region.*`, `rc.*`,
-//!   `sync.freeze`, and `stack.alloc` families are LIVE as of s26.
+//! - The `sync.transfer` mnemonic is RESERVED: it parses and prints
+//!   (so the text format doesn't churn) but the verifier rejects it
+//!   until its semantics land (c05 concurrency). The `region.*`,
+//!   `rc.*`, `sync.freeze`, and `stack.alloc` families are LIVE as of
+//!   s26; the `eu.*` error-union family is LIVE as of s27.
+//!
+//! # The s27 error-union representation (recorded here, the reference)
+//!
+//! `!T` is a value-pair type (`eu{OK, SLOTS…}`, [`crate::types::
+//! TypeData::Eu`]): an `i64` TAG — `0` is ok, any other value is a
+//! module-interned error-tag id ([`crate::ir::Module::tag_id`];
+//! interning is GLOBAL per module, so row widening at `?` boundaries
+//! is the identity on tag values and D30's "injection re-tagging" is a
+//! no-op value operation) — plus the ok payload and position-unified
+//! error-payload slots. The pair is built and split ONLY by `eu.*`
+//! value ops; branching on it is an ordinary `br` over `eu.is_err`.
+//! There is no unwind edge to pair it with — error propagation IS
+//! ordinary control flow, and c06 expands the pair to the two-value
+//! register contract of `[abi.err.repr]`.
 //!
 //! # The s26 unsigned decision (recorded here, the op-set reference)
 //!
@@ -261,18 +276,24 @@ pub enum Opcode {
     /// provenance, escape-to-stack promotion's landing pad (s19).
     StackAlloc,
 
-    // ---- RESERVED mnemonics (parse/print now; semantics s27/c05) -------
+    // ---- RESERVED mnemonics (parse/print now; semantics c05) -----------
     /// RESERVED (c05): `%q = sync.transfer %p` — region transfer to a task.
     SyncTransfer,
-    /// RESERVED (s27): `%e = eu.make.ok %v` — wrap a success value in `!T`.
+
+    // ---- error unions (s27, D30 — value ops; branching is plain `br`) --
+    /// `%e: eu{T, …} = eu.make.ok %v?` — wrap a success value (tag 0);
+    /// no operand when the ok half is unit.
     EuMakeOk,
-    /// RESERVED (s27): `%e = eu.make.err %t` — wrap an error tag in `!T`.
+    /// `%e: eu{…} = eu.make.err %t, %p…` — wrap a module-interned
+    /// error tag (`i64`, nonzero) plus its payload slot values (a
+    /// prefix of the type's slots; missing slots are unspecified).
     EuMakeErr,
-    /// RESERVED (s27): `%b = eu.is_err %e` — test the error bit (br on it).
+    /// `%b: bool = eu.is_err %e` — test the error bit (br on it).
     EuIsErr,
-    /// RESERVED (s27): `%v = eu.ok %e` — extract the success payload.
+    /// `%v: T = eu.ok %e` — extract the success payload (tag 0 side).
     EuOk,
-    /// RESERVED (s27): `%t = eu.err %e` — extract the error tag.
+    /// `%t: i64 = eu.err %e` — extract the error tag; with a slot
+    /// index (`eu.err %e, K`) extract error-payload slot K instead.
     EuErr,
 }
 
@@ -282,24 +303,16 @@ impl Opcode {
         matches!(self, Opcode::Jmp | Opcode::Br | Opcode::Ret | Opcode::Trap)
     }
 
-    /// True for mnemonics still reserved (s27/c05): representable in
+    /// True for mnemonics still reserved (c05): representable in
     /// text, rejected by the verifier until their semantics land.
     pub fn is_reserved(self) -> bool {
-        matches!(
-            self,
-            Opcode::SyncTransfer
-                | Opcode::EuMakeOk
-                | Opcode::EuMakeErr
-                | Opcode::EuIsErr
-                | Opcode::EuOk
-                | Opcode::EuErr
-        )
+        matches!(self, Opcode::SyncTransfer)
     }
 
     /// Ops whose textual form carries EXPLICIT result types (`%r: ptr =
-    /// …`): the memory family mints region tokens (result types are not
-    /// derivable from operands alone), and reserved ops have no typing
-    /// rules yet.
+    /// …`): the memory family mints region tokens, the `eu.*` family
+    /// mints/splits pair types (result types are not derivable from
+    /// operands alone), and reserved ops have no typing rules yet.
     pub fn explicit_results(self) -> bool {
         self.is_reserved()
             || matches!(
@@ -311,6 +324,11 @@ impl Opcode {
                     | Opcode::RcDrop
                     | Opcode::SyncFreeze
                     | Opcode::StackAlloc
+                    | Opcode::EuMakeOk
+                    | Opcode::EuMakeErr
+                    | Opcode::EuIsErr
+                    | Opcode::EuOk
+                    | Opcode::EuErr
             )
     }
 
