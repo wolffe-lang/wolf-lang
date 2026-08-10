@@ -1045,7 +1045,8 @@ you do not need.
 // E1011 multiopen antichain violation, E1012 write through frozen
 // data); s21 the shared tier's E1006 (strong `shared` cycle at the
 // type level — acyclicity is what lets RC drops skip cycle detection
-// forever, [mem.ub.defined]); the unsafe tier is s22's. The
+// forever, [mem.ub.defined]); s22 the unsafe tier's E13xx sub-family
+// (below, after E1012). The
 // dynamic counterparts are normative: E1001 ⇄ trap(use-after-move),
 // E1002 ⇄ trap(exclusivity), E1004/E1005/E1010 ⇄ region-fault per
 // [conf.trap.map] — the interpreter checks at runtime what these
@@ -1203,6 +1204,80 @@ that must keep changing.
 "#);
 
 // ------------------------------------------------------------------------
+// E13xx — the unsafe tier (s22, spec/02 §5–§7, D11). The raw tier's
+// rules are deliberately *simpler* than the safe tier's (the
+// anti-Stacked-Borrows posture): raw pointers are inert data anywhere,
+// and only the tier's *operations* — deref, write, provenance ops,
+// pointer casts, `assume`, the re-entry doors, C calls — demand the
+// `unsafe` ring. These codes gate the surface statically; the UB the
+// operations can cause is dynamic by design ([mem.ub] rows P1–P6/L/T/C,
+// checked by s23's miri-lite and the is04 oracle), so a program these
+// codes accept may still be `ub(mem.ub)` at run time — that split is
+// the tier's contract, not a gap.
+// ------------------------------------------------------------------------
+
+code!(E1301, "this raw-tier operation needs an `unsafe` block", r#"
+Raw pointers themselves are inert values: creating, copying, storing,
+and passing them is free in safe code (creation is not a use). What
+the safe tier cannot contain are the raw tier's *operations* — reading
+or writing through a pointer, pointer casts, provenance operations
+(`addr`, `with_addr`, `expose`, `with_exposed`), `assume noalias`,
+`borrow … from …`, and calls into imported C. Each of those can reach
+behavior the safe tier's guarantees do not cover, so each one lives
+inside the `unsafe { }` ring, where the enclosing module carries the
+proof obligation. Wrap the operation in an `unsafe` block — the rules
+inside are *simpler* than the safe tier's, not stricter — and state
+the invariant the block maintains in a `# Safety:` comment.
+"#);
+
+code!(E1302, "a raw pointer type cannot cross this boundary", r#"
+Unsafety never appears in types crossing function boundaries: every
+function signature is fully safe, and there are no `unsafe fn`s — the
+proof obligation is discharged at the `unsafe` block, and the module
+is the audit granule. A `*T` in a parameter or return type, or in an
+exported type's fields, would silently spread the raw tier through
+every caller's audit surface. Keep the pointer inside: pass a `handle`
+(revalidated at every access) or a region value instead, or hold the
+`*T` in a module-private field where the module's own invariants —
+and its `unsafe` blocks — can vouch for it.
+"#);
+
+code!(E1303, "this module holds `#[trusted]` code the manifest does not declare", r#"
+`#[trusted]` marks code whose unsafe blocks assert invariants the
+checker cannot see — allocator internals, pinned FFI regions. The deal
+that keeps that auditable is declaration: every module containing
+`#[trusted]` functions must be listed in the package manifest's
+`trusted` entry, so a dependency growing new trusted code is a visible
+diff, not a silent one (`wolf audit` reads exactly this roster). Add
+the module to the `trusted` list in `wolf.pkg`, or remove the
+`#[trusted]` attribute if the code no longer asserts unseen
+invariants.
+"#);
+
+code!(E1304, "`assume noalias` needs raw pointers to assume about", r#"
+`assume noalias p, q` asserts that the ranges reachable through two
+*raw pointers* do not overlap, for the assertion's scope — it is the
+one way to hand the optimizer an aliasing fact the raw tier otherwise
+refuses to guess, and a false assertion is UB (checked dynamically).
+An operand that is not a raw pointer has nothing to assert: safe
+values already carry stronger, checked aliasing facts (`mut` is
+exclusive, `read` is frozen). Pass the `*T` values themselves, or
+drop the `assume` — safe code never needs it.
+"#);
+
+code!(E1305, "this door needs a region and a raw pointer, in that order", r#"
+`borrow r from p` is one of exactly two doors from the raw tier back
+into the safe world: it asserts that `p` points into region `r`'s
+live allocation and yields a safe value governed by `r`'s rules from
+then on. The claim only makes sense with a `region` value on the left
+and a raw pointer (`*T`) on the right — anything else has no
+allocation to check the claim against. Pass the region the pointer
+really points into, or use the other door: launder the raw index
+through a checked `handle`, which re-validates its generation at
+every access.
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — the formatter's family (s11).
 // ------------------------------------------------------------------------
 
@@ -1217,6 +1292,22 @@ so scripts and editors know the file is not fully canonical yet. Fix
 the syntax errors it reports alongside this warning and run `wolf
 fmt` again; with a clean parse the whole file formats and the warning
 disappears.
+"#);
+
+// ------------------------------------------------------------------------
+// W13xx — unsafe-tier style lints (s22). Advisory, never load-bearing.
+// ------------------------------------------------------------------------
+
+code!(W1301, "this `unsafe` block does not state its invariant", r#"
+Every `unsafe` block discharges a proof obligation the checker cannot:
+some invariant, maintained by this module, makes the raw-tier
+operations inside defined. The reader auditing the module needs that
+invariant written down, next to the block that relies on it — the
+convention is a `# Safety:` comment immediately above the block (or on
+its first line) stating what must hold and why it does. This is a
+style lint, not a gate: the block still checks and compiles. Add the
+comment; future auditors — including `wolf audit` — read the rings by
+exactly these markers.
 "#);
 
 }

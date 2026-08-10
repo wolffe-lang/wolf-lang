@@ -1241,6 +1241,77 @@ that must keep changing.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_freeze_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_reopen_frozen.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_write_through_frozen.snap
 
+## E1301 — this raw-tier operation needs an `unsafe` block
+
+Raw pointers themselves are inert values: creating, copying, storing,
+and passing them is free in safe code (creation is not a use). What
+the safe tier cannot contain are the raw tier's *operations* — reading
+or writing through a pointer, pointer casts, provenance operations
+(`addr`, `with_addr`, `expose`, `with_exposed`), `assume noalias`,
+`borrow … from …`, and calls into imported C. Each of those can reach
+behavior the safe tier's guarantees do not cover, so each one lives
+inside the `unsafe { }` ring, where the enclosing module carries the
+proof obligation. Wrap the operation in an `unsafe` block — the rules
+inside are *simpler* than the safe tier's, not stricter — and state
+the invariant the block maintains in a `# Safety:` comment.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_raw_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_prov_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_raw_outside.snap
+
+## E1302 — a raw pointer type cannot cross this boundary
+
+Unsafety never appears in types crossing function boundaries: every
+function signature is fully safe, and there are no `unsafe fn`s — the
+proof obligation is discharged at the `unsafe` block, and the module
+is the audit granule. A `*T` in a parameter or return type, or in an
+exported type's fields, would silently spread the raw tier through
+every caller's audit surface. Keep the pointer inside: pass a `handle`
+(revalidated at every access) or a region value instead, or hold the
+`*T` in a module-private field where the module's own invariants —
+and its `unsafe` blocks — can vouch for it.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_sig.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1302_ptr_in_signature.snap
+
+## E1303 — this module holds `#[trusted]` code the manifest does not declare
+
+`#[trusted]` marks code whose unsafe blocks assert invariants the
+checker cannot see — allocator internals, pinned FFI regions. The deal
+that keeps that auditable is declaration: every module containing
+`#[trusted]` functions must be listed in the package manifest's
+`trusted` entry, so a dependency growing new trusted code is a visible
+diff, not a silent one (`wolf audit` reads exactly this roster). Add
+the module to the `trusted` list in `wolf.pkg`, or remove the
+`#[trusted]` attribute if the code no longer asserts unseen
+invariants.
+
+Fixtures: crates/wolf_sema/tests/snapshots/audit_surface__audit_e1303_undeclared.snap
+
+## E1304 — `assume noalias` needs raw pointers to assume about
+
+`assume noalias p, q` asserts that the ranges reachable through two
+*raw pointers* do not overlap, for the assertion's scope — it is the
+one way to hand the optimizer an aliasing fact the raw tier otherwise
+refuses to guess, and a false assertion is UB (checked dynamically).
+An operand that is not a raw pointer has nothing to assert: safe
+values already carry stronger, checked aliasing facts (`mut` is
+exclusive, `read` is frozen). Pass the `*T` values themselves, or
+drop the `assume` — safe code never needs it.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_assume_malformed.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1304_assume_malformed.snap
+
+## E1305 — this door needs a region and a raw pointer, in that order
+
+`borrow r from p` is one of exactly two doors from the raw tier back
+into the safe world: it asserts that `p` points into region `r`'s
+live allocation and yields a safe value governed by `r`'s rules from
+then on. The claim only makes sense with a `region` value on the left
+and a raw pointer (`*T`) on the right — anything else has no
+allocation to check the claim against. Pass the region the pointer
+really points into, or use the other door: launder the raw index
+through a checked `handle`, which re-validates its generation at
+every access.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_door_misuse.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1305_door_misuse.snap
+
 ## W0301 — file only partially formatted: syntax errors present
 
 `wolf fmt` formats through the resilient parse tree, so a file with
@@ -1255,3 +1326,17 @@ fmt` again; with a clean parse the whole file formats and the warning
 disappears.
 
 Fixtures: crates/wolf_fmt/tests/snapshots/broken__w0301_partial_format.snap
+
+## W1301 — this `unsafe` block does not state its invariant
+
+Every `unsafe` block discharges a proof obligation the checker cannot:
+some invariant, maintained by this module, makes the raw-tier
+operations inside defined. The reader auditing the module needs that
+invariant written down, next to the block that relies on it — the
+convention is a `# Safety:` comment immediately above the block (or on
+its first line) stating what must hold and why it does. This is a
+style lint, not a gate: the block still checks and compiles. Add the
+comment; future auditors — including `wolf audit` — read the rings by
+exactly these markers.
+
+Fixtures: crates/wolf_mem/tests/snapshots/mem_diagnostics__w1301_missing_safety.snap
