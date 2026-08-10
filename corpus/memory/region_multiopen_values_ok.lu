@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.region.multiopen, mem.region.open.2, mem.region.create.2
+//! The multiopen ANTICHAIN, legal direction: two sibling region
+//! values (neither owns the other) open simultaneously, with writes
+//! interleaving across both windows. The illegal ancestor direction
+//! is region_open_ancestor.lu. (region_multiopen_ok.lu pins the same
+//! law with `List`, which waits on generic std typing.)
+
+struct Cell { value: int }
+
+fn main() -> !int {
+    let a = region()
+    let b = region()
+    var total = 0
+    in a {
+        let x = Cell { value: 1 }          // lands in a
+        in b {                             // both a and b open: siblings
+            let y = Cell { value: 2 }      // lands in b
+            total += x.value + y.value     // reads cross both open regions
+        }
+        let z = Cell { value: 3 }          // a is still open
+        total += z.value
+    }
+    if total == 6 { 0 } else { 1 }
+}

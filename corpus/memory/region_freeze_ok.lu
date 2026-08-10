@@ -1,0 +1,19 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.region.freeze.1, mem.region.freeze.2, mem.region.create.1
+//! The clean freeze flow (the head of regions.lu, mem-checkable
+//! today): build in r, freeze — consuming the affine value — and
+//! read the promoted data forever.
+
+struct Config { limit: int }
+
+fn build_config() -> Config {
+    Config { limit: 42 }           // allocates into the ambient region
+}
+
+fn main() -> !int {
+    let r = region(rc)
+    let config = in r { build_config() }
+    let frozen = freeze r          // deep imm, no copy; r consumed
+    if config.limit == 42 { 0 } else { 1 }
+}

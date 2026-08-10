@@ -1,0 +1,13 @@
+//! check: fail(E1005)
+//! phase: typecheck
+//! conforms: mem.region.freeze.3, mem.region.open.1
+//! The open window pins the handle: a region transfers as a closed
+//! subtree only. (The channel spelling of the same rule is
+//! region_move_while_open.lu, which waits on channel typing.)
+
+fn main() -> !int {
+    region p {
+        let q = move p             // ERROR E1005: p is open (we are inside it)
+        0
+    }
+}

@@ -1,0 +1,13 @@
+//! check: fail(E1012)
+//! phase: typecheck
+//! conforms: mem.region.freeze.1
+//! `freeze` is deep and permanent: writes through any path into
+//! frozen data are rejected.
+
+struct Config { limit: int }
+
+fn main() -> !int {
+    var cfg = freeze region { Config { limit: 42 } }
+    cfg.limit = 7                  // ERROR E1012: the data is imm forever
+    cfg.limit
+}

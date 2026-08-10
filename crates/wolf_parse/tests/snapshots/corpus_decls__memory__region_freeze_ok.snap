@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 286..314 name=Config fields=1
+FnDecl 316..419 name=build_config body=Block
+FnDecl 421..617 name=main body=Block

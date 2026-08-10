@@ -8,6 +8,18 @@
 //! multi-acquire (deadlock-free by ordered set acquisition).
 //! NOTE: exact API names ride the s05 spec — corpus updates land in the
 //! same commit as spec surface changes (s02 discipline).
+//! Self-contained since 2026-08-10 (is06 finding S-5): every function
+//! the file calls is defined in the file.
+
+fn build_batch() -> List[int] {
+    var xs = List[int]()
+    for i in 0..4 { xs.push(i * i) }
+    xs
+}
+
+fn worker() -> int {
+    0                                    // exits normal(0): is_normal() holds
+}
 
 fn main() -> !int {
     var sum = 0

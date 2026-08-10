@@ -2,4 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 538..1907 name=main body=Block
+FnDecl 652..754 name=build_batch body=Block
+FnDecl 756..857 name=worker body=Block
+FnDecl 859..2228 name=main body=Block

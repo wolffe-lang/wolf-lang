@@ -1,0 +1,18 @@
+//! check: fail(E1011)
+//! phase: typecheck
+//! conforms: mem.region.multiopen, mem.region.edge.iso
+//! The multiopen ANTICHAIN, illegal direction: p owns c (iso edge via
+//! the stash), so opening c inside p's window would put c's data
+//! behind two live mutable windows. The legal sibling direction is
+//! region_multiopen_values_ok.lu.
+
+struct Holder { child: region }
+
+fn main() -> !int {
+    let c = region()
+    region p {
+        let h = Holder { child: move c }   // iso edge: p owns c
+        let n = in h.child { 1 }           // ERROR E1011: ancestor p is open
+        n
+    }
+}

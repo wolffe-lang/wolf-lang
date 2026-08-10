@@ -1,8 +1,10 @@
 //! check: run(exit=0)
 //! phase: resolve
-//! conforms: conc.mm.hb.mutex, conc.select.fair
-//! `when (a, b)` acquires the whole set at once (ordered acquisition
-//! under the hood): no lock-order deadlock exists by construction.
+//! conforms: conc.mm.hb.mutex, conc.when.order, conc.when.nodeadlock, conc.when.body
+//! `when (a, b)` acquires the whole set at once (canonical-order
+//! acquisition under the hood, [conc.when.order]): no lock-order
+//! deadlock exists by construction — the reversed spelling below
+//! performs the identical acquisitions.
 
 fn main() -> !int {
     let a = Mutex(1)

@@ -1,0 +1,12 @@
+//! check: fail(E1005)
+//! phase: typecheck
+//! conforms: mem.region.freeze.3, mem.region.freeze.1
+//! Freezing while the region is open would let the open window
+//! outlive the immutability promise — same rule, freeze spelling.
+
+fn main() -> !int {
+    region p {
+        let f = freeze p           // ERROR E1005: p is open (we are inside it)
+        0
+    }
+}
