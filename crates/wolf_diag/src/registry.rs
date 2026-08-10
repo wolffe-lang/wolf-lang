@@ -1038,6 +1038,74 @@ you do not need.
 "#);
 
 // ------------------------------------------------------------------------
+// E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
+// value/exclusivity codes; regions (E1004/E1005), shared (E1006), and
+// the unsafe tier arrive with s19–s22. The dynamic counterparts are
+// normative: E1001 ⇄ trap(use-after-move), E1002 ⇄ trap(exclusivity)
+// per [conf.trap.map] — the interpreter checks at runtime what these
+// codes prove statically.
+// ------------------------------------------------------------------------
+
+code!(E1001, "this value was moved away (or never given one) before this use", r#"
+In wolf, assignment and argument passing *move* a value: after
+`let b = a` or `f(take a)`, the name `a` no longer holds anything —
+its value went to the new place, whole. Reading a moved-from (or
+never-initialized) name would read nothing, so the checker stops it
+here and points at the move it happened in. Moves are field-granular:
+moving `s.a` away leaves `s.b` usable, and only the moved path is
+off-limits. To keep using the original, make the duplication explicit
+where the move happens — `copy a` produces an independent value of
+any type — or give the name a new value first: assigning to a
+moved-from place makes it live again.
+"#);
+
+code!(E1002, "this needs exclusive access, but the value is in use here", r#"
+While a value is passed `mut`, that call is the only way to touch it:
+`mut` means "mine alone for the whole call", so no other argument of
+the same call may read or write the same place, or any path that
+contains it ([mem.tier0.excl]). Distinct fields are distinct places —
+`f(mut p.x, mut p.y)` is fine — but `f(mut p, p.x)` is not, because
+`p.x` lives inside `p`. Split the call so the uses happen one after
+the other, pass disjoint fields instead of the whole value, or let
+the callee say what it really touches with a view set
+(`mut self.{x, y}`), which frees the caller to use the rest.
+"#);
+
+code!(E1007, "the argument's mode does not match the parameter's", r#"
+A parameter's mode is part of the deal between caller and callee, and
+wolf makes the caller spell it at the call site (X1): a `mut`
+parameter is written `f(mut x)` — the reader sees the mutation — and
+a `take` parameter is written `f(take x)` — the reader sees the value
+leave. This argument's spelling disagrees with the declaration: a
+mode is missing, or written where the parameter does not ask for one.
+The suggested edit inserts or removes the mode word at the argument;
+the parameter's declaration is marked so you can decide which side is
+wrong.
+"#);
+
+code!(E1008, "the method touches a field outside its declared view", r#"
+`fn norm(mut self.{x, y})` is a promise: of all of `self`, this
+method touches only `self.x` and `self.y`. Callers lean on that
+promise — it is what lets them keep using `self.z` while the call
+runs — so a use of a field outside the view set (or of `self` whole)
+would quietly break every call site. Add the field to the view set if
+the method genuinely needs it, or drop to plain `mut self` to claim
+the full value — both change the signature, which is exactly where
+that decision belongs.
+"#);
+
+code!(E1009, "a `mut` argument needs a place, not a temporary", r#"
+`mut` lends a location out to be written, so the argument must *name
+a location* the caller can see again afterwards: a variable, a field
+path like `p.x`. A temporary — `f(mut 1 + 2)`, `f(mut g())` — has no
+such location: the callee's writes would vanish with it, which is
+never what the call meant. Bind the value first (`var t = …`, then
+`f(mut t)`), or pass the expression plainly if the callee only needs
+its value. (`take` of a temporary is fine — consuming a value nobody
+else owns needs no location.)
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — the formatter's family (s11).
 // ------------------------------------------------------------------------
 

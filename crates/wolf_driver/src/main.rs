@@ -356,11 +356,12 @@ const PHASES: [&str; 8] = [
 ];
 
 /// Observation record ([proto.record]). The deepest implemented phase is
-/// `typecheck` (s13): each rung either stops with `fail(code)`, passes at
+/// `mem` (s18): each rung either stops with `fail(code)`, passes at
 /// the requested rung, or falls through deeper; a file with any
-/// NotYetCheckable body stops at `resolve` + `unsupported` — the
-/// conservatism ledger keeps showing exactly what the compiler cannot do
-/// yet. `--phase=none` remains the pre-s07 stub record.
+/// NotYetCheckable body stops at the last completed rung +
+/// `unsupported` — the conservatism ledger keeps showing exactly what
+/// the compiler cannot do yet. `--phase=none` remains the pre-s07 stub
+/// record.
 ///
 /// Diagnostics ride stderr (s10): the human CLI format by default, one
 /// diag-schema JSON object per line with `--error-format=json`. The
@@ -432,7 +433,7 @@ fn conform_run(args: &[String]) {
                 .find(|d| d.severity == wolf_diag::Severity::Error)
                 .map(|d| d.code)
         };
-        // Phase ladder, deepest implemented: parse (s09). Each rung either
+        // Phase ladder, deepest implemented: mem (s18). Each rung either
         // stops with fail(code) at that rung, passes at the requested rung,
         // or falls through deeper; past the last rung the verdict is
         // `unsupported` (conservatism ledger).
@@ -490,7 +491,30 @@ fn conform_run(args: &[String]) {
                                 } else if phase.as_deref() == Some("typecheck") {
                                     ("typecheck", "pass".to_string(), all)
                                 } else {
-                                    ("typecheck", "unsupported".to_string(), all)
+                                    // The mem rung (s18): Tier-0
+                                    // exclusivity over every typed
+                                    // body. Same conservatism
+                                    // contract as typecheck — ANY
+                                    // NotYet (regions s19–s20,
+                                    // shared/handle s21, unsafe s22,
+                                    // closures c05) means the rung
+                                    // was not completed and partial
+                                    // memory errors are withheld.
+                                    let mem = wolf_mem::check_package(&res.package, &tc);
+                                    if !mem.not_yet.is_empty() {
+                                        ("typecheck", "unsupported".to_string(), all)
+                                    } else {
+                                        let mut all = all;
+                                        all.extend(mem.diagnostics.iter().cloned());
+                                        wolf_diag::sort_diagnostics(&mut all);
+                                        if let Some(code) = first_error(&all) {
+                                            ("mem", format!("fail({code})"), all)
+                                        } else if phase.as_deref() == Some("mem") {
+                                            ("mem", "pass".to_string(), all)
+                                        } else {
+                                            ("mem", "unsupported".to_string(), all)
+                                        }
+                                    }
                                 }
                             }
                         }
