@@ -1101,6 +1101,25 @@ the callee say what it really touches with a view set
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
+## E1004 — this value is placed in one region, but needed in another
+
+Every allocation lands in exactly one region — the innermost
+enclosing `region`/`in` block, else the caller's region — and it
+stays there for its whole life: moving a value never relocates its
+storage. Embedding a value into an aggregate that lives somewhere
+else would therefore create a reference between two regions, which
+safe wolf does not allow (one region could be freed while the other
+still points in). The diagnostic marks where each side was allocated;
+make the two placements one: build the value inside the same
+`region`/`in` block as its container, or `copy` it — a copy is a
+fresh allocation in the ambient region, so it lands where the
+container lives. When the two sides are different *parameters*, their
+regions are independent by default (that independence is what lets
+callers pass arguments from anywhere without annotations), and the
+same two fixes apply.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_conflict_params.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_cross_region_store.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_params_independent.snap
+
 ## E1007 — the argument's mode does not match the parameter's
 
 A parameter's mode is part of the deal between caller and callee, and
@@ -1140,6 +1159,26 @@ its value. (`take` of a temporary is fine — consuming a value nobody
 else owns needs no location.)
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_arg_temporary.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1009_mut_temporary.snap
+
+## E1010 — the value's region is freed while the value is still needed
+
+A region dies as a unit: when a `region` block ends (or a region
+value's scope does), every allocation in it is freed wholesale — that
+is the whole deal, one free instead of thousands. This value is
+allocated in such a region, but something that lives longer still
+holds it: an outer binding, the function's result, or module state.
+After the free, that holder would point at nothing. Keep value and
+region together: build the value outside the region block so it lands
+in the caller's region, aim the allocation at a longer-lived region
+explicitly (`let r = region()` … `in r { … }`), or widen the region
+block so it covers every use. Note that `copy` inside the block does
+not help — a copy is a fresh allocation in the *current* ambient
+region, which is still the dying one. `freeze` (making the whole
+region immortal and immutable) and `shared` (counted escape) are
+coming in later tiers for the cases that genuinely need to outlive
+the region.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
 
 ## W0301 — file only partially formatted: syntax errors present
 

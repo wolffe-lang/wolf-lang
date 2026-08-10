@@ -1039,11 +1039,13 @@ you do not need.
 
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
-// value/exclusivity codes; regions (E1004/E1005), shared (E1006), and
-// the unsafe tier arrive with s19–s22. The dynamic counterparts are
-// normative: E1001 ⇄ trap(use-after-move), E1002 ⇄ trap(exclusivity)
-// per [conf.trap.map] — the interpreter checks at runtime what these
-// codes prove statically.
+// value/exclusivity codes; s19 the region-inference codes (E1004
+// conflicting placement, E1010 escape of region-local data); the
+// open/transfer rule (E1005) lands with s20, shared (E1006) with s21,
+// and the unsafe tier with s22. The dynamic counterparts are
+// normative: E1001 ⇄ trap(use-after-move), E1002 ⇄ trap(exclusivity),
+// E1004/E1010 ⇄ region-fault per [conf.trap.map] — the interpreter
+// checks at runtime what these codes prove statically.
 // ------------------------------------------------------------------------
 
 code!(E1001, "this value was moved away (or never given one) before this use", r#"
@@ -1069,6 +1071,23 @@ contains it ([mem.tier0.excl]). Distinct fields are distinct places —
 the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
+"#);
+
+code!(E1004, "this value is placed in one region, but needed in another", r#"
+Every allocation lands in exactly one region — the innermost
+enclosing `region`/`in` block, else the caller's region — and it
+stays there for its whole life: moving a value never relocates its
+storage. Embedding a value into an aggregate that lives somewhere
+else would therefore create a reference between two regions, which
+safe wolf does not allow (one region could be freed while the other
+still points in). The diagnostic marks where each side was allocated;
+make the two placements one: build the value inside the same
+`region`/`in` block as its container, or `copy` it — a copy is a
+fresh allocation in the ambient region, so it lands where the
+container lives. When the two sides are different *parameters*, their
+regions are independent by default (that independence is what lets
+callers pass arguments from anywhere without annotations), and the
+same two fixes apply.
 "#);
 
 code!(E1007, "the argument's mode does not match the parameter's", r#"
@@ -1103,6 +1122,24 @@ never what the call meant. Bind the value first (`var t = …`, then
 `f(mut t)`), or pass the expression plainly if the callee only needs
 its value. (`take` of a temporary is fine — consuming a value nobody
 else owns needs no location.)
+"#);
+
+code!(E1010, "the value's region is freed while the value is still needed", r#"
+A region dies as a unit: when a `region` block ends (or a region
+value's scope does), every allocation in it is freed wholesale — that
+is the whole deal, one free instead of thousands. This value is
+allocated in such a region, but something that lives longer still
+holds it: an outer binding, the function's result, or module state.
+After the free, that holder would point at nothing. Keep value and
+region together: build the value outside the region block so it lands
+in the caller's region, aim the allocation at a longer-lived region
+explicitly (`let r = region()` … `in r { … }`), or widen the region
+block so it covers every use. Note that `copy` inside the block does
+not help — a copy is a fresh allocation in the *current* ambient
+region, which is still the dying one. `freeze` (making the whole
+region immortal and immutable) and `shared` (counted escape) are
+coming in later tiers for the cases that genuinely need to outlive
+the region.
 "#);
 
 // ------------------------------------------------------------------------

@@ -377,6 +377,7 @@ fn conform_run(args: &[String]) {
     let mut file = None;
     let mut phase: Option<String> = None;
     let mut error_format = "human".to_string();
+    let mut dump: Option<String> = None;
     for a in args {
         if a == "--json" || a.starts_with("--seed=") {
             continue; // accepted per [proto.invoke.cli]
@@ -387,6 +388,14 @@ fn conform_run(args: &[String]) {
                 std::process::exit(2);
             }
             error_format = f.to_string();
+            continue;
+        }
+        if let Some(d) = a.strip_prefix("--dump=") {
+            if d != "regions" && d != "cfg" {
+                eprintln!("wolf conform-run: unknown dump `{d}` (regions, cfg)");
+                std::process::exit(2);
+            }
+            dump = Some(d.to_string());
             continue;
         }
         if let Some(p) = a.strip_prefix("--phase=") {
@@ -409,7 +418,7 @@ fn conform_run(args: &[String]) {
     let Some(file) = file else {
         eprintln!(
             "usage: wolf conform-run <file.lu> [--phase=<p>] [--seed=N] [--json] \
-             [--error-format=human|json]"
+             [--error-format=human|json] [--dump=regions|cfg]"
         );
         std::process::exit(2);
     };
@@ -537,6 +546,22 @@ fn conform_run(args: &[String]) {
             .collect();
         result
     };
+
+    // The debug dump surface (s19): every lowerable body's region
+    // inference (or check CFG) — stderr only, snapshot-reviewable;
+    // stdout stays the protocol's.
+    if let Some(kind) = &dump {
+        let mut dump_sm = wolf_span::SourceMap::new();
+        let mut dump_sources = Sources::new();
+        if let Ok(res) = resolve_from_entry(Path::new(&file), &mut dump_sm, &mut dump_sources) {
+            let tc = wolf_sema::typecheck_package(&res);
+            let text = match kind.as_str() {
+                "regions" => wolf_mem::dump_regions_package(&res.package, &tc),
+                _ => wolf_mem::dump_package(&res.package, &tc),
+            };
+            eprint!("{text}");
+        }
+    }
 
     // The rich diagnostic stream (s10) — stderr only, stdout is the
     // protocol's.
