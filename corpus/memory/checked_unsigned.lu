@@ -1,0 +1,19 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: arith.checked
+//! The s26 unsigned decision, exercised: `uint` rides the same-width
+//! scalar with the `u*.chk` family selected — checked in all profiles
+//! (X3), unsigned compares pick the `u` conditions, and a remainder by
+//! a positive constant carries its range postcondition as a WIR fact.
+
+fn digit(n: uint) -> uint {
+    n % 10          // urem.chk; fact range 0..=9 rides the result
+}
+
+fn main() -> !int {
+    let a: uint = 250
+    let b: uint = 5
+    let sum = a + b             // uadd.chk: traps on carry, not at 255
+    let d = digit(sum)
+    if d == 5 && sum > a { 0 } else { 1 }
+}

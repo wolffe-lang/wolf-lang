@@ -1,0 +1,15 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.item.let
+//!
+//! Issue #2's missing pin: `let` is immutable (spec/01 §2.4 — "`let`
+//! immutable, `var` mutable"), yet both implementations accepted this
+//! reassignment through four differential rounds because no corpus
+//! file exercised it. The fix-it offers `var`; shadowing with a second
+//! `let x = …` is the other legal spelling.
+
+fn main() -> !int {
+    let x = 1
+    x = 2
+    0
+}

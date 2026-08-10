@@ -1,0 +1,13 @@
+//! check: fail(E0410)
+//! phase: resolve
+//! conforms: gram.item.let
+//!
+//! Compound assignment is assignment (`[gram.expr.assign]` routes
+//! `+=` through the same place rules as plain `=`): a `let` binding
+//! rejects it identically (issue #2's second face).
+
+fn main() -> !int {
+    let total = 40
+    total += 2
+    0
+}

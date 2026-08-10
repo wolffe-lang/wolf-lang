@@ -535,6 +535,21 @@ user types arrive with the trait engine (s14).
 
 Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_string_plus.snap
 
+## E0410 — a `let` binding cannot be assigned again
+
+`let` names a value once: the binding is immutable for its whole scope
+(spec/01 `[gram.item.let]` — "`let` immutable, `var` mutable"), and
+that covers plain assignment and every compound form (`=`, `+=`, `-=`,
+…). A binding you intend to update is declared with `var` instead —
+the fix-it offers exactly that edit. When the second value is really a
+*new* thing rather than an update to the old one, the wolf idiom is
+shadowing: a second `let x = …` introduces a fresh binding under the
+same name without mutating the first. Function parameters and `match`
+bindings are not `let` bindings; their mutability is governed by modes
+(`mut`, `take`), not by this rule.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0410_let_reassign.snap
+
 ## E0501 — the generic body uses something its bounds do not provide
 
 The golden rule of wolf generics: a generic body is checked once,

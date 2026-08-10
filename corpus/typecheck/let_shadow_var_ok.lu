@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: gram.item.let
+//!
+//! The non-cases around E0410, pinned green: `var` reassigns (plain
+//! and compound), a second `let` under the same name shadows rather
+//! than assigns, a `var` shadowing a `let` is assignable again, and a
+//! parameter is not a `let` binding (its mutability is the mode
+//! system's business, not this rule's).
+
+fn bump(n: int) -> int {
+    var m = n
+    m = m + 1
+    m
+}
+
+fn main() -> !int {
+    var a = 1
+    a = 2
+    a += 3
+    let b = bump(a)
+    let b = b + 4
+    var b = b
+    b += 32
+    if b == 42 { 0 } else { 1 }
+}

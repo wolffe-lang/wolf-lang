@@ -559,6 +559,19 @@ surprises you with a numeric `+` overload. Trait-based operators for
 user types arrive with the trait engine (s14).
 "#);
 
+code!(E0410, "a `let` binding cannot be assigned again", r#"
+`let` names a value once: the binding is immutable for its whole scope
+(spec/01 `[gram.item.let]` — "`let` immutable, `var` mutable"), and
+that covers plain assignment and every compound form (`=`, `+=`, `-=`,
+…). A binding you intend to update is declared with `var` instead —
+the fix-it offers exactly that edit. When the second value is really a
+*new* thing rather than an update to the old one, the wolf idiom is
+shadowing: a second `let x = …` introduces a fresh binding under the
+same name without mutating the first. Function parameters and `match`
+bindings are not `let` bindings; their mutability is governed by modes
+(`mut`, `take`), not by this rule.
+"#);
+
 // ------------------------------------------------------------------------
 // E05xx — traits, checked generics, and coherence (s14).
 // ------------------------------------------------------------------------
