@@ -11,6 +11,14 @@
 //! the comptime sandbox refuses them, D33).
 
 use wolf_mem::ubcheck::{self, Budget, Verdict};
+
+/// A path spelled safely inside a wolf string literal: forward slashes
+/// everywhere (Windows accepts them at the API; backslashes would read
+/// as escape sequences — `C:\Users` began with "there is no \U
+/// escape in wolf", seven times).
+fn lit(p: &std::path::Path) -> String {
+    p.display().to_string().replace('\\', "/")
+}
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
 
 /// Statically clean ladder, then checked execution with a stdin
@@ -141,7 +149,7 @@ fn fs_write_read_roundtrip() {
          fs_remove(path)?\n\
          if fs_exists(path) {{ 1 }} else {{ 0 }}\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     let out = run(&src);
     assert!(
@@ -164,7 +172,7 @@ fn fs_missing_file_takes_the_else_path() {
          print(\"{{text}}\")\n\
          0\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     // The error is a VALUE the caller handles — not a trap (D30).
     assert_eq!(run(&src).stdout, "fallback\n");
@@ -181,7 +189,7 @@ fn fs_error_row_propagates_out_of_main() {
          print(\"{{text}}\")\n\
          0\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     let out = run(&src);
     // D30 process behavior: the tag on stdout, exit 1.
@@ -208,7 +216,7 @@ fn fs_handles_open_write_read_close() {
          fs_remove(path)?\n\
          0\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     let out = run(&src);
     assert!(
@@ -236,7 +244,7 @@ fn fs_read_at_end_is_the_eof_row() {
          print(\"{{second}}\")\n\
          0\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     let out = run(&src);
     // The first read drains the file; the second raises `eof`, which
@@ -260,7 +268,7 @@ fn fs_read_after_close_is_the_io_row() {
          print(\"{{text}}\")\n\
          0\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     // A forged or closed fd is the `io` row — checkable, never a trap.
     assert_eq!(run(&src).stdout, "closed-fd handled\n");
@@ -278,7 +286,7 @@ fn fs_exists_is_total() {
          let no = fs_exists(\"{q}\")\n\
          if yes && !no {{ 0 }} else {{ 1 }}\n\
          }}\n",
-        p = path.display(),
+        p = lit(&path),
         q = dir.join("gone.txt").display()
     );
     assert!(matches!(run(&src).verdict, Verdict::Exit(0)));
@@ -296,7 +304,7 @@ fn fs_utf8_failure_is_the_utf8_row() {
          print(\"{{text}}\")\n\
          0\n\
          }}\n",
-        p = path.display()
+        p = lit(&path)
     );
     let out = run(&src);
     assert!(matches!(out.verdict, Verdict::Exit(1)), "{:?}", out.verdict);
