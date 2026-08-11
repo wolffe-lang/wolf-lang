@@ -37,14 +37,14 @@ conc/when_nested.lu: not mem-clean (pre-wir rungs own it)
 errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
 faults/assert_msg_holds.lu: lowers
-faults/bounds_slice.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
+faults/bounds_slice.lu: lowers
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/overflow_add.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 ffi.lu: not mem-clean (pre-wir rungs own it)
-fs/error_row.lu: refused — io/fs builtins in native lowering (checked lane only at s38)
-fs/roundtrip.lu: refused — io/fs builtins in native lowering (checked lane only at s38)
+fs/error_row.lu: lowers
+fs/roundtrip.lu: lowers
 grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
 grammar/brackets_generic_call.lu: not mem-clean (pre-wir rungs own it)
@@ -56,9 +56,9 @@ grammar/intdot_exponent.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
 grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
-grammar/interp_nested.lu: refused — a method call without an elaborated impl
+grammar/interp_nested.lu: lowers
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
-grammar/newline_trailing.lu: refused — a method call without an elaborated impl
+grammar/newline_trailing.lu: lowers
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
@@ -77,9 +77,9 @@ lints/float_zero_minus.lu: lowers
 lints/mut_in_interp.lu: lowers
 lints/narrowing_literal.lu: lowers
 lints/prefix_statement.lu: lowers
-lints/raw_interp_braces.lu: refused — comparison outside integers/floats (str/enum compares, c06/std)
+lints/raw_interp_braces.lu: lowers
 lints/region_never_allocates.lu: lowers
-lints/safety_comment_missing.lu: refused — assignment through nested places (c06)
+lints/safety_comment_missing.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 lints/shadow_prelude.lu: lowers
 lints/tag_name_collision.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
@@ -89,15 +89,15 @@ memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
-memory/handle_stale.lu: refused — List/Pool/shared constructor lowering (runtime shapes, c06)
+memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
-memory/move_ok.lu: refused — shared-tier surface lowering (rc receivers + runtime cells, c06); List/Pool/shared constructor lowering (runtime shapes, c06)
+memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
-memory/oob_bounds.lu: refused — List/Pool/shared constructor lowering (runtime shapes, c06)
+memory/oob_bounds.lu: lowers
 memory/prov_holy_grail.lu: not mem-clean (pre-wir rungs own it)
-memory/prov_two_phase.lu: refused — List/Pool/shared constructor lowering (runtime shapes, c06)
-memory/region_ambient_ok.lu: refused — shared-tier surface lowering (rc receivers + runtime cells, c06); shared-tier surface lowering (rc receivers + runtime cells, c06)
+memory/prov_two_phase.lu: lowers
+memory/region_ambient_ok.lu: lowers
 memory/region_conflict_params.lu: not mem-clean (pre-wir rungs own it)
 memory/region_escape_local.lu: not mem-clean (pre-wir rungs own it)
 memory/region_freeze_ok.lu: lowers
@@ -108,8 +108,8 @@ memory/region_infer_request_handler.lu: lowers
 memory/region_infer_tree_transform.lu: lowers
 memory/region_iso_edge_ok.lu: not mem-clean (pre-wir rungs own it)
 memory/region_move_while_open.lu: not mem-clean (pre-wir rungs own it)
-memory/region_multiopen_ok.lu: refused — List/Pool/shared constructor lowering (runtime shapes, c06)
-memory/region_multiopen_swap.lu: refused — List/Pool/shared constructor lowering (runtime shapes, c06)
+memory/region_multiopen_ok.lu: lowers
+memory/region_multiopen_swap.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
@@ -117,21 +117,24 @@ memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers, s27)
 memory/unsafe_assume_malformed.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_c_alloc_native.lu: lowers
-memory/unsafe_creation_not_use.lu: refused — assignment through nested places (c06)
+memory/unsafe_creation_not_use.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 memory/unsafe_door_borrow.lu: refused — first-class region values beyond local bindings (c05)
 memory/unsafe_door_misuse.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_noalias.lu: refused — assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)
 memory/unsafe_raw_outside.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_sig.lu: not mem-clean (pre-wir rungs own it)
-memory/unsafe_trusted.lu: refused — assignment through nested places (c06)
-memory/unsafe_ub_uaf.lu: refused — assignment through nested places (c06)
+memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
+memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/echo_roundtrip.lu: refused — net builtins in native lowering (checked lane only at s39)
 net/refused_row.lu: refused — net builtins in native lowering (checked lane only at s39)
 overflow.lu: lowers
 procs.lu: not mem-clean (pre-wir rungs own it)
-regions.lu: refused — List/Pool/shared constructor lowering (runtime shapes, c06)
+projects/count.lu: lowers
+projects/rpn.lu: lowers
+projects/wordtree.lu: lowers
+regions.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 resolve/cycle/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/dupdef/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
@@ -151,17 +154,17 @@ rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
 rows/open_row_growth.lu: lowers
-rows/propagate/main.lu: refused — comparison outside integers/floats (str/enum compares, c06/std)
+rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
-strings/builtin_methods.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
+strings/builtin_methods.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/float_format.lu: lowers
 strings/format_spec_full.lu: lowers
 strings/format_spec_malformed.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
-strings/interp_value_position.lu: refused — interpolated strings in value position (allocating materialization, c08)
-strings/slice_oob_trap.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
+strings/interp_value_position.lu: lowers
+strings/slice_oob_trap.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)

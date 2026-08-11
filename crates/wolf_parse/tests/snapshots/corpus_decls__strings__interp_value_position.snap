@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 793..843 name=greet body=Block
-FnDecl 845..897 name=main body=Block
+FnDecl 654..704 name=greet body=Block
+FnDecl 706..758 name=main body=Block

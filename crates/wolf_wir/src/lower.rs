@@ -45,10 +45,10 @@
 use std::collections::HashMap;
 
 use wolf_ast::{
-    Arg, AssignStmt, Block as AstBlock, BreakExpr, CallExpr, CastExpr, ConstDecl, DeferStmt,
-    ElseExpr, ExprStmt, ForExpr, GreenNode, IfExpr, LetDecl, LoopExpr, MatchArm, MatchExpr,
-    ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr, SyntaxKind, TryExpr,
-    VarDecl, WhileExpr,
+    Arg, AssignStmt, Block as AstBlock, BracketApply, BreakExpr, CallExpr, CastExpr, ConstDecl,
+    DeferStmt, ElseExpr, ExprStmt, ForExpr, FromEndExpr, GreenNode, IfExpr, LetDecl, LoopExpr,
+    MatchArm, MatchExpr, ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr,
+    SyntaxKind, TryExpr, VarDecl, WhileExpr,
 };
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::{FnSig, ItemSig, SigTables};
@@ -462,11 +462,11 @@ fn wir_ty_depth(
             "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
             span,
         )),
-        TyKind::Shared(_)
-        | TyKind::Weak(_)
-        | TyKind::Handle(_)
-        | TyKind::List(_)
-        | TyKind::Pool(_) => Err(refuse(
+        // A `List[T]` VALUE is one pointer to its runtime header
+        // (s40, `wolf_rt::list`); element shapes are checked at the
+        // operation sites, so the handle lowers for any element.
+        TyKind::List(_) => Ok(Some(types::PTR)),
+        TyKind::Shared(_) | TyKind::Weak(_) | TyKind::Handle(_) | TyKind::Pool(_) => Err(refuse(
             "shared-tier surface lowering (rc receivers + runtime cells, c06)",
             span,
         )),
@@ -1474,6 +1474,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if place.kind == SyntaxKind::MemberExpr {
             return self.lower_member_assign(d, place, stmt.span);
         }
+        if place.kind == SyntaxKind::BracketApply {
+            return self.lower_index_assign(d, place, stmt.span);
+        }
         if place.kind != SyntaxKind::PathExpr {
             return Err(refuse("assignment through nested places (c06)", place.span));
         }
@@ -1912,10 +1915,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::StructLit => self.lower_struct_lit(e),
             SyntaxKind::TupleExpr => self.lower_tuple(e),
             SyntaxKind::MemberExpr => self.lower_member(e),
-            SyntaxKind::BracketApply => Err(refuse(
-                "indexing lowering (List/Pool runtime shapes, c06)",
-                e.span,
-            )),
+            SyntaxKind::BracketApply => self.lower_index(e),
             SyntaxKind::RangeExpr | SyntaxKind::FromEndExpr => Err(refuse(
                 "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
                 e.span,
@@ -2079,6 +2079,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(base_sema) = self.expr_sema_ty(base.span) else {
             return Err(refuse("a member access without a recorded type", e.span));
         };
+        // s40: the builtin `len` members — `s.len` is the byte length
+        // half of the pair (D25), `l.len` reads the runtime header.
+        if m.member().map(|t| self.text(t.span)).as_deref() == Some("len") {
+            match self.table.kind(self.strip_sema(base_sema)) {
+                TyKind::Prim(Prim::Str) => {
+                    let Some(sv) = flow_val!(self.lower_expr(base)) else {
+                        return Err(refuse("a valueless str receiver", base.span));
+                    };
+                    let (_, l) = self.str_parts(sv);
+                    return Ok(Flow::Val(Some(l)));
+                }
+                TyKind::List(_) => {
+                    let Some(hdr) = flow_val!(self.lower_expr(base)) else {
+                        return Err(refuse("a valueless List receiver", base.span));
+                    };
+                    let n = self
+                        .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
+                        .expect("len");
+                    return Ok(Flow::Val(Some(n)));
+                }
+                _ => {}
+            }
+        }
         let (index, ..) = self.member_index(base_sema, m, e.span)?;
         let Some(agg) = flow_val!(self.lower_expr(base)) else {
             return Err(refuse("member access on a valueless expression", e.span));
@@ -2352,6 +2375,35 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     return Ok(Flow::Val(Some(
                         self.b
                             .ins(Opcode::Fcmp, &[a, bv], &[types::BOOL], Aux::FloatCc(cc))
+                            .one(),
+                    )));
+                }
+                // s40: str comparison — byte equality and the
+                // byte-lexicographic order ([mem.str.order]), through
+                // the runtime (the checked executor's semantics).
+                let lhs_is_str = d
+                    .lhs()
+                    .and_then(|l| self.expr_sema_ty(l.span))
+                    .map(|t| matches!(self.table.kind(self.strip_sema(t)), TyKind::Prim(Prim::Str)))
+                    .unwrap_or(false);
+                if lhs_is_str {
+                    let (ap, al) = self.str_parts(a);
+                    let (bp, bl) = self.str_parts(bv);
+                    let z = self.b.iconst(types::I64, 0);
+                    let (sym, cc) = match op {
+                        SyntaxKind::EqEq => ("__wolf_rt_str_eq", IntCc::Ne),
+                        SyntaxKind::NotEq => ("__wolf_rt_str_eq", IntCc::Eq),
+                        SyntaxKind::Lt => ("__wolf_rt_str_cmp", IntCc::Slt),
+                        SyntaxKind::Gt => ("__wolf_rt_str_cmp", IntCc::Sgt),
+                        SyntaxKind::LtEq => ("__wolf_rt_str_cmp", IntCc::Sle),
+                        _ => ("__wolf_rt_str_cmp", IntCc::Sge),
+                    };
+                    let rc = self
+                        .rt_call(sym, &[ap, al, bp, bl], Some(types::I64))
+                        .expect("rc");
+                    return Ok(Flow::Val(Some(
+                        self.b
+                            .ins(Opcode::Icmp, &[rc, z], &[types::BOOL], Aux::IntCc(cc))
                             .one(),
                     )));
                 }
@@ -2709,20 +2761,33 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (Flow::Val(tv), Flow::Val(ev)) => {
                 // Coerce each arm's value into a fallible merge type
                 // in that arm's own end block (may branch for row
-                // widening).
+                // widening). Each coercion gets its OWN GVN scope:
+                // the arm-end blocks are siblings, and a coercion op
+                // with equal keys on both sides (a NULLARY
+                // `eu.make.ok` for unit arms — s40's fs family made
+                // these real; an injected tag iconst) must not
+                // GVN-share across them, or the "equal arm values
+                // need no parameter" test below sees one value that
+                // dominates neither edge.
                 self.b.switch_to_block(then_end);
+                self.b.gvn_push_scope();
                 let tv = if want_v {
-                    self.arm_to_merge(tv, merge_eu, e.span)?
+                    self.arm_to_merge(tv, merge_eu, e.span)
                 } else {
-                    tv
+                    Ok(tv)
                 };
+                self.b.gvn_pop_scope();
+                let tv = tv?;
                 let then_end = self.b.current_block();
                 self.b.switch_to_block(else_end);
+                self.b.gvn_push_scope();
                 let ev = if want_v {
-                    self.arm_to_merge(ev, merge_eu, e.span)?
+                    self.arm_to_merge(ev, merge_eu, e.span)
                 } else {
-                    ev
+                    Ok(ev)
                 };
+                self.b.gvn_pop_scope();
+                let ev = ev?;
                 let else_end = self.b.current_block();
                 let merge = self.b.create_block();
                 // The result rides a merge parameter, typed off the
@@ -2889,10 +2954,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let cs: Option<&CallSig> = self.calls.get(&e.span).copied();
         // Builtins without a signature: assert / print.
         let callee_text = d.callee().map(|c| self.text(c.span)).unwrap_or_default();
-        // The s38 io/fs builtin tier executes on the checked lane;
-        // native lowering owes it the row-returning call ABI and (for
-        // the read side) allocating str materialization — an honest
-        // refusal either way, with the tier named.
+        // The s38 io/fs builtin tier, natively (s40): rows ride the
+        // s29 eu shape, text results materialize through the ambient
+        // region (`wolf_rt::fs`).
         if matches!(
             callee_text.as_str(),
             "read_line"
@@ -2906,10 +2970,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_remove"
                 | "fs_exists"
         ) {
-            return Err(refuse(
-                "io/fs builtins in native lowering (checked lane only at s38)",
-                e.span,
-            ));
+            return self.lower_fs_builtin(&callee_text, d, e);
         }
         // The s39 net builtin tier mirrors the fs posture: checked
         // lane executes, native lowering owes the row-returning call
@@ -3145,26 +3206,1207 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(results.first().copied()))
     }
 
-    /// A string episode in VALUE position (s31): a literal-only string
-    /// becomes a `{ptr, len}` pair over module data. An interpolated
-    /// string in value position needs allocation to materialize —
-    /// refused until the str runtime tier (c08); `print` consumes
-    /// interpolation directly as segment writes ([`Self::lower_print`]).
+    // ------------------------------- s40: native str/List/fs tier ----
+    //
+    // The runtime shapes live in `wolf_rt::{str, list, fs}`; the
+    // region-backed strbuf materialization DESIGN NOTE is that str
+    // module's crate docs — a materialized str is an allocation like
+    // any other, landing in the ambient region per
+    // [mem.region.create.3] (realized as the process root region at
+    // this tier). Semantics per shim are the checked executor's,
+    // function for function; misses come back as codes and LOWERING
+    // picks the spelling — `{none}` row (`get`, `find`, `pop`) or
+    // `trap(bounds)` (`s[a..b]`, `l[i]`) — so verdict identity is
+    // decided here, where the language rules live, never in the
+    // runtime.
+
+    /// The sema type behind adapter wrappers (`distinct`, `wrapping`).
+    fn strip_sema(&self, mut ty: TyId) -> TyId {
+        for _ in 0..32 {
+            match self.table.kind(ty) {
+                TyKind::Distinct(i) | TyKind::Wrapping(i) => ty = *i,
+                _ => break,
+            }
+        }
+        ty
+    }
+
+    /// Import (once) a runtime shim under an explicit WIR signature.
+    /// One shape per symbol, by construction of the call sites.
+    fn rt_import(
+        &mut self,
+        name: &'static str,
+        params: Vec<Param>,
+        results: Vec<TypeId>,
+    ) -> ExtFunc {
+        match self.callees.get(name) {
+            Some(&ext) => ext,
+            None => {
+                let sig = self.b.module.make_sig(params, results);
+                let ext = self.b.func.import_func(name, sig);
+                self.callees.insert(name.to_string(), ext);
+                ext
+            }
+        }
+    }
+
+    /// Call a slotless runtime shim; `result` is its scalar result
+    /// type, if any.
+    fn rt_call(
+        &mut self,
+        name: &'static str,
+        args: &[Value],
+        result: Option<TypeId>,
+    ) -> Option<Value> {
+        let params: Vec<Param> = args
+            .iter()
+            .map(|&a| Param::val(self.b.func.value_ty(a)))
+            .collect();
+        let ext = self.rt_import(name, params, result.into_iter().collect());
+        self.b.ins_call(ext, args).first().copied()
+    }
+
+    /// A fresh `size`-byte stack slot for runtime out/elem traffic,
+    /// with its provenance facts (the s19 pattern the `mut`-arg spill
+    /// established).
+    fn rt_slot(&mut self, size: u64) -> (RegionId, Value) {
+        let (region, slot) = self.b.ins_stack_alloc(size);
+        self.b
+            .func
+            .add_fact(FactData::new(FactKind::Region(slot, region), Just::DefOp));
+        self.b.func.add_fact(FactData::new(
+            FactKind::Deref(slot, DerefSize::Const(size)),
+            Just::DefOp,
+        ));
+        (region, slot)
+    }
+
+    /// Call a runtime shim whose LAST machine parameter is a slot
+    /// pointer the runtime reads or writes: the shim's WIR signature
+    /// carries a `mem.r0` token bound to the slot's region, so the
+    /// call orders against the caller's stores and reloads through the
+    /// ordinary token chain. `result` as in [`Self::rt_call`].
+    fn rt_call_slot(
+        &mut self,
+        name: &'static str,
+        args: &[Value],
+        slot: Value,
+        slot_region: RegionId,
+        result: Option<TypeId>,
+    ) -> Option<Value> {
+        let mut params: Vec<Param> = args
+            .iter()
+            .map(|&a| Param::val(self.b.func.value_ty(a)))
+            .collect();
+        params.push(Param::val(types::PTR));
+        let formal = RegionId::new(0);
+        let tok = self.b.module.types.mem(formal);
+        params.push(Param {
+            ty: tok,
+            mode: Mode::Val,
+        });
+        let ext = self.rt_import(name, params, result.into_iter().collect());
+        let mut call_args = args.to_vec();
+        call_args.push(slot);
+        let mut formal_regions = HashMap::new();
+        formal_regions.insert(0u32, slot_region);
+        self.b
+            .ins_call_regions(ext, &call_args, &formal_regions)
+            .first()
+            .copied()
+    }
+
+    /// The `{ptr, len}` halves of a str value.
+    fn str_parts(&mut self, v: Value) -> (Value, Value) {
+        let p = self
+            .b
+            .ins(Opcode::AggGet, &[v], &[types::PTR], Aux::Int(0))
+            .one();
+        let l = self
+            .b
+            .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(1))
+            .one();
+        (p, l)
+    }
+
+    /// Reload the `{ptr, len}` pair a shim wrote through `slot`.
+    fn load_str_slot(&mut self, slot: Value, region: RegionId, span: Span) -> R<Value> {
+        let sty = str_ty(self.b.types());
+        self.load_flat(sty, slot, region, span)
+    }
+
+    /// `i64 != 0` as a WIR bool.
+    fn nonzero(&mut self, v: Value) -> Value {
+        let z = self.b.iconst(types::I64, 0);
+        self.b
+            .ins(Opcode::Icmp, &[v, z], &[types::BOOL], Aux::IntCc(IntCc::Ne))
+            .one()
+    }
+
+    /// Branch to a `kind` trap unless `hit` holds; continue otherwise.
+    /// Returns `true` when the trap is PROVEN (the caller's path
+    /// diverged); a proven pass emits nothing.
+    fn trap_unless(&mut self, hit: Value, kind: TrapKind) -> bool {
+        match self.b.as_bool_const(hit) {
+            Some(true) => {
+                self.b.stats.fold += 1;
+                false
+            }
+            Some(false) => {
+                self.b.stats.fold += 1;
+                self.b.ins_trap(kind);
+                true
+            }
+            None => {
+                let cont = self.b.create_block();
+                let trap_bb = self.b.create_block();
+                self.b.ins_br(hit, cont, &[], trap_bb, &[]);
+                self.b.seal_block(trap_bb);
+                self.b.switch_to_block(trap_bb);
+                self.b.ins_trap(kind);
+                self.b.seal_block(cont);
+                self.b.switch_to_block(cont);
+                false
+            }
+        }
+    }
+
+    /// The eu WIR type recorded for expression `span` (the `!T` shape
+    /// of a fallible builtin's result).
+    fn eu_ty_of(&mut self, span: Span) -> R<TypeId> {
+        let Some(sema) = self.expr_sema_ty(span) else {
+            return Err(refuse("a fallible builtin without a recorded type", span));
+        };
+        match wir_ty(&mut self.b.module.types, self.table, self.sigs, sema, span)? {
+            Some(t) if matches!(self.b.module.types.get(t), types::TypeData::Eu { .. }) => Ok(t),
+            _ => Err(refuse("a fallible builtin without a union shape", span)),
+        }
+    }
+
+    /// Declared tag names of the row on the `!T` type at `span`.
+    fn row_tag_names(&self, span: Span) -> Vec<String> {
+        let Some(sema) = self.expr_sema_ty(span) else {
+            return Vec::new();
+        };
+        let TyKind::ErrUnion(_, row) = self.table.kind(self.strip_sema(sema)) else {
+            return Vec::new();
+        };
+        let TyKind::Row { tags, .. } = self.table.kind(*row) else {
+            return Vec::new();
+        };
+        tags.iter().map(|(n, _)| n.clone()).collect()
+    }
+
+    /// Join a hit flag into an eu value: `hit` takes the ok half from
+    /// `mk_ok`, the miss path takes the payload-free tag + payloads
+    /// from `mk_err`. Both closures run in their own blocks.
+    fn eu_join(
+        &mut self,
+        eu_ty: TypeId,
+        hit: Value,
+        mk_ok: impl FnOnce(&mut Self) -> R<Option<Value>>,
+        mk_err: impl FnOnce(&mut Self) -> R<Value>,
+    ) -> R<Value> {
+        let hit_bb = self.b.create_block();
+        let miss_bb = self.b.create_block();
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, eu_ty);
+        self.b.ins_br(hit, hit_bb, &[], miss_bb, &[]);
+        self.b.seal_block(hit_bb);
+        self.b.seal_block(miss_bb);
+        self.b.switch_to_block(hit_bb);
+        self.b.gvn_push_scope();
+        let okv = mk_ok(self)?;
+        let ev = self.b.ins_eu_make_ok(eu_ty, okv);
+        self.b.ins_jmp(merge, &[ev]);
+        self.b.gvn_pop_scope();
+        self.b.switch_to_block(miss_bb);
+        self.b.gvn_push_scope();
+        let tag = mk_err(self)?;
+        let ev = self.b.ins_eu_make_err(eu_ty, tag, &[]);
+        self.b.ins_jmp(merge, &[ev]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        Ok(out)
+    }
+
+    /// The payload-free `{none}` miss tag.
+    fn none_tag(&mut self) -> Value {
+        let id = self.b.module.tag_id("none");
+        self.b.iconst(types::I64, id)
+    }
+
+    /// Map a runtime fs error code (nonzero, in `code`) to the
+    /// module-interned tag id — a compile-time-dispatched branch chain
+    /// mirroring the checked executor's `errtag`: `not_found`/`denied`
+    /// coarsen to `io` when the row does not declare them; `utf8`/`eof`
+    /// pass through.
+    fn fs_code_tag(&mut self, code: Value, declared: &[String]) -> Value {
+        let io_id = self.b.module.tag_id("io");
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, types::I64);
+        let cases: Vec<(i64, i64)> = [
+            (1, "not_found", true),
+            (2, "denied", true),
+            (4, "utf8", false),
+            (5, "eof", false),
+        ]
+        .into_iter()
+        .map(|(c, name, coarsen)| {
+            let id = if !coarsen || declared.iter().any(|t| t == name) {
+                self.b.module.tag_id(name)
+            } else {
+                io_id
+            };
+            (c, id)
+        })
+        .collect();
+        for (c, id) in cases {
+            let k = self.b.iconst(types::I64, c);
+            let eq = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[code, k],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let tag = self.b.iconst(types::I64, id);
+            let next = self.b.create_block();
+            self.b.ins_br(eq, merge, &[tag], next, &[]);
+            self.b.seal_block(next);
+            self.b.switch_to_block(next);
+        }
+        let io_tag = self.b.iconst(types::I64, io_id);
+        self.b.ins_jmp(merge, &[io_tag]);
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        out
+    }
+
+    /// Resolve a range node's endpoints against `len` — open sides
+    /// default to the edges, `^n` counts from the end, `..=` bumps the
+    /// upper bound — the SAME resolution as the checked executor's
+    /// `eval_str_slice`, before any domain question is asked.
+    fn range_endpoints(&mut self, rn: &'t GreenNode, len: Value) -> R<(Value, Value)> {
+        let d = RangeExpr::cast(rn).ok_or_else(|| refuse("this index shape", rn.span))?;
+        let dots = rn
+            .tokens()
+            .find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))
+            .map(|t| t.span.lo)
+            .unwrap_or(rn.span.hi);
+        let mut lo = self.b.iconst(types::I64, 0);
+        let mut hi = len;
+        for ep in d.endpoints() {
+            let resolved = if ep.kind == SyntaxKind::FromEndExpr {
+                let inner = FromEndExpr::cast(ep).and_then(|f| f.expr());
+                let Some(inner) = inner else {
+                    return Err(refuse("a bare `^` endpoint", ep.span));
+                };
+                let n = match self.lower_expr(inner)? {
+                    Flow::Val(Some(v)) => v,
+                    _ => return Err(refuse("a valueless `^n` endpoint", ep.span)),
+                };
+                // `len - n` cannot overflow: both are in-range i64s of
+                // a real string; wrap semantics match the checked
+                // subtraction.
+                self.b
+                    .ins(Opcode::IsubWrap, &[len, n], &[types::I64], Aux::None)
+                    .one()
+            } else {
+                match self.lower_expr(ep)? {
+                    Flow::Val(Some(v)) => v,
+                    _ => return Err(refuse("a valueless slice endpoint", ep.span)),
+                }
+            };
+            if ep.span.lo < dots {
+                lo = resolved;
+            } else {
+                hi = resolved;
+            }
+        }
+        if d.is_inclusive() {
+            let one = self.b.iconst(types::I64, 1);
+            hi = self
+                .b
+                .ins(Opcode::IaddWrap, &[hi, one], &[types::I64], Aux::None)
+                .one();
+        }
+        Ok((lo, hi))
+    }
+
+    /// A string episode in VALUE position: a literal-only string
+    /// becomes a `{ptr, len}` pair over module data (s31); an
+    /// interpolated string MATERIALIZES through the region-backed
+    /// strbuf (s40 — the c08-owed design, see `wolf_rt::str`): one
+    /// `strbuf_new`, per-segment appends through the same packed-spec
+    /// renderers the print path uses, one `strbuf_finish` into the
+    /// ambient region.
     fn lower_string(&mut self, e: &'t GreenNode) -> R<Flow> {
-        let mut bytes: Vec<u8> = Vec::new();
-        for seg in self.string_segments(e) {
+        // Dedent shifts every hole offset — refuse the combination,
+        // exactly as `lower_print` and the checked executor do.
+        if let Some(sd) = StringExpr::cast(e)
+            && self.text(e.span).starts_with("\"\"\"")
+            && sd.interps().any(|i| i.expr().is_some())
+        {
+            return Err(refuse(
+                "interpolation inside a multiline string (s38 formatting)",
+                e.span,
+            ));
+        }
+        let segs = self.string_segments(e);
+        if !segs.iter().any(|s| matches!(s, StrSeg::Hole { .. })) {
+            let mut bytes: Vec<u8> = Vec::new();
+            for seg in segs {
+                if let StrSeg::Lit(b) = seg {
+                    bytes.extend_from_slice(&b);
+                }
+            }
+            return Ok(Flow::Val(Some(self.str_value(&bytes))));
+        }
+        let buf = self
+            .rt_call("__wolf_rt_strbuf_new", &[], Some(types::PTR))
+            .expect("strbuf handle");
+        for seg in segs {
             match seg {
-                StrSeg::Lit(b) => bytes.extend_from_slice(&b),
-                StrSeg::Hole { .. } => {
-                    return Err(refuse(
-                        "interpolated strings in value position (allocating \
-                         materialization, c08)",
-                        e.span,
-                    ));
+                StrSeg::Lit(bytes) => {
+                    if bytes.is_empty() {
+                        continue;
+                    }
+                    let idx = self.b.module.intern_data(&bytes);
+                    let p = self.b.ins_data_addr(idx);
+                    let len = self.b.iconst(types::I64, bytes.len() as i64);
+                    let sp = self.b.iconst(types::I64, 0);
+                    self.rt_call("__wolf_rt_strbuf_str", &[buf, p, len, sp], None);
+                }
+                StrSeg::Hole { expr, spec } => {
+                    let packed = self.packed_spec(spec)?;
+                    let Some(v) = flow_val!(self.lower_expr(expr)) else {
+                        return Err(refuse("unit-typed interpolation holes", expr.span));
+                    };
+                    match self.classify_print_value(expr, v, packed)? {
+                        PrintSeg::Str { v, spec } => {
+                            let (p, l) = self.str_parts(v);
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_call("__wolf_rt_strbuf_str", &[buf, p, l, sp], None);
+                        }
+                        PrintSeg::Int { v, unsigned, spec } => {
+                            let vty = self.b.func.value_ty(v);
+                            let wide = if vty == types::I64 {
+                                v
+                            } else if unsigned {
+                                self.b
+                                    .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                                    .one()
+                            } else {
+                                self.b
+                                    .ins(Opcode::Sext, &[v], &[types::I64], Aux::None)
+                                    .one()
+                            };
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_call("__wolf_rt_strbuf_i64", &[buf, wide, sp], None);
+                        }
+                        PrintSeg::Bool { v, spec } => {
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_call("__wolf_rt_strbuf_bool", &[buf, v, sp], None);
+                        }
+                        PrintSeg::F64 { v, spec } => {
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_call("__wolf_rt_strbuf_f64", &[buf, v, sp], None);
+                        }
+                        PrintSeg::Lit(_) => unreachable!("holes classify as values"),
+                    }
                 }
             }
         }
-        Ok(Flow::Val(Some(self.str_value(&bytes))))
+        let (region, slot) = self.rt_slot(16);
+        self.rt_call_slot("__wolf_rt_strbuf_finish", &[buf], slot, region, None);
+        let v = self.load_str_slot(slot, region, e.span)?;
+        Ok(Flow::Val(Some(v)))
+    }
+
+    /// The s37 builtin `str` method set, natively (s40): every method
+    /// is one runtime call into `wolf_rt::str` (algorithms shared with
+    /// the checked executor by construction), plus the miss spelling
+    /// decided here — `{none}` rows for `get`/`find`/`strip_*`, a
+    /// `bounds` trap for negative `repeat`.
+    fn lower_str_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv_place: &'t GreenNode,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let Some(sv) = flow_val!(self.lower_expr(recv_place)) else {
+            return Err(refuse("a valueless str receiver", recv_place.span));
+        };
+        let (sp, sl) = self.str_parts(sv);
+        let arg_exprs: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .collect();
+        let arg_val = |zelf: &mut Self, i: usize| -> R<Value> {
+            let Some(x) = arg_exprs.get(i) else {
+                return Err(refuse("a str method with missing arguments", e.span));
+            };
+            match zelf.lower_expr(x)? {
+                Flow::Val(Some(v)) => Ok(v),
+                _ => Err(refuse("a valueless str method argument", x.span)),
+            }
+        };
+        let needle = |zelf: &mut Self, i: usize| -> R<(Value, Value)> {
+            let v = arg_val(zelf, i)?;
+            Ok(zelf.str_parts(v))
+        };
+        match mname {
+            "is_empty" => {
+                let z = self.b.iconst(types::I64, 0);
+                let r = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[sl, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                Ok(Flow::Val(Some(r)))
+            }
+            "get" => {
+                let Some(rn) = arg_exprs.first() else {
+                    return Err(refuse("`get` without a range", e.span));
+                };
+                let (lo, hi) = self.range_endpoints(rn, sl)?;
+                let eu = self.eu_ty_of(e.span)?;
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_str_get",
+                        &[sp, sl, lo, hi],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_str_slot(slot, region, e.span)?)),
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "bytes" => {
+                let r = self
+                    .rt_call("__wolf_rt_str_bytes", &[sp, sl], Some(types::PTR))
+                    .expect("list");
+                Ok(Flow::Val(Some(r)))
+            }
+            "starts_with" | "ends_with" | "contains" => {
+                let (np, nl) = needle(self, 0)?;
+                let mode = match mname {
+                    "starts_with" => 0,
+                    "ends_with" => 1,
+                    _ => 2,
+                };
+                let m = self.b.iconst(types::I64, mode);
+                let rc = self
+                    .rt_call(
+                        "__wolf_rt_str_probe",
+                        &[sp, sl, np, nl, m],
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                Ok(Flow::Val(Some(self.nonzero(rc))))
+            }
+            "find" | "rfind" => {
+                let (np, nl) = needle(self, 0)?;
+                let rev = self.b.iconst(types::I64, i64::from(mname == "rfind"));
+                let rc = self
+                    .rt_call(
+                        "__wolf_rt_str_find",
+                        &[sp, sl, np, nl, rev],
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(eu, hit, |_| Ok(Some(rc)), |z| Ok(z.none_tag()))?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "count" => {
+                let (np, nl) = needle(self, 0)?;
+                let rc = self
+                    .rt_call("__wolf_rt_str_count", &[sp, sl, np, nl], Some(types::I64))
+                    .expect("rc");
+                Ok(Flow::Val(Some(rc)))
+            }
+            "split" | "words" | "lines" => {
+                let (np, nl, mode) = if mname == "split" {
+                    let (np, nl) = needle(self, 0)?;
+                    (np, nl, 0)
+                } else {
+                    // No needle: pass the receiver's pointer with len 0
+                    // (the shim ignores it in these modes).
+                    let z = self.b.iconst(types::I64, 0);
+                    (sp, z, if mname == "words" { 1 } else { 2 })
+                };
+                let m = self.b.iconst(types::I64, mode);
+                let r = self
+                    .rt_call(
+                        "__wolf_rt_str_split",
+                        &[sp, sl, np, nl, m],
+                        Some(types::PTR),
+                    )
+                    .expect("list");
+                Ok(Flow::Val(Some(r)))
+            }
+            "trim" | "trim_start" | "trim_end" => {
+                let mode = match mname {
+                    "trim" => 0,
+                    "trim_start" => 1,
+                    _ => 2,
+                };
+                let m = self.b.iconst(types::I64, mode);
+                let (region, slot) = self.rt_slot(16);
+                self.rt_call_slot("__wolf_rt_str_trim", &[sp, sl, m], slot, region, None);
+                Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
+            }
+            "lower" | "upper" => {
+                let up = self.b.iconst(types::I64, i64::from(mname == "upper"));
+                let (region, slot) = self.rt_slot(16);
+                self.rt_call_slot("__wolf_rt_str_case", &[sp, sl, up], slot, region, None);
+                Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
+            }
+            "strip_prefix" | "strip_suffix" => {
+                let (np, nl) = needle(self, 0)?;
+                let suffix = self
+                    .b
+                    .iconst(types::I64, i64::from(mname == "strip_suffix"));
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_str_strip",
+                        &[sp, sl, np, nl, suffix],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_str_slot(slot, region, e.span)?)),
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "repeat" => {
+                let n = arg_val(self, 0)?;
+                // A negative count is the checked lane's `bounds` trap.
+                let z = self.b.iconst(types::I64, 0);
+                let ok = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[n, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                if self.trap_unless(ok, TrapKind::Bounds) {
+                    return Ok(Flow::Diverged);
+                }
+                let (region, slot) = self.rt_slot(16);
+                self.rt_call_slot("__wolf_rt_str_repeat", &[sp, sl, n], slot, region, None);
+                Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
+            }
+            "replace" => {
+                let (fp, fl) = needle(self, 0)?;
+                let (tp, tl) = needle(self, 1)?;
+                let (region, slot) = self.rt_slot(16);
+                self.rt_call_slot(
+                    "__wolf_rt_str_replace",
+                    &[sp, sl, fp, fl, tp, tl],
+                    slot,
+                    region,
+                    None,
+                );
+                Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
+            }
+            _ => Err(refuse(
+                "this `str` method (outside the s37 builtin set)",
+                e.span,
+            )),
+        }
+    }
+
+    /// The `List` method depth, natively (s40): the header pointer IS
+    /// the value; element traffic goes through caller stack slots and
+    /// `wolf_rt::list`. Recoverable reads (`pop`/`get`/`first`/`last`)
+    /// are `{none}` rows; `push` grows region-backed storage.
+    fn lower_list_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv_place: &'t GreenNode,
+        elem_sema: TyId,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let Some(ewty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            elem_sema,
+            e.span,
+        )?
+        else {
+            return Err(refuse("unit-typed List elements", e.span));
+        };
+        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+            return Err(refuse("List elements without a flat layout", e.span));
+        };
+        let Some(hdr) = flow_val!(self.lower_expr(recv_place)) else {
+            return Err(refuse("a valueless List receiver", recv_place.span));
+        };
+        let arg_exprs: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .collect();
+        match mname {
+            "push" => {
+                let Some(vx) = arg_exprs.first() else {
+                    return Err(refuse("`push` without a value", e.span));
+                };
+                let v = match self.lower_expr(vx)? {
+                    Flow::Val(Some(v)) => v,
+                    Flow::Val(None) => return Err(refuse("unit-typed List elements", vx.span)),
+                    Flow::Diverged => return Ok(Flow::Diverged),
+                };
+                let (region, slot) = self.rt_slot(esize);
+                self.store_flat(v, slot, region, vx.span)?;
+                self.rt_call_slot("__wolf_rt_list_push", &[hdr], slot, region, None);
+                Ok(Flow::Val(None))
+            }
+            "pop" => {
+                let (region, slot) = self.rt_slot(esize);
+                let rc = self
+                    .rt_call_slot("__wolf_rt_list_pop", &[hdr], slot, region, Some(types::I64))
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(ewty, slot, region, e.span)?)),
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "get" | "first" | "last" => {
+                let idx = match mname {
+                    "get" => {
+                        let Some(ix) = arg_exprs.first() else {
+                            return Err(refuse("`get` without an index", e.span));
+                        };
+                        match self.lower_expr(ix)? {
+                            Flow::Val(Some(v)) => v,
+                            _ => return Err(refuse("a valueless List index", ix.span)),
+                        }
+                    }
+                    "first" => self.b.iconst(types::I64, 0),
+                    _ => {
+                        let n = self
+                            .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
+                            .expect("len");
+                        let one = self.b.iconst(types::I64, 1);
+                        self.b
+                            .ins(Opcode::IsubWrap, &[n, one], &[types::I64], Aux::None)
+                            .one()
+                    }
+                };
+                let (region, slot) = self.rt_slot(esize);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_list_read",
+                        &[hdr, idx],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(ewty, slot, region, e.span)?)),
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "is_empty" => {
+                let n = self
+                    .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
+                    .expect("len");
+                let z = self.b.iconst(types::I64, 0);
+                let r = self
+                    .b
+                    .ins(Opcode::Icmp, &[n, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                    .one();
+                Ok(Flow::Val(Some(r)))
+            }
+            "count" => {
+                let n = self
+                    .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
+                    .expect("len");
+                Ok(Flow::Val(Some(n)))
+            }
+            "clear" => {
+                self.rt_call("__wolf_rt_list_clear", &[hdr], None);
+                Ok(Flow::Val(None))
+            }
+            _ => Err(refuse("this List method (s05 std surface)", e.span)),
+        }
+    }
+
+    /// The s38 io/fs builtin family, natively (s40): each call is one
+    /// `wolf_rt::fs` shim; the returned code becomes the row value
+    /// here (`fs_code_tag` mirrors the checked `errtag` coarsening),
+    /// text results reload from the out slot as `{ptr, len}` pairs.
+    fn lower_fs_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed fs arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let arg = |i: usize| -> R<Value> {
+            argv.get(i)
+                .copied()
+                .ok_or_else(|| refuse("an fs call with missing arguments", e.span))
+        };
+        let zero_eq = |zelf: &mut Self, rc: Value| -> Value {
+            let z = zelf.b.iconst(types::I64, 0);
+            zelf.b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one()
+        };
+        match name {
+            "fs_exists" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let rc = self
+                    .rt_call("__wolf_rt_fs_exists", &[p, l], Some(types::I64))
+                    .expect("rc");
+                Ok(Flow::Val(Some(self.nonzero(rc))))
+            }
+            "fs_read_text" | "read_line" | "fs_read" => {
+                let (region, slot) = self.rt_slot(16);
+                let rc = match name {
+                    "fs_read_text" => {
+                        let s = arg(0)?;
+                        let (p, l) = self.str_parts(s);
+                        self.rt_call_slot(
+                            "__wolf_rt_fs_read_text",
+                            &[p, l],
+                            slot,
+                            region,
+                            Some(types::I64),
+                        )
+                    }
+                    "read_line" => self.rt_call_slot(
+                        "__wolf_rt_read_line",
+                        &[],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    ),
+                    _ => {
+                        let fd = arg(0)?;
+                        let max = arg(1)?;
+                        self.rt_call_slot(
+                            "__wolf_rt_fs_read",
+                            &[fd, max],
+                            slot,
+                            region,
+                            Some(types::I64),
+                        )
+                    }
+                }
+                .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_str_slot(slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "fs_write_text" | "fs_write" | "fs_close" | "fs_remove" => {
+                let rc = match name {
+                    "fs_write_text" => {
+                        let path = arg(0)?;
+                        let contents = arg(1)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let (cp, cl) = self.str_parts(contents);
+                        self.rt_call(
+                            "__wolf_rt_fs_write_text",
+                            &[pp, pl, cp, cl],
+                            Some(types::I64),
+                        )
+                    }
+                    "fs_write" => {
+                        let fd = arg(0)?;
+                        let s = arg(1)?;
+                        let (sp, sl) = self.str_parts(s);
+                        self.rt_call("__wolf_rt_fs_write", &[fd, sp, sl], Some(types::I64))
+                    }
+                    "fs_close" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_fs_close", &[fd], Some(types::I64))
+                    }
+                    _ => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        self.rt_call("__wolf_rt_fs_remove", &[pp, pl], Some(types::I64))
+                    }
+                }
+                .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out =
+                    self.eu_join(eu, hit, |_| Ok(None), |z| Ok(z.fs_code_tag(rc, &declared)))?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "fs_open" | "fs_create" => {
+                let path = arg(0)?;
+                let (pp, pl) = self.str_parts(path);
+                let create = self.b.iconst(types::I64, i64::from(name == "fs_create"));
+                let rc = self
+                    .rt_call("__wolf_rt_fs_open", &[pp, pl, create], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(Some(rc)),
+                    |zelf| {
+                        // The failure code arrived negated.
+                        let zz = zelf.b.iconst(types::I64, 0);
+                        let code = zelf
+                            .b
+                            .ins(Opcode::IsubWrap, &[zz, rc], &[types::I64], Aux::None)
+                            .one();
+                        Ok(zelf.fs_code_tag(code, &declared))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            _ => Err(refuse("this io/fs builtin", e.span)),
+        }
+    }
+
+    /// `s[range]` / `l[i]` (s40): the checked byte-slice and the
+    /// bounds-trapping element read — same runtime entries as the
+    /// recoverable forms, with the miss spelled `trap(bounds)`.
+    fn lower_index(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let d = BracketApply::cast(e).ok_or_else(|| refuse("this index shape", e.span))?;
+        let Some(recv) = d.callee() else {
+            return Err(refuse("an index without a receiver", e.span));
+        };
+        let Some(base_sema) = self.expr_sema_ty(recv.span) else {
+            return Err(refuse("an index without a recorded type", e.span));
+        };
+        match self.table.kind(self.strip_sema(base_sema)) {
+            TyKind::Prim(Prim::Str) => {
+                let Some(sv) = flow_val!(self.lower_expr(recv)) else {
+                    return Err(refuse("a valueless str receiver", recv.span));
+                };
+                let (sp, sl) = self.str_parts(sv);
+                let rn = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .find(|v| v.kind == SyntaxKind::RangeExpr)
+                    .ok_or_else(|| refuse("str indexing outside range slices (D25)", e.span))?;
+                let (lo, hi) = self.range_endpoints(rn, sl)?;
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_str_get",
+                        &[sp, sl, lo, hi],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                if self.trap_unless(hit, TrapKind::Bounds) {
+                    return Ok(Flow::Diverged);
+                }
+                Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
+            }
+            TyKind::List(elem) => {
+                let elem = *elem;
+                let Some(ewty) = wir_ty(
+                    &mut self.b.module.types,
+                    self.table,
+                    self.sigs,
+                    elem,
+                    e.span,
+                )?
+                else {
+                    return Err(refuse("unit-typed List elements", e.span));
+                };
+                let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+                    return Err(refuse("List elements without a flat layout", e.span));
+                };
+                let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
+                    return Err(refuse("a valueless List receiver", recv.span));
+                };
+                let ix = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .next()
+                    .ok_or_else(|| refuse("an index without an operand", e.span))?;
+                let Some(idx) = flow_val!(self.lower_expr(ix)) else {
+                    return Err(refuse("a valueless List index", ix.span));
+                };
+                let (region, slot) = self.rt_slot(esize);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_list_read",
+                        &[hdr, idx],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                if self.trap_unless(hit, TrapKind::Bounds) {
+                    return Ok(Flow::Diverged);
+                }
+                Ok(Flow::Val(Some(self.load_flat(ewty, slot, region, e.span)?)))
+            }
+            _ => Err(refuse(
+                "indexing outside str/List (Pool/Map runtime shapes, c06/std)",
+                e.span,
+            )),
+        }
+    }
+
+    /// `l[i] = v` (s40): the bounds-trapping element write.
+    fn lower_index_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        place: &'t GreenNode,
+        span: Span,
+    ) -> R<Flow> {
+        let b = BracketApply::cast(place).ok_or_else(|| refuse("this index shape", span))?;
+        let Some(recv) = b.callee() else {
+            return Err(refuse("an index without a receiver", span));
+        };
+        let Some(base_sema) = self.expr_sema_ty(recv.span) else {
+            return Err(refuse("an index without a recorded type", span));
+        };
+        let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
+            return Err(refuse(
+                "index writes outside List (raw-pointer writes c10; Pool/Map c06/std)",
+                span,
+            ));
+        };
+        let elem = *elem;
+        let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)?
+        else {
+            return Err(refuse("unit-typed List elements", span));
+        };
+        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+            return Err(refuse("List elements without a flat layout", span));
+        };
+        if d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq) != SyntaxKind::Eq {
+            return Err(refuse("compound List index assignment (c06/std)", span));
+        }
+        let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
+            return Err(refuse("a valueless List receiver", recv.span));
+        };
+        let ix = b
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .next()
+            .ok_or_else(|| refuse("an index without an operand", span))?;
+        let Some(idx) = flow_val!(self.lower_expr(ix)) else {
+            return Err(refuse("a valueless List index", ix.span));
+        };
+        let Some(vx) = d.value() else {
+            return Ok(Flow::Val(None));
+        };
+        let Some(v) = flow_val!(self.lower_expr(vx)) else {
+            return Err(refuse("assignment of a valueless expression", vx.span));
+        };
+        let (region, slot) = self.rt_slot(esize);
+        self.store_flat(v, slot, region, vx.span)?;
+        let rc = self
+            .rt_call_slot(
+                "__wolf_rt_list_write",
+                &[hdr, idx],
+                slot,
+                region,
+                Some(types::I64),
+            )
+            .expect("rc");
+        let hit = self.nonzero(rc);
+        if self.trap_unless(hit, TrapKind::Bounds) {
+            return Ok(Flow::Diverged);
+        }
+        Ok(Flow::Val(None))
+    }
+
+    /// `for pat in <List>` (s40): the index-driven drive loop —
+    /// `len` once, ascending reads through the runtime, each element
+    /// bound by value per iteration.
+    fn lower_for_list(
+        &mut self,
+        d: ForExpr<'t>,
+        iter: &'t GreenNode,
+        elem_sema: TyId,
+        span: Span,
+    ) -> R<Flow> {
+        let Some(ewty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            elem_sema,
+            span,
+        )?
+        else {
+            return Err(refuse("unit-typed List elements", span));
+        };
+        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+            return Err(refuse("List elements without a flat layout", span));
+        };
+        let Some(hdr) = flow_val!(self.lower_expr(iter)) else {
+            return Err(refuse("a valueless List iterable", iter.span));
+        };
+        let bind_name = match d.pattern() {
+            None => None,
+            Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(p.span)),
+            Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+            Some(p) => {
+                return Err(refuse(
+                    "destructuring `for` patterns (tuple yields, c06/std)",
+                    p.span,
+                ));
+            }
+        };
+        let n = self
+            .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
+            .expect("len");
+        let header = self.b.create_block();
+        let iparam = self.b.add_block_param(header, types::I64);
+        let zero = self.b.iconst(types::I64, 0);
+        self.b.ins_jmp(header, &[zero]);
+        self.b.switch_to_block(header);
+        self.b.gvn_push_scope();
+        let cond = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[iparam, n],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let body_bb = self.b.create_block();
+        let exit = self.b.create_block();
+        self.b.ins_br(cond, body_bb, &[], exit, &[]);
+        self.b.seal_block(body_bb);
+        self.b.switch_to_block(body_bb);
+        // The element: in-bounds by the header test — the read cannot
+        // miss (the list length is loop-invariant: the binding is by
+        // value, and `mut` aliasing into the iterable is mem-rejected).
+        let (region, slot) = self.rt_slot(esize);
+        self.rt_call_slot(
+            "__wolf_rt_list_read",
+            &[hdr, iparam],
+            slot,
+            region,
+            Some(types::I64),
+        );
+        let elem = self.load_flat(ewty, slot, region, span)?;
+        let frame = self.run_for_body(d, elem, ewty, false, bind_name, Some(exit));
+        let frame = match frame {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            self.b.gvn_push_scope();
+            let one = self.b.iconst(types::I64, 1);
+            match self
+                .b
+                .ins(Opcode::IaddChk, &[iparam, one], &[types::I64], Aux::None)
+            {
+                InsOut::Vals(v) => self.b.ins_jmp(header, &[v[0]]),
+                InsOut::Trapped => {}
+            }
+            self.b.gvn_pop_scope();
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(header);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        Ok(Flow::Val(None))
     }
 
     /// Build the `{ptr, len}` value of a byte-literal string: intern
@@ -3690,12 +4932,32 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 _ => break,
             }
         }
-        if matches!(
-            self.table.kind(ty),
-            TyKind::List(_) | TyKind::Pool(_) | TyKind::Shared(_)
-        ) {
+        // s40: `List[T]()` — the runtime header, sized by the
+        // element's flat layout.
+        if let TyKind::List(elem) = self.table.kind(ty) {
+            let elem = *elem;
+            let Some(ewty) = wir_ty(
+                &mut self.b.module.types,
+                self.table,
+                self.sigs,
+                elem,
+                e.span,
+            )?
+            else {
+                return Err(refuse("unit-typed List elements", e.span));
+            };
+            let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+                return Err(refuse("List elements without a flat layout", e.span));
+            };
+            let sz = self.b.iconst(types::I64, esize as i64);
+            let hdr = self
+                .rt_call("__wolf_rt_list_new", &[sz], Some(types::PTR))
+                .expect("hdr");
+            return Ok(Flow::Val(Some(hdr)));
+        }
+        if matches!(self.table.kind(ty), TyKind::Pool(_) | TyKind::Shared(_)) {
             return Err(refuse(
-                "List/Pool/shared constructor lowering (runtime shapes, c06)",
+                "Pool/shared constructor lowering (runtime shapes, c06)",
                 e.span,
             ));
         }
@@ -3774,6 +5036,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         } else {
             base
         };
+        // s40: the builtin receivers — `str` (the s37 method set) and
+        // `List` dispatch to the runtime tier, never to an impl.
+        if let Some(recv_sema) = self.expr_sema_ty(recv_place.span) {
+            let mname = m.member().map(|t| self.text(t.span)).unwrap_or_default();
+            match self.table.kind(self.strip_sema(recv_sema)) {
+                TyKind::Prim(Prim::Str) => {
+                    return self.lower_str_method(d, recv_place, &mname, e);
+                }
+                TyKind::List(elem) => {
+                    let elem = *elem;
+                    return self.lower_list_method(d, recv_place, elem, &mname, e);
+                }
+                _ => {}
+            }
+        }
         // The method's signature, from the unique inherent impl.
         let msig: &FnSig = self
             .sigs
@@ -4813,8 +6090,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         if iter.kind != SyntaxKind::RangeExpr {
+            // s40: `for` over a List value (including the materialized
+            // str views — `words()`, `lines()`, `split()`, `bytes()`)
+            // drives by index through the runtime.
+            if let Some(it) = self.expr_sema_ty(iter.span)
+                && let TyKind::List(elem) = self.table.kind(self.strip_sema(it))
+            {
+                let elem = *elem;
+                return self.lower_for_list(d, iter, elem, e.span);
+            }
             return Err(refuse(
-                "`for` over non-range iterables (the `Iter[T]` drive loop — List/Pool adopt \
+                "`for` over non-range iterables (the `Iter[T]` drive loop — Pool adopts \
                  builtin-side, c06/std)",
                 e.span,
             ));
@@ -5245,6 +6531,9 @@ fn contains_control(node: &GreenNode) -> bool {
                 | SyntaxKind::ContinueExpr
                 | SyntaxKind::CallExpr
                 | SyntaxKind::ClosureExpr
+                // s40: checked indexing (`s[a..b]`, `l[i]`) branches
+                // to its `bounds` trap block.
+                | SyntaxKind::BracketApply
                 // Defers re-lower at exit edges (s27): their fragments
                 // may live in blocks other than their declaration's.
                 | SyntaxKind::DeferStmt

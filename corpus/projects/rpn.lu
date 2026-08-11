@@ -1,0 +1,58 @@
+//! check: run(exit=0, stdout="14")
+//! phase: run
+//! conforms: str.views, err.union, err.propagate
+//!
+//! The book's P2 shape (wolf-book ch. 27 — `rpn`, twice): the operand
+//! stack as a `List[int]` (push, pop, the `{none}` miss handled with
+//! `else`), tokens from `words()`, digits parsed through the byte
+//! view, malformed input as a row propagated with `?`. The s40 gate:
+//! native List push/pop, `bytes()`, str equality, and raise/propagate
+//! over the eu ABI — "gate: an executable str + fmt surface, `List`".
+
+fn parse_int(tok: str) -> int ! {bad} {
+    var n = 0
+    for b in tok.bytes() {
+        if b < 48 {
+            return bad
+        }
+        if b > 57 {
+            return bad
+        }
+        n = n * 10 + (b - 48)
+    }
+    n
+}
+
+fn eval(src: str) -> int ! {bad, empty} {
+    var stack = List[int]()
+    for tok in src.words() {
+        if tok == "+" || tok == "-" || tok == "*" {
+            let b = (mut stack).pop() else {
+                return empty
+            }
+            let a = (mut stack).pop() else {
+                return empty
+            }
+            let r = if tok == "+" {
+                a + b
+            } else if tok == "-" {
+                a - b
+            } else {
+                a * b
+            }
+            (mut stack).push(r)
+        } else {
+            (mut stack).push(parse_int(tok)?)
+        }
+    }
+    let out = (mut stack).pop() else {
+        return empty
+    }
+    out
+}
+
+fn main() -> !int {
+    let r = eval("3 4 + 2 *")?
+    print("{r}")
+    0
+}

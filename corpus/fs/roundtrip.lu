@@ -1,15 +1,13 @@
 //! check: run(exit=0, stdout="read: three wolves\ngone: true")
-//! phase: mem
+//! phase: run
 //! conforms: err.union
 //!
 //! fs v0 (s38): write, read back, remove — over D30 rows, never
-//! traps. The checked lane executes this against the real
-//! filesystem; the native lane refuses the fs tier honestly
-//! ("io/fs builtins in native lowering"), which is why this file
-//! pins `mem` while carrying its run expectation — proven by its
-//! checked-lane twin (`crates/wolf_mem/tests/io_fs.rs`, which runs
-//! the same shape under a temp directory). `errdefer`-style cleanup
-//! idioms arrive with the std facade (stdc02).
+//! traps. Both lanes execute this against the real filesystem since
+//! s40 (`wolf_rt::fs` mirrors the checked `io_fs_builtin` call for
+//! call; the checked-lane twin in `crates/wolf_mem/tests/io_fs.rs`
+//! runs the same shape under a temp directory). `errdefer`-style
+//! cleanup idioms arrive with the std facade (stdc02).
 
 fn main() -> !int {
     let path = "target/s38-fs-roundtrip.tmp"

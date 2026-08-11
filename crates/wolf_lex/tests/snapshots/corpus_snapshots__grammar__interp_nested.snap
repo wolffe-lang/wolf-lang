@@ -4,7 +4,7 @@ expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..15 "//! check: pass"
     lead  Whitespace 15..16 "\n"
-    lead  InnerDocComment 16..30 "//! phase: mem"
+    lead  InnerDocComment 16..30 "//! phase: run"
     lead  Whitespace 30..31 "\n"
     lead  InnerDocComment 31..76 "//! conforms: gram.amb.fmtcolon, gra…"
     lead  Whitespace 76..77 "\n"
