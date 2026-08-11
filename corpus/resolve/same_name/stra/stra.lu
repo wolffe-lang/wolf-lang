@@ -1,0 +1,8 @@
+//! member: true
+//! conforms: mod.vis.pub
+//!
+//! The other same-named `len` (issue #26): adds one.
+
+pub fn len(n: int) -> int {
+    n + 1
+}

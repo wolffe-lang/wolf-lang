@@ -1,0 +1,8 @@
+//! member: true
+//! conforms: mod.vis.pub
+//!
+//! One of two same-named `len`s (issue #26): doubles.
+
+pub fn len(n: int) -> int {
+    n + n
+}

@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: mod.dir, mod.use.pub
+//!
+//! The same-name two-module case (issue #26, wolf-std F-0026):
+//! `lista.len` and `stra.len` share an item name AND a signature —
+//! `std.list.len` vs `std.str.len` in miniature. Both must import
+//! into one program and link natively: WIR names are module-path
+//! qualified and the mangled symbol hash folds the full path, so the
+//! two `len`s are distinct functions end to end.
+
+use lista
+use stra
+
+fn main() -> !int {
+    let a = lista.len(4)
+    let b = stra.len(4)
+    if a == 8 { if b == 5 { return 0 } }
+    1
+}

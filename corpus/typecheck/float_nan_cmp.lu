@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: arith.cmp.float
+//!
+//! The float-compare litmus (issue #22, wolf-std F-0027): IEEE-754
+//! comparison semantics must agree between the interpreter and the
+//! native rung. `==`, `<`, `<=`, `>`, `>=` are ORDERED — false when
+//! either operand is NaN; `!=` is the NEGATION of `==`, so it is
+//! UNORDERED — TRUE when either operand is NaN. `n != n` is *the*
+//! portable NaN test; a rung that gets it wrong silently takes the
+//! wrong branch.
+
+fn main() -> !int {
+    let n = 0.0 / 0.0
+    let one = 1.0
+    if n == n { return 1 }
+    if n != n {} else { return 2 }
+    if n < one { return 3 }
+    if n <= one { return 4 }
+    if n > one { return 5 }
+    if n >= one { return 6 }
+    if one != one { return 7 }
+    if one == one {} else { return 8 }
+    if one < 2.0 {} else { return 9 }
+    0
+}
