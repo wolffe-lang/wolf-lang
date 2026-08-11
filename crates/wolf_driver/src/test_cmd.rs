@@ -34,14 +34,24 @@
 //! warnings render on stderr even when every test passes; a
 //! deny-promoted warning is a compile error and fails the run.
 //!
-//! # The determinism hook (X12, s36-gated)
+//! # The determinism surface (X12, decided in s36 — spec/07 §5)
 //!
-//! `--schedules=N`, `--replay=SEED`, `--chaos` are parsed and
-//! documented here; their semantics are the s36 deterministic
-//! scheduler's. Until s36 lands they refuse loudly (exit 2) — the
-//! integration contract (every exploration failure prints its seed;
-//! the printed `--replay` line reproduces it exactly) is tested end
-//! to end when the scheduler exists.
+//! - `--schedules=N` explores: each test runs N times under seeds
+//!   split from a printed root seed; a verdict that varies across
+//!   runs is a finding (FAILED, schedule divergence), and every
+//!   failing run prints its seed and a copy-pasteable `--replay=`
+//!   line.
+//! - `--replay=<seed | w1-token | ev:stream>` is the one reproduction
+//!   verb — it accepts every schedule spelling (`[sched.seed]`).
+//! - `--chaos` is parked with its owner named (the c07 closeout; the
+//!   injection engine lands on the s35 submit/deliver seams) and
+//!   refuses loudly until then.
+//!
+//! Honesty note: v0 tests execute on the checked machine, which is
+//! serial and seed-blind — exploration today detects nondeterminism
+//! in the test itself, and the seed plumbs through to the native
+//! runtime (`WOLF_SCHED_SEED`, wolf_rt's det engine) when the native
+//! test harness lands (recorded s39/s36 delta).
 //!
 //! # Machine output (`--json`, wolf-test/0)
 //!
@@ -101,6 +111,8 @@ pub fn test_cmd(args: &[String]) {
     let mut fail_fast = false;
     let mut list = false;
     let mut json = false;
+    let mut schedules: Option<u32> = None;
+    let mut replay: Option<String> = None;
     let mut lints = LintLevels::new();
     let mut paths: Vec<String> = Vec::new();
     let mut i = 0;
@@ -148,22 +160,38 @@ pub fn test_cmd(args: &[String]) {
             })
         {
             lints.set(crate::parse_lint_selector("test", flag, v), level);
-        } else if a.starts_with("--schedules") || a.starts_with("--replay") || a == "--chaos" {
-            // X12's front door (D23): parsed and reserved HERE so the
-            // flag surface is stable, executed by the s36 scheduler.
+        } else if let Some(v) = a.strip_prefix("--schedules=") {
+            match v.parse::<u32>() {
+                Ok(n) if n > 0 => schedules = Some(n),
+                _ => fail("--schedules needs a positive count (--schedules=N)"),
+            }
+        } else if let Some(v) = a.strip_prefix("--replay=") {
+            if parse_schedule_spec(v).is_none() {
+                fail(&format!(
+                    "`--replay={v}` is not a schedule: expected a decimal seed, \
+                     a `w1-` schedule token, or an explicit `ev:c0,c1,…` \
+                     decision stream (spec/07 [sched.seed])"
+                ));
+            }
+            replay = Some(v.to_string());
+        } else if a == "--chaos" {
+            // Decided name, parked engine (spec/07 [sched.flags]): the
+            // injection seams are named (io.arrive delay/reorder in the
+            // simulated reactor, proc.kill injection, s35 short
+            // reads/errors); the c07 closeout owns the handoff.
             eprintln!(
-                "wolf test: `{a}` is the determinism surface (X12) — schedule \
-                 exploration, seeded replay, and chaos mode execute on the s36 \
-                 deterministic scheduler, which has not landed. When it does: \
-                 every failure under exploration prints its seed, and the \
-                 printed `wolf test --replay=SEED` line reproduces the failure \
-                 exactly."
+                "wolf test: `--chaos` is named and reserved (X12/D23, spec/07 \
+                 §5) — seeded fault injection at the io.arrive/proc.kill/s35 \
+                 submit-deliver seams. The injection engine is a c07-closeout \
+                 handoff and has not landed; chaos runs will be replayable by \
+                 the same `--replay=` mechanism when it does."
             );
             std::process::exit(2);
         } else if a.starts_with('-') {
             fail(&format!(
                 "unknown flag `{a}` (usage: wolf test [<dir>|<file.lu>]… \
                  [--filter=SUBSTR] [--fail-fast] [--list] [--json] \
+                 [--schedules=N] [--replay=<seed|w1-token|ev:stream>] [--chaos] \
                  [--allow|--warn|--deny <sel>] [--deny-warnings] [--std-root <dir>])"
             ));
         } else {
@@ -173,6 +201,30 @@ pub fn test_cmd(args: &[String]) {
     }
     if paths.is_empty() {
         paths.push(".".to_string());
+    }
+    if schedules.is_some() && replay.is_some() {
+        fail("--schedules and --replay are exclusive: explore first, then replay a finding");
+    }
+    // Root seed: `WOLF_SCHED_SEED` pins it (CI reproducibility); else
+    // time-derived — every derived per-test seed is printed on
+    // failure, so any finding is reproducible regardless.
+    let root_seed: u64 = std::env::var("WOLF_SCHED_SEED")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(0x5EED)
+        });
+    if let Some(n) = schedules {
+        eprintln!(
+            "wolf test: exploring {n} schedule(s) per test (root seed {root_seed}; \
+             reproduce any run with --replay=SEED)"
+        );
+    }
+    if let Some(spec) = &replay {
+        eprintln!("wolf test: replaying schedule `{spec}`");
     }
 
     // ---- discovery: `*_test.lu` files, sorted (deterministic order) --
@@ -338,14 +390,8 @@ pub fn test_cmd(args: &[String]) {
             // survives, no ordering coupling. Parallel execution is
             // the s32-task story and lands with the native test
             // harness; v0 is serial and deterministic.
-            let (status, detail, out) = if *arity != 0 {
-                (
-                    Status::Unsupported,
-                    "a test fn with parameters (s39 runs zero-parameter tests)".to_string(),
-                    None,
-                )
-            } else {
-                match ubcheck::run_checked_fn(&res.package, &tc, Budget::default(), "", name) {
+            let run_once =
+                || match ubcheck::run_checked_fn(&res.package, &tc, Budget::default(), "", name) {
                     Ok(out) => {
                         let (status, detail) = match &out.verdict {
                             Verdict::Exit(0) => (Status::Pass, "exit(0)".to_string()),
@@ -362,7 +408,52 @@ pub fn test_cmd(args: &[String]) {
                         (status, detail, Some(out))
                     }
                     Err(nyc) => (Status::Unsupported, nyc.construct.to_string(), None),
+                };
+            let (status, detail, out) = if *arity != 0 {
+                (
+                    Status::Unsupported,
+                    "a test fn with parameters (s39 runs zero-parameter tests)".to_string(),
+                    None,
+                )
+            } else if let Some(n) = schedules {
+                // Exploration (spec/07 [sched.flags]): N runs under
+                // derived seeds; the CI-checkable property is verdict
+                // stability. A varying verdict is a finding, and every
+                // finding carries its replay line.
+                let mut runs: Vec<(u64, Status, String, Option<_>)> = Vec::new();
+                for k in 0..u64::from(n) {
+                    let seed = derive_seed(root_seed, &qualified, k);
+                    let (s, d, o) = run_once();
+                    runs.push((seed, s, d, o));
                 }
+                let (seed0, s0, d0) = (runs[0].0, runs[0].1, runs[0].2.clone());
+                let divergence = runs
+                    .iter()
+                    .find(|(_, s, d, _)| *s != s0 || *d != d0)
+                    .map(|(seed, _, d, _)| (*seed, d.clone()));
+                match divergence {
+                    Some((seed_div, d_div)) => (
+                        Status::Fail,
+                        format!(
+                            "schedule divergence: seed {seed0} → {d0}, seed {seed_div} → \
+                             {d_div} — replay: wolf test --replay={seed_div} {display}"
+                        ),
+                        runs.pop().and_then(|(_, _, _, o)| o),
+                    ),
+                    None => {
+                        let detail = if s0 == Status::Pass {
+                            format!("{d0} [{n} schedule(s)]")
+                        } else {
+                            format!(
+                                "{d0} [{n} schedule(s); replay: wolf test \
+                                 --replay={seed0} {display}]"
+                            )
+                        };
+                        (s0, detail, runs.swap_remove(0).3)
+                    }
+                }
+            } else {
+                run_once()
             };
             match status {
                 Status::Pass => tally.passed += 1,
@@ -433,6 +524,40 @@ pub fn test_cmd(args: &[String]) {
         );
     }
     std::process::exit(if ok { 0 } else { 1 });
+}
+
+/// Validate a `--replay` schedule spec (spec/07 `[sched.seed]`):
+/// decimal seed, `w1-` schedule token, or explicit `ev:` decision
+/// stream. Validation only — the checked machine is seed-blind; the
+/// native runtime consumes the spec when the native harness lands.
+fn parse_schedule_spec(s: &str) -> Option<()> {
+    if let Some(list) = s.strip_prefix("ev:") {
+        let items: Vec<&str> = list.split(',').filter(|x| !x.is_empty()).collect();
+        if items.is_empty() || items.iter().any(|x| x.trim().parse::<u32>().is_err()) {
+            return None;
+        }
+        return Some(());
+    }
+    if s.starts_with("w1-") {
+        return wolf_rt::task::seed_spec::parse_token(s).map(|_| ());
+    }
+    s.parse::<u64>().ok().map(|_| ())
+}
+
+/// Split a per-run seed from the root (SplitMix64 over root, test
+/// name, and run index — deterministic, collision-spread).
+fn derive_seed(root: u64, qualified: &str, k: u64) -> u64 {
+    let mut h: u64 = root ^ 0x9E37_79B9_7F4A_7C15u64.wrapping_mul(k.wrapping_add(1));
+    for b in qualified.bytes() {
+        h = (h ^ u64::from(b)).wrapping_mul(0x100_0000_01B3);
+    }
+    // SplitMix64 finalizer.
+    h = h.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    let mut z = h;
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    // Stay in the simple-seed namespace (bit 62 clear, [sched.seed]).
+    (z ^ (z >> 31)) & !(1u64 << 62)
 }
 
 /// A file whose ladder refused before tests could run: every test in
