@@ -1224,6 +1224,9 @@ dependencies = [
 [[package]]
 name = "wolf_rt"
 version = "0.0.1"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "wolf_sema"
