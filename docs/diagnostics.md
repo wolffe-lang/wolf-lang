@@ -549,7 +549,7 @@ same name without mutating the first. Function parameters and `match`
 bindings are not `let` bindings; their mutability is governed by modes
 (`mut`, `take`), not by this rule.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0410_let_reassign.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap
 
 ## E0501 — the generic body uses something its bounds do not provide
 

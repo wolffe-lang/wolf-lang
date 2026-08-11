@@ -503,14 +503,21 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                 i = end;
             }
             Tok::Ident(kw) if kw == "fn" => {
-                i = parse_function(&toks, i, &mut p)?;
+                i = parse_function(&toks, i, &mut p, false)?;
+            }
+            // `export fn @name…` — the C membrane marker (s29).
+            Tok::Ident(kw) if kw == "export" => {
+                i = parse_function(&toks, i + 1, &mut p, true)?;
             }
             t => {
                 let (l, c) = (toks[i].1, toks[i].2);
                 return err(
                     l,
                     c,
-                    format!("expected `decl` or `fn`, found {}", t.describe()),
+                    format!(
+                        "expected `decl`, `fn` or `export fn`, found {}",
+                        t.describe()
+                    ),
                 );
             }
         }
@@ -654,8 +661,13 @@ enum LineKind {
     Inst,
 }
 
-fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser) -> PResult<usize> {
-    // Header line: `fn @name(SIG) [-> ...] {`.
+fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser, export: bool) -> PResult<usize> {
+    // Header line: `('export')? fn @name(SIG) [-> ...] {` (the caller
+    // consumed any `export`; `start` points at `fn`).
+    if !matches!(toks.get(start), Some((Tok::Ident(kw), ..)) if kw == "fn") {
+        let (l, c) = toks.get(start).map(|&(_, l, c)| (l, c)).unwrap_or((0, 0));
+        return err(l, c, "expected `fn` after `export`");
+    }
     let head_end = line_end(toks, start);
     let mut head = Line::new(&toks[start..head_end]);
     head.next(); // `fn`
@@ -726,6 +738,7 @@ fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser) -> PResult<usi
     };
 
     let mut func = Function::new(name.clone(), sig);
+    func.export = export;
     let mut blocks: HashMap<String, Block> = HashMap::new();
     let mut values: HashMap<String, Value> = HashMap::new();
 

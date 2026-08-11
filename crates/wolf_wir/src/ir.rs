@@ -191,6 +191,11 @@ pub struct FuncMark {
 pub struct Function {
     pub name: String,
     pub sig: SigId,
+    /// C membrane export (s29, D19): the function is defined under the
+    /// C convention with an UNMANGLED linker symbol (its WIR name) and
+    /// external linkage. Textually `export fn @name…`. Everything else
+    /// stays `wolf-abi-0` internal.
+    pub export: bool,
     pub blocks: PrimaryMap<Block, BlockData>,
     pub insts: PrimaryMap<Inst, InstData>,
     pub values: PrimaryMap<Value, ValueData>,
@@ -208,6 +213,7 @@ impl Function {
         Function {
             name: name.into(),
             sig,
+            export: false,
             blocks: PrimaryMap::new(),
             insts: PrimaryMap::new(),
             values: PrimaryMap::new(),

@@ -93,14 +93,15 @@ memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers, s27)
 memory/unsafe_assume_malformed.lu: not mem-clean (pre-wir rungs own it)
-memory/unsafe_creation_not_use.lu: refused — unsafe-tier WIR ops (deferred from s26 — see closeout)
-memory/unsafe_door_borrow.lu: refused — unsafe-tier WIR ops (deferred from s26 — see closeout)
+memory/unsafe_c_alloc_native.lu: lowers
+memory/unsafe_creation_not_use.lu: refused — assignment through nested places (c06)
+memory/unsafe_door_borrow.lu: refused — first-class region values beyond local bindings (c05)
 memory/unsafe_door_misuse.lu: not mem-clean (pre-wir rungs own it)
-memory/unsafe_noalias.lu: refused — unsafe-tier WIR ops (deferred from s26 — see closeout)
+memory/unsafe_noalias.lu: refused — assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)
 memory/unsafe_raw_outside.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_sig.lu: not mem-clean (pre-wir rungs own it)
-memory/unsafe_trusted.lu: refused — unsafe-tier WIR ops (deferred from s26 — see closeout)
-memory/unsafe_ub_uaf.lu: refused — unsafe-tier WIR ops (deferred from s26 — see closeout)
+memory/unsafe_trusted.lu: refused — assignment through nested places (c06)
+memory/unsafe_ub_uaf.lu: refused — assignment through nested places (c06)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 overflow.lu: lowers
@@ -114,6 +115,7 @@ resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); string/byte lowering (data segments + runtime str shape, c06); string/byte lowering (data segments + runtime str shape, c06)
+rows/eu_main_err_exit.lu: lowers
 rows/hof_tail.lu: refused — generic-function lowering (monomorphization); generic-function calls (monomorphization)
 rows/inferred_private.lu: refused — module-item reads (globals, c06)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)

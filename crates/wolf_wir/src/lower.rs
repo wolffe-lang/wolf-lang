@@ -416,10 +416,11 @@ fn wir_ty_depth(
             "shared-tier surface lowering (rc receivers + runtime cells, c06)",
             span,
         )),
-        TyKind::Ptr(_) => Err(refuse(
-            "raw-pointer lowering (unsafe-tier WIR ops, deferred from s26 — see closeout)",
-            span,
-        )),
+        // Raw pointers are opaque `ptr` VALUES (s29 — the C membrane
+        // hands them out and takes them back). The raw-tier OPS over
+        // them (deref, index, arithmetic, casts) keep their s26
+        // refusals at the expression sites.
+        TyKind::Ptr(_) => Ok(Some(types::PTR)),
         _ => Err(refuse("this type in WIR lowering", span)),
     }
 }
@@ -1872,7 +1873,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     ))
                 }
             }
-            SyntaxKind::UnsafeBlock | SyntaxKind::BorrowExpr => Err(refuse(
+            SyntaxKind::UnsafeBlock => {
+                // The unsafe RING is static discipline — E1301 and the
+                // s22 attribution facts, enforced by wolf_mem before
+                // lowering ever runs. At WIR grain an unsafe block is
+                // a block (s29: the C membrane's call sites live here);
+                // the raw-tier OPS inside keep their own refusals.
+                match wolf_ast::UnsafeBlock::cast(e).and_then(|d| d.body()) {
+                    Some(b) => self.lower_block(b, want),
+                    None => Err(refuse("an unsafe block without a body", e.span)),
+                }
+            }
+            SyntaxKind::BorrowExpr => Err(refuse(
                 "unsafe-tier WIR ops (deferred from s26 — see closeout)",
                 e.span,
             )),
@@ -2849,7 +2861,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let cs = cs.expect("checked");
         if cs.c_call {
-            return Err(refuse("C calls (unsafe tier, c10)", e.span));
+            return self.lower_c_call(d, cs, e);
         }
         if cs.ctor {
             return self.lower_ctor(d, cs, e);
@@ -2957,6 +2969,61 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let results = self.b.ins_call_regions(ext, &args, &formal_regions);
         self.run_writebacks(writebacks)?;
+        Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// A call through the `c.` membrane (s29): the is04-modelled five
+    /// lower to WIR calls whose callee names KEEP the `c.` namespace —
+    /// the membrane is nominal, and the backend maps `c.X` to the
+    /// unmangled libc symbol under the SysV plan (D19). Signatures are
+    /// fixed here, mirroring sema's typing (`uint`/`int` → `i64`,
+    /// `*u8` → `ptr`).
+    ///
+    /// v0 threads NO io token through these calls: WIR never reorders
+    /// calls (block instruction order is program order at every
+    /// backend), and the raw loads/stores an io spine would have to
+    /// order against do not lower yet (s26 deferral). The token
+    /// threading joins when `print`/raw-deref lowering lands (c06 —
+    /// recorded in the campaign closeout).
+    fn lower_c_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        use crate::ir::Param;
+        let (param_tys, ret): (Vec<TypeId>, Option<TypeId>) = match cs.callee.as_str() {
+            "c.malloc" => (vec![types::I64], Some(types::PTR)),
+            "c.calloc" => (vec![types::I64, types::I64], Some(types::PTR)),
+            "c.free" => (vec![types::PTR], None),
+            "c.memset" => (vec![types::PTR, types::I64, types::I64], Some(types::PTR)),
+            "c.memcpy" => (vec![types::PTR, types::PTR, types::I64], Some(types::PTR)),
+            // Sema refuses beyond the modelled set before lowering
+            // runs; this is the defensive twin (c10's importer).
+            _ => {
+                return Err(refuse(
+                    "imported C beyond the modelled intrinsic set (c10)",
+                    e.span,
+                ));
+            }
+        };
+        let mut args = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            args.push(v);
+        }
+        if args.len() != param_tys.len() {
+            return Err(refuse("a C call with the wrong arity", e.span));
+        }
+        let ext = match self.callees.get(&cs.callee) {
+            Some(&ext) => ext,
+            None => {
+                let params = param_tys.iter().map(|&ty| Param::val(ty)).collect();
+                let sig = self.b.module.make_sig(params, ret.into_iter().collect());
+                let ext = self.b.func.import_func(cs.callee.clone(), sig);
+                self.callees.insert(cs.callee.clone(), ext);
+                ext
+            }
+        };
+        let results = self.b.ins_call(ext, &args);
         Ok(Flow::Val(results.first().copied()))
     }
 

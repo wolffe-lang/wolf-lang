@@ -314,7 +314,8 @@ pub(crate) fn render_fact(canon: &Canon, fact: &FactData) -> String {
 pub(crate) fn print_function(m: &Module, f: &Function) -> String {
     let canon = canonicalize(f);
     let mut out = String::new();
-    writeln!(out, "fn @{}{} {{", f.name, render_sig(m, f.sig)).unwrap();
+    let export = if f.export { "export " } else { "" };
+    writeln!(out, "{export}fn @{}{} {{", f.name, render_sig(m, f.sig)).unwrap();
     // Facts, sorted by rendered line — deterministic and diff-stable.
     let mut fact_lines: Vec<String> = f.facts.values().map(|fd| render_fact(&canon, fd)).collect();
     fact_lines.sort();
