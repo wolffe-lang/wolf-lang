@@ -49,12 +49,15 @@ pub enum ExitExpect {
     /// `exit=trap` (any kind) or `exit=trap(kind)` with a kind from the
     /// closed s06 vocabulary (overflow, div-zero, bounds, use-after-move,
     /// exclusivity, region-fault, stale-handle, alloc-contract, assert,
-    /// race, ub).
+    /// race, ub, deadlock).
     Trap(Option<String>),
 }
 
-/// The closed trap-kind vocabulary (s06; spec 02 §7 assigns them).
-pub const TRAP_KINDS: [&str; 11] = [
+/// The closed trap-kind vocabulary (s06; spec 02 §7 assigns them;
+/// `deadlock` added by the spec/03 amendment `[conc.deadlock.trap]` —
+/// the deliberate `[conf.trap.set]` revision, s33 aligning the
+/// harness with spec/05's 12-kind set).
+pub const TRAP_KINDS: [&str; 12] = [
     "overflow",
     "div-zero",
     "bounds",
@@ -66,6 +69,7 @@ pub const TRAP_KINDS: [&str; 11] = [
     "assert",
     "race",
     "ub",
+    "deadlock",
 ];
 
 /// Parsed header block of one corpus file.
