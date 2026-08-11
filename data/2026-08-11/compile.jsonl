@@ -1,0 +1,14 @@
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.138478443}
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.120971554}
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.137071617}
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.11947293}
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.137676748}
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.120102256}
+{"bench":"nmod","commit":"01ab40c","config":"wolf-batch-v0","lang":"wolf","metric":"max_rss_kb","style":"1","track":"compile","unit":"kB","value":69120.0}
+{"bench":"sema","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"bodies_per_sec","style":"1","track":"compile","unit":"bodies/s","value":236.5}
+{"bench":"sema","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"ctfe_memo_hit_rate","style":"1","track":"compile","unit":"ratio","value":0.0275}
+{"bench":"wir","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"wir_insts_per_sec","style":"1","track":"compile","unit":"insts/s","value":106551.9}
+{"bench":"wir","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"wir_fold_hits","style":"1","track":"compile","unit":"hits","value":23.0}
+{"bench":"wir","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"wir_identity_hits","style":"1","track":"compile","unit":"hits","value":9.0}
+{"bench":"wir","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"wir_gvn_hits","style":"1","track":"compile","unit":"hits","value":177.0}
+{"bench":"wir","commit":"01ab40c","config":"wolf-batch-v0","lang":"rust","metric":"wir_forward_hits","style":"1","track":"compile","unit":"hits","value":5.0}
