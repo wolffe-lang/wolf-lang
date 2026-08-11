@@ -11,3 +11,25 @@ rust-version.workspace = true
 # stays for the compiler-side users of the symbol/kind tables.
 [lib]
 crate-type = ["rlib", "staticlib"]
+
+# D15: dependency-thin by law — no workspace crates above wolf_span,
+# no heavy crates. `libc` is the contract's own "syscalls direct
+# (libc-level)" posture (s32 Target 1): raw bindings only, nothing at
+# runtime beyond the calls we make (mmap/madvise/pthread/sigaction for
+# the pooled task stacks and the guard-page fault report).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# Single-threaded-entry tests (s32 Target 1): the harness itself may
+# not spawn threads before the assertion runs, so these bypass libtest.
+[[test]]
+name = "no_spawn"
+harness = false
+
+[[test]]
+name = "stack_overflow"
+harness = false
+
+[[test]]
+name = "spawn_bench"
+harness = false
