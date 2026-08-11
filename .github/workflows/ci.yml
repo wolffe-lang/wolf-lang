@@ -26,13 +26,15 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: install native toolchain (gdb for debug-check, lld for the link probe)
+        run: sudo apt-get update && sudo apt-get install -y gdb lld
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
         run: cargo xtask ci
-      - name: bench smoke (report-only, no gating until M1/M2)
+      - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
           cargo xtask bench --track=compile --runs=1 --out=bench-results/pr-compile.jsonl
-      - name: bench report vs latest nightly baseline (report-only)
+      - name: bench diff vs latest nightly baseline
         run: |
           if git fetch --depth=1 origin bench-data 2>/dev/null; then
             git worktree add /tmp/bench-data FETCH_HEAD
@@ -42,6 +44,14 @@ jobs:
               echo '```' >> "$GITHUB_STEP_SUMMARY"
               cargo xtask bench diff "$base" bench-results/pr-runtime.jsonl 2>> "$GITHUB_STEP_SUMMARY" || true
               echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+            # Compile-track hard gate (s31/M1, D5): a significant
+            # regression vs the nightly baseline BLOCKS merge.
+            cbase=$(ls -1 /tmp/bench-data/data/*/compile.jsonl 2>/dev/null | sort | tail -1)
+            if [ -n "$cbase" ]; then
+              cargo xtask bench diff "$cbase" bench-results/pr-compile.jsonl --gate
+            else
+              echo "no compile baseline yet — the gate arms with the first nightly"
             fi
           else
             echo "no bench-data branch yet — skipping baseline diff"
