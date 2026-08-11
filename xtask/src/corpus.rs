@@ -1,15 +1,23 @@
 //! Corpus header directives (s01/s02, extended by s06).
 //!
-//! A corpus file's leading `//!` block carries at most three directive keys:
+//! A corpus file's leading `//!` block carries at most four directive keys:
 //!
 //! ```text
 //! //! check: pass | fail(E0312) | run(exit=0) | run(exit=trap)
 //! //! phase: none|lex|parse|resolve|typecheck|mem|wir|run
 //! //! conforms: mem.region.freeze, err.row.union
+//! //! warns: E0802, W1301
 //! ```
 //!
 //! Non-directive `//!` lines are prose and ignored. The directive language
-//! stays tiny — extend only under review (s01).
+//! stays tiny — extend only under review (s01; `warns:` added by s67).
+//!
+//! `warns:` is the warning ledger (s67): the exact set of warning codes
+//! this file is expected to fire. A file without the directive must run
+//! warning-clean — the repo's own `--deny-warnings` posture, enforced by
+//! `cargo xtask corpus` — and a file *with* it must fire exactly the
+//! declared codes (a reviewed-allow is a visible header, never a silent
+//! suppression).
 
 /// Canonical phase ladder (s06). Order matters: later phases include earlier.
 pub const PHASES: [&str; 8] = [
@@ -74,6 +82,10 @@ pub struct Directives {
     pub check: Option<Check>,
     pub phase: Option<String>,
     pub conforms: Vec<String>,
+    /// `warns: E0802, W1301` — the exact warning codes this file is
+    /// expected to fire (sorted, deduped). Empty = must be
+    /// warning-clean (the s67 `--deny-warnings` posture).
+    pub warns: Vec<String>,
     /// `member: true` — this file belongs to a multi-file module case and
     /// is compiled through its entry file, never conform-run directly
     /// (s12: directory = module).
@@ -114,6 +126,21 @@ pub fn parse_directives(src: &str) -> Result<Directives, String> {
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty()),
             );
+        } else if let Some(v) = rest.strip_prefix("warns:") {
+            for code in v.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                let b = code.as_bytes();
+                let shaped = b.len() == 5
+                    && matches!(b[0], b'E' | b'W')
+                    && b[1..].iter().all(u8::is_ascii_digit);
+                if !shaped {
+                    return Err(format!(
+                        "line {lineno}: bad `warns:` code `{code}` (codes look like W1301)"
+                    ));
+                }
+                d.warns.push(code.to_string());
+            }
+            d.warns.sort();
+            d.warns.dedup();
         } else if let Some(v) = rest.strip_prefix("member:") {
             match v.trim() {
                 "true" => d.member = true,
@@ -264,6 +291,16 @@ mod tests {
             panic!("expected run")
         };
         assert_eq!(r.stdout.as_deref(), Some("a, b"));
+    }
+
+    #[test]
+    fn warns_directive_parses_sorted_and_rejects_shapes() {
+        let d = parse_directives("//! phase: mem\n//! warns: W1301, E0802, W1301\n").unwrap();
+        assert_eq!(d.warns, vec!["E0802", "W1301"]);
+        assert!(parse_directives("//! warns: warning\n").is_err());
+        assert!(parse_directives("//! warns: W13xx\n").is_err());
+        let d = parse_directives("//! phase: mem\n").unwrap();
+        assert!(d.warns.is_empty());
     }
 
     #[test]

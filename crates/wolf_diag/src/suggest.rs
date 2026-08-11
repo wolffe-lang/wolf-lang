@@ -79,6 +79,31 @@ pub fn best_match<'c>(input: &str, candidates: &[&'c str]) -> Option<&'c str> {
     best.map(|(_, c)| c)
 }
 
+/// Apply byte-exact suggestion edits to one file's source (s67: the
+/// `wolf fix` engine; every edit's span must belong to this file).
+/// Edits are applied together: sorted by position, rejected wholesale
+/// (`None`) when any two overlap or any span exceeds the source — a
+/// fix either applies exactly or not at all, never partially. A
+/// zero-width span is an insertion; two edits may touch (`hi == lo`)
+/// but never cross.
+pub fn apply_edits(src: &[u8], edits: &[(wolf_span::Span, String)]) -> Option<Vec<u8>> {
+    let mut sorted: Vec<&(wolf_span::Span, String)> = edits.iter().collect();
+    sorted.sort_by_key(|(s, _)| (s.lo, s.hi));
+    let mut out = Vec::with_capacity(src.len());
+    let mut cursor = 0usize;
+    for (span, replacement) in sorted {
+        let (lo, hi) = (span.lo as usize, span.hi as usize);
+        if lo < cursor || hi < lo || hi > src.len() {
+            return None; // overlap or out of bounds: refuse whole
+        }
+        out.extend_from_slice(&src[cursor..lo]);
+        out.extend_from_slice(replacement.as_bytes());
+        cursor = hi;
+    }
+    out.extend_from_slice(&src[cursor..]);
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,6 +125,34 @@ mod tests {
         assert_eq!(max_edits(5), 2);
         assert_eq!(max_edits(8), 2);
         assert_eq!(max_edits(9), 3);
+    }
+
+    #[test]
+    fn edits_apply_together_or_not_at_all() {
+        let mut sm = wolf_span::SourceMap::new();
+        let f = sm.intern(std::path::Path::new("t.lu"));
+        let src = b"let x = -1";
+        // Replace `-` with `^`, insert at end.
+        let edits = vec![
+            (wolf_span::Span::new(f, 8, 9), "^".to_string()),
+            (wolf_span::Span::new(f, 10, 10), "0".to_string()),
+        ];
+        assert_eq!(apply_edits(src, &edits).unwrap(), b"let x = ^10");
+        // Overlapping edits refuse wholesale.
+        let bad = vec![
+            (wolf_span::Span::new(f, 0, 4), "var ".to_string()),
+            (wolf_span::Span::new(f, 3, 5), "!".to_string()),
+        ];
+        assert!(apply_edits(src, &bad).is_none());
+        // Out of bounds refuses.
+        let oob = vec![(wolf_span::Span::new(f, 9, 99), "".to_string())];
+        assert!(apply_edits(src, &oob).is_none());
+        // Touching edits (hi == lo) are fine.
+        let touch = vec![
+            (wolf_span::Span::new(f, 0, 3), "var".to_string()),
+            (wolf_span::Span::new(f, 3, 3), "!".to_string()),
+        ];
+        assert_eq!(apply_edits(src, &touch).unwrap(), b"var! x = -1");
     }
 
     #[test]

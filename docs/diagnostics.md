@@ -1026,7 +1026,7 @@ that swallows this one. Delete the unreachable arm, or reorder the
 arms so the more specific pattern comes first. (This is a warning:
 the program still compiles and its meaning is unchanged.)
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_unreachable.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_duplicate_literal.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_unreachable_arm.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_unreachable.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_shape.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_duplicate_literal.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_unreachable_arm.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
 
 ## E0803 — more than one trait in scope provides this method
 
@@ -1379,6 +1379,32 @@ disappears.
 
 Fixtures: crates/wolf_fmt/tests/snapshots/broken__w0301_partial_format.snap
 
+## W0302 — `#[allow(…)]` names a code that is not registered
+
+The `#[allow(…)]` attribute suppresses warnings by their registered
+diagnostic codes — `#[allow(w1301)]` for one code, `#[allow(w13xx)]`
+for a family — and this argument matches no code in the registry
+(spec/01 §9; the catalog in `docs/diagnostics.md` lists every code
+that exists). An allow of nothing usually means a typo in the digits,
+or a code from a different toolchain version. Fix the code, or delete
+the argument; the attribute itself still applies its other arguments.
+This warning cannot suppress itself for the same misspelled code —
+name it correctly and the allow works.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__allow_unknown_code.snap, crates/wolf_sema/tests/snapshots/lint_diagnostics__w0302_unknown_code.snap
+
+## W0303 — this `#[allow]` allows nothing
+
+`#[allow]` with no arguments suppresses no warnings at all: the
+attribute's whole meaning is the list of codes it names, item by item
+(`#[allow(w1301)]`), so an empty one is inert — almost always a
+half-written suppression or a leftover from deleting the codes out of
+it. Name the warning codes to allow, or delete the attribute; wolf
+reports the dead attribute rather than letting it sit there implying
+a suppression that never happens.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__allow_nothing.snap, crates/wolf_sema/tests/snapshots/lint_diagnostics__w0303_allow_nothing.snap
+
 ## W1301 — this `unsafe` block does not state its invariant
 
 Every `unsafe` block discharges a proof obligation the checker cannot:
@@ -1391,4 +1417,4 @@ style lint, not a gate: the block still checks and compiles. Add the
 comment; future auditors — including `wolf audit` — read the rings by
 exactly these markers.
 
-Fixtures: crates/wolf_mem/tests/snapshots/mem_diagnostics__w1301_missing_safety.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__safety_comment_missing.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1301_missing_safety.snap

@@ -1329,7 +1329,12 @@ defined shape for each row.
 "#);
 
 // ------------------------------------------------------------------------
-// W03xx — the formatter's family (s11).
+// W03xx — frontend/resolution-adjacent warnings (s67; W0301 is the
+// formatter's grandfathered s11 code). Warnings are leveled via
+// `wolf_diag::lint` — allow/warn/deny per code, per family
+// (`W13xx`), or wholesale — and every one obeys the spec/01 §9
+// severity contract: legal-but-inadvisable, citing a concrete hazard
+// or a D-numbered idiom rule, never "might be slow someday".
 // ------------------------------------------------------------------------
 
 code!(W0301, "file only partially formatted: syntax errors present", r#"
@@ -1343,6 +1348,28 @@ so scripts and editors know the file is not fully canonical yet. Fix
 the syntax errors it reports alongside this warning and run `wolf
 fmt` again; with a clean parse the whole file formats and the warning
 disappears.
+"#);
+
+code!(W0302, "`#[allow(…)]` names a code that is not registered", r#"
+The `#[allow(…)]` attribute suppresses warnings by their registered
+diagnostic codes — `#[allow(w1301)]` for one code, `#[allow(w13xx)]`
+for a family — and this argument matches no code in the registry
+(spec/01 §9; the catalog in `docs/diagnostics.md` lists every code
+that exists). An allow of nothing usually means a typo in the digits,
+or a code from a different toolchain version. Fix the code, or delete
+the argument; the attribute itself still applies its other arguments.
+This warning cannot suppress itself for the same misspelled code —
+name it correctly and the allow works.
+"#);
+
+code!(W0303, "this `#[allow]` allows nothing", r#"
+`#[allow]` with no arguments suppresses no warnings at all: the
+attribute's whole meaning is the list of codes it names, item by item
+(`#[allow(w1301)]`), so an empty one is inert — almost always a
+half-written suppression or a leftover from deleting the codes out of
+it. Name the warning codes to allow, or delete the attribute; wolf
+reports the dead attribute rather than letting it sit there implying
+a suppression that never happens.
 "#);
 
 // ------------------------------------------------------------------------

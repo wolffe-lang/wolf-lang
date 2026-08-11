@@ -1,0 +1,24 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.level.attr
+//!
+//! `#[allow(e0802)]` is item-granular suppression (s67): the dead arm
+//! inside this function fires nothing, because the attribute's region
+//! — the whole declaration, body included — covers it. The sibling
+//! function has no allow, so the same shape THERE would warn (see
+//! ../typecheck/match_unreachable.lu); this file must be
+//! warning-clean, which the corpus ledger enforces via its empty
+//! `warns:` set.
+
+#[allow(e0802)]
+fn pick(b: bool) -> int {
+    match b {
+        true => 0,
+        false => 1,
+        _ => 2,
+    }
+}
+
+fn main() -> !int {
+    pick(true)
+}

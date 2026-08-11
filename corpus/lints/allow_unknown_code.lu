@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.level.attr
+//! warns: W0302
+//!
+//! An `#[allow]` argument that names no registered code suppresses
+//! nothing, and saying so is itself a warning (W0302) — a typo'd
+//! suppression that silently did nothing would be worse than the
+//! warning it meant to hide.
+
+#[allow(w9999)]
+fn f() -> int {
+    1
+}
+
+fn main() -> !int {
+    if f() == 1 { 0 } else { 1 }
+}

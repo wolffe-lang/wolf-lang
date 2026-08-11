@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "impl": "example",
+  "impl_version": "0.0.1",
+  "commit": "abc1234",
+  "file": "corpus/lints/safety_comment_missing.lu",
+  "phase_reached": "mem",
+  "seeded": false,
+  "diagnostics": [
+    { "code": "W1301", "span": [356, 362], "severity": "warning" }
+  ],
+  "warnings": [
+    { "code": "W1301", "span": [356, 362] }
+  ],
+  "verdict": "unsupported",
+  "stdout_sha256": null,
+  "stdout_inline": null
+}

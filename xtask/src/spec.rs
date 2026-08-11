@@ -199,6 +199,7 @@ pub fn link_check(docs: &[(&str, &str)]) -> Vec<String> {
         let prefix = anchor.split('.').next().unwrap_or("");
         match prefix {
             "gram" => Some("01-grammar.md"),
+            "diag" => Some("01-grammar.md"), // §9, the diagnostics tier (s67)
             "mem" => Some("02-memory-model.md"),
             "conc" => Some("03-concurrency.md"),
             "abi" => Some("04-abi.md"),
@@ -267,6 +268,7 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
             let owns = matches!(
                 (prefix, *file),
                 ("gram", "01-grammar.md")
+                    | ("diag", "01-grammar.md")
                     | ("mem", "02-memory-model.md")
                     | ("conc", "03-concurrency.md")
                     | ("abi", "04-abi.md")
@@ -283,7 +285,7 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
 
 /// Registered namespaces resolve against the anchor index; reserved
 /// forward namespaces are legal-but-unresolvable ([conf.anchor.ns]).
-pub const REGISTERED_NS: [&str; 6] = ["gram", "mem", "conc", "abi", "conf", "proto"];
+pub const REGISTERED_NS: [&str; 7] = ["gram", "diag", "mem", "conc", "abi", "conf", "proto"];
 pub const FORWARD_NS: [&str; 14] = [
     "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",
     "mod", "std", "ty",

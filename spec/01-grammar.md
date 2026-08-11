@@ -271,7 +271,10 @@ attr_arg  ::= attr | literal   /* `key = "v"` is attr with '=' input */
 
 Closed, structured — attributes are not token soup (no macros at v1).
 Known at v1: `#[trusted]`, `#[noalloc]`, `#[inplace]`, `#[nopanic]`,
-`#[bounded_stack]`, `#[repr(c)]`, `#[cfg(target = "…")]`.
+`#[bounded_stack]`, `#[repr(c)]`, `#[cfg(target = "…")]`,
+`#[allow(w1301)]` (item-granular warning suppression, §9.3 — the
+arguments are diagnostic codes through the ordinary `attr_arg`
+production; no new grammar).
 
 ---
 
@@ -653,7 +656,7 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
 
 ---
 
-## 9. Diagnostics IOUs (seed for s10 catalog)
+## 9. Diagnostics `[diag]` (seeded s10; warnings formalized s67)
 
 Every counter-example above names an expected diagnostic. Codes reserved:
 E0001 (leading-operator continuation), E0002 (empty statement),
@@ -661,3 +664,73 @@ E0003 (comparison chaining), E0004 (float `1.e5`), E0005 (`else` on new
 line), E0006 (struct literal in condition; primary span = the opening `{`), E0007 (interp nesting depth),
 E0008 (keyword as identifier — names the keyword and suggests `r#`-free
 rename; wolf has no raw identifiers, pick another name).
+
+### 9.1 The severity contract `[diag.sev]`
+
+- `[diag.sev.error]` An **error** rejects meaning: the program is
+  outside the language, and no configuration reinstates it. Errors are
+  `E####` and cannot be leveled, allowed, or suppressed.
+- `[diag.sev.warn]` A **warning** flags a legal-but-inadvisable
+  program. Every warning cites a *concrete hazard* or an idiom rule
+  with a D-number — never speculation ("might be slow someday" is not
+  a warning). A warning changes no program's meaning; a build with
+  warnings is a correct build.
+- `[diag.sev.silence]` **Silence** is for what the formatter owns:
+  layout, spacing, ordering — `wolf fmt` (§7) is the arbiter of style,
+  and no diagnostic duplicates it.
+- `[diag.sev.teach]` Warnings obey the same voice discipline as errors
+  (D22): a warning teaches or it does not ship, and every code carries
+  an extended explanation (`wolf --explain W1301`) and at least one
+  reviewed fixture (the s10 catalog law, extended to warnings by s67).
+
+### 9.2 Code families `[diag.family]`
+
+`E####`/`W####` share one numbering plane, family = the first two
+digits, owned by the analysis that computes the code. Established
+E-families: E000x grammar reservations (above), E01xx lexer, E02xx
+parser, E03xx resolution, E04xx typing, E05xx traits, E06xx error
+rows, E07xx comptime, E08xx sema completion, E1xxx memory tiers
+(E13xx unsafe, E14xx checked execution). W-families mirror the plane:
+
+- **W03xx** — frontend/resolution-adjacent warnings. W0301 (partial
+  format, s11 — grandfathered), W0302 (`#[allow]` of an unregistered
+  code), W0303 (`#[allow]` of nothing).
+- **W1[0-3]xx** — memory/concurrency/abi-adjacent warnings. W1301
+  (`unsafe` block without a `# Safety:` comment, s22 —
+  grandfathered).
+
+Numbers retire with their codes and are never reused. A
+warning-severity diagnostic under an E-number (E0802, unreachable
+match arm) is a grandfathered exception: severity, not the code
+letter, is normative for leveling.
+
+### 9.3 Levels `[diag.level]`
+
+Every warning has a level: **allow** (dropped), **warn** (reported —
+the default), **deny** (promoted to an error that fails the build; the
+code keeps its `W####` spelling). Three declarative sources, most
+local authority first:
+
+- `[diag.level.attr]` `#[allow(w1301)]` — item-granular source
+  suppression through the ordinary attribute grammar (§2.7): `allow`
+  with code arguments, lowercase canonical, family form `w13xx`
+  accepted. The region is the attributed declaration, body included.
+  An argument naming no registered code is W0302; an empty `#[allow]`
+  is W0303.
+- `[diag.level.cli]` `wolf build --allow|--warn|--deny <sel>` with
+  `<sel>` a code (`W1301`), a family (`W13xx`), or `warnings`;
+  `--deny-warnings` ≡ `--deny warnings` (the CI posture — wolf's own
+  corpus holds itself to it).
+- `[diag.level.pkg]` The manifest's `lints.allow|warn|deny = sel, …`
+  entries in `wolf.pkg` (declarative only, D33). CLI rules layer over
+  manifest rules.
+
+Precedence is specificity: per-code beats per-family beats
+all-warnings; among equals the later rule wins (CLI after manifest).
+There are no plugin lints, ever — the compiler is the arbiter of
+idiomatic wolf (D33's spirit; c16).
+
+`wolf fix` promotes machine-applicable suggestions (s10) to applied
+edits — dry-run by default, `--apply` writes, idempotent because a
+fix removes the diagnostic that carried it. Only `MachineApplicable`
+suggestions are ever applied unattended.

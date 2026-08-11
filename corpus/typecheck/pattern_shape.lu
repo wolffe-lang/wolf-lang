@@ -1,6 +1,7 @@
 //! check: fail(E0808)
 //! phase: resolve
 //! conforms: ty.pattern.shape
+//! warns: E0802
 //!
 //! A pattern mirrors the value's shape: deconstructing a variant out
 //! of a plain integer can never be checked.

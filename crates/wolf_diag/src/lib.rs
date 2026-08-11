@@ -44,6 +44,7 @@
 
 use wolf_span::Span;
 
+pub mod lint;
 pub mod registry;
 mod render;
 mod render_json;
@@ -53,8 +54,10 @@ pub use registry::{Code, CodeInfo, codes, explain};
 pub use render::{RenderOptions, Sources, render_human};
 pub use render_json::{DIAG_SCHEMA_VERSION, render_json_line, render_json_line_with_files};
 
-/// How bad it is. Lints/levels are a later design (s10 non-target);
-/// error vs. warning is the whole surface for now.
+/// How bad it is. An error rejects meaning and cannot be configured
+/// away; a warning flags a legal-but-inadvisable program and is
+/// leveled — allow/warn/deny — by the [`lint`] machinery (s67,
+/// spec/01 §9).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Severity {
     Error,

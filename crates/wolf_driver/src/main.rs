@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
+use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
 fn main() {
@@ -23,6 +24,7 @@ fn main() {
         Some("--explain") => explain(&args[1..]),
         Some("build") => build(&args[1..]),
         Some("run") => run(&args[1..]),
+        Some("fix") => fix(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("audit-surface") => audit_surface(&args[1..]),
@@ -35,7 +37,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|fmt|lsp|interface|audit-surface|conform-run|--explain|--version"
+                "usage: wolf build|run|fix|fmt|lsp|interface|audit-surface|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }
@@ -546,6 +548,15 @@ struct BuildOpts {
     /// (conform-run's native rung — corpus directories must not grow
     /// cache droppings).
     cache_root: Option<PathBuf>,
+    /// CLI lint levels (s67): `--allow/--warn/--deny <sel>`,
+    /// `--deny-warnings`. Layered over the manifest's `lints.*` rules;
+    /// source `#[allow]` attributes are the most local authority.
+    lints: LintLevels,
+    /// Render surviving warnings on stderr after a clean gate (true
+    /// for `wolf build`/`run`; false for conform-run's native rung,
+    /// whose own reporter renders the diagnostic set — twice would be
+    /// noise).
+    report_warnings: bool,
 }
 
 impl BuildOpts {
@@ -556,8 +567,49 @@ impl BuildOpts {
             checked: false,
             emit: Emit::Bin,
             cache_root: None,
+            lints: LintLevels::new(),
+            report_warnings: false,
         }
     }
+}
+
+/// Parse a lint selector as given on a flag: shape via
+/// [`Selector::parse`], and exact codes must be registered — a `--deny
+/// W9999` is a user error at the CLI (the *attribute* form warns W0302
+/// instead, because source outlives toolchains; a flag does not).
+fn parse_lint_selector(cmd: &str, flag: &str, s: &str) -> Selector {
+    let fail = |msg: &str| -> ! {
+        eprintln!("wolf {cmd}: {flag}: {msg}");
+        std::process::exit(2);
+    };
+    let sel = match Selector::parse(s) {
+        Ok(sel) => sel,
+        Err(e) => fail(&e),
+    };
+    if let Selector::Code(code) = &sel
+        && wolf_diag::explain(code).is_none()
+    {
+        fail(&format!(
+            "`{code}` is not a registered diagnostic code (see docs/diagnostics.md)"
+        ));
+    }
+    sel
+}
+
+/// The effective lint levels for a package: the manifest's `lints.*`
+/// stub entries (wolf.pkg next to the entry file), with CLI rules
+/// layered after so flags win ties. A malformed manifest is a build
+/// error, never silently ignored.
+fn effective_lints(entry: &Path, cli: &LintLevels) -> Result<LintLevels, String> {
+    let mut levels = LintLevels::new();
+    let root = entry.parent().unwrap_or(Path::new("."));
+    if let Ok(manifest) = std::fs::read_to_string(root.join("wolf.pkg")) {
+        for (sel, lvl) in wolf_diag::lint::parse_manifest_lints(&manifest)? {
+            levels.set(sel, lvl);
+        }
+    }
+    levels.extend_from(cli);
+    Ok(levels)
 }
 
 /// One per-module compilation unit (s31): a sema module's functions in
@@ -598,6 +650,11 @@ fn compile_native(
     let mut sm = wolf_span::SourceMap::new();
     let res =
         resolve_from_entry(file, &mut sm, sources, std_root).map_err(BuildStop::Environment)?;
+    // The warning system (s67): source `#[allow]` regions + manifest
+    // levels + CLI levels decide each warning's fate — dropped,
+    // reported, or promoted to an error that stops the build.
+    let scan = wolf_sema::scan_allows(&res.package);
+    let levels = effective_lints(file, &opts.lints).map_err(BuildStop::Environment)?;
     let render = |sources: &Sources, diags: &[Diagnostic]| {
         let mut reporter = HumanReporter::new(sources, RenderOptions::default());
         for d in diags {
@@ -607,10 +664,26 @@ fn compile_native(
     };
     let has_errors =
         |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
-    if has_errors(&res.diagnostics) {
-        render(sources, &res.diagnostics);
-        return Err(BuildStop::Errors);
-    }
+    // Each phase's diagnostics pass through the level machinery, then
+    // accumulate; an error (original or deny-promoted) renders
+    // EVERYTHING pending and stops. `pending` carries surviving
+    // warnings across phases so a clean build still reports them.
+    let mut pending: Vec<Diagnostic> = Vec::new();
+    let gate = |sources: &Sources,
+                pending: &mut Vec<Diagnostic>,
+                diags: Vec<Diagnostic>|
+     -> Result<(), BuildStop> {
+        pending.extend(wolf_diag::lint::apply(&levels, &scan.allows, diags));
+        if has_errors(pending) {
+            wolf_diag::sort_diagnostics(pending);
+            render(sources, pending);
+            return Err(BuildStop::Errors);
+        }
+        Ok(())
+    };
+    let mut resolve_diags = res.diagnostics.clone();
+    resolve_diags.extend(scan.diagnostics.iter().cloned());
+    gate(sources, &mut pending, resolve_diags)?;
     let tc = wolf_sema::typecheck_package(&res);
     if let Some(nyc) = tc.not_yet.first() {
         return Err(BuildStop::Refused {
@@ -618,10 +691,7 @@ fn compile_native(
             reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
         });
     }
-    if has_errors(&tc.diagnostics) {
-        render(sources, &tc.diagnostics);
-        return Err(BuildStop::Errors);
-    }
+    gate(sources, &mut pending, tc.diagnostics.clone())?;
     let mem = wolf_mem::check_package(&res.package, &tc);
     if let Some(nyc) = mem.not_yet.first() {
         return Err(BuildStop::Refused {
@@ -629,9 +699,12 @@ fn compile_native(
             reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
         });
     }
-    if has_errors(&mem.diagnostics) {
-        render(sources, &mem.diagnostics);
-        return Err(BuildStop::Errors);
+    gate(sources, &mut pending, mem.diagnostics.clone())?;
+    // No later phase produces diagnostics: report the surviving
+    // warnings now, whatever `--emit` does next.
+    if opts.report_warnings && !pending.is_empty() {
+        wolf_diag::sort_diagnostics(&mut pending);
+        render(sources, &pending);
     }
     let build = wolf_wir::lower_package(&res.package, &tc);
     if let Some(nyc) = build.not_yet.first() {
@@ -1111,7 +1184,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     let usage = || -> ! {
         eprintln!(
             "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin] [--no-cache] \
-             [--verbose] [--checked] [--std-root <dir>]{}",
+             [--verbose] [--checked] [--std-root <dir>] \
+             [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]{}",
             if run_mode { " [prog args…]" } else { "" }
         );
         std::process::exit(2);
@@ -1135,6 +1209,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         checked: false,
         emit: Emit::Bin,
         cache_root: None,
+        lints: LintLevels::new(),
+        report_warnings: true,
     };
     let mut prog_args: Vec<String> = Vec::new();
     let mut i = 0;
@@ -1163,6 +1239,34 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 "bin" => Emit::Bin,
                 other => fail(&format!("unknown emit `{other}` (wir, obj, bin)")),
             };
+        } else if a == "--deny-warnings" {
+            opts.lints.deny_warnings();
+        } else if let Some((flag, level)) = match a.as_str() {
+            "--allow" => Some(("--allow", Level::Allow)),
+            "--warn" => Some(("--warn", Level::Warn)),
+            "--deny" => Some(("--deny", Level::Deny)),
+            _ => None,
+        } {
+            i += 1;
+            match args.get(i) {
+                Some(v) => opts.lints.set(parse_lint_selector(cmd, flag, v), level),
+                None => fail(&format!(
+                    "{flag} needs a lint selector (W####, W##xx, warnings)"
+                )),
+            }
+        } else if let Some((flag, level, v)) = a
+            .strip_prefix("--allow=")
+            .map(|v| ("--allow", Level::Allow, v))
+            .or_else(|| {
+                a.strip_prefix("--warn=")
+                    .map(|v| ("--warn", Level::Warn, v))
+            })
+            .or_else(|| {
+                a.strip_prefix("--deny=")
+                    .map(|v| ("--deny", Level::Deny, v))
+            })
+        {
+            opts.lints.set(parse_lint_selector(cmd, flag, v), level);
         } else if a == "--no-cache" {
             opts.no_cache = true;
         } else if a == "--verbose" {
@@ -1312,6 +1416,188 @@ fn run(args: &[String]) {
             std::process::exit(2);
         }
     }
+}
+
+/// `wolf fix <file.lu> [--apply] [--std-root <dir>]` — promote
+/// machine-applicable suggestions to applied edits (s67; the s10
+/// suggestion machinery, D34's promised subcommand).
+///
+/// Dry-run by default: lists every fix it would make and exits 1 so
+/// scripts can gate on "fixes pending"; `--apply` writes the files.
+/// Only `MachineApplicable` suggestions are ever applied (the
+/// applicability contract), the first such suggestion per diagnostic;
+/// suggestions whose edits overlap an already-accepted fix are skipped
+/// with a note. Applying a fix removes the diagnostic that carried it,
+/// so the command is idempotent: a second run finds nothing to do.
+fn fix(args: &[String]) {
+    let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
+        let root = effective_std_root(f)?;
+        Ok((a, root))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("wolf fix: {e}");
+            std::process::exit(2);
+        }
+    };
+    let mut apply = false;
+    let mut file: Option<String> = None;
+    for a in &args {
+        match a.as_str() {
+            "--apply" => apply = true,
+            _ if a.starts_with('-') => {
+                eprintln!("wolf fix: unknown flag `{a}`");
+                std::process::exit(2);
+            }
+            _ => file = Some(a.clone()),
+        }
+    }
+    let Some(file) = file else {
+        eprintln!("usage: wolf fix <file.lu> [--apply] [--std-root <dir>]");
+        std::process::exit(2);
+    };
+    let path = Path::new(&file);
+    if !path.is_file() {
+        eprintln!("wolf fix: no such file: {file}");
+        std::process::exit(2);
+    }
+    let mut sm = wolf_span::SourceMap::new();
+    let mut sources = Sources::new();
+    let res = match resolve_from_entry(path, &mut sm, &mut sources, std_root.as_deref()) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("wolf fix: {e}");
+            std::process::exit(2);
+        }
+    };
+    // The ladder, tolerant of errors (fixes often live ON errors):
+    // each phase's diagnostics are collected as deep as the pipeline
+    // honestly gets; allowed warnings never offer their fixes.
+    let scan = wolf_sema::scan_allows(&res.package);
+    let levels = match effective_lints(path, &LintLevels::new()) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("wolf fix: {e}");
+            std::process::exit(2);
+        }
+    };
+    let has_errors =
+        |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
+    let mut diags = res.diagnostics.clone();
+    diags.extend(scan.diagnostics.iter().cloned());
+    if !has_errors(&diags) {
+        let tc = wolf_sema::typecheck_package(&res);
+        if tc.not_yet.is_empty() {
+            diags.extend(tc.diagnostics.iter().cloned());
+            if !has_errors(&diags) {
+                let mem = wolf_mem::check_package(&res.package, &tc);
+                if mem.not_yet.is_empty() {
+                    diags.extend(mem.diagnostics.iter().cloned());
+                }
+            }
+        }
+    }
+    let mut diags = wolf_diag::lint::apply(&levels, &scan.allows, diags);
+    wolf_diag::sort_diagnostics(&mut diags);
+
+    // FileId index → (display path, source bytes).
+    let mut by_file: std::collections::HashMap<u32, (String, Vec<u8>)> =
+        std::collections::HashMap::new();
+    for unit in &res.package.files {
+        by_file.insert(
+            unit.raw.file.index() as u32,
+            (unit.raw.display.clone(), unit.raw.src.clone()),
+        );
+    }
+    // Accept suggestions greedily in diagnostic order; per-file
+    // interval sets refuse overlaps so fixes never fight.
+    let mut accepted: std::collections::HashMap<u32, Vec<(u32, u32)>> =
+        std::collections::HashMap::new();
+    let mut edits_by_file: std::collections::HashMap<u32, Vec<(wolf_span::Span, String)>> =
+        std::collections::HashMap::new();
+    let mut planned: Vec<String> = Vec::new();
+    let mut skipped = 0usize;
+    for d in &diags {
+        let Some(sug) = d
+            .suggestions
+            .iter()
+            .find(|s| s.applicability == wolf_diag::Applicability::MachineApplicable)
+        else {
+            continue;
+        };
+        let conflicts = sug.edits.iter().any(|(sp, _)| {
+            accepted
+                .get(&(sp.file.index() as u32))
+                .is_some_and(|ivs| ivs.iter().any(|&(lo, hi)| sp.lo < hi && lo < sp.hi))
+        });
+        if conflicts {
+            skipped += 1;
+            continue;
+        }
+        for (sp, rep) in &sug.edits {
+            let fi = sp.file.index() as u32;
+            accepted.entry(fi).or_default().push((sp.lo, sp.hi));
+            edits_by_file
+                .entry(fi)
+                .or_default()
+                .push((*sp, rep.clone()));
+        }
+        let loc = by_file
+            .get(&(d.span().file.index() as u32))
+            .map(|(p, src)| {
+                let line = 1 + src[..(d.span().lo as usize).min(src.len())]
+                    .iter()
+                    .filter(|&&b| b == b'\n')
+                    .count();
+                format!("{p}:{line}")
+            })
+            .unwrap_or_else(|| "?".to_string());
+        planned.push(format!("{loc}: {}: {}", d.code, sug.message));
+    }
+    if planned.is_empty() {
+        eprintln!("wolf fix: nothing to fix");
+        if skipped > 0 {
+            eprintln!("wolf fix: {skipped} overlapping fix(es) skipped — rerun after applying");
+        }
+        std::process::exit(0);
+    }
+    for p in &planned {
+        println!("{}{p}", if apply { "fixed " } else { "would fix " });
+    }
+    if !apply {
+        eprintln!(
+            "wolf fix: {} fix(es) pending — rerun with --apply to write them",
+            planned.len()
+        );
+        std::process::exit(1);
+    }
+    let mut files_written = 0usize;
+    for (fi, edits) in &edits_by_file {
+        let Some((display, src)) = by_file.get(fi) else {
+            continue;
+        };
+        let Some(out) = wolf_diag::suggest::apply_edits(src, edits) else {
+            // Individually accepted edits cannot overlap; a refusal
+            // here is a registry bug worth a loud exit.
+            eprintln!("wolf fix: ICE: accepted edits failed to apply in {display}");
+            std::process::exit(2);
+        };
+        if let Err(e) = std::fs::write(display, out) {
+            eprintln!("wolf fix: write {display}: {e}");
+            std::process::exit(2);
+        }
+        files_written += 1;
+    }
+    eprintln!(
+        "wolf fix: applied {} fix(es) across {} file(s){}",
+        planned.len(),
+        files_written,
+        if skipped > 0 {
+            format!("; {skipped} overlapping fix(es) skipped — run `wolf fix` again")
+        } else {
+            String::new()
+        }
+    );
 }
 
 /// The s28 native rung for `conform-run --native`: compile the
@@ -1710,6 +1996,10 @@ fn conform_run(args: &[String]) {
     // and the UB/trap extension keys ([proto.record.ext]).
     let mut run_stdout: Option<String> = None;
     let mut x_ext: Vec<(&'static str, serde_json::Value)> = Vec::new();
+    // Source `#[allow]` regions (s67): part of the program, so the
+    // conformance surface honors them — collected at the resolve rung,
+    // applied to the final diagnostic set.
+    let mut allow_regions: Vec<AllowRegion> = Vec::new();
     let (phase_reached, verdict, diagnostics) = if phase.as_deref() == Some("none") {
         ("none", "unsupported".to_string(), Vec::new())
     } else {
@@ -1764,7 +2054,13 @@ fn conform_run(args: &[String]) {
                         std::process::exit(2);
                     }
                     Ok(res) => {
-                        let all = res.diagnostics.clone();
+                        // The s67 allow scan: regions for the final
+                        // filter, W030x lints into the resolve rung.
+                        let scan = wolf_sema::scan_allows(&res.package);
+                        allow_regions = scan.allows;
+                        let mut all = res.diagnostics.clone();
+                        all.extend(scan.diagnostics);
+                        wolf_diag::sort_diagnostics(&mut all);
                         if let Some(code) = first_error(&all) {
                             ("resolve", format!("fail({code})"), all)
                         } else if phase.as_deref() == Some("resolve") {
@@ -1903,6 +2199,12 @@ fn conform_run(args: &[String]) {
         }
     }
 
+    // Source-level `#[allow]` suppression (s67): warnings inside an
+    // allowed region drop before reporting and before the record —
+    // levels stay default (conform-run takes no lint flags; the
+    // attribute is the program's own, so every consumer honors it).
+    let diagnostics = wolf_diag::lint::apply(&LintLevels::new(), &allow_regions, diagnostics);
+
     // The rich diagnostic stream (s10) — stderr only, stdout is the
     // protocol's.
     let mut reporter: Box<dyn Reporter> = if error_format == "json" {
@@ -1944,6 +2246,20 @@ fn conform_run(args: &[String]) {
         }
         _ => (serde_json::Value::Null, serde_json::Value::Null),
     };
+    // The warnings array (s67, [proto.record.warn]): every
+    // warning-severity observation as `{code, span}` — additive within
+    // protocol 1, present whenever the implementation runs its warning
+    // analyses (wolfgang always does), honest-absent otherwise.
+    let warnings: Vec<serde_json::Value> = diagnostics
+        .iter()
+        .filter(|d| d.severity == wolf_diag::Severity::Warning)
+        .map(|d| {
+            serde_json::json!({
+                "code": d.code.as_str(),
+                "span": [d.span().lo, d.span().hi],
+            })
+        })
+        .collect();
     let mut record = serde_json::json!({
         "protocol": 1,
         "impl": "wolfgang",
@@ -1953,6 +2269,7 @@ fn conform_run(args: &[String]) {
         "phase_reached": phase_reached,
         "seeded": false,
         "diagnostics": minimal,
+        "warnings": warnings,
         "verdict": verdict,
         "stdout_sha256": stdout_sha,
         "stdout_inline": stdout_inline,

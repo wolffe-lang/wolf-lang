@@ -19,6 +19,18 @@ fn extensions_accept_and_do_not_diverge_alone() {
 }
 
 #[test]
+fn warnings_fixture_accepts_and_absence_never_diverges() {
+    // The s67 additive array ([proto.record.warn]): validates when
+    // present, and a record without it never diverges against one with
+    // it (honest-absent — lupin implements the subset it has).
+    let w = fixture("with-warnings.json");
+    assert!(xtask::protocol::validate_record(&w).is_ok());
+    let mut plain = w.clone();
+    plain.as_object_mut().unwrap().remove("warnings");
+    assert!(xtask::protocol::compare(&w, &plain, false).is_none());
+}
+
+#[test]
 fn wrong_version_rejects() {
     assert!(xtask::protocol::validate_record(&fixture("wrong-version.json")).is_err());
 }

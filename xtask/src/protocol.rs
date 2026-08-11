@@ -72,6 +72,24 @@ pub fn validate_record(v: &serde_json::Value) -> Result<Verdict, String> {
             return Err("diagnostic entries need {code, span[2], severity}".into());
         }
     }
+    // `warnings` ([proto.record.warn], s67): optional and additive —
+    // honest-absent when the implementation runs no warning analyses —
+    // but well-shaped when present: `{code, span[2]}` entries.
+    if let Some(w) = obj.get("warnings") {
+        let ws = w
+            .as_array()
+            .ok_or("`warnings` must be an array when present")?;
+        for entry in ws {
+            let ok = entry.get("code").is_some_and(|c| c.is_string())
+                && entry
+                    .get("span")
+                    .and_then(|s| s.as_array())
+                    .is_some_and(|s| s.len() == 2);
+            if !ok {
+                return Err("warning entries need {code, span[2]}".into());
+            }
+        }
+    }
     let verdict = obj
         .get("verdict")
         .and_then(|x| x.as_str())
@@ -157,6 +175,31 @@ pub fn compare(
             return Some((Class::Stdout, "stdout hash mismatch".into()));
         }
     }
+    // Warning parity ([proto.record.warn], s67): compared only when
+    // BOTH records carry the array (the additive-key rule of
+    // [proto.record.ext] applied to a named field) — the sorted
+    // {code, span} sets must agree.
+    if let (Some(wa), Some(wb)) = (a.get("warnings"), b.get("warnings")) {
+        let set = |w: &serde_json::Value| -> Vec<String> {
+            let mut v: Vec<String> = w
+                .as_array()
+                .map(|ws| {
+                    ws.iter()
+                        .map(|e| format!("{}@{}", e["code"].as_str().unwrap_or(""), e["span"]))
+                        .collect()
+                })
+                .unwrap_or_default();
+            v.sort();
+            v
+        };
+        let (sa, sb) = (set(wa), set(wb));
+        if sa != sb {
+            return Some((
+                Class::Diag,
+                format!("warnings [{}] vs [{}]", sa.join(", "), sb.join(", ")),
+            ));
+        }
+    }
     None
 }
 
@@ -213,5 +256,27 @@ mod tests {
     fn equal_records_agree() {
         let (a, b) = (record("trap(overflow)"), record("trap(overflow)"));
         assert!(compare(&a, &b, false).is_none());
+    }
+
+    #[test]
+    fn warnings_are_additive_and_compared_when_shared() {
+        // Absent on one side: never a divergence (honest-absent).
+        let mut a = record("pass");
+        a["warnings"] = json!([{"code": "W1301", "span": [10, 16]}]);
+        let b = record("pass");
+        assert!(compare(&a, &b, false).is_none());
+        // Present on both and equal: agree.
+        let mut b2 = record("pass");
+        b2["warnings"] = json!([{"code": "W1301", "span": [10, 16]}]);
+        assert!(compare(&a, &b2, false).is_none());
+        // Present on both and different: a Diag-class divergence.
+        let mut b3 = record("pass");
+        b3["warnings"] = json!([]);
+        let (class, _) = compare(&a, &b3, false).unwrap();
+        assert_eq!(class, Class::Diag);
+        // Malformed entries reject at validation.
+        let mut bad = record("pass");
+        bad["warnings"] = json!([{"code": 7}]);
+        assert!(validate_record(&bad).is_err());
     }
 }

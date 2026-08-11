@@ -23,6 +23,7 @@ Ok(
             "str.interp",
             "mem.region.freeze",
         ],
+        warns: [],
         member: false,
     },
 )
