@@ -287,7 +287,7 @@ fn fs_exists_is_total() {
          if yes && !no {{ 0 }} else {{ 1 }}\n\
          }}\n",
         p = lit(&path),
-        q = dir.join("gone.txt").display()
+        q = lit(&dir.join("gone.txt"))
     );
     assert!(matches!(run(&src).verdict, Verdict::Exit(0)));
     let _ = std::fs::remove_dir_all(&dir);
