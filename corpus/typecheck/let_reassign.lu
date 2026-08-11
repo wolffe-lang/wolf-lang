@@ -1,5 +1,5 @@
 //! check: fail(E0410)
-//! phase: resolve
+//! phase: parse
 //! conforms: gram.item.let
 //!
 //! Issue #2's missing pin: `let` is immutable (spec/01 §2.4 — "`let`
@@ -7,6 +7,10 @@
 //! reassignment through four differential rounds because no corpus
 //! file exercised it. The fix-it offers `var`; shadowing with a second
 //! `let x = …` is the other legal spelling.
+//!
+//! Phase re-pinned resolve → parse at s29 (DIV-2026-010): binding
+//! structure is lexical, so E0410 fires at the RESOLVE rung in both
+//! implementations now — the deepest rung that *succeeds* is parse.
 
 fn main() -> !int {
     let x = 1

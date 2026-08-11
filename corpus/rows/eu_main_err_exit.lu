@@ -1,0 +1,15 @@
+//! check: run(exit=1, stdout="error: Boom")
+//! phase: wir
+//! conforms: abi.err.repr, err.union
+//!
+//! eu-main (s29): a `!int` main that returns an error value ends the
+//! process the DOCUMENTED way — `error: <tag>` on stdout and exit 1
+//! (D30: errors are values; there is no unwinding for one to escape
+//! by). Natively the entry shim branches on the error-union
+//! discriminant in the first INTEGER return register ([abi.err.repr])
+//! and hands the tag's NAME to the runtime reporter.
+
+fn main() -> !int {
+    if 1 == 1 { return Boom }
+    0
+}

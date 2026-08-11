@@ -859,6 +859,14 @@ pub fn run_checked(pkg: &Package, tc: &Typecheck, budget: Budget) -> Result<RunO
             let code = match v {
                 Value::Int(n) => n.rem_euclid(256) as u8,
                 Value::Unit => 0,
+                // `main` returned an error value: the documented D30
+                // process behavior (s29, matching the interpreter and
+                // the native `__wolf_rt_main_err` path) — the tag on
+                // stdout, exit 1.
+                Value::ErrTag { ref tag, .. } => {
+                    m.stdout.push_str(&format!("error: {tag}\n"));
+                    1
+                }
                 _ => 0,
             };
             Ok(RunOutcome {

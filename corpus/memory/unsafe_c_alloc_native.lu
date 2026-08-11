@@ -1,0 +1,29 @@
+//! check: run(exit=0)
+//! phase: wir
+//! conforms: abi.c.seams, mem.unsafe.scope
+//!
+//! The is04-modelled C set gets its NATIVE truth (s29): `c.malloc`,
+//! `c.calloc`, `c.memset`, `c.memcpy`, `c.free` compile to real libc
+//! calls through the explicit membrane (D19 — the `c.` namespace IS
+//! the seam; the symbols link unmangled under the SysV plan). No raw
+//! deref appears, so this witness runs at every rung that executes:
+//! the miri-lite models the same five, and the native binary calls
+//! glibc.
+
+import c "stdlib.h"
+import c "string.h"
+
+fn main() -> !int {
+    // # Safety: both allocations are freed exactly once; memset and
+    // memcpy stay inside the 64 bytes each allocation owns; nothing
+    // dereferences the pointers outside the C calls.
+    unsafe {
+        let p = c.malloc(64)
+        c.memset(p, 7, 64)
+        let q = c.calloc(8, 8)
+        c.memcpy(q, p, 64)
+        c.free(p)
+        c.free(q)
+    }
+    0
+}

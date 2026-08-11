@@ -1,10 +1,14 @@
 //! check: fail(E0410)
-//! phase: resolve
+//! phase: parse
 //! conforms: gram.item.let
 //!
 //! Compound assignment is assignment (`[gram.expr.assign]` routes
 //! `+=` through the same place rules as plain `=`): a `let` binding
 //! rejects it identically (issue #2's second face).
+//!
+//! Phase re-pinned resolve → parse at s29 (DIV-2026-010): E0410 now
+//! fires at the RESOLVE rung (binding structure is lexical), so the
+//! deepest rung that *succeeds* is parse.
 
 fn main() -> !int {
     let total = 40
