@@ -62,6 +62,10 @@ grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
+lints/allow_item.lu: lowers
+lints/allow_nothing.lu: lowers
+lints/allow_unknown_code.lu: lowers
+lints/safety_comment_missing.lu: refused — assignment through nested places (c06)
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/checked_unsigned.lu: lowers
 memory/defer_order.lu: lowers
