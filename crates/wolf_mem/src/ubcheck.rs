@@ -506,6 +506,12 @@ struct Machine<'t> {
     ctxs: Vec<Option<Ctx<'t>>>,
     /// (module, fn name) -> body index, top-level fns.
     fns: HashMap<(usize, String), usize>,
+    /// Defining name-token span -> body index, top-level fns. The
+    /// span is the same one the checker records as `CallSig::
+    /// decl_span`, so a resolved call site names its body exactly —
+    /// never "whichever same-named fn a hash order surfaces first"
+    /// (the F-0048 verdict flake).
+    fns_by_decl: HashMap<Span, usize>,
     /// (self-type name, method name) -> body index, inherent impls.
     methods: HashMap<(String, String), usize>,
 
@@ -1069,6 +1075,7 @@ impl<'t> Machine<'t> {
             tc,
             ctxs: Vec::new(),
             fns: HashMap::new(),
+            fns_by_decl: HashMap::new(),
             methods: HashMap::new(),
             allocs: Vec::new(),
             regions: Vec::new(),
@@ -1121,6 +1128,9 @@ impl<'t> Machine<'t> {
                 match outer {
                     None => {
                         m.fns.insert((b.module, b.name.clone()), i);
+                        if let Some(name) = wolf_ast::FnDecl::cast(node).and_then(|d| d.name()) {
+                            m.fns_by_decl.insert(name.span, i);
+                        }
                     }
                     Some(o) if o.kind == SyntaxKind::ImplDecl => {
                         // Inherent impls spell the target as the
@@ -1164,6 +1174,9 @@ impl<'t> Machine<'t> {
     /// (file 0), else any. `"main"` is the classic caller; `wolf test`
     /// asks for `test_*` names (s39).
     fn find_entry(&self, entry: &str) -> Option<usize> {
+        // Deterministic across runs (F-0048): the entry file's match
+        // wins; otherwise the smallest body index does — never
+        // whichever match a hash order happens to visit last.
         let mut best: Option<usize> = None;
         for ((_, name), &idx) in &self.fns {
             if name == entry {
@@ -1171,7 +1184,7 @@ impl<'t> Machine<'t> {
                 if file == 0 {
                     return Some(idx);
                 }
-                best = Some(idx);
+                best = Some(best.map_or(idx, |b| b.min(idx)));
             }
         }
         best
@@ -3629,12 +3642,23 @@ impl<'t> Machine<'t> {
         let module = self.tc.bodies[self.frames.last().expect("frame").body]
             .body
             .module;
-        let Some(&body) = self.fns.get(&(module, sig.callee.clone())).or_else(|| {
-            self.fns
-                .iter()
-                .find(|((_, n), _)| *n == sig.callee)
-                .map(|(_, b)| b)
-        }) else {
+        // Resolution order (F-0048): the checker's declaration locus
+        // names the body exactly (cross-module calls included), the
+        // caller's own module answers same-module calls, and the
+        // name-only net picks the SMALLEST body index — a stable,
+        // deterministic choice, never a hash order's.
+        let Some(&body) = sig
+            .decl_span
+            .and_then(|ds| self.fns_by_decl.get(&ds))
+            .or_else(|| self.fns.get(&(module, sig.callee.clone())))
+            .or_else(|| {
+                self.fns
+                    .iter()
+                    .filter(|((_, n), _)| *n == sig.callee)
+                    .map(|(_, b)| b)
+                    .min()
+            })
+        else {
             return self.refuse("calls into unresolvable bodies", e.span);
         };
         let mut args = Vec::new();
