@@ -30,6 +30,12 @@ harness = false
 name = "stack_overflow"
 harness = false
 
+# The D15 io twin of no_spawn (s35): a no-io program carries no
+# reactor thread; the assertion counts OS threads, so no libtest.
+[[test]]
+name = "no_io"
+harness = false
+
 [[test]]
 name = "spawn_bench"
 harness = false

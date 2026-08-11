@@ -68,8 +68,14 @@ pub enum ChanPhase {
 /// `proc.kill`, `proc.exit` ([`SchedEvent::ProcSpawn`] /
 /// [`SchedEvent::ProcKill`] / [`SchedEvent::ProcExit`] — sched-ev/0
 /// kind 8's native twin; monitor/link DELIVERIES ride the existing
-/// `chan.send` edges, so delivery order is already recorded). Io
-/// events join in s35.
+/// `chan.send` edges, so delivery order is already recorded). The s35
+/// widening appends `io.arrive` ([`SchedEvent::IoArrive`] — the
+/// reactor's completion-arrival decision, appended per
+/// `[sched.stable]`'s append rule: the net module's reserved
+/// "completion-arrival appends its own kind" note, activated) and
+/// gives the activated `timer.fire` kind a second producer, the
+/// reactor's timer wheel (same kind — `[sched.stable]`: the wheel
+/// inherits the name s33 activated).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedEvent {
     /// A task was made runnable under a scope.
@@ -107,7 +113,15 @@ pub enum SchedEvent {
     /// kind `timer.fire` — a timeout arm's deadline fired (s33
     /// activates the reserved kind; virtual under the s36 test
     /// scheduler, monotonic in production — `[conc.select.timeout]`).
+    /// s35's reactor timer wheel emits the same kind when a parked io
+    /// wait's deadline fires (the wheel inherits the name).
     TimerFire,
+    /// kind `io.arrive` — a pending io completion was delivered to
+    /// its parked waiter (s35's reactor). WHICH pending completion is
+    /// delivered next, and when, is the interleaving decision — the
+    /// s36 `--chaos` delay/reorder seam; `token` is the reactor's
+    /// submission token, the subject id.
+    IoArrive { token: u64 },
     /// kind `proc.spawn` — a proc came up under the root supervisor
     /// (`[conc.task.root]`; `proc` is the packed generational id).
     ProcSpawn { proc: u64 },
