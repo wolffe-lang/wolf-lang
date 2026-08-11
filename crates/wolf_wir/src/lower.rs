@@ -3147,6 +3147,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             holes.push((ispan.lo - base, ispan.hi - base, i.expr()));
         }
         let bytes = raw.as_bytes();
+        // `"""` multiline literals dedent by the closing delimiter's
+        // column (D26) — hole-free only; `lower_print` refuses the
+        // combination before segments are asked for. Byte-identical
+        // with the checked executor's path.
+        if bytes.starts_with(b"\"\"\"") && holes.iter().all(|(_, _, h)| h.is_none()) {
+            let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
+            let lit = decode_escapes(&dedent_multiline(inner));
+            if lit.is_empty() {
+                return Vec::new();
+            }
+            return vec![StrSeg::Lit(lit)];
+        }
         let (start, end) = if bytes.len() >= 2 {
             (1usize, bytes.len() - 1)
         } else {
@@ -3168,6 +3180,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             let c = bytes[i];
             if c == b'\\' && i + 1 < end {
+                // Code-point escapes (`\xNN`, `\u{…}`) — kept
+                // byte-identical with the checked executor's decoder
+                // (s37; a divergence here prints different bytes).
+                if let Some((ch, consumed)) = decode_codepoint_escape(&bytes[i..end]) {
+                    let mut buf = [0u8; 4];
+                    lit.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                    i += consumed;
+                    continue;
+                }
                 lit.push(match bytes[i + 1] {
                     b'n' => b'\n',
                     b't' => b'\t',
@@ -3175,6 +3196,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     b'0' => 0,
                     other => other, // \\ \" \{ \} and unknown: the char itself
                 });
+                i += 2;
+                continue;
+            }
+            // `{{` / `}}` are literal braces ([gram.lex.str]).
+            if (c == b'{' || c == b'}') && i + 1 < end && bytes[i + 1] == c {
+                lit.push(c);
                 i += 2;
                 continue;
             }
@@ -3250,6 +3277,33 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for a in d.args().into_iter().flat_map(|l| l.args()) {
             let Some(vexpr) = Arg::value(a) else { continue };
             if vexpr.kind == SyntaxKind::StringExpr {
+                // s37 / wolf-lang#10 — a format spec is never
+                // silently ignored: until the s38 formatting tier
+                // lowers it, a spec-carrying hole REFUSES here. The
+                // silent alternative printed different bytes than the
+                // reference implementation with no diagnostic — the
+                // exact class the differential rig exists to catch.
+                if let Some(sd) = StringExpr::cast(vexpr) {
+                    for i in sd.interps() {
+                        if let Some(spec) = i.format_spec() {
+                            return Err(refuse(
+                                "format specs in native print lowering (s38 formatting)",
+                                spec.span,
+                            ));
+                        }
+                    }
+                    // Dedent shifts every hole offset — refuse the
+                    // combination rather than print undedented text
+                    // (the checked executor refuses identically).
+                    if self.text(vexpr.span).starts_with("\"\"\"")
+                        && sd.interps().any(|i| i.expr().is_some())
+                    {
+                        return Err(refuse(
+                            "interpolation inside a multiline string (s38 formatting)",
+                            vexpr.span,
+                        ));
+                    }
+                }
                 for seg in self.string_segments(vexpr) {
                     match seg {
                         StrSeg::Lit(b) => outs.push(PrintSeg::Lit(b)),
@@ -5104,6 +5158,109 @@ fn parse_uint_literal(text: &str) -> Option<u64> {
         return u64::from_str_radix(hex, 16).ok();
     }
     t.parse::<u64>().ok()
+}
+
+/// Dedent a `"""` string's inner bytes by the closing delimiter's
+/// column (D26). Byte-identical with the checked executor's
+/// implementation (wolf_mem::ubcheck).
+fn dedent_multiline(inner: &[u8]) -> Vec<u8> {
+    let mut inner = inner;
+    if inner.starts_with(b"\r\n") {
+        inner = &inner[2..];
+    } else if inner.first() == Some(&b'\n') {
+        inner = &inner[1..];
+    }
+    let last_nl = inner.iter().rposition(|&b| b == b'\n');
+    let (body, indent) = match last_nl {
+        Some(i) => inner.split_at(i + 1),
+        None => return inner.to_vec(),
+    };
+    if !indent.iter().all(|&b| b == b' ' || b == b'\t') {
+        return inner.to_vec();
+    }
+    let mut out = Vec::with_capacity(body.len());
+    let mut start = 0;
+    while start < body.len() {
+        let end = body[start..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|p| start + p + 1)
+            .unwrap_or(body.len());
+        let line = &body[start..end];
+        let stripped = if line.starts_with(indent) {
+            &line[indent.len()..]
+        } else {
+            line
+        };
+        out.extend_from_slice(stripped);
+        start = end;
+    }
+    out
+}
+
+/// The escape decoder over a hole-free byte run — the multiline
+/// path's helper. Byte-identical with the checked executor's.
+fn decode_escapes(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b'\\' && i + 1 < bytes.len() {
+            if let Some((ch, consumed)) = decode_codepoint_escape(&bytes[i..]) {
+                let mut buf = [0u8; 4];
+                out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                i += consumed;
+                continue;
+            }
+            out.push(match bytes[i + 1] {
+                b'n' => b'\n',
+                b't' => b'\t',
+                b'r' => b'\r',
+                b'0' => 0,
+                other => other,
+            });
+            i += 2;
+            continue;
+        }
+        // `{{` / `}}` are literal braces ([gram.lex.str]).
+        if (c == b'{' || c == b'}') && bytes.get(i + 1) == Some(&c) {
+            out.push(c);
+            i += 2;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// Decode a `\xNN` or `\u{…}` escape at the start of `bytes` (which
+/// begins at the backslash). Returns the code point and the total
+/// bytes consumed, or `None` for any other shape — the caller falls
+/// back to the single-byte escape set. Byte-identical with the
+/// checked executor's decoder (wolf_mem::ubcheck).
+fn decode_codepoint_escape(bytes: &[u8]) -> Option<(char, usize)> {
+    match bytes.get(1)? {
+        b'x' => {
+            let hex = bytes.get(2..4)?;
+            let s = std::str::from_utf8(hex).ok()?;
+            let n = u32::from_str_radix(s, 16).ok()?;
+            Some((char::from_u32(n)?, 4))
+        }
+        b'u' => {
+            if bytes.get(2) != Some(&b'{') {
+                return None;
+            }
+            let close = bytes[3..].iter().position(|&b| b == b'}')?;
+            let s = std::str::from_utf8(&bytes[3..3 + close]).ok()?;
+            if s.is_empty() || s.len() > 6 {
+                return None;
+            }
+            let n = u32::from_str_radix(s, 16).ok()?;
+            Some((char::from_u32(n)?, 3 + close + 1))
+        }
+        _ => None,
+    }
 }
 
 /// Sign-wrap a bit pattern into a `bits`-wide iconst payload.
