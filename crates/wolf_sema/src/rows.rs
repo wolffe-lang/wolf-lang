@@ -271,6 +271,15 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
             let s = transfer(src, dst, t);
             dst.intern(TyKind::Pool(s))
         }
+        TyKind::Chan(t) => {
+            let s = transfer(src, dst, t);
+            dst.intern(TyKind::Chan(s))
+        }
+        TyKind::Mutex(t) => {
+            let s = transfer(src, dst, t);
+            dst.intern(TyKind::Mutex(s))
+        }
+        TyKind::TaskScope => dst.intern(TyKind::TaskScope),
         TyKind::Proj(base, name) => {
             let s = transfer(src, dst, base);
             dst.intern(TyKind::Proj(s, name))

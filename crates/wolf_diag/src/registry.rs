@@ -1266,6 +1266,55 @@ that must keep changing.
 "#);
 
 // ------------------------------------------------------------------------
+// E11xx — the concurrency family (spec/03, D14). The static half of
+// the conc-safety contract: dangerous sharing shapes are rejected at
+// compile time so the documented dynamic semantics (capture-by-copy
+// tasks, canonical-order `when` acquisition) never surprise. The
+// dynamic twins live in the trap vocabulary: E1101's shape is the
+// data race ([conc.mm.race.3]), E1103's is trap(deadlock)
+// ([conc.deadlock.self]).
+// ------------------------------------------------------------------------
+
+code!(E1101, "a task may not mutate state it captured from the enclosing function", r#"
+A spawned task's closure captures by value: `Copy` data copies, `imm`
+data shares, and a region must `move` (D14's verbs). What no capture
+mode provides is a mutable window onto the enclosing function's
+locals — this closure writes to a captured binding, which would be
+exactly the shared-mutable-state shape the memory model exists to
+forbid ([conc.task.spawn]). Tasks share by communicating instead:
+make a `channel` and send the result to the one owner who mutates,
+or, when the state truly is shared, guard it with a `Mutex` and do
+every access inside a `when` block, whose body has exclusive access
+to the payloads. The write the checker flagged would otherwise land
+on the task's private copy at best and race at worst.
+"#);
+
+code!(E1102, "this channel's payload type is not sendable", r#"
+`channel[T](n)` carries values between tasks, so `T` must be safe to
+hand across a task boundary: `Copy` data, `imm` data, a region value
+(the send is its affine `move`), or a `sync` type ([conc.chan.type]).
+The payload type here is none of those — sending it would either
+alias one mutable value from two tasks or silently copy something
+whose identity matters. D14's three verbs are the ways out: `move`
+the data into a region and send the region, `freeze` it into `imm`
+data that shares by reference, or wrap it in a `sync` type such as a
+`Mutex` and share that.
+"#);
+
+code!(E1103, "`when` blocks do not nest", r#"
+`when (a, b, …)` acquires its whole operand set before the body runs,
+in one canonical order — which is the construction that makes
+lock-order deadlock impossible ([conc.when.nodeadlock]). A `when`
+inside another `when` body is incremental acquisition by another
+spelling, and it would reopen the exact deadlock the construct
+closed, so the nesting is rejected where it is written
+([conc.when.nonest]). Merge the two operand sets into the outer
+block — `when (a, b, c) { … }` acquires everything at once — or end
+the outer block before acquiring the next set. The same acquisition
+reached through a call is detected at run time as trap(deadlock).
+"#);
+
+// ------------------------------------------------------------------------
 // E13xx — the unsafe tier (s22, spec/02 §5–§7, D11). The raw tier's
 // rules are deliberately *simpler* than the safe tier's (the
 // anti-Stacked-Borrows posture): raw pointers are inert data anywhere,

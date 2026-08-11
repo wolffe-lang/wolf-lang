@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: resolve
+//! phase: typecheck
 //! conforms: conc.mm.hb.mutex, conc.when.order, conc.when.nodeadlock, conc.when.body
 //! `when (a, b)` acquires the whole set at once (canonical-order
 //! acquisition under the hood, [conc.when.order]): no lock-order

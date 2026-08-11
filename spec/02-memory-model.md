@@ -203,6 +203,20 @@ Edge legality (source stores a reference to target):
 - `[mem.region.freeze.3]` Freezing or transferring a region containing an
   open child region is a compile error (E1005): the forest transfers as
   closed subtrees only.
+- `[mem.region.freeze.4]` **Reads are never the fault.** Every read
+  through frozen data — field and index projections to any depth, and
+  a method call that only reads its receiver — is an ordinary read;
+  `[mem.region.edge.imm]` is the affirmative permission, forever and
+  from anywhere. Only a *write* into frozen data is a rejection
+  (E1012; dynamically `region-fault`, `[mem.region.freeze.1]`). An
+  implementation whose value semantics write a method receiver back
+  must not count writing back an unmodified receiver as a write:
+  `frozen[0].body.words()` is a legal read. (Appended 2026-08-11 —
+  DRAFT, the bs06 ledger's frozen-read question: the book expected
+  the read, the reference machine trapped `region-fault` on the
+  receiver write-back. Ruling: the read is legal; the trap is an
+  implementation defect to repair, not a spec ambiguity — this
+  clause exists so the next machine cannot make the same choice.)
 
 ### Unobservable placement `[mem.region.promote]`
 

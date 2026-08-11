@@ -1,0 +1,21 @@
+---
+source: crates/wolf_sema/tests/conc_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1103]: `when` blocks do not nest
+  --> mem:///main.lu:8:9
+   |
+ 7 |     when (a, b) {
+   |     -------------
+ 8 |         when (c, d) {
+   |         ^^^^^^^^^^^^^
+ 9 |             total = a + b + c + d
+10 |         }
+   | ^^^^^^^^^ this would acquire while a set is already held
+11 |     }
+   | ----- the enclosing `when` holds its whole set here
+   |
+   = note: `when` acquires its entire operand set at once, in one canonical order — that is what
+     makes lock-order deadlock impossible ([conc.when.nodeadlock]); a nested `when` is
+     incremental acquisition by another spelling. Merge the operands into the outer set
+     (`when (a, b, c) { … }`), or end the outer block before acquiring the next set.

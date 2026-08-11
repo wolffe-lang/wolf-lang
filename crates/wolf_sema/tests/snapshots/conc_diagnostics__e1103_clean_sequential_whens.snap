@@ -1,0 +1,5 @@
+---
+source: crates/wolf_sema/tests/conc_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+(clean)

@@ -1,0 +1,23 @@
+//! check: fail(E1103)
+//! phase: resolve
+//! conforms: conc.when.nonest, conc.when.nodeadlock
+//! `when` acquires its whole set at once — that is the no-deadlock
+//! proof ([conc.when.nodeadlock]), and it holds only because no task
+//! holds one set while acquiring another. A `when` lexically inside a
+//! `when` body is incremental acquisition by another spelling: E1103.
+//! (The same acquisition reached through a call is the dynamic half,
+//! trap(deadlock) — [conc.deadlock.self].)
+
+fn main() -> !int {
+    let a = Mutex(1)
+    let b = Mutex(2)
+    let c = Mutex(3)
+    let d = Mutex(4)
+    var total = 0
+    when (a, b) {
+        when (c, d) {                // ERROR E1103: a `when` inside a `when`
+            total = a + b + c + d
+        }
+    }
+    total
+}

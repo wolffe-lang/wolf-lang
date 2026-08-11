@@ -169,6 +169,16 @@ premise by construction.
 - `[conc.chan.buf]` Capacity `n ≥ 1` buffers; `n = 0` is rendezvous.
   Sends on a full channel and receives on an empty one block (they are
   cancellation points and recorded events).
+- `[conc.chan.default]` `channel[T]()` — no capacity argument — is the
+  rendezvous channel: the default is `n = 0` (`[conc.chan.buf]`).
+  (Appended 2026-08-11 — DRAFT, the bs06 ledger's spec-gap row: the
+  reference machine defaulted to rendezvous with no clause behind it;
+  this clause adopts that behavior as normative rather than repairing
+  it. Rationale: rendezvous is the synchronization-first default —
+  every send meets its receive, so the `[conc.mm.hb.chan]` edge pairs
+  the parties directly and no message waits in a buffer nobody chose;
+  a capacity is a throughput decision, and decisions are spelled.
+  Go's precedent, deliberately shared: `make(chan T)` is unbuffered.)
 - `[conc.chan.close]` `close` makes further sends return an error value
   (never UB, never a fault); buffered items drain; receives on a
   drained-closed channel return the closed error. Iterating a channel
