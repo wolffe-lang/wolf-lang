@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mem.region.create.1
+//! warns: W1001
+//!
+//! W1001 — a region that provably never allocates (the free
+//! `region()` smell): nothing is built in `scratch`, nothing moves
+//! into it, and its create/free pair is frame-local ceremony.
+
+fn main() -> !int {
+    var total = 0
+    region scratch {
+        total = 2
+    }
+    total - 2
+}

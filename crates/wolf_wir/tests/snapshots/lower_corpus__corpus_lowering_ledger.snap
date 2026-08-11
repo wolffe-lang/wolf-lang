@@ -65,7 +65,19 @@ io/eprint.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers
+lints/assume_reassigned.lu: refused — assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)
+lints/binder_capitalized.lu: lowers
+lints/discarded_result.lu: lowers
+lints/else_comparison.lu: lowers
+lints/float_zero_minus.lu: lowers
+lints/mut_in_interp.lu: lowers
+lints/narrowing_literal.lu: lowers
+lints/prefix_statement.lu: lowers
+lints/raw_interp_braces.lu: refused — comparison outside integers/floats (str/enum compares, c06/std)
+lints/region_never_allocates.lu: lowers
 lints/safety_comment_missing.lu: refused — assignment through nested places (c06)
+lints/shadow_prelude.lu: lowers
+lints/tag_name_collision.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/checked_unsigned.lu: lowers
 memory/defer_order.lu: lowers

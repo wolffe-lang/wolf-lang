@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="11")
+//! phase: run
+//! conforms: diag.sev.warn, str.interp
+//! warns: W0308
+//!
+//! W0308 — a `mut` argument inside a string interpolation: building
+//! the string mutates program state, a write buried where readers
+//! expect pure formatting. Well-defined (interpolations run left to
+//! right, once) and worth hoisting.
+
+fn bump(mut n: int) -> int {
+    n += 1
+    n
+}
+
+fn main() -> !int {
+    var a = 10
+    print("{bump(mut a)}")
+    a - 11
+}

@@ -36,6 +36,10 @@ fn tally(n: int, mut hits: int, mut misses: int) -> int ! {empty, negative} {
     v * 2
 }
 
+// The region is the free-on-the-early-edge witness; it deliberately
+// holds nothing (reviewed allow — s68's W1001 is right that nothing
+// lives here, and that is this function's point).
+#[allow(w1001)]
 fn probe(flag: bool) -> int {
     region r {
         if flag {

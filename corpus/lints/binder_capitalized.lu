@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, gram.pat
+//! warns: W0801
+//!
+//! W0801 — a capitalized bare name in a pattern that binds instead of
+//! matching (the first-arm-always scar): `Zed` reads as a case test,
+//! and it matches every value. Placed last here, so nothing else is
+//! dead — the reading, not reachability, is the hazard.
+
+fn main() -> !int {
+    let n = 3
+    let v = match n {
+        0 => 5,
+        Zed => Zed + 1,
+    }
+    if v == 4 { 0 } else { 1 }
+}

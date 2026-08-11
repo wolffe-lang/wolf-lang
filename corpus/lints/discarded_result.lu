@@ -1,0 +1,19 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, err.rows
+//! warns: W0601
+//!
+//! W0601 — a fallible result discarded by an expression statement:
+//! the ignored-error classic. The call's row is part of its meaning,
+//! and the statement drops both value and failure with no trace.
+
+fn fetch(n: int) -> int ! {empty} {
+    if n == 0 { return empty }
+    n
+}
+
+fn main() -> !int {
+    fetch(3)
+    let kept = fetch(2) else 0
+    if kept == 2 { 0 } else { 1 }
+}

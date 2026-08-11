@@ -1,0 +1,23 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, err.rows
+//! warns: W0305
+//!
+//! W0305 — a row tag sharing its name with an item in scope (the
+//! silent-value collision class: raise position resolves the word as
+//! the tag, every other position as the function). The program is
+//! legal; the double reading is the hazard.
+
+fn stuck() -> int {
+    9
+}
+
+fn probe(n: int) -> int ! {stuck} {
+    if n == 0 { return stuck }
+    n + stuck()
+}
+
+fn main() -> !int {
+    let v = probe(1) else 0
+    if v == 10 { 0 } else { 1 }
+}

@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="{who}")
+//! phase: mem
+//! conforms: diag.sev.warn, gram.lex.str
+//! warns: W0309
+//!
+//! W0309 — interpolation-shaped braces in a raw literal: `r"{who}"`
+//! is six bytes, while the same characters in any other literal are
+//! an interpolation. One keystroke apart, different strings, no
+//! diagnostic — hence the warning.
+
+fn main() -> !int {
+    let who = "reader"
+    let s = r"{who}"
+    print(s)
+    if who == "reader" { 0 } else { 1 }
+}

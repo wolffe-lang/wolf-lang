@@ -694,10 +694,27 @@ rows, E07xx comptime, E08xx sema completion, E1xxx memory tiers
 
 - **W03xx** — frontend/resolution-adjacent warnings. W0301 (partial
   format, s11 — grandfathered), W0302 (`#[allow]` of an unregistered
-  code), W0303 (`#[allow]` of nothing).
-- **W1[0-3]xx** — memory/concurrency/abi-adjacent warnings. W1301
-  (`unsafe` block without a `# Safety:` comment, s22 —
-  grandfathered).
+  code), W0303 (`#[allow]` of nothing), W0304 (declaration shadows a
+  prelude name), W0305 (row tag collides with a name in scope), W0306
+  (bare prefix-operator statement — the broken-continuation shape),
+  W0307 (comparison binds to an `else` fallback), W0308 (`mut`
+  argument inside an interpolation), W0309 (interpolation-shaped
+  braces in a raw literal).
+- **W04xx** — typing-adjacent warnings, mirroring E04xx. W0401
+  (literal outside the cast target's range), W0402 (`0.0 - x` as
+  negation — loses `-0.0`).
+- **W06xx** — error-row-adjacent warnings, mirroring E06xx. W0601
+  (fallible result discarded by an expression statement), W0602
+  (anonymous row spelled inline on a `pub` signature — the s15 lean,
+  recorded there as allowed-but-linted).
+- **W08xx** — pattern/completion-adjacent warnings, mirroring E08xx.
+  W0801 (capitalized bare identifier binds in a pattern).
+- **W1[0-3]xx** — memory/concurrency/abi-adjacent warnings. W1001
+  (region that provably never allocates), W1101 (write to a captured
+  copy inside a task — the shape short of E1101), W1102 (closure
+  captured a binding assigned after its creation), W1301 (`unsafe`
+  block without a `# Safety:` comment, s22 — grandfathered), W1302
+  (`assume noalias` operand reassigned while the assumption stands).
 
 Numbers retire with their codes and are never reused. A
 warning-severity diagnostic under an E-number (E0802, unreachable
