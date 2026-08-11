@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="[    3.14]\n[3.14][3.14e+00][3.14E+00]\n[3.14159][0.5][2][inf]\n[+0.00][-0001.50]")
+//! phase: run
+//! conforms: str.interp
+//!
+//! The wolf-lang#10 headline made real: `{x:>8.2}` evaluates. Bare
+//! `.N` means fixed-point; `e`/`E` carry a signed two-digit exponent
+//! (`3.14e+00`); the default rendering is the SHORTEST decimal that
+//! reads back as the same bits, in `std.fmt.decimal.to_str`'s layout.
+//! Rounding is exact over the double's value, half-even —
+//! `{half:.0f}` of 1.5 is `2`. Floats are IEEE: division by zero is
+//! `inf`, a value, never a trap (X3 is integer law); `+` never hides
+//! `-0.0` and marks `+0.0`.
+
+fn main() -> !int {
+    let x = 3.14159
+    let half = 0.5
+    let three = 1.5
+    let zero = 0.0
+    print("[{x:>8.2}]")
+    print("[{x:.2f}][{x:.2e}][{x:.2E}]")
+    print("[{x}][{half}][{three + half:.0f}][{three / zero}]")
+    print("[{zero:+.2f}][{0.0 - three:08.2f}]")
+    0
+}

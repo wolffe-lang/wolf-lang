@@ -569,6 +569,42 @@ indices are caught earlier still, as E0209 with a `^n` fix-it).
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__char_index_fail.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0411_char_index.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0411_from_end_single.snap
 
+## E0412 — this format spec is malformed
+
+A format spec (`"{x:spec}"`, D26) is a closed mini-language —
+`[[fill]align][+][0][width][.precision][type]` with alignment `<`/`^`/`>`
+and type one of `b o x X e E f` (spec §7.4 candidate, #28) — and every
+spec is known at compile time, so a spec the grammar cannot read is an
+error here, at the literal, never a surprise at run time. The common
+shapes: a stray character the grammar has no place for; `.` with no
+precision digits after it; `0` combined with an explicit fill or
+alignment (`{n:0>8}` zero-pads OR right-aligns — the spec must pick
+one, the compiler never picks silently); a multi-byte fill (width
+counts bytes, D25, so the fill must be a single byte); a width or
+precision beyond the 65535 cap. Note `{n:08}` is well-formed: the `0`
+is the zero-pad flag and `8` the width — zero-padding goes after the
+sign, so `{-42:06}` renders `-00042`.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__format_spec_malformed.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0412_align_as_fill.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0412_malformed.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0412_zero_with_align.snap
+
+## E0413 — the format spec does not fit this value's type
+
+Format specs are typed (D26): each field of the spec mini-language
+means something for specific hole types, and a field applied to a type
+it cannot describe is a compile error at the interpolation — never a
+silently ignored spec (the wolf-lang#10 rule) and never a runtime
+failure, because every spec is comptime-known. The rules: `+` prints a
+sign on numbers only; `0` zero-pads a number's digits; `.precision` is
+digits-after-the-point on a float and a maximum byte length on a `str`
+(never splitting a code point) — it means nothing on an integer or
+bool; base types `b`/`o`/`x`/`X` render integers; float notations
+`e`/`E`/`f` render floats. Fill, alignment, and width apply to every
+formattable type. Reach for the conversion first when the intent is
+"this number as hex, padded": `{n:>8x}` works because both fields fit
+an integer.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__format_spec_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_hex_on_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_precision_on_int.snap
+
 ## E0501 — the generic body uses something its bounds do not provide
 
 The golden rule of wolf generics: a generic body is checked once,

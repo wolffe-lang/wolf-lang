@@ -1441,6 +1441,10 @@ fn checked_run(
             ("mem", "unsupported".to_string(), all)
         }
         Ok(outcome) => {
+            // The program's `eprint` channel reaches the real stderr
+            // (parity with the native lane); the record never hashes
+            // it — stdout is the compared channel (spec/06).
+            eprint!("{}", outcome.stderr);
             *run_stdout = Some(outcome.stdout);
             match outcome.verdict {
                 Verdict::Exit(code) => ("run", format!("exit({code})"), all),

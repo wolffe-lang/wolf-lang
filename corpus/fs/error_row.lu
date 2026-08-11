@@ -1,0 +1,21 @@
+//! check: run(exit=1, stdout="handled: fallback\nerror: not_found")
+//! phase: mem
+//! conforms: err.union, err.propagate
+//!
+//! io errors are ROWS, not traps (D30): a missing file is the
+//! `not_found` tag — handleable with `else` (the fallback fires, the
+//! program continues) or propagated with `?` (the documented process
+//! outcome: the tag on stdout, exit 1). Deterministic on any host:
+//! the path names a directory that does not exist. Run expectation
+//! proven by the checked-lane twins in
+//! `crates/wolf_mem/tests/io_fs.rs`; the native lane refuses the fs
+//! tier honestly at s38, so this file pins `mem`.
+
+fn main() -> !int {
+    let path = "target/s38-no-such-dir/absent.txt"
+    let text = fs_read_text(path) else |_| "fallback"
+    print("handled: {text}")
+    let strict = fs_read_text(path)?
+    print("unreachable: {strict}")
+    0
+}
