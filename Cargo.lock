@@ -1093,6 +1093,7 @@ dependencies = [
 name = "wolf_backend"
 version = "0.0.1"
 dependencies = [
+ "gimli",
  "wolf_wir",
 ]
 
@@ -1131,6 +1132,7 @@ dependencies = [
 name = "wolf_driver"
 version = "0.0.1"
 dependencies = [
+ "object",
  "serde_json",
  "wolf_backend",
  "wolf_codegen_clif",
