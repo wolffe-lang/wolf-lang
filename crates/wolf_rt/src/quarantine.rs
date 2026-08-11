@@ -1,6 +1,8 @@
 //! The debug quarantine allocator — contract + hooks (s23 specs and
-//! stubs; the real allocation path is s32, the `--checked` user
-//! surface is s54).
+//! stubs; the s23-era plan said "s32" for the real allocation path,
+//! but s32's contract is the task scheduler — the c06 closeout routed
+//! the `--checked` runtime hooks, and with them this allocator's
+//! bodies, to s54).
 //!
 //! # What it is (D21)
 //!
@@ -41,10 +43,10 @@
 //!
 //! This module is the **contract and the hook signatures**, stubbed.
 //! `wolf_rt` stays dependency-thin (D15) and has no allocator today;
-//! s32 implements the granule store, the tag PRNG, and the fault
-//! path against a real backing allocator, and s31 wires the
-//! `--checked` link-time profile that selects it. The signatures here
-//! are the interface s32 fills and s23's fact/HIR docs reference — the
+//! s54 implements the granule store, the tag PRNG, and the fault
+//! path against a real backing allocator (the c06 closeout's routing;
+//! s31 already plumbs the `--checked` flag). The signatures here
+//! are the interface s54 fills and s23's fact/HIR docs reference — the
 //! checker-side equivalent already runs in
 //! [`crate::super`]`::ubcheck` (in `wolf_mem`), so the model is
 //! validated before the runtime grows around it (01 Q6).
@@ -99,16 +101,16 @@ pub enum FaultKind {
 }
 
 /// The runtime hooks a checked build calls. **All stubbed this
-/// sprint** — s32 implements the bodies against a real backing
+/// sprint** — s54 implements the bodies against a real backing
 /// allocator; the signatures are the frozen interface s31/s54 wire and
 /// s23's fact docs reference.
 pub trait QuarantineHooks {
     /// Allocate `size` bytes, returning the base address and its fresh
-    /// random tag. s32: draw a nonzero tag, stamp the granule shadow.
+    /// random tag. s54: draw a nonzero tag, stamp the granule shadow.
     fn alloc(&mut self, size: usize) -> (usize, Tag);
 
     /// Free `addr`: retag the granule, move it to quarantine (no
-    /// reuse until [`QuarantineBudget`] pressure). s32: record the
+    /// reuse until [`QuarantineBudget`] pressure). s54: record the
     /// free backtrace for the fault report.
     fn free(&mut self, addr: usize);
 
@@ -125,11 +127,11 @@ pub trait QuarantineHooks {
 
 /// A runtime region identity (the allocator layer's view; distinct
 /// from the checker's region variables and the type-level region
-/// values). s32 assigns these as regions are created.
+/// values). s54 assigns these as regions are created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegionId(pub u32);
 
-/// The unimplemented stub every hook resolves to until s32. Present so
+/// The unimplemented stub every hook resolves to until s54. Present so
 /// the `--checked` link path has a symbol to bind and so the contract
 /// compiles and is documented from here on.
 #[derive(Debug, Default)]
@@ -148,17 +150,17 @@ impl StubAllocator {
 impl QuarantineHooks for StubAllocator {
     fn alloc(&mut self, _size: usize) -> (usize, Tag) {
         unimplemented!(
-            "wolf_rt quarantine allocator is s32; the s23 checker-side twin is wolf_mem::ubcheck"
+            "wolf_rt quarantine allocator is s54; the s23 checker-side twin is wolf_mem::ubcheck"
         )
     }
     fn free(&mut self, _addr: usize) {
-        unimplemented!("wolf_rt quarantine allocator is s32")
+        unimplemented!("wolf_rt quarantine allocator is s54")
     }
     fn free_region(&mut self, _region: RegionId) {
-        unimplemented!("wolf_rt quarantine allocator is s32")
+        unimplemented!("wolf_rt quarantine allocator is s54")
     }
     fn check(&self, _addr: usize, _tag: Tag) -> Result<(), FaultKind> {
-        unimplemented!("wolf_rt quarantine allocator is s32")
+        unimplemented!("wolf_rt quarantine allocator is s54")
     }
 }
 
@@ -169,7 +171,7 @@ mod tests {
     #[test]
     fn contract_shapes_exist() {
         // The interface is a compile-time contract this sprint; the
-        // bodies are s32. This test pins that the shapes are the ones
+        // bodies are s54. This test pins that the shapes are the ones
         // the checker-side twin (wolf_mem::ubcheck) mirrors.
         let a = StubAllocator::new(QuarantineBudget::default());
         assert_eq!(a.budget_bytes, 64 << 20);
@@ -186,8 +188,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "s32")]
-    fn hooks_are_stubbed_until_s32() {
+    #[should_panic(expected = "s54")]
+    fn hooks_are_stubbed_until_s54() {
         let mut a = StubAllocator::new(QuarantineBudget::default());
         let _ = a.alloc(8);
     }

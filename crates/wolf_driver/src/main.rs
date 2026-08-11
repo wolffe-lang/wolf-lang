@@ -1054,6 +1054,15 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     // What a Rust staticlib needs from the platform (linux x86-64,
     // the s28 target).
     cmd.arg(&rt).args(["-lpthread", "-ldl", "-lm"]);
+    // s32 Target 1 ("a wolf binary that never spawns is a C binary"):
+    // rustc emits function sections, so section GC drops every
+    // wolf_rt entry point the program never calls — the no-spawn CI
+    // test asserts no scheduler symbols survive in a no-spawn binary.
+    // Debug info is unaffected (non-alloc sections are not collected).
+    #[cfg(target_os = "macos")]
+    cmd.arg("-Wl,-dead_strip");
+    #[cfg(not(target_os = "macos"))]
+    cmd.arg("-Wl,--gc-sections");
     if let Some(flag) = lld_fuse_flag() {
         cmd.arg(flag);
     }
