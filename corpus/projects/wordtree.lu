@@ -1,0 +1,81 @@
+//! check: run(exit=0, stdout="and 2\ndog 1\nfox 2\nlazy 1\nquick 1\nthe 3")
+//! phase: run
+//! conforms: str.views, mem.str.order
+//!
+//! The book's P3 OUTPUT contract (wolf-book ch. 28 — `wordtree`,
+//! twice): the alphabetized word-frequency walk over real input. The
+//! index-LINKED tree itself is blocked on neither str nor List
+//! lowering but on sema: container-element assignment (`l[i] = v`)
+//! is NotYetCheckable on EVERY lane ("assignment through this place",
+//! s17) — recorded in the s40 closeout as the one remaining gap in
+//! the P3 gate (native lowering already carries `list_write`). This
+//! witness produces the chapter's output through append-only Lists:
+//! unique-word collection, then a selection walk by
+//! byte-lexicographic order ([mem.str.order]) — natively exercising
+//! `words()`, checked `l[i]` reads, `List.len`, str equality and
+//! ordering, and value-position interpolation. `for` stays off the
+//! reused lists deliberately: `for x in xs` consumes the iterable
+//! ([mem.tier0.move]); the index walk is the non-consuming read.
+
+fn has(xs: List[str], w: str) -> bool {
+    var i = 0
+    while i < xs.len {
+        if xs[i] == w {
+            return true
+        }
+        i += 1
+    }
+    false
+}
+
+fn count_of(ws: List[str], w: str) -> int {
+    var n = 0
+    var i = 0
+    while i < ws.len {
+        if ws[i] == w {
+            n += 1
+        }
+        i += 1
+    }
+    n
+}
+
+fn smallest_above(uniq: List[str], prev: str, first: bool) -> str {
+    var best = ""
+    var found = false
+    var i = 0
+    while i < uniq.len {
+        let u = uniq[i]
+        if first || prev < u {
+            if !found || u < best {
+                best = u
+                found = true
+            }
+        }
+        i += 1
+    }
+    best
+}
+
+fn main() -> !int {
+    let text = "the quick fox and the lazy dog and the fox"
+    let ws = text.words()
+    var uniq = List[str]()
+    var i = 0
+    while i < ws.len {
+        let w = ws[i]
+        if !has(uniq, w) {
+            (mut uniq).push(w)
+        }
+        i += 1
+    }
+    var prev = ""
+    var k = 0
+    while k < uniq.len {
+        let w = smallest_above(uniq, prev, k == 0)
+        print("{w} {count_of(ws, w)}")
+        prev = w
+        k += 1
+    }
+    0
+}

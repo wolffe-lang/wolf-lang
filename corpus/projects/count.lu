@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="5 22")
+//! phase: run
+//! conforms: str.views, err.union, err.propagate
+//!
+//! The book's P1 shape (wolf-book ch. 26 — `count`, twice): read a
+//! file through `fs_read_text` over rows, walk `words()`, report a
+//! word and byte count. The s40 gate: fs builtins, the materialized
+//! word view, `for` over a List, and `str.len` all executing NATIVELY
+//! — the chapter's "gate: an executable str surface" (§Deltas bs10),
+//! witnessed on both lanes.
+
+fn count_words(text: str) -> int {
+    var n = 0
+    for _ in text.words() {
+        n += 1
+    }
+    n
+}
+
+fn main() -> !int {
+    let path = "target/s40-count.tmp"
+    fs_write_text(path, "the wolf runs\nat dusk\n")?
+    let text = fs_read_text(path)?
+    fs_remove(path)?
+    print("{count_words(text)} {text.len}")
+    0
+}

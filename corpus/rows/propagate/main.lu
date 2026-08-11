@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: err.rows, err.propagate, err.union
 //! warns: W0602
 //!

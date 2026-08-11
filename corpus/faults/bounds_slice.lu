@@ -1,5 +1,5 @@
 //! check: run(exit=trap(bounds))
-//! phase: mem
+//! phase: run
 //! conforms: mem.ub.defined
 //!
 //! `[mem.ub.defined]` names two bounds faults in one row: "OOB index /

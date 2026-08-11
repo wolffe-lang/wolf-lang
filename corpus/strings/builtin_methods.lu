@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: str.slice, str.views, mem.str.get, mem.str.order
 //!
 //! s37 — the builtin `str` surface (D24/D25): `len` is bytes and says

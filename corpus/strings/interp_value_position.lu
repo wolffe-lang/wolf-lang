@@ -1,17 +1,16 @@
 //! check: run(exit=0, stdout="hello, wolf")
-//! phase: mem
+//! phase: run
 //! conforms: str.interp
 //!
-//! The most user-visible refusal in the language (reported mid-c08): a
-//! function RETURNING an interpolated string. The checked lane runs it
-//! today — `eval_string` materializes the built `str` as a value — and
-//! the run expectation is proven by its checked-lane twin
-//! (`crates/wolf_mem/tests/str_builtins.rs::interpolated_str_as_a_value`).
-//! The native lane refuses honestly ("interpolated strings in value
-//! position — allocating materialization"): building the string at run
-//! time needs the region-backed strbuf design (I15's `#[noalloc]` law
-//! makes the allocation story a decision, not a shortcut), which is
-//! why this file pins `mem` while carrying its run expectation.
+//! FORMERLY the most user-visible refusal in the language (reported
+//! mid-c08): a function RETURNING an interpolated string. s40 repaid
+//! it — lowering materializes the value through the region-backed
+//! strbuf (`wolf_rt::str`'s design note, the c08-owed decision:
+//! allocation lands in the ambient region per [mem.region.create.3]),
+//! so this file now RUNS natively and is the s40 acceptance witness.
+//! The checked-lane twin
+//! (`crates/wolf_mem/tests/str_builtins.rs::interpolated_str_as_a_value`)
+//! pins the same bytes from the reference side.
 
 fn greet(name: str) -> str {
     "hello, {name}"

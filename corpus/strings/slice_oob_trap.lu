@@ -1,5 +1,5 @@
 //! check: run(exit=trap(bounds))
-//! phase: mem
+//! phase: run
 //! conforms: str.slice, mem.ub.defined
 //!
 //! D25's first defined fault: a byte range outside the string is a
