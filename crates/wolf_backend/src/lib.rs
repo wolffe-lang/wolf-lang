@@ -7,13 +7,16 @@
 //! Cranelift crate is scaffolding and is DELETED at c12 closeout — if
 //! replacing it touches anything above this crate, s28 failed).
 //!
-//! This crate also owns [`layout`]: the aggregate layout rules shared
-//! by every backend and by the s29 ABI lowering. Layout is a language
-//! contract, never a Cranelift-private detail.
+//! This crate also owns [`layout`] — the aggregate layout rules shared
+//! by every backend — and [`abi`] (s29): the call-boundary plans every
+//! backend executes mechanically (wolf-native v0 + the SysV C
+//! membrane). Both are language contracts, never a Cranelift-private
+//! detail.
 //!
 //! Nothing here may depend on Cranelift — `cargo xtask deps-check`
 //! holds the edge (`wir ← backend ← codegen_clif ← driver`).
 
+pub mod abi;
 pub mod layout;
 
 use wolf_wir::ir::{FuncId, Function, Module, SigId};
@@ -163,12 +166,20 @@ pub trait Backend {
 
 /// Symbol mangling v0 (s28): `_W` + the WIR item name (module-path
 /// qualified names keep their interior dots — ELF allows them) + `$` +
-/// a 16-hex hash of the name and rendered signature. Deliberately NOT
-/// C-linkable: the FFI membrane is explicit (`extern "c"`/`export`
-/// symbols are emitted unmangled, s29 formalizes). Deterministic
-/// across runs — the hash is FNV-1a over stable inputs, no interner
-/// indices.
+/// a 16-hex hash of the name, the rendered signature, and the native
+/// convention version ([`abi::CONVENTION_VERSION`], s29): a convention
+/// bump changes every symbol, so mixed-convention objects fail to LINK
+/// rather than silently miscompile (D7). Deliberately NOT C-linkable:
+/// the FFI membrane is explicit (`extern "c"`/`export` symbols are
+/// emitted unmangled). Deterministic across runs — the hash is FNV-1a
+/// over stable inputs, no interner indices.
 pub fn mangle(module: &Module, name: &str, sig: SigId) -> String {
+    mangle_versioned(module, name, sig, abi::CONVENTION_VERSION)
+}
+
+/// [`mangle`] with the convention version explicit (the D7 invariant's
+/// test seam — production callers use [`mangle`]).
+pub fn mangle_versioned(module: &Module, name: &str, sig: SigId, version: &str) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let mut eat = |bytes: &[u8]| {
         for &b in bytes {
@@ -176,6 +187,7 @@ pub fn mangle(module: &Module, name: &str, sig: SigId) -> String {
             h = h.wrapping_mul(0x0000_0100_0000_01b3);
         }
     };
+    eat(version.as_bytes());
     eat(name.as_bytes());
     let data = &module.sigs[sig];
     for p in &data.params {

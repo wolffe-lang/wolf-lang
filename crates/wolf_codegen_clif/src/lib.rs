@@ -77,6 +77,8 @@ pub struct ClifBackend {
     funcs: HashMap<String, translate::FuncEntry>,
     /// Runtime shims declared so far (`__wolf_rt_*`).
     rt: HashMap<&'static str, cranelift_module::FuncId>,
+    /// C membrane imports declared so far (`c.*` callee names, s29).
+    imports: HashMap<String, cranelift_module::FuncId>,
     symbols: Vec<SymbolInfo>,
     /// CLIF text of every defined function, in definition order — the
     /// golden-snapshot surface (lowering changes are reviewed diffs).
@@ -112,6 +114,7 @@ impl ClifBackend {
             module: ObjectModule::new(builder),
             funcs: HashMap::new(),
             rt: HashMap::new(),
+            imports: HashMap::new(),
             symbols: Vec::new(),
             clif_texts: Vec::new(),
             fb_ctx: FunctionBuilderContext::new(),
@@ -143,13 +146,20 @@ impl Backend for ClifBackend {
     fn declare_function(
         &mut self,
         module: &WirModule,
-        _id: FuncId,
+        id: FuncId,
         name: &str,
         symbol: &str,
         sig: SigId,
         linkage: Linkage,
     ) -> Result<(), BackendError> {
-        let si = translate::sig_info(module, sig, self.module.isa().default_call_conv());
+        // `export` functions are C membranes: declared under the SysV
+        // plan (s29, D19). Everything else is wolf-native.
+        let conv = if module.funcs.get(id).is_some_and(|f| f.export) {
+            wolf_backend::abi::Conv::C
+        } else {
+            wolf_backend::abi::Conv::Wolf
+        };
+        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv());
         let fid = self
             .module
             .declare_function(symbol, clif_linkage(linkage), &si.clif)
@@ -178,7 +188,12 @@ impl Backend for ClifBackend {
             )));
         };
         let (fid, sig) = (entry.fid, entry.sig);
-        let si = translate::sig_info(module, sig, self.module.isa().default_call_conv());
+        let conv = if func.export {
+            wolf_backend::abi::Conv::C
+        } else {
+            wolf_backend::abi::Conv::Wolf
+        };
+        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv());
         let mut ctx = self.module.make_context();
         ctx.func.signature = si.clif.clone();
         ctx.func.name = UserFuncName::user(0, id.as_u32());
@@ -188,10 +203,12 @@ impl Backend for ClifBackend {
                 builder,
                 module,
                 func,
+                conv,
                 &si,
                 &mut self.module,
                 &self.funcs,
                 &mut self.rt,
+                &mut self.imports,
             )?;
         }
         let symbol = self
@@ -245,11 +262,16 @@ impl Backend for ClifBackend {
 }
 
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
-/// truth a niladic CLIF function — that calls wolf's `@main` and
-/// truncates its `i64` result to the C exit code. The returned id must
-/// be declared with the UNMANGLED symbol `main` ([`compile_module`]
-/// does). s29 formalizes the ABI; this is the v0 sketch the contract
-/// calls for.
+/// truth a niladic CLIF function — that calls wolf's `@main`. A plain
+/// `() -> i64` main truncates its result to the C exit code. An
+/// error-union main (`!int`, s29 `[abi.err]`) branches on the
+/// discriminant: the ok value becomes the exit code; an error value
+/// becomes the documented D30 process behavior — `error: <tag name>`
+/// on stdout and exit 1, via `__wolf_rt_main_err` (the tag's name
+/// bytes ride as packed immediates selected by a compile-time tag
+/// dispatch: tag names are module-static, so no runtime name table is
+/// needed). The returned id must be declared with the UNMANGLED
+/// symbol `main` ([`compile_module`] does).
 pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     let Some((_, entry)) = m.funcs.iter().find(|(_, f)| f.name == "main") else {
         return Err(BackendError::Unsupported(
@@ -257,24 +279,113 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
         ));
     };
     let entry_sig = entry.sig;
-    {
-        let sd = &m.sigs[entry_sig];
-        if !sd.params.is_empty() || sd.results != vec![types::I64] {
-            return Err(BackendError::Unsupported(format!(
-                "entry signature is not `() -> i64` (found {} param(s), {} result(s)) — \
-                 error-union mains land with the c06 ABI work",
-                sd.params.len(),
-                sd.results.len()
-            )));
-        }
+    let refuse = |sd: &wolf_wir::ir::SigData| {
+        Err(BackendError::Unsupported(format!(
+            "entry signature is not `() -> i64` or `() -> !i64` (found {} param(s), \
+             {} result(s))",
+            sd.params.len(),
+            sd.results.len()
+        )))
+    };
+    let sd = m.sigs[entry_sig].clone();
+    if !sd.params.is_empty() || sd.results.len() != 1 {
+        return refuse(&sd);
     }
+    let res_ty = sd.results[0];
+    let eu_ok = match m.types.get(res_ty).clone() {
+        wolf_wir::types::TypeData::I64 => None,
+        wolf_wir::types::TypeData::Eu { ok, .. } => {
+            if ok.is_some_and(|t| t != types::I64) {
+                return refuse(&sd);
+            }
+            Some(ok)
+        }
+        _ => return refuse(&sd),
+    };
+    let tags = m.tags.clone();
+    let err_sig = m.make_sig(vec![wolf_wir::ir::Param::val(types::I64); 6], vec![]);
     let shim_sig = m.make_sig(vec![], vec![types::I32]);
     let mut f = Function::new("__wolf_main_shim", shim_sig);
     let b0 = f.make_block(&[]);
     let callee = f.import_func("main", entry_sig);
-    let (_, res) = f.append_inst(b0, Opcode::Call, &[], &[types::I64], Aux::Callee(callee));
-    let (_, tr) = f.append_inst(b0, Opcode::Itrunc, &[res[0]], &[types::I32], Aux::None);
-    f.append_inst(b0, Opcode::Ret, &[tr[0]], &[], Aux::None);
+    let (_, res) = f.append_inst(b0, Opcode::Call, &[], &[res_ty], Aux::Callee(callee));
+
+    let Some(eu_ok) = eu_ok else {
+        // Plain `() -> i64`: truncate and return.
+        let (_, tr) = f.append_inst(b0, Opcode::Itrunc, &[res[0]], &[types::I32], Aux::None);
+        f.append_inst(b0, Opcode::Ret, &[tr[0]], &[], Aux::None);
+        return Ok(m.add_func(f));
+    };
+
+    // Error-union main: branch on the discriminant.
+    let b_ok = f.make_block(&[]);
+    let b_err = f.make_block(&[]);
+    let (_, is_err) = f.append_inst(b0, Opcode::EuIsErr, &[res[0]], &[types::BOOL], Aux::None);
+    let then_edge = f.block_call(b_err, &[]);
+    let else_edge = f.block_call(b_ok, &[]);
+    f.append_inst(
+        b0,
+        Opcode::Br,
+        &[is_err[0]],
+        &[],
+        Aux::Br(then_edge, else_edge),
+    );
+    // Ok path: the payload (or 0 for a unit ok) is the exit code.
+    let code = if eu_ok.is_some() {
+        let (_, ok) = f.append_inst(b_ok, Opcode::EuOk, &[res[0]], &[types::I64], Aux::None);
+        let (_, tr) = f.append_inst(b_ok, Opcode::Itrunc, &[ok[0]], &[types::I32], Aux::None);
+        tr[0]
+    } else {
+        let (_, z) = f.append_inst(b_ok, Opcode::Iconst, &[], &[types::I32], Aux::Int(0));
+        z[0]
+    };
+    f.append_inst(b_ok, Opcode::Ret, &[code], &[], Aux::None);
+    // Err path: compile-time dispatch over the module's interned tags
+    // (tag id k = index + 1) hands the tag's NAME to the runtime.
+    let (_, tagv) = f.append_inst(b_err, Opcode::EuErr, &[res[0]], &[types::I64], Aux::None);
+    let err_callee = f.import_func("__wolf_rt_main_err", err_sig);
+    let report = |f: &mut Function, block, tag_val, name: Option<&str>| {
+        let mut words = [0i64; 4];
+        let mut len = 0i64;
+        if let Some(name) = name {
+            let bytes = name.as_bytes();
+            len = bytes.len().min(32) as i64;
+            for (j, &b) in bytes.iter().take(32).enumerate() {
+                words[j / 8] |= (b as i64) << ((j % 8) * 8);
+            }
+        }
+        let mut args = vec![tag_val];
+        for imm in std::iter::once(len).chain(words) {
+            let (_, v) = f.append_inst(block, Opcode::Iconst, &[], &[types::I64], Aux::Int(imm));
+            args.push(v[0]);
+        }
+        f.append_inst(block, Opcode::Call, &args, &[], Aux::Callee(err_callee));
+        // `__wolf_rt_main_err` exits; this return is the honest CFG
+        // tail (exit 1 if the runtime ever returned).
+        let (_, one) = f.append_inst(block, Opcode::Iconst, &[], &[types::I32], Aux::Int(1));
+        f.append_inst(block, Opcode::Ret, &[one[0]], &[], Aux::None);
+    };
+    let mut cur = b_err;
+    for (i, name) in tags.iter().enumerate() {
+        let id = (i + 1) as i64;
+        let b_hit = f.make_block(&[]);
+        let b_next = f.make_block(&[]);
+        let (_, k) = f.append_inst(cur, Opcode::Iconst, &[], &[types::I64], Aux::Int(id));
+        let (_, eq) = f.append_inst(
+            cur,
+            Opcode::Icmp,
+            &[tagv[0], k[0]],
+            &[types::BOOL],
+            Aux::IntCc(wolf_wir::ops::IntCc::Eq),
+        );
+        let hit_edge = f.block_call(b_hit, &[]);
+        let next_edge = f.block_call(b_next, &[]);
+        f.append_inst(cur, Opcode::Br, &[eq[0]], &[], Aux::Br(hit_edge, next_edge));
+        report(&mut f, b_hit, tagv[0], Some(name));
+        cur = b_next;
+    }
+    // Unknown tag (defensive): report the numeric id alone.
+    report(&mut f, cur, tagv[0], None);
     Ok(m.add_func(f))
 }
 
@@ -290,6 +401,10 @@ pub fn compile_module(
     for (id, f) in m.funcs.iter() {
         let (symbol, linkage) = if Some(id) == entry_shim {
             ("main".to_string(), Linkage::Export)
+        } else if f.export {
+            // The C membrane (s29, D19): unmangled, externally
+            // visible, defined under the SysV plan.
+            (f.name.clone(), Linkage::Export)
         } else {
             (mangle(m, &f.name, f.sig), Linkage::Local)
         };

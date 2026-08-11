@@ -30,6 +30,23 @@ void __wolf_rt_trap(int kind) {
     exit(134);
 }
 
+void __wolf_rt_main_err(long long tag, long long len,
+                        long long w0, long long w1,
+                        long long w2, long long w3) {
+    char name[33] = {0};
+    long long ws[4] = {w0, w1, w2, w3};
+    if (len < 0) len = 0;
+    if (len > 32) len = 32;
+    for (long long i = 0; i < len; i++)
+        name[i] = (char)((ws[i / 8] >> ((i % 8) * 8)) & 0xff);
+    if (len == 0)
+        printf("error: %lld\n", tag);
+    else
+        printf("error: %s\n", name);
+    fflush(stdout);
+    exit(1);
+}
+
 void *__wolf_rt_region_new(void) { return malloc(sizeof(void *)); }
 void *__wolf_rt_region_alloc(void *h, long long size) {
     (void)h;
@@ -189,4 +206,67 @@ fn exit_code_flows_through_shim() {
         return;
     };
     assert_eq!(code, 42);
+}
+
+/// eu-main (s29): an error-union `main` returning ok exits with the
+/// payload; returning an error reports `error: <tag name>` on stdout
+/// and exits 1 (D30's documented process behavior — never a trap,
+/// never an unwind). The entry shim's compile-time tag dispatch hands
+/// the NAME to the runtime.
+#[test]
+fn eu_main_ok_and_err_paths() {
+    // Ok path: `eu{i64}` with tag 0 — exit code 7.
+    let Some((code, _)) = run_wir(
+        "eumain_ok",
+        "fn @main() -> eu{i64} {\nb0:\n  %0 = iconst.i64 7\n  \
+         %1: eu{i64} = eu.make.ok %0\n  ret %1\n}\n",
+    ) else {
+        return;
+    };
+    assert_eq!(code, 7);
+}
+
+#[test]
+fn eu_main_err_reports_tag_and_exits_one() {
+    let mut module = wolf_wir::parse_module(
+        "fn @main() -> eu{i64} {\nb0:\n  %0 = iconst.i64 1\n  \
+         %1: eu{i64} = eu.make.err %0\n  ret %1\n}\n",
+    )
+    .expect("wir parses");
+    // The interned tag table names id 1.
+    module.tag_id("Boom");
+    wolf_wir::verify_module(&module).expect("wir verifies");
+    let shim = add_entry_shim(&mut module).expect("entry shim");
+    let mut backend = match ClifBackend::new() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("SKIP: {e}");
+            return;
+        }
+    };
+    compile_module(&mut backend, &module, Some(shim)).expect("compiles");
+    let product = Box::new(backend).finish().expect("object emits");
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("exec_smoke_eumain_err");
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let obj = dir.join("prog.o");
+    let stub = dir.join("rt_stub.c");
+    let exe = dir.join("prog");
+    std::fs::write(&obj, &product.bytes).expect("write object");
+    std::fs::write(&stub, RT_STUB).expect("write stub");
+    let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    let st = Command::new(&cc)
+        .arg("-o")
+        .arg(&exe)
+        .arg(&obj)
+        .arg(&stub)
+        .status()
+        .expect("cc runs");
+    assert!(st.success(), "link failed");
+    let out = Command::new(&exe).output().expect("binary runs");
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "error: Boom\n",
+        "the tag NAME is the documented report"
+    );
 }

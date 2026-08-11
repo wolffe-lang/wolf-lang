@@ -18,9 +18,13 @@
 //!   `wolf_backend::layout`. Aggregate-typed BLOCK PARAMETERS own a
 //!   slot; every entering edge copies into it (loads before stores, so
 //!   swapping edges can't clobber); `br` edges with aggregate args go
-//!   through per-edge trampoline blocks. Aggregate params/results
-//!   cross calls by pointer (the scalars-only v0 convention — the s29
-//!   ABI classification replaces this stub, the seam is `sig_info`).
+//!   through per-edge trampoline blocks.
+//! - **Call boundaries execute `wolf_backend::abi` plans** (s29):
+//!   classification lives THERE, this file is mechanical. Small
+//!   aggregates scalarize into register units; MEMORY-class values go
+//!   by pointer (wolf) or byval/sret (C membrane); `c.*` callees are
+//!   unmangled libc imports under the SysV plan; error-union returns
+//!   keep the discriminant in the first INTEGER return register.
 //! - **Region ops** call the `wolf_rt` shims; `stack.alloc` is a real
 //!   stack slot.
 
@@ -37,37 +41,72 @@ use cranelift_module::Module as _;
 use cranelift_object::ObjectModule;
 
 use wolf_backend::BackendError;
+use wolf_backend::abi::{self, Conv, ParamPass, RegClass, RetPass, Unit};
 use wolf_backend::layout::{self, Layout};
 use wolf_wir::ir::{Aux, Block as WBlock, Function as WFunction, Module as WModule, SigId};
 use wolf_wir::ops::{FloatCc, IntCc, Opcode, TrapKind};
 use wolf_wir::types::{TypeData, TypeId};
 
-/// The runtime symbols compiled code may reference (the s28 symbol
+/// The runtime symbols compiled code may reference (the s28/s29 symbol
 /// contract with `wolf_rt`): name, param count, has-result.
-pub const RT_SYMBOLS: [(&str, usize, bool); 5] = [
+/// `__wolf_rt_main_err` is the eu-main exit path (s29): tag id, name
+/// length, and the tag's name bytes packed little-endian into four
+/// i64 words (32-byte cap) — reports `error: <name>` on stdout and
+/// exits 1, the documented D30 process behavior for a `main` that
+/// returns an error value.
+pub const RT_SYMBOLS: [(&str, usize, bool); 6] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
     ("__wolf_rt_region_free", 1, false),
     ("__wolf_rt_region_freeze", 1, false),
+    ("__wolf_rt_main_err", 6, false),
 ];
 
-/// How one WIR signature position crosses the call boundary.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// How one WIR parameter crosses the call boundary (the mechanical
+/// execution of [`wolf_backend::abi::ParamPass`] — classification
+/// lives THERE; this enum only adds what plan execution needs).
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) enum Slot {
-    /// Passed/returned directly as one CLIF value.
+    /// Passed directly as one CLIF value.
     Direct(cranelift_codegen::ir::Type),
-    /// Aggregate: passed by pointer; returned via a trailing sret
-    /// pointer param (v0 stub convention; s29 replaces).
-    Indirect,
+    /// Aggregate scalarized into ≤ 2 eightbyte register units.
+    Split(Vec<Unit>),
+    /// Aggregate by pointer (wolf-native MEMORY class).
+    Ref,
+    /// Aggregate byval on the stack (C MEMORY class), by size.
+    CStruct(u32),
     /// Effect token: erased, crosses as nothing.
+    Token,
+}
+
+/// How one WIR result crosses the call boundary.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) enum RSlot {
+    /// Returned directly as one CLIF value.
+    Direct(cranelift_codegen::ir::Type),
+    /// Aggregate in ≤ 2 return registers (eu: tag is unit 0).
+    Split(Vec<Unit>),
+    /// Caller-allocated out-slot of `size` bytes. Wolf: plain pointer
+    /// param (trailing), plus an `i64` discriminant return when
+    /// `disc_in_reg` (big error unions). C: a true psABI sret param
+    /// (first; Cranelift returns the pointer in `%rax` itself).
+    Sret {
+        disc_in_reg: bool,
+        c: bool,
+        size: u32,
+    },
+    /// Effect token: erased.
     Token,
 }
 
 pub(crate) struct SigInfo {
     pub params: Vec<Slot>,
-    pub rets: Vec<Slot>,
+    pub rets: Vec<RSlot>,
     pub clif: Signature,
+    /// The out-slot pointer params sit FIRST in the CLIF signature
+    /// (C convention) rather than trailing (wolf-native).
+    pub sret_first: bool,
 }
 
 fn scalar_clif_ty(m: &WModule, ty: TypeId) -> Option<cranelift_codegen::ir::Type> {
@@ -86,42 +125,115 @@ fn is_agg(m: &WModule, ty: TypeId) -> bool {
     matches!(m.types.get(ty), TypeData::Agg(_) | TypeData::Eu { .. })
 }
 
-pub(crate) fn sig_info(m: &WModule, sig: SigId, cc: CallConv) -> SigInfo {
+/// The CLIF value type carrying one eightbyte unit: INTEGER units ride
+/// `i64` (partial eightbytes are chunk-assembled), SSE units ride
+/// `f32`/`f64` by covered width.
+fn unit_clif_ty(u: &Unit) -> cranelift_codegen::ir::Type {
+    match u.class {
+        RegClass::Int => ctypes::I64,
+        RegClass::Sse => {
+            if u.bytes <= 4 {
+                ctypes::F32
+            } else {
+                ctypes::F64
+            }
+        }
+    }
+}
+
+/// Build the CLIF signature + slot map for one WIR signature under one
+/// convention, executing the shared plan from [`wolf_backend::abi`]
+/// (where ALL classification lives — this function is mechanical).
+pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, cc: CallConv) -> SigInfo {
     let data = &m.sigs[sig];
+    let plan = abi::plan_sig(&m.types, data, conv);
     let mut clif = Signature::new(cc);
-    let mut params = Vec::with_capacity(data.params.len());
-    for p in &data.params {
-        if m.types.is_token(p.ty) {
-            params.push(Slot::Token);
-        } else if is_agg(m, p.ty) {
-            params.push(Slot::Indirect);
-            clif.params.push(AbiParam::new(ctypes::I64));
-        } else {
-            let ty = scalar_clif_ty(m, p.ty).expect("scalar param");
-            params.push(Slot::Direct(ty));
-            clif.params.push(AbiParam::new(ty));
-        }
-    }
+    let sret_first = conv == Conv::C;
     let mut rets = Vec::with_capacity(data.results.len());
-    for &r in &data.results {
-        if m.types.is_token(r) {
-            rets.push(Slot::Token);
-        } else if is_agg(m, r) {
-            rets.push(Slot::Indirect);
-        } else {
-            let ty = scalar_clif_ty(m, r).expect("scalar result");
-            rets.push(Slot::Direct(ty));
-            clif.returns.push(AbiParam::new(ty));
+    for (pass, &r) in plan.rets.iter().zip(data.results.iter()) {
+        match pass {
+            RetPass::Token => rets.push(RSlot::Token),
+            RetPass::Direct(ty) => {
+                let t = scalar_clif_ty(m, *ty).expect("scalar result");
+                clif.returns.push(AbiParam::new(t));
+                rets.push(RSlot::Direct(t));
+            }
+            RetPass::Split(units) => {
+                for u in units {
+                    clif.returns.push(AbiParam::new(unit_clif_ty(u)));
+                }
+                rets.push(RSlot::Split(units.clone()));
+            }
+            RetPass::Sret { disc_in_reg } => {
+                let size = layout::layout_of(&m.types, r).expect("sized result").size;
+                if sret_first {
+                    // psABI sret: pointer first (%rdi); Cranelift
+                    // returns it in %rax itself — no explicit return.
+                    clif.params.push(AbiParam::special(
+                        ctypes::I64,
+                        cranelift_codegen::ir::ArgumentPurpose::StructReturn,
+                    ));
+                } else if *disc_in_reg {
+                    // Big error union: the discriminant STILL rides
+                    // the first INTEGER return register ([abi.err]).
+                    clif.returns.push(AbiParam::new(ctypes::I64));
+                }
+                rets.push(RSlot::Sret {
+                    disc_in_reg: *disc_in_reg,
+                    c: sret_first,
+                    size,
+                });
+            }
         }
     }
-    // Aggregate results ride trailing sret pointer params, in result
-    // order.
-    for r in &rets {
-        if *r == Slot::Indirect {
-            clif.params.push(AbiParam::new(ctypes::I64));
+    let mut params = Vec::with_capacity(data.params.len());
+    for (pass, p) in plan.params.iter().zip(data.params.iter()) {
+        match pass {
+            ParamPass::Token => params.push(Slot::Token),
+            ParamPass::Direct(ty) => {
+                let t = scalar_clif_ty(m, *ty).expect("scalar param");
+                clif.params.push(AbiParam::new(t));
+                params.push(Slot::Direct(t));
+            }
+            ParamPass::Split(units) => {
+                for u in units {
+                    clif.params.push(AbiParam::new(unit_clif_ty(u)));
+                }
+                params.push(Slot::Split(units.clone()));
+            }
+            ParamPass::Memory => match conv {
+                Conv::Wolf => {
+                    clif.params.push(AbiParam::new(ctypes::I64));
+                    params.push(Slot::Ref);
+                }
+                Conv::C => {
+                    let size = layout::layout_of(&m.types, p.ty).expect("sized param").size;
+                    clif.params.push(AbiParam::special(
+                        ctypes::I64,
+                        cranelift_codegen::ir::ArgumentPurpose::StructArgument(
+                            size.next_multiple_of(8),
+                        ),
+                    ));
+                    params.push(Slot::CStruct(size));
+                }
+            },
         }
     }
-    SigInfo { params, rets, clif }
+    // Wolf-native out-slot pointers trail the declared params, in
+    // result order (a PLAIN pointer param — no C sret obligations).
+    if !sret_first {
+        for r in &rets {
+            if matches!(r, RSlot::Sret { .. }) {
+                clif.params.push(AbiParam::new(ctypes::I64));
+            }
+        }
+    }
+    SigInfo {
+        params,
+        rets,
+        clif,
+        sret_first,
+    }
 }
 
 /// How a WIR value exists in CLIF.
@@ -139,9 +251,14 @@ struct Tx<'a, 'b> {
     b: FunctionBuilder<'b>,
     m: &'a WModule,
     f: &'a WFunction,
+    /// The convention THIS function is defined under (wolf-native for
+    /// module functions; C for `export`ed membranes).
+    conv: Conv,
     om: &'a mut ObjectModule,
     funcs: &'a HashMap<String, FuncEntry>,
     rt: &'a mut HashMap<&'static str, cranelift_module::FuncId>,
+    /// C membrane imports declared so far (`c.*` callee → func id).
+    imports: &'a mut HashMap<String, cranelift_module::FuncId>,
     blocks: HashMap<WBlock, cranelift_codegen::ir::Block>,
     vals: HashMap<wolf_wir::ir::Value, Repr>,
     /// Slots owned by aggregate-typed block params of non-entry blocks.
@@ -150,8 +267,9 @@ struct Tx<'a, 'b> {
     sret: Vec<CValue>,
     /// Lazily created per-kind trap blocks.
     trap_blocks: HashMap<i32, cranelift_codegen::ir::Block>,
-    /// FuncRefs imported into this function, by callee name.
-    fref_cache: HashMap<String, cranelift_codegen::ir::FuncRef>,
+    /// FuncRefs imported into this function, by callee name, with the
+    /// convention their calls lower under.
+    fref_cache: HashMap<String, (cranelift_codegen::ir::FuncRef, Conv)>,
 }
 
 /// One declared function the translator can call.
@@ -173,18 +291,22 @@ pub(crate) fn translate_function(
     b: FunctionBuilder<'_>,
     m: &WModule,
     f: &WFunction,
+    conv: Conv,
     si: &SigInfo,
     om: &mut ObjectModule,
     funcs: &HashMap<String, FuncEntry>,
     rt: &mut HashMap<&'static str, cranelift_module::FuncId>,
+    imports: &mut HashMap<String, cranelift_module::FuncId>,
 ) -> Result<(), BackendError> {
     let mut tx = Tx {
         b,
         m,
         f,
+        conv,
         om,
         funcs,
         rt,
+        imports,
         blocks: HashMap::new(),
         vals: HashMap::new(),
         param_slots: HashMap::new(),
@@ -216,13 +338,19 @@ impl<'a, 'b> Tx<'a, 'b> {
             self.b.append_block_param(entry_cb, abi.value_type);
         }
         let cparams: Vec<CValue> = self.b.block_params(entry_cb).to_vec();
-        let mut next = 0usize;
+        let n_sret = si
+            .rets
+            .iter()
+            .filter(|r| matches!(r, RSlot::Sret { .. }))
+            .count();
+        // C convention: out-slot pointers sit FIRST; wolf trails them.
+        let mut next = if si.sret_first { n_sret } else { 0 };
         let wparams = self.f.block_params(entry);
         if wparams.len() != si.params.len() {
             return Err(ice("entry params do not match the signature"));
         }
         for (i, &wv) in wparams.iter().enumerate() {
-            match si.params[i] {
+            match &si.params[i] {
                 Slot::Token => {
                     self.vals.insert(wv, Repr::Token);
                 }
@@ -230,17 +358,28 @@ impl<'a, 'b> Tx<'a, 'b> {
                     self.vals.insert(wv, Repr::Scalar(cparams[next]));
                     next += 1;
                 }
-                Slot::Indirect => {
+                Slot::Split(units) => {
+                    // Materialize the register units into a local slot
+                    // (rounded to whole eightbytes — the store-side
+                    // invariant of [`Tx::store_unit`]).
+                    let units = units.clone();
+                    let addr = self.units_slot_addr(&units);
+                    for u in &units {
+                        let v = cparams[next];
+                        next += 1;
+                        self.store_unit(addr, u, v);
+                    }
+                    self.vals.insert(wv, Repr::Addr(addr));
+                }
+                Slot::Ref | Slot::CStruct(_) => {
                     self.vals.insert(wv, Repr::Addr(cparams[next]));
                     next += 1;
                 }
             }
         }
-        for r in &si.rets {
-            if *r == Slot::Indirect {
-                self.sret.push(cparams[next]);
-                next += 1;
-            }
+        let sret_base = if si.sret_first { 0 } else { next };
+        for k in 0..n_sret {
+            self.sret.push(cparams[sret_base + k]);
         }
         // Non-entry blocks: scalar params become CLIF block params;
         // aggregate params own a stack slot filled by entering edges.
@@ -264,14 +403,16 @@ impl<'a, 'b> Tx<'a, 'b> {
                 }
             }
         }
-        // 2. Translate every block.
+        // 2. Translate every block. The entry is first in layout and
+        // the builder is ALREADY positioned there (step 1 may have
+        // emitted param-materialization stores into it — switching,
+        // even to the same block, would trip the fill-before-switch
+        // rule).
         for bi in 0..self.f.layout.len() {
             let wb = self.f.layout[bi];
             let cb = self.blocks[&wb];
             if wb != entry {
                 self.b.switch_to_block(cb);
-            } else {
-                self.b.switch_to_block(entry_cb);
             }
             // Aggregate block params: bind their slot addresses.
             for (i, wv) in self.f.block_params(wb).into_iter().enumerate() {
@@ -376,7 +517,7 @@ impl<'a, 'b> Tx<'a, 'b> {
         &mut self,
         name: &'static str,
     ) -> Result<cranelift_codegen::ir::FuncRef, BackendError> {
-        if let Some(&fr) = self.fref_cache.get(name) {
+        if let Some(&(fr, _)) = self.fref_cache.get(name) {
             return Ok(fr);
         }
         let fid = match self.rt.get(name) {
@@ -410,8 +551,68 @@ impl<'a, 'b> Tx<'a, 'b> {
             }
         };
         let fr = self.om.declare_func_in_func(fid, self.b.func);
-        self.fref_cache.insert(name.to_string(), fr);
+        self.fref_cache.insert(name.to_string(), (fr, Conv::Wolf));
         Ok(fr)
+    }
+
+    /// A fresh slot big enough to hold `units` whole eightbytes (the
+    /// [`Tx::store_unit`] invariant: full-width unit stores are always
+    /// in bounds), returning its address.
+    fn units_slot_addr(&mut self, units: &[Unit]) -> CValue {
+        let slot = self.new_slot(Layout {
+            size: (units.len() as u32).max(1) * 8,
+            align: 8,
+        });
+        self.b.ins().stack_addr(ctypes::I64, slot, 0)
+    }
+
+    /// Store one register unit into `base + u.offset`. INTEGER units
+    /// store the full eightbyte (callers guarantee a rounded slot —
+    /// [`Tx::units_slot_addr`]); bytes beyond `u.bytes` are undefined
+    /// slack, exactly like the register's high bytes.
+    fn store_unit(&mut self, base: CValue, u: &Unit, v: CValue) {
+        self.b
+            .ins()
+            .store(MemFlagsData::trusted(), v, base, u.offset as i32);
+    }
+
+    /// Load one register unit from `base + u.offset`. INTEGER units
+    /// with partial coverage assemble from exact chunks — `base` may
+    /// be an interior view of a larger aggregate, so no byte beyond
+    /// the value's real extent is ever read.
+    fn load_unit(&mut self, base: CValue, u: &Unit) -> CValue {
+        let flags = MemFlagsData::trusted();
+        match u.class {
+            RegClass::Sse => {
+                let ty = unit_clif_ty(u);
+                self.b.ins().load(ty, flags, base, u.offset as i32)
+            }
+            RegClass::Int => {
+                if u.bytes >= 8 {
+                    return self.b.ins().load(ctypes::I64, flags, base, u.offset as i32);
+                }
+                let mut acc: Option<CValue> = None;
+                let mut off = 0u32;
+                let bytes = u.bytes as u32;
+                for (chunk, ty) in [(4u32, ctypes::I32), (2, ctypes::I16), (1, ctypes::I8)] {
+                    while bytes - off >= chunk {
+                        let v = self.b.ins().load(ty, flags, base, (u.offset + off) as i32);
+                        let wide = self.b.ins().uextend(ctypes::I64, v);
+                        let shifted = if off == 0 {
+                            wide
+                        } else {
+                            self.b.ins().ishl_imm_s(wide, (off * 8) as i64)
+                        };
+                        acc = Some(match acc {
+                            None => shifted,
+                            Some(a) => self.b.ins().bor(a, shifted),
+                        });
+                        off += chunk;
+                    }
+                }
+                acc.unwrap_or_else(|| self.b.ins().iconst(ctypes::I64, 0))
+            }
+        }
     }
 
     /// Copy `size` bytes from `src` to `dst` (both addresses), in
@@ -902,19 +1103,45 @@ impl<'a, 'b> Tx<'a, 'b> {
                 }
             }
             Opcode::Ret => {
-                let si = sig_info(self.m, self.f.sig, self.om.isa().default_call_conv());
+                let si = sig_info(
+                    self.m,
+                    self.f.sig,
+                    self.conv,
+                    self.om.isa().default_call_conv(),
+                );
                 let mut scalars: Vec<CValue> = Vec::new();
                 let mut sret_i = 0usize;
                 for (&rv, slot) in args.iter().zip(si.rets.iter()) {
                     match slot {
-                        Slot::Token => {}
-                        Slot::Direct(_) => scalars.push(self.scalar(rv)?),
-                        Slot::Indirect => {
+                        RSlot::Token => {}
+                        RSlot::Direct(_) => scalars.push(self.scalar(rv)?),
+                        RSlot::Split(units) => {
+                            let src = self.addr(rv)?;
+                            for u in units {
+                                let v = self.load_unit(src, u);
+                                scalars.push(v);
+                            }
+                        }
+                        RSlot::Sret {
+                            disc_in_reg,
+                            c,
+                            size,
+                        } => {
                             let dst = self.sret[sret_i];
                             sret_i += 1;
                             let src = self.addr(rv)?;
-                            let size = self.layout_of(self.f.value_ty(rv))?.size;
-                            self.copy_bytes(dst, src, size);
+                            self.copy_bytes(dst, src, *size);
+                            if *disc_in_reg && !c {
+                                // [abi.err.repr]: the discriminant
+                                // rides the first INTEGER return
+                                // register even for out-slot unions
+                                // (tag is at offset 0 by layout).
+                                let tag =
+                                    self.b
+                                        .ins()
+                                        .load(ctypes::I64, MemFlagsData::trusted(), src, 0);
+                                scalars.push(tag);
+                            }
                         }
                     }
                 }
@@ -1163,8 +1390,11 @@ impl<'a, 'b> Tx<'a, 'b> {
         Ok(self.b.ins().select(o, clamp, r))
     }
 
-    /// Lower one call: tokens erased, aggregates by pointer, aggregate
-    /// results via caller-allocated sret slots.
+    /// Lower one call, executing the callee's ABI plan: tokens erased,
+    /// small aggregates in registers, big ones through memory, error
+    /// unions per `[abi.err.repr]`. The convention is the callee's:
+    /// wolf-native for module functions and runtime shims, C SysV for
+    /// the `c.*` import membrane.
     fn lower_call(
         &mut self,
         callee: &str,
@@ -1172,58 +1402,115 @@ impl<'a, 'b> Tx<'a, 'b> {
         args: &[wolf_wir::ir::Value],
         results: &[wolf_wir::ir::Value],
     ) -> Result<(), BackendError> {
-        let si = sig_info(self.m, sig, self.om.isa().default_call_conv());
+        let cc = self.om.isa().default_call_conv();
+        // Resolve the callee: module function (wolf conv), `c.*`
+        // import (C membrane, unmangled libc symbol), or runtime shim.
+        let (fref, conv) = if let Some(&(fr, conv)) = self.fref_cache.get(callee) {
+            (fr, conv)
+        } else if let Some(entry) = self.funcs.get(callee) {
+            let fr = self.om.declare_func_in_func(entry.fid, self.b.func);
+            self.fref_cache.insert(callee.to_string(), (fr, Conv::Wolf));
+            (fr, Conv::Wolf)
+        } else if let Some(symbol) = abi::c_import_symbol(callee) {
+            // The explicit membrane (D19): the WIR name's `c.`
+            // namespace IS the seam; the linker symbol is the plain C
+            // name, declared with the SysV plan.
+            let si_c = sig_info(self.m, sig, Conv::C, cc);
+            let fid = match self.imports.get(callee) {
+                Some(&fid) => fid,
+                None => {
+                    let fid = self
+                        .om
+                        .declare_function(symbol, cranelift_module::Linkage::Import, &si_c.clif)
+                        .map_err(|e| ice(e.to_string()))?;
+                    self.imports.insert(callee.to_string(), fid);
+                    fid
+                }
+            };
+            let fr = self.om.declare_func_in_func(fid, self.b.func);
+            self.fref_cache.insert(callee.to_string(), (fr, Conv::C));
+            (fr, Conv::C)
+        } else if let Some((name, ..)) = RT_SYMBOLS.iter().find(|(n, ..)| n == &callee) {
+            let fr = self.rt_ref(name)?;
+            (fr, Conv::Wolf)
+        } else {
+            return Err(nyi(format!(
+                "call to external `@{callee}` (hand-declared externs beyond the \
+                 modelled c.* set are c10's header importer)"
+            )));
+        };
+        let si = sig_info(self.m, sig, conv, cc);
         let mut cargs: Vec<CValue> = Vec::new();
-        for (&av, slot) in args.iter().zip(si.params.iter()) {
-            match slot {
-                Slot::Token => {}
-                Slot::Direct(_) => cargs.push(self.scalar(av)?),
-                Slot::Indirect => cargs.push(self.addr(av)?),
-            }
-        }
-        // sret slots for aggregate results, in result order.
+        // Out-slots for memory-class results, in result order. C puts
+        // the pointer FIRST in the argument list; wolf trails it.
         let rdata = self.m.sigs[sig].results.clone();
         let mut sret_addrs: Vec<CValue> = Vec::new();
         for (&rty, slot) in rdata.iter().zip(si.rets.iter()) {
-            if *slot == Slot::Indirect {
+            if matches!(slot, RSlot::Sret { .. }) {
                 let l = self.layout_of(rty)?;
                 let s = self.new_slot(l);
                 let a = self.b.ins().stack_addr(ctypes::I64, s, 0);
                 sret_addrs.push(a);
-                cargs.push(a);
+                if si.sret_first {
+                    cargs.push(a);
+                }
             }
         }
-        let fref = match self.fref_cache.get(callee) {
-            Some(&fr) => fr,
-            None => {
-                let entry = self.funcs.get(callee).ok_or_else(|| {
-                    nyi(format!(
-                        "call to external `@{callee}` (FFI membrane lands at s29)"
-                    ))
-                })?;
-                let fr = self.om.declare_func_in_func(entry.fid, self.b.func);
-                self.fref_cache.insert(callee.to_string(), fr);
-                fr
+        for (&av, slot) in args.iter().zip(si.params.iter()) {
+            match slot {
+                Slot::Token => {}
+                Slot::Direct(_) => cargs.push(self.scalar(av)?),
+                Slot::Split(units) => {
+                    let units = units.clone();
+                    let base = self.addr(av)?;
+                    for u in &units {
+                        let v = self.load_unit(base, u);
+                        cargs.push(v);
+                    }
+                }
+                // C byval struct args take the ADDRESS as the CLIF
+                // value; Cranelift performs the stack copy.
+                Slot::Ref | Slot::CStruct(_) => cargs.push(self.addr(av)?),
             }
-        };
+        }
+        if !si.sret_first {
+            cargs.extend(sret_addrs.iter().copied());
+        }
         let call = self.b.ins().call(fref, &cargs);
         let rvals: Vec<CValue> = self.b.inst_results(call).to_vec();
         // Map declared results, then successor tokens (which trail the
         // declared results in WIR call results).
-        let mut direct_i = 0usize;
+        let mut rv_i = 0usize;
         let mut sret_i = 0usize;
         let mut wr = results.iter();
         for slot in si.rets.iter() {
             let &rv = wr.next().ok_or_else(|| ice("call result arity"))?;
             match slot {
-                Slot::Token => {
+                RSlot::Token => {
                     self.vals.insert(rv, Repr::Token);
                 }
-                Slot::Direct(_) => {
-                    self.vals.insert(rv, Repr::Scalar(rvals[direct_i]));
-                    direct_i += 1;
+                RSlot::Direct(_) => {
+                    self.vals.insert(rv, Repr::Scalar(rvals[rv_i]));
+                    rv_i += 1;
                 }
-                Slot::Indirect => {
+                RSlot::Split(units) => {
+                    // Materialize the returned units into a slot.
+                    let units = units.clone();
+                    let addr = self.units_slot_addr(&units);
+                    for u in &units {
+                        let v = rvals[rv_i];
+                        rv_i += 1;
+                        self.store_unit(addr, u, v);
+                    }
+                    self.vals.insert(rv, Repr::Addr(addr));
+                }
+                RSlot::Sret { disc_in_reg, c, .. } => {
+                    if *disc_in_reg && !c {
+                        // The register discriminant is advisory at
+                        // this tier (the tag bytes are in the slot);
+                        // consume its return position.
+                        rv_i += 1;
+                    }
                     self.vals.insert(rv, Repr::Addr(sret_addrs[sret_i]));
                     sret_i += 1;
                 }
