@@ -37,3 +37,9 @@ harness = false
 [[test]]
 name = "chan_bench"
 harness = false
+
+# Root-domain death calls process::exit ([conc.proc.root]) — the
+# scenario re-execs itself as a child process, so no libtest harness.
+[[test]]
+name = "proc_root"
+harness = false

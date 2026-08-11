@@ -63,8 +63,13 @@ pub enum ChanPhase {
 /// sched-ev/0 kind 5's native twin, `[conc.when.order]`), and the
 /// RESERVED `timer.fire` kind, activated by s33's timeout arms
 /// (`[sched.stable]`: implementing a reserved kind activates its
-/// name; s35's timer wheel inherits it). Proc/io events join in
-/// s34–s35.
+/// name; s35's timer wheel inherits it). The s34 widening appends
+/// the proc kinds per `[sched.stable]`'s append rule: `proc.spawn`,
+/// `proc.kill`, `proc.exit` ([`SchedEvent::ProcSpawn`] /
+/// [`SchedEvent::ProcKill`] / [`SchedEvent::ProcExit`] — sched-ev/0
+/// kind 8's native twin; monitor/link DELIVERIES ride the existing
+/// `chan.send` edges, so delivery order is already recorded). Io
+/// events join in s35.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedEvent {
     /// A task was made runnable under a scope.
@@ -103,6 +108,18 @@ pub enum SchedEvent {
     /// activates the reserved kind; virtual under the s36 test
     /// scheduler, monotonic in production — `[conc.select.timeout]`).
     TimerFire,
+    /// kind `proc.spawn` — a proc came up under the root supervisor
+    /// (`[conc.task.root]`; `proc` is the packed generational id).
+    ProcSpawn { proc: u64 },
+    /// kind `proc.kill` — kill teardown was requested for `proc`
+    /// (`[conc.proc.kill]` step 1 begins here; the s36 `--chaos`
+    /// kill-injection point).
+    ProcKill { proc: u64 },
+    /// kind `proc.exit` — `proc`'s exit reason was determined
+    /// (sched-ev/0 kind 8's native twin; `kind` is the reason class:
+    /// 0 normal, 1 error, 2 killed, 3 cancelled — `[conc.proc.exit]`).
+    /// Monitor/link deliveries then ride ordinary `chan.send` edges.
+    ProcExit { proc: u64, kind: u8 },
 }
 
 /// The one seam. Inlines to nothing outside test builds.

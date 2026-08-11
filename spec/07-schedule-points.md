@@ -37,6 +37,19 @@ interleaving. The closed v1 set:
   set's ids. (Appended 2026-08-11 by s33: `[conc.when.order]` and
   sched-ev/0 kind 5 already name `acquire`; this list omitted it only
   because s32 had no sync objects.)
+- `proc.spawn` — a proc comes up under the root supervisor
+  (`[conc.task.root]`; subject: the packed generational proc id).
+- `proc.kill` — kill teardown is requested for a proc
+  (`[conc.proc.kill]` step 1 begins; this is also `--chaos`'s s36
+  kill-injection point).
+- `proc.exit` — a proc's exit reason is determined (sched-ev/0 kind
+  8's native twin; subject carries the proc id and the reason class
+  per `[conc.proc.exit]`). Monitor and link DELIVERIES ride ordinary
+  `chan.send` edges, so delivery order is already recorded without a
+  separate kind. (All three appended 2026-08-11 by s34 per
+  `[sched.stable]`'s append rule — the module's "proc events join in
+  s34" reservation, activated; cross-version comparison stays by
+  verdict.)
 
 ## 2. The hook shape `[sched.point.hook]`
 

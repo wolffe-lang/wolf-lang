@@ -220,6 +220,15 @@ pub fn when_acquire(cells: &[&SyncCell]) -> Result<(), WhenErr> {
                 for &j in held.iter().rev() {
                     cells[j].release(me);
                 }
+                // Kill teardown (s34, `[conc.proc.kill]`): with the
+                // prefix released and no locks held, a killed scope's
+                // task terminates here instead of returning the
+                // cancellation value to user code.
+                if e == WhenErr::Cancelled
+                    && let Some(s) = current_scope()
+                {
+                    super::pool::kill_teardown_check(&s);
+                }
                 return Err(e);
             }
         }
