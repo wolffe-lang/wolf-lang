@@ -467,6 +467,28 @@ struct Frame<'t> {
 }
 
 /// Per-body evaluation context: the typed side tables, span-keyed.
+/// One open socket in the checked machine's table (s39 net tier).
+#[derive(Debug)]
+enum NetSock {
+    Listener(std::net::TcpListener),
+    Stream(std::net::TcpStream),
+}
+
+/// The s39 net row-tag mapping: `io::ErrorKind` → net row tag. Mirrors
+/// `wolf_rt::net::err_tag` by hand — wolf_mem and wolf_rt may not see
+/// each other (the locked graph; D15) — and the driver's `net_parity`
+/// test pins the two, exactly the fmt-shim precedent. Public for that
+/// test alone.
+pub fn net_err_tag(kind: std::io::ErrorKind) -> &'static str {
+    use std::io::ErrorKind as K;
+    match kind {
+        K::ConnectionRefused => "refused",
+        K::TimedOut | K::WouldBlock => "timeout",
+        K::ConnectionReset | K::ConnectionAborted | K::BrokenPipe | K::NotConnected => "closed",
+        _ => "io",
+    }
+}
+
 struct Ctx<'t> {
     tb: &'t TypedBody,
     node: &'t GreenNode,
@@ -508,6 +530,10 @@ struct Machine<'t> {
     /// Open file handles (s38 fs tier): index = the `int` fd wolf code
     /// holds; `None` after close.
     files: Vec<Option<std::fs::File>>,
+    /// Open sockets (s39 net tier): a separate handle namespace from
+    /// `files`, same discipline — index = the `int` fd, `None` after
+    /// close, forged/foreign fds are the `io` row.
+    socks: Vec<Option<NetSock>>,
     steps: u64,
     mem_used: u64,
     budget: Budget,
@@ -875,19 +901,93 @@ pub fn run_checked_with_input(
     budget: Budget,
     stdin: &str,
 ) -> Result<RunOutcome, NotYet> {
+    run_checked_fn(pkg, tc, budget, stdin, "main")
+}
+
+/// The `wolf test` discovery seam (s39): the entry file's top-level
+/// `test_*` functions in declaration order, each with its parameter
+/// count (the runner executes zero-parameter tests and reports
+/// parameter-carrying ones as unsupported — never silently skipped).
+pub fn discover_tests(pkg: &Package) -> Vec<(String, usize)> {
+    let file = &pkg.files[0];
+    let src = &file.raw.src;
+    let mut out = Vec::new();
+    for node in file.parse.root.nodes().filter(|n| n.kind.is_item()) {
+        let Some(d) = wolf_ast::FnDecl::cast(node) else {
+            continue;
+        };
+        let Some(tok) = d.name() else { continue };
+        let name =
+            String::from_utf8_lossy(&src[tok.span.lo as usize..tok.span.hi as usize]).into_owned();
+        if !name.starts_with("test_") {
+            continue;
+        }
+        let arity = d.params().map(|p| p.params().count()).unwrap_or(0);
+        out.push((name, arity));
+    }
+    out
+}
+
+/// Does the package declare a top-level `main`? (`wolf test` uses this
+/// to run a `_test.lu` file black-box when it carries no `test_*`
+/// functions.)
+pub fn has_main(pkg: &Package) -> bool {
+    for file in &pkg.files {
+        let src = &file.raw.src;
+        for node in file.parse.root.nodes().filter(|n| n.kind.is_item()) {
+            let Some(d) = wolf_ast::FnDecl::cast(node) else {
+                continue;
+            };
+            let Some(tok) = d.name() else { continue };
+            if &src[tok.span.lo as usize..tok.span.hi as usize] == b"main" {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Execute one named zero-parameter entry function under the UB
+/// machine — the `wolf test` execution seam (s39). `entry == "main"`
+/// is exactly [`run_checked_with_input`]; any other name must be a
+/// checked, zero-parameter, top-level fn (entry file preferred) or the
+/// run refuses honestly.
+pub fn run_checked_fn(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+    entry: &str,
+) -> Result<RunOutcome, NotYet> {
     let root_span = pkg.files[0].parse.root.span;
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
     m.stdin = stdin.to_string();
-    let main = match m.find_main() {
+    let main = match m.find_entry(entry) {
         Some(b) => b,
         None => {
             return Err(NotYet {
-                construct: "checked execution without a `main` entry",
+                construct: if entry == "main" {
+                    "checked execution without a `main` entry"
+                } else {
+                    "checked execution without the requested entry fn"
+                },
                 span: root_span,
             });
         }
     };
+    // A parameter-carrying entry has no argument source; refuse rather
+    // than invent values.
+    if let Some(ctx) = m.ctxs[main].as_ref()
+        && let Some(d) = wolf_ast::FnDecl::cast(ctx.node)
+        && d.params().map(|p| p.params().count()).unwrap_or(0) != 0
+        && entry != "main"
+    {
+        return Err(NotYet {
+            construct: "a test entry with parameters (s39 runs zero-parameter tests)",
+            span: ctx.node.span,
+        });
+    }
     match m.call_body(main, Vec::new()) {
         Ok(v) => {
             let code = match v {
@@ -982,6 +1082,7 @@ impl<'t> Machine<'t> {
             stdin: String::new(),
             stdin_pos: 0,
             files: Vec::new(),
+            socks: Vec::new(),
             steps: 0,
             mem_used: 0,
             budget: Budget::default(),
@@ -1059,11 +1160,13 @@ impl<'t> Machine<'t> {
         m
     }
 
-    fn find_main(&self) -> Option<usize> {
-        // Prefer the entry file's `main` (file 0), else any.
+    /// Find a top-level entry fn by name, preferring the entry file's
+    /// (file 0), else any. `"main"` is the classic caller; `wolf test`
+    /// asks for `test_*` names (s39).
+    fn find_entry(&self, entry: &str) -> Option<usize> {
         let mut best: Option<usize> = None;
         for ((_, name), &idx) in &self.fns {
-            if name == "main" {
+            if name == entry {
                 let file = self.tc.bodies[idx].body.file;
                 if file == 0 {
                     return Some(idx);
@@ -2798,6 +2901,156 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// The s39 net builtin tier (checked lane): REAL blocking TCP over
+    /// the host's loopback-capable stack, D30 rows only — `refused`,
+    /// `timeout`, `closed` (the peer's finish: the socket `eof`),
+    /// `utf8` on text decode, everything else coarsened to `io`. A
+    /// forged, foreign, or wrong-kind fd is `io`, never a trap. v0 is
+    /// blocking-syscall-shaped: the interpreter thread blocks in the
+    /// kernel, so no schedule point exists here (spec/07 untouched);
+    /// the s35 reactor owns the async story and appends its own
+    /// completion-arrival kind when it lands.
+    fn net_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        use std::io::{Read as _, Write as _};
+        fn tag(t: &str) -> Flow {
+            Flow::Err(Value::ErrTag {
+                tag: t.to_string(),
+                payload: Vec::new(),
+            })
+        }
+        fn coarse(kind: std::io::ErrorKind, declared: &[&str]) -> String {
+            let t = net_err_tag(kind);
+            if declared.contains(&t) { t } else { "io" }.to_string()
+        }
+        let str_arg = |i: usize| -> Option<String> {
+            match argv.get(i) {
+                Some(Value::Str(s)) => Some(s.clone()),
+                _ => None,
+            }
+        };
+        let int_arg = |i: usize| -> Option<i64> {
+            match argv.get(i) {
+                Some(Value::Int(n)) => Some(*n),
+                _ => None,
+            }
+        };
+        match name {
+            "net_listen" => {
+                let Some(addr) = str_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                match std::net::TcpListener::bind(&addr) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
+                    Ok(l) => {
+                        let fd = self.socks.len() as i64;
+                        self.socks.push(Some(NetSock::Listener(l)));
+                        Ok(Flow::Val(Value::Int(fd)))
+                    }
+                }
+            }
+            "net_port" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let addr = match self.sock(fd) {
+                    Some(NetSock::Listener(l)) => l.local_addr(),
+                    Some(NetSock::Stream(s)) => s.local_addr(),
+                    None => return Ok(tag("io")),
+                };
+                match addr {
+                    Ok(a) => Ok(Flow::Val(Value::Int(i64::from(a.port())))),
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
+                }
+            }
+            "net_accept" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let accepted = match self.sock(fd) {
+                    Some(NetSock::Listener(l)) => l.accept(),
+                    _ => return Ok(tag("io")),
+                };
+                match accepted {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["timeout", "io"]))),
+                    Ok((s, _peer)) => {
+                        let fd = self.socks.len() as i64;
+                        self.socks.push(Some(NetSock::Stream(s)));
+                        Ok(Flow::Val(Value::Int(fd)))
+                    }
+                }
+            }
+            "net_connect" => {
+                let Some(addr) = str_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                match std::net::TcpStream::connect(&addr) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["refused", "timeout", "io"]))),
+                    Ok(s) => {
+                        let fd = self.socks.len() as i64;
+                        self.socks.push(Some(NetSock::Stream(s)));
+                        Ok(Flow::Val(Value::Int(fd)))
+                    }
+                }
+            }
+            "net_read" => {
+                let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                    return Ok(tag("io"));
+                };
+                if max <= 0 {
+                    return Ok(Flow::Val(Value::Str(String::new())));
+                }
+                let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+                match s.read(&mut buf) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "timeout", "io"]))),
+                    Ok(0) => Ok(tag("closed")),
+                    Ok(n) => {
+                        buf.truncate(n);
+                        self.charge_mem(n as u64)?;
+                        match String::from_utf8(buf) {
+                            Ok(s) => Ok(Flow::Val(Value::Str(s))),
+                            Err(_) => Ok(tag("utf8")),
+                        }
+                    }
+                }
+            }
+            "net_write" => {
+                let (Some(fd), Some(payload)) = (int_arg(0), str_arg(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                    return Ok(tag("io"));
+                };
+                match s.write_all(payload.as_bytes()) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            "net_close" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                match usize::try_from(fd).ok().and_then(|i| self.socks.get_mut(i)) {
+                    Some(slot @ Some(_)) => {
+                        *slot = None; // drop closes; double close is `io`
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    _ => Ok(tag("io")),
+                }
+            }
+            _ => self.refuse("this net builtin", span),
+        }
+    }
+
+    fn sock(&mut self, fd: i64) -> Option<&mut NetSock> {
+        usize::try_from(fd)
+            .ok()
+            .and_then(|i| self.socks.get_mut(i))
+            .and_then(Option::as_mut)
+    }
+
     /// Is this expression an injected raise of a declared row tag?
     /// True when the checker recorded the `!T` union as the node's
     /// type and the node's own text names one of the row's tags —
@@ -3311,6 +3564,23 @@ impl<'t> Machine<'t> {
                     }
                 }
                 return self.io_fs_builtin(&callee_name, argv, e.span);
+            }
+            // The s39 net builtin tier: same posture as fs — real host
+            // operations, D30 rows, comptime is the one refusal site.
+            "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read" | "net_write"
+            | "net_close" => {
+                let mut argv = Vec::new();
+                for a in d.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = Arg::value(a) {
+                        let x = if let Some(place) = self.place_of(v)? {
+                            self.read_place(&place, v.span)?
+                        } else {
+                            val!(self.eval(v))
+                        };
+                        argv.push(x);
+                    }
+                }
+                return self.net_builtin(&callee_name, argv, e.span);
             }
             "assert" => {
                 // Only the FIRST argument is the condition; the

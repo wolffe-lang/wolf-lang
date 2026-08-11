@@ -2911,6 +2911,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             ));
         }
+        // The s39 net builtin tier mirrors the fs posture: checked
+        // lane executes, native lowering owes the row-returning call
+        // ABI + str materialization — an honest refusal, tier named.
+        if matches!(
+            callee_text.as_str(),
+            "net_listen"
+                | "net_port"
+                | "net_accept"
+                | "net_connect"
+                | "net_read"
+                | "net_write"
+                | "net_close"
+        ) {
+            return Err(refuse(
+                "net builtins in native lowering (checked lane only at s39)",
+                e.span,
+            ));
+        }
         if cs.is_none() {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),

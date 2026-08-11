@@ -60,6 +60,18 @@ pub const PRELUDE: &[&str] = &[
     "fs_close",
     "fs_remove",
     "fs_exists",
+    // the net builtin tier (s39, blocking TCP v0 on the checked lane;
+    // D30 rows {refused, timeout, closed, io}; I13: all tagged `net`
+    // in the sandbox table). std.net (stdc02+) DELEGATES to these —
+    // the builtin spelling is not the std API; the s35 reactor owns
+    // the real async story.
+    "net_listen",
+    "net_port",
+    "net_accept",
+    "net_connect",
+    "net_read",
+    "net_write",
+    "net_close",
     // provisional corpus stand-ins (retire with s05's real std surface)
     "acquire",
     "release",

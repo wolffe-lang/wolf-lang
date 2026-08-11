@@ -128,7 +128,11 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // rule starts here).
         "read_text" | "fs_read_text" | "fs_write_text" | "fs_open" | "fs_create" | "fs_read"
         | "fs_write" | "fs_close" | "fs_remove" | "fs_exists" => SandboxCategory::Fs,
-        "net_fetch" => SandboxCategory::Net,
+        // The s39 net builtin tier: every entry point carries the
+        // `net` capability (I13), and the whole family is refused at
+        // comptime categorically — sockets are the loudest D33 case.
+        "net_fetch" | "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read"
+        | "net_write" | "net_close" => SandboxCategory::Net,
         "env_var" => SandboxCategory::Env,
         "clock_ms" => SandboxCategory::Clock,
         "random_seed" => SandboxCategory::Random,
