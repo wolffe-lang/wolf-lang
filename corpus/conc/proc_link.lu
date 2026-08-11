@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="both-down")
+//! phase: resolve
+//! conforms: conc.proc.link.pair, conc.proc.kill
+//! [conc.proc.link.pair]: `a.link(b)` couples two procs symmetrically
+//! (the two-proc spelling is06 pinned — finding S-7); killing one of
+//! a linked pair takes both down, and the partner's monitor observes
+//! reason `killed`. Linking is idempotent per pair.
+
+fn parked() -> int {
+    let ch = channel[int](0)
+    let v = ch.recv()?                   // blocks forever
+    v
+}
+
+fn main() -> !int {
+    let a = spawn proc parked()
+    let b = spawn proc parked()
+    a.link(b)
+    a.link(b)                            // idempotent per pair
+    let m = b.monitor()
+    a.kill()                             // fate-shared: b dies too
+    select {
+        exit(reason) from m => {
+            if reason.is_killed() { print_raw("both-down") } else { print_raw("wrong") }
+        },
+        timeout(1.s) => { print_raw("timeout") },
+    }
+    0
+}
