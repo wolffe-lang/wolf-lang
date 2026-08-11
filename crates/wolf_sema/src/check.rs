@@ -2974,26 +2974,44 @@ impl<'a> Checker<'a> {
                 Some(inner) => self.place_type(inner),
                 None => Ok(self.error_ty()),
             },
-            // s22 — a raw-pointer write target `p[i] = v`: the one
-            // bracket place the raw tier adds (container-element
-            // assignment stays s17's). wolf_mem gates the write to
-            // `unsafe` blocks (E1301).
-            SyntaxKind::BracketApply
-                if BracketApply::cast(place)
-                    .and_then(|b| b.callee())
-                    .is_some_and(|recv| {
-                        // A cheap pre-probe would re-synth the
-                        // receiver; instead, peek the recorded type
-                        // when the receiver is a plain local path.
-                        PathExpr::cast(recv)
-                            .and_then(|p| p.ident())
-                            .map(|t| self.text(t.span))
-                            .and_then(|n| self.lookup_local(&n))
-                            .is_some_and(|ty| matches!(self.kind_of(ty), TyKind::Ptr(_)))
-                    }) =>
-            {
-                self.synth_bracket(place)
+            // `l[i] = v` (s17's container-element write, unblocked at
+            // s70/#55) and the s22 raw-pointer write `p[i] = v`
+            // (wolf_mem gates the latter to `unsafe` blocks, E1301).
+            // The receiver synthesizes like the read; what the bracket
+            // read refuses stays NotYetCheckable, and a `str` slice is
+            // never a place.
+            SyntaxKind::BracketApply => self.bracket_place_type(place),
+            _ => Err(NotYet {
+                construct: "assignment through this place (s17)",
+                span: place.span,
+            }),
+        }
+    }
+
+    /// The type of a `recv[idx]` PLACE (#55): `List[T]` elements and
+    /// raw-pointer cells type exactly as their reads do; `Pool`, `str`
+    /// slices and everything else the bracket read admits stay
+    /// non-places (a `str` slice is a view, a pool write is c06's).
+    fn bracket_place_type(&mut self, place: &GreenNode) -> R<TyId> {
+        let Some(d) = BracketApply::cast(place) else {
+            return Ok(self.error_ty());
+        };
+        let Some(recv) = d.callee() else {
+            return Ok(self.error_ty());
+        };
+        let recv_ty = self.synth_expr(recv)?;
+        match self.kind_of(recv_ty) {
+            TyKind::List(elem) => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                self.check_index_arg(d.args(), int_, "List index")?;
+                Ok(elem)
             }
+            TyKind::Ptr(elem) => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                self.check_index_arg(d.args(), int_, "raw pointer index")?;
+                Ok(elem)
+            }
+            TyKind::Error | TyKind::Never => Ok(self.error_ty()),
             _ => Err(NotYet {
                 construct: "assignment through this place (s17)",
                 span: place.span,
@@ -7682,9 +7700,22 @@ impl<'a> Checker<'a> {
     /// constructor.
     fn literal_pattern(&mut self, pat: &GreenNode, scrut: TyId) -> R<exhaust::Pat> {
         use exhaust::{Ctor, Pat};
-        // String literals arrive as a StringExpr node.
-        if let Some(s) = pat.nodes().find(|n| n.kind == SyntaxKind::StringExpr) {
-            if wolf_ast::StringExpr::cast(s).is_some_and(|d| d.interps().next().is_some()) {
+        // String literals arrive as a StringLit node in pattern
+        // position (the parser's raw-episode wrapper); StringExpr is
+        // kept for robustness. Treating either as anything but a str
+        // constructor made arm one swallow the whole column (#54's
+        // false E0802 on every later arm).
+        if let Some(s) = pat
+            .nodes()
+            .find(|n| matches!(n.kind, SyntaxKind::StringExpr | SyntaxKind::StringLit))
+        {
+            let interpolated = match wolf_ast::StringExpr::cast(s) {
+                Some(d) => d.interps().next().is_some(),
+                // A raw StringLit episode: interpolation is visible as
+                // an InterpOpen token.
+                None => s.tokens().any(|t| t.kind == SyntaxKind::InterpOpen),
+            };
+            if interpolated {
                 self.pattern_shape_err(
                     pat.span,
                     "an interpolated string cannot be a pattern".to_string(),

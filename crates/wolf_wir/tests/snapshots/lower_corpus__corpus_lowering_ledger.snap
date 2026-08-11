@@ -41,6 +41,11 @@ faults/bounds_slice.lu: lowers
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/overflow_add.lu: lowers
+faults/overflow_call_result.lu: lowers
+faults/overflow_elem_read.lu: lowers
+faults/overflow_elem_write.lu: lowers
+faults/overflow_field_read.lu: lowers
+faults/overflow_interp_operand.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/error_row.lu: lowers
@@ -74,6 +79,7 @@ lints/binder_capitalized.lu: lowers
 lints/discarded_result.lu: lowers
 lints/else_comparison.lu: lowers
 lints/float_zero_minus.lu: lowers
+lints/match_str_arm_unreachable.lu: lowers
 lints/mut_in_interp.lu: lowers
 lints/narrowing_literal.lu: lowers
 lints/prefix_statement.lu: lowers
@@ -90,6 +96,7 @@ memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
 memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
+memory/list_elem_assign.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
@@ -145,6 +152,7 @@ resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
 rows/eu_main_err_exit.lu: lowers
+rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: refused — generic-function lowering (monomorphization); generic-function calls (monomorphization)
 rows/inferred_private.lu: refused — module-item reads (globals, c06)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
@@ -164,6 +172,7 @@ strings/format_spec_malformed.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
 strings/interp_value_position.lu: lowers
+strings/match_str_dispatch.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
@@ -195,6 +204,7 @@ typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/match_exhaustive.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_str_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/method_inherent.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies

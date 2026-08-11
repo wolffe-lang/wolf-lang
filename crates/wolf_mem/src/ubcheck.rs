@@ -67,6 +67,7 @@ use wolf_ast::{
 };
 use wolf_diag::{Diagnostic, codes};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
+use wolf_sema::sig::ItemSig;
 use wolf_sema::types::{Prim, TyId, TyKind};
 use wolf_sema::{BodyResult, NotYet, Package, Typecheck, TypedBody};
 use wolf_span::Span;
@@ -2075,13 +2076,18 @@ impl<'t> Machine<'t> {
 
     fn eval_match(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = MatchExpr::cast(e).expect("kind");
+        // The #30 rule on the handler side (#48): the scrutinee's
+        // row/enum type names the identifiers that are TAG TESTS in
+        // arm position — everything else is a binding. Resolved once,
+        // statically, from the recorded scrutinee type.
+        let domain = d.scrutinee().and_then(|s| self.match_domain_names(s.span));
         let scrut = match d.scrutinee() {
             Some(s) => val!(self.eval(s)),
             None => Value::Unit,
         };
         for arm in d.arms() {
             let Some(pat) = arm.pattern() else { continue };
-            let bind = match self.match_pattern(pat, &scrut)? {
+            let bind = match self.match_pattern(pat, &scrut, domain.as_deref())? {
                 Some(b) => b,
                 None => continue,
             };
@@ -2113,15 +2119,44 @@ impl<'t> Machine<'t> {
         Ok(Flow::Val(Value::Unit))
     }
 
+    /// The scrutinee's tag/variant names, when its recorded type is a
+    /// row or an enum — the identifiers a bare arm pattern resolves
+    /// against BEFORE it may bind (the #30 rule, handler side). `None`
+    /// for scalar scrutinees: every identifier arm binds there.
+    fn match_domain_names(&self, span: Span) -> Option<Vec<String>> {
+        let ctx = self.ctx();
+        let mut id = *ctx.expr_tys.get(&span)?;
+        for _ in 0..32 {
+            match ctx.tb.table.kind(id) {
+                TyKind::Distinct(inner) => id = *inner,
+                _ => break,
+            }
+        }
+        match ctx.tb.table.kind(id) {
+            TyKind::Row { tags, .. } => Some(tags.iter().map(|(n, _)| n.clone()).collect()),
+            TyKind::Nominal { module, name } => match self.tc.sigs.get(*module as usize, name) {
+                Some(ItemSig::Enum { variants, .. }) => {
+                    Some(variants.iter().map(|v| v.name.clone()).collect())
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Match a pattern against a value: `None` = no match;
     /// `Some(None)` = matched, no binding; `Some(Some((name, v)))` =
     /// matched with one binding. Literal, wildcard, and single-ident
-    /// patterns only — the modelled subset.
+    /// patterns only — the modelled subset. `domain` carries the
+    /// scrutinee row/enum's tag names: a bare identifier naming one is
+    /// a tag TEST (match iff the value carries that tag), mirroring
+    /// native lowering's `domain_test` — never a catch-all binding.
     #[allow(clippy::type_complexity)]
     fn match_pattern(
         &mut self,
         pat: &'t GreenNode,
         scrut: &Value,
+        domain: Option<&[String]>,
     ) -> E<Option<Option<(String, Value)>>> {
         match pat.kind {
             SyntaxKind::WildcardPat => Ok(Some(None)),
@@ -2130,14 +2165,42 @@ impl<'t> Machine<'t> {
                 let matched = match scrut {
                     Value::Int(n) => parse_int_literal(&text) == Some(*n),
                     Value::Bool(b) => text == if *b { "true" } else { "false" },
-                    Value::Str(s) => text.len() >= 2 && &text[1..text.len() - 1] == s.as_str(),
+                    // Cook the pattern exactly as string expressions
+                    // cook (escapes, brace doubling, `"""` dedent) so
+                    // both lanes compare the same bytes (#54).
+                    Value::Str(s) => cooked_str_pattern(&text) == s.as_bytes(),
                     _ => false,
                 };
                 Ok(if matched { Some(None) } else { None })
             }
-            SyntaxKind::IdentPat | SyntaxKind::BindingPat => {
+            SyntaxKind::IdentPat => {
+                let name = self.text(pat.span);
+                let last = name.rsplit('.').next().unwrap_or(name.as_str());
+                if let Some(names) = domain
+                    && let Some(tag) = names.iter().find(|n| *n == &name || n.as_str() == last)
+                {
+                    let hit = match scrut {
+                        Value::ErrTag { tag: t, .. } => t == tag,
+                        Value::Enum { variant, .. } => variant == tag,
+                        _ => false,
+                    };
+                    return Ok(if hit { Some(None) } else { None });
+                }
+                Ok(Some(Some((name, scrut.clone()))))
+            }
+            SyntaxKind::BindingPat => {
                 let name = self.text(pat.span);
                 Ok(Some(Some((name, scrut.clone()))))
+            }
+            SyntaxKind::OrPat => {
+                // First matching alternative wins; or-alternatives
+                // never carry bindings (native lowering's rule).
+                for alt in pat.nodes().filter(|n| is_pattern_kind(n.kind)) {
+                    if self.match_pattern(alt, scrut, domain)?.is_some() {
+                        return Ok(Some(None));
+                    }
+                }
+                Ok(None)
             }
             _ => self.refuse("this pattern shape in checked execution", pat.span),
         }
@@ -4412,6 +4475,23 @@ fn dedent_multiline(inner: &[u8]) -> Vec<u8> {
 
 /// The escape decoder over a hole-free byte run — the same set the
 /// segmented rebuild uses, factored for the multiline path.
+/// Cook a str-literal PATTERN's source text into its runtime bytes:
+/// quote strip, the shared escape set, `"""` dedent — the same steps
+/// native lowering's `cooked_str_lit` takes (#54 lane parity).
+fn cooked_str_pattern(text: &str) -> Vec<u8> {
+    let bytes = text.as_bytes();
+    if bytes.starts_with(b"\"\"\"") {
+        let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
+        return decode_escapes(&dedent_multiline(inner));
+    }
+    let inner = if bytes.len() >= 2 {
+        &bytes[1..bytes.len() - 1]
+    } else {
+        bytes
+    };
+    decode_escapes(inner)
+}
+
 fn decode_escapes(bytes: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0usize;
