@@ -122,6 +122,50 @@ thread_local! {
     /// plus nested `scope { }` blocks pushed by the owner.
     static SCOPE_STACK: RefCell<Vec<Arc<ScopeInner>>> =
         const { RefCell::new(Vec::new()) };
+    /// True while a `Body::Rust` task body runs on this thread — the
+    /// only frames kill teardown may unwind (s34). C-ABI frames are
+    /// never unwound (`[conc.cancel.c]`'s discipline extended to
+    /// kill: compiled tasks get kill delivery when codegen lowers the
+    /// no-defer teardown branch — the honest s34 refusal).
+    static IN_RUST_TASK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// The kill-teardown unwind payload (s34, `[conc.proc.kill]` step 1):
+/// blocking points in a killed scope terminate their task by raising
+/// this token instead of returning a value, so NO further user code —
+/// and therefore no `defer` — runs on the killed path (contrast
+/// cancellation, which surfaces as a value and lets ordinary returns
+/// run the defers: `[conc.cancel.defer]` vs `[conc.proc.kill]`, D14's
+/// signature distinction). [`run_task`] catches it at the task
+/// boundary and records [`ExitReason::Killed`].
+pub(crate) struct KilledToken;
+
+/// Raise kill teardown if `scope` sits in a killed proc tree and the
+/// current frame stack is unwindable (a Rust task body). Callers must
+/// hold NO locks: the token skips their cleanup (that is its job for
+/// user code, but runtime state must already be consistent — waiter
+/// cells committed, prefixes released).
+pub(crate) fn kill_teardown_check(scope: &ScopeInner) {
+    if scope.is_killed() && IN_RUST_TASK.with(std::cell::Cell::get) {
+        std::panic::panic_any(KilledToken);
+    }
+}
+
+/// Run `f` with kill-teardown unwinding suppressed: the frames below
+/// are C ABI (never unwound — `[conc.cancel.c]` extended to kill), so
+/// blocking points inside surface the cancelled status VALUE instead
+/// of the token. The compiled-body teardown branch is the codegen
+/// sprint's; this keeps the C proc entry sound until then.
+pub(crate) fn suppress_kill_unwind<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            IN_RUST_TASK.with(|c| c.set(self.0));
+        }
+    }
+    let prev = IN_RUST_TASK.with(|c| c.replace(false));
+    let _g = Restore(prev);
+    f()
 }
 
 /// The innermost scope on the calling thread (spawn parenting, C
@@ -240,7 +284,20 @@ fn wake_one(p: &Pool) {
 
 /// Wrap a runtime-owned blocking wait: mark the worker blocked so the
 /// pool can compensate (Target 6). Non-worker threads pass through.
+///
+/// Handler atomicity (s34, `[conc.chan.mailbox]`): proc message
+/// handlers are atomic and NON-BLOCKING — a handler that must block
+/// spawns the work onto its proc's scope instead. The checker rejects
+/// what it can see statically; this debug-assert is the defense in
+/// depth at every runtime-owned blocking point (release builds
+/// compile it out).
 pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
+    debug_assert!(
+        !super::proc::in_handler(),
+        "blocking primitive called inside a proc message handler \
+         ([conc.chan.mailbox]: handlers are atomic and non-blocking — \
+         spawn the work onto the proc's scope and complete via a message)"
+    );
     let Some(w) = WORKER_ID.with(std::cell::Cell::get) else {
         return f();
     };
@@ -408,10 +465,27 @@ fn run_task(task: Box<Task>) {
             let ctx = TaskCtx {
                 scope: scope.clone(),
             };
+            // Unwind-safe flag guard: kill teardown may only unwind
+            // Rust task frames, and the flag must reset even when the
+            // body unwinds (workers are pooled — TLS outlives tasks).
+            struct RustTaskFlag;
+            impl Drop for RustTaskFlag {
+                fn drop(&mut self) {
+                    IN_RUST_TASK.with(|c| c.set(false));
+                }
+            }
             // D30: a panic becomes an exit reason, never an unwind
-            // across the scheduler.
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&ctx)))
-                .unwrap_or(ExitReason::Panicked)
+            // across the scheduler. The kill-teardown token is the
+            // one distinguished payload (`[conc.proc.kill]` step 1).
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                IN_RUST_TASK.with(|c| c.set(true));
+                let _guard = RustTaskFlag;
+                f(&ctx)
+            })) {
+                Ok(reason) => reason,
+                Err(payload) if payload.is::<KilledToken>() => ExitReason::Killed,
+                Err(_) => ExitReason::Panicked,
+            }
         }
         Body::C { entry, env } => {
             // SAFETY: codegen's contract — `entry` is the lowered

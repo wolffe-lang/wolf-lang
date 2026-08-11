@@ -175,11 +175,61 @@ pub extern "C" fn __wolf_rt_print_bool(v: i8) {
 const CHUNK_MIN: usize = 16 * 1024;
 const ALIGN: usize = 16;
 
+/// The proc-ledger seam (s34, sprint Target 2): when procs exist, the
+/// proc layer accounts every region create/free against its owning
+/// proc (count + bytes — the per-proc resource accounting Erlang
+/// never had) and bulk-frees the ledger on proc exit. The seam is a
+/// function-pointer table installed by the proc registry's lazy init:
+/// a binary that never spawns a proc never installs it, keeps zero
+/// static reference from region code into the proc layer (D15 — the
+/// `--gc-sections` link drops the registry outright), and pays one
+/// null-check per region create/free.
+pub(crate) struct RegionLedgerHooks {
+    /// A region was created; `handle` is its opaque address.
+    pub on_new: fn(handle: usize),
+    /// A region is about to free; `bytes` is its ledger weight.
+    pub on_free: fn(handle: usize, bytes: usize),
+}
+
+static LEDGER_HOOKS: std::sync::atomic::AtomicPtr<RegionLedgerHooks> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+
+/// Install the proc-ledger hooks (once, from the proc registry's lazy
+/// init). The table leaks by design: it lives for the process.
+pub(crate) fn install_region_ledger_hooks(hooks: &'static RegionLedgerHooks) {
+    LEDGER_HOOKS.store(
+        std::ptr::from_ref(hooks).cast_mut(),
+        std::sync::atomic::Ordering::SeqCst,
+    );
+}
+
+fn ledger_hooks() -> Option<&'static RegionLedgerHooks> {
+    let p = LEDGER_HOOKS.load(std::sync::atomic::Ordering::SeqCst);
+    // SAFETY: only ever null or a leaked 'static table.
+    unsafe { p.cast_const().as_ref() }
+}
+
+/// A region's current ledger weight in bytes (the proc layer reads it
+/// at ownership-transfer seams — `region_transfer`/`region_adopt`).
+///
+/// # Safety
+///
+/// `handle` must be a live pointer from [`__wolf_rt_region_new`].
+pub(crate) unsafe fn region_bytes(handle: *mut core::ffi::c_void) -> usize {
+    // SAFETY: caller contract — live region handle.
+    let r: &Region = unsafe { &*handle.cast() };
+    r.bytes
+}
+
 struct Region {
     /// Owned chunks: (base pointer as a boxed allocation, capacity).
     chunks: Vec<Box<[u8]>>,
     /// Bump cursor within the last chunk.
     used: usize,
+    /// Total bytes ever bump-allocated (aligned) — the ledger weight.
+    /// Tracked unconditionally (one add on the alloc path); read only
+    /// through the proc-ledger seam.
+    bytes: usize,
 }
 
 /// `region.new` — a fresh region arena. Returns the opaque handle.
@@ -188,8 +238,13 @@ pub extern "C" fn __wolf_rt_region_new() -> *mut core::ffi::c_void {
     let r = Box::new(Region {
         chunks: Vec::new(),
         used: 0,
+        bytes: 0,
     });
-    Box::into_raw(r).cast()
+    let handle: *mut core::ffi::c_void = Box::into_raw(r).cast();
+    if let Some(h) = ledger_hooks() {
+        (h.on_new)(handle as usize);
+    }
+    handle
 }
 
 /// `region.alloc` — bump-allocate `size` bytes (16-aligned) in the
@@ -220,6 +275,7 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
     let chunk = r.chunks.last_mut().expect("chunk exists");
     let p = unsafe { chunk.as_mut_ptr().add(r.used) };
     r.used += size;
+    r.bytes += size;
     p
 }
 
@@ -233,7 +289,12 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
 /// pointer into the region may be used afterwards.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
-    drop(unsafe { Box::<Region>::from_raw(handle.cast()) });
+    // SAFETY: caller contract — live handle, dead after this call.
+    let r = unsafe { Box::<Region>::from_raw(handle.cast()) };
+    if let Some(h) = ledger_hooks() {
+        (h.on_free)(handle as usize, r.bytes);
+    }
+    drop(r);
 }
 
 /// `sync.freeze` — v0 no-op (freezing is a capability change enforced

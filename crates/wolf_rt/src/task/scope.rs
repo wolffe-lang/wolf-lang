@@ -35,7 +35,10 @@ use super::pool;
 
 /// How a task or scope run ended. This shape is pinned by snapshot
 /// (the sibling-cancel acceptance test); extending it is a reviewed
-/// change — s34's proc exit reasons (`[conc.proc.exit]`) build on it.
+/// change — s34's proc exit reasons (`[conc.proc.exit]`) build on it
+/// (`Killed` is that reviewed extension: the kill-teardown outcome of
+/// `[conc.proc.kill]`, distinct from `Cancelled` because the two run
+/// different defer laws — D14's signature distinction).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExitReason {
     /// Completed with its value.
@@ -50,11 +53,16 @@ pub enum ExitReason {
     Panicked,
     /// Structured cancellation reached the task at a blocking point.
     Cancelled,
+    /// Kill teardown reached the task at a blocking point: the task
+    /// terminated WITHOUT running further user code
+    /// (`[conc.proc.kill]` step 1 — contrast `Cancelled`, whose
+    /// blocking point returns a value and lets defers run).
+    Killed,
 }
 
 impl ExitReason {
-    /// Failures fail the scope; `Cancelled` is a consequence, not a
-    /// cause, and `Normal` is success.
+    /// Failures fail the scope; `Cancelled` and `Killed` are
+    /// consequences, not causes, and `Normal` is success.
     fn is_failure(&self) -> bool {
         matches!(self, ExitReason::Error { .. } | ExitReason::Panicked)
     }
@@ -112,6 +120,12 @@ pub struct ScopeInner {
     name: Box<str>,
     parent: Option<Weak<ScopeInner>>,
     cancelled: AtomicBool,
+    /// Kill teardown (s34, `[conc.proc.kill]`): a killed scope is also
+    /// cancelled, but blocking points additionally refuse to return to
+    /// user code (proc.rs's `kill_teardown_check`). The flag lives on
+    /// the scope — not the proc — so the channel/when blocking paths
+    /// need no proc-layer linkage (D15).
+    killed: AtomicBool,
     state: Mutex<ScopeState>,
     cv: Condvar,
 }
@@ -131,6 +145,7 @@ impl ScopeInner {
             name: name.into(),
             parent: parent.map(Arc::downgrade),
             cancelled: AtomicBool::new(false),
+            killed: AtomicBool::new(false),
             state: Mutex::new(ScopeState {
                 live: 0,
                 first_fail: None,
@@ -172,6 +187,40 @@ impl ScopeInner {
         self.cv.notify_all();
     }
 
+    /// Deliver kill teardown (`[conc.proc.kill]` step 1): the scope is
+    /// cancelled AND marked killed, so blocking points terminate their
+    /// task without returning to user code (defers do not run). Only
+    /// the proc layer calls this — there is no task-level kill in the
+    /// language.
+    pub fn kill(&self) {
+        self.killed.store(true, SeqCst);
+        self.cancel();
+    }
+
+    /// Killed, directly or through an enclosing scope (kill reaches
+    /// the whole proc task tree, same chain walk as [`Self::is_cancelled`]).
+    pub fn is_killed(&self) -> bool {
+        if self.killed.load(SeqCst) {
+            return true;
+        }
+        match &self.parent {
+            Some(p) => p.upgrade().is_some_and(|p| p.is_killed()),
+            None => false,
+        }
+    }
+
+    /// The root of this scope's parent chain — the proc-root scope for
+    /// scopes inside a proc (proc.rs's scope→proc attribution). A
+    /// dropped mid-chain parent terminates the walk (v0: scopes
+    /// outlive their tasks in every supported shape).
+    pub fn root(self: &Arc<ScopeInner>) -> Arc<ScopeInner> {
+        let mut cur = self.clone();
+        while let Some(p) = cur.parent.as_ref().and_then(Weak::upgrade) {
+            cur = p;
+        }
+        cur
+    }
+
     /// Register a child about to be spawned; returns its task id.
     /// The name is shared with the task object (one allocation on the
     /// spawn path — it is on the sub-microsecond budget).
@@ -205,7 +254,7 @@ impl ScopeInner {
             } else {
                 st.context.push(reason);
             }
-        } else if reason == ExitReason::Cancelled {
+        } else if matches!(reason, ExitReason::Cancelled | ExitReason::Killed) {
             st.context.push(reason);
         }
         st.live -= 1;
@@ -255,6 +304,9 @@ impl ScopeInner {
                 st = g;
             }
         });
+        // Kill teardown (s34): a killed scope's task terminates here
+        // rather than resuming user code (`[conc.proc.kill]` step 1).
+        pool::kill_teardown_check(self);
     }
 
     /// Failure context attached after the first (`[conc.task.fail]`).

@@ -303,6 +303,11 @@ impl Chan {
             Committed::Closed => Err(ChanErr::Closed),
             Committed::Cancelled => {
                 self.remove_waiters_of(&cell);
+                // Kill teardown (s34, `[conc.proc.kill]`): with the
+                // channel state consistent again, a killed scope's
+                // task terminates HERE — the cancelled error value is
+                // never returned, so no defer runs on the kill path.
+                kill_teardown_check_current();
                 Err(ChanErr::Cancelled)
             }
             Committed::RecvOk(_) | Committed::Timeout => unreachable!("send cell"),
@@ -378,6 +383,8 @@ impl Chan {
             Committed::Closed => Err(ChanErr::Closed),
             Committed::Cancelled => {
                 self.remove_waiters_of(&cell);
+                // Kill teardown — see the twin comment in `send`.
+                kill_teardown_check_current();
                 Err(ChanErr::Cancelled)
             }
             Committed::SentOk | Committed::Timeout => unreachable!("recv cell"),
@@ -664,8 +671,22 @@ pub fn select_with(
                 Arm::Send(ch, _) => commit(Selected::SendClosed { arm: arm as usize }, ch.id, true),
             },
             Committed::Timeout => Selected::Timeout,
-            Committed::Cancelled => Selected::Cancelled,
+            Committed::Cancelled => {
+                // Kill teardown — registrations are already cleaned
+                // off every arm above; see the twin comment in `send`.
+                kill_teardown_check_current();
+                Selected::Cancelled
+            }
         };
+    }
+}
+
+/// [`super::pool::kill_teardown_check`] against the calling task's
+/// scope — the shared tail of every cancelled-resolution branch. Must
+/// be called with no channel locks held.
+fn kill_teardown_check_current() {
+    if let Some(s) = current_scope() {
+        super::pool::kill_teardown_check(&s);
     }
 }
 

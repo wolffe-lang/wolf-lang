@@ -38,7 +38,9 @@
 //! `__wolf_rt_chan_new/clone/free/send/send_region/recv/close`,
 //! `__wolf_rt_select` — and the `when` family in when.rs —
 //! `__wolf_rt_sync_new/free/payload`,
-//! `__wolf_rt_when_acquire/release` — frozen the same way, ahead of
+//! `__wolf_rt_when_acquire/release`; s34 adds the proc family in
+//! proc.rs — `__wolf_rt_proc_spawn/self/monitor/link/kill/cancel`,
+//! `__wolf_rt_region_adopt` — frozen the same way, ahead of
 //! consumption):
 //!
 //! - [`__wolf_rt_scope_new`] — open a scope; the returned handle IS
@@ -75,6 +77,7 @@ mod chan;
 mod deque;
 mod hooks;
 mod pool;
+mod proc;
 mod scope;
 #[cfg(unix)]
 mod stack;
@@ -87,6 +90,13 @@ pub use chan::{
 };
 pub use hooks::{ChanPhase, SchedEvent, SchedRng};
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
+pub use proc::{
+    __wolf_rt_proc_cancel, __wolf_rt_proc_kill, __wolf_rt_proc_link, __wolf_rt_proc_monitor,
+    __wolf_rt_proc_self, __wolf_rt_proc_spawn, __wolf_rt_region_adopt, ProcErr, ProcExit,
+    ProcOutcome, ROOT_DEATH_EXIT, ROOT_DOMAIN, RestartPolicy, Supervised, TRAP_ERROR_TAG, cancel,
+    current_proc, kill, ledger_live, link, monitor, proc_ledger, set_trap_exit, spawn_proc,
+    supervise, with_handler,
+};
 pub use scope::{ExitReason, ScopeInner, TaskState, dump};
 pub use when::{
     __wolf_rt_sync_free, __wolf_rt_sync_new, __wolf_rt_sync_payload, __wolf_rt_when_acquire,
@@ -166,7 +176,7 @@ impl Gate {
     /// scope is cancelled, returning `false` (`[conc.cancel.points]`:
     /// cancellation surfaces as a value at the blocking point).
     pub fn wait(&self, ctx: &TaskCtx) -> bool {
-        blocking(|| {
+        let opened = blocking(|| {
             let mut opened = self.state.lock().unwrap();
             loop {
                 if *opened {
@@ -181,7 +191,14 @@ impl Gate {
                     .unwrap();
                 opened = g;
             }
-        })
+        });
+        if !opened {
+            // Kill teardown (s34): a killed scope terminates the task
+            // here; a merely-cancelled one sees `false` and runs its
+            // defers by ordinary returns.
+            pool::kill_teardown_check(&ctx.scope);
+        }
+        opened
     }
 }
 
@@ -189,7 +206,7 @@ impl Gate {
 
 use core::ffi::c_void;
 
-fn name_from_raw(ptr: *const u8, len: i64) -> String {
+pub(crate) fn name_from_raw(ptr: *const u8, len: i64) -> String {
     if ptr.is_null() || len <= 0 {
         return String::new();
     }
@@ -298,6 +315,10 @@ pub extern "C" fn __wolf_rt_task_checkpoint() -> i8 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_transfer(handle: *mut c_void) -> *mut c_void {
     hooks::sched_point(SchedEvent::RegionTransfer);
+    // s34 ledger half: ownership leaves the donor proc at the move;
+    // the receiver attaches via `__wolf_rt_region_adopt` (in-flight
+    // regions belong to the channel — `[conc.chan.move]`).
+    proc::region_transferred(handle as usize);
     handle
 }
 
@@ -387,7 +408,9 @@ mod tests {
     }
 
     /// The exit-reason shape, pinned (acceptance: "snapshot the
-    /// exit-reason shape"). Changing this is a reviewed change.
+    /// exit-reason shape"). Changing this is a reviewed change —
+    /// `Killed` is s34's reviewed extension (the kill-teardown
+    /// outcome, `[conc.proc.kill]`).
     #[test]
     fn exit_reason_shape_snapshot() {
         let shapes = [
@@ -395,10 +418,17 @@ mod tests {
             format!("{:?}", ExitReason::Error { tag: 7 }),
             format!("{:?}", ExitReason::Panicked),
             format!("{:?}", ExitReason::Cancelled),
+            format!("{:?}", ExitReason::Killed),
         ];
         assert_eq!(
             shapes,
-            ["Normal", "Error { tag: 7 }", "Panicked", "Cancelled",]
+            [
+                "Normal",
+                "Error { tag: 7 }",
+                "Panicked",
+                "Cancelled",
+                "Killed",
+            ]
         );
     }
 
@@ -554,6 +584,9 @@ mod tests {
                 SchedEvent::SelectArm { .. } => "select-arm",
                 SchedEvent::Acquire { .. } => "acquire",
                 SchedEvent::TimerFire => "timer",
+                SchedEvent::ProcSpawn { .. } => "proc-spawn",
+                SchedEvent::ProcKill { .. } => "proc-kill",
+                SchedEvent::ProcExit { .. } => "proc-exit",
             };
             SEEN.lock().unwrap().push(tag);
         })));

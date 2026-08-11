@@ -81,7 +81,10 @@ fn no_spawn_binary_has_no_scheduler_symbols() {
         "symbol table unreadable or stripped — the assertion below \
          would be vacuous"
     );
-    // The law: no scheduler surface in a no-spawn binary.
+    // The law: no scheduler surface in a no-spawn binary — and no
+    // proc registry/supervisor surface in a no-proc binary (the s34
+    // half of the same D15 check: a no-spawn program is a fortiori
+    // no-proc).
     for banned in [
         "__wolf_rt_scope_new",
         "__wolf_rt_scope_spawn",
@@ -89,6 +92,13 @@ fn no_spawn_binary_has_no_scheduler_symbols() {
         "__wolf_rt_task_checkpoint",
         "__wolf_rt_region_transfer",
         "__wolf_rt_dump_tasks",
+        "__wolf_rt_proc_spawn",
+        "__wolf_rt_proc_self",
+        "__wolf_rt_proc_monitor",
+        "__wolf_rt_proc_link",
+        "__wolf_rt_proc_kill",
+        "__wolf_rt_proc_cancel",
+        "__wolf_rt_region_adopt",
     ] {
         assert!(
             !syms.iter().any(|s| s == banned),
