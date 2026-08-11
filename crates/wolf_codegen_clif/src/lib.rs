@@ -82,6 +82,9 @@ pub struct ClifBackend {
     rt: HashMap<&'static str, cranelift_module::FuncId>,
     /// C membrane imports declared so far (`c.*` callee names, s29).
     imports: HashMap<String, cranelift_module::FuncId>,
+    /// Module data blobs defined so far (s31 str/data): WIR data index
+    /// → object data id, lazily defined on first `data.addr`.
+    data_ids: HashMap<u32, cranelift_module::DataId>,
     symbols: Vec<SymbolInfo>,
     /// CLIF text of every defined function, in definition order — the
     /// golden-snapshot surface (lowering changes are reviewed diffs).
@@ -137,6 +140,7 @@ impl ClifBackend {
             by_id: HashMap::new(),
             rt: HashMap::new(),
             imports: HashMap::new(),
+            data_ids: HashMap::new(),
             symbols: Vec::new(),
             clif_texts: Vec::new(),
             debug_sections: Vec::new(),
@@ -234,6 +238,7 @@ impl Backend for ClifBackend {
                 &self.funcs,
                 &mut self.rt,
                 &mut self.imports,
+                &mut self.data_ids,
             )?;
         }
         let symbol = self
@@ -547,7 +552,33 @@ pub fn compile_module(
     entry_shim: Option<FuncId>,
     debug: &mut dyn DebugSink,
 ) -> Result<(), BackendError> {
-    for (id, f) in m.funcs.iter() {
+    let all: Vec<FuncId> = m.funcs.keys().collect();
+    compile_selected(backend, m, &all, entry_shim, true, false, debug)
+}
+
+/// [`compile_module`] restricted to a subset of the module's functions
+/// — the s31 per-module object seam. Wolf functions are declared
+/// `Export` when `cross_module` (other objects call them by mangled
+/// symbol; calls to functions OUTSIDE the subset import the same
+/// mangled names — see the translator's callee fallback), `Local` in a
+/// single-object build. The trap-info table is emitted only where
+/// `trap_table` (exactly one object per executable — the entry one).
+pub fn compile_selected(
+    backend: &mut dyn Backend,
+    m: &WirModule,
+    funcs: &[FuncId],
+    entry_shim: Option<FuncId>,
+    trap_table_here: bool,
+    cross_module: bool,
+    debug: &mut dyn DebugSink,
+) -> Result<(), BackendError> {
+    let wolf_linkage = if cross_module {
+        Linkage::Export
+    } else {
+        Linkage::Local
+    };
+    for &id in funcs {
+        let f = &m.funcs[id];
         let (symbol, linkage) = if Some(id) == entry_shim {
             ("main".to_string(), Linkage::Export)
         } else if f.export {
@@ -555,14 +586,16 @@ pub fn compile_module(
             // visible, defined under the SysV plan.
             (f.name.clone(), Linkage::Export)
         } else {
-            (mangle(m, &f.name, f.sig), Linkage::Local)
+            (mangle(m, &f.name, f.sig), wolf_linkage)
         };
         backend.declare_function(m, id, &f.name, &symbol, f.sig, linkage)?;
     }
-    for (id, f) in m.funcs.iter() {
-        backend.define_function(m, id, f, debug)?;
+    for &id in funcs {
+        backend.define_function(m, id, &m.funcs[id], debug)?;
     }
-    backend.define_data(TRAP_TABLE_SYMBOL, &trap_table(), Linkage::Local)?;
+    if trap_table_here {
+        backend.define_data(TRAP_TABLE_SYMBOL, &trap_table(), Linkage::Local)?;
+    }
     Ok(())
 }
 

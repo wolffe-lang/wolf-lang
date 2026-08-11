@@ -112,6 +112,59 @@ pub extern "C" fn __wolf_rt_main_err(tag: i64, len: i64, w0: i64, w1: i64, w2: i
     std::process::exit(1)
 }
 
+// ---- the v0 print path (s31) ---------------------------------------------
+//
+// `print`/`print_raw` lower to per-segment calls: literal chunks and
+// str values through [`__wolf_rt_print_str`], integer holes through
+// [`__wolf_rt_print_i64`], bool holes through [`__wolf_rt_print_bool`].
+// Formatting matches the reference interpreter's `format_value`
+// (Rust `to_string` on both sides — the parity is by construction).
+// Every call flushes: the process exits through the C entry shim, so
+// no Rust exit hook ever runs to drain a buffer.
+
+/// Write `len` bytes at `ptr` to stdout, flushed.
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes (compiled wolf code passes
+/// rodata or checked str values only).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_print_str(ptr: *const u8, len: i64) {
+    if ptr.is_null() || len <= 0 {
+        return;
+    }
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
+    let mut out = std::io::stdout().lock();
+    let _ = out.write_all(bytes);
+    let _ = out.flush();
+}
+
+/// Write a signed 64-bit integer in decimal to stdout, flushed.
+///
+/// # Safety
+///
+/// Callable from any thread at any time; takes no pointers.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_print_i64(v: i64) {
+    let mut out = std::io::stdout().lock();
+    let _ = write!(out, "{v}");
+    let _ = out.flush();
+}
+
+/// Write `true`/`false` to stdout, flushed. The parameter is `i8` —
+/// WIR bools cross the call boundary as one byte (only the low byte of
+/// the register is defined under SysV).
+///
+/// # Safety
+///
+/// Callable from any thread at any time; takes no pointers.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_print_bool(v: i8) {
+    let mut out = std::io::stdout().lock();
+    let _ = write!(out, "{}", v != 0);
+    let _ = out.flush();
+}
+
 // ---- the v0 bump-region allocator ----------------------------------------
 
 const CHUNK_MIN: usize = 16 * 1024;

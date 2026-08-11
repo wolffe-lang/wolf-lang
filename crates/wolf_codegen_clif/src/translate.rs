@@ -54,13 +54,19 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 6] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 9] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
     ("__wolf_rt_region_free", 1, false),
     ("__wolf_rt_region_freeze", 1, false),
     ("__wolf_rt_main_err", 6, false),
+    // The s31 print path: `print` lowers to per-segment writes — bytes
+    // (ptr, len), decimal i64, `true`/`false` — flushed per call so no
+    // buffered bytes outlive the C-shim `main` return.
+    ("__wolf_rt_print_str", 2, false),
+    ("__wolf_rt_print_i64", 1, false),
+    ("__wolf_rt_print_bool", 1, false),
 ];
 
 /// How one WIR parameter crosses the call boundary (the mechanical
@@ -259,6 +265,10 @@ struct Tx<'a, 'b> {
     rt: &'a mut HashMap<&'static str, cranelift_module::FuncId>,
     /// C membrane imports declared so far (`c.*` callee → func id).
     imports: &'a mut HashMap<String, cranelift_module::FuncId>,
+    /// Module data blobs defined so far (`data.addr` targets, s31):
+    /// WIR data index → object data id. Lazily defined on first
+    /// reference, so an object carries exactly the data it uses.
+    data_ids: &'a mut HashMap<u32, cranelift_module::DataId>,
     blocks: HashMap<WBlock, cranelift_codegen::ir::Block>,
     vals: HashMap<wolf_wir::ir::Value, Repr>,
     /// Slots owned by aggregate-typed block params of non-entry blocks.
@@ -309,6 +319,7 @@ pub(crate) fn translate_function(
     funcs: &HashMap<String, FuncEntry>,
     rt: &mut HashMap<&'static str, cranelift_module::FuncId>,
     imports: &mut HashMap<String, cranelift_module::FuncId>,
+    data_ids: &mut HashMap<u32, cranelift_module::DataId>,
 ) -> Result<Vec<(String, DebugTy, StackSlot, bool)>, BackendError> {
     let mut tx = Tx {
         b,
@@ -319,6 +330,7 @@ pub(crate) fn translate_function(
         funcs,
         rt,
         imports,
+        data_ids,
         blocks: HashMap::new(),
         vals: HashMap::new(),
         param_slots: HashMap::new(),
@@ -623,10 +635,13 @@ impl<'a, 'b> Tx<'a, 'b> {
                     .ok_or_else(|| ice(format!("unknown runtime symbol {name}")))?;
                 let mut sig = Signature::new(self.om.isa().default_call_conv());
                 for i in 0..nparams {
-                    // The trap code is i32; every other shim param is a
-                    // pointer/size i64.
+                    // The trap code is i32, the bool print shim takes
+                    // an i8 (WIR bool crosses as I8); every other shim
+                    // param is a pointer/size i64.
                     let ty = if name == "__wolf_rt_trap" && i == 0 {
                         ctypes::I32
+                    } else if name == "__wolf_rt_print_bool" && i == 0 {
+                        ctypes::I8
                     } else {
                         ctypes::I64
                     };
@@ -1099,6 +1114,41 @@ impl<'a, 'b> Tx<'a, 'b> {
                 }
             }
 
+            // ---- module data (s31: string literals in rodata) ----
+            Opcode::DataAddr => {
+                let Aux::Data(idx) = data.aux else {
+                    return Err(ice("data.addr without payload"));
+                };
+                let did = match self.data_ids.get(&idx) {
+                    Some(&did) => did,
+                    None => {
+                        let d = self
+                            .m
+                            .data
+                            .get(idx as usize)
+                            .ok_or_else(|| ice("data.addr names missing data"))?;
+                        // Local read-only bytes; the `_W.` prefix keeps
+                        // wolf data out of the C namespace like `_W`
+                        // function mangling does.
+                        let sym = format!("_W.{}", d.name);
+                        let did = self
+                            .om
+                            .declare_data(&sym, cranelift_module::Linkage::Local, false, false)
+                            .map_err(|e| ice(e.to_string()))?;
+                        let mut desc = cranelift_module::DataDescription::new();
+                        desc.define(d.bytes.clone().into_boxed_slice());
+                        self.om
+                            .define_data(did, &desc)
+                            .map_err(|e| ice(e.to_string()))?;
+                        self.data_ids.insert(idx, did);
+                        did
+                    }
+                };
+                let gv = self.om.declare_data_in_func(did, self.b.func);
+                let p = self.b.ins().symbol_value(ctypes::I64, gv);
+                self.vals.insert(results[0], Repr::Scalar(p));
+            }
+
             // ---- calls ----
             Opcode::Call => {
                 let Aux::Callee(ef) = data.aux else {
@@ -1525,6 +1575,28 @@ impl<'a, 'b> Tx<'a, 'b> {
             (fr, Conv::C)
         } else if let Some((name, ..)) = RT_SYMBOLS.iter().find(|(n, ..)| n == &callee) {
             let fr = self.rt_ref(name)?;
+            (fr, Conv::Wolf)
+        } else if self.m.funcs.values().any(|f| f.name == callee) {
+            // A wolf function OUTSIDE this object's subset (s31
+            // per-module objects): import its mangled symbol under the
+            // wolf plan. The mangle folds name + rendered sig +
+            // convention version, so the import and the defining
+            // object's export agree structurally (D7 at link grain).
+            let si_w = sig_info(self.m, sig, Conv::Wolf, cc);
+            let symbol = wolf_backend::mangle(self.m, callee, sig);
+            let fid = match self.imports.get(callee) {
+                Some(&fid) => fid,
+                None => {
+                    let fid = self
+                        .om
+                        .declare_function(&symbol, cranelift_module::Linkage::Import, &si_w.clif)
+                        .map_err(|e| ice(e.to_string()))?;
+                    self.imports.insert(callee.to_string(), fid);
+                    fid
+                }
+            };
+            let fr = self.om.declare_func_in_func(fid, self.b.func);
+            self.fref_cache.insert(callee.to_string(), (fr, Conv::Wolf));
             (fr, Conv::Wolf)
         } else {
             return Err(nyi(format!(
