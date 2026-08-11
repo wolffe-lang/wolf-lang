@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 //! s32 acceptance — spawn/join microbench (D5). Prints the numbers
 //! the campaign closeout records and asserts only a loose sanity
 //! ceiling (CI boxes vary; the <1µs spawn-median gate binds on the

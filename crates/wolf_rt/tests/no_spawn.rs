@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 //! s32 Target 1 — "a wolf binary that never spawns is a C binary":
 //! the runtime half. No scheduler state, no background threads exist
 //! before the first spawn; they exist after. `harness = false`

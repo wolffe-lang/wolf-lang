@@ -1,3 +1,4 @@
+#![cfg(target_os = "linux")]
 //! s32 Target 3 acceptance — hitting the guard page is a
 //! deterministic fault whose diagnostic NAMES the task. Runs the
 //! overflow in a subprocess (re-exec of this binary) and asserts the
