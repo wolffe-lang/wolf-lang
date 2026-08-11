@@ -136,16 +136,216 @@ pub enum SchedEvent {
     ProcExit { proc: u64, kind: u8 },
 }
 
-/// The one seam. Inlines to nothing outside test builds.
+/// The one seam. Inlines to nothing outside test builds (`test` or
+/// the `sched-test` feature — the debug-tier runtime's hook switch;
+/// release staticlibs carry no hook code, D15/D5 bench-verified).
 #[inline(always)]
 pub fn sched_point(event: SchedEvent) {
-    #[cfg(test)]
-    test_hook::dispatch(&event);
-    #[cfg(not(test))]
+    #[cfg(any(test, feature = "sched-test"))]
+    {
+        super::det::on_event(&event);
+        test_hook::dispatch(&event);
+    }
+    #[cfg(not(any(test, feature = "sched-test")))]
     let _ = event;
 }
 
-#[cfg(test)]
+/// `sched-ev/1` kind numbering (s36 Phase B, spec/07 §1.1) —
+/// append-only per `[sched.stable]`: new kinds take the next number,
+/// nothing renumbers. Kind 0 is `pick` (the grant decision itself,
+/// emitted by the det scheduler, not by a seam site).
+pub fn kind_code(ev: &SchedEvent) -> u8 {
+    match ev {
+        SchedEvent::Spawn { .. } => 1,
+        SchedEvent::Join { .. } => 2,
+        SchedEvent::Park { .. } => 3,
+        SchedEvent::Unpark { .. } => 4,
+        SchedEvent::Steal { .. } => 5,
+        SchedEvent::CancelCheck { .. } => 6,
+        SchedEvent::RegionTransfer => 7,
+        SchedEvent::ChanSend { .. } => 8,
+        SchedEvent::ChanRecv { .. } => 9,
+        SchedEvent::ChanClose { .. } => 10,
+        SchedEvent::SelectArm { .. } => 11,
+        SchedEvent::Acquire { .. } => 12,
+        SchedEvent::TimerFire => 13,
+        SchedEvent::IoArrive { .. } => 14,
+        SchedEvent::ProcSpawn { .. } => 15,
+        SchedEvent::ProcKill { .. } => 16,
+        SchedEvent::ProcExit { .. } => 17,
+    }
+}
+
+/// `[sched.seed]`'s namespace split and the `w1-` schedule token —
+/// shared with the driver's `--replay` parser (pure encoding; unused
+/// symbols drop from release links).
+pub mod seed_spec {
+    /// Bit 62: set = packed mixed-radix schedule, clear = simple seed.
+    pub const PACKED_BIT: u64 = 1 << 62;
+
+    /// Crockford-ish base32 (lowercase, no i/l/o/u) for `w1-` tokens.
+    const ALPHABET: &[u8; 32] = b"0123456789abcdefghjkmnpqrstvwxyz";
+
+    /// Pack `(choice, radix)` decisions into a bit-62 seed
+    /// (little-endian mixed radix: the FIRST decision is the lowest
+    /// digit). `None` when the schedule does not fit below 2^62.
+    pub fn encode_packed(decisions: &[(u32, u32)]) -> Option<u64> {
+        let mut v: u64 = 0;
+        let mut scale: u64 = 1;
+        for &(c, r) in decisions {
+            debug_assert!(r > 0 && c < r);
+            v = v.checked_add(scale.checked_mul(u64::from(c))?)?;
+            scale = scale.checked_mul(u64::from(r.max(1)))?;
+            if v >= PACKED_BIT || scale > PACKED_BIT {
+                return None;
+            }
+        }
+        Some(v | PACKED_BIT)
+    }
+
+    /// Render a packed seed as the short `w1-` token bs07 asked for
+    /// (19-digit decimal seeds are hostile; 13 base32 digits are not).
+    pub fn format_token(seed: u64) -> String {
+        let mut v = seed & !PACKED_BIT;
+        let mut out = String::from("w1-");
+        let mut digits = Vec::new();
+        loop {
+            digits.push(ALPHABET[(v % 32) as usize] as char);
+            v /= 32;
+            if v == 0 {
+                break;
+            }
+        }
+        out.extend(digits.iter().rev());
+        out
+    }
+
+    /// Parse a `w1-` token back to its packed seed (bit 62 set).
+    pub fn parse_token(s: &str) -> Option<u64> {
+        let body = s.strip_prefix("w1-")?;
+        if body.is_empty() || body.len() > 13 {
+            return None;
+        }
+        let mut v: u64 = 0;
+        for b in body.bytes() {
+            let d = ALPHABET.iter().position(|&a| a == b)? as u64;
+            v = v.checked_mul(32)?.checked_add(d)?;
+        }
+        if v >= PACKED_BIT {
+            return None;
+        }
+        Some(v | PACKED_BIT)
+    }
+}
+
+// ---- det-engine shims -----------------------------------------------------
+//
+// The deterministic scheduler's seams, compiled to nothing outside
+// hooked builds so pool/chan call sites stay free of cfg noise. Each
+// shim forwards to `super::det` in test builds and inlines away in
+// release (the D15/D5 zero-cost obligation, bench- and
+// symbol-verified).
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_note_spawn(scope: &std::sync::Arc<super::scope::ScopeInner>) {
+    #[cfg(any(test, feature = "sched-test"))]
+    super::det::note_spawn(scope);
+}
+
+#[inline(always)]
+pub(crate) fn det_ctx_exit() {
+    #[cfg(any(test, feature = "sched-test"))]
+    super::det::ctx_exit();
+}
+
+#[inline(always)]
+pub(crate) fn det_block_enter() {
+    #[cfg(any(test, feature = "sched-test"))]
+    super::det::block_enter();
+}
+
+#[inline(always)]
+pub(crate) fn det_block_exit() {
+    #[cfg(any(test, feature = "sched-test"))]
+    super::det::block_exit();
+}
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_choose(n: usize) -> Option<usize> {
+    #[cfg(any(test, feature = "sched-test"))]
+    {
+        super::det::choose(n)
+    }
+    #[cfg(not(any(test, feature = "sched-test")))]
+    {
+        None
+    }
+}
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_arm_timer(dur: std::time::Duration) {
+    #[cfg(any(test, feature = "sched-test"))]
+    super::det::arm_timer(dur);
+}
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_timer_register(deadline: Option<std::time::Instant>) -> Option<u64> {
+    #[cfg(any(test, feature = "sched-test"))]
+    {
+        super::det::timer_register(deadline)
+    }
+    #[cfg(not(any(test, feature = "sched-test")))]
+    {
+        None
+    }
+}
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_timer_fired(id: u64) -> bool {
+    #[cfg(any(test, feature = "sched-test"))]
+    {
+        super::det::timer_fired(id)
+    }
+    #[cfg(not(any(test, feature = "sched-test")))]
+    {
+        false
+    }
+}
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_timer_done(id: Option<u64>) {
+    #[cfg(any(test, feature = "sched-test"))]
+    if let Some(id) = id {
+        super::det::timer_done(id);
+    }
+}
+
+#[inline(always)]
+pub(crate) fn det_poll_tick() {
+    #[cfg(any(test, feature = "sched-test"))]
+    super::det::poll_tick();
+}
+
+#[inline(always)]
+#[allow(unused_variables)]
+pub(crate) fn det_poll_period(default: std::time::Duration) -> std::time::Duration {
+    #[cfg(any(test, feature = "sched-test"))]
+    {
+        super::det::poll_period(default)
+    }
+    #[cfg(not(any(test, feature = "sched-test")))]
+    {
+        default
+    }
+}
+
+#[cfg(any(test, feature = "sched-test"))]
 pub mod test_hook {
     //! The pluggable observer for test builds (s36 Phase B's socket).
     use super::SchedEvent;

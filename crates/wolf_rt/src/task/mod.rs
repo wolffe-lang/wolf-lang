@@ -75,6 +75,8 @@
 
 mod chan;
 mod deque;
+#[cfg(any(test, feature = "sched-test"))]
+pub mod det;
 mod hooks;
 mod pool;
 mod proc;
@@ -88,7 +90,7 @@ pub use chan::{
     __wolf_rt_chan_recv, __wolf_rt_chan_send, __wolf_rt_chan_send_region, __wolf_rt_select, Arm,
     Chan, ChanErr, Selected, WolfSelectArm, select, select_verdict, select_with,
 };
-pub use hooks::{ChanPhase, SchedEvent, SchedRng};
+pub use hooks::{ChanPhase, SchedEvent, SchedRng, kind_code, seed_spec};
 // The reactor (crate::reactor, s35) composes with the task layer
 // through these crate-internal seams: the one sched_point site rule
 // and the kill-teardown discipline hold there too.

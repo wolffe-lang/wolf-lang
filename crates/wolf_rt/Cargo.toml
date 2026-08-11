@@ -12,6 +12,13 @@ rust-version.workspace = true
 [lib]
 crate-type = ["rlib", "staticlib"]
 
+# s36 (X12/D15): `sched-test` compiles the schedule-point hooks and
+# the deterministic test scheduler into the staticlib — the future
+# debug-tier runtime build. DEFAULT OFF: the release staticlib carries
+# no hook code (the D5 zero-cost gate measures this, never asserts it).
+[features]
+sched-test = []
+
 # D15: dependency-thin by law — no workspace crates above wolf_span,
 # no heavy crates. `libc` is the contract's own "syscalls direct
 # (libc-level)" posture (s32 Target 1): raw bindings only, nothing at

@@ -225,6 +225,9 @@ pub fn spawn_task(scope: &Arc<ScopeInner>, name: &str, body: Body) {
         task: id,
         scope: scope.id(),
     });
+    // det (s36): an in-flight tracked task holds the fast-grant path
+    // open until a worker enters it.
+    super::hooks::det_note_spawn(scope);
     let task = Box::new(Task {
         id,
         name,
@@ -299,7 +302,11 @@ pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
          spawn the work onto the proc's scope and complete via a message)"
     );
     let Some(w) = WORKER_ID.with(std::cell::Cell::get) else {
-        return f();
+        // det (s36): the harness root context blocks off-pool.
+        super::hooks::det_block_enter();
+        let r = f();
+        super::hooks::det_block_exit();
+        return r;
     };
     let p = pool();
     // The LIFO slot is owner-private: flush it to stealable ground
@@ -320,7 +327,14 @@ pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
     }
     p.unblocked.fetch_sub(1, SeqCst);
     compensate(p);
+    // det (s36): the baton frees while the primitive parks; the
+    // return edge re-requests a grant before user-observable state
+    // moves again. Both no-op outside the det domain. The worker
+    // stays counted blocked through the grant wait, so compensation
+    // keeps covering it.
+    super::hooks::det_block_enter();
     let r = f();
+    super::hooks::det_block_exit();
     p.unblocked.fetch_add(1, SeqCst);
     r
 }
@@ -460,6 +474,15 @@ fn run_task(task: Box<Task>) {
     #[cfg(unix)]
     super::stack::set_fault_label(&name);
     scope.child_state(id, TaskState::Running);
+    // det (s36): a tracked task joins the det domain and waits for
+    // its first grant before the body runs; the wait routes through
+    // `blocking` so the pool compensates for the parked worker. The
+    // trackedness check comes first — untracked tasks (and release
+    // builds) must not pay `blocking`'s LIFO flush.
+    #[cfg(any(test, feature = "sched-test"))]
+    if super::det::is_tracked(&scope) {
+        blocking(|| super::det::ctx_enter(id, &scope));
+    }
     let reason = with_scope(&scope, || match body {
         Body::Rust(f) => {
             let ctx = TaskCtx {
@@ -501,6 +524,10 @@ fn run_task(task: Box<Task>) {
     #[cfg(unix)]
     super::stack::set_fault_label("");
     scope.child_done(id, reason);
+    // det (s36): completion (child_done's join/cancel wakeups
+    // included) happened under the baton; release it for the next
+    // grant. No-op when this task never entered the det domain.
+    super::hooks::det_ctx_exit();
 }
 
 // ---- worker thread creation ---------------------------------------------
