@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 361..417 name=build_code comptime body=Block
+FnDecl 419..504 name=main body=Block

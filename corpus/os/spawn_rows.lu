@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="empty\nio\nio2")
+//! phase: mem
+//! conforms: err.union
+//!
+//! The process trio (s40): argv-array ONLY — no shell-string spawn
+//! exists anywhere, by construction (injection off the table). Rows,
+//! never traps: an empty argv names no program (`not_found`), a
+//! forged or reaped handle is `io`. Checked lane only at s40 (the
+//! native rung refuses honestly, the s39 net posture — List[str]
+//! argv unpacking and the child table land with the std.process
+//! facade); the checked-lane execution twins, including a live
+//! spawn/wait/kill against a real child, run in
+//! `crates/wolf_mem/tests/os_time_json.rs`. This file stays
+//! deterministic on any host: no program is ever actually spawned.
+
+fn main() -> !int {
+    let argv = List[str]()
+    os_spawn(argv) else |_| { print("empty"); -1 }
+    os_wait(99) else |_| { print("io"); -1 }
+    os_kill(99) else |_| print("io2")
+    0
+}

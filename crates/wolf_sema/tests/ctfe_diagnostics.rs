@@ -73,6 +73,18 @@ fn e0701_sandbox_ffi() {
     );
 }
 
+/// Exec reach (s40): child processes / process control — refused for
+/// confinement; `os_exit` would terminate the compiler.
+#[test]
+fn e0701_sandbox_exec() {
+    snap_one(
+        "e0701_exec",
+        "comptime fn build_code() -> int {\n    os_exit(3)\n    0\n}\n\n\
+         fn main() -> !int {\n    const CODE = build_code()\n    \
+         if CODE == 0 { 1 } else { 0 }\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0702 -----
 
 /// Fuel exhaustion: backtrace plus the raise-the-budget fix-it

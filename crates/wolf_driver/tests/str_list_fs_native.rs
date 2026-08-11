@@ -283,7 +283,7 @@ fn main() -> !int {
 fn the_runtime_symbol_table_covers_the_s40_families() {
     // Every shim lowering can emit must be declared in the codegen's
     // symbol contract (the RT_SYMBOLS drift guard).
-    for family in ["strbuf_", "str_", "list_", "fs_"] {
+    for family in ["strbuf_", "str_", "list_", "fs_", "env_", "os_", "time_"] {
         let n = wolf_codegen_clif::RT_SYMBOLS
             .iter()
             .filter(|(name, ..)| name.starts_with(&format!("__wolf_rt_{family}")))
@@ -292,7 +292,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        48,
+        57,
         "RT_SYMBOLS count moved — keep the s40 families in sync with wolf_rt"
     );
 }

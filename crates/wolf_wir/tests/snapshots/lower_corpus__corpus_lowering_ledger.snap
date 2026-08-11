@@ -15,6 +15,7 @@ comptime/reflect_fields.lu: refused — trait-impl method lowering (dispatch tab
 comptime/runtime_arg.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_clock.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_env.lu: not mem-clean (pre-wir rungs own it)
+comptime/sandbox_exec.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_ffi.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_fs.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_io.lu: not mem-clean (pre-wir rungs own it)
@@ -66,6 +67,8 @@ grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
+json/query.lu: refused — json builtins in native lowering (checked lane only at s40)
+json/rows.lu: refused — json builtins in native lowering (checked lane only at s40)
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers
@@ -129,6 +132,10 @@ memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/echo_roundtrip.lu: refused — net builtins in native lowering (checked lane only at s39)
 net/refused_row.lu: refused — net builtins in native lowering (checked lane only at s39)
+os/args_cwd.lu: lowers
+os/env_roundtrip.lu: lowers
+os/exit_code.lu: lowers
+os/spawn_rows.lu: refused — process builtins in native lowering (checked lane only at s40)
 overflow.lu: lowers
 procs.lu: not mem-clean (pre-wir rungs own it)
 projects/count.lu: lowers
@@ -167,6 +174,7 @@ strings/interp_value_position.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
+time/monotonic.lu: lowers
 traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
 traits/assoc_rewrite.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
 traits/call_unmet_bound.lu: not mem-clean (pre-wir rungs own it)

@@ -1,0 +1,20 @@
+---
+source: crates/wolf_sema/tests/ctfe_diagnostics.rs
+expression: render_ctfe(src)
+---
+error[E0701]: `os_exit` reaches child processes, which comptime code can never touch
+ --> mem:///main.lu:2:5
+  |
+2 |     os_exit(3)
+  |     ^^^^^^^^^^ ambient IO at compile time
+...
+7 |     const CODE = build_code()
+  |                  ------------ while evaluating `build_code`, entered here
+  |                  ------------ while evaluating `main`, entered here
+  |
+  = note: why it is refused — confinement: compiling a package must never run or terminate
+    programs on the machine that compiles it.
+  = note: the comptime sandbox is hermetic (D33): the intrinsics available at compile time are an
+    explicit allowlist, and nothing ambient is on it. Compute this value at runtime instead;
+    file contents will arrive later as declared build inputs (s51), never as an evaluator
+    capability.

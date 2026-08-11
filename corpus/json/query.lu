@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="true\nlupin 42\narray null 3 2")
+//! phase: mem
+//! conforms: err.union
+//!
+//! std.x.json's query kernels (s40, nursery-first per D31): RFC 8259
+//! validation and dotted-path queries — digits index arrays, other
+//! segments key objects, "" is the root. Strings decode, numbers keep
+//! their source spelling (no rounding introduced by the tier).
+//! Checked lane only at s40: the reference parser is
+//! `wolf_mem::json` (module doc pins semantics); the native mirror
+//! lands with the std.x.json facade. PURE — the one builtin family
+//! with no capability tag; comptime still refuses (no json evaluator
+//! in the D33 allowlist at v0, `corpus/comptime/` owns the sandbox
+//! shapes).
+
+fn main() -> !int {
+    let ok = json_valid("[1, 2, 3]")
+    print("{ok}")
+    let doc = "{{\"pack\": [{{\"name\": \"lupin\"}}, {{\"name\": \"ainu\"}}], \"n\": 42, \"a\": [1, 2, 3], \"b\": null}}"
+    let first = json_get(doc, "pack.0.name")?
+    let n = json_get(doc, "n")?
+    print("{first} {n}")
+    let t = json_type(doc, "a")?
+    let u = json_type(doc, "b")?
+    let len = json_len(doc, "a")?
+    let members = json_len(doc, "pack")?
+    print("{t} {u} {len} {members}")
+    0
+}

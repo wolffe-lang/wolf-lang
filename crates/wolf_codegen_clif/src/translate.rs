@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 48] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 57] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -114,6 +114,20 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 48] = [
     ("__wolf_rt_fs_remove", 2, true),
     ("__wolf_rt_fs_exists", 2, true),
     ("__wolf_rt_read_line", 1, true),
+    // The s40 os/env/time families (wolf_rt::{os,time}): same shape
+    // discipline — pointers/lens/codes as i64, str results through
+    // caller out slots, list results as header pointers. `os_exit`
+    // never returns (the lowering seals the block with a residual
+    // trap edge).
+    ("__wolf_rt_env_args", 0, true),
+    ("__wolf_rt_env_get", 3, true),
+    ("__wolf_rt_env_set", 4, true),
+    ("__wolf_rt_env_vars", 0, true),
+    ("__wolf_rt_os_cwd", 1, true),
+    ("__wolf_rt_os_exit", 1, false),
+    ("__wolf_rt_time_now_ms", 0, true),
+    ("__wolf_rt_time_unix_ms", 0, true),
+    ("__wolf_rt_time_sleep_ms", 1, false),
 ];
 
 /// How one WIR parameter crosses the call boundary (the mechanical

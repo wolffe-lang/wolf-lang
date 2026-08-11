@@ -118,6 +118,7 @@ use wolf_span::Span;
 pub mod cfg;
 mod excl;
 pub mod facts;
+pub mod json;
 pub mod loans;
 mod lower;
 mod moves;

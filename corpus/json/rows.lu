@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="parse\nmissing\nkind")
+//! phase: mem
+//! conforms: err.union
+//!
+//! json errors are ROWS, not traps (D30): malformed text is `parse`
+//! (any RFC 8259 violation — the tier never guesses), a path that
+//! addresses nothing is `missing`, a scalar where the operation needs
+//! a container is `kind`. Each handleable with `else`, each
+//! deterministic on any host. Checked lane only at s40 (see
+//! `query.lu`); execution twins in
+//! `crates/wolf_mem/tests/os_time_json.rs`.
+
+fn main() -> !int {
+    json_get("{{", "x") else |_| { print("parse"); "" }
+    json_get("[1]", "9") else |_| { print("missing"); "" }
+    json_len("[1]", "0") else |_| { print("kind"); -1 }
+    0
+}

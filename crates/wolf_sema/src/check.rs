@@ -4815,8 +4815,12 @@ impl<'a> Checker<'a> {
                     }
                     // Ambient host surfaces (s16): typed here, callable
                     // at runtime, categorically refused at comptime by
-                    // the D33 sandbox.
-                    if crate::ctfe::intrinsics::host_stub(&name).is_some() {
+                    // the D33 sandbox. The pure builtins (s40 json)
+                    // type through the same table but carry no sandbox
+                    // category — no capability, no ambient reach.
+                    if crate::ctfe::intrinsics::host_stub(&name).is_some()
+                        || crate::ctfe::intrinsics::pure_builtin(&name)
+                    {
                         return self.call_host_stub(&name, e, d.args());
                     }
                     // The comptime intrinsics allowlist (D29/D33).
@@ -5287,6 +5291,56 @@ impl<'a> Checker<'a> {
             ),
             "net_write" => (vec![int_, str_], rowed(self, unit, &["closed", "io"])),
             "net_close" => (vec![int_], rowed(self, unit, &["io"])),
+            // The s40 os/env builtin tier. `env_get`'s absent variable
+            // is the `missing` row (an outcome, never a sentinel);
+            // `utf8` covers a value the host holds in a non-UTF-8
+            // encoding. `env_set` rejects names the platform cannot
+            // hold (`=`/NUL, empty) as `invalid`. `env_args`/`env_vars`
+            // are `List[str]` — args in order, vars as sorted `K=V`
+            // lines (determinism; the std facade owns richer shapes).
+            "env_args" | "env_vars" => {
+                let list_str = self.lo.table.intern(TyKind::List(str_));
+                (Vec::new(), list_str)
+            }
+            "env_get" => (vec![str_], rowed(self, str_, &["missing", "utf8"])),
+            "env_set" => (vec![str_, str_], rowed(self, unit, &["invalid"])),
+            "os_cwd" => (Vec::new(), rowed(self, str_, &["io"])),
+            // `os_exit` types unit and never returns (the checked
+            // machine stops with the code; native calls the runtime
+            // exit) — a `never` result is the std facade's refinement.
+            "os_exit" => (vec![int_], unit),
+            // The process trio (I13 `exec`): argv-array only — there
+            // is deliberately NO shell-string spawn anywhere. v0 stdio
+            // is null-wired (pipes arrive with the std facade over the
+            // s38 io traits); `signal` is a child that died without an
+            // exit code.
+            "os_spawn" => {
+                let list_str = self.lo.table.intern(TyKind::List(str_));
+                (
+                    vec![list_str],
+                    rowed(self, int_, &["not_found", "denied", "io"]),
+                )
+            }
+            "os_wait" => (vec![int_], rowed(self, int_, &["signal", "io"])),
+            "os_kill" => (vec![int_], rowed(self, unit, &["io"])),
+            // The s40 time builtin tier (X12): ms integers — monotonic
+            // from an arbitrary process-local anchor, wall ms since
+            // the Unix epoch, and a blocking sleep.
+            "time_now_ms" | "time_unix_ms" => (Vec::new(), int_),
+            "time_sleep_ms" => (vec![int_], unit),
+            // The s40 json builtin tier (pure; std.x.json's query
+            // kernels). `parse` is any RFC 8259 violation, `missing`
+            // a path that addresses nothing, `kind` a node of the
+            // wrong kind for the operation. Paths are dotted
+            // key/index segments ("users.0.name"; "" is the root).
+            "json_valid" => (vec![str_], bool_),
+            "json_get" | "json_type" => {
+                (vec![str_, str_], rowed(self, str_, &["parse", "missing"]))
+            }
+            "json_len" => (
+                vec![str_, str_],
+                rowed(self, int_, &["parse", "missing", "kind"]),
+            ),
             _ => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)

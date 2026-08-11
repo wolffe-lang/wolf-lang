@@ -1,0 +1,16 @@
+//! check: run(exit=7, stdout="before")
+//! phase: run
+//! conforms: err.union
+//!
+//! `os_exit` (s40): immediate termination with the code — everything
+//! printed so far stands, nothing after runs, defers do NOT run (the
+//! documented contract; supervised teardown is the proc tier's job,
+//! [conc.proc.kill]). Codes mask to the process range
+//! (`rem_euclid(256)`) identically on both lanes.
+
+fn main() -> !int {
+    print("before")
+    os_exit(7)
+    print("after")
+    0
+}
