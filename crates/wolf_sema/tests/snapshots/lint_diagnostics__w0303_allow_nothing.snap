@@ -1,0 +1,11 @@
+---
+source: crates/wolf_sema/tests/lint_diagnostics.rs
+expression: "render_scan(\"#[allow]\\nfn f() -> int {\\n    1\\n}\\n\")"
+---
+warning[W0303]: this `#[allow]` names no warning codes, so it allows nothing
+ --> mem:///main.lu:1:3
+  |
+1 | #[allow]
+  |   ^^^^^ no codes to allow
+  |
+  = note: name the codes to suppress (`#[allow(w1301)]`) or delete the attribute.

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/lint_diagnostics.rs
+expression: "render_scan(\"#[allow(w9999)]\\nfn f() -> int {\\n    1\\n}\\n\")"
+---
+warning[W0302]: `w9999` is not a registered diagnostic code, so this allow suppresses nothing
+ --> mem:///main.lu:1:9
+  |
+1 | #[allow(w9999)]
+  |         ^^^^^ no such code
+  |
+  = note: codes look like `w1301` (one code) or `w13xx` (a family); the catalog in
+    docs/diagnostics.md lists every registered code.
