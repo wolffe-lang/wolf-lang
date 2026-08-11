@@ -20,8 +20,11 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   **Reserved forward namespaces** (owned by spec documents not yet
   written; tags in them are legal, reported as *forward*): `str`, `err`,
   `task`, `proc`, `sync`, `generics`, `arith`, `ffi`, `unsafe`,
-  `comptime`, `perf`, `mod`, `std`, `ty`. A tag outside all registered and
-  reserved namespaces is a CI failure.
+  `comptime`, `perf`, `mod`, `std`, `ty`, `test`. A tag outside all
+  registered and reserved namespaces is a CI failure. (`test` appended
+  2026-08-11 by s39 for the built-in test framework's litmus tier —
+  D34/D36 own the future spec document; the append is additive per
+  this clause's own contract, nothing renumbered.)
 - `[conf.anchor.stable]` Anchors are **stable once published**: never
   renumbered, never reused. A deleted clause leaves a tombstone (the
   anchor with the text "*tombstone — see <replacement or rationale>*").

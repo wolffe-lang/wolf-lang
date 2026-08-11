@@ -286,9 +286,12 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
 /// Registered namespaces resolve against the anchor index; reserved
 /// forward namespaces are legal-but-unresolvable ([conf.anchor.ns]).
 pub const REGISTERED_NS: [&str; 7] = ["gram", "diag", "mem", "conc", "abi", "conf", "proto"];
-pub const FORWARD_NS: [&str; 14] = [
+pub const FORWARD_NS: [&str; 15] = [
     "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",
     "mod", "std", "ty",
+    // Appended 2026-08-11 by s39 (the built-in test framework's litmus
+    // tier; D34/D36 own the future spec document).
+    "test",
 ];
 
 #[cfg(test)]

@@ -1,0 +1,19 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.net
+//!
+//! D33: no sockets at comptime — the s39 `net_*` builtin tier is
+//! refused categorically, same category and same named reason as
+//! `net_fetch` (confinement: `wolf add` must never mean arbitrary
+//! code talks to the network with the builder's credentials). The
+//! row-typed builtins refuse identically to the unrowed stub: the
+//! sandbox table is keyed by capability, not by signature shape.
+
+comptime fn probe(addr: str) -> int ! {refused, timeout, io} {
+    net_connect(addr)
+}
+
+fn main() -> !int {
+    const FD = probe("127.0.0.1:1") else |_| 0
+    if FD == 0 { 1 } else { 0 }
+}
