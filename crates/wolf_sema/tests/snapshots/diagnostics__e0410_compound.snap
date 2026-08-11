@@ -1,6 +1,6 @@
 ---
-source: crates/wolf_sema/tests/typecheck_diagnostics.rs
-expression: "render_types(&[(&[], \"main.lu\", src)])"
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
 ---
 error[E0410]: `total` is bound with `let`, so it cannot be assigned again
  --> mem:///main.lu:3:5

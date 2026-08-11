@@ -81,6 +81,37 @@ pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
     std::process::exit(TRAP_EXIT_CODE)
 }
 
+/// `main` returned an error value (D30, s29 `[abi.err]`): the
+/// documented process behavior is `error: <tag name>` on STDOUT
+/// (matching the reference interpreter) and exit 1 — an error return
+/// is a reported outcome, never a trap and never an unwind. The tag's
+/// name arrives as immediates from the entry shim's compile-time tag
+/// dispatch: `len` bytes (0 for an unknown tag — then the numeric
+/// `tag` id is reported), packed little-endian into `w0..w3` (32-byte
+/// cap; longer names truncate — tags that long do not exist in the
+/// corpus and the cap is the shim's, not the language's).
+///
+/// # Safety
+///
+/// Callable from any thread at any time; takes no pointers.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_main_err(tag: i64, len: i64, w0: i64, w1: i64, w2: i64, w3: i64) -> ! {
+    let mut out = std::io::stdout().lock();
+    let len = len.clamp(0, 32) as usize;
+    if len == 0 {
+        let _ = writeln!(out, "error: {tag}");
+    } else {
+        let mut bytes = [0u8; 32];
+        for (i, w) in [w0, w1, w2, w3].into_iter().enumerate() {
+            bytes[i * 8..(i + 1) * 8].copy_from_slice(&w.to_le_bytes());
+        }
+        let name = String::from_utf8_lossy(&bytes[..len]);
+        let _ = writeln!(out, "error: {name}");
+    }
+    let _ = out.flush();
+    std::process::exit(1)
+}
+
 // ---- the v0 bump-region allocator ----------------------------------------
 
 const CHUNK_MIN: usize = 16 * 1024;

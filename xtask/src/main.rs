@@ -15,6 +15,7 @@ fn main() -> ExitCode {
         Some("ci") => ci(),
         Some("deps-check") => deps_check(),
         Some("corpus") => corpus_cmd(),
+        Some("abi-check") => abi_check(),
         Some("bench") => bench_cmd(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("dist") => dist(),
@@ -54,6 +55,7 @@ fn ci() -> ExitCode {
         ("test", &["test", "--workspace"]),
         ("deps-check", &["xtask", "deps-check"]),
         ("corpus", &["xtask", "corpus"]),
+        ("abi-check", &["xtask", "abi-check"]),
         ("spec-extract", &["xtask", "spec-extract", "--check"]),
         ("conformance", &["xtask", "conformance"]),
         ("print-gate", &["xtask", "print-gate"]),
@@ -76,6 +78,34 @@ fn ci() -> ExitCode {
     }
     eprintln!("xtask ci: all steps green");
     ExitCode::SUCCESS
+}
+
+// ------------------------------------------------------------- abi-check --
+
+/// `xtask abi-check` — the s29 differential ABI gate (s49's embryo):
+/// the fixed signature table compiled by the wolf backend AND the host
+/// C compiler, round-tripped and bit-asserted. A named PR-CI step so
+/// an ABI regression fails loudly under its own name, not somewhere
+/// inside the workspace test wall.
+fn abi_check() -> ExitCode {
+    let ok = run_ok(
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "wolf_codegen_clif",
+            "--test",
+            "abi_check",
+            "--quiet",
+        ],
+    );
+    if ok {
+        eprintln!("abi-check: signature table green against host cc");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("abi-check: ABI divergence against host cc");
+        ExitCode::FAILURE
+    }
 }
 
 // ---------------------------------------------------------------- corpus --

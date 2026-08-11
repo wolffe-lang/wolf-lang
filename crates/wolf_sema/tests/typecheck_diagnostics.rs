@@ -232,44 +232,6 @@ fn e0409_logic_on_numbers() {
     );
 }
 
-// ---------------------------------------------------------- E0410 -----
-
-/// Issue #2: `let` reassignment slipped past both implementations.
-/// The fix-it rewrites `let` to `var`; the secondary span pins the
-/// immutable binding site.
-#[test]
-fn e0410_let_reassign() {
-    snap_one(
-        "e0410_let_reassign",
-        "fn main() -> !int {\n    let x = 1\n    x = 2\n    0\n}\n",
-    );
-}
-
-/// Compound assignment is assignment: `+=` on a `let` binding fails
-/// the same way.
-#[test]
-fn e0410_let_compound_assign() {
-    snap_one(
-        "e0410_compound",
-        "fn main() -> !int {\n    let total = 10\n    total += 5\n    0\n}\n",
-    );
-}
-
-/// An item-level `let` global is immutable too ([gram.item.let]:
-/// item-level and statement-level share the grammar).
-#[test]
-fn e0410_global_let_assign() {
-    snap_one(
-        "e0410_global",
-        "let limit: int = 8\n\nfn main() -> !int {\n    limit = 9\n    0\n}\n",
-    );
-}
-
-/// The non-cases: `var` reassigns fine; a `var` shadowing a `let`
-/// assigns fine; a parameter is not a `let` binding; a fresh `let`
-/// *shadowing* is not an assignment.
-#[test]
-fn e0410_non_cases_stay_clean() {
-    let src = "fn bump(n: int) -> int {\n    var m = n\n    m = m + 1\n    let k = m\n    let k = k + 1\n    var k = k\n    k += 2\n    k\n}\n\nfn main() -> !int {\n    bump(1)\n    0\n}\n";
-    assert_eq!(render_types(&[(&[], "main.lu", src)]), "");
-}
+// E0410 moved to the RESOLVE rung at s29 (DIV-2026-010): its snapshots
+// live in `tests/diagnostics.rs` now — binding immutability is lexical
+// knowledge, and the type checker no longer reports it.

@@ -139,3 +139,66 @@ fn e0306_duplicate_import() {
     ]);
     insta::assert_snapshot!("e0306_duplicate_import", render(&res));
 }
+
+// ------------------------------------------------------------ E0410 ---
+// Moved here from the typecheck suite at s29 (DIV-2026-010): `let`
+// immutability is binding structure — lexical knowledge — so E0410 is
+// the resolve rung's law, matching the interpreter's placement.
+
+/// Issue #2: `let` reassignment slipped past both implementations.
+/// The fix-it rewrites `let` to `var`; the secondary span pins the
+/// immutable binding site.
+#[test]
+fn e0410_let_reassign() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "fn main() -> !int {\n    let x = 1\n    x = 2\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0410_let_reassign", render(&res));
+}
+
+/// Compound assignment is assignment: `+=` on a `let` binding fails
+/// the same way.
+#[test]
+fn e0410_let_compound_assign() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "fn main() -> !int {\n    let total = 10\n    total += 5\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0410_compound", render(&res));
+}
+
+/// An item-level `let` global is immutable too ([gram.item.let]:
+/// item-level and statement-level share the grammar).
+#[test]
+fn e0410_global_let_assign() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "let limit: int = 8\n\nfn main() -> !int {\n    limit = 9\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0410_global", render(&res));
+}
+
+/// The non-cases: `var` reassigns fine; a `var` shadowing a `let`
+/// assigns fine; a parameter is not a `let` binding; a fresh `let`
+/// *shadowing* is not an assignment.
+#[test]
+fn e0410_non_cases_stay_clean() {
+    let src = "fn bump(n: int) -> int {\n    var m = n\n    m = m + 1\n    let k = m\n    let k = k + 1\n    var k = k\n    k += 2\n    k\n}\n\nfn main() -> !int {\n    bump(1)\n    0\n}\n";
+    let res = resolve(&[(&[], "main.lu", src)]);
+    assert_eq!(render(&res), "");
+}
+
+/// The E0410 walk sees through control-flow scopes: a `let` captured
+/// by shadowing inside a `for` body still rejects, the loop pattern
+/// itself is assignable, and an `else |e|` handler binding is not a
+/// `let`.
+#[test]
+fn e0410_scope_shapes_stay_clean() {
+    let src = "fn main() -> !int {\n    var acc = 0\n    for i in 0..3 {\n        i = i + 1\n        acc += i\n    }\n    let cap = 9\n    if acc > cap {\n        var cap = acc\n        cap = 0\n        acc = cap\n    }\n    0\n}\n";
+    let res = resolve(&[(&[], "main.lu", src)]);
+    assert_eq!(render(&res), "");
+}

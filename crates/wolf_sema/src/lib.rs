@@ -209,6 +209,7 @@ pub mod ctfe;
 pub(crate) mod exhaust;
 pub mod graph;
 pub mod interface;
+pub(crate) mod letcheck;
 pub mod prelude;
 pub mod resolve;
 pub mod rewrite;

@@ -142,6 +142,13 @@ fn resolve_module(pkg: &Package, module: usize) -> Vec<Diagnostic> {
         };
         r.run();
     }
+    // E0410 — `let` immutability — is a resolve-rung law (binding
+    // structure is lexical knowledge; DIV-2026-010): checked here, per
+    // file, against the module's item-level globals.
+    let globals = crate::letcheck::module_globals(pkg, module);
+    for &fi in &pkg.modules[module].files {
+        crate::letcheck::check_file(pkg, fi, &globals, &mut sink);
+    }
     sink.into_vec()
 }
 

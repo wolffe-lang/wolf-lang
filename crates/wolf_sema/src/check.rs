@@ -387,16 +387,10 @@ struct Checker<'a> {
     file: usize,
     lo: Lower<'a>,
     vars: VarStore,
-    /// Lexical scopes: `(name, type, immutable-binding provenance)`.
-    /// The third field is `Some(span of the `let` keyword)` for a
-    /// statement-level `let` binding — E0410's evidence and fix-it
-    /// anchor — and `None` for everything else (`var`, params, `for`,
-    /// `match`, closures).
-    scopes: Vec<Vec<(String, TyId, Option<Span>)>>,
-    /// While binding a `let` statement's pattern: the `let` keyword's
-    /// span, recorded into each name the pattern introduces. `None`
-    /// outside exactly that window.
-    binding_let: Option<Span>,
+    /// Lexical scopes: `(name, type)`. Binding *immutability* (E0410)
+    /// is the resolve rung's law since s29 (DIV-2026-010) — this
+    /// checker no longer tracks `let` provenance.
+    scopes: Vec<Vec<(String, TyId)>>,
     diags: Vec<Diagnostic>,
     exprs: Vec<(Span, TyId)>,
     locals: Vec<(String, Span, TyId)>,
@@ -555,7 +549,6 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         lo: Lower::new(pkg, sigs.table.clone()),
         vars: VarStore::new(),
         scopes: Vec::new(),
-        binding_let: None,
         diags: Vec::new(),
         exprs: Vec::new(),
         locals: Vec::new(),
@@ -687,7 +680,6 @@ pub(crate) fn collect_body_rows(
         lo: Lower::new(pkg, sigs.table.clone()),
         vars: VarStore::new(),
         scopes: Vec::new(),
-        binding_let: None,
         diags: Vec::new(),
         exprs: Vec::new(),
         locals: Vec::new(),
@@ -846,23 +838,17 @@ impl<'a> Checker<'a> {
     fn bind(&mut self, name: String, span: Span, ty: TyId) {
         self.locals.push((name.clone(), span, ty));
         if let Some(top) = self.scopes.last_mut() {
-            top.push((name, ty, self.binding_let));
+            top.push((name, ty));
         }
     }
 
+    /// The innermost binding of `name`. Shadowing-correct by
+    /// construction: the first match in reverse scope order decides.
     fn lookup_local(&self, name: &str) -> Option<TyId> {
-        self.lookup_binding(name).map(|(t, _)| t)
-    }
-
-    /// The innermost binding of `name`: its type plus, when it was
-    /// introduced by a statement-level `let`, the `let` keyword's span
-    /// (E0410). Shadowing-correct by construction: the first match in
-    /// reverse scope order decides.
-    fn lookup_binding(&self, name: &str) -> Option<(TyId, Option<Span>)> {
         for scope in self.scopes.iter().rev() {
-            for (n, t, l) in scope.iter().rev() {
+            for (n, t) in scope.iter().rev() {
                 if n == name {
-                    return Some((*t, *l));
+                    return Some(*t);
                 }
             }
         }
@@ -2375,25 +2361,10 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            SyntaxKind::LetDecl => {
-                // The `let` keyword's span rides into every name the
-                // pattern binds: E0410's secondary label and its
-                // change-`let`-to-`var` fix-it both anchor there.
-                let let_kw = s
-                    .tokens()
-                    .find(|t| t.kind == SyntaxKind::LetKw)
-                    .map(|t| t.span);
-                self.check_binding_stmt(
-                    LetDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())),
-                    s,
-                    let_kw,
-                )
-            }
-            SyntaxKind::VarDecl => self.check_binding_stmt(
-                VarDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())),
-                s,
-                None,
-            ),
+            SyntaxKind::LetDecl => self
+                .check_binding_stmt(LetDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
+            SyntaxKind::VarDecl => self
+                .check_binding_stmt(VarDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(s);
                 let name = d.and_then(|c| c.name());
@@ -2422,7 +2393,6 @@ impl<'a> Checker<'a> {
         &mut self,
         parts: Option<(Option<&GreenNode>, Option<&GreenNode>, Option<&GreenNode>)>,
         stmt: &GreenNode,
-        let_kw: Option<Span>,
     ) -> R<()> {
         let Some((pat, ann, init)) = parts else {
             return Ok(());
@@ -2438,13 +2408,7 @@ impl<'a> Checker<'a> {
         };
         let name = single_ident(pat, self.src());
         let ty = self.binding_init(ann, init, name, stmt.span)?;
-        // Only the pattern-binding window carries the `let` mark — the
-        // initializer above binds its own names (closure params, block
-        // locals) mutably or not on their own terms.
-        self.binding_let = let_kw;
-        let bound = self.bind_pattern(pat, ty);
-        self.binding_let = None;
-        bound
+        self.bind_pattern(pat, ty)
     }
 
     /// The shared `annotation? = init?` typing of let/var/const.
@@ -2564,11 +2528,9 @@ impl<'a> Checker<'a> {
         let Some(place) = a.place() else {
             return Ok(());
         };
-        // E0410 — `let` is immutable (spec/01 `[gram.item.let]`):
-        // assignment to a let-bound name, plain or compound, is
-        // rejected here, the earliest phase that knows how the place
-        // was bound; the memory tier never sees the program.
-        self.check_place_immutable(place);
+        // E0410 — `let` is immutable — is the RESOLVE rung's law
+        // (s29, DIV-2026-010): binding structure is lexical, so the
+        // rejection fires before this checker ever runs.
         let place_ty = self.place_type(place)?;
         let place_text = self.text(place.span);
         let op = a.op().map(|t| t.kind);
@@ -2598,62 +2560,6 @@ impl<'a> Checker<'a> {
             self.check_expr(v, &exp)?;
         }
         Ok(())
-    }
-
-    /// E0410: the place of an assignment must not be a `let`-bound
-    /// name — binding immutability is a fact this checker already
-    /// holds, so it is enforced here rather than in the memory tier.
-    /// Covers statement-level `let` locals (shadowing-correct: the
-    /// innermost binding decides) and item-level `let` globals.
-    /// Fields, elements, and everything reached *through* a binding
-    /// stay c04's exclusivity/freeze territory.
-    fn check_place_immutable(&mut self, place: &GreenNode) {
-        // Peel parens: `(x) = 2` assigns to `x`.
-        let mut root = place;
-        while root.kind == SyntaxKind::ParenExpr {
-            match ParenExpr::cast(root).and_then(|p| p.expr()) {
-                Some(inner) => root = inner,
-                None => return,
-            }
-        }
-        if root.kind != SyntaxKind::PathExpr {
-            return;
-        }
-        let Some(t) = PathExpr::cast(root).and_then(|p| p.ident()) else {
-            return;
-        };
-        let name = self.text(t.span);
-        let let_kw = match self.lookup_binding(&name) {
-            // The innermost local decides — a `var` shadowing a `let`
-            // assigns fine, and vice versa fails.
-            Some((_, provenance)) => provenance,
-            None => match self.sigs.get(self.module, &name) {
-                Some(ItemSig::Global(g)) => g.let_kw,
-                _ => None,
-            },
-        };
-        let Some(kw) = let_kw else {
-            return;
-        };
-        self.diags.push(
-            Diagnostic::error(
-                codes::E0410,
-                root.span,
-                format!("`{name}` is bound with `let`, so it cannot be assigned again"),
-            )
-            .with_label("this assignment needs a mutable binding")
-            .with_secondary(kw, "the binding is made immutable here")
-            .with_note(
-                "`let` names a value once. Declare the binding with `var` \
-                 to update it in place, or shadow it with a second \
-                 `let` if the next value is really a new thing.",
-            )
-            .with_suggestion(Suggestion::new(
-                "make the binding mutable: `var`",
-                vec![(kw, "var".to_string())],
-                Applicability::Maybe,
-            )),
-        );
     }
 
     /// The type of an assignable place. Mutability/exclusivity are
