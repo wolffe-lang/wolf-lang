@@ -46,6 +46,10 @@ pub mod trap_code {
     pub const ALLOC_CONTRACT: i32 = 9;
     pub const RACE: i32 = 10;
     pub const UB: i32 = 11;
+    /// `[conc.deadlock.trap]` / `[conc.deadlock.self]` — added to the
+    /// closed `[conf.trap.set]` by the spec/03 amendment (s33: the
+    /// `when` runtime's self-acquisition detection fires it).
+    pub const DEADLOCK: i32 = 12;
 }
 
 /// The vocabulary name of a trap code (`trap(<name>)` in verdicts).
@@ -62,6 +66,7 @@ pub fn trap_kind_name(code: i32) -> &'static str {
         trap_code::ALLOC_CONTRACT => "alloc-contract",
         trap_code::RACE => "race",
         trap_code::UB => "ub",
+        trap_code::DEADLOCK => "deadlock",
         _ => "unknown",
     }
 }
@@ -269,6 +274,7 @@ mod tests {
             (trap_code::ASSERT, "assert"),
             (trap_code::BOUNDS, "bounds"),
             (trap_code::UB, "ub"),
+            (trap_code::DEADLOCK, "deadlock"),
         ] {
             assert_eq!(trap_kind_name(code), name);
         }

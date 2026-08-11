@@ -230,9 +230,9 @@ impl ScopeInner {
     }
 
     /// A runtime-owned blocking point that completes only when the
-    /// scope is cancelled — the v0 stand-in for "blocked forever on a
-    /// channel" until s33 (tests and the sibling-cancel acceptance
-    /// use it). Fires a cancel-check event on every wakeup.
+    /// scope is cancelled — predates s33's channels as the "blocked
+    /// forever" stand-in (the sibling-cancel acceptance still uses
+    /// it). Fires a cancel-check event on every wakeup.
     pub fn wait_cancelled(&self) {
         pool::blocking(|| {
             let mut st = self.state.lock().unwrap();

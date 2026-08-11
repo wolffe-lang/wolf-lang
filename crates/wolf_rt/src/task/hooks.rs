@@ -35,14 +35,37 @@
 //! description of a schedule, and once s36 virtualizes time the seed
 //! alone is.
 
-/// A schedule-point event — s32's slice of the s36 taxonomy.
-///
-/// Discriminants and layout are UNSTABLE (numbering is the s36 doc's;
-/// see the module doc). Channel/select/proc/io events join in s33–s35;
-/// `TimerFire` is declared now so the s33 timer lands inside the seam
-/// rather than around it.
+/// The phase of a blocking channel edge: `Block` when the operation
+/// parks (spec/07's decision point — which task runs next), `Commit`
+/// when the k-th send↔recv pairing lands (the `[conc.mm.hb.chan]`
+/// edge the recorder pairs per channel, per k). The sprint inventory's
+/// send-block / send-commit / recv-block / recv-commit factor as
+/// kind (`chan.send` / `chan.recv`) × this phase — the KIND vocabulary
+/// stays exactly spec/07's.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // TimerFire: declared for s33, unreachable in s32.
+pub enum ChanPhase {
+    /// The op found no partner/space and is about to park.
+    Block,
+    /// The op committed (paired, buffered, or drained).
+    Commit,
+}
+
+/// A schedule-point event — the s32+s33 slice of the spec/07 taxonomy
+/// (`[sched.point.set]`).
+///
+/// Discriminants and layout are UNSTABLE (numbering is s36 Phase B's;
+/// see the module doc). The s33 widening carries exactly the spec/07
+/// kinds: `chan.send`/`chan.recv` ([`SchedEvent::ChanSend`] /
+/// [`SchedEvent::ChanRecv`]), `select.arm` ([`SchedEvent::SelectArm`]),
+/// the appended `acquire` and `chan.close` kinds
+/// ([`SchedEvent::Acquire`] / [`SchedEvent::ChanClose`] — appended to
+/// the doc per `[sched.stable]`'s append rule; `acquire` is
+/// sched-ev/0 kind 5's native twin, `[conc.when.order]`), and the
+/// RESERVED `timer.fire` kind, activated by s33's timeout arms
+/// (`[sched.stable]`: implementing a reserved kind activates its
+/// name; s35's timer wheel inherits it). Proc/io events join in
+/// s34–s35.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedEvent {
     /// A task was made runnable under a scope.
     Spawn { task: u64, scope: u64 },
@@ -56,9 +79,29 @@ pub enum SchedEvent {
     Join { scope: u64 },
     /// A cancellation poll at a runtime-owned blocking point.
     CancelCheck { scope: u64, cancelled: bool },
-    /// A region moved across a spawn boundary (`sync.transfer` seam).
+    /// A region moved across a spawn/send boundary (`sync.transfer`
+    /// seam; s33's moving sends route through it too).
     RegionTransfer,
-    /// Reserved: the s33 timer wheel fires through the seam.
+    /// kind `chan.send` — a send edge on channel `chan`.
+    ChanSend { chan: u64, phase: ChanPhase },
+    /// kind `chan.recv` — a receive edge on channel `chan`.
+    ChanRecv { chan: u64, phase: ChanPhase },
+    /// kind `chan.close` — `close` wakes every waiter (an
+    /// interleaving-visible decision; sprint inventory's `close`).
+    ChanClose { chan: u64 },
+    /// kind `select.arm` — the committed arm among the ready set
+    /// (`[conc.select.fair]`: the choice is the seeded PRNG's;
+    /// `ready` is the ready-arm bitmask, recorded with the choice).
+    SelectArm { chosen: u32, ready: u64 },
+    /// kind `acquire` — one sync object acquired, in canonical order
+    /// (`[conc.when.order]`). `idx`/`set_len` tie the steps of one
+    /// `when` whole-set acquisition together: the recorder folds
+    /// them into one event carrying the set's ids (sprint inventory's
+    /// when-acquire(set)).
+    Acquire { obj: u64, idx: u32, set_len: u32 },
+    /// kind `timer.fire` — a timeout arm's deadline fired (s33
+    /// activates the reserved kind; virtual under the s36 test
+    /// scheduler, monotonic in production — `[conc.select.timeout]`).
     TimerFire,
 }
 
@@ -79,6 +122,11 @@ pub mod test_hook {
 
     type Hook = Box<dyn Fn(&SchedEvent) + Send + Sync>;
     static HOOK: OnceLock<Mutex<Option<Hook>>> = OnceLock::new();
+
+    /// Serializes tests that install the process-wide observer (the
+    /// hook is global; concurrent installers would drop each other's
+    /// events). Lock it for the whole observed section.
+    pub static SERIAL: Mutex<()> = Mutex::new(());
 
     fn cell() -> &'static Mutex<Option<Hook>> {
         HOOK.get_or_init(|| Mutex::new(None))
@@ -108,6 +156,22 @@ impl SchedRng {
     pub fn for_worker(index: usize) -> SchedRng {
         // golden-ratio increment keeps sibling streams decorrelated.
         SchedRng(root_seed() ^ (index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15))
+    }
+
+    /// Split the stream for the n-th `select` decision — the
+    /// ready-arm tie-break (`[conc.select.fair]`; sprint rule:
+    /// runtime-owned randomness, never ambient entropy). Derived from
+    /// the root seed and the process-wide select index alone, so a
+    /// seed reproduces every choice; domain-separated from the worker
+    /// streams by a constant.
+    pub fn for_select(seq: u64) -> SchedRng {
+        SchedRng(root_seed() ^ 0x5E1E_C7A2_B00C_0FFE ^ seq.wrapping_mul(0x9E37_79B9_7F4A_7C15))
+    }
+
+    /// A stream from an explicit seed — the fairness-under-seed
+    /// acceptance drives the select tie-break with pinned seeds.
+    pub fn from_seed(seed: u64) -> SchedRng {
+        SchedRng(seed)
     }
 
     fn next_u64(&mut self) -> u64 {
