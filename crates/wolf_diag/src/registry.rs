@@ -573,6 +573,22 @@ bindings are not `let` bindings; their mutability is governed by modes
 (`mut`, `take`), not by this rule.
 "#);
 
+code!(E0411, "`str` has no character indexing", r#"
+Strings in wolf are UTF-8 byte slices, and byte offsets are the one
+honest currency (D25): `s.len` counts bytes, `find` returns byte
+offsets, and slicing (`s[a..b]`) takes byte offsets — checked, so an
+out-of-range offset or one that splits a multi-byte code point is a
+deterministic `bounds` fault, never UB and never a garbled character.
+What does not exist is `s[i]`: a single index cannot honestly name "a
+character" (code point? byte? grapheme?), so wolf refuses to guess.
+Reach for the operation you mean: a byte slice `s[i..j]` (or the
+recoverable `s.get(i..j)`), the byte view `s.bytes()`, or the search
+methods that hand back offsets. The end-relative forms are slices too:
+`s[^n..]` keeps the last `n` bytes, `s[..^n]` drops them — a single
+`s[^1]` is still character indexing and refuses the same way (negative
+indices are caught earlier still, as E0209 with a `^n` fix-it).
+"#);
+
 // ------------------------------------------------------------------------
 // E05xx — traits, checked generics, and coherence (s14).
 // ------------------------------------------------------------------------

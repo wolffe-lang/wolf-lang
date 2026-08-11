@@ -1,0 +1,30 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: str.slice, str.views, mem.str.get, mem.str.order
+//!
+//! s37 — the builtin `str` surface (D24/D25): `len` is bytes and says
+//! so, slicing is byte-offset and checked, `^n` counts from the end,
+//! `get` is the recoverable slice (the boundary primitive), `find`
+//! returns byte offsets, and ordering is byte-lexicographic
+//! ([mem.str.order]). Views materialize `List`s at v0.
+
+fn main() -> !int {
+    let s = "the wolf runs"
+    let head = s[..8]
+    let tail = s[^4..]
+    let mid = s.get(4..8) else "?"
+    let miss = s.get(0..99) else "?"
+    let off = s.find("wolf") else 0 - 1
+    let words = s.words()
+    let bytes_ok = s.len == 13 && "é".len == 2
+    let slices_ok = head == "the wolf" && tail == "runs" && mid == "wolf" && miss == "?"
+    let probes_ok = s.starts_with("the") && s.ends_with("runs") && s.contains("wolf")
+    let views_ok = words.len == 3 && words[1] == "wolf" && off == 4
+    let methods_ok = "  wolf  ".trim() == "wolf" && "é".upper() == "É" && "ab".repeat(2) == "abab"
+    let order_ok = "wolf" < "wolves" && "z" < "é"
+    if bytes_ok && slices_ok && probes_ok && views_ok && methods_ok && order_ok {
+        0
+    } else {
+        1
+    }
+}

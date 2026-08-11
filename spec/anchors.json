@@ -240,6 +240,7 @@
     "mem.shared.rc.3": "02-memory-model.md",
     "mem.shared.rc.4": "02-memory-model.md",
     "mem.str": "02-memory-model.md",
+    "mem.str.get": "02-memory-model.md",
     "mem.str.impl": "02-memory-model.md",
     "mem.str.order": "02-memory-model.md",
     "mem.tier0": "02-memory-model.md",

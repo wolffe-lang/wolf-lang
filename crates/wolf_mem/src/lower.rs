@@ -1723,8 +1723,18 @@ impl<'t> Lowerer<'t> {
                 }
             }
             SyntaxKind::RangeExpr => {
+                // s37: `^n` endpoints (D25 end-relative slicing) read
+                // their inner offset expression; the marker itself has
+                // no place effects.
                 for end in RangeExpr::cast(e).expect("kind").endpoints() {
-                    self.eval_value(end)?;
+                    if end.kind == SyntaxKind::FromEndExpr {
+                        if let Some(inner) = wolf_ast::FromEndExpr::cast(end).and_then(|f| f.expr())
+                        {
+                            self.eval_value(inner)?;
+                        }
+                    } else {
+                        self.eval_value(end)?;
+                    }
                 }
                 Ok(Val::none())
             }

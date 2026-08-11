@@ -1,0 +1,469 @@
+//! s37 — the builtin `str` surface under checked execution (D24/D25):
+//! byte-offset slicing with its two defined faults (OOB, split code
+//! point), `^n` end-relative offsets, the recoverable boundary
+//! primitive `get` (wolf-lang#17), the Python method set, the
+//! materialized views, `[mem.str.order]` byte-lexicographic ordering,
+//! and the `[[fill]align][width]` format-spec subset with honest
+//! refusals beyond it (wolf-lang#10 — a spec is never silently
+//! ignored).
+//!
+//! Every program is statically clean through `mem` before it
+//! executes — the harness asserts the ladder, so a trap or a miss
+//! here is a genuine dynamic verdict.
+
+use wolf_mem::ubcheck::{self, Budget, Verdict};
+use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
+
+/// Run a single-file program: assert the static ladder is clean, then
+/// execute under the checked machine. Returns the full outcome
+/// (verdict + stdout).
+fn run(src: &str) -> ubcheck::RunOutcome {
+    let mut ml = MemoryLoader::new("strb");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    assert!(
+        res.diagnostics
+            .iter()
+            .all(|d| d.severity != wolf_diag::Severity::Error),
+        "input resolves clean: {:?}",
+        res.diagnostics
+    );
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty(),
+        "input typechecks fully: {:?}",
+        tc.not_yet
+    );
+    assert!(
+        !tc.has_errors(),
+        "input typechecks clean: {:?}",
+        tc.diagnostics
+    );
+    let mem = wolf_mem::check_package(&res.package, &tc);
+    assert!(
+        mem.not_yet.is_empty(),
+        "input stays inside the mem surface: {:?}",
+        mem.not_yet
+    );
+    assert!(
+        mem.diagnostics
+            .iter()
+            .all(|d| d.severity != wolf_diag::Severity::Error),
+        "input is statically accepted: {:?}",
+        mem.diagnostics
+    );
+    ubcheck::run_checked(&res.package, &tc, Budget::default())
+        .expect("the program is within the executable surface")
+}
+
+fn assert_exit(src: &str, code: u8) {
+    match run(src).verdict {
+        Verdict::Exit(n) => assert_eq!(n, code, "exit code"),
+        other => panic!("expected exit({code}), got {other:?}"),
+    }
+}
+
+fn assert_trap(src: &str, kind: &str) {
+    match run(src).verdict {
+        Verdict::Trap(t) => assert_eq!(t.kind, kind, "trap kind"),
+        other => panic!("expected trap({kind}), got {other:?}"),
+    }
+}
+
+fn assert_stdout(src: &str, expected: &str) {
+    let out = run(src);
+    match out.verdict {
+        Verdict::Exit(0) => {}
+        other => panic!("expected exit(0), got {other:?}"),
+    }
+    assert_eq!(out.stdout, expected, "stdout");
+}
+
+/// The refusal path: the program must be statically clean but refuse
+/// under checked execution with the given construct text.
+fn assert_refuses(src: &str, needle: &str) {
+    let mut ml = MemoryLoader::new("strb");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty() && !tc.has_errors(),
+        "input typechecks clean: {:?} {:?}",
+        tc.not_yet,
+        tc.diagnostics
+    );
+    match ubcheck::run_checked(&res.package, &tc, Budget::default()) {
+        Err(nyc) => assert!(
+            nyc.construct.contains(needle),
+            "refusal names the construct: got `{}`",
+            nyc.construct
+        ),
+        Ok(out) => panic!("expected a refusal, got {:?}", out.verdict),
+    }
+}
+
+// ----------------------------------------------------- len + slicing --
+
+#[test]
+fn len_is_bytes() {
+    // `"é".len == 2` — the honest documentation case (D24).
+    assert_exit(
+        "fn main() -> !int {\n\
+         let a = \"wolf\"\n\
+         let b = \"é\"\n\
+         if a.len == 4 && b.len == 2 && \"\".len == 0 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn slicing_shares_bytes() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"the wolf runs\"\n\
+         let head = s[..8]\n\
+         let tail = s[9..]\n\
+         let mid = s[4..8]\n\
+         if head == \"the wolf\" && tail == \"runs\" && mid == \"wolf\" { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn slicing_from_end() {
+    // `^n` counts bytes from the end (D25): `s[..^1]` drops the last
+    // byte, `s[^4..]` keeps the last four.
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"wolves\"\n\
+         if s[..^1] == \"wolve\" && s[^2..] == \"es\" && s[^4..^1] == \"lve\" { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn slice_oob_traps_bounds() {
+    // D25's first defined fault: an out-of-range byte offset.
+    assert_trap(
+        "fn main() -> !int {\n\
+         let s = \"wolf\"\n\
+         let x = s[0..9]\n\
+         if x == \"\" { 1 } else { 2 }\n\
+         }\n",
+        "bounds",
+    );
+}
+
+#[test]
+fn slice_split_code_point_traps_bounds() {
+    // D25's second defined fault: an offset inside a multi-byte code
+    // point — deterministic, never a garbled slice.
+    assert_trap(
+        "fn main() -> !int {\n\
+         let s = \"é\"\n\
+         let x = s[0..1]\n\
+         if x == \"\" { 1 } else { 2 }\n\
+         }\n",
+        "bounds",
+    );
+}
+
+#[test]
+fn inclusive_slice() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"wolf\"\n\
+         if s[0..=2] == \"wol\" { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+// ------------------------------------- the boundary primitive: `get` --
+
+#[test]
+fn get_is_the_recoverable_slice() {
+    // wolf-lang#17: the same questions the checked slice would trap
+    // on come back as `{none}` rows — OOB and split-boundary alike.
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"héllo\"\n\
+         let hit = s.get(0..1) else \"?\"\n\
+         let oob = s.get(0..9) else \"?\"\n\
+         let split = s.get(0..2) else \"?\"\n\
+         let all = s.get(0..6) else \"?\"\n\
+         if hit == \"h\" && oob == \"?\" && split == \"?\" && all == \"héllo\" { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+// ------------------------------------------------------ method set --
+
+#[test]
+fn affix_probes() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"the wolf runs\"\n\
+         let a = s.starts_with(\"the \")\n\
+         let b = s.ends_with(\"runs\")\n\
+         let c = s.contains(\"wolf\")\n\
+         let d = s.starts_with(\"wolf\")\n\
+         if a && b && c && !d { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn find_returns_byte_offsets() {
+    // The asymmetry that named the bug (#17): `find` over arbitrary
+    // UTF-8 — `l` after a two-byte `é` sits at byte offset 3.
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"héllo\"\n\
+         let a = s.find(\"l\") else 0 - 1\n\
+         let b = s.rfind(\"l\") else 0 - 1\n\
+         let miss = s.find(\"wolf\") else 0 - 1\n\
+         if a == 3 && b == 4 && miss == 0 - 1 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn strip_and_trim() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"  wolf  \"\n\
+         let t = s.trim()\n\
+         let ts = s.trim_start()\n\
+         let te = s.trim_end()\n\
+         let p = t.strip_prefix(\"wo\") else \"?\"\n\
+         let q = t.strip_suffix(\"xx\") else \"?\"\n\
+         if t == \"wolf\" && ts == \"wolf  \" && te == \"  wolf\" && p == \"lf\" && q == \"?\" {\n\
+         0\n\
+         } else {\n\
+         1\n\
+         }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn case_count_repeat_replace() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"Wolf\"\n\
+         let a = s.lower() == \"wolf\"\n\
+         let b = s.upper() == \"WOLF\"\n\
+         let c = \"aabaa\".count(\"aa\") == 2\n\
+         let d = \"ab\".repeat(3) == \"ababab\"\n\
+         let e = \"the wolf\".replace(\"wolf\", \"moon\") == \"the moon\"\n\
+         let f = \"\".is_empty() && !s.is_empty()\n\
+         if a && b && c && d && e && f { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn repeat_negative_traps() {
+    assert_trap(
+        "fn main() -> !int {\n\
+         let n = 0 - 1\n\
+         let x = \"ab\".repeat(n)\n\
+         if x == \"\" { 1 } else { 2 }\n\
+         }\n",
+        "bounds",
+    );
+}
+
+// ----------------------------------------------------------- views --
+
+#[test]
+fn words_lines_split_bytes() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"the wolf runs\"\n\
+         let w = s.words()\n\
+         let l = \"a\\nb\\nc\".lines()\n\
+         let p = \"a,b,c\".split(\",\")\n\
+         let b = \"é\".bytes()\n\
+         let words_ok = w.len == 3 && w[1] == \"wolf\"\n\
+         let lines_ok = l.len == 3 && l[2] == \"c\"\n\
+         let split_ok = p.len == 3 && p[0] == \"a\"\n\
+         let bytes_ok = b.len == 2 && b[0] == 195 && b[1] == 169\n\
+         if words_ok && lines_ok && split_ok && bytes_ok { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+// -------------------------------------------------- [mem.str.order] --
+
+#[test]
+fn str_ordering_is_byte_lexicographic() {
+    // The [mem.str.order] pins: shared prefix, shorter first, every
+    // multi-byte code point above every ASCII one.
+    assert_exit(
+        "fn main() -> !int {\n\
+         let a = \"wolf\" < \"wolves\"\n\
+         let b = \"wolf\" < \"wolf!\"\n\
+         let c = \"z\" < \"é\"\n\
+         let d = \"é\" < \"🐺\"\n\
+         let e = \"\" < \"a\"\n\
+         if a && b && c && d && e { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+// ------------------------------------------- interpolation + specs --
+
+#[test]
+fn interp_preserves_utf8() {
+    // The c06 latin-1 divergence, retired: a non-ASCII literal
+    // survives interpolation byte-for-byte.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let w = \"caf\u{e9} \u{1f43a}\"\n\
+         print(\"<{w}>\")\n\
+         0\n\
+         }\n",
+        "<café 🐺>\n",
+    );
+}
+
+#[test]
+fn double_braces_are_literal() {
+    // `{{` / `}}` are literal braces ([gram.lex.str]) — printing them
+    // doubled was a stdout divergence against the reference.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let n = 3\n\
+         print(\"{{n}} is {n}\")\n\
+         0\n\
+         }\n",
+        "{n} is 3\n",
+    );
+}
+
+#[test]
+fn format_spec_fill_align_width() {
+    // The implemented subset (`[[fill]align][width]`, #10/#28):
+    // numbers default right, strings default left, width in bytes.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let s = \"hi\"\n\
+         let n = 42\n\
+         print(\"[{s:8}]\")\n\
+         print(\"[{n:8}]\")\n\
+         print(\"[{n:>6}]\")\n\
+         print(\"[{n:*>8}]\")\n\
+         print(\"[{s:^6}]\")\n\
+         print(\"[{n:2}]\")\n\
+         0\n\
+         }\n",
+        "[hi      ]\n[      42]\n[    42]\n[******42]\n[  hi  ]\n[42]\n",
+    );
+}
+
+#[test]
+fn format_spec_beyond_subset_refuses() {
+    // wolf-lang#10's smallest ask: an unimplemented spec REFUSES —
+    // wolfc printing the bare value while the reference pads was a
+    // stdout divergence with no diagnostic.
+    assert_refuses(
+        "fn main() -> !int {\n\
+         let n = 42\n\
+         print(\"[{n:+}]\")\n\
+         0\n\
+         }\n",
+        "format spec",
+    );
+}
+
+#[test]
+fn format_spec_zero_pad_refuses() {
+    // `{n:08}` silently reading as width 8 with a space fill was the
+    // reference implementation's own bug — refusing beats guessing.
+    assert_refuses(
+        "fn main() -> !int {\n\
+         let n = 42\n\
+         print(\"[{n:08}]\")\n\
+         0\n\
+         }\n",
+        "zero-padded",
+    );
+}
+
+// --------------------------------------------- multiline dedent (D26) --
+
+#[test]
+fn multiline_dedents_by_closing_column() {
+    // The closing delimiter's column sets the dedent; the final
+    // newline stays, the closing indentation goes.
+    assert_exit(
+        "fn main() -> !int {\n\
+         let poem = \"\"\"\n\
+        \x20   the wolf runs\n\
+        \x20   the moon watches\n\
+        \x20   \"\"\"\n\
+         let head = poem[..8]\n\
+         let tail = poem[^13..]\n\
+         let ok_len = poem.len == 31\n\
+         if ok_len && head == \"the wolf\" && tail == \"moon watches\\n\" { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn multiline_with_holes_refuses() {
+    // Dedent shifts hole offsets — the combination refuses rather
+    // than printing undedented text (the silent-wrong class).
+    assert_refuses(
+        "fn main() -> !int {\n\
+         let n = 3\n\
+         let s = \"\"\"\n\
+        \x20   count: {n}\n\
+        \x20   \"\"\"\n\
+         if s == \"\" { 1 } else { 0 }\n\
+         }\n",
+        "multiline",
+    );
+}
+
+// -------------------------------------- wolf-lang#30: tag collision --
+
+#[test]
+fn raise_resolves_declared_row_before_value_namespace() {
+    // A row tag sharing a name with a same-scope function: the raise
+    // must mean the TAG (the declared row is the nearest scope), so
+    // the caller's `else` fires. Pre-fix this returned the function
+    // value and the miss path never ran (the silent-wrong class).
+    assert_exit(
+        "fn helper() -> int {\n\
+         3\n\
+         }\n\
+         \n\
+         fn miss(k: int) -> int ! {helper} {\n\
+         if k < 0 {\n\
+         return helper\n\
+         }\n\
+         k\n\
+         }\n\
+         \n\
+         fn main() -> !int {\n\
+         let hit = miss(5) else 0 - 1\n\
+         let b = miss(0 - 1) else 0 - 7\n\
+         if hit == 5 && b == 0 - 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}

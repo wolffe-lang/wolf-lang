@@ -33,7 +33,7 @@ conc/when_multi.lu: not mem-clean (pre-wir rungs own it)
 errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
 faults/assert_msg_holds.lu: lowers
-faults/bounds_slice.lu: not mem-clean (pre-wir rungs own it)
+faults/bounds_slice.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/overflow_add.lu: lowers
@@ -50,9 +50,9 @@ grammar/intdot_exponent.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
 grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
-grammar/interp_nested.lu: not mem-clean (pre-wir rungs own it)
+grammar/interp_nested.lu: refused — a method call without an elaborated impl
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
-grammar/newline_trailing.lu: not mem-clean (pre-wir rungs own it)
+grammar/newline_trailing.lu: refused — a method call without an elaborated impl
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
@@ -128,6 +128,10 @@ rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
 rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: refused — comparison outside integers/floats (str/enum compares, c06/std)
 rows/qmark_defer.lu: lowers
+strings/builtin_methods.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
+strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
+strings/format_spec_width.lu: refused — format specs in native print lowering (s38 formatting)
+strings/slice_oob_trap.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
 strings.lu: not mem-clean (pre-wir rungs own it)
 traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
 traits/assoc_rewrite.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)

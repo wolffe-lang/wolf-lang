@@ -241,10 +241,19 @@ fn is_nyc(tc: &Typecheck, name: &str) -> bool {
 }
 
 #[test]
-fn method_calls_are_not_yet_checkable() {
-    let tc = check_one("fn main() -> !int {\n    let s = \"abc\".upper()\n    0\n}\n");
+fn str_methods_type_since_s37() {
+    // s13 refused builtin-receiver methods honestly; s37's builtin
+    // `str` surface types them (D24/D25).
+    let tc = check_one("fn main() -> !int {\n    let s = \"abc\".upper()\n    s.len\n}\n");
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    // Outside the s37 set stays an honest refusal.
+    let tc = check_one("fn main() -> !int {\n    let s = \"abc\".frobnicate()\n    0\n}\n");
     assert!(is_nyc(&tc, "main"));
-    assert!(!tc.fully_checked());
 }
 
 #[test]
@@ -334,9 +343,21 @@ fn unsafe_blocks_typecheck_since_s22_but_asm_still_refuses() {
 }
 
 #[test]
-fn indexing_is_not_yet_checkable() {
-    let tc =
-        check_one("fn main() -> !int {\n    let s = \"abcdef\"\n    let h = s[0..3]\n    0\n}\n");
+fn str_slicing_types_since_s37() {
+    // `s[a..b]` is the D25 checked byte slice — typed as `str`,
+    // including `^n` end-relative endpoints.
+    let tc = check_one(
+        "fn main() -> !int {\n    let s = \"abcdef\"\n    let h = s[0..3]\n    let t = s[..^1]\n    h.len + t.len\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    // Bracket application outside the container/str set stays an
+    // honest refusal.
+    let tc = check_one("fn main() -> !int {\n    let n = 7\n    let h = n[0..2]\n    0\n}\n");
     assert!(is_nyc(&tc, "main"));
 }
 

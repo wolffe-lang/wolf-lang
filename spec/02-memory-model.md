@@ -430,6 +430,25 @@ lupin's executed byte-order behavior at the sc01 pins.)
   in-library with **no bytes accessor**; the operator family and the
   impl agree by definition.
 
+(Appended 2026-08-10, s37 core types — wolf-std F-0018 / issue #17.
+The boundary primitive: a byte-offset string library cannot ask
+whether an offset is a code-point boundary without slicing at it, and
+slicing at a non-boundary is a fault. `get` is the recoverable twin —
+the one primitive that cannot be written in library code, because
+writing it requires itself.)
+
+- `[mem.str.get]` `s.get(a..b) -> str ! {none}` is defined for every
+  `str` and every pair of `int` byte offsets. It answers the same
+  question as the checked slice `s[a..b]` with the same domain:
+  **exactly** the inputs on which `s[a..b]` faults `bounds` — an
+  offset outside `0..=s.len`, `b < a`, or an offset that splits a
+  UTF-8 code point — answer the tag `none`, and every other input
+  answers the slice value `s[a..b]` would produce. No third outcome
+  exists: `get` never faults on any input, and a hit is bit-identical
+  to the checked slice. End-relative endpoints (`^n`) and open ends
+  resolve exactly as in `s[a..b]` before the domain question is
+  asked.
+
 ---
 
 ## Appendix A — `corpus/regions.lu`, clause by clause `[mem.appendix]`

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0411]: `str` has no character indexing
+ --> mem:///main.lu:3:16
+  |
+3 |     let last = s[^1]
+  |                ^^^^^ no `s[^1]` on `str`
+  |
+  = note: a single position cannot honestly name a character (D25); the end-relative slices are
+    `s[^n..]` (last `n` bytes) and `s[..^n]` (all but the last `n`).
