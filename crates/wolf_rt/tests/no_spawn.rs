@@ -50,3 +50,8 @@ fn main() {
     assert!(running >= 1 && running <= (target * 8).max(target + 4));
     println!("no_spawn: ok (target={target}, running={running})");
 }
+
+// harness-false stub: the linux-only cfg above strips the real main on
+// other hosts; cargo still builds the target and demands an entry point.
+#[cfg(not(target_os = "linux"))]
+fn main() {}

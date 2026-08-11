@@ -105,3 +105,8 @@ fn main() {
         "per-task round trip blew the sanity ceiling: {per_task:?}"
     );
 }
+
+// harness-false stub: the linux-only cfg above strips the real main on
+// other hosts; cargo still builds the target and demands an entry point.
+#[cfg(not(target_os = "linux"))]
+fn main() {}

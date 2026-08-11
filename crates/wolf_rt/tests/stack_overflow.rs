@@ -61,3 +61,8 @@ fn main() {
     // handler; windows is the recorded VirtualAlloc delta).
     println!("stack_overflow: SKIP (linux-only assertion)");
 }
+
+// harness-false stub: the linux-only cfg above strips the real main on
+// other hosts; cargo still builds the target and demands an entry point.
+#[cfg(not(target_os = "linux"))]
+fn main() {}
