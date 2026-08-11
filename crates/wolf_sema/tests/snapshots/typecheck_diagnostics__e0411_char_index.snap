@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0411]: `str` has no character indexing
+ --> mem:///main.lu:4:13
+  |
+4 |     let c = s[i]
+  |             ^^^^ no `s[i]` on `str`
+  |
+  = note: byte offsets are the honest currency (D25): slice with `s[a..b]` (or the recoverable
+    `s.get(a..b)`), read bytes via `s.bytes()`, or use `find` — it returns byte offsets.

@@ -1078,16 +1078,11 @@ impl<'t> Machine<'t> {
         let out = match result {
             Ok(Flow::Val(v)) => self.exit_scopes_to(0, false).map(|()| v),
             Ok(Flow::Return(v)) => self.exit_scopes_to(0, false).map(|()| v),
-            Ok(Flow::Err(_)) => {
-                let r = self.exit_scopes_to(0, true);
-                match r {
-                    Ok(()) => Err(Stop::Refuse(NotYet {
-                        construct: "an error value escaping the checked entry",
-                        span: node.span,
-                    })),
-                    Err(e) => Err(e),
-                }
-            }
+            // A raise leaving the body (s15/s37): errdefers run, the
+            // tag value crosses to the caller — the call site rewraps
+            // it as `Flow::Err` (or `main` reports it, D30's process
+            // behavior).
+            Ok(Flow::Err(v)) => self.exit_scopes_to(0, true).map(|()| v),
             Ok(Flow::Break) | Ok(Flow::Continue) => Ok(Value::Unit),
             Err(e) => Err(e),
         };
@@ -1320,6 +1315,11 @@ impl<'t> Machine<'t> {
             }
             (PStep::Field(f), Value::List(id)) if f == "len" => {
                 let n = self.lists[id].len() as i64;
+                self.walk_read(Value::Int(n), rest, span)
+            }
+            // s37: `s.len` through a place — bytes, O(1) (D24/D25).
+            (PStep::Field(f), Value::Str(s)) if f == "len" => {
+                let n = s.len() as i64;
                 self.walk_read(Value::Int(n), rest, span)
             }
             (PStep::ListIdx { index, span: isp }, Value::List(id)) => {
@@ -1653,6 +1653,20 @@ impl<'t> Machine<'t> {
                     let v = self.take_value(&place, e.span)?;
                     return Ok(Flow::Val(v));
                 }
+                // A raise site (s15/s37): the checker injected a row
+                // tag here — the recorded type is the `!T` union and
+                // the bare name is one of its declared tags. The
+                // declared row wins over the value namespace
+                // (wolf-lang#30), so this fires before the module-item
+                // fallback.
+                if e.kind == SyntaxKind::PathExpr
+                    && let Some(tag) = self.raised_tag(e)
+                {
+                    return Ok(Flow::Err(Value::ErrTag {
+                        tag,
+                        payload: Vec::new(),
+                    }));
+                }
                 // Not a local place: a module item (global const) or
                 // an unmodelled member.
                 self.item_value(e)
@@ -1663,6 +1677,12 @@ impl<'t> Machine<'t> {
                     && matches!(self.expr_ty(recv.span), Some(TyKind::Ptr(_)))
                 {
                     return self.raw_index_read(e);
+                }
+                // s37 — `s[a..b]` byte-offset checked slicing (D25).
+                if let Some(recv) = b.callee()
+                    && matches!(self.expr_ty(recv.span), Some(TyKind::Prim(Prim::Str)))
+                {
+                    return self.eval_str_slice(e);
                 }
                 if let Some(place) = self.place_of(e)? {
                     let v = self.read_place(&place, e.span)?;
@@ -2184,18 +2204,30 @@ impl<'t> Machine<'t> {
                 let want = op == SyntaxKind::EqEq;
                 Ok(Flow::Val(Value::Bool(eq == want)))
             }
-            SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq => {
-                let (Value::Int(a), Value::Int(b)) = (l, r) else {
-                    return self.refuse("ordering outside integers", e.span);
-                };
-                let out = match op {
-                    SyntaxKind::Lt => a < b,
-                    SyntaxKind::Gt => a > b,
-                    SyntaxKind::LtEq => a <= b,
-                    _ => a >= b,
-                };
-                Ok(Flow::Val(Value::Bool(out)))
-            }
+            SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq => match (l, r) {
+                (Value::Int(a), Value::Int(b)) => {
+                    let out = match op {
+                        SyntaxKind::Lt => a < b,
+                        SyntaxKind::Gt => a > b,
+                        SyntaxKind::LtEq => a <= b,
+                        _ => a >= b,
+                    };
+                    Ok(Flow::Val(Value::Bool(out)))
+                }
+                // `[mem.str.order]` (s37): byte-lexicographic over the
+                // UTF-8 bytes, unsigned compare, shorter-first on a
+                // shared prefix — exactly Rust's `str` ordering.
+                (Value::Str(a), Value::Str(b)) => {
+                    let out = match op {
+                        SyntaxKind::Lt => a < b,
+                        SyntaxKind::Gt => a > b,
+                        SyntaxKind::LtEq => a <= b,
+                        _ => a >= b,
+                    };
+                    Ok(Flow::Val(Value::Bool(out)))
+                }
+                _ => self.refuse("ordering outside integers and str", e.span),
+            },
             _ => self.refuse("this operator in checked execution", e.span),
         }
     }
@@ -2339,7 +2371,12 @@ impl<'t> Machine<'t> {
     fn eval_string(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = StringExpr::cast(e).expect("kind");
         // Rebuild: literal segments from source, values spliced at
-        // interpolation holes ({x} f-strings, D26).
+        // interpolation holes ({x} f-strings, D26). Format specs
+        // (`{x:>8}`) apply per s38's amendment candidate (#28): the
+        // implemented subset is `[[fill]align][width]` — width in
+        // BYTES (D25), default alignment left for `str`/`bool` and
+        // right for numbers; everything beyond it refuses honestly
+        // (the wolf-lang#10 rule: a spec is never silently ignored).
         let raw = self.text(e.span);
         let base = e.span.lo;
         let mut holes: Vec<(u32, u32, String)> = Vec::new();
@@ -2352,14 +2389,40 @@ impl<'t> Machine<'t> {
                     } else {
                         val!(self.eval(hole))
                     };
-                    format_value(&hv)
+                    let rendered = format_value(&hv);
+                    match i.format_spec() {
+                        Some(spec) => self.apply_format_spec(spec, &hv, rendered)?,
+                        None => rendered,
+                    }
                 }
                 None => String::new(),
             };
             holes.push((ispan.lo - base, ispan.hi - base, v));
         }
         let bytes = raw.as_bytes();
-        let mut out = String::new();
+        // `"""` multiline strings dedent by the closing delimiter's
+        // column (D26). Holes inside one shift every offset after
+        // dedent, so that combination refuses honestly for now
+        // (printing undedented text was a silent wrong answer).
+        if bytes.starts_with(b"\"\"\"") {
+            if !holes.is_empty() {
+                return Err(Stop::Refuse(NotYet {
+                    construct: "interpolation inside a multiline string (s38 formatting)",
+                    span: e.span,
+                }));
+            }
+            let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
+            let dedented = dedent_multiline(inner);
+            let decoded = decode_escapes(&dedented);
+            let out = String::from_utf8_lossy(&decoded).into_owned();
+            return Ok(Flow::Val(Value::Str(out)));
+        }
+        // Byte-accurate rebuild: literal segments are copied as UTF-8
+        // *bytes* (a per-byte `as char` push double-encoded every
+        // non-ASCII literal — the c06 latin-1 divergence, retired
+        // here), escapes push their single byte, holes splice their
+        // rendered text.
+        let mut outb: Vec<u8> = Vec::new();
         let mut i = 0usize;
         // Strip the surrounding quotes.
         let (start, end) = if bytes.len() >= 2 {
@@ -2370,31 +2433,153 @@ impl<'t> Machine<'t> {
         i = i.max(start);
         while i < end {
             if let Some((_, hi, v)) = holes.iter().find(|(lo, _, _)| *lo as usize == i) {
-                out.push_str(v);
+                outb.extend_from_slice(v.as_bytes());
                 i = *hi as usize;
                 continue;
             }
             let c = bytes[i];
             if c == b'\\' && i + 1 < end {
+                // Code-point escapes: `\xNN` and `\u{…}` (s37 — the
+                // wolf-std whitespace-set pin exercises both).
+                if let Some((ch, consumed)) = decode_codepoint_escape(&bytes[i..end]) {
+                    let mut buf = [0u8; 4];
+                    outb.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                    i += consumed;
+                    continue;
+                }
                 let esc = bytes[i + 1];
-                out.push(match esc {
-                    b'n' => '\n',
-                    b't' => '\t',
-                    b'r' => '\r',
-                    b'\\' => '\\',
-                    b'"' => '"',
-                    b'{' => '{',
-                    b'}' => '}',
-                    b'0' => '\0',
-                    other => other as char,
+                outb.push(match esc {
+                    b'n' => b'\n',
+                    b't' => b'\t',
+                    b'r' => b'\r',
+                    b'\\' => b'\\',
+                    b'"' => b'"',
+                    b'{' => b'{',
+                    b'}' => b'}',
+                    b'0' => b'\0',
+                    other => other,
                 });
                 i += 2;
                 continue;
             }
-            out.push(c as char);
+            // `{{` / `}}` are literal braces ([gram.lex.str]).
+            if (c == b'{' || c == b'}') && i + 1 < end && bytes[i + 1] == c {
+                outb.push(c);
+                i += 2;
+                continue;
+            }
+            outb.push(c);
             i += 1;
         }
+        let out = String::from_utf8_lossy(&outb).into_owned();
         Ok(Flow::Val(Value::Str(out)))
+    }
+
+    /// The checked tier's format-spec application (s37 interim for
+    /// s38): `[[fill]align][width]`, refusing the rest. The refusals
+    /// are the point — wolfc parsing a spec and printing the bare
+    /// value was a stdout divergence with no diagnostic (#10);
+    /// `{n:08}` silently reading as width 8 was lupin's own bug, so
+    /// zero-pad refuses rather than guessing.
+    fn apply_format_spec(
+        &mut self,
+        spec: &'t GreenNode,
+        val: &Value,
+        rendered: String,
+    ) -> Result<String, Stop> {
+        // A computed spec (`{x:{w}}`) has no pinned semantics.
+        if spec.nodes().any(|n| n.kind == SyntaxKind::Interp) {
+            return Err(Stop::Refuse(NotYet {
+                construct: "a computed format spec (s38 formatting)",
+                span: spec.span,
+            }));
+        }
+        let text = self.text(spec.span);
+        let s = text.strip_prefix(':').unwrap_or(&text);
+        if s.is_empty() {
+            return Ok(rendered);
+        }
+        let chars: Vec<char> = s.chars().collect();
+        let is_align = |c: char| matches!(c, '<' | '>' | '^');
+        let (fill, align, rest_at) = if chars.len() >= 2 && is_align(chars[1]) {
+            (chars[0], Some(chars[1]), 2)
+        } else if is_align(chars[0]) {
+            (' ', Some(chars[0]), 1)
+        } else {
+            (' ', None, 0)
+        };
+        if !fill.is_ascii() {
+            return Err(Stop::Refuse(NotYet {
+                construct: "a non-ASCII fill in a format spec (s38 formatting)",
+                span: spec.span,
+            }));
+        }
+        let rest: String = chars[rest_at..].iter().collect();
+        if !rest.is_empty() && !rest.chars().all(|c| c.is_ascii_digit()) {
+            return Err(Stop::Refuse(NotYet {
+                construct: "this format spec (only `[[fill]align][width]` is implemented, s38)",
+                span: spec.span,
+            }));
+        }
+        if rest.len() > 1 && rest.starts_with('0') {
+            return Err(Stop::Refuse(NotYet {
+                construct: "a zero-padded format width (s38 formatting)",
+                span: spec.span,
+            }));
+        }
+        let width = if rest.is_empty() {
+            0
+        } else {
+            rest.parse::<usize>().unwrap_or(0)
+        };
+        let len = rendered.len(); // bytes — D25's honest width unit
+        if width <= len {
+            return Ok(rendered);
+        }
+        let pad = width - len;
+        // Default alignment: numbers right, everything else left
+        // (spec §7.4 candidate, #28).
+        let align = align.unwrap_or(match val {
+            Value::Int(_) => '>',
+            _ => '<',
+        });
+        let fills = |n: usize| fill.to_string().repeat(n);
+        Ok(match align {
+            '<' => format!("{rendered}{}", fills(pad)),
+            '>' => format!("{}{rendered}", fills(pad)),
+            _ => {
+                let l = pad / 2;
+                format!("{}{rendered}{}", fills(l), fills(pad - l))
+            }
+        })
+    }
+
+    /// Is this expression an injected raise of a declared row tag?
+    /// True when the checker recorded the `!T` union as the node's
+    /// type and the node's own text names one of the row's tags —
+    /// exactly the shape `inject_tag` leaves behind.
+    fn raised_tag(&self, e: &'t GreenNode) -> Option<String> {
+        let Some(TyKind::ErrUnion(_, row)) = self.expr_ty(e.span) else {
+            return None;
+        };
+        let name = self.text(e.span);
+        let TyKind::Row { tags, .. } = self.ctx().tb.table.kind(*row) else {
+            return None;
+        };
+        tags.iter().any(|(n, _)| n == &name).then_some(name)
+    }
+
+    /// The call-shaped raise: the whole call's recorded type is the
+    /// `!T` union and the callee text names a declared tag.
+    fn raised_tag_call(&self, e: &'t GreenNode, callee: &'t GreenNode) -> Option<String> {
+        let Some(TyKind::ErrUnion(_, row)) = self.expr_ty(e.span) else {
+            return None;
+        };
+        let name = self.text(callee.span);
+        let TyKind::Row { tags, .. } = self.ctx().tb.table.kind(*row) else {
+            return None;
+        };
+        tags.iter().any(|(n, _)| n == &name).then_some(name)
     }
 
     /// A path that is not a local: a module global (item initializer)
@@ -2415,6 +2600,8 @@ impl<'t> Machine<'t> {
                     Value::List(id) if field == "len" => {
                         Ok(Flow::Val(Value::Int(self.lists[id].len() as i64)))
                     }
+                    // s37: `s.len` — bytes, O(1) (D24/D25).
+                    Value::Str(s) if field == "len" => Ok(Flow::Val(Value::Int(s.len() as i64))),
                     Value::Shared(c) => {
                         let payload = self.cells[c].value.clone();
                         match payload {
@@ -2435,6 +2622,84 @@ impl<'t> Machine<'t> {
             }
         }
         self.refuse("module items in checked execution", e.span)
+    }
+
+    // ---------------------------------------------------- str tier --
+
+    /// `s[a..b]` — the D25 checked slice: byte offsets, `^n` from the
+    /// end, open ends default to the string's edges. OOB and
+    /// split-code-point offsets are *defined checks*: a deterministic
+    /// `bounds` trap, never UB and never a garbled slice. The
+    /// recoverable twin is `s.get(a..b) -> str ! {none}` (a method,
+    /// below).
+    fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let b = BracketApply::cast(e).expect("kind");
+        let Some(recv) = b.callee() else {
+            return self.refuse("a slice without a receiver", e.span);
+        };
+        let sv = if let Some(place) = self.place_of(recv)? {
+            self.read_place(&place, recv.span)?
+        } else {
+            val!(self.eval(recv))
+        };
+        let Value::Str(s) = sv else {
+            return self.refuse("str slicing of a non-str", e.span);
+        };
+        let mut range_node = None;
+        for a in b.args().into_iter().flat_map(|l| l.args()) {
+            if let Some(v) = Arg::value(a)
+                && v.kind == SyntaxKind::RangeExpr
+            {
+                range_node = Some(v);
+            }
+        }
+        let Some(rn) = range_node else {
+            return self.refuse("this str index shape in checked execution", e.span);
+        };
+        let d = RangeExpr::cast(rn).expect("kind");
+        let len = s.len() as i64;
+        // Which side of the dots each endpoint sits on decides which
+        // bound it names — open sides default to the edges.
+        let dots = rn
+            .tokens()
+            .find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))
+            .map(|t| t.span.lo)
+            .unwrap_or(rn.span.hi);
+        let mut lo = 0i64;
+        let mut hi = len;
+        for ep in d.endpoints() {
+            let resolved = if ep.kind == SyntaxKind::FromEndExpr {
+                let inner = wolf_ast::FromEndExpr::cast(ep).and_then(|f| f.expr());
+                let Some(inner) = inner else {
+                    return self.refuse("a bare `^` endpoint", ep.span);
+                };
+                let Value::Int(n) = val!(self.eval(inner)) else {
+                    return self.refuse("a non-integer `^n` endpoint", ep.span);
+                };
+                len - n
+            } else {
+                let Value::Int(n) = val!(self.eval(ep)) else {
+                    return self.refuse("a non-integer slice endpoint", ep.span);
+                };
+                n
+            };
+            if ep.span.lo < dots {
+                lo = resolved;
+            } else {
+                hi = resolved;
+            }
+        }
+        if d.is_inclusive() {
+            hi += 1;
+        }
+        if lo < 0 || hi < lo || hi > len {
+            return self.trap("bounds", "mem.ub.defined", e.span);
+        }
+        let (a, z) = (lo as usize, hi as usize);
+        if !s.is_char_boundary(a) || !s.is_char_boundary(z) {
+            return self.trap("bounds", "mem.ub.defined", e.span);
+        }
+        Ok(Flow::Val(Value::Str(s[a..z].to_string())))
     }
 
     // ---------------------------------------------------- raw tier --
@@ -2803,6 +3068,22 @@ impl<'t> Machine<'t> {
             }
             _ => {}
         }
+        // A payload-carrying raise (`return tag(x)`, s15/s37): no
+        // CallSig — the checker injected the tag; the recorded type
+        // is the `!T` union and the callee names a declared tag.
+        if cs.is_none()
+            && let Some(callee) = d.callee()
+            && callee.kind == SyntaxKind::PathExpr
+            && let Some(tag) = self.raised_tag_call(e, callee)
+        {
+            let mut payload = Vec::new();
+            for a in d.args().into_iter().flat_map(|l| l.args()) {
+                if let Some(v) = Arg::value(a) {
+                    payload.push(val!(self.eval(v)));
+                }
+            }
+            return Ok(Flow::Err(Value::ErrTag { tag, payload }));
+        }
         // A plain user fn call.
         let Some(sig) = cs else {
             return self.refuse("calls outside the modelled surface", e.span);
@@ -2825,6 +3106,11 @@ impl<'t> Machine<'t> {
             args.push(self.eval_arg(v, mode)?);
         }
         let out = self.call_body(body, args)?;
+        // A raised row tag crosses the call as the error flow — the
+        // caller's `?`/`else`/`match` observes it (D30).
+        if let Value::ErrTag { .. } = out {
+            return Ok(Flow::Err(out));
+        }
         Ok(Flow::Val(out))
     }
 
@@ -2987,7 +3273,51 @@ impl<'t> Machine<'t> {
                         }
                         Ok(Flow::Val(Value::Unit))
                     }
-                    "len" => Ok(Flow::Val(Value::Int(self.lists[id].len() as i64))),
+                    "len" | "count" => Ok(Flow::Val(Value::Int(self.lists[id].len() as i64))),
+                    "is_empty" => Ok(Flow::Val(Value::Bool(self.lists[id].is_empty()))),
+                    // The recoverable reads (s37): misses are `{none}`
+                    // rows — absence is a row, not a trap.
+                    "pop" => match self.lists[id].pop() {
+                        Some(v) => Ok(Flow::Val(v)),
+                        None => Ok(Flow::Err(Value::ErrTag {
+                            tag: "none".to_string(),
+                            payload: Vec::new(),
+                        })),
+                    },
+                    "get" => {
+                        let idx = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value);
+                        let Some(v) = idx else {
+                            return self.refuse("List.get without an index", e.span);
+                        };
+                        let Value::Int(i) = val!(self.eval(v)) else {
+                            return self.refuse("List.get with a non-int index", e.span);
+                        };
+                        if i < 0 || i as usize >= self.lists[id].len() {
+                            return Ok(Flow::Err(Value::ErrTag {
+                                tag: "none".to_string(),
+                                payload: Vec::new(),
+                            }));
+                        }
+                        Ok(Flow::Val(self.lists[id][i as usize].clone()))
+                    }
+                    "first" | "last" => {
+                        let v = if method == "first" {
+                            self.lists[id].first().cloned()
+                        } else {
+                            self.lists[id].last().cloned()
+                        };
+                        match v {
+                            Some(v) => Ok(Flow::Val(v)),
+                            None => Ok(Flow::Err(Value::ErrTag {
+                                tag: "none".to_string(),
+                                payload: Vec::new(),
+                            })),
+                        }
+                    }
+                    "clear" => {
+                        self.lists[id].clear();
+                        Ok(Flow::Val(Value::Unit))
+                    }
                     _ => self.refuse("this List method", e.span),
                 }
             }
@@ -3056,6 +3386,29 @@ impl<'t> Machine<'t> {
                         self.pools[id][index].value = Value::Uninit;
                         Ok(Flow::Val(Value::Unit))
                     }
+                    // s37 — Pool observability (wolf-lang#11's gap):
+                    // live-slot count and the non-trapping probe.
+                    "len" | "is_empty" => {
+                        let live = self.pools[id].iter().filter(|s| s.live).count() as i64;
+                        if method == "len" {
+                            Ok(Flow::Val(Value::Int(live)))
+                        } else {
+                            Ok(Flow::Val(Value::Bool(live == 0)))
+                        }
+                    }
+                    "alive" => {
+                        let h = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value);
+                        let Some(v) = h else {
+                            return self.refuse("pool.alive without a handle", e.span);
+                        };
+                        let Value::Handle { index, generation } = val!(self.eval(v)) else {
+                            return self.refuse("pool.alive with a non-handle", e.span);
+                        };
+                        let live = index < self.pools[id].len()
+                            && self.pools[id][index].generation == generation
+                            && self.pools[id][index].live;
+                        Ok(Flow::Val(Value::Bool(live)))
+                    }
                     _ => self.refuse("this Pool method", e.span),
                 }
             }
@@ -3100,6 +3453,166 @@ impl<'t> Machine<'t> {
                     _ => self.refuse("this weak method", e.span),
                 }
             }
+            // s37 — the builtin `str` surface (D24/D25): pure reads
+            // over the two-word slice; byte offsets out; misses are
+            // `{none}` rows, never traps. Views materialize `List`s
+            // at v0 (the zero-copy protocol is D28's).
+            Some(TyKind::Prim(Prim::Str)) => {
+                let sv = if let Some(place) = self.place_of(recv)? {
+                    self.read_place(&place, recv.span)?
+                } else {
+                    val!(self.eval(recv))
+                };
+                let Value::Str(s) = sv else {
+                    return self.refuse("str method on a non-str", e.span);
+                };
+                let mut argv = Vec::new();
+                for a in args.into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = Arg::value(a) {
+                        argv.push(val!(self.eval(v)));
+                    }
+                }
+                let none_miss = || {
+                    Ok(Flow::Err(Value::ErrTag {
+                        tag: "none".to_string(),
+                        payload: Vec::new(),
+                    }))
+                };
+                let needle = |i: usize| -> Option<String> {
+                    match argv.get(i) {
+                        Some(Value::Str(n)) => Some(n.clone()),
+                        _ => None,
+                    }
+                };
+                let make_list = |m: &mut Self, items: Vec<Value>| -> E<Flow> {
+                    m.charge_mem(16 * items.len() as u64 + 16)?;
+                    let id = m.lists.len();
+                    m.lists.push(items);
+                    Ok(Flow::Val(Value::List(id)))
+                };
+                match method {
+                    "is_empty" => Ok(Flow::Val(Value::Bool(s.is_empty()))),
+                    // The boundary primitive (wolf-lang#17): the
+                    // recoverable slice — OOB *and* split-code-point
+                    // offsets are the same honest miss.
+                    "get" => {
+                        let Some(Value::Range { start, end }) = argv.first() else {
+                            return self.refuse("str.get without a range", e.span);
+                        };
+                        let (a, z) = (*start, *end);
+                        if a < 0 || z < a || z > s.len() as i64 {
+                            return none_miss();
+                        }
+                        let (a, z) = (a as usize, z as usize);
+                        if !s.is_char_boundary(a) || !s.is_char_boundary(z) {
+                            return none_miss();
+                        }
+                        Ok(Flow::Val(Value::Str(s[a..z].to_string())))
+                    }
+                    "bytes" => {
+                        let items: Vec<Value> = s.bytes().map(|b| Value::Int(b as i64)).collect();
+                        make_list(self, items)
+                    }
+                    "starts_with" => match needle(0) {
+                        Some(n) => Ok(Flow::Val(Value::Bool(s.starts_with(&n)))),
+                        None => self.refuse("starts_with without a str needle", e.span),
+                    },
+                    "ends_with" => match needle(0) {
+                        Some(n) => Ok(Flow::Val(Value::Bool(s.ends_with(&n)))),
+                        None => self.refuse("ends_with without a str needle", e.span),
+                    },
+                    "contains" => match needle(0) {
+                        Some(n) => Ok(Flow::Val(Value::Bool(s.contains(&n)))),
+                        None => self.refuse("contains without a str needle", e.span),
+                    },
+                    "find" | "rfind" => {
+                        let Some(n) = needle(0) else {
+                            return self.refuse("find without a str needle", e.span);
+                        };
+                        let hit = if method == "find" {
+                            s.find(&n)
+                        } else {
+                            s.rfind(&n)
+                        };
+                        match hit {
+                            Some(off) => Ok(Flow::Val(Value::Int(off as i64))),
+                            None => none_miss(),
+                        }
+                    }
+                    "count" => match needle(0) {
+                        Some(n) if n.is_empty() => self.refuse("count of an empty needle", e.span),
+                        Some(n) => Ok(Flow::Val(Value::Int(s.matches(&n).count() as i64))),
+                        None => self.refuse("count without a str needle", e.span),
+                    },
+                    "split" => match needle(0) {
+                        Some(n) if n.is_empty() => {
+                            self.refuse("split on an empty separator", e.span)
+                        }
+                        Some(n) => {
+                            let items: Vec<Value> = s
+                                .split(n.as_str())
+                                .map(|p| Value::Str(p.to_string()))
+                                .collect();
+                            make_list(self, items)
+                        }
+                        None => self.refuse("split without a str separator", e.span),
+                    },
+                    // Unicode `White_Space`, matching the builtin set
+                    // wolf-std pinned code point by code point (#18).
+                    "words" => {
+                        let items: Vec<Value> = s
+                            .split_whitespace()
+                            .map(|p| Value::Str(p.to_string()))
+                            .collect();
+                        make_list(self, items)
+                    }
+                    "lines" => {
+                        let items: Vec<Value> =
+                            s.lines().map(|p| Value::Str(p.to_string())).collect();
+                        make_list(self, items)
+                    }
+                    "trim" => Ok(Flow::Val(Value::Str(s.trim().to_string()))),
+                    "trim_start" => Ok(Flow::Val(Value::Str(s.trim_start().to_string()))),
+                    "trim_end" => Ok(Flow::Val(Value::Str(s.trim_end().to_string()))),
+                    "lower" => Ok(Flow::Val(Value::Str(s.to_lowercase()))),
+                    "upper" => Ok(Flow::Val(Value::Str(s.to_uppercase()))),
+                    "strip_prefix" | "strip_suffix" => {
+                        let Some(n) = needle(0) else {
+                            return self.refuse("strip without a str needle", e.span);
+                        };
+                        let hit = if method == "strip_prefix" {
+                            s.strip_prefix(&n)
+                        } else {
+                            s.strip_suffix(&n)
+                        };
+                        match hit {
+                            Some(rest) => Ok(Flow::Val(Value::Str(rest.to_string()))),
+                            None => none_miss(),
+                        }
+                    }
+                    "repeat" => {
+                        let Some(Value::Int(n)) = argv.first() else {
+                            return self.refuse("repeat without a count", e.span);
+                        };
+                        if *n < 0 {
+                            return self.trap("bounds", "mem.ub.defined", e.span);
+                        }
+                        self.charge_mem(s.len() as u64 * *n as u64 + 16)?;
+                        Ok(Flow::Val(Value::Str(s.repeat(*n as usize))))
+                    }
+                    "replace" => {
+                        let (Some(from), Some(to)) = (needle(0), needle(1)) else {
+                            return self.refuse("replace without str arguments", e.span);
+                        };
+                        if from.is_empty() {
+                            return self.refuse("replace of an empty needle", e.span);
+                        }
+                        self.charge_mem(s.len() as u64 + 16)?;
+                        Ok(Flow::Val(Value::Str(s.replace(&from, &to))))
+                    }
+                    _ => self.refuse("this `str` method in checked execution", e.span),
+                }
+            }
             _ => {
                 // An inherent user method (s17 dispatch record).
                 let ty_name = match self.ctx().dispatch.get(&e.span) {
@@ -3121,6 +3634,9 @@ impl<'t> Machine<'t> {
                     call_args.push(self.eval_arg(v, mode)?);
                 }
                 let out = self.call_body(body, call_args)?;
+                if let Value::ErrTag { .. } = out {
+                    return Ok(Flow::Err(out));
+                }
                 Ok(Flow::Val(out))
             }
         }
@@ -3286,6 +3802,115 @@ fn values_equal(a: &Value, b: &Value) -> bool {
             },
         ) => xt == yt && xp.len() == yp.len() && xp.iter().zip(yp).all(|(m, n)| values_equal(m, n)),
         _ => false,
+    }
+}
+
+/// Dedent a `"""` string's inner bytes by the closing delimiter's
+/// column (D26): content starts on the line after the opening
+/// delimiter; the whitespace run after the last newline — the closing
+/// quotes' own indentation — strips from every line and is dropped
+/// itself.
+fn dedent_multiline(inner: &[u8]) -> Vec<u8> {
+    let mut inner = inner;
+    if inner.starts_with(b"\r\n") {
+        inner = &inner[2..];
+    } else if inner.first() == Some(&b'\n') {
+        inner = &inner[1..];
+    }
+    let last_nl = inner.iter().rposition(|&b| b == b'\n');
+    let (body, indent) = match last_nl {
+        Some(i) => inner.split_at(i + 1),
+        None => return inner.to_vec(),
+    };
+    if !indent.iter().all(|&b| b == b' ' || b == b'\t') {
+        // The closing quotes share the last content line: no dedent.
+        return inner.to_vec();
+    }
+    let mut out = Vec::with_capacity(body.len());
+    let mut start = 0;
+    while start < body.len() {
+        let end = body[start..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map(|p| start + p + 1)
+            .unwrap_or(body.len());
+        let line = &body[start..end];
+        let stripped = if line.starts_with(indent) {
+            &line[indent.len()..]
+        } else {
+            line
+        };
+        out.extend_from_slice(stripped);
+        start = end;
+    }
+    out
+}
+
+/// The escape decoder over a hole-free byte run — the same set the
+/// segmented rebuild uses, factored for the multiline path.
+fn decode_escapes(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let c = bytes[i];
+        if c == b'\\' && i + 1 < bytes.len() {
+            if let Some((ch, consumed)) = decode_codepoint_escape(&bytes[i..]) {
+                let mut buf = [0u8; 4];
+                out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                i += consumed;
+                continue;
+            }
+            out.push(match bytes[i + 1] {
+                b'n' => b'\n',
+                b't' => b'\t',
+                b'r' => b'\r',
+                b'\\' => b'\\',
+                b'"' => b'"',
+                b'{' => b'{',
+                b'}' => b'}',
+                b'0' => b'\0',
+                other => other,
+            });
+            i += 2;
+            continue;
+        }
+        // `{{` / `}}` are literal braces ([gram.lex.str]).
+        if (c == b'{' || c == b'}') && bytes.get(i + 1) == Some(&c) {
+            out.push(c);
+            i += 2;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
+/// Decode a `\xNN` or `\u{…}` escape at the start of `bytes` (which
+/// begins at the backslash). Returns the code point and the total
+/// bytes consumed, or `None` when the shape is not one of the two —
+/// the caller falls back to the single-byte escape set.
+fn decode_codepoint_escape(bytes: &[u8]) -> Option<(char, usize)> {
+    match bytes.get(1)? {
+        b'x' => {
+            let hex = bytes.get(2..4)?;
+            let s = std::str::from_utf8(hex).ok()?;
+            let n = u32::from_str_radix(s, 16).ok()?;
+            Some((char::from_u32(n)?, 4))
+        }
+        b'u' => {
+            if bytes.get(2) != Some(&b'{') {
+                return None;
+            }
+            let close = bytes[3..].iter().position(|&b| b == b'}')?;
+            let s = std::str::from_utf8(&bytes[3..3 + close]).ok()?;
+            if s.is_empty() || s.len() > 6 {
+                return None;
+            }
+            let n = u32::from_str_radix(s, 16).ok()?;
+            Some((char::from_u32(n)?, 3 + close + 1))
+        }
+        _ => None,
     }
 }
 

@@ -235,3 +235,27 @@ fn e0409_logic_on_numbers() {
 // E0410 moved to the RESOLVE rung at s29 (DIV-2026-010): its snapshots
 // live in `tests/diagnostics.rs` now — binding immutability is lexical
 // knowledge, and the type checker no longer reports it.
+
+// ---------------------------------------------------------- E0411 -----
+
+/// Catalog case (s37): a single `s[^1]` is still character indexing —
+/// the end-relative *slices* are the honest spelling. (The Python
+/// reflex `s[-1]` is caught one rung earlier, as E0209 with its own
+/// `^n` fix-it.)
+#[test]
+fn e0411_from_end_single_position() {
+    snap_one(
+        "e0411_from_end_single",
+        "fn main() -> !int {\n    let s = \"wolf\"\n    let last = s[^1]\n    0\n}\n",
+    );
+}
+
+/// Catalog case (s37): `s[i]` — no character indexing on `str`, by
+/// decision (D25); the note names the honest alternatives.
+#[test]
+fn e0411_char_index_hint() {
+    snap_one(
+        "e0411_char_index",
+        "fn main() -> !int {\n    let s = \"wolf\"\n    let i = 2\n    let c = s[i]\n    0\n}\n",
+    );
+}

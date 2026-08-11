@@ -46,9 +46,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
-    ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, GreenNode, IfExpr,
-    InBlock, LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, RangeExpr,
-    RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr,
+    ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, FromEndExpr, GreenNode,
+    IfExpr, InBlock, LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr,
+    RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr,
     UnsafeBlock, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
 };
 
@@ -2860,6 +2860,23 @@ impl<'a> Checker<'a> {
                 return None;
             }
         }
+        // s37 / wolf-lang#30 — a raise-position bare identifier
+        // resolves against the *declared row first*: when the
+        // expected row declares this tag, the tag wins over module
+        // items, imports, prelude names and builtin types. Without
+        // this, `return hex` inside module `hex` under `! {hex}`
+        // silently returned the module value and the caller's `else`
+        // never fired (the silent-wrong class). Locals and generics
+        // still shadow — they are the tightest scope, and a collision
+        // there is visible in the same function.
+        if let Some(r) = row
+            && self.row_declares(r, &name)
+            && self.lookup_local(&name).is_none()
+            && !self.generics.contains(&name)
+            && name != "Self"
+        {
+            return Some(t.span);
+        }
         if self.lookup_local(&name).is_some()
             || self.generics.contains(&name)
             || name == "Self"
@@ -3593,6 +3610,8 @@ impl<'a> Checker<'a> {
                 self.check_index_arg(d.args(), int_, "raw pointer index")?;
                 elem
             }
+            // s37 — `s[a..b]` byte-offset checked slicing (D25).
+            TyKind::Prim(Prim::Str) => return self.str_bracket(e, d.args()),
             TyKind::Error | TyKind::Never => self.error_ty(),
             _ => {
                 return Err(NotYet {
@@ -3602,6 +3621,96 @@ impl<'a> Checker<'a> {
             }
         };
         Ok(elem)
+    }
+
+    /// `s[a..b]` — zero-copy byte-offset slicing, checked (D25): the
+    /// endpoints type as `int`, `^n` counts from the end, open ends
+    /// default to the string's edges. **No `s[i]`** — a single index
+    /// cannot honestly name "a character", so E0411 refuses with the
+    /// real alternatives (slice / `bytes()` / `find` offsets), and
+    /// the Python reflex `s[-1]` gets a fix-it to `s[^1]`.
+    fn str_bracket(&mut self, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
+        let str_ = self.lo.table.prim(Prim::Str);
+        let int_ = self.lo.table.prim(Prim::Int);
+        let arg_nodes: Vec<&GreenNode> = args
+            .into_iter()
+            .flat_map(|a| a.args())
+            .filter_map(Arg::value)
+            .collect();
+        let [one] = arg_nodes.as_slice() else {
+            return Err(NotYet {
+                construct: "this `str` index shape (one range argument, s37)",
+                span: e.span,
+            });
+        };
+        if one.kind == SyntaxKind::RangeExpr {
+            let d = RangeExpr::cast(one).expect("kind");
+            for ep in d.endpoints() {
+                let inner = if ep.kind == SyntaxKind::FromEndExpr {
+                    FromEndExpr::cast(ep).and_then(|f| f.expr())
+                } else {
+                    Some(ep)
+                };
+                if let Some(x) = inner {
+                    let exp = Expect {
+                        ty: int_,
+                        reason: Reason::ArgOfCall {
+                            callee: "str slicing".to_string(),
+                            index: 0,
+                        },
+                        because: None,
+                    };
+                    self.check_expr(x, &exp)?;
+                }
+            }
+            return Ok(str_);
+        }
+        // `s[^n]` — a single end-relative position is still character
+        // indexing; the slice forms are the honest spelling.
+        if one.kind == SyntaxKind::FromEndExpr {
+            if let Some(inner) = FromEndExpr::cast(one).and_then(|f| f.expr()) {
+                let exp = Expect {
+                    ty: int_,
+                    reason: Reason::ArgOfCall {
+                        callee: "str slicing".to_string(),
+                        index: 0,
+                    },
+                    because: None,
+                };
+                self.check_expr(inner, &exp)?;
+            }
+            let digits = self.text(one.span);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0411,
+                    e.span,
+                    "`str` has no character indexing".to_string(),
+                )
+                .with_label(format!("no `s[{digits}]` on `str`"))
+                .with_note(
+                    "a single position cannot honestly name a character (D25); \
+                     the end-relative slices are `s[^n..]` (last `n` bytes) and \
+                     `s[..^n]` (all but the last `n`).",
+                ),
+            );
+            return Ok(self.error_ty());
+        }
+        // `s[i]` — no character indexing exists, by decision (D25).
+        self.synth_expr(one)?;
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0411,
+                e.span,
+                "`str` has no character indexing".to_string(),
+            )
+            .with_label("no `s[i]` on `str`")
+            .with_note(
+                "byte offsets are the honest currency (D25): slice with \
+                 `s[a..b]` (or the recoverable `s.get(a..b)`), read bytes via \
+                 `s.bytes()`, or use `find` — it returns byte offsets.",
+            ),
+        );
+        Ok(self.error_ty())
     }
 
     /// The single index argument of a container `e[…]`, checked
@@ -3785,6 +3894,63 @@ impl<'a> Checker<'a> {
                 let u = self.lo.table.unit();
                 (vec![pm("self", recv_ty), p("value", t)], u)
             }
+            // s37 — List method depth: the recoverable element reads
+            // (`{none}` rows, the D25 posture — absence is a row, not
+            // a sentinel or a trap), the emptiness probe, and the
+            // drain/clear mutators.
+            (TyKind::List(t), "pop") => {
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("none".to_string(), Vec::new())], None);
+                let r = self.lo.table.intern(TyKind::ErrUnion(t, row));
+                (vec![pm("self", recv_ty)], r)
+            }
+            (TyKind::List(t), "get") => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("none".to_string(), Vec::new())], None);
+                let r = self.lo.table.intern(TyKind::ErrUnion(t, row));
+                (vec![p("self", recv_ty), p("index", int_)], r)
+            }
+            (TyKind::List(t), "first" | "last") => {
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("none".to_string(), Vec::new())], None);
+                let r = self.lo.table.intern(TyKind::ErrUnion(t, row));
+                (vec![p("self", recv_ty)], r)
+            }
+            (TyKind::List(_), "is_empty") => {
+                let b = self.lo.table.prim(Prim::Bool);
+                (vec![p("self", recv_ty)], b)
+            }
+            (TyKind::List(_), "count") => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                (vec![p("self", recv_ty)], int_)
+            }
+            (TyKind::List(_), "clear") => {
+                let u = self.lo.table.unit();
+                (vec![pm("self", recv_ty)], u)
+            }
+            // s37 — Pool observability (the wolf-lang#11 gap: no
+            // length, no liveness probe): `len`/`is_empty` count live
+            // slots; `alive` is the non-trapping handle probe.
+            (TyKind::Pool(_), "len") => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                (vec![p("self", recv_ty)], int_)
+            }
+            (TyKind::Pool(_), "is_empty") => {
+                let b = self.lo.table.prim(Prim::Bool);
+                (vec![p("self", recv_ty)], b)
+            }
+            (TyKind::Pool(t), "alive") => {
+                let h = self.lo.table.intern(TyKind::Handle(t));
+                let b = self.lo.table.prim(Prim::Bool);
+                (vec![p("self", recv_ty), p("handle", h)], b)
+            }
             // `[mem.shared.handle.1]` two-phase: reserve yields the
             // handle, init fills the slot. No null handles exist.
             (TyKind::Pool(t), "reserve") => {
@@ -3804,6 +3970,129 @@ impl<'a> Checker<'a> {
             _ => {
                 return Err(NotYet {
                     construct: "methods on generic std data (s05 std surface)",
+                    span: e.span,
+                });
+            }
+        };
+        self.dispatch.push((
+            e.span,
+            Dispatch::Inherent {
+                ty: self.show(recv_ty),
+                method: mname.to_string(),
+            },
+        ));
+        let sig = FnSig {
+            params,
+            ret,
+            name_span: member_span,
+            ret_span: None,
+            row_span: None,
+            generics: Vec::new(),
+            comptime: false,
+            trusted: None,
+        };
+        self.dispatch_method(
+            mname,
+            &sig,
+            BTreeMap::new(),
+            member_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        )
+    }
+
+    /// s37 — the builtin `str` method surface (D24/D25). Typed stubs
+    /// like the Tier-2 containers': `str` is an immutable two-word
+    /// UTF-8 slice, so every receiver is a plain read and every
+    /// offset is a *byte* offset (D25 — the one honest currency).
+    /// The load-bearing entry is `get`: `s.get(a..b) -> str ! {none}`
+    /// — the recoverable slice, the boundary primitive wolf-std's
+    /// filings named (wolf-lang#17): the row-shaped twin of the
+    /// checked `s[a..b]` fault, and the one primitive a library
+    /// cannot write for itself (writing it needs itself). Misses —
+    /// out-of-range or split-code-point offsets, absent needles —
+    /// are `{none}` rows, never traps. The views (`bytes`, `split`,
+    /// `words`, `lines`) type as materialized `List`s at v0; the
+    /// zero-copy iterator views arrive with the D28 protocol's
+    /// builtin adoption (tracked in the s37 ledger). No `chars()`
+    /// yet: it wants a `char` type, which is its own spec item.
+    #[allow(clippy::too_many_arguments)]
+    fn str_method_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let p = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+        };
+        let str_ = self.lo.table.prim(Prim::Str);
+        let int_ = self.lo.table.prim(Prim::Int);
+        let bool_ = self.lo.table.prim(Prim::Bool);
+        let none_of = |zelf: &mut Self, ok: TyId| {
+            let row = zelf
+                .lo
+                .table
+                .row(vec![("none".to_string(), Vec::new())], None);
+            zelf.lo.table.intern(TyKind::ErrUnion(ok, row))
+        };
+        let (params, ret) = match mname {
+            "is_empty" => (vec![p("self", recv_ty)], bool_),
+            // The boundary primitive (D25's anti-landmine form).
+            "get" => {
+                let r = self.lo.table.intern(TyKind::Range(int_));
+                let ret = none_of(self, str_);
+                (vec![p("self", recv_ty), p("range", r)], ret)
+            }
+            // The byte view, materialized at v0 (D25 licenses byte
+            // indexing on `bytes`; `b[i]` rides List indexing).
+            "bytes" => {
+                let ret = self.lo.table.intern(TyKind::List(int_));
+                (vec![p("self", recv_ty)], ret)
+            }
+            "starts_with" | "ends_with" | "contains" => {
+                (vec![p("self", recv_ty), p("needle", str_)], bool_)
+            }
+            // Byte offsets out; absence is a row, not a sentinel.
+            "find" | "rfind" => {
+                let ret = none_of(self, int_);
+                (vec![p("self", recv_ty), p("needle", str_)], ret)
+            }
+            "count" => (vec![p("self", recv_ty), p("needle", str_)], int_),
+            "split" => {
+                let ret = self.lo.table.intern(TyKind::List(str_));
+                (vec![p("self", recv_ty), p("sep", str_)], ret)
+            }
+            "words" | "lines" => {
+                let ret = self.lo.table.intern(TyKind::List(str_));
+                (vec![p("self", recv_ty)], ret)
+            }
+            "trim" | "trim_start" | "trim_end" | "lower" | "upper" => {
+                (vec![p("self", recv_ty)], str_)
+            }
+            "strip_prefix" | "strip_suffix" => {
+                let ret = none_of(self, str_);
+                (vec![p("self", recv_ty), p("needle", str_)], ret)
+            }
+            "repeat" => (vec![p("self", recv_ty), p("count", int_)], str_),
+            "replace" => (
+                vec![p("self", recv_ty), p("from", str_), p("to", str_)],
+                str_,
+            ),
+            _ => {
+                return Err(NotYet {
+                    construct: "this `str` method (outside the s37 builtin set)",
                     span: e.span,
                 });
             }
@@ -5060,6 +5349,10 @@ impl<'a> Checker<'a> {
             TyKind::Shared(_) | TyKind::Weak(_) | TyKind::List(_) | TyKind::Pool(_) => {
                 self.tier2_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
+            // s37 — the builtin `str` surface (D24/D25).
+            TyKind::Prim(Prim::Str) => {
+                self.str_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
+            }
             // s22 — the raw tier's builtin pointer methods (strict
             // provenance ops + the null probe).
             TyKind::Ptr(_) => {
@@ -6052,6 +6345,20 @@ impl<'a> Checker<'a> {
                 } else {
                     Err(NotYet {
                         construct: "members on generic std data (s05 std surface)",
+                        span: e.span,
+                    })
+                }
+            }
+            // s37: `s.len` — byte length, O(1), documented honestly
+            // (`"é".len == 2`; D24/D25). The one field-shaped member
+            // `str` carries; everything else on `str` is a method.
+            TyKind::Prim(Prim::Str) => {
+                let mname = self.text(member.span);
+                if mname == "len" {
+                    Ok(self.lo.table.prim(Prim::Int))
+                } else {
+                    Err(NotYet {
+                        construct: "this `str` member (the s37 surface is `len` + methods)",
                         span: e.span,
                     })
                 }
