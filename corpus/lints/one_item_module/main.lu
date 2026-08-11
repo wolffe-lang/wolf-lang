@@ -1,0 +1,14 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mod.dir
+//! warns: W0314
+//!
+//! W0314 — a module holding exactly one item: a directory of ceremony
+//! around a single function. The warning sits on the item in the
+//! member file; a deliberate seam answers with `#[allow(w0314)]`.
+
+use solo
+
+fn main() -> !int {
+    solo.only() - 1
+}

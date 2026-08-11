@@ -100,12 +100,13 @@ fn e0504_orphan_impl() {
             (
                 &["fmt"],
                 "f.lu",
-                "pub trait Show {\n    fn show(x: Self) -> str\n}\n",
+                "/// Rendering.\npub trait Show {\n    fn show(x: Self) -> str\n}\n\
+                 /// A width hint.\npub fn width() -> int {\n    4\n}\n",
             ),
             (
                 &["data"],
                 "d.lu",
-                "pub struct Thing {\n    pub n: int,\n}\npub fn make() -> Thing {\n    Thing { n: 0 }\n}\n",
+                "/// A thing.\npub struct Thing {\n    pub n: int,\n}\n/// One thing.\npub fn make() -> Thing {\n    Thing { n: 0 }\n}\n",
             ),
         ])
     );

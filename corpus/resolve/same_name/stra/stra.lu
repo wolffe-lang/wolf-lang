@@ -3,6 +3,7 @@
 //!
 //! The other same-named `len` (issue #26): adds one.
 
+/// Adds one to its argument — the other `len`.
 pub fn len(n: int) -> int {
     n + 1
 }

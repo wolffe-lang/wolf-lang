@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: out
+---
+warning[W0315]: nothing else in the package uses the `pub(pkg)` item `spare`
+ --> mem://store/data.lu:5:13
+  |
+5 | pub(pkg) fn spare() -> int {
+  |             ^^^^^ package visibility, unearned
+  |
+  = note: the widened visibility claims another module needs this; make the item private, and
+    widen it back the day one does.

@@ -5,7 +5,7 @@ expression: render_rows(src)
 error[E0602]: this can also fail with `Io(str)`, `NotFound(str)`, which `render`'s row does not include
  --> mem:///main.lu:6:5
   |
-5 | fn render(path: str) -> int ! {Empty} {
+5 | fn render(path: str) -> int ! {empty} {
   |                      ---------------- the receiving row is declared here
 6 |     read(path)?
   |     ^^^^^^^^^^^ the missing tags escape here
@@ -14,5 +14,5 @@ error[E0602]: this can also fail with `Io(str)`, `NotFound(str)`, which `render`
     conversion to write, only tags to admit.
 help: extend the row with `Io(str)`, `NotFound(str)`
   |
-5 | fn render(path: str) -> int ! {Empty, Io(str), NotFound(str)} {
+5 | fn render(path: str) -> int ! {empty, Io(str), NotFound(str)} {
   |

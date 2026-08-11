@@ -409,3 +409,83 @@ scars, and the strongest members have several.)
   std's own `--deny-warnings` posture is owned by its rig at its next
   toolchain pin, with `#[allow]` available where its wrappers are
   deliberate.
+
+---
+
+# The idiom arbiter — the second wave (s69 addendum)
+
+The conventions the std track wrote for itself
+(`API-CONVENTIONS.md`), generalized to every wolf author and enforced
+mechanically where the prose and a decidable check agree. Eleven codes
+ship; the philosophy page (`docs/warnings.md`, generated from the
+registry beside `diagnostics.md`) states the severity contract and the
+escape-hatch etiquette, and its `--check` is the audit hook the v1
+diagnostics-polish pass extends.
+
+## Convention lints (API-CONVENTIONS, mechanized)
+
+| Code | Shape | Convention | Analysis | Fix-it |
+|---|---|---|---|---|
+| W0310 | `get_`-prefixed function | §1 "no `get_` prefix anywhere" | syn | none (rename) |
+| W0311 | `is_`/`has_` fn not answering `bool` | §1 predicate rule | syn | none |
+| W0312 | `as_` fn with a `mut`/`take` operand | §1 `to_`/`as_` split (the decidable face: a view must borrow; the allocation half stays with review) | syn | none |
+| W0313 | `pub` item without `///` | §4 doc format (`pub(pkg)` exempt) | syn | none (write the contract) |
+| W0603 | tag case contradicts payload; `none` with payload | §12 marks-vs-payloads + absence-is-not-an-error — the SE-05/T-T4/T-T1/T-R4 rows s68 parked "until s69 arbitrates", now arbitrated: promoted from std's rig to the compiler. Row variables (fn generics, single uppercase letters) exempt | syn | none (rename) |
+| W0604 | bare `get` with no absence row | §1/§2 checked-access rule | syn | none |
+| W1002 | `mut` param never written | §3 "only where mutation is the point" (X1) | syn | drop-the-mut: **MachineApplicable** (private free fn, every mention a plain call — declaration + call sites rewritten together), **Maybe** otherwise (decl-only edit; callers invisible) |
+| W1003 | `take` param returned unchanged | §3 "take only for true consumption" | syn | drop-the-take: **Maybe** always (callers keep their binding; owned payloads may need a real transform first) |
+
+## Structure lints (D32 lived experience)
+
+| Code | Shape | Analysis | Fix-it |
+|---|---|---|---|
+| W0314 | one-item module (root and namespace parents exempt) | name | none (`#[allow(w0314)]` for deliberate seams) |
+| W0315 | `pub(pkg)` item no other loaded module mentions | name | none (make it private) |
+| W0316 | module imports its own ancestor — the cyclic-adjacent shape one edit from the E0303 hard error | name | none (move shared items down) |
+
+## Cross-implementation classification
+
+All eleven are **shared-analysis** (parse tree + module graph + name
+facts only — no types): filed for the next lupin batch alongside the
+first wave's ten. `[proto.record.warn]` parity grows lint-by-lint;
+absence stays honest. The std tree remains exempt as a library
+(`use std.*` — the first wave's recorded law, re-verified: a std-using
+program compiles with zero std-body warnings), so std's own
+deny-warnings run stays owned by its rig at its next toolchain pin.
+
+## Standing coordination, updated
+
+- **S-11 — still OPEN** (re-verified via the issue tracker:
+  mutate-while-iterating, wolf-lang#15). The for-over-mutated-container
+  lint stays held per the s68 contract's "coordinate"; nothing here
+  pre-empts the ruling.
+- **The cancellation-absorption ask (net-tier sprint, evaluated):**
+  `ch.recv() else …` at a cancellation point absorbs the cancellation
+  row along with `closed`, turning structured cancellation into a
+  `normal(0)` exit — a real hazard (`[conc.cancel.points]` delivers
+  cancellation as an error value at blocking points, and a broad
+  handler swallows it). **LINT (deferred), out of s69 scope**: the
+  contract's targets are convention and structure lints, and the
+  discriminating analysis is not writable today — it needs the
+  blocking-point set as a queryable fact (an effect notion, the
+  G-21/B38/B39 family this table already defers), and the fix the lint
+  would demand (re-raise the cancel tag, handle the rest) is exactly
+  the multi-tag handler branch that lang#43 records as unwritable and
+  F-0052 records as wrong on the executing lane. Filed with the
+  cancellation family for the wave that gets the effect notion; a lint
+  whose fix cannot be written trains workarounds.
+- **F-0018 offset-provenance cluster** — unchanged, still the named
+  wave-two lead; it needs the byte-type/provenance analysis, which is
+  deeper than this wave's name-level footprint and was not started
+  here.
+- **L-63 module-budget lint** — stays deferred (needs the lane-cost
+  model); the s69 structure lints deliberately took only the
+  graph-shape advisories that need no cost model.
+- **Corpus posture:** the tree stays `--deny-warnings` green with the
+  second wave live. Conforming fixes were preferred over declarations
+  (CapCase marks renamed lowercase, member `pub` items documented,
+  `get_num`/`get` fixture renames); `warns:` declarations were used
+  where the unidiomatic shape is the fixture's point (dup_tags,
+  match_exhaustive's mark, the deliberate dead `mut` in
+  exclusivity_nested_path) and for the deliberately tiny modules of
+  the resolve/traits fixtures (W0314).

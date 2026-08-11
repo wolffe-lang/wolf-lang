@@ -15,14 +15,14 @@ fn digit(s: str, i: int) -> int ! {BadDigit(ParseError)} {
     c.to_int() else 0
 }
 
-fn parse_pair(s: str) -> (int, int) ! {BadDigit(ParseError), TooShort} {
-    if s.len < 2 { return TooShort }
+fn parse_pair(s: str) -> (int, int) ! {BadDigit(ParseError), too_short} {
+    if s.len < 2 { return too_short }
     let a = digit(s, 0)?                 // row {BadDigit} flows into ours
     let b = digit(s, 1)?
     (a, b)
 }
 
-fn load() -> int ! {BadDigit(ParseError), TooShort, io.Error} {
+fn load() -> int ! {BadDigit(ParseError), too_short, io.Error} {
     var res = acquire()?
     errdefer release(mut res)            // runs only on the error path
     let (a, b) = parse_pair(res.text())?
@@ -34,7 +34,7 @@ fn main() -> !int {
     let v = load() else |err| {
         match err {
             BadDigit(e) => print("bad digit `{e.found}` at {e.at}"),
-            TooShort => print("input too short"),
+            too_short => print("input too short"),
             io.Error(_) => print("io failed"),
         }
         0

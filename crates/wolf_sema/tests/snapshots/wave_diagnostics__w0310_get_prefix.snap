@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0310]: `get_total` wears the `get_` prefix
+ --> mem:///main.lu:1:4
+  |
+1 | fn get_total(a: int, b: int) -> int {
+  |    ^^^^^^^^^ the prefix says nothing
+  |
+  = note: every function gets something — name it after the noun it fetches (`total`), or, for
+    checked access that can miss, bare `get` with an absence row.

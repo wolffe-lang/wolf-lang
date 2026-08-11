@@ -11,7 +11,7 @@ struct Counter {
 }
 
 impl Counter {
-    fn get(self) -> int {
+    fn peek(self) -> int {
         self.n
     }
 
@@ -28,7 +28,7 @@ impl Counter {
 fn main() -> !int {
     var c = Counter { n: 40 }
     let a = (mut c).bump()
-    let b = c.get()
+    let b = c.peek()
     let z = (take c).finish()
     if a + b + z == 123 { 0 } else { 1 }
 }

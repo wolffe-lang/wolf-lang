@@ -1,6 +1,7 @@
 //! check: fail(E0601)
 //! phase: resolve
 //! conforms: err.rows
+//! warns: W0603
 //!
 //! Rows are sets, not Koka's multi-maps: duplicate labels are rejected
 //! at the declaration, not silently merged.

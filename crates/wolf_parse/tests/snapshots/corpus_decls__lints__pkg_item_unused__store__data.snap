@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 113..143 name=used pub body=Block
+FnDecl 145..181 name=spare pub(pkg) body=Block

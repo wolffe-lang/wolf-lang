@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-TraitDecl 18..61 name=Show pub
-  FnDecl 39..60 name=show
+TraitDecl 72..115 name=Show pub
+  FnDecl 93..114 name=show

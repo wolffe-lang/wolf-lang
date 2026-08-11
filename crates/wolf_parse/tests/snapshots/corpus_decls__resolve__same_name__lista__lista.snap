@@ -2,4 +2,4 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 103..142 name=len pub body=Block
+FnDecl 153..192 name=len pub body=Block

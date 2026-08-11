@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mem.tier0.mode.mut
+//! warns: W1002
+//!
+//! W1002 — a `mut` parameter the body never writes: every call site
+//! surrenders exclusive access for a write that never happens. The
+//! fix-it drops the `mut` at the declaration and at every call site
+//! (machine-applicable here: private function, plain calls only).
+
+fn offset(mut base: int, delta: int) -> int {
+    base + delta
+}
+
+fn main() -> !int {
+    var b = 1
+    offset(mut b, 2) - 3
+}

@@ -61,11 +61,11 @@ SourceFile 123..404
         LBrace 215..216 "{"
         RowEntry 216..222
           Path 216..222
-            Ident 216..222 "Failed"
+            Ident 216..222 "failed"
         Comma 222..223 ","
         RowEntry 224..228
           Path 224..228
-            Ident 224..228 "Slow"
+            Ident 224..228 "slow"
         RBrace 228..229 "}"
     Block 230..235
       LBrace 230..231 "{"

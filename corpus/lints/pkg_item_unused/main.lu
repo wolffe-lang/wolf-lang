@@ -1,0 +1,14 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mod.vis.pkg
+//! warns: W0315
+//!
+//! W0315 — a `pub(pkg)` item nothing else in the package uses: the
+//! widened visibility claims another module needs it, and none does.
+//! The used sibling stays silent.
+
+use store
+
+fn main() -> !int {
+    store.used() - 2
+}

@@ -10,7 +10,7 @@ fn read(path: str) -> int ! {Io(str), NotFound(str)} {
     NotFound(path)
 }
 
-fn render(path: str) -> int ! {Empty} {
+fn render(path: str) -> int ! {empty} {
     read(path)?
 }
 

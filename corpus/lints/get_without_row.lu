@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0604
+//!
+//! W0604 — bare `get` is the checked-access spelling: it answers
+//! `T ! {none}` and callers handle the miss. A `get` with no row
+//! promises a lookup and delivers a total function.
+
+fn get(i: int) -> int {
+    i * 2
+}
+
+fn main() -> !int {
+    get(2) - 4
+}

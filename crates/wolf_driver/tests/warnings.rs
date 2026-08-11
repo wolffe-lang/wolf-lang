@@ -186,3 +186,44 @@ fn fix_applies_machine_applicable_edits_idempotently() {
     assert_eq!(code, 0, "second run is clean");
     assert!(err.contains("nothing to fix"), "{err}");
 }
+
+/// The idiom arbiter's W1002 fix through the real subcommand: the
+/// drop-the-mut edit rewrites the declaration AND the call sites in
+/// one machine-applicable suggestion, and the result is warning-clean
+/// (idempotence: a second run finds nothing).
+#[test]
+fn fix_drops_dead_mut_at_declaration_and_call_sites() {
+    let dir = fixture(
+        "fix-dead-mut",
+        "fn offset(mut base: int, delta: int) -> int {\n    base + delta\n}\n\n\
+         fn main() -> !int {\n    var b = 1\n    offset(mut b, 2) + offset(mut b, 3) - 7\n}\n",
+    );
+    let run_fix = |extra: &[&str]| {
+        let out = Command::new(wolf())
+            .arg("fix")
+            .arg(dir.join("main.lu"))
+            .args(extra)
+            .output()
+            .expect("run wolf fix");
+        (
+            out.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+        )
+    };
+    let (code, out) = run_fix(&[]);
+    assert_eq!(code, 1, "dry-run signals the pending fix");
+    assert!(out.contains("W1002"), "dead-mut fix planned:\n{out}");
+    let (code, _) = run_fix(&["--apply"]);
+    assert_eq!(code, 0, "apply succeeds");
+    let after = std::fs::read_to_string(dir.join("main.lu")).expect("read");
+    assert!(
+        after.contains("fn offset(base: int"),
+        "declaration rewritten:\n{after}"
+    );
+    assert!(
+        after.contains("offset(b, 2) + offset(b, 3)"),
+        "both call sites rewritten:\n{after}"
+    );
+    let (code, _) = run_fix(&[]);
+    assert_eq!(code, 0, "nothing left to fix");
+}

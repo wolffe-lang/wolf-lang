@@ -1,6 +1,7 @@
 //! check: fail(E0303)
 //! phase: parse
 //! conforms: mod.cycle
+//! warns: W0314
 //!
 //! Imports between modules must form a DAG (D32): `alpha` and `beta`
 //! import each other, and the diagnostic draws the whole cycle with

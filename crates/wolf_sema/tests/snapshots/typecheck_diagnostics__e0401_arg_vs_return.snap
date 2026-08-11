@@ -8,8 +8,8 @@ error[E0401]: this is `fn() -> int`, but `add` needs its 1st argument to be `int
  5 | fn add(a: int, b: int) -> int {
    |        - the parameter is declared here
 ...
-10 |     add(get_num, 1)
-   |         ^^^^^^^ found `fn() -> int` here
+10 |     add(answer, 1)
+   |         ^^^^^^ found `fn() -> int` here
    |
    = note: expected `int`, found `fn() -> int`
    = note: this is the function itself; add `()` to call it and use its result.

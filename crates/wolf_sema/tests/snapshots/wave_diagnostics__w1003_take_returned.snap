@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W1003]: `v` is taken, never touched, and returned
+ --> mem:///main.lu:1:9
+  |
+1 | fn keep(take v: int) -> int {
+  |         ^^^^ consumption that consumes nothing
+  |
+  = note: the caller gives the value up only to receive it back; if callers could reasonably keep
+    it, the signature is wrong.
+help: drop the `take` (call sites drop theirs and keep their binding; owned payloads may then need a real transform)
+  |
+1 | fn keep(v: int) -> int {
+  |

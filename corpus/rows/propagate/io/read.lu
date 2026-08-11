@@ -3,6 +3,7 @@
 //!
 //! The narrow end of the chain: two payload-carrying tags.
 
+/// Reads `path`: `not found` and `locked` ride payload tags.
 pub fn read(path: str) -> int ! {Locked(str), NotFound(str)} {
     if path == "" { return NotFound(path) }
     if path == "locked" { return Locked(path) }

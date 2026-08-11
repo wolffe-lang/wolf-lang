@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-UseDecl 333..342 path=data
-UseDecl 342..355 path=fmt.Show
-ImplDecl 356..436 path=Show for=data.Thing
-  FnDecl 387..434 name=show body=Block
-FnDecl 438..489 name=main body=Block
+UseDecl 350..359 path=data
+UseDecl 359..372 path=fmt.Show
+ImplDecl 373..453 path=Show for=data.Thing
+  FnDecl 404..451 name=show body=Block
+FnDecl 455..506 name=main body=Block

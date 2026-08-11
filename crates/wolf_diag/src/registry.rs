@@ -1521,6 +1521,83 @@ nothing and keep the raw literal if the six bytes are what is wanted
 apart and produce different strings with no diagnostic.
 "#);
 
+// The idiom arbiter's convention lints: the house API conventions the
+// std track wrote for itself, generalized to every wolf author —
+// checkable, not tribal. Each cites the convention it mechanizes.
+
+code!(W0310, "the `get_` prefix names nothing", r#"
+House convention, applied mechanically: no function wears a `get_`
+prefix. The prefix carries no information — every function gets
+something — so the name that matters is the noun after it: `get_len`
+is `len`, `get_first` is `first`. The one blessed `get` spelling is
+the bare word itself, the checked-access operation that answers with
+an absence row instead of a sentinel. Rename the function to the noun
+it fetches; if it is genuinely checked access, name it `get` and give
+it the absence row.
+"#);
+
+code!(W0311, "a predicate-named function must answer `bool`", r#"
+Names spelling `is_` or `has_` are the predicate convention: callers
+read `is_empty(x)` as a yes-or-no question, and nothing else is
+allowed to wear the shape. This function has the prefix but does not
+return `bool`, so every call site reads as a test and is not one.
+Either return `bool`, or rename the function after what it actually
+produces — the prefix is the promise, and a signature that does not
+keep it is worse than no convention at all.
+"#);
+
+code!(W0312, "an `as_` conversion must borrow, and this one does not", r#"
+The naming split for conversions is allocation and ownership: `to_x`
+builds a new value, while `as_x` (and bare nouns) are views that
+borrow their operand and leave it untouched in the caller's hands.
+This `as_` function takes an operand `mut` or `take`, so it mutates
+or consumes what a caller reads as a borrowed view — the name
+promises one cost and the signature charges another. Rename it `to_x`
+(or after the operation it really performs), or change the mode to
+the read default a view deserves.
+"#);
+
+code!(W0313, "this `pub` item has no doc comment", r#"
+A `pub` item is a promise to other modules, and the doc comment is
+where the promise is written down: the contract sentence, the meaning
+of each row tag, the trap conditions. This exported item carries no
+`///` at all, so its callers get a name and a signature and must read
+the body for everything else. Write the contract line above the
+declaration; if the item is not worth documenting, it is usually not
+worth exporting — make it private instead.
+"#);
+
+code!(W0314, "this module contains exactly one item", r#"
+A module is a namespace, a visibility boundary, and a directory (D32)
+— real structure with a real reading cost. This one holds a single
+item, so the structure is all ceremony: importers write the module's
+name to reach one thing, and the tree grows a directory per function.
+Fold the item into the module that uses it, or grow the module into
+the family of items its name promises. A one-item module that is a
+deliberate seam can say so with an `#[allow]` and a reason.
+"#);
+
+code!(W0315, "nothing else in this package uses this `pub(pkg)` item", r#"
+`pub(pkg)` widens an item's visibility to the whole package — a claim
+that some other module in the package needs it. No other loaded
+module mentions this item's name, so the widened visibility is
+unearned: the item behaves as private and the declaration says
+otherwise, which misleads exactly the reader deciding whether a
+change to it is safe. Make it private; when another module really
+does take it up, widening back is a one-word change.
+"#);
+
+code!(W0316, "this module imports its own ancestor", r#"
+A child module reaching up into its ancestor couples the two in both
+directions at once: the ancestor owns the child structurally, and now
+the child depends on the ancestor's items too. The shape is legal —
+no cycle exists yet — but it sits one ordinary edit from the
+hard-error import cycle, because the ancestor importing any of its
+descendants closes the loop. Move the shared items down into the
+child (or into a sibling both can import) so the dependency runs one
+way, parent to child.
+"#);
+
 // ------------------------------------------------------------------------
 // W04xx — typing-adjacent warnings (mirror of the E04xx family).
 // ------------------------------------------------------------------------
@@ -1574,6 +1651,29 @@ caller can act on — and reuse the same spelling at every boundary
 that shares it.
 "#);
 
+code!(W0603, "this row tag's case contradicts its payload", r#"
+A row tag's case is the reader's signal about whether there is
+anything to destructure: payload-free marks are lowercase bare words
+(`none`, `eof`, `parse`), payload-carrying tags are CapCase and name
+their payload type (`Parse(ParseErr)`). This tag breaks the pact —
+a CapCase mark implies data that is not there, a lowercase tag hides
+data that is, and `none` in particular never carries a payload,
+because "there is nothing here" and "this went wrong, here is how"
+are different answers on purpose. Rename the tag to match its
+payload, or move the payload to a tag whose case admits it.
+"#);
+
+code!(W0604, "bare `get` is the checked-access spelling, and this one cannot miss", r#"
+The convention reserves the bare name `get` for checked access: the
+operation that can find nothing and says so with an absence row
+(`-> T ! {none}`), consumed by `else` and `?`. This function is named
+`get` but declares no error row, so it promises a lookup and delivers
+a total function — callers reach for the `else` that checked access
+trains them to write, and there is nothing to handle. Give it the
+absence row if it can miss; name it after what it computes if it
+cannot.
+"#);
+
 // ------------------------------------------------------------------------
 // W08xx — pattern/completion-adjacent warnings (mirror of E08xx).
 // ------------------------------------------------------------------------
@@ -1601,6 +1701,28 @@ costs a reader the question "what lives here?" whose answer is
 allocation that silently landed in the ambient region instead of the
 one written for it. Delete the region, or move the allocation it was
 written for inside it.
+"#);
+
+code!(W1002, "this `mut` parameter is never written", r#"
+The parameter is declared `mut`, and the body never assigns to it,
+never passes it onward as `mut` or `take`, and never mutates through
+it — the mode buys writeback nothing uses. The cost lands on callers:
+every call site must spell `f(mut x)` and surrender exclusive access
+for a write that never happens, and every reader budgets for a
+mutation that is not there. Drop the `mut` from the parameter and
+from the call sites that pass it; the read default is the honest
+mode. (X1: the absence of a keyword is the mode.)
+"#);
+
+code!(W1003, "this `take` parameter is returned unchanged", r#"
+`take` is for true consumption — the caller gives the value up and it
+is gone. This function's body never touches the taken parameter and
+hands it straight back as its result, so the caller loses the value
+only to be handed it again through the return: a round trip that
+consumes nothing and costs every call site its binding. If the caller
+could reasonably keep using the value, the signature is wrong — take
+the read default (copying what it returns), or make the consumption
+real by transforming the value before it leaves.
 "#);
 
 // ------------------------------------------------------------------------

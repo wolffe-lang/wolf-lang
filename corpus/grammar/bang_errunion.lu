@@ -8,7 +8,7 @@ fn may_fail(flag: bool) -> !int {
     7
 }
 
-fn rowy() -> int ! {Failed, Slow} { 7 }
+fn rowy() -> int ! {failed, slow} { 7 }
 
 fn main() -> !int {
     let v = may_fail(false) else 0

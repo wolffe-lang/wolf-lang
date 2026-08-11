@@ -2,10 +2,12 @@
 //!
 //! The type's home module.
 
+/// A counted thing; the type the orphan impl covets.
 pub struct Thing {
     pub n: int,
 }
 
+/// One zeroed `Thing`.
 pub fn make() -> Thing {
     Thing { n: 0 }
 }

@@ -1,0 +1,17 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mem.tier0.mode.take
+//! warns: W1003
+//!
+//! W1003 — a `take` parameter returned unchanged: the caller gives
+//! the value up only to receive it back, a round trip that consumes
+//! nothing and costs every call site its binding.
+
+fn keep(take v: int) -> int {
+    v
+}
+
+fn main() -> !int {
+    let n = 5
+    keep(take n) - 5
+}

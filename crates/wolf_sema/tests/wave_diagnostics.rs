@@ -128,7 +128,8 @@ fn w0309_raw_literal_interp_braces() {
 fn w0602_pub_anonymous_row() {
     snap(
         "w0602_pub_row",
-        "pub fn wide(path: str) -> int ! {stale, lost} {\n    \
+        "/// Reads a thing; documented so only the row shape warns.\n\
+         pub fn wide(path: str) -> int ! {stale, lost} {\n    \
              if path == \"\" { return stale }\n    1\n}\n\
          fn main() -> !int {\n    wide(\"p\") else 0\n}\n",
     );
@@ -275,6 +276,278 @@ fn provisional_standins_are_exempt_from_w0304() {
     assert!(
         res.diagnostics.is_empty(),
         "stand-ins stay silent: {:?}",
+        res.diagnostics
+    );
+}
+
+// ------------------------------------------- the idiom arbiter ----
+
+#[test]
+fn w0310_get_prefix() {
+    snap(
+        "w0310_get_prefix",
+        "fn get_total(a: int, b: int) -> int {\n    a + b\n}\n\
+         fn main() -> !int {\n    get_total(1, 2) - 3\n}\n",
+    );
+}
+
+#[test]
+fn w0311_predicate_not_bool() {
+    snap(
+        "w0311_predicate_int",
+        "fn is_positive(n: int) -> int {\n    if n > 0 { 1 } else { 0 }\n}\n\
+         fn main() -> !int {\n    is_positive(3) - 1\n}\n",
+    );
+}
+
+#[test]
+fn w0312_as_view_consumes() {
+    snap(
+        "w0312_as_view_take",
+        "fn as_length(take s: str) -> int {\n    s.len\n}\n\
+         fn main() -> !int {\n    let t = \"four\"\n    as_length(take t) - 4\n}\n",
+    );
+}
+
+#[test]
+fn w0313_pub_without_doc() {
+    snap(
+        "w0313_pub_undocumented",
+        "pub fn exported(n: int) -> int {\n    n + 1\n}\n\
+         fn main() -> !int {\n    exported(1) - 2\n}\n",
+    );
+}
+
+#[test]
+fn w0603_tag_case_contradicts_payload() {
+    snap(
+        "w0603_tag_case_payload",
+        "fn fetch(n: int) -> int ! {Stale, flat(int)} {\n    \
+             if n < 0 { return Stale }\n    n\n}\n\
+         fn main() -> !int {\n    let v = fetch(3) else 0\n    v - 3\n}\n",
+    );
+}
+
+#[test]
+fn w0603_none_with_payload() {
+    snap(
+        "w0603_none_payload",
+        "fn lookup(n: int) -> int ! {none(int)} {\n    \
+             if n < 0 { return none(0) }\n    n\n}\n\
+         fn main() -> !int {\n    let v = lookup(2) else 0\n    v - 2\n}\n",
+    );
+}
+
+#[test]
+fn w0604_get_without_row() {
+    snap(
+        "w0604_get_total_fn",
+        "fn get(i: int) -> int {\n    i * 2\n}\n\
+         fn main() -> !int {\n    get(2) - 4\n}\n",
+    );
+}
+
+#[test]
+fn w1002_mut_param_never_written() {
+    snap(
+        "w1002_mut_unwritten",
+        "fn offset(mut base: int, delta: int) -> int {\n    base + delta\n}\n\
+         fn main() -> !int {\n    var b = 1\n    offset(mut b, 2) - 3\n}\n",
+    );
+}
+
+#[test]
+fn w1003_take_returned_unchanged() {
+    snap(
+        "w1003_take_returned",
+        "fn keep(take v: int) -> int {\n    v\n}\n\
+         fn main() -> !int {\n    let n = 5\n    keep(take n) - 5\n}\n",
+    );
+}
+
+fn render_package_warnings(files: &[(&[&str], &str, &str)]) -> String {
+    let mut ml = MemoryLoader::new("snap");
+    for (path, name, src) in files {
+        ml.add_file(path, name, src);
+    }
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    assert!(
+        !res.diagnostics
+            .iter()
+            .any(|d| d.severity == Severity::Error),
+        "fixtures resolve without errors: {:?}",
+        res.diagnostics
+    );
+    let mut sources = Sources::new();
+    for u in &res.package.files {
+        sources.add(u.raw.file, u.raw.display.clone(), &u.raw.src);
+    }
+    let mut out = String::new();
+    for d in res
+        .diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Warning)
+    {
+        out.push_str(&render_human(d, &sources, &RenderOptions::default()));
+        out.push('\n');
+    }
+    assert!(!out.is_empty(), "every package fixture warns");
+    out
+}
+
+#[test]
+fn w0314_one_item_module() {
+    let out = render_package_warnings(&[
+        (
+            &[],
+            "main.lu",
+            "use solo\nfn main() -> !int {\n    solo.only() - 1\n}\n",
+        ),
+        (
+            &["solo"],
+            "only.lu",
+            "/// The module's only item.\npub fn only() -> int {\n    1\n}\n",
+        ),
+    ]);
+    insta::assert_snapshot!("w0314_one_item_module", out);
+}
+
+#[test]
+fn w0315_pkg_item_unused() {
+    let out = render_package_warnings(&[
+        (
+            &[],
+            "main.lu",
+            "use store\nfn main() -> !int {\n    store.used() - 2\n}\n",
+        ),
+        (
+            &["store"],
+            "data.lu",
+            "/// The taken-up export.\npub fn used() -> int {\n    2\n}\n\
+             pub(pkg) fn spare() -> int {\n    9\n}\n",
+        ),
+    ]);
+    insta::assert_snapshot!("w0315_pkg_unused", out);
+}
+
+#[test]
+fn w0316_ancestor_import() {
+    let out = render_package_warnings(&[
+        (
+            &[],
+            "main.lu",
+            "use outer\nuse outer.inner\n\
+             fn main() -> !int {\n    outer.base() + inner.leaf() - 5\n}\n",
+        ),
+        (
+            &["outer"],
+            "base.lu",
+            "/// The base value.\npub fn base() -> int {\n    2\n}\n\
+             /// A second item.\npub fn twice() -> int {\n    4\n}\n",
+        ),
+        (
+            &["outer", "inner"],
+            "leaf.lu",
+            "use outer\n\
+             /// One more than base.\npub fn leaf() -> int {\n    outer.base() + 1\n}\n\
+             /// A second item.\npub fn leaf2() -> int {\n    5\n}\n",
+        ),
+    ]);
+    insta::assert_snapshot!("w0316_ancestor_import", out);
+}
+
+// -------------------------------------- arbiter boundary facts ----
+
+fn resolve_only(src: &str) -> Vec<wolf_diag::Diagnostic> {
+    let mut ml = MemoryLoader::new("snap");
+    ml.add_file(&[], "main.lu", src);
+    resolve_package_with(&mut ml, &AliasTable::default(), true)
+        .expect("root loads")
+        .diagnostics
+}
+
+#[test]
+fn arbiter_clean_shapes_stay_silent() {
+    // Documented pub, predicate answering bool, borrowed as_ view,
+    // get with its absence row, written mut, transformed take, a row
+    // variable in a generic signature, and correctly-cased tags: the
+    // conventions' own shapes fire nothing.
+    let src = "/// Documented.\npub fn fine(n: int) -> int {\n    n\n}\n\
+         fn is_even(n: int) -> bool {\n    n % 2 == 0\n}\n\
+         fn as_view(s: str) -> str {\n    s\n}\n\
+         fn get(i: int) -> int ! {none} {\n    if i < 0 { return none }\n    i\n}\n\
+         fn bump(mut n: int) -> int {\n    n += 1\n    n\n}\n\
+         fn grow(take v: int) -> int {\n    v + 1\n}\n\
+         fn wrap[T, E](x: T, f: fn(T) -> T ! {E}) -> T ! {E} {\n    f(x)?\n}\n\
+         fn parse(s: str) -> int ! {Bad(int), eof} {\n    if s == \"\" { return eof }\n    if s == \"x\" { return Bad(0) }\n    1\n}\n\
+         fn main() -> !int {\n    var m = 1\n    let g = get(2) else 0\n    let p = parse(\"ok\") else 0\n    \
+             fine(1) + is_even(2).to_int() + as_view(\"a\").len + g + bump(mut m) + grow(take p) - 9\n}\n";
+    let diags = resolve_only(src);
+    assert!(diags.is_empty(), "conforming shapes stay silent: {diags:?}");
+}
+
+#[test]
+fn w1002_fix_applicability_is_honest() {
+    // Private fn, plain calls: the fix rewrites declaration AND call
+    // sites, machine-applicable. A `pub` fn keeps a Maybe decl-only
+    // fix (callers outside the module are invisible).
+    let private = resolve_only(
+        "fn offset(mut base: int, d: int) -> int {\n    base + d\n}\n\
+         fn main() -> !int {\n    var b = 1\n    offset(mut b, 2) - 3\n}\n",
+    );
+    let w = private
+        .iter()
+        .find(|d| d.code.as_str() == "W1002")
+        .expect("W1002 fires");
+    let sug = w.suggestions.first().expect("carries a fix");
+    assert_eq!(
+        sug.applicability,
+        wolf_diag::Applicability::MachineApplicable
+    );
+    assert_eq!(sug.edits.len(), 2, "declaration + one call site");
+
+    let public = resolve_only(
+        "/// Documented, exported, and warned once for the dead mut.\n\
+         pub fn offset(mut base: int, d: int) -> int {\n    base + d\n}\n\
+         fn main() -> !int {\n    var b = 1\n    offset(mut b, 2) - 3\n}\n",
+    );
+    let w = public
+        .iter()
+        .find(|d| d.code.as_str() == "W1002")
+        .expect("W1002 fires on pub too");
+    let sug = w.suggestions.first().expect("still carries a fix");
+    assert_eq!(sug.applicability, wolf_diag::Applicability::Maybe);
+    assert_eq!(sug.edits.len(), 1, "declaration only");
+}
+
+#[test]
+fn package_shape_counterparts_stay_silent() {
+    // Two-item module, used pub(pkg), parent-to-child import: the
+    // healthy versions of all three structure lints.
+    let mut ml = MemoryLoader::new("snap");
+    ml.add_file(
+        &[],
+        "main.lu",
+        "use store\nuse store.depot\n\
+         fn main() -> !int {\n    store.used() + store.also() + depot.spare() - 6\n}\n",
+    );
+    ml.add_file(
+        &["store"],
+        "data.lu",
+        "use store.depot\n\
+         /// Used.\npub fn used() -> int {\n    1\n}\n\
+         /// Also used — and it takes the pkg item up.\npub fn also() -> int {\n    depot.spare() - 1\n}\n",
+    );
+    ml.add_file(
+        &["store", "depot"],
+        "d.lu",
+        "/// Package-visible and taken up by the parent.\npub(pkg) fn spare() -> int {\n    2\n}\n\
+         /// A second item.\npub fn other() -> int {\n    4\n}\n",
+    );
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    assert!(
+        res.diagnostics.is_empty(),
+        "healthy package shapes stay silent: {:?}",
         res.diagnostics
     );
 }

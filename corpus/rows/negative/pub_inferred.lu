@@ -5,6 +5,7 @@
 //! Inferred rows are private-only: an exported signature states its
 //! failure set. The fix-it writes the sealed row the body implies.
 
+/// Exported with an inferred row — exactly the E0605 shape.
 pub fn parse(flag: bool) -> !int {
     if flag { return Invalid }
     1

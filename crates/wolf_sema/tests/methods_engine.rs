@@ -108,7 +108,7 @@ fn inherent_shadows_trait_method() {
 fn moded_receivers_follow_the_declaration() {
     let tc = check_one(
         "struct P {\n    x: int,\n}\n\n\
-         impl P {\n    fn bump(mut self) -> int {\n        self.x\n    }\n\n    \
+         impl P {\n    fn bump(mut self) -> int {\n        self.x += 1\n        self.x\n    }\n\n    \
          fn done(take self) -> int {\n        self.x\n    }\n}\n\n\
          fn main() -> !int {\n    var p = P { x: 1 }\n    let a = (mut p).bump()\n    \
          let b = (take p).done()\n    a + b\n}\n",

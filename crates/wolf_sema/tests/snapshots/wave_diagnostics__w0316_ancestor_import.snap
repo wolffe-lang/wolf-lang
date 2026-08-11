@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: out
+---
+warning[W0316]: `outer.inner` imports `outer`, its own ancestor
+ --> mem://outer/inner/leaf.lu:1:5
+  |
+1 | use outer
+  |     ^^^^^ one edit away from an import cycle
+  |
+  = note: the ancestor owns this module structurally, and this import couples the two the other
+    way; move the shared items down (or into a sibling) so the dependency runs parent to
+    child.

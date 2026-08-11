@@ -5,7 +5,7 @@ expression: render_rows(src)
 error[E0601]: the tag `Io` appears twice in this error row
  --> mem:///main.lu:1:28
   |
-1 | fn go() -> int ! {Io(str), Io} {
+1 | fn go() -> int ! {Io(str), Io(str)} {
   |                            ^^ second appearance
   |
   = note: an error row is a set of tags, not a list — each tag appears once (its payload is part

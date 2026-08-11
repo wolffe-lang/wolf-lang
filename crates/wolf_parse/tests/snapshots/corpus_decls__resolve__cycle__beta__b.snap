@@ -3,4 +3,4 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 UseDecl 18..28 path=alpha
-FnDecl 29..106 name=pong pub body=Block
+FnDecl 95..172 name=pong pub body=Block

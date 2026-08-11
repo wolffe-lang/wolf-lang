@@ -1,0 +1,17 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W1002]: `base` is `mut`, and the body never writes it
+ --> mem:///main.lu:1:11
+  |
+1 | fn offset(mut base: int, delta: int) -> int {
+  |           ^^^ writeback nothing uses
+  |
+  = note: every call site surrenders exclusive access for a write that never happens; the read
+    default is the honest mode.
+help: drop the `mut` here and at every call site — the parameter is never written
+  |
+1 | fn offset(base: int, delta: int) -> int {
+6 |     offset(b, 2) - 3
+  |

@@ -1,13 +1,12 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @Counter.bump(mut ptr, mem.r0) -> i64
 decl @Counter.finish(take {i64}) -> i64
-decl @Counter.get({i64}) -> i64
+decl @Counter.peek({i64}) -> i64
 
-fn @Counter.get({i64}) -> i64 {
+fn @Counter.peek({i64}) -> i64 {
 b0(%0: {i64}):
   %1 = agg.get %0, 0
   ret %1
@@ -46,7 +45,7 @@ b0:
   %7, %8 = call @Counter.bump(%3, %6)
   %9 = load.i64 %3, %8
   %10 = agg.make %9
-  %11 = call @Counter.get(%10)
+  %11 = call @Counter.peek(%10)
   %12 = call @Counter.finish(%10)
   %13 = iadd.chk %7, %11
   %14 = iadd.chk %13, %12

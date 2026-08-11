@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0310
+//!
+//! W0310 — the `get_` prefix names nothing: every function gets
+//! something, so the noun after the prefix is the whole name. The
+//! house convention reserves bare `get` for checked access.
+
+fn get_total(a: int, b: int) -> int {
+    a + b
+}
+
+fn main() -> !int {
+    get_total(1, 2) - 3
+}

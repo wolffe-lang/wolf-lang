@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0604]: this `get` declares no absence row
+ --> mem:///main.lu:1:4
+  |
+1 | fn get(i: int) -> int {
+  |    ^^^ checked access that cannot miss
+  |
+  = note: bare `get` is the checked-access spelling: it answers `T ! {none}` and callers handle
+    the miss. Give it the absence row, or name it after what it computes.

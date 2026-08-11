@@ -12,7 +12,7 @@ error[E0604]: `?` propagates an error, but `calm` cannot fail
   |
   = note: errors travel in the declared row, never a side channel: make the function fallible (`->
     !T`, or an explicit row), or handle the error here with `else`.
-help: make `calm` fallible: `! {Bad}`
+help: make `calm` fallible: `! {bad}`
   |
-5 | fn calm() -> int ! {Bad} {
+5 | fn calm() -> int ! {bad} {
   |

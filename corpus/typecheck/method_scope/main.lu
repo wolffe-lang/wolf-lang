@@ -1,6 +1,7 @@
 //! check: fail(E0807)
 //! phase: resolve
 //! conforms: ty.method.trait-scope
+//! warns: W0314
 //!
 //! Method calls resolve through the traits IN SCOPE (D28): `P`
 //! implements `fmt.Show`, but this file never imports the trait, so

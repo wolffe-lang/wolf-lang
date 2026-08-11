@@ -2,4 +2,4 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 157..269 name=digit body=Block
+FnDecl 157..272 name=digit body=Block

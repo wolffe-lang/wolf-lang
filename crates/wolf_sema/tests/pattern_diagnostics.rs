@@ -71,8 +71,8 @@ fn e0801_int_witness() {
 fn e0801_row_missing_tag() {
     snap_one(
         "e0801_row_missing_tag",
-        "fn f(n: int) -> int ! {Io(int), Timeout} {\n    \
-         if n == 0 {\n        return Timeout\n    }\n    \
+        "fn f(n: int) -> int ! {Io(int), timeout} {\n    \
+         if n == 0 {\n        return timeout\n    }\n    \
          if n == 1 {\n        return Io(3)\n    }\n    n\n}\n\n\
          fn main() -> !int {\n    let v = f(2) else |err| {\n        \
          match err {\n            Io(_) => 1,\n        }\n    }\n    v\n}\n",

@@ -3,8 +3,8 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 StructDecl 323..353 name=Counter fields=1
-ImplDecl 355..555 path=Counter
-  FnDecl 374..416 name=get body=Block
-  FnDecl 422..497 name=bump body=Block
-  FnDecl 503..553 name=finish body=Block
-FnDecl 557..726 name=main body=Block
+ImplDecl 355..556 path=Counter
+  FnDecl 374..417 name=peek body=Block
+  FnDecl 423..498 name=bump body=Block
+  FnDecl 504..554 name=finish body=Block
+FnDecl 558..728 name=main body=Block

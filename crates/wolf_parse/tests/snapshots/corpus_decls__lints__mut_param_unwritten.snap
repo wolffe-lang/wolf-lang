@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 383..447 name=offset body=Block
+FnDecl 449..509 name=main body=Block
