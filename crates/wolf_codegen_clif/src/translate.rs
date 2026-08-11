@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 9] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 13] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -67,6 +67,13 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 9] = [
     ("__wolf_rt_print_str", 2, false),
     ("__wolf_rt_print_i64", 1, false),
     ("__wolf_rt_print_bool", 1, false),
+    // The s38 io path: stream-parameterized writes (stdout/stderr)
+    // with the comptime-packed format spec as a trailing i64 immediate
+    // (0 = none) — `wolf_rt::io`'s symbol contract.
+    ("__wolf_rt_write_str", 4, false),
+    ("__wolf_rt_write_i64", 3, false),
+    ("__wolf_rt_write_bool", 3, false),
+    ("__wolf_rt_write_f64", 3, false),
 ];
 
 /// How one WIR parameter crosses the call boundary (the mechanical
@@ -635,13 +642,19 @@ impl<'a, 'b> Tx<'a, 'b> {
                     .ok_or_else(|| ice(format!("unknown runtime symbol {name}")))?;
                 let mut sig = Signature::new(self.om.isa().default_call_conv());
                 for i in 0..nparams {
-                    // The trap code is i32, the bool print shim takes
-                    // an i8 (WIR bool crosses as I8); every other shim
-                    // param is a pointer/size i64.
+                    // The trap code is i32; the bool shims take an i8
+                    // where the value crosses (WIR bool crosses as
+                    // I8); the f64 write shim takes a real f64; every
+                    // other shim param is a pointer/size/packed-spec
+                    // i64.
                     let ty = if name == "__wolf_rt_trap" && i == 0 {
                         ctypes::I32
-                    } else if name == "__wolf_rt_print_bool" && i == 0 {
+                    } else if (name == "__wolf_rt_print_bool" && i == 0)
+                        || (name == "__wolf_rt_write_bool" && i == 1)
+                    {
                         ctypes::I8
+                    } else if name == "__wolf_rt_write_f64" && i == 1 {
+                        ctypes::F64
                     } else {
                         ctypes::I64
                     };

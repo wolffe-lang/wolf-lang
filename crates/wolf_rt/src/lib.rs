@@ -6,6 +6,7 @@
 //! `cargo xtask deps-check` enforces it. Deterministic-scheduler hooks
 //! (s36) are part of this crate's v1 spec surface.
 
+pub mod io;
 pub mod native;
 pub mod quarantine;
 // The task layer is linux-only at this campaign stage — the same

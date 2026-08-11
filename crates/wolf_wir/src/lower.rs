@@ -261,22 +261,33 @@ fn str_ty(it: &mut types::TypeInterner) -> TypeId {
 /// One decoded segment of a string episode: literal bytes (escape set
 /// per the reference interpreter's `eval_string` — `\n \t \r \\ \" \{
 /// \} \0`, unknown escapes drop the backslash) or an interpolation
-/// hole's expression.
+/// hole's expression with its format-spec node, if the hole carries
+/// one (s38).
 enum StrSeg<'t> {
     Lit(Vec<u8>),
-    Hole(&'t GreenNode),
+    Hole {
+        expr: &'t GreenNode,
+        spec: Option<&'t GreenNode>,
+    },
 }
 
-/// One classified print segment (s31 print path).
+/// One classified print segment (s31 print path; s38 adds the packed
+/// format spec — `0` means none — and the float segment). Spec-less
+/// stdout segments keep the frozen `__wolf_rt_print_*` symbols;
+/// everything else flows through the stream-parameterized
+/// `__wolf_rt_write_*` family.
 enum PrintSeg {
-    /// Literal bytes → module data → `__wolf_rt_print_str`.
+    /// Literal bytes → module data.
     Lit(Vec<u8>),
-    /// A str value ({ptr, len}) → `__wolf_rt_print_str`.
-    Str(Value),
-    /// An integer value; widened to i64 per signedness → `__wolf_rt_print_i64`.
-    Int { v: Value, unsigned: bool },
-    /// A bool value → `__wolf_rt_print_bool`.
-    Bool(Value),
+    /// A str value ({ptr, len}).
+    Str { v: Value, spec: i64 },
+    /// An integer value; widened to i64 per signedness.
+    Int { v: Value, unsigned: bool, spec: i64 },
+    /// A bool value.
+    Bool { v: Value, spec: i64 },
+    /// An `f64` value (s38: reference semantics exist — the checked
+    /// executor renders the same bytes).
+    F64 { v: Value, spec: i64 },
 }
 
 /// The module-path-qualified WIR name of item `name` in `module`
@@ -2878,11 +2889,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let cs: Option<&CallSig> = self.calls.get(&e.span).copied();
         // Builtins without a signature: assert / print.
         let callee_text = d.callee().map(|c| self.text(c.span)).unwrap_or_default();
+        // The s38 io/fs builtin tier executes on the checked lane;
+        // native lowering owes it the row-returning call ABI and (for
+        // the read side) allocating str materialization — an honest
+        // refusal either way, with the tier named.
+        if matches!(
+            callee_text.as_str(),
+            "read_line"
+                | "fs_read_text"
+                | "fs_write_text"
+                | "fs_open"
+                | "fs_create"
+                | "fs_read"
+                | "fs_write"
+                | "fs_close"
+                | "fs_remove"
+                | "fs_exists"
+        ) {
+            return Err(refuse(
+                "io/fs builtins in native lowering (checked lane only at s38)",
+                e.span,
+            ));
+        }
         if cs.is_none() {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
-                "print" | "print_raw" => {
-                    return self.lower_print(d, callee_text == "print");
+                "print" | "print_raw" | "eprint" | "eprint_raw" => {
+                    let stream = if callee_text.starts_with('e') { 2 } else { 1 };
+                    return self.lower_print(d, callee_text.ends_with("print"), stream);
                 }
                 _ => {
                     // A call-shaped tag RAISE (`Io(9)` under a row
@@ -3103,7 +3137,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for seg in self.string_segments(e) {
             match seg {
                 StrSeg::Lit(b) => bytes.extend_from_slice(&b),
-                StrSeg::Hole(_) => {
+                StrSeg::Hole { .. } => {
                     return Err(refuse(
                         "interpolated strings in value position (allocating \
                          materialization, c08)",
@@ -3141,10 +3175,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let d = StringExpr::cast(e).expect("kind");
         let raw = self.text(e.span);
         let base = e.span.lo;
-        let mut holes: Vec<(u32, u32, Option<&'t GreenNode>)> = Vec::new();
+        #[allow(clippy::type_complexity)]
+        let mut holes: Vec<(u32, u32, Option<(&'t GreenNode, Option<&'t GreenNode>)>)> = Vec::new();
         for i in d.interps() {
             let ispan = i.syntax().span;
-            holes.push((ispan.lo - base, ispan.hi - base, i.expr()));
+            holes.push((
+                ispan.lo - base,
+                ispan.hi - base,
+                i.expr().map(|e| (e, i.format_spec())),
+            ));
         }
         let bytes = raw.as_bytes();
         // `"""` multiline literals dedent by the closing delimiter's
@@ -3168,12 +3207,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let mut lit: Vec<u8> = Vec::new();
         let mut i = start;
         while i < end {
-            if let Some(&(_, hi, expr)) = holes.iter().find(|(lo, _, _)| *lo as usize == i) {
-                if let Some(h) = expr {
+            if let Some(&(_, hi, hole)) = holes.iter().find(|(lo, _, _)| *lo as usize == i) {
+                if let Some((expr, spec)) = hole {
                     if !lit.is_empty() {
                         segs.push(StrSeg::Lit(std::mem::take(&mut lit)));
                     }
-                    segs.push(StrSeg::Hole(h));
+                    segs.push(StrSeg::Hole { expr, spec });
                 }
                 i = hi as usize;
                 continue;
@@ -3216,10 +3255,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     /// Classify one evaluated print value by its sema type: str values
     /// print as bytes, integers widen to i64 per signedness, bools
-    /// print `true`/`false`. Floats refuse — the reference interpreter
-    /// defines no float formatting yet, so a native rendering would be
-    /// unfalsifiable (c08 owns the formatting tier).
-    fn classify_print_value(&mut self, expr: &'t GreenNode, v: Value) -> R<PrintSeg> {
+    /// print `true`/`false`, `f64` renders shortest-round-trip (s38 —
+    /// the checked executor is the reference, byte for byte). `f32`
+    /// still refuses (its rounding story is unruled). `spec` is the
+    /// packed format spec, `0` for none.
+    fn classify_print_value(&mut self, expr: &'t GreenNode, v: Value, spec: i64) -> R<PrintSeg> {
         let Some(&sema) = self.expr_tys.get(&expr.span) else {
             return Err(refuse("print of an untyped expression", expr.span));
         };
@@ -3228,19 +3268,47 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             ty = *inner;
         }
         match self.table.kind(ty) {
-            TyKind::Prim(Prim::Str) => Ok(PrintSeg::Str(v)),
-            TyKind::Prim(Prim::Bool) => Ok(PrintSeg::Bool(v)),
-            TyKind::Prim(Prim::F32 | Prim::F64) => Err(refuse(
-                "float print formatting (no reference semantics yet, c08)",
+            TyKind::Prim(Prim::Str) => Ok(PrintSeg::Str { v, spec }),
+            TyKind::Prim(Prim::Bool) => Ok(PrintSeg::Bool { v, spec }),
+            TyKind::Prim(Prim::F64) => Ok(PrintSeg::F64 { v, spec }),
+            TyKind::Prim(Prim::F32) => Err(refuse(
+                "`f32` print formatting (f64 is the s38 float)",
                 expr.span,
             )),
-            TyKind::Prim(_) => Ok(PrintSeg::Int {
-                v,
-                unsigned: sema_unsigned(self.table, ty),
-            }),
+            TyKind::Prim(_) => {
+                let unsigned = sema_unsigned(self.table, ty);
+                let spec = if unsigned && spec != 0 {
+                    spec | wolf_sema::fmtspec::PACK_UNSIGNED
+                } else {
+                    spec
+                };
+                Ok(PrintSeg::Int { v, unsigned, spec })
+            }
             _ => Err(refuse(
                 "print of a non-primitive value (s16/D26)",
                 expr.span,
+            )),
+        }
+    }
+
+    /// Parse a hole's format spec into its packed form (s38): the
+    /// spec is comptime-known, sema already diagnosed malformed and
+    /// mismatched ones (E0412/E0413), so lowering only refuses what
+    /// has no pinned semantics — the computed spec (`{x:{w}}`).
+    fn packed_spec(&mut self, spec: Option<&'t GreenNode>) -> R<i64> {
+        let Some(node) = spec else { return Ok(0) };
+        if node.nodes().any(|n| n.kind == SyntaxKind::Interp) {
+            return Err(refuse("a computed format spec (s38 formatting)", node.span));
+        }
+        let text = self.text(node.span);
+        let src = text.strip_prefix(':').unwrap_or(&text);
+        match wolf_sema::fmtspec::parse(src) {
+            Ok(parsed) if parsed.is_default() => Ok(0),
+            Ok(parsed) => Ok(wolf_sema::fmtspec::pack(&parsed)),
+            // Sema diagnosed E0412; nothing malformed lowers.
+            Err(_) => Err(refuse(
+                "a format spec outside the ruled grammar (E0412)",
+                node.span,
             )),
         }
     }
@@ -3266,52 +3334,44 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_call(ext, args);
     }
 
-    /// The v0 print path (s31): `print(x)` lowers to per-segment
-    /// runtime writes. All hole values are evaluated BEFORE any byte
-    /// is written (the interpreter's order — a trapping hole emits no
-    /// partial output); then literal chunks flow from module data and
-    /// values through the typed shims. `print` appends one `\n`
-    /// segment; `print_raw` appends nothing.
-    fn lower_print(&mut self, d: CallExpr<'t>, newline: bool) -> R<Flow> {
+    /// The v0 print path (s31, s38): `print(x)`/`eprint(x)` lower to
+    /// per-segment runtime writes. All hole values are evaluated
+    /// BEFORE any byte is written (the interpreter's order — a
+    /// trapping hole emits no partial output); then literal chunks
+    /// flow from module data and values through the typed shims.
+    /// `print`/`eprint` append one `\n` segment; the `_raw` forms
+    /// append nothing. Spec-less stdout segments keep the frozen s31
+    /// `__wolf_rt_print_*` symbols; spec-carrying, stderr, and float
+    /// segments flow through the s38 `__wolf_rt_write_*` family with
+    /// the comptime-packed spec as an immediate (never a runtime
+    /// parse).
+    fn lower_print(&mut self, d: CallExpr<'t>, newline: bool, stream: i64) -> R<Flow> {
+        let stdout = stream == 1;
         let mut outs: Vec<PrintSeg> = Vec::new();
         for a in d.args().into_iter().flat_map(|l| l.args()) {
             let Some(vexpr) = Arg::value(a) else { continue };
             if vexpr.kind == SyntaxKind::StringExpr {
-                // s37 / wolf-lang#10 — a format spec is never
-                // silently ignored: until the s38 formatting tier
-                // lowers it, a spec-carrying hole REFUSES here. The
-                // silent alternative printed different bytes than the
-                // reference implementation with no diagnostic — the
-                // exact class the differential rig exists to catch.
-                if let Some(sd) = StringExpr::cast(vexpr) {
-                    for i in sd.interps() {
-                        if let Some(spec) = i.format_spec() {
-                            return Err(refuse(
-                                "format specs in native print lowering (s38 formatting)",
-                                spec.span,
-                            ));
-                        }
-                    }
-                    // Dedent shifts every hole offset — refuse the
-                    // combination rather than print undedented text
-                    // (the checked executor refuses identically).
-                    if self.text(vexpr.span).starts_with("\"\"\"")
-                        && sd.interps().any(|i| i.expr().is_some())
-                    {
-                        return Err(refuse(
-                            "interpolation inside a multiline string (s38 formatting)",
-                            vexpr.span,
-                        ));
-                    }
+                // Dedent shifts every hole offset — refuse the
+                // combination rather than print undedented text
+                // (the checked executor refuses identically).
+                if let Some(sd) = StringExpr::cast(vexpr)
+                    && self.text(vexpr.span).starts_with("\"\"\"")
+                    && sd.interps().any(|i| i.expr().is_some())
+                {
+                    return Err(refuse(
+                        "interpolation inside a multiline string (s38 formatting)",
+                        vexpr.span,
+                    ));
                 }
                 for seg in self.string_segments(vexpr) {
                     match seg {
                         StrSeg::Lit(b) => outs.push(PrintSeg::Lit(b)),
-                        StrSeg::Hole(h) => {
+                        StrSeg::Hole { expr: h, spec } => {
+                            let packed = self.packed_spec(spec)?;
                             let Some(v) = flow_val!(self.lower_expr(h)) else {
                                 return Err(refuse("unit-typed interpolation holes", h.span));
                             };
-                            let seg = self.classify_print_value(h, v)?;
+                            let seg = self.classify_print_value(h, v, packed)?;
                             outs.push(seg);
                         }
                     }
@@ -3320,7 +3380,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
                     return Err(refuse("unit-typed print arguments", vexpr.span));
                 };
-                let seg = self.classify_print_value(vexpr, v)?;
+                let seg = self.classify_print_value(vexpr, v, 0)?;
                 outs.push(seg);
             }
         }
@@ -3336,9 +3396,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let idx = self.b.module.intern_data(&bytes);
                     let p = self.b.ins_data_addr(idx);
                     let len = self.b.iconst(types::I64, bytes.len() as i64);
-                    self.rt_print_call("__wolf_rt_print_str", &[types::PTR, types::I64], &[p, len]);
+                    if stdout {
+                        self.rt_print_call(
+                            "__wolf_rt_print_str",
+                            &[types::PTR, types::I64],
+                            &[p, len],
+                        );
+                    } else {
+                        let st = self.b.iconst(types::I64, stream);
+                        let sp = self.b.iconst(types::I64, 0);
+                        self.rt_print_call(
+                            "__wolf_rt_write_str",
+                            &[types::I64, types::PTR, types::I64, types::I64],
+                            &[st, p, len, sp],
+                        );
+                    }
                 }
-                PrintSeg::Str(v) => {
+                PrintSeg::Str { v, spec } => {
                     let p = self
                         .b
                         .ins(Opcode::AggGet, &[v], &[types::PTR], Aux::Int(0))
@@ -3347,9 +3421,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         .b
                         .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(1))
                         .one();
-                    self.rt_print_call("__wolf_rt_print_str", &[types::PTR, types::I64], &[p, len]);
+                    if stdout && spec == 0 {
+                        self.rt_print_call(
+                            "__wolf_rt_print_str",
+                            &[types::PTR, types::I64],
+                            &[p, len],
+                        );
+                    } else {
+                        let st = self.b.iconst(types::I64, stream);
+                        let sp = self.b.iconst(types::I64, spec);
+                        self.rt_print_call(
+                            "__wolf_rt_write_str",
+                            &[types::I64, types::PTR, types::I64, types::I64],
+                            &[st, p, len, sp],
+                        );
+                    }
                 }
-                PrintSeg::Int { v, unsigned } => {
+                PrintSeg::Int { v, unsigned, spec } => {
                     let vty = self.b.func.value_ty(v);
                     let wide = if vty == types::I64 {
                         v
@@ -3362,10 +3450,39 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             .ins(Opcode::Sext, &[v], &[types::I64], Aux::None)
                             .one()
                     };
-                    self.rt_print_call("__wolf_rt_print_i64", &[types::I64], &[wide]);
+                    if stdout && spec == 0 {
+                        self.rt_print_call("__wolf_rt_print_i64", &[types::I64], &[wide]);
+                    } else {
+                        let st = self.b.iconst(types::I64, stream);
+                        let sp = self.b.iconst(types::I64, spec);
+                        self.rt_print_call(
+                            "__wolf_rt_write_i64",
+                            &[types::I64, types::I64, types::I64],
+                            &[st, wide, sp],
+                        );
+                    }
                 }
-                PrintSeg::Bool(v) => {
-                    self.rt_print_call("__wolf_rt_print_bool", &[types::BOOL], &[v]);
+                PrintSeg::Bool { v, spec } => {
+                    if stdout && spec == 0 {
+                        self.rt_print_call("__wolf_rt_print_bool", &[types::BOOL], &[v]);
+                    } else {
+                        let st = self.b.iconst(types::I64, stream);
+                        let sp = self.b.iconst(types::I64, spec);
+                        self.rt_print_call(
+                            "__wolf_rt_write_bool",
+                            &[types::I64, types::BOOL, types::I64],
+                            &[st, v, sp],
+                        );
+                    }
+                }
+                PrintSeg::F64 { v, spec } => {
+                    let st = self.b.iconst(types::I64, stream);
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_print_call(
+                        "__wolf_rt_write_f64",
+                        &[types::I64, types::F64, types::I64],
+                        &[st, v, sp],
+                    );
                 }
             }
         }
