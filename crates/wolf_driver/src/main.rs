@@ -16,6 +16,8 @@ use std::path::{Path, PathBuf};
 use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
+mod test_cmd;
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -25,19 +27,20 @@ fn main() {
         Some("build") => build(&args[1..]),
         Some("run") => run(&args[1..]),
         Some("fix") => fix(&args[1..]),
+        Some("test") => test_cmd::test_cmd(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("audit-surface") => audit_surface(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
         Some("lsp") => lsp(&args[1..]),
         // D34: the single binary grows per-campaign; stubs are honest.
-        Some(cmd @ ("test" | "doc" | "bench" | "dbg" | "add" | "vendor" | "audit" | "publish")) => {
+        Some(cmd @ ("doc" | "bench" | "dbg" | "add" | "vendor" | "audit" | "publish")) => {
             eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
             std::process::exit(2);
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|fix|fmt|lsp|interface|audit-surface|conform-run|--explain|--version"
+                "usage: wolf build|run|test|fix|fmt|lsp|interface|audit-surface|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }

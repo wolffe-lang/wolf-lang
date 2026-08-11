@@ -1,0 +1,24 @@
+//! check: run(exit=1, stdout="handled: 0\nerror: refused")
+//! phase: mem
+//! conforms: err.union, err.propagate
+//!
+//! Connection errors are ROWS, not traps (D30): dialing a port nobody
+//! listens on is the `refused` tag — handleable with `else` (the
+//! fallback fires, the program continues) or propagated with `?` (the
+//! documented process outcome: the tag on stdout, exit 1).
+//! Deterministic on any host without touching a fixed port: bind
+//! loopback port 0, learn the ephemeral port, close the listener,
+//! then dial it. Run expectation proven by the checked-lane twins in
+//! `crates/wolf_mem/tests/net.rs`; the native lane refuses the net
+//! tier honestly at s39, so this file pins `mem`.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    net_close(srv)?
+    let sock = net_connect("127.0.0.1:{port}") else |_| 0
+    print("handled: {sock}")
+    let strict = net_connect("127.0.0.1:{port}")?
+    print("unreachable: {strict}")
+    0
+}

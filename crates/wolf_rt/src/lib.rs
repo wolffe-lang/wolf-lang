@@ -8,6 +8,7 @@
 
 pub mod io;
 pub mod native;
+pub mod net;
 pub mod quarantine;
 // The task layer is linux-only at this campaign stage — the same
 // platform posture as native codegen (s28: M1 targets linux/x86-64;

@@ -1,0 +1,22 @@
+//! check: pass
+//! phase: wir
+//! conforms: test.discovery, test.assert
+//!
+//! The s39 test-tier litmus: a black-box `_test.lu` file the built-in
+//! runner discovers (D34 — no registration, no life-before-main).
+//! Every top-level zero-parameter `fn test_*` is one test, run in
+//! declaration order, each in a fresh checked machine (per-test
+//! isolation). A test passes iff its checked execution exits 0;
+//! `assert` failure is `trap(assert)`. `wolf test corpus/test` runs
+//! this file green — the driver's `test_cmd` CLI tests pin it.
+
+fn test_arithmetic_holds() {
+    let x = 41
+    assert(x + 1 == 42, "checked arithmetic is still arithmetic")
+}
+
+fn test_rows_are_values() -> !int {
+    let ok = 7
+    assert(ok == 7)
+    0
+}

@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 550..661 name=test_arithmetic_holds body=Block
+FnDecl 663..741 name=test_rows_are_values body=Block

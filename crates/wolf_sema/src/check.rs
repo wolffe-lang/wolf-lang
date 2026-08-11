@@ -4741,6 +4741,22 @@ impl<'a> Checker<'a> {
                 rowed(self, unit, &["not_found", "denied", "io"]),
             ),
             "fs_exists" => (vec![str_], bool_),
+            // The s39 net builtin tier (blocking TCP v0): the row
+            // vocabulary is {refused, timeout, closed, io} — `closed`
+            // is the peer's finish (the socket `eof`), `timeout` is
+            // declared now so the vocabulary is stable when s35/s40
+            // deadlines make it routinely reachable. A forged or
+            // wrong-kind fd is `io`, never a trap.
+            "net_listen" => (vec![str_], rowed(self, int_, &["io"])),
+            "net_port" => (vec![int_], rowed(self, int_, &["io"])),
+            "net_accept" => (vec![int_], rowed(self, int_, &["timeout", "io"])),
+            "net_connect" => (vec![str_], rowed(self, int_, &["refused", "timeout", "io"])),
+            "net_read" => (
+                vec![int_, int_],
+                rowed(self, str_, &["closed", "timeout", "utf8", "io"]),
+            ),
+            "net_write" => (vec![int_, str_], rowed(self, unit, &["closed", "io"])),
+            "net_close" => (vec![int_], rowed(self, unit, &["io"])),
             _ => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)
