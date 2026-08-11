@@ -1,6 +1,6 @@
 # wolf
 
-<img src="https://raw.githubusercontent.com/tenseleyFlow/wolf/trunk/assets/wolf-logo.svg" alt="the wolf mark" width="120" align="right"/>
+<img src="https://raw.githubusercontent.com/wolffe-lang/wolf/trunk/assets/wolf-logo.svg" alt="the wolf mark" width="120" align="right"/>
 
 Wolf is a new compiled systems language built on one idea carried end to end:
 memory lives in inferred **regions** — value semantics on the surface (no
