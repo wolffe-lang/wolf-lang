@@ -207,6 +207,7 @@ pub mod check;
 pub mod coerce;
 pub mod ctfe;
 pub(crate) mod exhaust;
+pub mod fmtspec;
 pub mod graph;
 pub mod interface;
 pub(crate) mod letcheck;

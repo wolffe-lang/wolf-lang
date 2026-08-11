@@ -259,3 +259,61 @@ fn e0411_char_index_hint() {
         "fn main() -> !int {\n    let s = \"wolf\"\n    let i = 2\n    let c = s[i]\n    0\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E0412 -----
+
+/// Catalog case (s38): a spec character the grammar has no place for —
+/// specs are comptime-known, so the error lands at the literal, never
+/// at run time (#28).
+#[test]
+fn e0412_malformed_spec() {
+    snap_one(
+        "e0412_malformed",
+        "fn main() -> !int {\n    let n = 42\n    print(\"[{n:>8q}]\")\n    0\n}\n",
+    );
+}
+
+/// Catalog case (s38): the zero FLAG after an explicit alignment —
+/// the spec must pick zero-padding OR alignment; the compiler never
+/// picks silently. (`{n:0>8}` is different and legal: fill `0`,
+/// align `>` — the two-character form reads as fill+align.)
+#[test]
+fn e0412_zero_with_align() {
+    snap_one(
+        "e0412_zero_with_align",
+        "fn main() -> !int {\n    let n = 42\n    print(\"[{n:>08}]\")\n    0\n}\n",
+    );
+}
+
+/// Catalog case (s38): the #28-named typo `{x:>>8}` — a doubled
+/// alignment, not "fill with `>`".
+#[test]
+fn e0412_align_as_fill() {
+    snap_one(
+        "e0412_align_as_fill",
+        "fn main() -> !int {\n    let n = 42\n    print(\"[{n:>>8}]\")\n    0\n}\n",
+    );
+}
+
+// ---------------------------------------------------------- E0413 -----
+
+/// Catalog case (s38): precision on an integer — `.2` means
+/// digits-after-the-point on a float and a byte cap on a `str`,
+/// nothing on an `int`.
+#[test]
+fn e0413_precision_on_int() {
+    snap_one(
+        "e0413_precision_on_int",
+        "fn main() -> !int {\n    let n = 42\n    print(\"[{n:.2}]\")\n    0\n}\n",
+    );
+}
+
+/// Catalog case (s38): a base kind off integers — `x` renders an
+/// integer in hex; a `str` has no base.
+#[test]
+fn e0413_hex_on_str() {
+    snap_one(
+        "e0413_hex_on_str",
+        "fn main() -> !int {\n    let s = \"wolf\"\n    print(\"[{s:x}]\")\n    0\n}\n",
+    );
+}

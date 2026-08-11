@@ -1,0 +1,10 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0412]: `0` zero-pads after the sign and cannot combine with an explicit fill or alignment — spell one or the other
+ --> mem:///main.lu:3:15
+  |
+3 |     print("[{n:>08}]")
+  |               ^^^^ in this format spec
+  |

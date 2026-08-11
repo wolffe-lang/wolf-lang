@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="stdout says 1")
+//! phase: run
+//! conforms: str.interp
+//!
+//! The s38 stderr writers: `eprint` mirrors `print` (trailing
+//! newline; `eprint_raw` appends nothing) onto the OTHER stream —
+//! stdout stays clean, which is what this pin proves (the record
+//! hashes stdout only; stderr is the rich human channel, spec/06).
+//! Format specs render identically on both streams: one fmt
+//! machinery, two fds.
+
+fn main() -> !int {
+    let n = 1
+    eprint("stderr says {n:>4}")
+    eprint_raw("raw ")
+    eprint_raw("tail\n")
+    print("stdout says {n}")
+    0
+}

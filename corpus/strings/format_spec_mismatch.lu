@@ -1,0 +1,15 @@
+//! check: fail(E0413)
+//! phase: resolve
+//! conforms: str.interp
+//!
+//! A well-formed spec that does not fit the hole's type is a COMPILE
+//! error at the literal (s38, #28): `.2` means digits-after-the-point
+//! on a float and a byte cap on a `str` — on an integer it means
+//! nothing, and the wolf-lang#10 rule holds: a spec is never silently
+//! ignored.
+
+fn main() -> !int {
+    let n = 42
+    print("[{n:.2}]")
+    0
+}

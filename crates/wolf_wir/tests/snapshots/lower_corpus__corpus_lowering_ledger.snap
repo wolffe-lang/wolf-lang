@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 333
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -40,6 +39,8 @@ faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/overflow_add.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 ffi.lu: not mem-clean (pre-wir rungs own it)
+fs/error_row.lu: refused — io/fs builtins in native lowering (checked lane only at s38)
+fs/roundtrip.lu: refused — io/fs builtins in native lowering (checked lane only at s38)
 grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
 grammar/brackets_generic_call.lu: not mem-clean (pre-wir rungs own it)
@@ -60,10 +61,7 @@ grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
-lints/allow_item.lu: lowers
-lints/allow_nothing.lu: lowers
-lints/allow_unknown_code.lu: lowers
-lints/safety_comment_missing.lu: refused — assignment through nested places (c06)
+io/eprint.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/checked_unsigned.lu: lowers
 memory/defer_order.lu: lowers
@@ -135,7 +133,12 @@ rows/propagate/main.lu: refused — comparison outside integers/floats (str/enum
 rows/qmark_defer.lu: lowers
 strings/builtin_methods.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
-strings/format_spec_width.lu: refused — format specs in native print lowering (s38 formatting)
+strings/float_format.lu: lowers
+strings/format_spec_full.lu: lowers
+strings/format_spec_malformed.lu: not mem-clean (pre-wir rungs own it)
+strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
+strings/format_spec_width.lu: lowers
+strings/interp_value_position.lu: refused — interpolated strings in value position (allocating materialization, c08)
 strings/slice_oob_trap.lu: refused — indexing lowering (List/Pool runtime shapes, c06)
 strings.lu: not mem-clean (pre-wir rungs own it)
 traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)

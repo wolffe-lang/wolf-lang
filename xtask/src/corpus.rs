@@ -200,13 +200,40 @@ fn parse_run(args: &str) -> Result<RunExpect, String> {
                 .strip_prefix('"')
                 .and_then(|s| s.strip_suffix('"'))
                 .ok_or_else(|| format!("stdout value must be quoted, got `{v}`"))?;
-            stdout = Some(v.to_string());
+            stdout = Some(unescape_stdout(v));
         } else if !part.is_empty() {
             return Err(format!("unknown run() argument `{part}`"));
         }
     }
     let exit = exit.ok_or("run() requires exit=")?;
     Ok(RunExpect { exit, stdout })
+}
+
+/// Decode the escape set of a `stdout="…"` directive value (s38 —
+/// multi-print expectations need real newlines): `\n`, `\t`, `\\`,
+/// `\"`. Anything else keeps the backslash literally (the directive
+/// language stays small).
+fn unescape_stdout(v: &str) -> String {
+    let mut out = String::with_capacity(v.len());
+    let mut chars = v.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// Split run() args on commas that are outside double quotes.
@@ -308,5 +335,18 @@ mod tests {
         assert!(phase_rank("none").unwrap() < phase_rank("lex").unwrap());
         assert!(phase_rank("wir").unwrap() < phase_rank("run").unwrap());
         assert_eq!(phase_rank("sema"), None);
+    }
+
+    #[test]
+    fn stdout_directive_decodes_escapes() {
+        // Multi-print expectations carry real newlines (s38).
+        let d = parse_directives(
+            "//! check: run(exit=0, stdout=\"a\\nb\\tc\\\\d\")\n//! phase: run\nfn main() {}\n",
+        )
+        .unwrap();
+        let Some(Check::Run(r)) = d.check else {
+            panic!("run check");
+        };
+        assert_eq!(r.stdout.as_deref(), Some("a\nb\tc\\d"));
     }
 }

@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="[+42][+0][-42]\n[00000042][-00042][+00042]\n[2a][2A][101010][52][-2a]\n[      2a][wo][a  e][  a  ]")
+//! phase: run
+//! conforms: str.interp
+//!
+//! The full §7.4 candidate grammar (s38, wolf-lang#28):
+//! `[[fill]align][+][0][width][.precision][type]`. `+` marks
+//! non-negative numbers and zero takes it (`with_sign`); `0`
+//! zero-pads AFTER the sign — `{neg:06}` is `-00042`, and `{n:08}`
+//! is the flag plus width, never width 8 with space fill (#28 item
+//! 3); the bases are sign-magnitude with no prefix; `.N` on a `str`
+//! is a byte cap that never splits a code point; `^` centers with
+//! the odd byte on the right. Semantics member-by-member the
+//! wolf-std sc05 reference functions; the checked executor and the
+//! native shims render identical bytes (the driver's fmt_parity
+//! test pins the two implementations).
+
+fn main() -> !int {
+    let n = 42
+    let z = 0
+    let neg = 0 - 42
+    let s = "wolf"
+    let a = "a"
+    print("[{n:+}][{z:+}][{neg:+}]")
+    print("[{n:08}][{neg:06}][{n:+06}]")
+    print("[{n:x}][{n:X}][{n:b}][{n:o}][{neg:x}]")
+    print("[{n:>8x}][{s:.2}][{a:<3}e][{a:^5}]")
+    0
+}

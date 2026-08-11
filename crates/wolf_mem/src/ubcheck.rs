@@ -196,6 +196,10 @@ pub enum Verdict {
 pub struct RunOutcome {
     pub verdict: Verdict,
     pub stdout: String,
+    /// The `eprint` channel (s38). The differential record never
+    /// hashes stderr — it is the rich human channel — but tests
+    /// assert it and the driver forwards it.
+    pub stderr: String,
 }
 
 /// Execution budget: steps (every expression evaluation counts one)
@@ -335,6 +339,11 @@ enum Value {
     Unit,
     Int(i64),
     Bool(bool),
+    /// The executable float (s38): `f64` values under IEEE semantics —
+    /// arithmetic never traps (X3 is integer law; inf/nan are values).
+    /// `f32` stays an honest refusal until a use case rules its
+    /// rounding story.
+    F64(f64),
     Str(String),
     Range {
         start: i64,
@@ -375,6 +384,7 @@ impl Value {
             Value::Unit
                 | Value::Int(_)
                 | Value::Bool(_)
+                | Value::F64(_)
                 | Value::Str(_)
                 | Value::Range { .. }
                 | Value::Handle { .. }
@@ -487,6 +497,17 @@ struct Machine<'t> {
     /// region (never freed while the run lives).
     ambient: Vec<usize>,
     stdout: String,
+    /// What the program wrote through `eprint`/`eprint_raw` (s38).
+    stderr: String,
+    /// The program's standard input (s38): a caller-supplied buffer,
+    /// consumed by `read_line`. Conform-run supplies none — the
+    /// checked lane's default stdin is empty, so `read_line` raises
+    /// `eof` deterministically.
+    stdin: String,
+    stdin_pos: usize,
+    /// Open file handles (s38 fs tier): index = the `int` fd wolf code
+    /// holds; `None` after close.
+    files: Vec<Option<std::fs::File>>,
     steps: u64,
     mem_used: u64,
     budget: Budget,
@@ -842,9 +863,22 @@ impl<'t> Machine<'t> {
 /// the honest refusal (construct outside the executable surface, or
 /// budget exhaustion); the driver reports `unsupported`.
 pub fn run_checked(pkg: &Package, tc: &Typecheck, budget: Budget) -> Result<RunOutcome, NotYet> {
+    run_checked_with_input(pkg, tc, budget, "")
+}
+
+/// [`run_checked`] with a standard-input buffer for `read_line` (s38).
+/// Conform-run has no stdin channel, so the default is empty (every
+/// `read_line` raises `eof`); tests feed programs here.
+pub fn run_checked_with_input(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+) -> Result<RunOutcome, NotYet> {
     let root_span = pkg.files[0].parse.root.span;
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
+    m.stdin = stdin.to_string();
     let main = match m.find_main() {
         Some(b) => b,
         None => {
@@ -872,15 +906,18 @@ pub fn run_checked(pkg: &Package, tc: &Typecheck, budget: Budget) -> Result<RunO
             Ok(RunOutcome {
                 verdict: Verdict::Exit(code),
                 stdout: m.stdout,
+                stderr: m.stderr,
             })
         }
         Err(Stop::Trap(t)) => Ok(RunOutcome {
             verdict: Verdict::Trap(t),
             stdout: m.stdout,
+            stderr: m.stderr,
         }),
         Err(Stop::Ub(f)) => Ok(RunOutcome {
             verdict: Verdict::Ub(f),
             stdout: m.stdout,
+            stderr: m.stderr,
         }),
         Err(Stop::Refuse(nyc)) => Err(nyc),
         Err(Stop::Budget(what)) => Err(NotYet {
@@ -941,6 +978,10 @@ impl<'t> Machine<'t> {
             frames: Vec::new(),
             ambient: Vec::new(),
             stdout: String::new(),
+            stderr: String::new(),
+            stdin: String::new(),
+            stdin_pos: 0,
+            files: Vec::new(),
             steps: 0,
             mem_used: 0,
             budget: Budget::default(),
@@ -2110,6 +2151,8 @@ impl<'t> Machine<'t> {
                         Some(m) => Ok(Flow::Val(Value::Int(m))),
                         None => self.trap("overflow", "mem.ub.defined", e.span),
                     },
+                    // IEEE negation flips the sign bit; `-0.0` exists.
+                    Value::F64(x) => Ok(Flow::Val(Value::F64(-x))),
                     _ => self.refuse("negation outside integers", e.span),
                 }
             }
@@ -2206,6 +2249,17 @@ impl<'t> Machine<'t> {
             }
             SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq => match (l, r) {
                 (Value::Int(a), Value::Int(b)) => {
+                    let out = match op {
+                        SyntaxKind::Lt => a < b,
+                        SyntaxKind::Gt => a > b,
+                        SyntaxKind::LtEq => a <= b,
+                        _ => a >= b,
+                    };
+                    Ok(Flow::Val(Value::Bool(out)))
+                }
+                // IEEE partial order (s38): any comparison against
+                // nan is false.
+                (Value::F64(a), Value::F64(b)) => {
                     let out = match op {
                         SyntaxKind::Lt => a < b,
                         SyntaxKind::Gt => a > b,
@@ -2319,6 +2373,23 @@ impl<'t> Machine<'t> {
                 }
                 Ok(Value::Int(out))
             }
+            // Floats are IEEE (s38): arithmetic never traps — inf and
+            // nan are VALUES; X3's trap law is integer law. `%` on
+            // floats has no ruled semantics (fmod vs IEEE remainder)
+            // and refuses honestly.
+            (Value::F64(a), Value::F64(b)) => {
+                let out = match op {
+                    SyntaxKind::Plus => a + b,
+                    SyntaxKind::Minus => a - b,
+                    SyntaxKind::Star => a * b,
+                    SyntaxKind::Slash => a / b,
+                    SyntaxKind::Percent => {
+                        return self.refuse("`%` on floats (unruled: fmod vs remainder)", span);
+                    }
+                    _ => a,
+                };
+                Ok(Value::F64(out))
+            }
             (Value::Str(a), Value::Str(b)) if op == SyntaxKind::Plus => Ok(Value::Str(a + &b)),
             _ => self.refuse("arithmetic outside integers", span),
         }
@@ -2361,6 +2432,23 @@ impl<'t> Machine<'t> {
         }
         if text == "false" {
             return Ok(Value::Bool(false));
+        }
+        // Type-driven float literals (s38): a literal the checker
+        // typed `f64` is a float even when its spelling is integral
+        // (`let x: f64 = 3`). `f32` refuses until its rounding story
+        // is ruled.
+        match self.expr_ty(e.span) {
+            Some(TyKind::Prim(Prim::F64)) => {
+                let t: String = text.chars().filter(|&c| c != '_').collect();
+                return match t.parse::<f64>() {
+                    Ok(x) => Ok(Value::F64(x)),
+                    Err(_) => self.refuse("this float literal shape", e.span),
+                };
+            }
+            Some(TyKind::Prim(Prim::F32)) => {
+                return self.refuse("`f32` in checked execution (f64 is the s38 float)", e.span);
+            }
+            _ => {}
         }
         match parse_int_literal(&text) {
             Some(n) => Ok(Value::Int(n)),
@@ -2475,18 +2563,23 @@ impl<'t> Machine<'t> {
         Ok(Flow::Val(Value::Str(out)))
     }
 
-    /// The checked tier's format-spec application (s37 interim for
-    /// s38): `[[fill]align][width]`, refusing the rest. The refusals
-    /// are the point — wolfc parsing a spec and printing the bare
-    /// value was a stdout divergence with no diagnostic (#10);
-    /// `{n:08}` silently reading as width 8 was lupin's own bug, so
-    /// zero-pad refuses rather than guessing.
+    /// The checked tier's format-spec application (s38): the full
+    /// §7.4 candidate grammar — `[[fill]align][+][0][width]
+    /// [.precision][type]` — through `wolf_sema::fmtspec`, the single
+    /// reference implementation (semantics member-by-member the
+    /// wolf-std sc05 functions; the native shims mirror it and the
+    /// driver's parity test pins the two). Malformed and mismatched
+    /// specs never reach here: sema diagnoses them (E0412/E0413) and
+    /// the ladder stops. What still refuses, honestly: a computed
+    /// spec (`{x:{w}}`, no pinned semantics — a #28 question), and a
+    /// spec whose hole type the checker could not classify.
     fn apply_format_spec(
         &mut self,
         spec: &'t GreenNode,
         val: &Value,
         rendered: String,
     ) -> Result<String, Stop> {
+        use wolf_sema::fmtspec::{self, FmtValue};
         // A computed spec (`{x:{w}}`) has no pinned semantics.
         if spec.nodes().any(|n| n.kind == SyntaxKind::Interp) {
             return Err(Stop::Refuse(NotYet {
@@ -2496,62 +2589,213 @@ impl<'t> Machine<'t> {
         }
         let text = self.text(spec.span);
         let s = text.strip_prefix(':').unwrap_or(&text);
-        if s.is_empty() {
+        let Ok(parsed) = fmtspec::parse(s) else {
+            // Sema diagnosed E0412; execution never starts. Defensive
+            // honesty if a path ever slips.
+            return Err(Stop::Refuse(NotYet {
+                construct: "a format spec outside the ruled grammar (E0412)",
+                span: spec.span,
+            }));
+        };
+        if parsed.is_default() {
             return Ok(rendered);
         }
-        let chars: Vec<char> = s.chars().collect();
-        let is_align = |c: char| matches!(c, '<' | '>' | '^');
-        let (fill, align, rest_at) = if chars.len() >= 2 && is_align(chars[1]) {
-            (chars[0], Some(chars[1]), 2)
-        } else if is_align(chars[0]) {
-            (' ', Some(chars[0]), 1)
-        } else {
-            (' ', None, 0)
-        };
-        if !fill.is_ascii() {
-            return Err(Stop::Refuse(NotYet {
-                construct: "a non-ASCII fill in a format spec (s38 formatting)",
-                span: spec.span,
-            }));
-        }
-        let rest: String = chars[rest_at..].iter().collect();
-        if !rest.is_empty() && !rest.chars().all(|c| c.is_ascii_digit()) {
-            return Err(Stop::Refuse(NotYet {
-                construct: "this format spec (only `[[fill]align][width]` is implemented, s38)",
-                span: spec.span,
-            }));
-        }
-        if rest.len() > 1 && rest.starts_with('0') {
-            return Err(Stop::Refuse(NotYet {
-                construct: "a zero-padded format width (s38 formatting)",
-                span: spec.span,
-            }));
-        }
-        let width = if rest.is_empty() {
-            0
-        } else {
-            rest.parse::<usize>().unwrap_or(0)
-        };
-        let len = rendered.len(); // bytes — D25's honest width unit
-        if width <= len {
-            return Ok(rendered);
-        }
-        let pad = width - len;
-        // Default alignment: numbers right, everything else left
-        // (spec §7.4 candidate, #28).
-        let align = align.unwrap_or(match val {
-            Value::Int(_) => '>',
-            _ => '<',
-        });
-        let fills = |n: usize| fill.to_string().repeat(n);
-        Ok(match align {
-            '<' => format!("{rendered}{}", fills(pad)),
-            '>' => format!("{}{rendered}", fills(pad)),
+        let fv = match val {
+            Value::Str(s) => FmtValue::Str(s),
+            Value::Bool(b) => FmtValue::Bool(*b),
+            // The checked machine models every integer as its value
+            // in `i64` (narrow prims range-trap on arithmetic), so
+            // rendering is signed here; the native lane's unsigned
+            // flag matters only beyond `i64::MAX`, which no checked
+            // value reaches.
+            Value::Int(n) => FmtValue::Int {
+                v: *n,
+                unsigned: false,
+            },
+            Value::F64(x) => FmtValue::F64(*x),
             _ => {
-                let l = pad / 2;
-                format!("{}{rendered}{}", fills(l), fills(pad - l))
+                return Err(Stop::Refuse(NotYet {
+                    construct: "a format spec on a non-primitive value",
+                    span: spec.span,
+                }));
             }
-        })
+        };
+        match fmtspec::apply(&parsed, fv) {
+            Ok(out) => Ok(out),
+            // A mismatch the checker skipped (unresolved hole class).
+            Err(_) => Err(Stop::Refuse(NotYet {
+                construct: "a format spec the checker did not rule on for this value",
+                span: spec.span,
+            })),
+        }
+    }
+
+    /// The s38 io/fs builtin tier (checked lane): real host
+    /// operations with D30 row errors — `not_found`/`denied`/`io` per
+    /// `io::ErrorKind`, `utf8` on text-decode failure, `eof` where an
+    /// end is an outcome. An error outside a builtin's declared row
+    /// coarsens to `io` (rule 3 of the wolf-std taxonomy: one tag per
+    /// actionable response, never per internal cause). File handles
+    /// are plain `int` fds into the machine's table; every operation
+    /// on a closed or foreign fd is the `io` row, never a trap — a
+    /// forged fd is a checkable condition, not a contract violation.
+    fn io_fs_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        use std::io::{Read as _, Write as _};
+        fn tag(t: &str) -> Flow {
+            Flow::Err(Value::ErrTag {
+                tag: t.to_string(),
+                payload: Vec::new(),
+            })
+        }
+        fn errtag(e: &std::io::Error, declared: &[&str]) -> String {
+            let t = match e.kind() {
+                std::io::ErrorKind::NotFound => "not_found",
+                std::io::ErrorKind::PermissionDenied => "denied",
+                _ => "io",
+            };
+            if declared.contains(&t) { t } else { "io" }.to_string()
+        }
+        let str_arg = |i: usize| -> Option<String> {
+            match argv.get(i) {
+                Some(Value::Str(s)) => Some(s.clone()),
+                _ => None,
+            }
+        };
+        let int_arg = |i: usize| -> Option<i64> {
+            match argv.get(i) {
+                Some(Value::Int(n)) => Some(*n),
+                _ => None,
+            }
+        };
+        match name {
+            "read_line" => {
+                if self.stdin_pos >= self.stdin.len() {
+                    return Ok(tag("eof"));
+                }
+                let rest = &self.stdin[self.stdin_pos..];
+                let (line, consumed) = match rest.find('\n') {
+                    Some(i) => (&rest[..i], i + 1),
+                    None => (rest, rest.len()),
+                };
+                let line = line.strip_suffix('\r').unwrap_or(line).to_string();
+                self.stdin_pos += consumed;
+                self.charge_mem(line.len() as u64)?;
+                Ok(Flow::Val(Value::Str(line)))
+            }
+            "fs_read_text" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::read(&path) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(bytes) => {
+                        self.charge_mem(bytes.len() as u64)?;
+                        match String::from_utf8(bytes) {
+                            Ok(s) => Ok(Flow::Val(Value::Str(s))),
+                            Err(_) => Ok(tag("utf8")),
+                        }
+                    }
+                }
+            }
+            "fs_write_text" => {
+                let (Some(path), Some(contents)) = (str_arg(0), str_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::write(&path, contents.as_bytes()) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            "fs_open" | "fs_create" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let opened = if name == "fs_open" {
+                    std::fs::OpenOptions::new().read(true).open(&path)
+                } else {
+                    std::fs::File::create(&path)
+                };
+                let declared: &[&str] = if name == "fs_open" {
+                    &["not_found", "denied", "io"]
+                } else {
+                    &["denied", "io"]
+                };
+                match opened {
+                    Err(e) => Ok(tag(&errtag(&e, declared))),
+                    Ok(f) => {
+                        let fd = self.files.len() as i64;
+                        self.files.push(Some(f));
+                        Ok(Flow::Val(Value::Int(fd)))
+                    }
+                }
+            }
+            "fs_read" => {
+                let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                if max <= 0 {
+                    return Ok(Flow::Val(Value::Str(String::new())));
+                }
+                let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+                match f.read(&mut buf) {
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(0) => Ok(tag("eof")),
+                    Ok(n) => {
+                        buf.truncate(n);
+                        self.charge_mem(n as u64)?;
+                        match String::from_utf8(buf) {
+                            Ok(s) => Ok(Flow::Val(Value::Str(s))),
+                            Err(_) => Ok(tag("utf8")),
+                        }
+                    }
+                }
+            }
+            "fs_write" => {
+                let (Some(fd), Some(s)) = (int_arg(0), str_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                match f.write_all(s.as_bytes()) {
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            "fs_close" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i)) {
+                    Some(slot @ Some(_)) => {
+                        *slot = None; // drop closes; double close is `io`
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    _ => Ok(tag("io")),
+                }
+            }
+            "fs_remove" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::remove_file(&path) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            "fs_exists" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                Ok(Flow::Val(Value::Bool(std::path::Path::new(&path).exists())))
+            }
+            _ => self.refuse("this io/fs builtin", span),
+        }
     }
 
     /// Is this expression an injected raise of a declared row tag?
@@ -3026,7 +3270,7 @@ impl<'t> Machine<'t> {
         // `assert`).
         let callee_name = d.callee().map(|c| self.text(c.span)).unwrap_or_default();
         match callee_name.as_str() {
-            "print" | "print_raw" => {
+            "print" | "print_raw" | "eprint" | "eprint_raw" => {
                 let mut out = String::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -3038,11 +3282,35 @@ impl<'t> Machine<'t> {
                         out.push_str(&format_value(&x));
                     }
                 }
-                self.stdout.push_str(&out);
-                if callee_name == "print" {
-                    self.stdout.push('\n');
+                if callee_name.ends_with("print") {
+                    out.push('\n');
+                }
+                if callee_name.starts_with('e') {
+                    self.stderr.push_str(&out);
+                } else {
+                    self.stdout.push_str(&out);
                 }
                 return Ok(Flow::Val(Value::Unit));
+            }
+            // The s38 io/fs builtin tier. Errors are D30 payload rows,
+            // never traps: the machine performs the REAL host
+            // operation (checked execution is a host process; the
+            // comptime sandbox is the one place these are refused) and
+            // maps `io::ErrorKind` onto each builtin's declared tags.
+            "read_line" | "fs_read_text" | "fs_write_text" | "fs_open" | "fs_create"
+            | "fs_read" | "fs_write" | "fs_close" | "fs_remove" | "fs_exists" => {
+                let mut argv = Vec::new();
+                for a in d.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = Arg::value(a) {
+                        let x = if let Some(place) = self.place_of(v)? {
+                            self.read_place(&place, v.span)?
+                        } else {
+                            val!(self.eval(v))
+                        };
+                        argv.push(x);
+                    }
+                }
+                return self.io_fs_builtin(&callee_name, argv, e.span);
             }
             "assert" => {
                 // Only the FIRST argument is the condition; the
@@ -3767,6 +4035,8 @@ fn is_container_ctor(callee: Option<&GreenNode>) -> bool {
 fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
+        // IEEE equality: `nan != nan`, `-0.0 == 0.0`.
+        (Value::F64(x), Value::F64(y)) => x == y,
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::Unit, Value::Unit) => true,
@@ -3918,6 +4188,9 @@ fn format_value(v: &Value) -> String {
     match v {
         Value::Int(n) => n.to_string(),
         Value::Bool(b) => b.to_string(),
+        // The shortest round-trip decimal, `std.fmt.decimal.to_str`'s
+        // layout — the s38 reference rendering (spec §7.4 candidate).
+        Value::F64(x) => wolf_sema::fmtspec::f64_shortest(*x),
         Value::Str(s) => s.clone(),
         Value::Unit => "()".to_string(),
         Value::Range { start, end } => format!("{start}..{end}"),

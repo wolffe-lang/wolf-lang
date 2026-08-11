@@ -1,0 +1,10 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0412]: `>>` reads as a doubled alignment, not as "fill with `>`" — alignment characters cannot be the fill
+ --> mem:///main.lu:3:15
+  |
+3 |     print("[{n:>>8}]")
+  |               ^^^^ in this format spec
+  |
