@@ -17,13 +17,26 @@ interleaving. The closed v1 set:
 - `join` — a scope waits; which pending task runs next is a decision.
 - `park` / `unpark` — a worker blocks or wakes (production-only detail;
   under the test scheduler these collapse into `pick`).
-- `chan.send` / `chan.recv` — blocking channel edges (s33 widens with
-  its hook inventory, which must match this doc).
-- `select.arm` — the committed arm among ready arms.
+- `chan.send` / `chan.recv` — blocking channel edges (s33's
+  implemented inventory: each edge carries a block/commit phase as
+  subject detail — the kind vocabulary is exactly this list).
+- `select.arm` — the committed arm among ready arms (the ready set
+  rides as subject detail, per `[conc.det.events]` kind 4).
 - `pick` — the generic "which runnable task next" decision; every other
   point reduces to at most one `pick` plus its own identity.
-- `timer.fire` — RESERVED (s35's inventory names it; unimplemented
-  points stay named here so numbering never shifts).
+- `timer.fire` — activated by s33's timeout arms per `[sched.stable]`
+  (reserved-kind activation); s35's timer wheel inherits the name.
+- `chan.close` — `close` wakes every blocked waiter, an
+  interleaving-visible decision. (Appended 2026-08-11 by s33 per
+  `[sched.stable]`'s append rule — the sprint inventory's `close`
+  event; sched-ev/0 has no counterpart, and cross-version comparison
+  is by verdict, so the append is safe.)
+- `acquire` — one sync-object acquisition in `when`'s canonical
+  order; a whole-set acquisition's steps carry (index, set-size)
+  subject detail so the recorder folds them into one event with the
+  set's ids. (Appended 2026-08-11 by s33: `[conc.when.order]` and
+  sched-ev/0 kind 5 already name `acquire`; this list omitted it only
+  because s32 had no sync objects.)
 
 ## 2. The hook shape `[sched.point.hook]`
 

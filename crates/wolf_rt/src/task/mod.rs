@@ -33,7 +33,13 @@
 //!
 //! # The symbol contract (codegen-facing, frozen like s28's)
 //!
-//! Compiled wolf code drives this layer through five entry points:
+//! Compiled wolf code drives the s32 task layer through five entry
+//! points (s33 adds the channel/select family in chan.rs —
+//! `__wolf_rt_chan_new/clone/free/send/send_region/recv/close`,
+//! `__wolf_rt_select` — and the `when` family in when.rs —
+//! `__wolf_rt_sync_new/free/payload`,
+//! `__wolf_rt_when_acquire/release` — frozen the same way, ahead of
+//! consumption):
 //!
 //! - [`__wolf_rt_scope_new`] — open a scope; the returned handle IS
 //!   the language's scope value (D16: scope handles are values; the
@@ -52,27 +58,40 @@
 //!   boundary (`sync.transfer`'s runtime half; v0 identity, the seam
 //!   where the checked profile retags and s36 records).
 //!
-//! WIR does not lower `scope`/`spawn` yet (the front end refuses them
-//! at typecheck; the conc corpus tier sits at `phase: resolve`), so
-//! nothing emits calls to these symbols this sprint — the surface is
-//! frozen here first, exactly as s28 froze the trap contract before
-//! s31 consumed it fully.
+//! WIR does not lower `scope`/`spawn`/`channel`/`select`/`when` yet
+//! (typecheck refuses all concurrency constructs with the
+//! "concurrency typing (c05)" NotYet, closures included; the conc
+//! corpus tier sits at `phase: resolve`), so nothing emits calls to
+//! any of these symbols yet — the surfaces are frozen here first,
+//! exactly as s28 froze the trap contract before s31 consumed it
+//! fully.
 //!
 //! A binary that never spawns pays for none of this: pool, registry,
 //! signal handler, and stack store are all lazily initialized on
 //! first use, and the driver's `--gc-sections` link drops the symbols
 //! outright (Target 1's CI test holds both halves).
 
+mod chan;
 mod deque;
 mod hooks;
 mod pool;
 mod scope;
 #[cfg(unix)]
 mod stack;
+mod when;
 
-pub use hooks::{SchedEvent, SchedRng};
+pub use chan::{
+    __wolf_rt_chan_clone, __wolf_rt_chan_close, __wolf_rt_chan_free, __wolf_rt_chan_new,
+    __wolf_rt_chan_recv, __wolf_rt_chan_send, __wolf_rt_chan_send_region, __wolf_rt_select, Arm,
+    Chan, ChanErr, Selected, WolfSelectArm, select, select_verdict, select_with,
+};
+pub use hooks::{ChanPhase, SchedEvent, SchedRng};
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use scope::{ExitReason, ScopeInner, TaskState, dump};
+pub use when::{
+    __wolf_rt_sync_free, __wolf_rt_sync_new, __wolf_rt_sync_payload, __wolf_rt_when_acquire,
+    __wolf_rt_when_release, SyncCell, WhenErr, when, when_acquire, when_release,
+};
 
 use std::sync::Arc;
 
@@ -115,9 +134,9 @@ impl ScopeHandle {
 }
 
 /// A runtime-owned gate: tasks block in [`Gate::wait`] until
-/// [`Gate::open`]. The v0 stand-in for s33 primitives — it exists so
-/// blocking compensation and cancellation-at-blocking-points have a
-/// real blocking point to be tested through.
+/// [`Gate::open`]. Predates the s33 channel layer as the v0 blocking
+/// point; kept as the dependency-free primitive the pool/cancellation
+/// tests block through.
 pub struct Gate {
     state: std::sync::Mutex<bool>,
     cv: std::sync::Condvar,
@@ -516,6 +535,9 @@ mod tests {
     #[test]
     fn sched_seam_observes_events() {
         use std::sync::Mutex;
+        let _serial = hooks::test_hook::SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         static SEEN: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
         hooks::test_hook::set_test_hook(Some(Box::new(|ev| {
             let tag = match ev {
@@ -526,6 +548,11 @@ mod tests {
                 SchedEvent::Join { .. } => "join",
                 SchedEvent::CancelCheck { .. } => "cancel-check",
                 SchedEvent::RegionTransfer => "region-transfer",
+                SchedEvent::ChanSend { .. } => "chan-send",
+                SchedEvent::ChanRecv { .. } => "chan-recv",
+                SchedEvent::ChanClose { .. } => "chan-close",
+                SchedEvent::SelectArm { .. } => "select-arm",
+                SchedEvent::Acquire { .. } => "acquire",
                 SchedEvent::TimerFire => "timer",
             };
             SEEN.lock().unwrap().push(tag);
