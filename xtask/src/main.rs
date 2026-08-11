@@ -784,9 +784,24 @@ fn bench_diff(args: &[String]) -> ExitCode {
                 } else {
                     delta_pct < 0.0
                 };
+                // Hardware-sensitive metrics (wall clock, RSS) swing
+                // wildly across runner instances — the first gate trip
+                // was max_rss +37.8% on an xtask-only commit, beside
+                // wall times "improving" 60% (reports/10 §measurement:
+                // no variance floor, no credible gate). They stay
+                // REPORTED but do not gate until s44's methodology
+                // lands; deterministic counters and rates keep gating.
+                let hw_sensitive = metric.ends_with("_wall_s")
+                    || metric.ends_with("_rss_kb")
+                    || metric.ends_with("_ns");
                 let dir = if regressed { "REGRESSED" } else { "improved" };
-                eprintln!("  {key}: {dir} {delta_pct:+.1}%");
-                if regressed {
+                let tag = if regressed && hw_sensitive {
+                    " (report-only: hardware-sensitive, no variance floor yet)"
+                } else {
+                    ""
+                };
+                eprintln!("  {key}: {dir} {delta_pct:+.1}%{tag}");
+                if regressed && !hw_sensitive {
                     regressions += 1;
                 }
             }
