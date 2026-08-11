@@ -235,6 +235,15 @@ impl<'m> FuncBuilder<'m> {
         &mut self.module.types
     }
 
+    /// Set the source span every subsequently appended instruction
+    /// records (s30 debug aux). Lowering calls this once per source
+    /// statement; everything a statement expands into — checks, defer
+    /// re-lowers, `?` branches — inherits its span, so stepping never
+    /// lands on a line the user didn't write.
+    pub fn set_span(&mut self, lo: u32, hi: u32) {
+        self.func.span_cursor = Some(crate::ir::SrcSpan { lo, hi });
+    }
+
     // ------------------------------------------------------ blocks ----
 
     /// Create an empty, unsealed block (parameters appear on demand
@@ -526,6 +535,11 @@ impl<'m> FuncBuilder<'m> {
         for v in self.gvn.values_mut() {
             if *v == old {
                 *v = new;
+            }
+        }
+        for dv in &mut self.func.debug_vars {
+            if dv.val == old {
+                dv.val = new;
             }
         }
     }

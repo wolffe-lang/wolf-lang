@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 333
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -112,6 +113,7 @@ resolve/dupdef/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
 resolve/pkgvis/main.lu: lowers
 resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
+resolve/same_name/main.lu: lowers
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); string/byte lowering (data segments + runtime str shape, c06); string/byte lowering (data segments + runtime str shape, c06)
@@ -149,6 +151,7 @@ typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
 typecheck/cast_set.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/field_typo.lu: not mem-clean (pre-wir rungs own it)
+typecheck/float_nan_cmp.lu: lowers
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)

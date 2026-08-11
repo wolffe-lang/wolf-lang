@@ -148,6 +148,31 @@ pub struct InstData {
     pub aux: Aux,
 }
 
+/// A source span attached to an instruction (s30): byte offsets into
+/// the function's source file ([`Function::src_file`]). Debug aux, NOT
+/// part of the canonical textual format — like fact spans and tag
+/// names, spans do not survive print → parse (the D8 hash input is the
+/// printed form). Dropping them is always sound; line tables (s30
+/// DWARF) consume them through the backend's `DebugSink`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct SrcSpan {
+    pub lo: u32,
+    pub hi: u32,
+}
+
+/// One named source binding's SSA definition (s30 debug aux): `name`
+/// currently holds `val`. A name may appear many times — once per
+/// (re)binding or assignment — and one value may carry several names
+/// (GVN dedup). Like [`SrcSpan`]s, these are non-canonical: the
+/// printer ignores them, backends read them to emit variable DIEs.
+#[derive(Clone, Debug)]
+pub struct DebugVarData {
+    pub name: String,
+    pub val: Value,
+    /// True for function parameters (DW_TAG_formal_parameter).
+    pub param: bool,
+}
+
 /// Where a value comes from.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ValueDef {
@@ -206,6 +231,22 @@ pub struct Function {
     /// The one packed pool for every value list in this function
     /// (operands, results, block params, branch args).
     pub vpool: ListPool<Value>,
+    /// s30 debug aux: the source file (a `wolf_span::FileId` index)
+    /// this function's spans point into. `None` for synthetic
+    /// functions (entry shims, hand-built fixtures) — no line table.
+    pub src_file: Option<u32>,
+    /// s30 debug aux: the span every subsequently appended instruction
+    /// records ([`Function::append_inst`] reads it). Lowering sets it
+    /// per statement; synthesized code (defer chains, trap checks)
+    /// inherits the enclosing statement's span.
+    pub span_cursor: Option<SrcSpan>,
+    /// Per-instruction source spans, parallel to `insts` (same length
+    /// always; rolled back together). Non-canonical (see [`SrcSpan`]).
+    srcspans: Vec<Option<SrcSpan>>,
+    /// Named-binding definitions for variable DIEs (s30). Rolled back
+    /// with the value arena; rewritten by the builder's value
+    /// replacement. Non-canonical.
+    pub debug_vars: Vec<DebugVarData>,
 }
 
 impl Function {
@@ -221,7 +262,26 @@ impl Function {
             ext_funcs: PrimaryMap::new(),
             layout: Vec::new(),
             vpool: ListPool::new(),
+            src_file: None,
+            span_cursor: None,
+            srcspans: Vec::new(),
+            debug_vars: Vec::new(),
         }
+    }
+
+    /// The source span recorded for `inst`, if any (s30 debug aux).
+    pub fn srcspan(&self, inst: Inst) -> Option<SrcSpan> {
+        self.srcspans.get(inst.index()).copied().flatten()
+    }
+
+    /// Record a named binding's current SSA definition (s30 debug
+    /// aux; see [`DebugVarData`]).
+    pub fn add_debug_var(&mut self, name: impl Into<String>, val: Value, param: bool) {
+        self.debug_vars.push(DebugVarData {
+            name: name.into(),
+            val,
+            param,
+        });
     }
 
     pub fn entry(&self) -> Option<Block> {
@@ -280,6 +340,7 @@ impl Function {
             aux,
         });
         debug_assert_eq!(i, inst);
+        self.srcspans.push(self.span_cursor);
         self.blocks[block].insts.push(inst);
         (inst, results)
     }
@@ -337,6 +398,9 @@ impl Function {
             insts.retain(|&i| i < first_dead_inst);
         }
         self.insts.truncate_to(mark.insts);
+        self.srcspans.truncate(mark.insts.0 as usize);
+        let first_dead_value = Value::new(mark.values.0);
+        self.debug_vars.retain(|dv| dv.val < first_dead_value);
         self.values.truncate_to(mark.values);
         self.facts.truncate_to(mark.facts);
         self.ext_funcs.truncate_to(mark.ext_funcs);

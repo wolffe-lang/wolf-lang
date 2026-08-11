@@ -147,13 +147,11 @@ fn lower_body(
             let Some(ItemSig::Fn(fsig)) = sigs.get(body.module, &body.name) else {
                 return Ok(None);
             };
-            if fns.get(body.name.as_str()).map(|v| v.len()).unwrap_or(0) > 1 {
-                return Err(refuse(
-                    "two modules declare a function with this name (WIR name mangling)",
-                    span,
-                ));
-            }
-            (node, fsig, body.name.clone())
+            // WIR names are module-path qualified (issue #26): two
+            // modules may declare the same item name, and the mangled
+            // symbol hash must fold the full path — `std.list.len`
+            // and `std.str.len` are distinct functions.
+            (node, fsig, qualify(sigs, body.module, &body.name))
         }
         Some(mi) => {
             if node.kind != SyntaxKind::ImplDecl {
@@ -213,6 +211,11 @@ fn lower_body(
     // The WIR signature (modes carried; s26 attaches the fact slots).
     let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, span)?;
     let mut b = FuncBuilder::new(module, wir_name, sig);
+    // s30: spans thread from the typed HIR into WIR (the lossless s07
+    // chain) — the file once per function, then a per-statement span
+    // cursor the builder stamps on every appended instruction.
+    b.func.src_file = Some(span.file.index() as u32);
+    b.set_span(fsig.name_span.lo, fsig.name_span.hi);
     let mut lowerer = Lowerer {
         src: &pkg.files[body.file].raw.src,
         table: &tb.table,
@@ -247,6 +250,18 @@ fn lower_body(
 
 fn refuse(construct: &'static str, span: Span) -> NotYet {
     NotYet { construct, span }
+}
+
+/// The module-path-qualified WIR name of item `name` in `module`
+/// (issue #26): `geometry.area` for a child module, the bare name in
+/// the package root (whose dotted path is empty — `main` stays
+/// `main`). The mangled symbol hashes the WIR name, so the full module
+/// path lands in every `_W…$hash` symbol.
+fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
+    match sigs.module_names.get(module).map(String::as_str) {
+        Some("") | None => name.to_string(),
+        Some(path) => format!("{path}.{name}"),
+    }
 }
 
 /// Map one sema type to a WIR type. `Ok(None)` is the unit/never
@@ -882,6 +897,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     self.b.mark_single_block(var);
                 }
                 self.b.def_var(var, val);
+                // s30 debug aux: the parameter's name and entry value
+                // (DW_TAG_formal_parameter rides this).
+                self.b.func.add_debug_var(p.name.clone(), val, true);
                 LocalBind::Val {
                     var,
                     wrapping,
@@ -1115,6 +1133,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         last_value: Option<Span>,
         out: &mut Option<Value>,
     ) -> R<Flow> {
+        // s30: statement-grain span threading — every instruction this
+        // statement expands into (checks, `?` branches, defer chains
+        // re-lowered at its exits) inherits the statement's span, so
+        // line tables step statements and never land on synthesized
+        // code.
+        self.b.set_span(stmt.span.lo, stmt.span.hi);
         match stmt.kind {
             SyntaxKind::ExprStmt => {
                 let d = ExprStmt::cast(stmt).expect("kind");
@@ -1253,6 +1277,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     self.b.mark_single_block(var);
                 }
                 self.b.def_var(var, val);
+                // s30 debug aux: `let`/`var`/`const` binding.
+                self.b.func.add_debug_var(name.clone(), val, false);
                 LocalBind::Val {
                     var,
                     wrapping: matches!(self.table.kind(sema_ty), TyKind::Wrapping(_)),
@@ -1464,6 +1490,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 };
                 self.b.def_var(var, newval);
+                // s30 debug aux: the rebinding is the name's current
+                // definition from here on.
+                self.b.func.add_debug_var(name.clone(), newval, false);
                 Ok(Flow::Val(None))
             }
             // s25's honest refusal, repaid: a write through a `mut`
@@ -2872,17 +2901,30 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if cs.decl_span.is_none() {
             return Err(refuse("indirect calls through fn values (c05)", e.span));
         }
-        // Resolve the callee to its unique package fn.
+        // Resolve the callee to its package fn. Names declared in more
+        // than one module disambiguate by the declaration locus sema
+        // recorded on the call (issue #26): `decl_span` names exactly
+        // one signature.
         let Some(cands) = self.fns.get(cs.callee.as_str()) else {
             return Err(refuse("calls into unresolvable bodies", e.span));
         };
-        if cands.len() != 1 {
-            return Err(refuse(
-                "two modules declare a function with this name (WIR name mangling)",
-                e.span,
-            ));
-        }
-        let (_, callee_sig) = cands[0];
+        let (callee_module, callee_sig) = if cands.len() == 1 {
+            cands[0]
+        } else {
+            let hits: Vec<&(usize, &FnSig)> = cands
+                .iter()
+                .filter(|(_, f)| Some(f.name_span) == cs.decl_span)
+                .collect();
+            match hits.as_slice() {
+                [one] => **one,
+                _ => {
+                    return Err(refuse(
+                        "a same-named callee without a unique declaration locus",
+                        e.span,
+                    ));
+                }
+            }
+        };
         if !callee_sig.generics.is_empty() {
             return Err(refuse("generic-function calls (monomorphization)", e.span));
         }
@@ -2956,14 +2998,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ));
             }
         }
-        // Import the callee (per-function cache; the shared sig build
-        // keeps the mut-expansion identical to the definition's).
-        let ext = match self.callees.get(&cs.callee) {
+        // Import the callee under its module-qualified WIR name (per-
+        // function cache; the shared sig build keeps the mut-expansion
+        // identical to the definition's).
+        let callee_name = qualify(self.sigs, callee_module, &cs.callee);
+        let ext = match self.callees.get(&callee_name) {
             Some(&ext) => ext,
             None => {
                 let sig = wir_sig_of(self.b.module, self.sigs, callee_sig, e.span)?;
-                let ext = self.b.func.import_func(cs.callee.clone(), sig);
-                self.callees.insert(cs.callee.clone(), ext);
+                let ext = self.b.func.import_func(callee_name.clone(), sig);
+                self.callees.insert(callee_name, ext);
                 ext
             }
         };
@@ -4555,6 +4599,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if let Some(name) = bind_name {
             let var = self.b.declare_var(ity);
             self.b.def_var(var, iparam);
+            // s30 debug aux: the induction variable is the loop-carried
+            // block param — `print i` in the body reads the live value.
+            self.b.func.add_debug_var(name.clone(), iparam, false);
             self.scopes.last_mut().expect("scope").binds.push((
                 name,
                 LocalBind::Val {

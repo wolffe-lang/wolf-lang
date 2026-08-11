@@ -69,7 +69,13 @@ fn run_wir(name: &str, text: &str) -> Option<(i32, String)> {
             return None;
         }
     };
-    compile_module(&mut backend, &module, Some(shim)).expect("compiles");
+    compile_module(
+        &mut backend,
+        &module,
+        Some(shim),
+        &mut wolf_backend::NullDebugSink,
+    )
+    .expect("compiles");
     let product = Box::new(backend).finish().expect("object emits");
 
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("exec_smoke_{name}"));
@@ -195,6 +201,75 @@ fn narrow_checked_vs_wrap() {
     );
 }
 
+/// IEEE-754 float compares through machine code (issue #22, wolf-std
+/// F-0027): `fcmp.ne` is UNORDERED (`nan != nan` is TRUE — the
+/// portable NaN test), while eq/lt/le/gt/ge are ordered (false on
+/// NaN). The program computes NaN dynamically (0.0/0.0), runs each
+/// compare, and exits with the sum of the *wrong* answers — 0 iff
+/// every compare matches the interpreter's IEEE semantics.
+#[test]
+fn float_nan_compare_semantics() {
+    // n = 0.0/0.0 (NaN), one = 1.0. Each wrong compare exits with its
+    // own code (1..=7); all-correct falls through to exit 0.
+    let text = "fn @main() -> i64 {\n\
+        b0:\n\
+        \x20 %0 = fconst.f64 0x0\n\
+        \x20 %1 = fdiv %0, %0\n\
+        \x20 %2 = fconst.f64 0x3ff0000000000000\n\
+        \x20 %3 = fcmp.eq %1, %1\n\
+        \x20 br %3, b8, b1\n\
+        b1:\n\
+        \x20 %4 = fcmp.ne %1, %1\n\
+        \x20 br %4, b2, b9\n\
+        b2:\n\
+        \x20 %5 = fcmp.lt %1, %2\n\
+        \x20 br %5, b10, b3\n\
+        b3:\n\
+        \x20 %6 = fcmp.le %1, %2\n\
+        \x20 br %6, b11, b4\n\
+        b4:\n\
+        \x20 %7 = fcmp.gt %1, %2\n\
+        \x20 br %7, b12, b5\n\
+        b5:\n\
+        \x20 %8 = fcmp.ge %1, %2\n\
+        \x20 br %8, b13, b6\n\
+        b6:\n\
+        \x20 %9 = fcmp.ne %2, %2\n\
+        \x20 br %9, b14, b7\n\
+        b7:\n\
+        \x20 %10 = iconst.i64 0\n\
+        \x20 ret %10\n\
+        b8:\n\
+        \x20 %11 = iconst.i64 1\n\
+        \x20 ret %11\n\
+        b9:\n\
+        \x20 %12 = iconst.i64 2\n\
+        \x20 ret %12\n\
+        b10:\n\
+        \x20 %13 = iconst.i64 3\n\
+        \x20 ret %13\n\
+        b11:\n\
+        \x20 %14 = iconst.i64 4\n\
+        \x20 ret %14\n\
+        b12:\n\
+        \x20 %15 = iconst.i64 5\n\
+        \x20 ret %15\n\
+        b13:\n\
+        \x20 %16 = iconst.i64 6\n\
+        \x20 ret %16\n\
+        b14:\n\
+        \x20 %17 = iconst.i64 7\n\
+        \x20 ret %17\n\
+        }\n";
+    let Some((code, _)) = run_wir("nancmp", text) else {
+        return;
+    };
+    assert_eq!(
+        code, 0,
+        "IEEE float-compare semantics: ordered eq/lt/le/gt/ge, unordered ne"
+    );
+}
+
 /// Plain exit-code plumbing: `main`'s i64 becomes the process status
 /// through the entry shim.
 #[test]
@@ -244,7 +319,13 @@ fn eu_main_err_reports_tag_and_exits_one() {
             return;
         }
     };
-    compile_module(&mut backend, &module, Some(shim)).expect("compiles");
+    compile_module(
+        &mut backend,
+        &module,
+        Some(shim),
+        &mut wolf_backend::NullDebugSink,
+    )
+    .expect("compiles");
     let product = Box::new(backend).finish().expect("object emits");
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("exec_smoke_eumain_err");
     std::fs::create_dir_all(&dir).expect("mkdir");

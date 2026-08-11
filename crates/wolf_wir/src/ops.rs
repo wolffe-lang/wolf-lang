@@ -90,7 +90,11 @@ impl IntCc {
     }
 }
 
-/// Comparison condition for `fcmp.*` (ordered: NaN compares false).
+/// Comparison condition for `fcmp.*`. IEEE-754 semantics: `eq`, `lt`,
+/// `le`, `gt`, `ge` are ORDERED (NaN compares false); `ne` is the
+/// negation of `eq`, so it is UNORDERED (true when either operand is
+/// NaN) — `x != x` is the portable NaN test and must hold on every
+/// rung (issue #22).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum FloatCc {
     Eq,

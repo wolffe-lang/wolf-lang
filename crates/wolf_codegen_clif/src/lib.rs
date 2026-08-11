@@ -56,8 +56,8 @@ use cranelift_module::{DataDescription, Module as _};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 
 use wolf_backend::{
-    Backend, BackendError, Capabilities, DebugSink, DwarfFidelity, Linkage, ObjectProduct,
-    SymbolInfo, mangle,
+    Backend, BackendError, Capabilities, DebugRelocTarget, DebugSection, DebugSink, DwarfFidelity,
+    Linkage, ObjectProduct, SymbolInfo, mangle,
 };
 use wolf_wir::entity::EntityRef;
 use wolf_wir::ir::{Aux, FuncId, Function, Module as WirModule, SigId};
@@ -75,6 +75,9 @@ pub struct ClifBackend {
     module: ObjectModule,
     /// WIR name → declared entry: how call sites resolve.
     funcs: HashMap<String, translate::FuncEntry>,
+    /// WIR FuncId index → object function id (s30: debug relocations
+    /// name functions by WIR id; this map resolves them to symbols).
+    by_id: HashMap<u32, cranelift_module::FuncId>,
     /// Runtime shims declared so far (`__wolf_rt_*`).
     rt: HashMap<&'static str, cranelift_module::FuncId>,
     /// C membrane imports declared so far (`c.*` callee names, s29).
@@ -83,6 +86,9 @@ pub struct ClifBackend {
     /// CLIF text of every defined function, in definition order — the
     /// golden-snapshot surface (lowering changes are reviewed diffs).
     clif_texts: Vec<(String, String)>,
+    /// DWARF sections handed over via `add_debug_sections`, embedded
+    /// into the object at `finish` (s30).
+    debug_sections: Vec<DebugSection>,
     fb_ctx: FunctionBuilderContext,
 }
 
@@ -104,19 +110,36 @@ impl ClifBackend {
         flags
             .set("is_pic", "true")
             .map_err(|e| BackendError::Internal(e.to_string()))?;
+        // The debug tier keeps frame pointers (s30): frame base = %rbp
+        // for DW_OP_fbreg variable locations, and debugger stack walks
+        // work even where .eh_frame coverage is thin.
+        flags
+            .set("preserve_frame_pointers", "true")
+            .map_err(|e| BackendError::Internal(e.to_string()))?;
         let isa = cranelift_codegen::isa::lookup(triple)
             .map_err(|e| BackendError::Internal(e.to_string()))?
             .finish(settings::Flags::new(flags))
             .map_err(|e| BackendError::Internal(e.to_string()))?;
-        let builder = ObjectBuilder::new(isa, "wolf", cranelift_module::default_libcall_names())
-            .map_err(|e| BackendError::Internal(e.to_string()))?;
+        let mut builder =
+            ObjectBuilder::new(isa, "wolf", cranelift_module::default_libcall_names())
+                .map_err(|e| BackendError::Internal(e.to_string()))?;
+        // NO cranelift-object .eh_frame (recorded s30 delta from the
+        // contract): its absolute relocations produce DT_TEXTREL
+        // warnings in PIE links, and with frame pointers preserved the
+        // debugger's stack walks are already sound via the %rbp chain
+        // (verified: gdb backtraces through wolf frames into libc).
+        // PC-relative .eh_frame via gimli CFI is an s31/s58 follow-up;
+        // wolf itself has no unwinding semantics (D30).
+        builder.unwind_info(false);
         Ok(ClifBackend {
             module: ObjectModule::new(builder),
             funcs: HashMap::new(),
+            by_id: HashMap::new(),
             rt: HashMap::new(),
             imports: HashMap::new(),
             symbols: Vec::new(),
             clif_texts: Vec::new(),
+            debug_sections: Vec::new(),
             fb_ctx: FunctionBuilderContext::new(),
         })
     }
@@ -166,6 +189,7 @@ impl Backend for ClifBackend {
             .map_err(|e| BackendError::Internal(e.to_string()))?;
         self.funcs
             .insert(name.to_string(), translate::FuncEntry { fid, sig });
+        self.by_id.insert(id.as_u32(), fid);
         self.symbols.push(SymbolInfo {
             name: symbol.to_string(),
             linkage,
@@ -197,9 +221,10 @@ impl Backend for ClifBackend {
         let mut ctx = self.module.make_context();
         ctx.func.signature = si.clif.clone();
         ctx.func.name = UserFuncName::user(0, id.as_u32());
+        let debug_slots;
         {
             let builder = FunctionBuilder::new(&mut ctx.func, &mut self.fb_ctx);
-            translate::translate_function(
+            debug_slots = translate::translate_function(
                 builder,
                 module,
                 func,
@@ -218,11 +243,59 @@ impl Backend for ClifBackend {
             .linkage_name(fid)
             .into_owned();
         debug.function(id, &func.name, &symbol);
+        // The function's source coordinates (s30): the file plus the
+        // earliest span any of its instructions carries (the decl-site
+        // span lowering seeds the cursor with). Synthetic functions
+        // (entry shim, fixtures) have neither — no DIE, no line rows.
+        if let Some(file) = func.src_file {
+            let first_span = func
+                .layout
+                .iter()
+                .flat_map(|&b| func.blocks[b].insts.iter())
+                .find_map(|&i| func.srcspan(i));
+            if let Some(sp) = first_span {
+                debug.function_span(file, sp.lo, sp.hi);
+            }
+        }
         self.clif_texts
             .push((func.name.clone(), ctx.func.display().to_string()));
         self.module
             .define_function(fid, &mut ctx)
             .map_err(|e| BackendError::Internal(format!("{}: {e}", func.name)))?;
+        // Post-compile debug facts: machine srclocs (the span rides in
+        // the SourceLoc bits as the span's `lo`; `hi` recovered from
+        // the WIR side table), frame-slot variable locations, and the
+        // code size closing the line-table sequence.
+        let compiled = ctx
+            .compiled_code()
+            .ok_or_else(|| BackendError::Internal("no compiled code after define".into()))?;
+        let mut span_hi: HashMap<u32, u32> = HashMap::new();
+        for &b in &func.layout {
+            for &i in &func.blocks[b].insts {
+                if let Some(sp) = func.srcspan(i) {
+                    span_hi.entry(sp.lo).or_insert(sp.hi);
+                }
+            }
+        }
+        for loc in compiled.buffer.get_srclocs_sorted() {
+            if loc.loc.is_default() {
+                continue;
+            }
+            let lo = loc.loc.bits();
+            let hi = span_hi.get(&lo).copied().unwrap_or(lo);
+            debug.srcloc(loc.start, lo, hi);
+        }
+        if let Some(frame) = compiled.buffer.frame_layout() {
+            let fp = frame.frame_to_fp_offset as i64;
+            for (name, ty, slot, param) in &debug_slots {
+                let off = frame.stackslots[*slot].offset as i64 - fp;
+                let Ok(off) = i32::try_from(off) else {
+                    continue;
+                };
+                debug.var(name, *ty, off, *param);
+            }
+        }
+        debug.function_size(compiled.buffer.total_size());
         Ok(())
     }
 
@@ -249,8 +322,82 @@ impl Backend for ClifBackend {
         Ok(())
     }
 
+    fn add_debug_sections(&mut self, sections: Vec<DebugSection>) -> Result<(), BackendError> {
+        self.debug_sections = sections;
+        Ok(())
+    }
+
     fn finish(self: Box<Self>) -> Result<ObjectProduct, BackendError> {
-        let product = self.module.finish();
+        let mut product = self.module.finish();
+        // Embed the DWARF sections (s30): section data first, then
+        // relocations — function targets resolve through the WIR-id →
+        // object-symbol map, section targets through the section's own
+        // symbol. Absolute 64-bit (or 32-bit offset) relocations; the
+        // system linker finalizes addresses.
+        use cranelift_object::object::write::{Relocation, StandardSegment, Symbol, SymbolSection};
+        use cranelift_object::object::{
+            RelocationEncoding, RelocationFlags, RelocationKind, SymbolFlags, SymbolKind,
+            SymbolScope,
+        };
+        let mut sec_ids = HashMap::new();
+        for sec in &self.debug_sections {
+            let id = product.object.add_section(
+                product.object.segment_name(StandardSegment::Debug).to_vec(),
+                sec.name.as_bytes().to_vec(),
+                cranelift_object::object::SectionKind::Debug,
+            );
+            product.object.set_section_data(id, sec.data.clone(), 1);
+            let sym = product.object.add_symbol(Symbol {
+                name: sec.name.as_bytes().to_vec(),
+                value: 0,
+                size: 0,
+                kind: SymbolKind::Section,
+                scope: SymbolScope::Compilation,
+                weak: false,
+                section: SymbolSection::Section(id),
+                flags: SymbolFlags::None,
+            });
+            sec_ids.insert(sec.name, (id, sym));
+        }
+        for sec in &self.debug_sections {
+            let &(id, _) = sec_ids.get(sec.name).expect("just inserted");
+            for r in &sec.relocs {
+                let symbol = match r.target {
+                    DebugRelocTarget::Func(fid) => {
+                        let Some(&ofid) = self.by_id.get(&fid.as_u32()) else {
+                            return Err(BackendError::Internal(format!(
+                                "debug reloc names undeclared function {fid:?}"
+                            )));
+                        };
+                        product.function_symbol(ofid)
+                    }
+                    DebugRelocTarget::Section(name) => match sec_ids.get(name) {
+                        Some(&(_, sym)) => sym,
+                        None => {
+                            return Err(BackendError::Internal(format!(
+                                "debug reloc names missing section {name}"
+                            )));
+                        }
+                    },
+                };
+                product
+                    .object
+                    .add_relocation(
+                        id,
+                        Relocation {
+                            offset: u64::from(r.offset),
+                            symbol,
+                            addend: r.addend,
+                            flags: RelocationFlags::Generic {
+                                kind: RelocationKind::Absolute,
+                                encoding: RelocationEncoding::Generic,
+                                size: r.size * 8,
+                            },
+                        },
+                    )
+                    .map_err(|e| BackendError::Internal(e.to_string()))?;
+            }
+        }
         let bytes = product
             .emit()
             .map_err(|e| BackendError::Internal(e.to_string()))?;
@@ -392,11 +539,13 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
 /// Drive a backend over a whole WIR module: declare everything, define
 /// everything, emit the trap-info table. Functions get mangled local
 /// symbols; `entry_shim` (from [`add_entry_shim`]) exports the
-/// unmangled `main`.
+/// unmangled `main`. `debug` receives the per-function debug stream
+/// (s30) — pass [`wolf_backend::NullDebugSink`] to drop it.
 pub fn compile_module(
     backend: &mut dyn Backend,
     m: &WirModule,
     entry_shim: Option<FuncId>,
+    debug: &mut dyn DebugSink,
 ) -> Result<(), BackendError> {
     for (id, f) in m.funcs.iter() {
         let (symbol, linkage) = if Some(id) == entry_shim {
@@ -411,7 +560,7 @@ pub fn compile_module(
         backend.declare_function(m, id, &f.name, &symbol, f.sig, linkage)?;
     }
     for (id, f) in m.funcs.iter() {
-        backend.define_function(m, id, f, &mut wolf_backend::NullDebugSink)?;
+        backend.define_function(m, id, f, debug)?;
     }
     backend.define_data(TRAP_TABLE_SYMBOL, &trap_table(), Linkage::Local)?;
     Ok(())

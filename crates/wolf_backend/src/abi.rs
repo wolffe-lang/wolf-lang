@@ -94,7 +94,14 @@ use crate::layout;
 /// miscompiles (D7). The s31 driver additionally folds this string
 /// into its rebuild keys; until then the wolfi interface hash pins the
 /// toolchain version, which can only change together with this one.
-pub const CONVENTION_VERSION: &str = "wolf-abi-0";
+///
+/// History: `wolf-abi-0` was s29's initial version. s30 bumped to
+/// `wolf-abi-1` when the mangling scheme changed to fold the full
+/// module path into every symbol (issue #26) — a mangling change IS a
+/// symbol-contract change, and the s29 rule says any such change must
+/// invalidate stale objects at link grain rather than let two schemes
+/// coexist in one link.
+pub const CONVENTION_VERSION: &str = "wolf-abi-1";
 
 /// Which convention a signature crosses under.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -531,7 +538,7 @@ mod tests {
         let sig = m.make_sig(vec![Param::val(types::I64)], vec![types::I64]);
         let now = crate::mangle_versioned(&m, "f", sig, CONVENTION_VERSION);
         assert_eq!(now, crate::mangle(&m, "f", sig));
-        let bumped = crate::mangle_versioned(&m, "f", sig, "wolf-abi-1");
+        let bumped = crate::mangle_versioned(&m, "f", sig, "wolf-abi-2");
         assert_ne!(
             now, bumped,
             "a convention bump must invalidate every symbol (D7)"

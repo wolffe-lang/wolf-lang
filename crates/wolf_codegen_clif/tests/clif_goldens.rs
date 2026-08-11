@@ -25,7 +25,13 @@ fn clif_of(fixture: &str) -> Option<String> {
             return None;
         }
     };
-    wolf_codegen_clif::compile_module(&mut backend, &module, None).expect("compiles");
+    wolf_codegen_clif::compile_module(
+        &mut backend,
+        &module,
+        None,
+        &mut wolf_backend::NullDebugSink,
+    )
+    .expect("compiles");
     let mut out = String::new();
     for (name, clif) in backend.clif_texts() {
         out.push_str(&format!(";; @{name}\n{clif}\n"));

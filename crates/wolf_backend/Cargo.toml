@@ -8,3 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 wolf_wir.workspace = true
+# D6: gimli leverage — the s30 DWARF builder drives gimli's write API
+# from the DebugSink seam. It lives HERE (the permanent crate), never
+# in the disposable Cranelift crate, so it survives the c12 swap.
+gimli = { version = "0.33", default-features = false, features = ["write"] }

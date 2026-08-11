@@ -17,6 +17,7 @@
 //! holds the edge (`wir ← backend ← codegen_clif ← driver`).
 
 pub mod abi;
+pub mod dwarf;
 pub mod layout;
 
 use wolf_wir::ir::{FuncId, Function, Module, SigId};
@@ -98,18 +99,83 @@ pub enum DwarfFidelity {
     Full,
 }
 
+/// The scalar shape of a debug variable ([`DebugSink::var`]): the
+/// closed v0 set the type-DIE mapping covers. Signedness is an op
+/// property in WIR, not a type property, so integers report as signed
+/// wolf ints at v0 (honest, documented; s58 refines).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum DebugTy {
+    I8,
+    I16,
+    I32,
+    I64,
+    F32,
+    F64,
+    Bool,
+    Ptr,
+}
+
 /// Where debug information flows OUT of a backend — part of the trait
-/// from day one so Tier-F's DWARF-first design is not bolted on (s30
-/// consumes; today's WIR carries no per-instruction spans yet, so the
-/// hooks fire with what exists: function boundaries).
+/// from day one so Tier-F's DWARF-first design is not bolted on. s30
+/// consumes: WIR instructions carry statement-grain source spans, and
+/// the backend reports, per function and in this order —
+/// [`DebugSink::function`], [`DebugSink::function_span`], then any
+/// number of [`DebugSink::var`] and [`DebugSink::srcloc`] calls, then
+/// [`DebugSink::function_size`] exactly once. All methods default to
+/// no-ops so a sink implements only what its fidelity tier needs.
 pub trait DebugSink {
     /// A function's definition begins (name is the pre-mangling WIR
     /// name; `symbol` the linker-visible one).
     fn function(&mut self, _func: FuncId, _name: &str, _symbol: &str) {}
+    /// The current function's source coordinates: `file` is a
+    /// `wolf_span::FileId` index, `lo..hi` the declaration span.
+    /// Not called for synthetic functions (entry shims) — they get no
+    /// line-table sequence or subprogram DIE.
+    fn function_span(&mut self, _file: u32, _lo: u32, _hi: u32) {}
+    /// A named scalar variable of the current function, spilled to a
+    /// frame slot: location is frame-base-relative (`DW_OP_fbreg`,
+    /// frame base = the frame pointer), valid for the whole function
+    /// (the s28 debug-tier decision: debuggability over debug-build
+    /// speed — no live-range locations until s58).
+    fn var(&mut self, _name: &str, _ty: DebugTy, _fbreg_offset: i32, _param: bool) {}
     /// A source location for the instruction range starting at
     /// `code_offset` within the current function (s30: WIR spans flow
     /// through here into line tables).
     fn srcloc(&mut self, _code_offset: u32, _span_lo: u32, _span_hi: u32) {}
+    /// The current function's machine-code size, reported once after
+    /// its srclocs (closes the line-table sequence; DW_AT_high_pc).
+    fn function_size(&mut self, _size: u32) {}
+}
+
+/// One finished DWARF section the debug builder hands back to the
+/// backend for embedding in the object ([`Backend::add_debug_sections`]).
+#[derive(Clone, Debug)]
+pub struct DebugSection {
+    /// Section name (`.debug_info`, `.debug_line`, …).
+    pub name: &'static str,
+    pub data: Vec<u8>,
+    pub relocs: Vec<DebugReloc>,
+}
+
+/// A relocation inside a [`DebugSection`].
+#[derive(Clone, Copy, Debug)]
+pub struct DebugReloc {
+    /// Offset within the section's data.
+    pub offset: u32,
+    /// Size of the relocated field in bytes.
+    pub size: u8,
+    pub target: DebugRelocTarget,
+    pub addend: i64,
+}
+
+/// What a [`DebugReloc`] points at.
+#[derive(Clone, Copy, Debug)]
+pub enum DebugRelocTarget {
+    /// A function's code address (the backend maps the WIR id to its
+    /// object symbol).
+    Func(FuncId),
+    /// Another debug section, by name (section-relative offset).
+    Section(&'static str),
 }
 
 /// A [`DebugSink`] that drops everything (the default).
@@ -160,16 +226,31 @@ pub trait Backend {
         linkage: Linkage,
     ) -> Result<(), BackendError>;
 
+    /// Hand finished DWARF sections (built by the caller's
+    /// [`dwarf::DwarfBuilder`] from this backend's `DebugSink` stream)
+    /// to the backend for embedding in the object, before `finish`.
+    /// The default drops them — a backend reporting
+    /// [`DwarfFidelity::None`] has nothing to embed, and the driver
+    /// gates on capabilities, never identity.
+    fn add_debug_sections(&mut self, _sections: Vec<DebugSection>) -> Result<(), BackendError> {
+        Ok(())
+    }
+
     /// Finish the module: all declared functions must be defined.
     fn finish(self: Box<Self>) -> Result<ObjectProduct, BackendError>;
 }
 
-/// Symbol mangling v0 (s28): `_W` + the WIR item name (module-path
-/// qualified names keep their interior dots — ELF allows them) + `$` +
-/// a 16-hex hash of the name, the rendered signature, and the native
-/// convention version ([`abi::CONVENTION_VERSION`], s29): a convention
-/// bump changes every symbol, so mixed-convention objects fail to LINK
-/// rather than silently miscompile (D7). Deliberately NOT C-linkable:
+/// Symbol mangling v1 (s28, revised s30 for issue #26): `_W` + the
+/// WIR item name + `$` + a 16-hex hash of the name, the rendered
+/// signature, and the native convention version
+/// ([`abi::CONVENTION_VERSION`], s29). WIR names are MODULE-PATH
+/// QUALIFIED since s30 (`std.list.len`, not `len` — lowering owns the
+/// qualification; interior dots are ELF-legal), so the full module
+/// path is folded into both the visible name and the hash: two
+/// modules sharing an item name can never collide. A convention bump
+/// changes every symbol, so mixed-convention objects fail to LINK
+/// rather than silently miscompile (D7) — the s30 scheme change
+/// itself bumped the version to `wolf-abi-1` under that same rule. Deliberately NOT C-linkable:
 /// the FFI membrane is explicit (`extern "c"`/`export` symbols are
 /// emitted unmangled). Deterministic across runs — the hash is FNV-1a
 /// over stable inputs, no interner indices.
@@ -296,5 +377,21 @@ mod tests {
         assert!(seen.insert(mangle(&m, "g", s1)));
         // Dotted method names survive (ELF permits interior dots).
         assert!(mangle(&m, "Counter.bump", s1).starts_with("_WCounter.bump$"));
+    }
+
+    /// Issue #26: the module path is part of the symbol — two modules
+    /// declaring the same item name with the SAME signature must mangle
+    /// apart, in both the visible name and the hash.
+    #[test]
+    fn mangling_folds_the_module_path() {
+        let mut m = Module::new();
+        let sig = m.make_sig(vec![Param::val(types::I64)], vec![types::I64]);
+        let a = mangle(&m, "std.list.len", sig);
+        let b = mangle(&m, "std.str.len", sig);
+        assert_ne!(a, b, "same item name in two modules must not collide");
+        assert!(a.starts_with("_Wstd.list.len$"));
+        assert!(b.starts_with("_Wstd.str.len$"));
+        // The hash differs too — the path is folded, not just prefixed.
+        assert_ne!(a.rsplit('$').next(), b.rsplit('$').next());
     }
 }

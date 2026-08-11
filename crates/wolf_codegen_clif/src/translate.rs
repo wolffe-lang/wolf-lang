@@ -32,17 +32,17 @@ use std::collections::HashMap;
 
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    AbiParam, BlockArg, InstBuilder, MemFlagsData, Signature, StackSlotData, StackSlotKind,
-    TrapCode, Value as CValue, types as ctypes,
+    AbiParam, BlockArg, InstBuilder, MemFlagsData, Signature, SourceLoc, StackSlot, StackSlotData,
+    StackSlotKind, TrapCode, Value as CValue, types as ctypes,
 };
 use cranelift_codegen::isa::CallConv;
 use cranelift_frontend::FunctionBuilder;
 use cranelift_module::Module as _;
 use cranelift_object::ObjectModule;
 
-use wolf_backend::BackendError;
 use wolf_backend::abi::{self, Conv, ParamPass, RegClass, RetPass, Unit};
 use wolf_backend::layout::{self, Layout};
+use wolf_backend::{BackendError, DebugTy};
 use wolf_wir::ir::{Aux, Block as WBlock, Function as WFunction, Module as WModule, SigId};
 use wolf_wir::ops::{FloatCc, IntCc, Opcode, TrapKind};
 use wolf_wir::types::{TypeData, TypeId};
@@ -270,6 +270,15 @@ struct Tx<'a, 'b> {
     /// FuncRefs imported into this function, by callee name, with the
     /// convention their calls lower under.
     fref_cache: HashMap<String, (cranelift_codegen::ir::FuncRef, Conv)>,
+    /// s30 debug: WIR value → indices into `debug_slots` (a value may
+    /// carry several names — GVN dedup; a name may have many values —
+    /// rebindings, all stored to ONE slot).
+    debug_names: HashMap<wolf_wir::ir::Value, Vec<usize>>,
+    /// s30 debug: one frame slot per named scalar binding —
+    /// (name, scalar shape, slot, is-param). The debug tier forces
+    /// named locals addressable (s28 decision) so `DW_OP_fbreg`
+    /// locations are whole-function truths.
+    debug_slots: Vec<(String, DebugTy, StackSlot, bool)>,
 }
 
 /// One declared function the translator can call.
@@ -286,6 +295,9 @@ fn nyi(msg: impl Into<String>) -> BackendError {
     BackendError::Unsupported(msg.into())
 }
 
+/// Translate one function. Returns the named-variable frame slots the
+/// debug tier spilled (s30): the caller maps them to frame-pointer-
+/// relative offsets once the frame layout is known.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn translate_function(
     b: FunctionBuilder<'_>,
@@ -297,7 +309,7 @@ pub(crate) fn translate_function(
     funcs: &HashMap<String, FuncEntry>,
     rt: &mut HashMap<&'static str, cranelift_module::FuncId>,
     imports: &mut HashMap<String, cranelift_module::FuncId>,
-) -> Result<(), BackendError> {
+) -> Result<Vec<(String, DebugTy, StackSlot, bool)>, BackendError> {
     let mut tx = Tx {
         b,
         m,
@@ -313,14 +325,73 @@ pub(crate) fn translate_function(
         sret: Vec::new(),
         trap_blocks: HashMap::new(),
         fref_cache: HashMap::new(),
+        debug_names: HashMap::new(),
+        debug_slots: Vec::new(),
     };
+    tx.prepare_debug_vars();
     tx.run(si)?;
     let cfg = tx.om.isa().frontend_config();
     tx.b.finalize(cfg);
-    Ok(())
+    Ok(tx.debug_slots)
 }
 
 impl<'a, 'b> Tx<'a, 'b> {
+    /// Build the named-binding tables (s30): one frame slot per named
+    /// SCALAR binding (aggregates already live in addressable slots;
+    /// their DIEs are s31+), shared by every rebinding of the name.
+    /// Shadowing with a DIFFERENT scalar shape keeps the first
+    /// binding's slot and shape — later shadows of another type are
+    /// not stored (v0 honesty: one DIE per name).
+    fn prepare_debug_vars(&mut self) {
+        let mut by_name: HashMap<&str, usize> = HashMap::new();
+        for dv in &self.f.debug_vars {
+            let ty = self.f.value_ty(dv.val);
+            let Some(dty) = debug_ty(self.m, ty) else {
+                continue; // aggregate/token-shaped: no scalar slot at v0
+            };
+            let idx = match by_name.get(dv.name.as_str()) {
+                Some(&i) => {
+                    if self.debug_slots[i].1 != dty {
+                        continue; // shadow of a different shape
+                    }
+                    if dv.param {
+                        self.debug_slots[i].3 = true;
+                    }
+                    i
+                }
+                None => {
+                    let slot = self.b.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        8,
+                        3,
+                    ));
+                    self.debug_slots
+                        .push((dv.name.clone(), dty, slot, dv.param));
+                    by_name.insert(dv.name.as_str(), self.debug_slots.len() - 1);
+                    self.debug_slots.len() - 1
+                }
+            };
+            self.debug_names.entry(dv.val).or_default().push(idx);
+        }
+    }
+
+    /// If `wv` is a named scalar binding, store its value into the
+    /// name's frame slot at the current point (the definition site) —
+    /// the debug tier's forced spill.
+    fn debug_spill(&mut self, wv: wolf_wir::ir::Value) {
+        let Some(idxs) = self.debug_names.get(&wv).cloned() else {
+            return;
+        };
+        let Some(&Repr::Scalar(cv)) = self.vals.get(&wv) else {
+            return;
+        };
+        for i in idxs {
+            let slot = self.debug_slots[i].2;
+            let addr = self.b.ins().stack_addr(ctypes::I64, slot, 0);
+            self.b.ins().store(MemFlagsData::trusted(), cv, addr, 0);
+        }
+    }
+
     fn run(&mut self, si: &SigInfo) -> Result<(), BackendError> {
         let Some(entry) = self.f.entry() else {
             return Err(ice("function has no entry block"));
@@ -381,6 +452,12 @@ impl<'a, 'b> Tx<'a, 'b> {
         for k in 0..n_sret {
             self.sret.push(cparams[sret_base + k]);
         }
+        // Named parameters spill to their debug slots in the prologue
+        // (s30): readable the moment a `break main`-style breakpoint
+        // lands (prologue_end marks the first user row).
+        for &wv in &wparams {
+            self.debug_spill(wv);
+        }
         // Non-entry blocks: scalar params become CLIF block params;
         // aggregate params own a stack slot filled by entering edges.
         for &wb in &self.f.layout {
@@ -414,16 +491,32 @@ impl<'a, 'b> Tx<'a, 'b> {
             if wb != entry {
                 self.b.switch_to_block(cb);
             }
-            // Aggregate block params: bind their slot addresses.
+            // Aggregate block params: bind their slot addresses. Named
+            // scalar params (merged rebindings, loop variables) re-
+            // spill to their debug slots at block entry (s30).
             for (i, wv) in self.f.block_params(wb).into_iter().enumerate() {
                 if let Some(&slot) = self.param_slots.get(&(wb, i)) {
                     let addr = self.b.ins().stack_addr(ctypes::I64, slot, 0);
                     self.vals.insert(wv, Repr::Addr(addr));
                 }
+                if wb != entry {
+                    self.debug_spill(wv);
+                }
             }
             for ii in 0..self.f.blocks[wb].insts.len() {
                 let inst = self.f.blocks[wb].insts[ii];
+                // s30: the WIR span rides into the machine buffer as a
+                // Cranelift srcloc (bits = span lo; the byte-exact s07
+                // chain ends in .debug_line).
+                let loc = match self.f.srcspan(inst) {
+                    Some(sp) => SourceLoc::new(sp.lo),
+                    None => SourceLoc::default(),
+                };
+                self.b.set_srcloc(loc);
                 self.inst(inst)?;
+                for rv in self.results_of(inst) {
+                    self.debug_spill(rv);
+                }
             }
         }
         self.fill_trap_blocks()?;
@@ -1524,6 +1617,22 @@ impl<'a, 'b> Tx<'a, 'b> {
     }
 }
 
+/// The debug shape of a WIR scalar type (s30 variable DIEs); `None`
+/// for aggregates, error unions, and tokens (no scalar DIE at v0).
+fn debug_ty(m: &WModule, ty: TypeId) -> Option<DebugTy> {
+    Some(match m.types.get(ty) {
+        TypeData::Bool => DebugTy::Bool,
+        TypeData::I8 => DebugTy::I8,
+        TypeData::I16 => DebugTy::I16,
+        TypeData::I32 => DebugTy::I32,
+        TypeData::I64 => DebugTy::I64,
+        TypeData::F32 => DebugTy::F32,
+        TypeData::F64 => DebugTy::F64,
+        TypeData::Ptr => DebugTy::Ptr,
+        TypeData::Mem(_) | TypeData::Io | TypeData::Agg(_) | TypeData::Eu { .. } => return None,
+    })
+}
+
 fn clif_int(bits: u32) -> cranelift_codegen::ir::Type {
     match bits {
         8 => ctypes::I8,
@@ -1559,11 +1668,14 @@ fn int_cc(cc: IntCc) -> IntCC {
 }
 
 fn float_cc(cc: FloatCc) -> FloatCC {
-    // WIR float compares are ORDERED (NaN compares false), including
-    // `ne`.
+    // WIR float compares are ORDERED (NaN compares false) for
+    // eq/lt/le/gt/ge; `ne` is IEEE-754 `!=` — the NEGATION of `eq`, so
+    // it is UNORDERED (true when either operand is NaN). `nan != nan`
+    // must be true natively exactly as in the interpreter (issue #22,
+    // wolf-std F-0027: `x != x` is *the* portable NaN test).
     match cc {
         FloatCc::Eq => FloatCC::Equal,
-        FloatCc::Ne => FloatCC::OrderedNotEqual,
+        FloatCc::Ne => FloatCC::NotEqual,
         FloatCc::Lt => FloatCC::LessThan,
         FloatCc::Le => FloatCC::LessThanOrEqual,
         FloatCc::Gt => FloatCC::GreaterThan,

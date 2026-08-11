@@ -298,7 +298,13 @@ fn abi_table_round_trips_against_host_cc() {
             return;
         }
     };
-    compile_module(&mut backend, &module, None).expect("compiles");
+    compile_module(
+        &mut backend,
+        &module,
+        None,
+        &mut wolf_backend::NullDebugSink,
+    )
+    .expect("compiles");
     let product = Box::new(backend).finish().expect("object emits");
 
     // Every export must be visible under its UNMANGLED name.
@@ -373,7 +379,13 @@ int main(void) {
             return;
         }
     };
-    compile_module(&mut backend, &module, None).expect("compiles");
+    compile_module(
+        &mut backend,
+        &module,
+        None,
+        &mut wolf_backend::NullDebugSink,
+    )
+    .expect("compiles");
     let product = Box::new(backend).finish().expect("object emits");
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("abi_check_trap");
     std::fs::create_dir_all(&dir).expect("mkdir");
