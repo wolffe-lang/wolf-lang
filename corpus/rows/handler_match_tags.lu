@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="io-value: said-io\neof-value: said-eof\nclosed after 2")
+//! phase: run
+//! conforms: err.union, err.rows
+//!
+//! The #48 regression (wolf-std's withdrawn `read_all` names the
+//! shape): a bare identifier in a handler's `match` arm resolves
+//! against the operand row's TAGS before it may bind — the #30 rule,
+//! applied on the handler side. The two matches swap their arms on
+//! purpose: if the first arm caught every tag, the answers would swap
+//! with them (and the sealed row makes the tag arms total — no rest
+//! arm to hide behind). The loop below is the read_all skeleton — it
+//! must stop on `closed` and count everything else, and a first-arm
+//! catch-all would end it on the first `io`.
+
+fn miss_io() -> str ! {eof, io} {
+    return io
+}
+
+fn miss_eof() -> str ! {eof, io} {
+    return eof
+}
+
+fn step(n: int) -> int ! {closed, io} {
+    if n > 1 {
+        return closed
+    }
+    if n == 1 {
+        return io
+    }
+    n + 10
+}
+
+fn main() -> !int {
+    let a = miss_io() else |e| match e {
+        eof => "said-eof",
+        io => "said-io",
+    }
+    let b = miss_eof() else |e| match e {
+        io => "said-io",
+        eof => "said-eof",
+    }
+    print("io-value: {a}")
+    print("eof-value: {b}")
+    var seen = 0
+    var n = 0
+    var open = true
+    while open {
+        let r = step(n) else |e| match e {
+            closed => -1,
+            _ => 0,
+        }
+        if r < 0 {
+            open = false
+        } else {
+            seen = seen + 1
+            n = n + 1
+        }
+    }
+    print("closed after {seen}")
+    0
+}

@@ -767,6 +767,9 @@ enum MatchDomain {
     Row(Vec<(String, usize)>),
     /// Integer/bool literals.
     Scalar,
+    /// `str`: literal arms dispatch by equality (#54, v0) — a chain of
+    /// `__wolf_rt_str_eq` tests in arm order.
+    Str,
 }
 
 /// One lowered pattern's shape.
@@ -779,6 +782,9 @@ enum PatShape {
     Tests(Vec<i64>, Vec<(usize, String)>),
     /// Bool literal (the discriminant IS the condition).
     BoolTest(bool),
+    /// Str literal arm: the scrutinee equals one of these cooked byte
+    /// strings (or-alternatives). Dispatch-by-equality (#54, v0).
+    StrTests(Vec<Vec<u8>>),
 }
 
 /// How one `mut` argument reaches the callee (s26).
@@ -4494,9 +4500,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(esize) = flat_size(&self.b.module.types, ewty) else {
             return Err(refuse("List elements without a flat layout", span));
         };
-        if d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq) != SyntaxKind::Eq {
-            return Err(refuse("compound List index assignment (c06/std)", span));
-        }
+        let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
         let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
             return Err(refuse("a valueless List receiver", recv.span));
         };
@@ -4513,8 +4517,38 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(vx) = d.value() else {
             return Ok(Flow::Val(None));
         };
-        let Some(v) = flow_val!(self.lower_expr(vx)) else {
+        let Some(rhs) = flow_val!(self.lower_expr(vx)) else {
             return Err(refuse("assignment of a valueless expression", vx.span));
+        };
+        // `l[i] op= v` (#55): read-modify-write through the same
+        // runtime entries, X3-checked at the element's sema type.
+        let v = if op == SyntaxKind::Eq {
+            rhs
+        } else {
+            let Some(bin) = Self::compound_bin(op) else {
+                return Err(refuse("this compound assignment operator", span));
+            };
+            let (rregion, rslot) = self.rt_slot(esize);
+            let rrc = self
+                .rt_call_slot(
+                    "__wolf_rt_list_read",
+                    &[hdr, idx],
+                    rslot,
+                    rregion,
+                    Some(types::I64),
+                )
+                .expect("rc");
+            let rhit = self.nonzero(rrc);
+            if self.trap_unless(rhit, TrapKind::Bounds) {
+                return Ok(Flow::Diverged);
+            }
+            let cur = self.load_flat(ewty, rslot, rregion, span)?;
+            let wrapping = matches!(self.table.kind(elem), TyKind::Wrapping(_));
+            let unsigned = sema_unsigned(self.table, elem);
+            match self.arith(bin, cur, rhs, wrapping, unsigned, ewty, span)? {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
         };
         let (region, slot) = self.rt_slot(esize);
         self.store_flat(v, slot, region, vx.span)?;
@@ -4650,6 +4684,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b
             .ins(Opcode::AggMake, &[p, len], &[sty], Aux::None)
             .one()
+    }
+
+    /// Cook a hole-free string EPISODE (a `StringLit` pattern node)
+    /// into its runtime bytes: quote strip, the shared escape set,
+    /// `"""` dedent — byte-identical with `string_segments`' literal
+    /// walk and the checked executor's decoder (#54: str match arms
+    /// compare these bytes at runtime).
+    fn cooked_str_lit(&self, s: &'t GreenNode) -> Vec<u8> {
+        let raw = self.text(s.span);
+        let bytes = raw.as_bytes();
+        if bytes.starts_with(b"\"\"\"") {
+            let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
+            return decode_escapes(&dedent_multiline(inner));
+        }
+        let inner = if bytes.len() >= 2 {
+            &bytes[1..bytes.len() - 1]
+        } else {
+            bytes
+        };
+        decode_escapes(inner)
     }
 
     /// Decode one string episode into literal chunks and interpolation
@@ -5786,6 +5840,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             TyKind::Row { tags, .. } => Ok(MatchDomain::Row(
                 tags.iter().map(|(n, p)| (n.clone(), p.len())).collect(),
             )),
+            TyKind::Prim(Prim::Str) => Ok(MatchDomain::Str),
             TyKind::Prim(Prim::Bool) | TyKind::Prim(_) | TyKind::Wrapping(_) => {
                 Ok(MatchDomain::Scalar)
             }
@@ -5811,7 +5866,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         (id, *a)
                     })
             }
-            MatchDomain::Scalar => None,
+            MatchDomain::Scalar | MatchDomain::Str => None,
         }
     }
 
@@ -5827,6 +5882,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             SyntaxKind::LiteralPat => {
+                // A str-literal arm (#54): the raw string episode is a
+                // StringLit child; cook its bytes exactly as string
+                // expressions cook (escapes, brace doubling, dedent).
+                if let Some(s) = pat.nodes().find(|n| n.kind == SyntaxKind::StringLit) {
+                    if s.tokens().any(|t| t.kind == SyntaxKind::InterpOpen) {
+                        return Err(refuse("an interpolated string as a pattern", pat.span));
+                    }
+                    return Ok(PatShape::StrTests(vec![self.cooked_str_lit(s)]));
+                }
                 let text = self.text(pat.span);
                 if text == "true" {
                     return Ok(PatShape::BoolTest(true));
@@ -5885,6 +5949,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             SyntaxKind::OrPat => {
                 let mut consts = Vec::new();
+                let mut strs: Vec<Vec<u8>> = Vec::new();
                 for alt in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
                     match self.pattern_shape(alt, domain)? {
                         PatShape::Irrefutable(_) => return Ok(PatShape::Irrefutable(None)),
@@ -5897,10 +5962,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             }
                             consts.extend(cs);
                         }
+                        PatShape::StrTests(bs) => strs.extend(bs),
                         PatShape::BoolTest(_) => {
                             return Err(refuse("or-patterns over bool", alt.span));
                         }
                     }
+                }
+                if !strs.is_empty() {
+                    if !consts.is_empty() {
+                        return Err(refuse("mixed str/scalar or-patterns", pat.span));
+                    }
+                    return Ok(PatShape::StrTests(strs));
                 }
                 Ok(PatShape::Tests(consts, vec![]))
             }
@@ -6134,6 +6206,75 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         self.b.seal_block(next_bb);
                         self.b.switch_to_block(next_bb);
                     }
+                }
+                PatShape::StrTests(cands) => {
+                    // Dispatch-by-equality (#54, v0): each candidate is
+                    // one `__wolf_rt_str_eq` test against the interned
+                    // literal bytes, chained in arm order.
+                    if is_last && exhaustive && arm.guard().is_none() {
+                        self.enter_match_arm(
+                            arm,
+                            sv,
+                            &[],
+                            None,
+                            want_v,
+                            merge_eu,
+                            &mut merge,
+                            None,
+                            e.span,
+                        )?;
+                        open = false;
+                        continue;
+                    }
+                    let (sp, sl) = self.str_parts(sv);
+                    let z = self.b.iconst(types::I64, 0);
+                    let arm_bb = self.b.create_block();
+                    let next_bb = self.b.create_block();
+                    let mut chain_scopes = 0usize;
+                    for (k, bytesc) in cands.iter().enumerate() {
+                        let cv = self.str_value(bytesc);
+                        let (cp, cl) = self.str_parts(cv);
+                        let rc = self
+                            .rt_call("__wolf_rt_str_eq", &[sp, sl, cp, cl], Some(types::I64))
+                            .expect("rc");
+                        let t = self
+                            .b
+                            .ins(
+                                Opcode::Icmp,
+                                &[rc, z],
+                                &[types::BOOL],
+                                Aux::IntCc(IntCc::Ne),
+                            )
+                            .one();
+                        if k + 1 == cands.len() {
+                            self.b.ins_br(t, arm_bb, &[], next_bb, &[]);
+                        } else {
+                            let more = self.b.create_block();
+                            self.b.ins_br(t, arm_bb, &[], more, &[]);
+                            self.b.seal_block(more);
+                            self.b.switch_to_block(more);
+                            self.b.gvn_push_scope();
+                            chain_scopes += 1;
+                        }
+                    }
+                    for _ in 0..chain_scopes {
+                        self.b.gvn_pop_scope();
+                    }
+                    self.b.seal_block(arm_bb);
+                    self.b.switch_to_block(arm_bb);
+                    self.enter_match_arm(
+                        arm,
+                        sv,
+                        &[],
+                        None,
+                        want_v,
+                        merge_eu,
+                        &mut merge,
+                        Some(next_bb),
+                        e.span,
+                    )?;
+                    self.b.seal_block(next_bb);
+                    self.b.switch_to_block(next_bb);
                 }
             }
         }

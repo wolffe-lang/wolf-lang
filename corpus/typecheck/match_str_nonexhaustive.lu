@@ -1,0 +1,19 @@
+//! check: fail(E0801)
+//! phase: resolve
+//! conforms: str.views
+//!
+//! Str literals never complete the column (#54's other half): with
+//! the arms no longer collapsing to a wildcard, a str `match` without
+//! a rest arm is E0801 — literals are tests, not coverage.
+
+fn kind(tok: str) -> int {
+    match tok {
+        "+" => 1,
+        "-" => 2,
+    }
+}
+
+fn main() -> !int {
+    print("{kind("+")}")
+    0
+}

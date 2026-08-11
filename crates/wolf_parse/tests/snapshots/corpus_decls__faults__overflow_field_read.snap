@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 297..329 name=Gauge fields=1
+FnDecl 331..456 name=main body=Block

@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="plus minus times operand\ntab nl brace other\n17")
+//! phase: run
+//! conforms: str.views
+//!
+//! The #54 witness: token dispatch spelled the natural way — `match`
+//! over str literals, dispatch-by-equality at v0. Every arm past the
+//! first is reachable (the false E0802 retired), or-patterns chain,
+//! escaped and doubled-brace literals compare by their COOKED bytes,
+//! and the rpn-shaped evaluator underneath runs identically on every
+//! lane.
+
+fn kind(tok: str) -> str {
+    match tok {
+        "+" => "plus",
+        "-" => "minus",
+        "*" => "times",
+        _ => "operand",
+    }
+}
+
+fn odd(tok: str) -> str {
+    match tok {
+        "\t" => "tab",
+        "\n" => "nl",
+        "{{" => "brace",
+        _ => "other",
+    }
+}
+
+fn apply(op: str, a: int, b: int) -> int {
+    match op {
+        "+" | "-" => if op == "+" { a + b } else { a - b },
+        "*" => a * b,
+        _ => 0,
+    }
+}
+
+fn main() -> !int {
+    print("{kind("+")} {kind("-")} {kind("*")} {kind("7")}")
+    print("{odd("\t")} {odd("\n")} {odd("{{")} {odd("x")}")
+    let r = apply("+", apply("*", 4, 5), apply("-", 2, 5))
+    print("{r}")
+    0
+}

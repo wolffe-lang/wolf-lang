@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 296..334 name=ceiling body=Block
+FnDecl 336..423 name=main body=Block

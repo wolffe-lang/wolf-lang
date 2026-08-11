@@ -93,6 +93,21 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   At `resolve|typecheck|mem`: same, plus `fail` codes drawn from the
   E1xxx+ families. At `run`: compare `verdict`; for `exit`, compare
   status and `stdout_sha256`; for `trap`, compare kind only.
+- `[proto.cmp.rung]` Rejection-rung tolerance (s70, the DIV-011
+  family's ruling): when both records reject with `fail(CODE)` and the
+  **first** diagnostic's code and span agree, the records AGREE even
+  when `phase_reached` names different rungs of the shared ladder.
+  Where on the ladder an implementation discovers a rejection is an
+  architecture fact — a fused resolver rejects at `resolve` what a
+  staged checker rejects at `typecheck` — not a semantic observation;
+  the rejection itself (code + span) is the observation. The tolerance
+  is exactly one verdict wide: it never spans `fail` vs any other
+  verdict, and a full-ladder run (no `--phase`) that rejects on one
+  side while the other runs to a dynamic outcome stays a divergence
+  under `[proto.cmp.phase]`. At an explicit `--phase=<p>`, a side that
+  reports `pass` at `<p>` while the other already rejected is likewise
+  still a divergence — the tolerance compares two rejections, never a
+  rejection against silence.
 - `[proto.cmp.warn]` Warning parity (s67): when **both** records carry
   the `warnings` array, the sorted `{code, span}` sets must agree —
   a mismatch is a span/code-class divergence. Absent on either side is
