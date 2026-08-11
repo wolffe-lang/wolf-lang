@@ -1473,6 +1473,15 @@ impl<'a> Engine<'a> {
             if let Some(category) = intrinsics::host_stub(&name) {
                 return Ok(Callee::HostStub { name, category });
             }
+            // The pure builtins (s40 json): no sandbox category — they
+            // reach nothing ambient — but the engine models no json
+            // evaluator, so the refusal is an honest gap, not E0701.
+            if intrinsics::pure_builtin(&name) {
+                return Err(FaultKind::EngineGap {
+                    construct: "json builtins at comptime (no json evaluator in the \
+                                D33 allowlist at v0)",
+                });
+            }
             if let Some(i) = intrinsics::intrinsic(&name) {
                 if i == Intrinsic::Implements {
                     let tr = args

@@ -2990,6 +2990,46 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             ));
         }
+        // The s40 os/env and time builtin tiers, natively: same eu
+        // shape as fs — codes become row tags, str results
+        // materialize through the ambient region (`wolf_rt::{os,time}`
+        // mirror the checked `os_builtin`/`time_builtin` entry for
+        // entry).
+        if matches!(
+            callee_text.as_str(),
+            "env_args"
+                | "env_get"
+                | "env_set"
+                | "env_vars"
+                | "os_cwd"
+                | "os_exit"
+                | "time_now_ms"
+                | "time_unix_ms"
+                | "time_sleep_ms"
+        ) {
+            return self.lower_os_time_builtin(&callee_text, d, e);
+        }
+        // The s40 process trio mirrors the s39 net posture: checked
+        // lane executes, native lowering owes List[str] argv unpacking
+        // plus a child table — an honest refusal, tier named. Same for
+        // json: the reference parser is the checked lane's
+        // (`wolf_mem::json`); its native mirror lands with the
+        // std.x.json facade work.
+        if matches!(callee_text.as_str(), "os_spawn" | "os_wait" | "os_kill") {
+            return Err(refuse(
+                "process builtins in native lowering (checked lane only at s40)",
+                e.span,
+            ));
+        }
+        if matches!(
+            callee_text.as_str(),
+            "json_valid" | "json_get" | "json_type" | "json_len"
+        ) {
+            return Err(refuse(
+                "json builtins in native lowering (checked lane only at s40)",
+                e.span,
+            ));
+        }
         if cs.is_none() {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
@@ -4145,6 +4185,192 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(out)))
             }
             _ => Err(refuse("this io/fs builtin", e.span)),
+        }
+    }
+
+    /// Map a runtime error code to a row tag through a branch chain:
+    /// `pairs` are `(code, tag)` cases, `fallback` catches every other
+    /// nonzero code — the compile-time-dispatched twin of
+    /// [`Self::fs_code_tag`] for families whose codes are not the fs
+    /// family's.
+    fn code_tag_chain(&mut self, code: Value, pairs: &[(i64, &str)], fallback: &str) -> Value {
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, types::I64);
+        for (c, name) in pairs {
+            let id = self.b.module.tag_id(name);
+            let k = self.b.iconst(types::I64, *c);
+            let eq = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[code, k],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let tag = self.b.iconst(types::I64, id);
+            let next = self.b.create_block();
+            self.b.ins_br(eq, merge, &[tag], next, &[]);
+            self.b.seal_block(next);
+            self.b.switch_to_block(next);
+        }
+        let fb = self.b.module.tag_id(fallback);
+        let fb_tag = self.b.iconst(types::I64, fb);
+        self.b.ins_jmp(merge, &[fb_tag]);
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        out
+    }
+
+    /// The s40 os/env and time builtin families, natively: one
+    /// `wolf_rt::{os,time}` shim each, codes to row tags, str results
+    /// through out slots — the fs pattern, family for family.
+    /// `os_exit` calls the runtime exit and diverges (the block ends
+    /// in an unreachable trap edge, the `[conf.trap.map]` residual
+    /// spelling).
+    fn lower_os_time_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed os/time arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let arg = |i: usize| -> R<Value> {
+            argv.get(i)
+                .copied()
+                .ok_or_else(|| refuse("an os/time call with missing arguments", e.span))
+        };
+        match name {
+            "env_args" | "env_vars" => {
+                let sym = if name == "env_args" {
+                    "__wolf_rt_env_args"
+                } else {
+                    "__wolf_rt_env_vars"
+                };
+                let r = self.rt_call(sym, &[], Some(types::PTR)).expect("list");
+                Ok(Flow::Val(Some(r)))
+            }
+            "env_get" => {
+                let (np, nl) = {
+                    let s = arg(0)?;
+                    self.str_parts(s)
+                };
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_env_get",
+                        &[np, nl],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_str_slot(slot, region, e.span)?)),
+                    |z| Ok(z.code_tag_chain(rc, &[(2, "utf8")], "missing")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "env_set" => {
+                let (np, nl) = {
+                    let s = arg(0)?;
+                    self.str_parts(s)
+                };
+                let (vp, vl) = {
+                    let s = arg(1)?;
+                    self.str_parts(s)
+                };
+                let rc = self
+                    .rt_call("__wolf_rt_env_set", &[np, nl, vp, vl], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |z| {
+                        let id = z.b.module.tag_id("invalid");
+                        Ok(z.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_cwd" => {
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot("__wolf_rt_os_cwd", &[], slot, region, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_str_slot(slot, region, e.span)?)),
+                    |z| {
+                        let id = z.b.module.tag_id("io");
+                        Ok(z.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_exit" => {
+                let c = arg(0)?;
+                self.rt_call("__wolf_rt_os_exit", &[c], None);
+                // The shim never returns; the residual edge is the
+                // sema-licensed unreachable spelling.
+                self.b.ins_trap(TrapKind::Assert);
+                Ok(Flow::Diverged)
+            }
+            "time_now_ms" | "time_unix_ms" => {
+                let sym = if name == "time_now_ms" {
+                    "__wolf_rt_time_now_ms"
+                } else {
+                    "__wolf_rt_time_unix_ms"
+                };
+                let r = self.rt_call(sym, &[], Some(types::I64)).expect("ms");
+                Ok(Flow::Val(Some(r)))
+            }
+            "time_sleep_ms" => {
+                let ms = arg(0)?;
+                self.rt_call("__wolf_rt_time_sleep_ms", &[ms], None);
+                Ok(Flow::Val(None))
+            }
+            _ => Err(refuse("this os/time builtin", e.span)),
         }
     }
 

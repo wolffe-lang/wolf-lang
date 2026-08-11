@@ -54,6 +54,9 @@ pub enum SandboxCategory {
     Clock,
     Random,
     Ffi,
+    /// Child processes and process control (s40: `os_spawn`/`os_wait`/
+    /// `os_kill`/`os_exit` — the I13 `exec` capability).
+    Exec,
 }
 
 impl SandboxCategory {
@@ -67,6 +70,7 @@ impl SandboxCategory {
             SandboxCategory::Clock => "the clock",
             SandboxCategory::Random => "randomness",
             SandboxCategory::Ffi => "native code",
+            SandboxCategory::Exec => "child processes",
         }
     }
 
@@ -99,6 +103,10 @@ impl SandboxCategory {
             SandboxCategory::Ffi => {
                 "confinement: the sandbox cannot see into native code, so it never \
                  runs any"
+            }
+            SandboxCategory::Exec => {
+                "confinement: compiling a package must never run or terminate \
+                 programs on the machine that compiles it"
             }
         }
     }
@@ -133,11 +141,32 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // comptime categorically — sockets are the loudest D33 case.
         "net_fetch" | "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read"
         | "net_write" | "net_close" => SandboxCategory::Net,
-        "env_var" => SandboxCategory::Env,
-        "clock_ms" => SandboxCategory::Clock,
+        // The s40 os/env builtin tier: `env` is I13's capability for
+        // the environment family plus the process-context reads
+        // (`os_cwd` — machine state that differs per host); `exec`
+        // covers child processes AND process control (`os_exit` would
+        // terminate the compiler).
+        "env_var" | "env_get" | "env_set" | "env_args" | "env_vars" | "os_cwd" => {
+            SandboxCategory::Env
+        }
+        "os_spawn" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,
+        // The s40 time builtin tier: every clock read and sleep is the
+        // one Clock category (X12 — two identical builds must not
+        // observe different times).
+        "clock_ms" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms" => SandboxCategory::Clock,
         "random_seed" => SandboxCategory::Random,
         _ => return None,
     })
+}
+
+/// Pure builtin families typed like host stubs but carrying NO
+/// capability (s40: json). They reach no ambient surface, so they are
+/// deliberately absent from the sandbox table — the I13 metadata for a
+/// package using only these stays capability-free. The comptime engine
+/// still refuses them (it models no json evaluator at v0; growing the
+/// D33 allowlist is a design decision, not a convenience).
+pub fn pure_builtin(name: &str) -> bool {
+    matches!(name, "json_valid" | "json_get" | "json_type" | "json_len")
 }
 
 /// Convert a checker type to a self-contained comptime type value at

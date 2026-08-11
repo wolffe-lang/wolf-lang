@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="true true true")
+//! phase: run
+//! conforms: err.union
+//!
+//! time v0 (s40, X12 posture): `time_now_ms` is monotonic from an
+//! arbitrary process-local anchor (values compare and subtract; they
+//! are never wall timestamps), `time_sleep_ms` really blocks,
+//! `time_unix_ms` is the wall clock. Assertions are predicates only —
+//! no timestamp ever reaches stdout, so the file is deterministic on
+//! any host. Virtualized time under `--schedules`/`--replay` rides
+//! the s36 clock-hook seam as it widens to clock reads (the tracked
+//! campaign-closeout item); Instant/SystemTime/Duration typing is the
+//! std facade's (stdc02+), where unit confusion becomes a compile
+//! error.
+
+fn main() -> !int {
+    let a = time_now_ms()
+    time_sleep_ms(2)
+    let b = time_now_ms()
+    let nonneg = a >= 0
+    let advanced = b > a
+    let modern = time_unix_ms() > 1577836800000
+    print("{nonneg} {advanced} {modern}")
+    0
+}

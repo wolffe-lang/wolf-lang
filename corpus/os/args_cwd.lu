@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="argc: 0\nhas_cwd: true")
+//! phase: run
+//! conforms: err.union
+//!
+//! argv and cwd basics (s40, the bs10 ask: every project holds its
+//! input as data). Conform-run supplies no arguments on either lane —
+//! the checked machine's argv defaults empty (the stdin posture,
+//! mirrored) and the native rung runs the binary bare — so `argc: 0`
+//! is deterministic. `wolf run file.lu a b c` is where real argv
+//! arrives. The cwd is asserted as a predicate, never a path (host
+//! independence).
+
+fn main() -> !int {
+    let args = env_args()
+    print("argc: {args.len}")
+    let d = os_cwd()?
+    let ok = d.len > 0
+    print("has_cwd: {ok}")
+    0
+}

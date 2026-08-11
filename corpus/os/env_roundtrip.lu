@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="got: tarn\n<missing>\ninvalid")
+//! phase: run
+//! conforms: err.union
+//!
+//! env v0 (s40): set, read back, and the two rows — `missing` for an
+//! absent variable, `invalid` for a name the platform cannot hold
+//! (`=`/NUL/empty). Both lanes execute (`wolf_rt::os` mirrors the
+//! checked `os_builtin` entry for entry); the checked lane writes a
+//! machine-local overlay, the native lane the program's own real
+//! environment — the same program observes the same answers either
+//! way. std.env (stdc02+) delegates here; the builtin spelling is not
+//! the std API.
+
+fn main() -> !int {
+    env_set("WOLF_S40_DEN", "tarn")?
+    let v = env_get("WOLF_S40_DEN")?
+    print("got: {v}")
+    let miss = env_get("WOLF_S40_ABSENT") else |_| "<missing>"
+    print("{miss}")
+    env_set("A=B", "x") else |_| print("invalid")
+    0
+}

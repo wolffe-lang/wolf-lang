@@ -1,0 +1,18 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.exec
+//!
+//! D33: no child processes and no process control at comptime —
+//! compiling a package must never run or terminate programs on the
+//! machine that compiles it (the s40 `exec` category; `os_spawn`/
+//! `os_wait`/`os_kill` refuse identically to `os_exit`).
+
+comptime fn build_code() -> int {
+    os_exit(3)
+    0
+}
+
+fn main() -> !int {
+    const CODE = build_code()
+    if CODE == 0 { 1 } else { 0 }
+}

@@ -72,6 +72,38 @@ pub const PRELUDE: &[&str] = &[
     "net_read",
     "net_write",
     "net_close",
+    // the os/env builtin tier (s40, capability-first per I13: the env
+    // family + `os_cwd` carry `env`, the process trio + `os_exit`
+    // carry `exec` in the sandbox table). std.os/std.env/std.process
+    // (stdc02+) DELEGATE to these — the builtin spelling is not the
+    // std API. `os_spawn` is argv-array ONLY: no shell-string spawn
+    // exists anywhere, by construction (injection off the table).
+    "env_args",
+    "env_get",
+    "env_set",
+    "env_vars",
+    "os_cwd",
+    "os_exit",
+    "os_spawn",
+    "os_wait",
+    "os_kill",
+    // the time builtin tier (s40, determinism-first per X12: every
+    // entry is Clock-tagged and comptime-refused; the ms-integer
+    // spellings are the builtin ABI — Instant/SystemTime/Duration
+    // typing is the std facade's, where unit confusion becomes a
+    // compile error). Virtualization under --schedules/--replay rides
+    // the s36 clock-hook seam as it widens.
+    "time_now_ms",
+    "time_unix_ms",
+    "time_sleep_ms",
+    // the json builtin tier (s40, nursery-first per D31: std.x.json
+    // wraps these as its query kernels). PURE — no capability tag, no
+    // sandbox category; the comptime engine still refuses them (no
+    // json evaluator in the D33 allowlist at v0).
+    "json_valid",
+    "json_get",
+    "json_type",
+    "json_len",
     // provisional corpus stand-ins (retire with s05's real std surface)
     "acquire",
     "release",
