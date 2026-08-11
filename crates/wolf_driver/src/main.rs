@@ -582,8 +582,51 @@ fn compile_native(
     let shim = wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?;
     let mut backend: Box<dyn wolf_backend::Backend> =
         Box::new(wolf_codegen_clif::ClifBackend::new().map_err(|e| refuse("wir", e))?);
-    wolf_codegen_clif::compile_module(backend.as_mut(), &module, Some(shim))
+    // DWARF v0 (s30): the debug tier always carries debug info — the
+    // Cranelift backend IS the debug tier (release is the LLVM tier,
+    // s41). The builder collects the DebugSink stream and hands the
+    // finished .debug_* sections back through the trait; the driver
+    // gates on capabilities, never backend identity.
+    let mut dwarf = if backend.capabilities().dwarf_fidelity != wolf_backend::DwarfFidelity::None {
+        let mut files = std::collections::HashMap::new();
+        for unit in &res.package.files {
+            let mut line_starts = vec![0u32];
+            for (i, &b) in unit.raw.src.iter().enumerate() {
+                if b == b'\n' {
+                    line_starts.push(i as u32 + 1);
+                }
+            }
+            files.insert(
+                unit.raw.file.index() as u32,
+                wolf_backend::dwarf::SourceFile {
+                    path: unit.raw.display.clone(),
+                    line_starts,
+                },
+            );
+        }
+        let comp_dir = std::env::current_dir()
+            .map(|d| d.display().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+        Some(wolf_backend::dwarf::DwarfBuilder::new(comp_dir, files))
+    } else {
+        None
+    };
+    let mut null = wolf_backend::NullDebugSink;
+    let sink: &mut dyn wolf_backend::DebugSink = match dwarf.as_mut() {
+        Some(d) => d,
+        None => &mut null,
+    };
+    wolf_codegen_clif::compile_module(backend.as_mut(), &module, Some(shim), sink)
         .map_err(|e| refuse("wir", e))?;
+    if let Some(dwarf) = &dwarf {
+        let sections = dwarf.finish().unwrap_or_else(|e| {
+            eprintln!("wolf build: ICE: DWARF emission failed: {e}");
+            std::process::exit(2);
+        });
+        backend
+            .add_debug_sections(sections)
+            .map_err(|e| refuse("wir", e))?;
+    }
     let product = backend.finish().map_err(|e| refuse("wir", e))?;
     link_object(&product.bytes, out)
 }

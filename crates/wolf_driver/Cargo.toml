@@ -25,3 +25,8 @@ wolf_codegen_clif.workspace = true
 wolf_rt.workspace = true
 wolf_query.workspace = true
 wolf_lsp.workspace = true
+
+[dev-dependencies]
+# s30 debug tests: parse the built executable's ELF sections to assert
+# .debug_* presence (the ledger's readelf-style check, tool-free).
+object = { version = "0.39", default-features = false, features = ["read_core", "elf", "std"] }
