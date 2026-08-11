@@ -834,7 +834,11 @@ impl<'t> Lowerer<'t> {
     /// keys are raw indices; rigid regions never merge, but lookups
     /// resolve through the table to stay honest about `same`).
     fn parent_of(&mut self, r: RegionId) -> Option<RegionId> {
-        let keys: Vec<u32> = self.region_parent.keys().copied().collect();
+        // Sorted keys (F-0048 class): when several merged regions
+        // carry parent edges, the SMALLEST matching index answers —
+        // a stable choice, never a hash order's.
+        let mut keys: Vec<u32> = self.region_parent.keys().copied().collect();
+        keys.sort_unstable();
         for k in keys {
             if self.rt.same(RegionId(k), r) {
                 return self.region_parent.get(&k).copied();

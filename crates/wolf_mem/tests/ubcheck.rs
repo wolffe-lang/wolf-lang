@@ -104,6 +104,78 @@ fn assert_exit(src: &str, code: u8) {
 
 const IMPORT: &str = "import c \"stdlib.h\"\n";
 
+// ------------------------------------- F-0048: verdict determinism --
+
+/// wolf-lang#42 (wolf-std F-0048): the checked lane's verdict is a
+/// pure function of the program. The sensitive shape is two modules
+/// exporting the same fn name — std.str and std.strbuf both export
+/// `len` — where the machine's name-only fallback once walked a
+/// `HashMap` in hash order: `alpha.len("wolf")` sometimes reached
+/// beta's `len(b: Buf)` instead and refused ("place projection
+/// outside the modelled surface"), so the SAME program answered `run`
+/// or `unsupported` at random. Resolution now goes through the
+/// checker's declaration locus (`CallSig::decl_span`); this rebuilds
+/// the package per iteration (fresh hash seeds each time) and demands
+/// one identical, CORRECT verdict every time.
+#[test]
+fn f0048_same_named_fns_across_modules_verdict_is_stable() {
+    let files: &[(&[&str], &str, &str)] = &[
+        (
+            &[],
+            "main.lu",
+            "use alpha\n\nfn main() -> !int {\n    \
+             if alpha.len(\"wolf\") == 4 { 0 } else { 1 }\n}\n",
+        ),
+        (
+            &["alpha"],
+            "alpha.lu",
+            "use beta\n\npub fn len(s: str) -> int {\n    s.len\n}\n\n\
+             pub fn blank_len() -> int {\n    beta.len(beta.mk())\n}\n",
+        ),
+        (
+            &["beta"],
+            "beta.lu",
+            "pub struct Buf {\n    s: str,\n}\n\n\
+             pub fn mk() -> Buf {\n    Buf { s: \"\" }\n}\n\n\
+             pub fn len(b: Buf) -> int {\n    b.s.len\n}\n",
+        ),
+    ];
+    let mut verdicts = Vec::new();
+    for _ in 0..24 {
+        let mut ml = MemoryLoader::new("f0048");
+        for (m, n, s) in files {
+            ml.add_file(m, n, s);
+        }
+        let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+        assert!(
+            res.diagnostics
+                .iter()
+                .all(|d| d.severity != wolf_diag::Severity::Error),
+            "input resolves clean: {:?}",
+            res.diagnostics
+        );
+        let tc = typecheck_package_with(&res.package, true);
+        assert!(
+            !tc.has_errors(),
+            "input typechecks clean: {:?}",
+            tc.diagnostics
+        );
+        verdicts.push(
+            match ubcheck::run_checked(&res.package, &tc, Budget::default()) {
+                Ok(out) => match out.verdict {
+                    Verdict::Exit(c) => format!("exit({c})"),
+                    other => format!("{other:?}"),
+                },
+                Err(ny) => format!("unsupported: {}", ny.construct),
+            },
+        );
+    }
+    assert!(
+        verdicts.iter().all(|v| v == "exit(0)"),
+        "checked verdicts must be deterministic and correct: {verdicts:?}"
+    );
+}
+
 // ------------------------------------------------------------- P1 UAF --
 
 #[test]
