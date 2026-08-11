@@ -791,9 +791,13 @@ fn bench_diff(args: &[String]) -> ExitCode {
                 // no variance floor, no credible gate). They stay
                 // REPORTED but do not gate until s44's methodology
                 // lands; deterministic counters and rates keep gating.
-                let hw_sensitive = metric.ends_with("_wall_s")
-                    || metric.ends_with("_rss_kb")
-                    || metric.ends_with("_ns");
+                // Deterministic = same input, same number, any machine
+                // (hit counts, memo rates). Everything wall-derived —
+                // including per_sec throughput, which swung +78.7% then
+                // -32.7% across two runs of sibling commits — is
+                // hardware-sensitive and reports without gating.
+                let deterministic = metric.ends_with("_hits") || metric.ends_with("hit_rate");
+                let hw_sensitive = !deterministic;
                 let dir = if regressed { "REGRESSED" } else { "improved" };
                 let tag = if regressed && hw_sensitive {
                     " (report-only: hardware-sensitive, no variance floor yet)"
