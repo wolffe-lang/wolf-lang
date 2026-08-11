@@ -227,6 +227,16 @@ pub enum TyKind {
     /// generic instantiation still lands in [`TyKind::Unsupported`].
     List(TyId),
     Pool(TyId),
+    /// The concurrency surface's builtin types (spec 03, D14). Typed
+    /// as builtins exactly like the containers above — the real std
+    /// sync surface subsumes these later. `Chan` is `channel[T](n)`'s
+    /// value ([conc.chan.type]); `Mutex` is the `sync` wrapper the
+    /// `when` construct acquires ([conc.when.body]); `TaskScope` is
+    /// the handle a `scope name { … }` block binds (D16: scope
+    /// handles are ordinary values, passable as parameters).
+    Chan(TyId),
+    Mutex(TyId),
+    TaskScope,
     /// `dyn Trait` with the trait resolved to its defining module
     /// (s14). Dyn-safety is checked where the type is written; witness
     /// layout is c05's.
@@ -489,6 +499,9 @@ pub fn render(
         TyKind::Distinct(t) => format!("distinct {}", render(table, *t, resolve)),
         TyKind::List(t) => format!("List[{}]", render(table, *t, resolve)),
         TyKind::Pool(t) => format!("Pool[{}]", render(table, *t, resolve)),
+        TyKind::Chan(t) => format!("channel[{}]", render(table, *t, resolve)),
+        TyKind::Mutex(t) => format!("Mutex[{}]", render(table, *t, resolve)),
+        TyKind::TaskScope => "scope".to_string(),
         TyKind::Dyn { name, .. } => format!("dyn {name}"),
         TyKind::Proj(base, name) => format!("{}.{name}", render(table, *base, resolve)),
         TyKind::RegionTy => "region".to_string(),
@@ -670,6 +683,14 @@ pub fn subst(
         TyKind::Pool(t) => {
             let s = subst(table, t, map);
             table.intern(TyKind::Pool(s))
+        }
+        TyKind::Chan(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Chan(s))
+        }
+        TyKind::Mutex(t) => {
+            let s = subst(table, t, map);
+            table.intern(TyKind::Mutex(s))
         }
         TyKind::Proj(base, name) => {
             let s = subst(table, base, map);

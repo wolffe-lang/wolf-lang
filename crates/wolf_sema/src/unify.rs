@@ -301,6 +301,8 @@ fn occurs_adjust(
         | TyKind::Distinct(t)
         | TyKind::List(t)
         | TyKind::Pool(t)
+        | TyKind::Chan(t)
+        | TyKind::Mutex(t)
         | TyKind::Proj(t, _) => occurs_adjust(store, table, var, level, t),
         TyKind::ErrUnion(t, row) => {
             occurs_adjust(store, table, var, level, t)?;
@@ -416,7 +418,9 @@ pub fn unify(
         // rewrite engine runs before unification; D28: no equality
         // solver): same associated name, unifiable bases.
         (TyKind::Proj(ba, na), TyKind::Proj(bb, nb)) if na == nb => unify(table, store, ba, bb),
-        (TyKind::RegionTy, TyKind::RegionTy) | (TyKind::TypeTy, TyKind::TypeTy) => Ok(()),
+        (TyKind::RegionTy, TyKind::RegionTy)
+        | (TyKind::TypeTy, TyKind::TypeTy)
+        | (TyKind::TaskScope, TyKind::TaskScope) => Ok(()),
         (TyKind::ErrUnion(x, rx), TyKind::ErrUnion(y, ry)) => {
             unify(table, store, x, y)?;
             unify(table, store, rx, ry)
@@ -439,7 +443,9 @@ pub fn unify(
         | (TyKind::Weak(x), TyKind::Weak(y))
         | (TyKind::Distinct(x), TyKind::Distinct(y))
         | (TyKind::List(x), TyKind::List(y))
-        | (TyKind::Pool(x), TyKind::Pool(y)) => unify(table, store, x, y),
+        | (TyKind::Pool(x), TyKind::Pool(y))
+        | (TyKind::Chan(x), TyKind::Chan(y))
+        | (TyKind::Mutex(x), TyKind::Mutex(y)) => unify(table, store, x, y),
         (TyKind::Tuple(xs), TyKind::Tuple(ys)) => {
             if xs.len() != ys.len() {
                 return Err(UnifyErr::Mismatch);

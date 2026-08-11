@@ -48,8 +48,8 @@ use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
     ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, FromEndExpr, GreenNode,
     IfExpr, InBlock, LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr,
-    RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit, SyntaxKind, TupleExpr,
-    UnsafeBlock, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
+    RangeExpr, RegionBlock, RegionValue, ReturnExpr, ScopeExpr, SelectExpr, StringExpr, StructLit,
+    SyntaxKind, TupleExpr, UnsafeBlock, VarDecl, WhenExpr, WhileExpr, is_expr_kind, is_type_kind,
 };
 
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
@@ -262,6 +262,10 @@ pub enum Reason {
     /// `[mem.region.freeze.1]`) — or a region block, which types as
     /// its body's value.
     FreezeTarget,
+    /// A `when` operand must be a sync value (`[conc.when.order]`).
+    WhenOperand,
+    /// A select arm's source must be a channel (`[conc.select.ready]`).
+    SelectSource,
 }
 
 impl Reason {
@@ -298,6 +302,8 @@ impl Reason {
             Reason::Receiver(m) => format!("`{m}`'s receiver must be"),
             Reason::InTarget => "the target of `in` must be".to_string(),
             Reason::FreezeTarget => "the target of `freeze` must be".to_string(),
+            Reason::WhenOperand => "a `when` operand must be".to_string(),
+            Reason::SelectSource => "a select arm receives from".to_string(),
         }
     }
 
@@ -324,6 +330,8 @@ impl Reason {
             Reason::Receiver(_) => "the method is declared here",
             Reason::InTarget => "the `in` block starts here",
             Reason::FreezeTarget => "the `freeze` is here",
+            Reason::WhenOperand => "the `when` set is acquired here",
+            Reason::SelectSource => "the select arm is here",
         }
     }
 }
@@ -444,6 +452,17 @@ struct Checker<'a> {
     /// lowercase name it deferred is refused honestly instead of
     /// silently ([`crate::resolve::lexical_row_tags`], #4).
     row_tags: BTreeSet<String>,
+    /// Lexically enclosing `when` blocks, outermost first
+    /// ([conc.when.nonest]): a non-empty stack makes another `when`
+    /// E1103. The stack survives into closures deliberately — the
+    /// clause's word is *lexically*.
+    when_stack: Vec<Span>,
+    /// Inside the argument of a `s.spawn(…)` call ([conc.task.spawn]):
+    /// the scope depth at the spawn site and the spawn call's span.
+    /// An assignment whose target binding sits below that depth writes
+    /// captured enclosing state — E1101, unless the binding is a
+    /// `sync` type or a `when`-body payload rebind.
+    spawn_ctx: Option<(usize, Span)>,
 }
 
 /// One `match` recorded for the body-end exhaustiveness pass (s17):
@@ -575,6 +594,8 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         match_facts: Vec::new(),
         calls: Vec::new(),
         row_tags: BTreeSet::new(),
+        when_stack: Vec::new(),
+        spawn_ctx: None,
     };
     let outcome = match body.member {
         None => c.run(node, body),
@@ -706,6 +727,8 @@ pub(crate) fn collect_body_rows(
         match_facts: Vec::new(),
         calls: Vec::new(),
         row_tags: BTreeSet::new(),
+        when_stack: Vec::new(),
+        spawn_ctx: None,
     };
     let _ = c.run(node, body);
     // Solve what the body pinned, then default the rest so payload
@@ -2243,6 +2266,363 @@ impl<'a> Checker<'a> {
         Ok(region)
     }
 
+    // ------------------------------------ the conc surface (spec 03) ----
+
+    /// `scope name? { … }` — the structured-concurrency block
+    /// ([conc.task.scope]). The name binds a `scope`-typed handle
+    /// over the body (D16: handles are ordinary values); the block's
+    /// value is the body's value, produced after the join
+    /// ([conc.task.join] is the runtime's fact, not typing's).
+    fn synth_scope(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = ScopeExpr::cast(e).expect("kind");
+        self.push_scope();
+        if let Some(name) = d.name() {
+            let handle = self.lo.table.intern(TyKind::TaskScope);
+            let nm = self.text(name.span);
+            self.bind(nm, name.span, handle);
+        }
+        let ty = match d.body() {
+            Some(b) => self.synth_block(b)?,
+            None => self.error_ty(),
+        };
+        self.pop_scope();
+        Ok(ty)
+    }
+
+    /// `select { pat from ch => body, timeout(d) => body, … }` —
+    /// readiness choice over channels ([conc.select.ready]). Each
+    /// arm's source must be a channel; a simple binder pattern takes
+    /// the element type over the arm's body. The whole `select` is a
+    /// statement shape at v0 and types as unit.
+    fn synth_select(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = SelectExpr::cast(e).expect("kind");
+        for arm in d.arms() {
+            let body = arm.body();
+            let head = arm
+                .syntax()
+                .nodes()
+                .filter(|n| is_expr_kind(n.kind))
+                .find(|n| body.is_none_or(|b| !std::ptr::eq(*n as *const _, b as *const _)));
+            self.push_scope();
+            if arm.is_timeout() {
+                // The duration is numeric at v0; the real duration
+                // type is the std surface's.
+                if let Some(dur) = head {
+                    let int_ = self.lo.table.prim(Prim::Int);
+                    let exp = Expect {
+                        ty: int_,
+                        reason: Reason::ArgOfCall {
+                            callee: "timeout".to_string(),
+                            index: 0,
+                        },
+                        because: None,
+                    };
+                    self.check_expr(dur, &exp)?;
+                }
+            } else {
+                let elem = self.fresh(NumKind::Any, arm.syntax().span);
+                if let Some(src) = head {
+                    let chan = self.lo.table.intern(TyKind::Chan(elem));
+                    let exp = Expect {
+                        ty: chan,
+                        reason: Reason::SelectSource,
+                        because: None,
+                    };
+                    self.check_expr(src, &exp)?;
+                }
+                if let Some(pat) = arm.pattern() {
+                    match pat.kind {
+                        SyntaxKind::IdentPat => {
+                            if let Some(t) = pat.child_token(SyntaxKind::Ident) {
+                                let name = self.text(t.span);
+                                self.bind(name, t.span, elem);
+                            }
+                        }
+                        SyntaxKind::WildcardPat => {}
+                        // Destructuring arms (`exit(reason) from m`)
+                        // ride the proc surface's typing.
+                        _ => {
+                            self.pop_scope();
+                            return Err(NotYet {
+                                construct: "this select-arm pattern shape (s35)",
+                                span: pat.span,
+                            });
+                        }
+                    }
+                }
+            }
+            if let Some(b) = body {
+                self.synth_expr(b)?;
+            }
+            self.pop_scope();
+        }
+        Ok(self.lo.table.unit())
+    }
+
+    /// `when (a, b, …) { … }` — whole-set acquisition
+    /// ([conc.when.order]). Operands must be `Mutex` values; simple
+    /// paths rebind to their payloads over the body
+    /// ([conc.when.body]), so reads and writes inside go to the
+    /// payload. A `when` lexically inside another `when` body is
+    /// E1103 ([conc.when.nonest]) — detected here, body still
+    /// checked (one root cause, no cascade).
+    fn synth_when(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = WhenExpr::cast(e).expect("kind");
+        if let Some(&outer) = self.when_stack.last() {
+            self.diags.push(
+                Diagnostic::error(codes::E1103, e.span, "`when` blocks do not nest")
+                    .with_label("this would acquire while a set is already held")
+                    .with_secondary(outer, "the enclosing `when` holds its whole set here")
+                    .with_note(
+                        "`when` acquires its entire operand set at once, in one \
+                         canonical order — that is what makes lock-order deadlock \
+                         impossible ([conc.when.nodeadlock]); a nested `when` is \
+                         incremental acquisition by another spelling. Merge the \
+                         operands into the outer set (`when (a, b, c) { … }`), or \
+                         end the outer block before acquiring the next set.",
+                    ),
+            );
+        }
+        self.push_scope();
+        for op in d.operands() {
+            let payload = self.fresh(NumKind::Any, op.span);
+            let mx = self.lo.table.intern(TyKind::Mutex(payload));
+            let exp = Expect {
+                ty: mx,
+                reason: Reason::WhenOperand,
+                because: None,
+            };
+            self.check_expr(op, &exp)?;
+            if op.kind == SyntaxKind::PathExpr
+                && let Some(t) = PathExpr::cast(op).and_then(|p| p.ident())
+            {
+                let name = self.text(t.span);
+                self.bind(name, t.span, payload);
+            }
+        }
+        self.when_stack.push(e.span);
+        let ty = match d.body() {
+            Some(b) => self.synth_block(b),
+            None => Ok(self.error_ty()),
+        };
+        self.when_stack.pop();
+        self.pop_scope();
+        ty
+    }
+
+    /// Is `t` sendable through a channel ([conc.chan.type])? `Copy`
+    /// data, region values (moved on send), and `sync` types qualify;
+    /// unsolved inference leftovers pass so E1102 never fires on a
+    /// wreck. `imm` is a region-state fact, not a type, so frozen
+    /// aggregates are conservatively unsendable here — send the
+    /// region, or share the frozen value by capture instead.
+    fn sendable(&self, t: TyId) -> bool {
+        match self.kind_of(t) {
+            TyKind::Error | TyKind::Never | TyKind::Var(_) | TyKind::Rigid(_) => true,
+            TyKind::Unit | TyKind::Prim(_) | TyKind::Fn(..) => true,
+            TyKind::Wrapping(x) | TyKind::Range(x) | TyKind::Distinct(x) => self.sendable(x),
+            TyKind::Tuple(xs) => xs.iter().all(|x| self.sendable(*x)),
+            TyKind::RegionTy => true,
+            TyKind::Chan(_) | TyKind::Mutex(_) => true,
+            _ => false,
+        }
+    }
+
+    /// `channel[T](n)` — the channel constructor ([conc.chan.type]).
+    /// The payload must be sendable (E1102); the capacity is an
+    /// integer, and omitting it is the rendezvous default
+    /// ([conc.chan.default] — `n = 0`, [conc.chan.buf]).
+    fn call_channel_ctor(
+        &mut self,
+        b: BracketApply<'_>,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let ty_nodes: Vec<_> = b
+            .args()
+            .into_iter()
+            .flat_map(|a| a.args())
+            .filter_map(Arg::value)
+            .collect();
+        let elem = match ty_nodes.as_slice() {
+            [one] => match self.type_from_bracket_arg(one) {
+                Some(t) => t,
+                None => {
+                    return Err(NotYet {
+                        construct: "this channel payload shape (s16 generic data)",
+                        span: e.span,
+                    });
+                }
+            },
+            _ => {
+                return Err(NotYet {
+                    construct: "this channel instantiation (s16 generic data)",
+                    span: e.span,
+                });
+            }
+        };
+        if !self.sendable(elem) {
+            let shown = self.show(elem);
+            let span = ty_nodes.first().map(|n| n.span).unwrap_or(e.span);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1102,
+                    span,
+                    format!("`{shown}` cannot be sent through a channel"),
+                )
+                .with_label("not a sendable payload type")
+                .with_note(
+                    "channel payloads must be `Copy` data, `imm` data, a region \
+                     value (the send is its affine move), or a `sync` type \
+                     ([conc.chan.type]) — sending anything else would give two \
+                     tasks one mutable value. D14's verbs are the ways out: \
+                     `move` the data into a region and send the region, `freeze` \
+                     it into shareable `imm` data, or guard it with a `Mutex`.",
+                ),
+            );
+        }
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        match arg_nodes.as_slice() {
+            // No capacity: rendezvous ([conc.chan.default]).
+            [] => {}
+            [one] => {
+                if let Some(v) = Arg::value(*one) {
+                    let int_ = self.lo.table.prim(Prim::Int);
+                    let exp = Expect {
+                        ty: int_,
+                        reason: Reason::ArgOfCall {
+                            callee: "channel".to_string(),
+                            index: 0,
+                        },
+                        because: None,
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+            }
+            more => {
+                self.wrong_arg_count("channel", e.span, None, 1, more.len());
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+            }
+        }
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: "channel".to_string(),
+                decl_span: None,
+                has_self: false,
+                ctor: true,
+                params: Vec::new(),
+                c_call: false,
+            },
+        ));
+        Ok(self.lo.table.intern(TyKind::Chan(elem)))
+    }
+
+    /// `Mutex(v)` — the sync-cell constructor (D14's `sync` verb
+    /// surface). One argument, the payload; acquisition is the `when`
+    /// construct, so the type carries no methods.
+    fn call_mutex_ctor(&mut self, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        let payload = match arg_nodes.as_slice() {
+            [one] => match Arg::value(*one) {
+                Some(v) => self.synth_expr(v)?,
+                None => self.error_ty(),
+            },
+            more => {
+                self.wrong_arg_count("Mutex", e.span, None, 1, more.len());
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                self.error_ty()
+            }
+        };
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: "Mutex".to_string(),
+                decl_span: None,
+                has_self: false,
+                ctor: true,
+                params: Vec::new(),
+                c_call: false,
+            },
+        ));
+        Ok(self.lo.table.intern(TyKind::Mutex(payload)))
+    }
+
+    /// E1101 — an assignment inside a spawned task's closure whose
+    /// target is a binding captured from the enclosing function
+    /// ([conc.task.spawn]). Sync-typed state is exempt (the clause's
+    /// carve-out); `when`-body payload rebinds are naturally exempt
+    /// (they bind inside the closure's scopes). The three fixes are
+    /// the book's: a channel, a `Mutex` in a `when`, or `par` with a
+    /// reduction.
+    fn check_task_capture_write(&mut self, place: &GreenNode) {
+        let Some((depth_limit, spawn_span)) = self.spawn_ctx else {
+            return;
+        };
+        let Some((name, span)) = self.place_root_ident(place) else {
+            return;
+        };
+        let mut found = None;
+        'outer: for (i, scope) in self.scopes.iter().enumerate().rev() {
+            for (n, t) in scope.iter().rev() {
+                if *n == name {
+                    found = Some((i, *t));
+                    break 'outer;
+                }
+            }
+        }
+        let Some((depth, ty)) = found else {
+            return; // module state is not a capture
+        };
+        if depth >= depth_limit {
+            return; // task-local, or a `when` payload rebind
+        }
+        if matches!(
+            self.kind_of(ty),
+            TyKind::Error | TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope
+        ) {
+            return; // sync state is the clause's carve-out
+        }
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1101,
+                span,
+                format!(
+                    "this task writes to `{name}`, which it captures from the enclosing function"
+                ),
+            )
+            .with_label("tasks cannot mutate captured state")
+            .with_secondary(spawn_span, "the task's closure captures it at this spawn")
+            .with_note(
+                "task captures are copies, `imm` shares, or region moves (D14) — \
+                 never mutable windows onto the parent's locals; two tasks writing \
+                 one binding is the data race the memory model forbids. Three ways \
+                 out: send results over a `channel` and let one owner mutate; \
+                 guard truly shared state with a `Mutex` acquired in a `when` \
+                 block; or, for loop-shaped work, use `par` with a reduction.",
+            ),
+        );
+    }
+
+    /// The root binding name of an assignable place: strip member,
+    /// index, and paren steps down to the base path.
+    fn place_root_ident(&self, place: &GreenNode) -> Option<(String, Span)> {
+        match place.kind {
+            SyntaxKind::PathExpr => {
+                let t = PathExpr::cast(place)?.ident()?;
+                Some((self.text(t.span), t.span))
+            }
+            SyntaxKind::MemberExpr => self.place_root_ident(MemberExpr::cast(place)?.base()?),
+            SyntaxKind::ParenExpr => self.place_root_ident(ParenExpr::cast(place)?.expr()?),
+            SyntaxKind::BracketApply => self.place_root_ident(BracketApply::cast(place)?.callee()?),
+            _ => None,
+        }
+    }
+
     // ----------------------------------------- the unsafe tier (s22) ----
 
     /// `unsafe { … }` — the tier-3 ring. Typing-wise it is a plain
@@ -2531,6 +2911,10 @@ impl<'a> Checker<'a> {
         // E0410 — `let` is immutable — is the RESOLVE rung's law
         // (s29, DIV-2026-010): binding structure is lexical, so the
         // rejection fires before this checker ever runs.
+        // E1101 — a task closure writing captured enclosing state
+        // ([conc.task.spawn]) — is this rung's, checked on the place
+        // before its type (the capture law is about the binding).
+        self.check_task_capture_write(place);
         let place_ty = self.place_type(place)?;
         let place_text = self.text(place.span);
         let op = a.op().map(|t| t.kind);
@@ -2759,11 +3143,18 @@ impl<'a> Checker<'a> {
             SyntaxKind::RegionValue => self.synth_region_value(e),
             SyntaxKind::InBlock => self.synth_in_block(e),
             SyntaxKind::FreezeExpr => self.synth_freeze(e),
-            SyntaxKind::ScopeExpr
-            | SyntaxKind::SelectExpr
-            | SyntaxKind::WhenExpr
-            | SyntaxKind::SpawnExpr => Err(NotYet {
-                construct: "concurrency typing (c05)",
+            // ---- the conc surface (spec 03): scope/spawn/select/when
+            // TYPE here — capture law E1101, sendability E1102, the
+            // nesting ban E1103 all live on this typing. LOWERING
+            // (wolf_mem's conc split, wir shapes, the runtime) stays
+            // an honest refusal downstream.
+            SyntaxKind::ScopeExpr => self.synth_scope(e),
+            SyntaxKind::SelectExpr => self.synth_select(e),
+            SyntaxKind::WhenExpr => self.synth_when(e),
+            // `spawn proc` — the proc surface (handles, monitors,
+            // exit reasons) types with the supervisor work (s34/s35).
+            SyntaxKind::SpawnExpr => Err(NotYet {
+                construct: "proc spawn typing (s35)",
                 span: e.span,
             }),
             // ---- the unsafe tier (s22): `unsafe { }` types as its
@@ -3871,6 +4262,32 @@ impl<'a> Checker<'a> {
         if is_type_kind(node.kind) {
             return Some(self.lower_ty(node));
         }
+        // A nested builtin instantiation (`channel[List[int]]`): the
+        // element spells as an expression (D29), so the bracket shape
+        // recurses here.
+        if node.kind == SyntaxKind::BracketApply {
+            let b = BracketApply::cast(node)?;
+            let head = b.callee()?;
+            let t = PathExpr::cast(head)?.ident()?;
+            let name = self.text(t.span);
+            if self.lookup_local(&name).is_some() {
+                return None;
+            }
+            let inner: Vec<_> = b
+                .args()
+                .into_iter()
+                .flat_map(|a| a.args())
+                .filter_map(Arg::value)
+                .collect();
+            let [one] = inner.as_slice() else { return None };
+            let elem = self.type_from_bracket_arg(one)?;
+            return match name.as_str() {
+                "List" => Some(self.lo.table.intern(TyKind::List(elem))),
+                "Pool" => Some(self.lo.table.intern(TyKind::Pool(elem))),
+                "channel" => Some(self.lo.table.intern(TyKind::Chan(elem))),
+                _ => None,
+            };
+        }
         if node.kind != SyntaxKind::PathExpr {
             return None;
         }
@@ -4061,6 +4478,111 @@ impl<'a> Checker<'a> {
             e,
             args,
         )
+    }
+
+    /// Methods on the conc builtins (spec 03): the channel operations
+    /// and the scope handle's `spawn`. Typed stubs exactly like the
+    /// Tier-2 containers'. `send` types as unit at v0 — the
+    /// closed-channel error value ([conc.chan.close]) becomes a row
+    /// with the std sync surface; `recv` is row-shaped already
+    /// (`T ! {closed}`). `Mutex` deliberately carries no methods:
+    /// acquisition is the `when` construct ([conc.when.order]).
+    #[allow(clippy::too_many_arguments)]
+    fn conc_method_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let p = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+        };
+        let (params, ret) = match (self.kind_of(recv_ty), mname) {
+            // `[conc.mm.hb.chan]` — the k-th send pairs the k-th
+            // receive; sends block on a full buffer ([conc.chan.buf]).
+            (TyKind::Chan(t), "send") => {
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty), p("value", t)], u)
+            }
+            // `[conc.chan.close]` — receives on a drained-closed
+            // channel return the closed error value, so `recv` is
+            // row-shaped: handle it with `else`, `?`, or `match`.
+            (TyKind::Chan(t), "recv") => {
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("closed".to_string(), Vec::new())], None);
+                let r = self.lo.table.intern(TyKind::ErrUnion(t, row));
+                (vec![p("self", recv_ty)], r)
+            }
+            (TyKind::Chan(_), "close") => {
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty)], u)
+            }
+            // `[conc.task.spawn]` — the task closure takes no
+            // parameters (values arrive through captures or
+            // channels) and its result flows through the join.
+            (TyKind::TaskScope, "spawn") => {
+                let ret_v = self.fresh(NumKind::Any, e.span);
+                let task = self.lo.table.intern(TyKind::Fn(Vec::new(), ret_v));
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty), p("task", task)], u)
+            }
+            _ => {
+                return Err(NotYet {
+                    construct: "this method on the conc surface (s35 std sync API)",
+                    span: e.span,
+                });
+            }
+        };
+        self.dispatch.push((
+            e.span,
+            Dispatch::Inherent {
+                ty: self.show(recv_ty),
+                method: mname.to_string(),
+            },
+        ));
+        let sig = FnSig {
+            params,
+            ret,
+            name_span: member_span,
+            ret_span: None,
+            row_span: None,
+            generics: Vec::new(),
+            comptime: false,
+            trusted: None,
+        };
+        // E1101 rides on `spawn`'s argument: while the task closure
+        // checks, assignments to bindings below this depth are
+        // capture writes ([conc.task.spawn]).
+        let is_spawn = mname == "spawn" && matches!(self.kind_of(recv_ty), TyKind::TaskScope);
+        let saved = self.spawn_ctx;
+        if is_spawn {
+            self.spawn_ctx = Some((self.scopes.len(), e.span));
+        }
+        let out = self.dispatch_method(
+            mname,
+            &sig,
+            BTreeMap::new(),
+            member_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        );
+        if is_spawn {
+            self.spawn_ctx = saved;
+        }
+        out
     }
 
     /// s37 — the builtin `str` method surface (D24/D25). Typed stubs
@@ -4301,6 +4823,10 @@ impl<'a> Checker<'a> {
                     if let Some(i) = crate::ctfe::intrinsics::intrinsic(&name) {
                         return self.call_intrinsic(&name, i, e, d.args());
                     }
+                    // `Mutex(v)` — the sync-cell ctor (spec 03, D14).
+                    if name == "Mutex" {
+                        return self.call_mutex_ctor(e, d.args());
+                    }
                     if let Some((module, item)) = self.named_fn_target(&name) {
                         return self.call_named(&item, module, callee.span, e, d.args());
                     }
@@ -4350,6 +4876,10 @@ impl<'a> Checker<'a> {
             let name = self.text(t.span);
             if self.lookup_local(&name).is_none() && matches!(name.as_str(), "List" | "Pool") {
                 return self.call_container_ctor(&name, b, e, d.args());
+            }
+            // `channel[T](n)` — the conc surface's ctor (spec 03).
+            if self.lookup_local(&name).is_none() && name == "channel" {
+                return self.call_channel_ctor(b, e, d.args());
             }
         }
         // Otherwise: call through the callee's type (closures, fn-typed
@@ -5465,6 +5995,12 @@ impl<'a> Checker<'a> {
             // prelude containers carry their typed stub methods.
             TyKind::Shared(_) | TyKind::Weak(_) | TyKind::List(_) | TyKind::Pool(_) => {
                 self.tier2_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
+            }
+            // The conc builtins (spec 03): channel ops and the
+            // scope's `spawn`. `Mutex` has no methods by design —
+            // acquisition is the `when` construct.
+            TyKind::Chan(_) | TyKind::TaskScope | TyKind::Mutex(_) => {
+                self.conc_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
             // s37 — the builtin `str` surface (D24/D25).
             TyKind::Prim(Prim::Str) => {

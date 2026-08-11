@@ -1765,8 +1765,11 @@ fn select_arm(p: &mut Parser<'_>, ctx: Ctx) {
     a.complete(p, SyntaxKind::SelectArm);
 }
 
-/// `'when' '(' expr (',' expr)+ ','? ')' block` — one operand is just a
-/// method on the sync type, so `when` requires at least two.
+/// `'when' '(' expr (',' expr)+ ','? ')' block` — whole-set
+/// acquisition is the construct's point ([conc.when.order]), so the
+/// grammar requires at least two operands. (The old hint here named a
+/// sync-type method that does not exist — `Mutex` has no methods;
+/// the message now states the whole-set rule instead.)
 fn when_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
     p.bump(); // when
@@ -1825,8 +1828,9 @@ fn when_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.here(),
-                "`when` requires at least two operands (one operand is a \
-                 method on the sync type)",
+                "`when` requires at least two operands — it acquires its \
+                 whole set at once, so name every sync object the body \
+                 touches in one `when` list",
             );
         }
     } else {

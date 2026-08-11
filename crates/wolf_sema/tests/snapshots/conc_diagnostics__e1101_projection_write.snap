@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/conc_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1101]: this task writes to `t`, which it captures from the enclosing function
+ --> mem:///main.lu:8:24
+  |
+8 |         s.spawn(fn() { t.count = 1 })
+  |         ----------------------------- the task's closure captures it at this spawn
+  |                        ^ tasks cannot mutate captured state
+  |
+  = note: task captures are copies, `imm` shares, or region moves (D14) — never mutable windows
+    onto the parent's locals; two tasks writing one binding is the data race the memory
+    model forbids. Three ways out: send results over a `channel` and let one owner mutate;
+    guard truly shared state with a `Mutex` acquired in a `when` block; or, for loop-shaped
+    work, use `par` with a reduction.
