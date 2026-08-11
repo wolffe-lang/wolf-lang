@@ -209,6 +209,7 @@ fn corpus_cmd() -> ExitCode {
             let Ok(out) = out else { continue };
             if !out.status.success() {
                 eprintln!("corpus: {}: conform-run failed", f.display());
+                eprintln!("  stderr: {}", String::from_utf8_lossy(&out.stderr).trim());
                 bad += 1;
                 continue;
             }
