@@ -6,10 +6,13 @@
 //! `cargo xtask deps-check` enforces it. Deterministic-scheduler hooks
 //! (s36) are part of this crate's v1 spec surface.
 
+pub mod fs;
 pub mod io;
+pub mod list;
 pub mod native;
 pub mod net;
 pub mod quarantine;
+pub mod str;
 // The task layer is linux-only at this campaign stage — the same
 // platform posture as native codegen (s28: M1 targets linux/x86-64;
 // mmap/pthread stack plumbing uses linux-specific surface). Other
