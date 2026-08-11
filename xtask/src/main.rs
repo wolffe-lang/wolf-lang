@@ -194,7 +194,10 @@ fn corpus_cmd() -> ExitCode {
     // Runs through the differential protocol so xtask stays independent of
     // compiler crates. A stub driver (verdict `unsupported`) skips checks.
     let mut executed = false;
-    if run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+    if run_ok(
+        "cargo",
+        &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
+    ) {
         for (f, d) in &parsed {
             // `phase: run` files execute NATIVELY (s31: compile, link,
             // run — the M1 gate). WOLF_NATIVE=1 keeps the argv shape
