@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W1302]: `q` was an `assume noalias` operand, and this reassigns it
+  --> mem:///main.lu:11:9
+   |
+ 9 |         assume noalias p, q
+   |         ------------------- the assumption was stated here
+10 |         let spare = q
+11 |         q = p
+   |         ^^^^^ the assumption no longer describes this name
+   |
+   = note: the no-alias license was granted for the pointer this name held then; state the
+     assumption after the last assignment of its operands.

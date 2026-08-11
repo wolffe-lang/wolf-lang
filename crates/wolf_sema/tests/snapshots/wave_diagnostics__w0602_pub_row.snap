@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0602]: this `pub` signature spells a 2-tag error row anonymously
+ --> mem:///main.lu:1:33
+  |
+1 | pub fn wide(path: str) -> int ! {stale, lost} {
+  |                                 ^^^^^^^^^^^^^ this exact tag set is now API
+  |
+  = note: every caller depends on this row, and every later tag is a visible change at every
+    boundary; keep the row small — one tag per failure a caller can act on — and reuse one
+    spelling everywhere it flows.

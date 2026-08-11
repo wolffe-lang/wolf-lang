@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0309]: `{who}` in a raw literal is just braces and letters
+ --> mem:///main.lu:3:15
+  |
+3 |     let s = r"{who}"
+  |               ^^^^^ raw literals interpolate nothing
+  |
+  = note: drop the `r` prefix to interpolate, or keep it if these exact bytes are wanted — the two
+    readings are one keystroke apart.

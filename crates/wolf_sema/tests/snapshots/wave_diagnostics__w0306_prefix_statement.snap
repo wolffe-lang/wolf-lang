@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0306]: this statement is only `-` applied to a value
+ --> mem:///main.lu:5:5
+  |
+5 |     - b
+  |     ^^^ computes a value and discards it
+  |
+  = note: if this was meant to continue the line above, join the lines — a newline ended that
+    statement; standalone, the result goes nowhere.

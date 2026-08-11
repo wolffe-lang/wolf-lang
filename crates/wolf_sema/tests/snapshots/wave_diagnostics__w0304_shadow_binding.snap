@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0304]: this `let` binding shadows the prelude name `assert`
+ --> mem:///main.lu:2:9
+  |
+2 |     let assert = 1
+  |         ^^^^^^ shadows an ambient name
+  |
+  = note: every later use of `assert` in this scope means the binding, not the ambient name —
+    silently. Rename the binding.

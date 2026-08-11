@@ -175,6 +175,41 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
                     &lowered.regions,
                     &lowered.rc_cells,
                 ));
+                // W1001 (s68) — a region inference proves empty: no
+                // allocation ever lands in it and its handle never
+                // leaves the frame. A body that exposes a region's
+                // base to the raw tier is exempt wholesale: an empty
+                // arena handed across the C membrane is filled by
+                // code this checker cannot see.
+                let in_std = pkg.modules[outcome.body.module]
+                    .path
+                    .first()
+                    .is_some_and(|s| s == "std");
+                let exposes_region = lowered.cfg.blocks.iter().any(|b| {
+                    b.stmts.iter().any(
+                        |s| matches!(s, cfg::Stmt::Expose { dir, .. } if *dir == "region->ptr"),
+                    )
+                });
+                for &rid in &lowered.regions.never_allocates {
+                    if exposes_region || in_std {
+                        break;
+                    }
+                    let r = &lowered.regions.regions[rid.0 as usize];
+                    out.diagnostics.push(
+                        Diagnostic::warning(
+                            codes::W1001,
+                            r.span,
+                            format!("the region `{}` never allocates", r.name),
+                        )
+                        .with_label("nothing lives here")
+                        .with_note(
+                            "no allocation is attributed to this region and its \
+                             handle stays in this frame; delete the region, or move \
+                             the allocation it was written for inside it."
+                                .to_string(),
+                        ),
+                    );
+                }
                 out.regions.push(lowered.regions);
             }
         }

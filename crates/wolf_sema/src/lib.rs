@@ -221,6 +221,7 @@ pub mod traits;
 pub mod typecheck;
 pub mod types;
 pub mod unify;
+pub(crate) mod wave;
 
 pub use check::{BodyRef, BodyResult, CallSig, CastKind, Dispatch, NotYet, TypedBody, check_body};
 pub use coerce::Coercion;

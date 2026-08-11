@@ -14,9 +14,13 @@ fn check(files: &[(&[&str], &str, &str)]) -> Typecheck {
         ml.add_file(m, n, s);
     }
     let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    // Errors only: the fixtures deliberately exercise wide anonymous
+    // `pub` rows, which the s68 wave flags (W0602) — advisory here.
     assert!(
-        res.diagnostics.is_empty(),
-        "inputs resolve clean: {:?}",
+        !res.diagnostics
+            .iter()
+            .any(|d| d.severity == wolf_diag::Severity::Error),
+        "inputs resolve without errors: {:?}",
         res.diagnostics
     );
     typecheck_package_with(&res.package, true)

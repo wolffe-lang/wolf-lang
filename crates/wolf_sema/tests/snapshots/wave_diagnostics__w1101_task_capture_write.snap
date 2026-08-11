@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W1101]: this write to `sum` stays inside the task
+ --> mem:///main.lu:5:13
+  |
+4 |         s.spawn(fn() {
+  |                 ------
+5 |             sum = sum + 1
+  |             ^^^ lands on the task's own copy
+6 |         })
+  | --------- the closure captured it at spawn
+  |
+  = note: task captures copy (or move); the enclosing binding never sees this assignment. Send the
+    result over a channel, or return it through the scope's join.

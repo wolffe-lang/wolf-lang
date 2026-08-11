@@ -484,9 +484,9 @@ with this name. When a near-miss exists ("did you mean `radius`?") the
 message suggests it — most unknown fields are typos. Otherwise the
 struct's actual fields are listed, and the struct's definition site is
 shown so you can check which version of the type you are holding.
-Methods are looked up separately from fields (s17 method resolution):
-if you meant to *call* something, the parentheses matter — `p.len` is
-a field access, `p.len()` is a method call.
+Methods are looked up separately from fields: if you meant to *call*
+something, the parentheses matter — `p.len` is a field access,
+`p.len()` is a method call.
 "#);
 
 code!(E0404, "this would be an infinite type", r#"
@@ -520,8 +520,8 @@ constructs structs with braces: `Point { x: 1, y: 2 }`, not
 `Point(1, 2)`), a value that lost its function type to a shadowing
 binding, or a field that holds data rather than a closure. The message
 names the type the callee actually has. If you expected a method, note
-that s13 checks free functions only; method calls resolve in a later
-phase, and a field holding a closure *is* callable as `x.field(…)`.
+that methods resolve through the receiver's type, not this path — and
+a field holding a closure *is* callable as `x.field(…)`.
 "#);
 
 code!(E0407, "an item is missing its type annotation", r#"
@@ -556,8 +556,8 @@ integer types. This operand is outside the operator's family. Two
 classics: wolf has no truthiness, so `if x` on a number must be
 written as a comparison (`x != 0`); and `+` does not join strings —
 interpolation does (`"{first}{second}"`), which formats any primitive
-and never surprises you with a numeric `+` overload. Trait-based
-operators for user types arrive with the trait engine (s14).
+and never surprises you with a numeric `+` overload. Operators on
+user types come from traits, and need the trait in scope.
 "#);
 
 code!(E0410, "a `let` binding cannot be assigned again", r#"
@@ -901,9 +901,9 @@ reason: confinement (compiling a package must never act on or read
 the machine that compiles it — `wolf add` must never mean arbitrary
 code runs with your credentials) or determinism (the same program and
 target must produce bit-identical comptime results on every host).
-Compute the value at runtime instead; file contents will later arrive
-as *declared build inputs* through the build system (s51), never as
-an evaluator capability.
+Compute the value at runtime instead; file contents belong in
+*declared build inputs* through the package manifest, never in an
+evaluator capability.
 "#);
 
 code!(E0702, "comptime evaluation ran out of fuel", r#"
@@ -976,7 +976,7 @@ decision procedure it cannot bound. Rewrite both sides into the same
 "#);
 
 code!(E0708, "layout is unresolved until codegen", r#"
-Sizes and offsets are decided when codegen lays types out (c05), not
+Sizes and offsets are decided when codegen lays types out, not
 by the type checker — so `size_of` at comptime answers only for
 fixed-width primitives today, and `typeinfo` describes fields without
 offsets. This is a staging rule, not a permanent refusal: when layout
@@ -1052,7 +1052,7 @@ so where the reader can see it, exactly like argument modes (X1):
 Wrap the receiver in the declared mode — the suggested edit inserts
 `(mut …)`/`(take …)` for you — or drop the mode the method does not
 ask for. Whether the access is actually exclusive is checked by the
-memory tiers (c04); this rule is the syntax law only.
+memory tiers; this rule is the syntax law only.
 "#);
 
 code!(E0805, "this `as` cast is outside the cast set", r#"
@@ -1310,7 +1310,7 @@ checker cannot see — allocator internals, pinned FFI regions. The deal
 that keeps that auditable is declaration: every module containing
 `#[trusted]` functions must be listed in the package manifest's
 `trusted` entry, so a dependency growing new trusted code is a visible
-diff, not a silent one (`wolf audit` reads exactly this roster). Add
+diff, not a silent one (`wolf audit-surface` reads this roster). Add
 the module to the `trusted` list in `wolf.pkg`, or remove the
 `#[trusted]` attribute if the code no longer asserts unseen
 invariants.
@@ -1354,7 +1354,7 @@ transformation compiled code is entitled to make, which is exactly why
 the unchecked behavior is undefined rather than merely wrong. The
 static tier accepts this program by design: raw pointers carry no
 statically-checkable aliasing claims, so the unsafe tier's obligations
-are discharged dynamically, here or by the independent is04 oracle.
+are discharged dynamically, here or by an independent oracle.
 Fix the operation the finding points at (the second span shows the
 provenance it violates); the near-miss corpus files show the closest
 defined shape for each row.
@@ -1404,8 +1404,182 @@ reports the dead attribute rather than letting it sit there implying
 a suppression that never happens.
 "#);
 
+code!(W0304, "this declaration shadows a prelude name", r#"
+The prelude's names — `assert`, `print`, `List`, the reflection
+intrinsics, the built-in type names — resolve in every file with no
+import, and a declaration with the same name silently wins over the
+prelude for its whole module (file boundaries create no scopes). The
+loss is invisible at every use site: a module that declares its own
+`assert` severs itself from the assertion trap entirely, and calls
+that read as the intrinsic quietly run the local one. Pick another
+name; the prelude's inventory is small, fixed, and worth avoiding
+wholesale.
+"#);
+
+code!(W0305, "this row tag shares its name with something else in scope", r#"
+Inside a function whose signature declares this tag, an identifier in
+raise position resolves to the tag first, while the same word
+everywhere else resolves to the item, import, or binding it shadows —
+one name, two meanings, decided by position. Programs with this
+collision have historically returned a module as an `int` with the
+caller's `else` never firing, which is why the rule of thumb is
+absolute: a tag may not share a name with anything in scope. Rename
+the tag (or the item); tags are cheap to rename because they exist
+only in rows, raises, and arms.
+"#);
+
+code!(W0306, "this statement is a bare prefix-operator expression", r#"
+A statement consisting only of a prefix operator applied to a value —
+`-total`, `!ready`, `&slot` — computes a value and throws it away, so
+it does nothing. Nearly always it is a broken continuation: the line
+above ended an expression, the newline terminated the statement, and
+what was meant as `a - b` became two statements with the second
+inert. Join the lines so the operator is read as binary (wolf never
+continues a statement across a newline that ends one), or delete the
+statement if the value really is unwanted.
+"#);
+
+code!(W0307, "the comparison after `else` applies to the fallback only", r#"
+`else` binds more loosely than any operator, so `count else 0 == max`
+parses as `count else (0 == max)` — the comparison happens first,
+against the fallback alone, and the `else` then defaults a boolean,
+not a count. When the intent is to default and then compare, wrap the
+default: `(count else 0) == max`. The warning fires on comparison
+operators in fallback position because a bare comparison as a
+fallback is nearly always the wrong grouping; parenthesize either
+reading to say which one is meant, and the warning stands down.
+"#);
+
+code!(W0308, "a `mut` argument is hidden inside a string interpolation", r#"
+This interpolation calls a function that mutates its argument, so
+building the string changes program state — a write buried where every
+reader expects pure formatting. Interpolations run left to right
+exactly once, so the code is well-defined; it is the placement that
+misleads, and such calls have a record of surfacing memory-model edge
+cases first. Hoist the call onto its own line, bind the result, and
+interpolate the binding: the mutation becomes visible where mutations
+are expected.
+"#);
+
+code!(W0309, "a raw string contains interpolation-shaped braces", r#"
+Raw literals interpolate nothing: `r"{who}"` is six bytes, braces
+included, while the same characters in every other string literal are
+an interpolation of `who`. Braces that spell an in-scope name inside
+a raw literal almost always mean the `r` prefix was added to (or left
+on) the wrong string. Drop the prefix to interpolate, or escape
+nothing and keep the raw literal if the six bytes are what is wanted
+— the warning exists because the two readings are one keystroke
+apart and produce different strings with no diagnostic.
+"#);
+
 // ------------------------------------------------------------------------
-// W13xx — unsafe-tier style lints (s22). Advisory, never load-bearing.
+// W04xx — typing-adjacent warnings (mirror of the E04xx family).
+// ------------------------------------------------------------------------
+
+code!(W0401, "this literal does not fit the type it is cast to", r#"
+The value of this literal is known at compile time, and it lies
+outside the range of the cast's target type, so the conversion can
+never preserve it — the program carries a number that the type it is
+handed to cannot hold. Wolf's arithmetic is checked in every profile,
+and a conversion that must lose the value is the same hazard spelled
+as a cast. Use a wider target type, or change the literal; if
+truncation to the type's range is genuinely intended, say so with the
+`wrapping` family, which makes the wraparound part of the type.
+"#);
+
+code!(W0402, "`0.0 - x` is not negation", r#"
+Subtracting from a zero literal flips the sign of every float except
+one: `0.0 - (-0.0)` is `+0.0`, so the idiom silently erases the sign
+of a negative zero — and sign-honoring code (`copysign`, rounding,
+formatting of `-0.0`) then misbehaves on exactly one input. Wolf has
+a real unary minus: write `-x`, which negates every value including
+the zeros. The warning names the one-input difference because it has
+produced wrong library results that no test with nonzero data can
+catch.
+"#);
+
+// ------------------------------------------------------------------------
+// W06xx — error-row-adjacent warnings (mirror of the E06xx family).
+// ------------------------------------------------------------------------
+
+code!(W0601, "this fallible result is silently discarded", r#"
+The expression produces a `!T` value — a result whose error row is
+part of its meaning — and the statement throws it away, error and
+all. A failure here vanishes without a trace: no propagation, no
+handling, no trap, just a dropped row, which is the one way wolf's
+error channel can be ignored by accident. Propagate it with `?`,
+handle it with `else`, or match on it; if the failure genuinely does
+not matter here, bind it away explicitly so the discard is visible
+to the reader.
+"#);
+
+code!(W0602, "a `pub` signature spells its error row anonymously", r#"
+This exported function writes its error row out inline, so every
+caller now depends on this exact set of tags with nothing naming the
+set — the row is public API that cannot be referred to, documented
+once, or evolved in one place. The row's meaning is stable (written
+rows never widen silently); what is hazardous is its evolution, since
+every later tag is a source-visible change at every call boundary.
+State the row deliberately and keep it small — one tag per failure a
+caller can act on — and reuse the same spelling at every boundary
+that shares it.
+"#);
+
+// ------------------------------------------------------------------------
+// W08xx — pattern/completion-adjacent warnings (mirror of E08xx).
+// ------------------------------------------------------------------------
+
+code!(W0801, "a capitalized name in this pattern binds instead of matching", r#"
+This scrutinee has no cases for the name to test, so the bare
+identifier binds a fresh name — the arm matches every value, and any
+arms below it are dead. A capitalized name in pattern position reads
+as a variant or tag test, which is exactly why this shape has
+produced first-arm-always dispatch in correct-looking code. If a
+constant comparison was meant, use a guard (`n if n == Zed`); if a
+binding was meant, give it a lowercase name so it reads as one.
+"#);
+
+// ------------------------------------------------------------------------
+// W10xx — memory-tier warnings (mirror of the E10xx family).
+// ------------------------------------------------------------------------
+
+code!(W1001, "this region never allocates", r#"
+Region inference proves that no allocation is ever attributed to this
+region: nothing is built in it, nothing is moved into it, and its
+create/free pair is frame-local. The region is pure ceremony — it
+costs a reader the question "what lives here?" whose answer is
+"nothing", and it usually marks either leftover scaffolding or an
+allocation that silently landed in the ambient region instead of the
+one written for it. Delete the region, or move the allocation it was
+written for inside it.
+"#);
+
+// ------------------------------------------------------------------------
+// W11xx — concurrency-adjacent warnings (mirror of the E11xx family).
+// ------------------------------------------------------------------------
+
+code!(W1101, "this write stays inside the task", r#"
+The closure given to `spawn` assigns to a name captured from the
+enclosing function. Task captures copy (or move) at spawn time, so
+the write lands on the task's own copy and the enclosing binding
+never sees it — the program runs, exits cleanly, and computes with a
+value that was never updated. Send the result over a channel, or
+return it through the scope's join, so the data flow between tasks is
+explicit; cross-task shared mutation is what `sync` types are for.
+"#);
+
+code!(W1102, "the closure captured this value before it changed", r#"
+A closure captures by value at the moment it is created, and this
+binding is assigned after that moment — every later call of the
+closure still sees the old value. The program is legal and the copy
+semantics are deliberate; what bites is the reading, since the code
+looks like the closure tracks the variable. Create the closure after
+the last assignment, pass the value as a parameter at each call, or
+restructure so the captured binding never changes underneath it.
+"#);
+
+// ------------------------------------------------------------------------
+// W13xx — unsafe-tier style lints. Advisory, never load-bearing.
 // ------------------------------------------------------------------------
 
 code!(W1301, "this `unsafe` block does not state its invariant", r#"
@@ -1416,8 +1590,19 @@ invariant written down, next to the block that relies on it — the
 convention is a `# Safety:` comment immediately above the block (or on
 its first line) stating what must hold and why it does. This is a
 style lint, not a gate: the block still checks and compiles. Add the
-comment; future auditors — including `wolf audit` — read the rings by
-exactly these markers.
+comment; future auditors — including `wolf audit-surface` — read the
+rings by exactly these markers.
+"#);
+
+code!(W1302, "an `assume noalias` operand was reassigned", r#"
+`assume noalias p, q` asserts, at the point it is written, that its
+operands never alias — and the check is spent exactly there.
+Reassigning an operand afterwards leaves the assertion talking about
+a pointer the name no longer holds: `p = q` after the assume makes
+the two names alias while the license to assume otherwise still
+stands, which is undefined behavior waiting for an optimizer. State
+the assumption after the last assignment of its operands, or bind the
+asserted pointers to names that never change.
 "#);
 
 }
@@ -1475,6 +1660,55 @@ mod tests {
             let lower = info.explanation.to_lowercase();
             for stub in ["todo", "tbd", "fixme", "write me", "explanation goes here"] {
                 assert!(!lower.contains(stub), "{c}: explanation contains `{stub}`");
+            }
+        }
+    }
+
+    /// The catalog speaks to readers, not to the project (the lived
+    /// lint corpus's own rule, mined from the book's ledgers): no
+    /// sprint/campaign identifiers and no commands that do not exist
+    /// may appear in `--explain` prose or summaries. Spec anchors
+    /// (`[mem.ub.defined]`) and D-numbered decisions are public
+    /// vocabulary and stay.
+    #[test]
+    fn explanations_carry_no_internal_identifiers() {
+        // `s68`, `is04`, `c05` shapes: a lowercase marker letter (or
+        // `is`) followed by exactly two digits, standing alone.
+        fn sprint_id(text: &str) -> Option<String> {
+            let b = text.as_bytes();
+            for i in 0..b.len() {
+                let (mark, digits) = if b[i..].starts_with(b"is") {
+                    (2, &b[i + 2..])
+                } else if b[i] == b's' || b[i] == b'c' {
+                    (1, &b[i + 1..])
+                } else {
+                    continue;
+                };
+                let boundary_ok = i == 0 || !(b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_');
+                if !boundary_ok || digits.len() < 2 {
+                    continue;
+                }
+                let two = digits[0].is_ascii_digit() && digits[1].is_ascii_digit();
+                let closed =
+                    digits.len() == 2 || !(digits[2].is_ascii_alphanumeric() || digits[2] == b'_');
+                if two && closed {
+                    return Some(text[i..i + mark + 2].to_string());
+                }
+            }
+            None
+        }
+        for info in REGISTRY {
+            let c = info.code.as_str();
+            for text in [info.summary, info.explanation] {
+                if let Some(id) = sprint_id(text) {
+                    panic!("{c}: internal identifier `{id}` in reader-facing prose");
+                }
+                // Commands named must exist: `wolf audit` does not
+                // (the command is `wolf audit-surface`).
+                assert!(
+                    !text.contains("wolf audit`") && !text.contains("wolf audit "),
+                    "{c}: names `wolf audit`, which is not a command"
+                );
             }
         }
     }

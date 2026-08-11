@@ -164,6 +164,10 @@ pub struct RegionSummary {
     /// Regions whose create/free pair is frame-local and clean: the
     /// promotion fact.
     pub promoted: Vec<RegionId>,
+    /// Promoted regions with **no allocation site at all** (s68,
+    /// W1001): pure ceremony — nothing is ever built in them, and
+    /// their handle never leaves the frame (promotion's own proof).
+    pub never_allocates: Vec<RegionId>,
     /// Whether any placement demand could not be discharged (the
     /// function has E1004/E1010 diagnostics).
     pub conflicted: bool,
@@ -265,7 +269,7 @@ pub(crate) fn summarize(
         };
         resolved.push(text);
     }
-    let site_summaries = sites
+    let site_summaries: Vec<SiteSummary> = sites
         .iter()
         .enumerate()
         .map(|(i, s)| SiteSummary {
@@ -279,12 +283,19 @@ pub(crate) fn summarize(
                 && !promoted.iter().any(|p| rt.same(*p, s.region)),
         })
         .collect();
+    // W1001's fact: a promoted region no site ever resolved into.
+    let never_allocates: Vec<RegionId> = promoted
+        .iter()
+        .copied()
+        .filter(|&p| !sites.iter().any(|s| rt.same(s.region, p)))
+        .collect();
     RegionSummary {
         name: name.to_string(),
         regions: rt.regions,
         resolved,
         sites: site_summaries,
         promoted: promoted.to_vec(),
+        never_allocates,
         conflicted,
     }
 }

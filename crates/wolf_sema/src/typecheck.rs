@@ -97,9 +97,14 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
         match &result {
             BodyResult::Errors(ds) => diagnostics.extend(ds.iter().cloned()),
             BodyResult::NotYetCheckable(nyc) => not_yet.push(nyc.clone()),
-            // Warnings from clean bodies (E0802) surface too — a
-            // checked body is not a silent one.
-            BodyResult::Checked(tb) => diagnostics.extend(tb.warnings.iter().cloned()),
+            // Warnings from clean bodies (E0802 et al.) surface too — a
+            // checked body is not a silent one. The s68 typed lint wave
+            // (discarded `!T` results, unfitting literal casts, `0.0 -
+            // x`) runs over the recorded types here.
+            BodyResult::Checked(tb) => {
+                diagnostics.extend(tb.warnings.iter().cloned());
+                diagnostics.extend(crate::wave::check_typed_body(pkg, &body, tb));
+            }
         }
         bodies.push(BodyOutcome { body, result });
     }
