@@ -64,6 +64,62 @@ fn build(order_flipped: bool) -> (Module, String) {
     (m, text)
 }
 
+/// Module data (s31): `data @name = "…"` declarations and `data.addr`
+/// round-trip byte-identically, escapes included, and verify clean.
+#[test]
+fn data_declarations_round_trip() {
+    let src = "decl @__wolf_rt_print_str(ptr, i64)\n\
+               data @str.0 = \"hello, wolf\\n\"\n\
+               data @str.1 = \"quote \\\" slash \\\\ tab \\t nul \\x00 hi \\xff\"\n\
+               \n\
+               fn @main() -> i64 {\n\
+               b0:\n\
+               \x20\x20%0 = data.addr @str.0\n\
+               \x20\x20%1 = iconst.i64 12\n\
+               \x20\x20call @__wolf_rt_print_str(%0, %1)\n\
+               \x20\x20%2 = data.addr @str.1\n\
+               \x20\x20ret %1\n\
+               }\n";
+    let m = wolf_wir::parse_module(src).expect("data module parses");
+    assert_eq!(m.data.len(), 2);
+    assert_eq!(m.data[0].bytes, b"hello, wolf\n");
+    assert_eq!(
+        m.data[1].bytes,
+        b"quote \" slash \\ tab \t nul \x00 hi \xff"
+    );
+    verify_module(&m).expect("data module verifies");
+    let d1 = wolf_wir::print_module(&m);
+    let re = wolf_wir::parse_module(&d1).expect("canonical dump parses");
+    assert_eq!(
+        wolf_wir::print_module(&re),
+        d1,
+        "print→parse→print fixpoint"
+    );
+    // `print_selected` over all functions is the whole-module print.
+    let all: Vec<_> = m.funcs.keys().collect();
+    assert_eq!(wolf_wir::print_selected(&m, &all), d1);
+}
+
+/// Unreferenced data drops out of the canonical print (names, not
+/// indices, are the canonical identity) and the reprint is stable.
+#[test]
+fn unreferenced_data_is_not_printed() {
+    let mut m = wolf_wir::parse_module(
+        "data @str.0 = \"dead\"\n\nfn @f() -> i64 {\nb0:\n  %0 = iconst.i64 0\n  ret %0\n}\n",
+    )
+    .expect("parses");
+    assert_eq!(m.data.len(), 1);
+    let d = wolf_wir::print_module(&m);
+    assert!(!d.contains("data @"), "unreferenced data must not print");
+    let re = wolf_wir::parse_module(&d).expect("reparses");
+    assert_eq!(wolf_wir::print_module(&re), d);
+    // Interning is content-addressed: same bytes, same entry.
+    let a = m.intern_data(b"dead");
+    let b = m.intern_data(b"dead");
+    assert_eq!(a, b);
+    assert_eq!(m.data.len(), 1);
+}
+
 #[test]
 fn insertion_order_does_not_change_the_dump() {
     let (m1, d1) = build(false);

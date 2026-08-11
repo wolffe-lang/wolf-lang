@@ -47,8 +47,8 @@ use std::collections::HashMap;
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, BreakExpr, CallExpr, CastExpr, ConstDecl, DeferStmt,
     ElseExpr, ExprStmt, ForExpr, GreenNode, IfExpr, LetDecl, LoopExpr, MatchArm, MatchExpr,
-    ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, SyntaxKind, TryExpr, VarDecl,
-    WhileExpr,
+    ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr, SyntaxKind, TryExpr,
+    VarDecl, WhileExpr,
 };
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::{FnSig, ItemSig, SigTables};
@@ -252,6 +252,33 @@ fn refuse(construct: &'static str, span: Span) -> NotYet {
     NotYet { construct, span }
 }
 
+/// The WIR shape of `str` (s31): a `{ptr, i64}` fat pair — bytes
+/// pointer + byte length, exactly the s30 type-DIE mapping.
+fn str_ty(it: &mut types::TypeInterner) -> TypeId {
+    it.intern(types::TypeData::Agg(vec![types::PTR, types::I64]))
+}
+
+/// One decoded segment of a string episode: literal bytes (escape set
+/// per the reference interpreter's `eval_string` — `\n \t \r \\ \" \{
+/// \} \0`, unknown escapes drop the backslash) or an interpolation
+/// hole's expression.
+enum StrSeg<'t> {
+    Lit(Vec<u8>),
+    Hole(&'t GreenNode),
+}
+
+/// One classified print segment (s31 print path).
+enum PrintSeg {
+    /// Literal bytes → module data → `__wolf_rt_print_str`.
+    Lit(Vec<u8>),
+    /// A str value ({ptr, len}) → `__wolf_rt_print_str`.
+    Str(Value),
+    /// An integer value; widened to i64 per signedness → `__wolf_rt_print_i64`.
+    Int { v: Value, unsigned: bool },
+    /// A bool value → `__wolf_rt_print_bool`.
+    Bool(Value),
+}
+
 /// The module-path-qualified WIR name of item `name` in `module`
 /// (issue #26): `geometry.area` for a child module, the bare name in
 /// the package root (whose dotted path is empty — `main` stays
@@ -303,10 +330,11 @@ fn wir_ty_depth(
             Prim::I64 | Prim::Int | Prim::U64 | Prim::Uint => Ok(Some(types::I64)),
             Prim::F32 => Ok(Some(types::F32)),
             Prim::F64 => Ok(Some(types::F64)),
-            Prim::Str | Prim::Byte => Err(refuse(
-                "string/byte lowering (data segments + runtime str shape, c06)",
-                span,
-            )),
+            // `str` is a {ptr, len} pair (s31, the s30 DIE mapping made
+            // operational): the bytes live in module data (literals) or
+            // wherever a runtime str points; the value is the fat pair.
+            Prim::Str => Ok(Some(str_ty(it))),
+            Prim::Byte => Err(refuse("byte lowering (runtime byte views, c08)", span)),
         },
         TyKind::Wrapping(inner) => match wir_ty_depth(it, table, sigs, *inner, span, depth + 1)? {
             Some(t) if types_is_int(t) => Ok(Some(t)),
@@ -1869,10 +1897,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::ElseExpr => self.lower_else(e, want),
             SyntaxKind::MatchExpr => self.lower_match(e, want),
             SyntaxKind::ForExpr => self.lower_for(e),
-            SyntaxKind::StringExpr => Err(refuse(
-                "string lowering (data segments + runtime str shape, c06)",
-                e.span,
-            )),
+            SyntaxKind::StringExpr => self.lower_string(e),
             SyntaxKind::StructLit => self.lower_struct_lit(e),
             SyntaxKind::TupleExpr => self.lower_tuple(e),
             SyntaxKind::MemberExpr => self.lower_member(e),
@@ -2857,10 +2882,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
                 "print" | "print_raw" => {
-                    return Err(refuse(
-                        "print lowering (str data + io runtime calls, c06)",
-                        e.span,
-                    ));
+                    return self.lower_print(d, callee_text == "print");
                 }
                 _ => {
                     // A call-shaped tag RAISE (`Io(9)` under a row
@@ -3069,6 +3091,231 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let results = self.b.ins_call(ext, &args);
         Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// A string episode in VALUE position (s31): a literal-only string
+    /// becomes a `{ptr, len}` pair over module data. An interpolated
+    /// string in value position needs allocation to materialize —
+    /// refused until the str runtime tier (c08); `print` consumes
+    /// interpolation directly as segment writes ([`Self::lower_print`]).
+    fn lower_string(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let mut bytes: Vec<u8> = Vec::new();
+        for seg in self.string_segments(e) {
+            match seg {
+                StrSeg::Lit(b) => bytes.extend_from_slice(&b),
+                StrSeg::Hole(_) => {
+                    return Err(refuse(
+                        "interpolated strings in value position (allocating \
+                         materialization, c08)",
+                        e.span,
+                    ));
+                }
+            }
+        }
+        Ok(Flow::Val(Some(self.str_value(&bytes))))
+    }
+
+    /// Build the `{ptr, len}` value of a byte-literal string: intern
+    /// the bytes as module data, take their address, pair with the
+    /// length. Zero-length literals intern one NUL byte (a zero-size
+    /// data symbol is degenerate) but keep len 0.
+    fn str_value(&mut self, bytes: &[u8]) -> Value {
+        let idx = self
+            .b
+            .module
+            .intern_data(if bytes.is_empty() { &[0u8] } else { bytes });
+        let p = self.b.ins_data_addr(idx);
+        let len = self.b.iconst(types::I64, bytes.len() as i64);
+        let sty = str_ty(self.b.types());
+        self.b
+            .ins(Opcode::AggMake, &[p, len], &[sty], Aux::None)
+            .one()
+    }
+
+    /// Decode one string episode into literal chunks and interpolation
+    /// holes — the SAME algorithm as the reference interpreter's
+    /// `eval_string` (naive quote strip, its escape set, hole spans =
+    /// whole `Interp` nodes so format specs are consumed with the hole
+    /// and ignored at v0).
+    fn string_segments(&self, e: &'t GreenNode) -> Vec<StrSeg<'t>> {
+        let d = StringExpr::cast(e).expect("kind");
+        let raw = self.text(e.span);
+        let base = e.span.lo;
+        let mut holes: Vec<(u32, u32, Option<&'t GreenNode>)> = Vec::new();
+        for i in d.interps() {
+            let ispan = i.syntax().span;
+            holes.push((ispan.lo - base, ispan.hi - base, i.expr()));
+        }
+        let bytes = raw.as_bytes();
+        let (start, end) = if bytes.len() >= 2 {
+            (1usize, bytes.len() - 1)
+        } else {
+            (0, bytes.len())
+        };
+        let mut segs: Vec<StrSeg<'t>> = Vec::new();
+        let mut lit: Vec<u8> = Vec::new();
+        let mut i = start;
+        while i < end {
+            if let Some(&(_, hi, expr)) = holes.iter().find(|(lo, _, _)| *lo as usize == i) {
+                if let Some(h) = expr {
+                    if !lit.is_empty() {
+                        segs.push(StrSeg::Lit(std::mem::take(&mut lit)));
+                    }
+                    segs.push(StrSeg::Hole(h));
+                }
+                i = hi as usize;
+                continue;
+            }
+            let c = bytes[i];
+            if c == b'\\' && i + 1 < end {
+                lit.push(match bytes[i + 1] {
+                    b'n' => b'\n',
+                    b't' => b'\t',
+                    b'r' => b'\r',
+                    b'0' => 0,
+                    other => other, // \\ \" \{ \} and unknown: the char itself
+                });
+                i += 2;
+                continue;
+            }
+            lit.push(c);
+            i += 1;
+        }
+        if !lit.is_empty() {
+            segs.push(StrSeg::Lit(lit));
+        }
+        segs
+    }
+
+    /// Classify one evaluated print value by its sema type: str values
+    /// print as bytes, integers widen to i64 per signedness, bools
+    /// print `true`/`false`. Floats refuse — the reference interpreter
+    /// defines no float formatting yet, so a native rendering would be
+    /// unfalsifiable (c08 owns the formatting tier).
+    fn classify_print_value(&mut self, expr: &'t GreenNode, v: Value) -> R<PrintSeg> {
+        let Some(&sema) = self.expr_tys.get(&expr.span) else {
+            return Err(refuse("print of an untyped expression", expr.span));
+        };
+        let mut ty = sema;
+        while let TyKind::Wrapping(inner) | TyKind::Distinct(inner) = self.table.kind(ty) {
+            ty = *inner;
+        }
+        match self.table.kind(ty) {
+            TyKind::Prim(Prim::Str) => Ok(PrintSeg::Str(v)),
+            TyKind::Prim(Prim::Bool) => Ok(PrintSeg::Bool(v)),
+            TyKind::Prim(Prim::F32 | Prim::F64) => Err(refuse(
+                "float print formatting (no reference semantics yet, c08)",
+                expr.span,
+            )),
+            TyKind::Prim(_) => Ok(PrintSeg::Int {
+                v,
+                unsigned: sema_unsigned(self.table, ty),
+            }),
+            _ => Err(refuse(
+                "print of a non-primitive value (s16/D26)",
+                expr.span,
+            )),
+        }
+    }
+
+    /// Import (once) and call a `__wolf_rt_print_*` shim. No io token
+    /// threads through in v0: WIR never reorders calls — block
+    /// instruction order IS program order at every backend (the s29
+    /// posture; the io spine joins with a reordering tier, recorded in
+    /// the campaign closeout).
+    fn rt_print_call(&mut self, name: &'static str, params: &[TypeId], args: &[Value]) {
+        let ext = match self.callees.get(name) {
+            Some(&ext) => ext,
+            None => {
+                let sig = self
+                    .b
+                    .module
+                    .make_sig(params.iter().map(|&t| Param::val(t)).collect(), vec![]);
+                let ext = self.b.func.import_func(name, sig);
+                self.callees.insert(name.to_string(), ext);
+                ext
+            }
+        };
+        self.b.ins_call(ext, args);
+    }
+
+    /// The v0 print path (s31): `print(x)` lowers to per-segment
+    /// runtime writes. All hole values are evaluated BEFORE any byte
+    /// is written (the interpreter's order — a trapping hole emits no
+    /// partial output); then literal chunks flow from module data and
+    /// values through the typed shims. `print` appends one `\n`
+    /// segment; `print_raw` appends nothing.
+    fn lower_print(&mut self, d: CallExpr<'t>, newline: bool) -> R<Flow> {
+        let mut outs: Vec<PrintSeg> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            if vexpr.kind == SyntaxKind::StringExpr {
+                for seg in self.string_segments(vexpr) {
+                    match seg {
+                        StrSeg::Lit(b) => outs.push(PrintSeg::Lit(b)),
+                        StrSeg::Hole(h) => {
+                            let Some(v) = flow_val!(self.lower_expr(h)) else {
+                                return Err(refuse("unit-typed interpolation holes", h.span));
+                            };
+                            let seg = self.classify_print_value(h, v)?;
+                            outs.push(seg);
+                        }
+                    }
+                }
+            } else {
+                let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                    return Err(refuse("unit-typed print arguments", vexpr.span));
+                };
+                let seg = self.classify_print_value(vexpr, v)?;
+                outs.push(seg);
+            }
+        }
+        if newline {
+            outs.push(PrintSeg::Lit(b"\n".to_vec()));
+        }
+        for out in outs {
+            match out {
+                PrintSeg::Lit(bytes) => {
+                    if bytes.is_empty() {
+                        continue;
+                    }
+                    let idx = self.b.module.intern_data(&bytes);
+                    let p = self.b.ins_data_addr(idx);
+                    let len = self.b.iconst(types::I64, bytes.len() as i64);
+                    self.rt_print_call("__wolf_rt_print_str", &[types::PTR, types::I64], &[p, len]);
+                }
+                PrintSeg::Str(v) => {
+                    let p = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[types::PTR], Aux::Int(0))
+                        .one();
+                    let len = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(1))
+                        .one();
+                    self.rt_print_call("__wolf_rt_print_str", &[types::PTR, types::I64], &[p, len]);
+                }
+                PrintSeg::Int { v, unsigned } => {
+                    let vty = self.b.func.value_ty(v);
+                    let wide = if vty == types::I64 {
+                        v
+                    } else if unsigned {
+                        self.b
+                            .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                            .one()
+                    } else {
+                        self.b
+                            .ins(Opcode::Sext, &[v], &[types::I64], Aux::None)
+                            .one()
+                    };
+                    self.rt_print_call("__wolf_rt_print_i64", &[types::I64], &[wide]);
+                }
+                PrintSeg::Bool(v) => {
+                    self.rt_print_call("__wolf_rt_print_bool", &[types::BOOL], &[v]);
+                }
+            }
+        }
+        Ok(Flow::Val(None))
     }
 
     /// Reload spilled places after a call: the callee's writes are

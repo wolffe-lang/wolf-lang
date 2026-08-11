@@ -64,6 +64,8 @@ enum Tok {
     Global(String),
     /// Number lexeme, verbatim (`42`, `-7`, `0x3ff0000000000000`, `1.5`).
     Num(String),
+    /// String-literal bytes, escape-decoded (`data` declarations, s31).
+    Str(Vec<u8>),
     LParen,
     RParen,
     LBrace,
@@ -83,6 +85,7 @@ impl Tok {
             Tok::Val(s) => format!("`%{s}`"),
             Tok::Global(s) => format!("`@{s}`"),
             Tok::Num(s) => format!("`{s}`"),
+            Tok::Str(_) => "a string literal".into(),
             Tok::LParen => "`(`".into(),
             Tok::RParen => "`)`".into(),
             Tok::LBrace => "`{`".into(),
@@ -195,6 +198,70 @@ fn tokenize(src: &str) -> PResult<Vec<Spanned>> {
                 } else {
                     return err(line, start_col, "unexpected `-`");
                 }
+            }
+            '"' => {
+                // A data string literal: bytes with the canonical
+                // escape set (the printer's `escape_bytes` inverse).
+                let mut out: Vec<u8> = Vec::new();
+                let mut j = i + 1;
+                loop {
+                    match bytes.get(j) {
+                        None | Some('\n') => {
+                            return err(line, start_col, "unterminated string literal");
+                        }
+                        Some('"') => break,
+                        Some('\\') => match bytes.get(j + 1) {
+                            Some('"') => {
+                                out.push(b'"');
+                                j += 2;
+                            }
+                            Some('\\') => {
+                                out.push(b'\\');
+                                j += 2;
+                            }
+                            Some('n') => {
+                                out.push(b'\n');
+                                j += 2;
+                            }
+                            Some('t') => {
+                                out.push(b'\t');
+                                j += 2;
+                            }
+                            Some('r') => {
+                                out.push(b'\r');
+                                j += 2;
+                            }
+                            Some('x') => {
+                                let (Some(&h1), Some(&h2)) = (bytes.get(j + 2), bytes.get(j + 3))
+                                else {
+                                    return err(line, start_col, "truncated `\\x` escape");
+                                };
+                                let hex: String = [h1, h2].iter().collect();
+                                let Ok(v) = u8::from_str_radix(&hex, 16) else {
+                                    return err(
+                                        line,
+                                        start_col,
+                                        format!("bad `\\x` escape `\\x{hex}`"),
+                                    );
+                                };
+                                out.push(v);
+                                j += 4;
+                            }
+                            _ => {
+                                return err(line, start_col, "unknown escape in string literal");
+                            }
+                        },
+                        Some(&c) => {
+                            let mut buf = [0u8; 4];
+                            out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+                            j += 1;
+                        }
+                    }
+                }
+                let n = (j + 1 - i) as u32;
+                push!(Tok::Str(out), start_col);
+                i = j + 1;
+                col += n;
             }
             '%' | '@' => {
                 // Names admit interior dots (`@Counter.bump` — s27
@@ -502,6 +569,35 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                 p.module.add_decl(name, sig);
                 i = end;
             }
+            // `data @name = "bytes"` — module data (s31).
+            Tok::Ident(kw) if kw == "data" => {
+                let end = line_end(&toks, i);
+                let mut line = Line::new(&toks[i..end]);
+                line.next(); // `data`
+                let name = match line.peek() {
+                    Some(Tok::Global(n)) => {
+                        let n = n.clone();
+                        line.next();
+                        n
+                    }
+                    _ => return line.fail("expected `@name` after `data`"),
+                };
+                line.expect(Tok::Eq)?;
+                let bytes = match line.peek() {
+                    Some(Tok::Str(b)) => {
+                        let b = b.clone();
+                        line.next();
+                        b
+                    }
+                    _ => return line.fail("expected a string literal after `=`"),
+                };
+                line.expect_end()?;
+                if p.module.data.iter().any(|d| d.name == name) {
+                    return line.fail(format!("data `@{name}` is declared twice"));
+                }
+                p.module.data.push(crate::ir::DataDecl { name, bytes });
+                i = end;
+            }
             Tok::Ident(kw) if kw == "fn" => {
                 i = parse_function(&toks, i, &mut p, false)?;
             }
@@ -515,7 +611,7 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                     l,
                     c,
                     format!(
-                        "expected `decl`, `fn` or `export fn`, found {}",
+                        "expected `decl`, `data`, `fn` or `export fn`, found {}",
                         t.describe()
                     ),
                 );
@@ -870,6 +966,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("ptr.off", Opcode::PtrOff),
         ("agg.make", Opcode::AggMake),
         ("agg.get", Opcode::AggGet),
+        ("data.addr", Opcode::DataAddr),
         ("call", Opcode::Call),
         ("jmp", Opcode::Jmp),
         ("br", Opcode::Br),
@@ -1231,6 +1328,21 @@ fn parse_inst(
                 return line.fail(format!("aggregate has no field {k}"));
             };
             vec![fty]
+        }
+        Opcode::DataAddr => {
+            let name = match line.peek() {
+                Some(Tok::Global(n)) => {
+                    let n = n.clone();
+                    line.next();
+                    n
+                }
+                _ => return line.fail("expected `@name` after `data.addr`"),
+            };
+            let Some(idx) = p.module.data.iter().position(|d| d.name == name) else {
+                return line.fail(format!("`@{name}` is not a declared data symbol"));
+            };
+            aux = Aux::Data(idx as u32);
+            vec![types::PTR]
         }
         Opcode::Call => {
             let callee = match line.peek() {

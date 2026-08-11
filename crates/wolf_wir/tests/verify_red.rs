@@ -426,3 +426,22 @@ fn every_rejection_class_is_exercised() {
     ];
     assert_eq!(covered.len(), 21);
 }
+
+/// s31: `data.addr` naming a missing data declaration is a Type-class
+/// rejection. Raw-API only — the parser resolves `@name` against the
+/// declared data, so text can never carry a dangling index.
+#[test]
+fn data_addr_missing_declaration() {
+    use wolf_wir::types::{I64, PTR};
+    use wolf_wir::{Aux, Opcode};
+    let mut m = Module::new();
+    let sig = m.make_sig(vec![], vec![I64]);
+    let mut f = Function::new("f", sig);
+    let b0 = f.make_block(&[]);
+    f.append_inst(b0, Opcode::DataAddr, &[], &[PTR], Aux::Data(0));
+    let (_, z) = f.append_inst(b0, Opcode::Iconst, &[], &[I64], Aux::Int(0));
+    f.append_inst(b0, Opcode::Ret, &[z[0]], &[], Aux::None);
+    m.add_func(f);
+    let err = verify_module(&m).expect_err("verifier must reject");
+    assert_eq!(err.class, ErrClass::Type, "{}", err.msg);
+}

@@ -97,13 +97,13 @@ pub mod verify;
 pub use build::{Const, FuncBuilder, InsOut, Stats, Var};
 pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
 pub use ir::{
-    Aux, Block, BlockCall, ExtFunc, ExtFuncData, FuncId, Function, Inst, InstData, Mode, Module,
-    Param, SigData, SigId, Value, ValueData, ValueDef,
+    Aux, Block, BlockCall, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst, InstData, Mode,
+    Module, Param, SigData, SigId, Value, ValueData, ValueDef,
 };
 pub use lower::{Build, lower_package};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
-pub use print::print_module;
+pub use print::{print_module, print_selected};
 pub use types::{RegionId, TypeData, TypeId, TypeInterner};
 pub use verify::{
     ErrClass, Invalidation, PassCtx, VerifyError, run_pass, verify_function, verify_module,

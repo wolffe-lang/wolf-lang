@@ -254,6 +254,14 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
             )
             .unwrap();
         }
+        Aux::Data(idx) => {
+            let name = m
+                .data
+                .get(idx as usize)
+                .map(|d| d.name.as_str())
+                .unwrap_or("?");
+            write!(s, " @{name}").unwrap();
+        }
         Aux::Jump(bc) => {
             write!(s, " {}", render_edge(canon, f, bc)).unwrap();
         }
@@ -341,30 +349,78 @@ pub(crate) fn print_function(m: &Module, f: &Function) -> String {
     out
 }
 
+/// Escape data bytes for the canonical `data @name = "…"` form:
+/// printable ASCII verbatim, `\"` `\\` `\n` `\t` `\r`, and `\xNN` for
+/// everything else (non-ASCII bytes stay bytes — the data section is
+/// bytes, not text).
+pub(crate) fn escape_bytes(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() + 2);
+    for &b in bytes {
+        match b {
+            b'"' => s.push_str("\\\""),
+            b'\\' => s.push_str("\\\\"),
+            b'\n' => s.push_str("\\n"),
+            b'\t' => s.push_str("\\t"),
+            b'\r' => s.push_str("\\r"),
+            0x20..=0x7e => s.push(b as char),
+            _ => {
+                write!(s, "\\x{b:02x}").unwrap();
+            }
+        }
+    }
+    s
+}
+
 /// Print a module in canonical form: `decl`s (every declared or called
-/// name, sorted), then functions in definition order, blank-line
-/// separated.
+/// name, sorted), then `data` declarations in definition order, then
+/// functions in definition order, blank-line separated.
 pub fn print_module(m: &Module) -> String {
+    let funcs: Vec<_> = m.funcs.keys().collect();
+    print_selected(m, &funcs)
+}
+
+/// [`print_module`] restricted to a subset of functions: the sorted
+/// `decl` union of the subset's callees, the data declarations the
+/// subset references (in definition order), and the functions in the
+/// given order. The whole-module print is `print_selected(all)`. This
+/// is the per-module cache-key input of the s31 driver: the printed
+/// text IS the codegen input, so hashing it keys objects soundly (D8).
+pub fn print_selected(m: &Module, funcs: &[crate::ir::FuncId]) -> String {
     let mut decls: BTreeMap<String, SigId> = BTreeMap::new();
     for (name, sig) in &m.decls {
         decls.entry(name.clone()).or_insert(*sig);
     }
-    for f in m.funcs.values() {
+    let mut used_data: HashSet<u32> = HashSet::new();
+    for &fid in funcs {
+        let f = &m.funcs[fid];
         for ef in f.ext_funcs.values() {
             decls.entry(ef.name.clone()).or_insert(ef.sig);
+        }
+        for inst in f.insts.values() {
+            if let Aux::Data(idx) = inst.aux {
+                used_data.insert(idx);
+            }
         }
     }
     let mut out = String::new();
     for (name, sig) in &decls {
         writeln!(out, "decl @{name}{}", render_sig(m, *sig)).unwrap();
     }
-    let mut first = decls.is_empty();
-    for f in m.funcs.values() {
+    let mut any_head = !decls.is_empty();
+    for (i, d) in m.data.iter().enumerate() {
+        if !used_data.contains(&(i as u32)) {
+            continue;
+        }
+        writeln!(out, "data @{} = \"{}\"", d.name, escape_bytes(&d.bytes)).unwrap();
+        any_head = true;
+    }
+    let mut first = !any_head;
+    for &fid in funcs {
         if !first {
             out.push('\n');
         }
         first = false;
-        out.push_str(&print_function(m, f));
+        out.push_str(&print_function(m, &m.funcs[fid]));
     }
     out
 }

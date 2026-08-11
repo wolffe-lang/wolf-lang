@@ -127,6 +127,9 @@ pub enum Aux {
     /// `trap` kind — which check this trap reports (s28; `Assert`
     /// prints as bare `trap`, the pre-s28 form).
     Trap(TrapKind),
+    /// `data.addr` payload: index into [`Module::data`] (s31 — the
+    /// str/data story; string literals live in module data).
+    Data(u32),
 }
 
 /// A branch edge: target block plus the arguments passed to its params.
@@ -409,6 +412,18 @@ impl Function {
     }
 }
 
+/// One module data declaration (s31): named read-only bytes — string
+/// literals and, later, other constant pools. `data.addr` takes the
+/// address; the backend emits the bytes as a local rodata symbol.
+/// Content-interned by [`Module::intern_data`] (names are `str.N` in
+/// interning order), printed/parsed canonically, so the bytes are part
+/// of the D8 hash input like everything else.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct DataDecl {
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
 /// A module: the type interner, interned signatures, external decls,
 /// and functions in definition order.
 #[derive(Clone, Debug)]
@@ -428,6 +443,10 @@ pub struct Module {
     /// format carries only the `i64` ids and round-trip does not
     /// preserve the names (like fact spans).
     pub tags: Vec<String>,
+    /// Module data declarations (s31): read-only byte blobs referenced
+    /// by `data.addr`. Content-interned; printed as `data @name = "…"`
+    /// lines and round-tripped, so data participates in the D8 hash.
+    pub data: Vec<DataDecl>,
 }
 
 impl Default for Module {
@@ -444,7 +463,22 @@ impl Module {
             decls: Vec::new(),
             funcs: PrimaryMap::new(),
             tags: Vec::new(),
+            data: Vec::new(),
         }
+    }
+
+    /// Content-intern a data blob; returns its index (the `Aux::Data`
+    /// payload). Identical byte strings share one declaration.
+    pub fn intern_data(&mut self, bytes: &[u8]) -> u32 {
+        if let Some(i) = self.data.iter().position(|d| d.bytes == bytes) {
+            return i as u32;
+        }
+        let name = format!("str.{}", self.data.len());
+        self.data.push(DataDecl {
+            name,
+            bytes: bytes.to_vec(),
+        });
+        (self.data.len() - 1) as u32
     }
 
     /// Intern an error-tag name; ids start at 1 (0 = ok).

@@ -598,6 +598,18 @@ impl<'a> Verifier<'a> {
                     return Err(self.type_err(inst, "agg.get result type mismatch"));
                 }
             }
+            Opcode::DataAddr => {
+                self.expect_counts(inst, 0, 1)?;
+                let Aux::Data(idx) = data.aux else {
+                    return Err(self.type_err(inst, "data.addr without a data payload"));
+                };
+                if self.m.data.get(idx as usize).is_none() {
+                    return Err(self.type_err(inst, "data.addr names a missing data declaration"));
+                }
+                if self.f.value_ty(results[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "data.addr result must be ptr"));
+                }
+            }
             Opcode::Call => {
                 let Aux::Callee(ef) = data.aux else {
                     return Err(self.type_err(inst, "call without a callee"));

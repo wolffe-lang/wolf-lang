@@ -838,6 +838,13 @@ impl<'m> FuncBuilder<'m> {
     }
 
     /// `ptr.off base, index, scale`.
+    /// `data.addr @sym` (s31): the address of module data entry `idx`
+    /// (from [`crate::ir::Module::intern_data`]). Pure; GVN dedups it.
+    pub fn ins_data_addr(&mut self, idx: u32) -> Value {
+        self.ins(Opcode::DataAddr, &[], &[crate::types::PTR], Aux::Data(idx))
+            .one()
+    }
+
     pub fn ins_ptr_off(&mut self, base: Value, index: Value, scale: u64) -> Value {
         self.ins(
             Opcode::PtrOff,
@@ -1463,6 +1470,7 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::Load
                 | Opcode::AggMake
                 | Opcode::AggGet
+                | Opcode::DataAddr
                 | Opcode::EuMakeOk
                 | Opcode::EuMakeErr
                 | Opcode::EuIsErr
@@ -1509,6 +1517,7 @@ impl<'m> FuncBuilder<'m> {
             Aux::IntCc(cc) => (4, cc as u64),
             Aux::FloatCc(cc) => (5, cc as u64),
             Aux::Scale(s) => (6, s),
+            Aux::Data(idx) => (7, idx as u64),
             // Edge- or callee-carrying ops (and terminators) never
             // reach here.
             Aux::Callee(_) | Aux::Jump(_) | Aux::Br(..) | Aux::Trap(_) => return None,

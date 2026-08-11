@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 333
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -59,10 +58,10 @@ grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
-hello.lu: refused — string lowering (data segments + runtime str shape, c06)
+hello.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/checked_unsigned.lu: lowers
-memory/defer_order.lu: refused — print lowering (str data + io runtime calls, c06)
+memory/defer_order.lu: lowers
 memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
@@ -116,7 +115,7 @@ resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
-rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); string/byte lowering (data segments + runtime str shape, c06); string/byte lowering (data segments + runtime str shape, c06)
+rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
 rows/eu_main_err_exit.lu: lowers
 rows/hof_tail.lu: refused — generic-function lowering (monomorphization); generic-function calls (monomorphization)
 rows/inferred_private.lu: refused — module-item reads (globals, c06)
@@ -127,10 +126,10 @@ rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
 rows/open_row_growth.lu: lowers
-rows/propagate/main.lu: refused — string lowering (data segments + runtime str shape, c06); string/byte lowering (data segments + runtime str shape, c06); string/byte lowering (data segments + runtime str shape, c06)
+rows/propagate/main.lu: refused — comparison outside integers/floats (str/enum compares, c06/std)
 rows/qmark_defer.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
-traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); string/byte lowering (data segments + runtime str shape, c06); string/byte lowering (data segments + runtime str shape, c06)
+traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
 traits/assoc_rewrite.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
 traits/call_unmet_bound.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_orphan/main.lu: not mem-clean (pre-wir rungs own it)
@@ -143,7 +142,7 @@ traits/dyn_self_position.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_arith.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_eq.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_missing_bound.lu: not mem-clean (pre-wir rungs own it)
-traits/show_bound.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); print lowering (str data + io runtime calls, c06)
+traits/show_bound.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
 typecheck/ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
@@ -160,11 +159,11 @@ typecheck/match_exhaustive.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
-typecheck/method_inherent.lu: refused — string/byte lowering (data segments + runtime str shape, c06); trait-impl method lowering (dispatch tables, c06); print lowering (str data + io runtime calls, c06)
+typecheck/method_inherent.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
-typecheck/trait_default.lu: refused — trait default-body lowering (dispatch tables, c06); trait-impl method lowering (dispatch tables, c06); print lowering (str data + io runtime calls, c06)
+typecheck/trait_default.lu: refused — trait default-body lowering (dispatch tables, c06); trait-impl method lowering (dispatch tables, c06); trait-method call lowering (dispatch tables, c06)
 wordcount.lu: not mem-clean (pre-wir rungs own it)

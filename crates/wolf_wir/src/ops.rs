@@ -287,6 +287,12 @@ pub enum Opcode {
     /// `%r = agg.get.K %a` — extract field K (imm) from an aggregate.
     AggGet,
 
+    // ---- module data (s31: the str/data story) -------------------------
+    /// `%p = data.addr @sym` — address of a module data declaration
+    /// (read-only bytes; string literals live here). Pure: the address
+    /// is a link-time constant, so GVN may dedup it freely.
+    DataAddr,
+
     // ---- calls ---------------------------------------------------------
     /// `%res…, %tok… = call @f(%args…)` — call with the mode-carrying sig;
     /// token args are consumed, and a fresh successor token is produced
@@ -437,6 +443,7 @@ impl Opcode {
             Opcode::Store => "store",
             Opcode::AggMake => "agg.make",
             Opcode::AggGet => "agg.get",
+            Opcode::DataAddr => "data.addr",
             Opcode::Call => "call",
             Opcode::Jmp => "jmp",
             Opcode::Br => "br",
