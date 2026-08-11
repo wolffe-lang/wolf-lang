@@ -284,6 +284,7 @@
     "proto.cmp": "06-differential-protocol.md",
     "proto.cmp.defined-divergence": "06-differential-protocol.md",
     "proto.cmp.phase": "06-differential-protocol.md",
+    "proto.cmp.rung": "06-differential-protocol.md",
     "proto.cmp.severity": "06-differential-protocol.md",
     "proto.cmp.triage": "06-differential-protocol.md",
     "proto.cmp.warn": "06-differential-protocol.md",

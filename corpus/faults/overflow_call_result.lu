@@ -1,0 +1,17 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 value-path litmus (s70, #53): a CALL RESULT is a checked
+//! operand like any other — `i32`-typed returns feed the wrapped
+//! multiply, and the out-of-range product traps on every lane.
+
+fn ceiling() -> i32 {
+    2147483647
+}
+
+fn main() -> !int {
+    let x = ceiling() * 2
+    print("{x}")   // unreachable
+    0
+}

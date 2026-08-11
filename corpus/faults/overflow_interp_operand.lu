@@ -1,0 +1,14 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 value-path litmus (s70, #53): arithmetic INSIDE an
+//! interpolation hole is checked exactly like statement-position
+//! arithmetic — the hole's operand rides the same wrapper, so the
+//! trap fires before any text renders.
+
+fn main() -> !int {
+    var a: i32 = 2147483647
+    print("value: {a * 2}")   // the hole's multiply traps
+    0
+}

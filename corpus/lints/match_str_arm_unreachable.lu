@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="one")
+//! phase: run
+//! conforms: str.views
+//! warns: E0802
+//!
+//! E0802 over str patterns is literal-precise after #54: only a
+//! genuinely duplicated literal arm is unreachable — arms past the
+//! first are NOT blanket-dead (the false positive that made native
+//! lowering refuse the shape is retired; the true positive stays).
+
+fn pick(tok: str) -> str {
+    match tok {
+        "x" => "one",
+        "y" => "two",
+        "x" => "dup",   // E0802: subsumed by the first `"x"` arm
+        _ => "rest",
+    }
+}
+
+fn main() -> !int {
+    print("{pick("x")}")
+    0
+}

@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 value-path litmus (s70, #53 × #55): the read-modify-write of a
+//! compound ELEMENT assignment is checked at the element's width —
+//! `l[0] *= 2` at `i32`'s ceiling traps before the write lands.
+
+fn main() -> !int {
+    var l = List[i32]()
+    (mut l).push(2147483647)
+    l[0] *= 2   // the element's checked multiply traps
+    print("{l[0]}")   // unreachable
+    0
+}

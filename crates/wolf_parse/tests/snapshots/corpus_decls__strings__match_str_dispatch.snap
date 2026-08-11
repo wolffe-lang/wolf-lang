@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 487..632 name=kind body=Block
+FnDecl 634..775 name=odd body=Block
+FnDecl 777..940 name=apply body=Block
+FnDecl 942..1166 name=main body=Block

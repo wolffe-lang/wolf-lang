@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="10 25\n7 42\n6")
+//! phase: run
+//! conforms: mem.region.intra
+//!
+//! `l[i] = v` (#55): container-element assignment types, checks and
+//! lowers — plain writes, the nested place `b.items[0]` (bs10's
+//! shape), writes through a `mut` parameter, and the compound
+//! read-modify-write, all through `list_write`'s bounds-trapping
+//! runtime entry. The OOB write litmus lives in
+//! `corpus/faults/bounds_slice.lu`'s family; here every index is in
+//! range and the values prove the writes landed.
+
+struct Bag {
+    items: List[int],
+}
+
+fn bump(mut l: List[int]) {
+    l[0] = l[0] + 1
+}
+
+fn main() -> !int {
+    var l = List[int]()
+    (mut l).push(10)
+    (mut l).push(20)
+    l[1] = 25
+    print("{l[0]} {l[1]}")
+
+    var b = Bag { items: List[int]() }
+    (mut b.items).push(5)
+    b.items[0] = 7
+    var m = List[int]()
+    (mut m).push(41)
+    bump(mut m)
+    print("{b.items[0]} {m[0]}")
+
+    var c = List[int]()
+    (mut c).push(4)
+    c[0] += 1
+    c[0] += 1
+    print("{c[0]}")
+    0
+}

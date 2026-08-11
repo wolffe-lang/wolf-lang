@@ -1,0 +1,18 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 value-path litmus (s70, #53): a FIELD LOAD feeds arithmetic
+//! through the checked wrapper at the field's declared width — the
+//! `i32` product leaves the range and traps on every lane.
+
+struct Gauge {
+    level: i32,
+}
+
+fn main() -> !int {
+    let g = Gauge { level: 2147483647 }
+    let x = g.level * 2
+    print("{x}")   // unreachable
+    0
+}

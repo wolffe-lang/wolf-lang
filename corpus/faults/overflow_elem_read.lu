@@ -1,0 +1,17 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 value-path litmus (s70, #53): an element loaded OUT of a
+//! `List[i32]` still carries the checked-op wrapper into arithmetic —
+//! the product leaves `i32`'s range and traps on every lane. The
+//! ch27 finding's shape, pinned at the width where the trap law is
+//! observable.
+
+fn main() -> !int {
+    var l = List[i32]()
+    (mut l).push(2147483647)
+    let x = l[0] * 2
+    print("{x}")   // unreachable: the multiply traps
+    0
+}

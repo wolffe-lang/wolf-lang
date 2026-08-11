@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 743..792 name=miss_io body=Block
+FnDecl 794..845 name=miss_eof body=Block
+FnDecl 847..982 name=step body=Block
+FnDecl 984..1592 name=main body=Block
