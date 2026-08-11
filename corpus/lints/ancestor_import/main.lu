@@ -1,0 +1,15 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mod.dir
+//! warns: W0316
+//!
+//! W0316 — a child module importing its own ancestor: `outer.inner`
+//! reaches up into `outer`, the cyclic-adjacent shape one ordinary
+//! edit away from the hard-error import cycle.
+
+use outer
+use outer.inner
+
+fn main() -> !int {
+    outer.base() + inner.leaf() - 5
+}

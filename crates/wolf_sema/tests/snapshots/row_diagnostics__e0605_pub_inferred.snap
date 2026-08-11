@@ -3,9 +3,9 @@ source: crates/wolf_sema/tests/row_diagnostics.rs
 expression: render_rows(src)
 ---
 error[E0605]: `boom` is `pub`, so it must state its error row
- --> mem:///main.lu:1:8
+ --> mem:///main.lu:2:8
   |
-1 | pub fn boom(n: int) -> !int {
+2 | pub fn boom(n: int) -> !int {
   |        ^^^^ exported with an inferred row
   |                     ------- the row is inferred here
   |
@@ -13,5 +13,5 @@ error[E0605]: `boom` is `pub`, so it must state its error row
     rebuild against, so its failure set is stated, never derived from a body that can drift.
 help: state the sealed row: `-> int ! {Empty}`
   |
-1 | pub fn boom(n: int) -> int ! {Empty} {
+2 | pub fn boom(n: int) -> int ! {Empty} {
   |

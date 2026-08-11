@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: out
+---
+warning[W0314]: `solo` holds exactly one item
+ --> mem://solo/only.lu:2:8
+  |
+2 | pub fn only() -> int {
+  |        ^^^^ a directory of ceremony around it
+  |
+  = note: fold the item into the module that uses it, or grow the module into the family its name
+    promises; a deliberate seam says so with `#[allow(w0314)]` and a reason.

@@ -2,6 +2,7 @@
 //!
 //! The trait's home module.
 
+/// Rendering to `str`; owned here, implemented elsewhere.
 pub trait Show {
     fn show(x: Self) -> str
 }

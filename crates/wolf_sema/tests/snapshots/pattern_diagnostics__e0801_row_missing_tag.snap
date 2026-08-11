@@ -2,7 +2,7 @@
 source: crates/wolf_sema/tests/pattern_diagnostics.rs
 expression: "render_types(&[(&[], \"main.lu\", src)])"
 ---
-error[E0801]: this `match` does not cover `Timeout`
+error[E0801]: this `match` does not cover `timeout`
   --> mem:///main.lu:13:9
    |
 13 |         match err {

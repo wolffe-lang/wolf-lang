@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0313]: this `pub` item has no doc comment
+ --> mem:///main.lu:1:1
+  |
+1 | pub fn exported(n: int) -> int {
+  | ^^^ exported, but undocumented
+  |
+  = note: an exported item carries a `///` contract: what it computes, what each row tag means,
+    when it traps. If it is not worth documenting, it is rarely worth exporting.

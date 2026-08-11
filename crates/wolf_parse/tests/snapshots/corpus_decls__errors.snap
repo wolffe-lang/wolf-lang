@@ -4,6 +4,6 @@ expression: dump
 ---
 StructDecl 394..435 name=ParseError fields=2
 FnDecl 437..621 name=digit body=Block
-FnDecl 623..845 name=parse_pair body=Block
-FnDecl 847..1065 name=load body=Block
-FnDecl 1067..1478 name=main body=Block
+FnDecl 623..847 name=parse_pair body=Block
+FnDecl 849..1068 name=load body=Block
+FnDecl 1070..1482 name=main body=Block

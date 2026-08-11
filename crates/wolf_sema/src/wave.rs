@@ -23,6 +23,21 @@
 //!   (W0801, the capitalized-binder pattern lint, lives in the
 //!   checker itself, where pattern resolution decides bind-vs-test.)
 //!
+//! The idiom arbiter (the second wave) adds two more layers:
+//!
+//! - **convention lints** in [`check_file`], mechanizing the house API
+//!   conventions where they generalize: W0310 `get_` prefixes, W0311
+//!   predicate names that do not answer `bool`, W0312 `as_` views
+//!   that consume, W0313 undocumented `pub` items, W0603 row-tag
+//!   case/payload discipline, W0604 a `get` that cannot miss, W1002
+//!   `mut` parameters never written (with the drop-the-`mut` fix-it),
+//!   W1003 `take` parameters returned unchanged;
+//! - [`check_package`] — the **package-shape** pass over the resolved
+//!   module graph (D32 lived experience): W0314 one-item modules,
+//!   W0315 `pub(pkg)` items nothing else in the package uses, W0316
+//!   modules importing their own ancestor (the cyclic-adjacent shape
+//!   short of the hard error).
+//!
 //! Cost discipline (D5): each pass is one walk over trees the phase
 //! already holds, allocation-light, and firing nothing on clean code.
 
@@ -30,14 +45,14 @@ use std::collections::BTreeSet;
 
 use wolf_ast::{
     Arg, AssignStmt, AssumeStmt, Block, CallExpr, CastExpr, ClosureExpr, ConstDecl, ElseExpr,
-    EnumDecl, ExprStmt, FnDecl, GreenNode, GreenToken, LetDecl, MemberExpr, ParamMode, RowEntry,
-    StructDecl, SyntaxKind, TraitDecl, TypeDecl, VarDecl,
+    EnumDecl, ExprStmt, FnDecl, GreenNode, GreenToken, LetDecl, MemberExpr, ParamMode, ParenExpr,
+    RowEntry, StructDecl, SyntaxKind, TraitDecl, TypeDecl, VarDecl, Visibility,
 };
 use wolf_diag::{Applicability, Diagnostic, Diagnostics, Suggestion, codes};
 use wolf_span::Span;
 
 use crate::check::{BodyRef, TypedBody};
-use crate::graph::{Package, pattern_names};
+use crate::graph::{BindTarget, Package, Vis, pattern_names};
 use crate::prelude;
 use crate::types::{Prim, TyKind, render};
 
@@ -108,6 +123,11 @@ impl Wave<'_> {
     // ------------------------------------------------------ items --
 
     fn item(&mut self, node: &GreenNode) {
+        // W0313 — a `pub` item (not `pub(pkg)`) with no `///` above it.
+        // Impl blocks are not named exports and stay out of scope.
+        if node.kind != SyntaxKind::ImplDecl {
+            self.pub_doc_check(node);
+        }
         match node.kind {
             SyntaxKind::FnDecl => self.func(node, /*free*/ true),
             SyntaxKind::TraitDecl | SyntaxKind::ImplDecl => {
@@ -231,6 +251,8 @@ impl Wave<'_> {
             self.pub_row_check(&d);
         }
         self.row_collision_check(node, &d);
+        self.convention_checks(&d);
+        self.mode_discipline(&d, free);
         // Fresh per-function lexical state.
         let saved_closures = std::mem::take(&mut self.closures);
         let saved_assumes = std::mem::take(&mut self.assumes);
@@ -257,17 +279,76 @@ impl Wave<'_> {
     }
 
     /// W0305 — a declared row tag that shares its name with a module
-    /// item, an import, or a prelude name.
+    /// item, an import, or a prelude name — and W0603, the tag-shape
+    /// discipline over the same entries: marks are lowercase bare
+    /// words, payload-carrying tags are CapCase, and `none` never
+    /// carries a payload.
     fn row_collision_check(&mut self, node: &GreenNode, d: &FnDecl<'_>) {
         // Every row entry in the signature (return row; param rows).
-        let mut entries: Vec<(String, Span)> = Vec::new();
+        let mut entries: Vec<(String, Span, usize)> = Vec::new();
         collect_row_entries(
             node,
             d.body().map(|b| b.syntax().span),
             self.src,
             &mut entries,
         );
-        for (tag, span) in entries {
+        // Row *variables* are generic parameters, not tags: `! {E}` in
+        // a signature whose generics declare `E` instantiates per call
+        // site and owes the tag-shape rules nothing. Single uppercase
+        // letters get the same benefit (the row-variable convention,
+        // for members whose generics live on an enclosing impl).
+        let generics: BTreeSet<String> = d
+            .generics()
+            .map(|g| {
+                g.params()
+                    .filter_map(|p| p.name())
+                    .map(|t| self.text(t.span))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for (tag, span, payload) in &entries {
+            if generics.contains(tag)
+                || (tag.len() == 1 && tag.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+            {
+                continue;
+            }
+            let capitalized = tag.chars().next().is_some_and(|c| c.is_ascii_uppercase());
+            let shape = if tag == "none" && *payload > 0 {
+                Some((
+                    "`none` carries a payload here".to_string(),
+                    "absence is not an error",
+                    "\"there is nothing here\" and \"this went wrong, here is how\" are \
+                     different answers on purpose: `none` stays payload-free, and a \
+                     failure that has something to say gets its own CapCase tag.",
+                ))
+            } else if *payload > 0 && !capitalized {
+                Some((
+                    format!("the tag `{tag}` carries a payload but is spelled like a mark"),
+                    "lowercase reads as nothing-to-destructure",
+                    "payload-carrying tags are CapCase and name their payload type \
+                     (`Parse(ParseErr)`); lowercase bare words are reserved for \
+                     payload-free marks.",
+                ))
+            } else if *payload == 0 && capitalized {
+                Some((
+                    format!("the mark `{tag}` is spelled CapCase"),
+                    "reads as if there were data to destructure",
+                    "payload-free marks are lowercase bare words (`none`, `eof`, \
+                     `parse`); CapCase is the reader's signal that a payload waits \
+                     inside.",
+                ))
+            } else {
+                None
+            };
+            if let Some((msg, label, note)) = shape {
+                self.warn(
+                    Diagnostic::warning(codes::W0603, *span, msg)
+                        .with_label(label)
+                        .with_note(note.to_string()),
+                );
+            }
+        }
+        for (tag, span, _) in entries {
             let clash = if self.pkg.tables[self.module]
                 .get(&tag)
                 .is_some_and(|it| self.text(span) == it.name)
@@ -336,6 +417,311 @@ impl Wave<'_> {
                     .to_string(),
             ),
         );
+    }
+
+    // ----------------------------------------- the idiom arbiter --
+
+    /// W0313 — a `pub` item with no `///` above it. `pub(pkg)` is
+    /// package-internal and exempt; the doc obligation is the export's.
+    fn pub_doc_check(&mut self, node: &GreenNode) {
+        let Some(vis) = node.nodes().find_map(Visibility::cast) else {
+            return;
+        };
+        if vis.is_pkg() {
+            return;
+        }
+        let documented = first_token(node).is_some_and(|t| {
+            t.leading.iter().any(|sp| {
+                self.src[sp.lo as usize..sp.hi as usize]
+                    .strip_prefix(b"///")
+                    .is_some()
+            })
+        });
+        if documented {
+            return;
+        }
+        self.warn(
+            Diagnostic::warning(
+                codes::W0313,
+                vis.syntax().span,
+                "this `pub` item has no doc comment".to_string(),
+            )
+            .with_label("exported, but undocumented")
+            .with_note(
+                "an exported item carries a `///` contract: what it computes, what \
+                 each row tag means, when it traps. If it is not worth documenting, \
+                 it is rarely worth exporting."
+                    .to_string(),
+            ),
+        );
+    }
+
+    /// The naming conventions that generalize mechanically: W0310
+    /// (`get_` prefix), W0311 (predicate names answer `bool`), W0312
+    /// (`as_` views borrow), W0604 (bare `get` is checked access).
+    fn convention_checks(&mut self, d: &FnDecl<'_>) {
+        let Some(t) = d.name() else { return };
+        let name = self.text(t.span);
+        if let Some(noun) = name.strip_prefix("get_")
+            && !noun.is_empty()
+        {
+            self.warn(
+                Diagnostic::warning(
+                    codes::W0310,
+                    t.span,
+                    format!("`{name}` wears the `get_` prefix"),
+                )
+                .with_label("the prefix says nothing")
+                .with_note(format!(
+                    "every function gets something — name it after the noun it \
+                     fetches (`{noun}`), or, for checked access that can miss, \
+                     bare `get` with an absence row."
+                )),
+            );
+        }
+        if name
+            .strip_prefix("is_")
+            .or_else(|| name.strip_prefix("has_"))
+            .is_some_and(|rest| !rest.is_empty())
+        {
+            let answers_bool = d
+                .ret_ty()
+                .and_then(|r| r.ty())
+                .is_some_and(|ty| self.text(ty.span) == "bool");
+            if !answers_bool {
+                self.warn(
+                    Diagnostic::warning(
+                        codes::W0311,
+                        t.span,
+                        format!("`{name}` reads as a predicate but does not answer `bool`"),
+                    )
+                    .with_label("a question that is not one")
+                    .with_note(
+                        "`is_`/`has_` names promise a yes-or-no answer; return `bool`, \
+                         or rename the function after what it produces."
+                            .to_string(),
+                    ),
+                );
+            }
+        }
+        if name
+            .strip_prefix("as_")
+            .is_some_and(|rest| !rest.is_empty())
+            && let Some(params) = d.params()
+            && let Some(p) = params.params().find(|p| p.mode().is_some())
+        {
+            let verb = match p.mode() {
+                Some(ParamMode::Take) => "consumes",
+                _ => "mutates",
+            };
+            self.warn(
+                Diagnostic::warning(
+                    codes::W0312,
+                    p.syntax().span,
+                    format!(
+                        "`{name}` reads as a borrowed view, but this parameter {verb} its operand"
+                    ),
+                )
+                .with_label("a view must borrow")
+                .with_note(
+                    "`as_x` (and bare nouns) are views over an untouched operand; \
+                     `to_x` is the spelling that builds a new value. Rename the \
+                     function, or give the parameter the read default."
+                        .to_string(),
+                ),
+            );
+        }
+        if name == "get" && !d.ret_ty().is_some_and(|r| r.error_row().is_some()) {
+            self.warn(
+                Diagnostic::warning(
+                    codes::W0604,
+                    t.span,
+                    "this `get` declares no absence row".to_string(),
+                )
+                .with_label("checked access that cannot miss")
+                .with_note(
+                    "bare `get` is the checked-access spelling: it answers `T ! {none}` \
+                     and callers handle the miss. Give it the absence row, or name it \
+                     after what it computes."
+                        .to_string(),
+                ),
+            );
+        }
+    }
+
+    /// Mode discipline (X1): W1002 — a `mut` parameter the body never
+    /// writes; W1003 — a `take` parameter returned unchanged. Both
+    /// carry drop-the-mode fix-its; W1002's is machine-applicable when
+    /// every call site is provably rewritable (private free function,
+    /// name used only as a call), and honest `Maybe` otherwise.
+    fn mode_discipline(&mut self, d: &FnDecl<'_>, free: bool) {
+        let Some(body) = d.body() else { return };
+        let body_node = body.syntax();
+        let Some(params) = d.params() else { return };
+        // Shadowing makes the flat write scan unreliable: a body that
+        // rebinds the name anywhere keeps the lint silent.
+        let rebound = rebound_names(body_node, self.src);
+        for (idx, p) in params.params().enumerate() {
+            let Some(mode) = p.mode() else { continue };
+            let name_tok = if p.is_self() {
+                p.syntax().child_token(SyntaxKind::SelfKw)
+            } else {
+                p.name()
+            };
+            let Some(name_tok) = name_tok else { continue };
+            let name = self.text(name_tok.span);
+            if rebound.contains(&name) {
+                continue;
+            }
+            let Some(mode_tok) = p
+                .syntax()
+                .tokens()
+                .find(|t| matches!(t.kind, SyntaxKind::MutKw | SyntaxKind::TakeKw))
+            else {
+                continue;
+            };
+            if body_writes(body_node, &name, self.src) {
+                continue;
+            }
+            let drop_decl = (
+                Span::new(mode_tok.span.file, mode_tok.span.lo, name_tok.span.lo),
+                String::new(),
+            );
+            match mode {
+                ParamMode::Mut => {
+                    let callsites = if free && d.visibility().is_none() {
+                        d.name()
+                            .and_then(|f| self.callsite_mut_edits(&self.text(f.span), f.span, idx))
+                    } else {
+                        None
+                    };
+                    let sugg = match callsites {
+                        Some(mut edits) => {
+                            edits.insert(0, drop_decl);
+                            Suggestion::new(
+                                "drop the `mut` here and at every call site — the \
+                                 parameter is never written",
+                                edits,
+                                Applicability::MachineApplicable,
+                            )
+                        }
+                        None => Suggestion::new(
+                            "drop the `mut` (call sites passing `mut` must drop \
+                             theirs too)",
+                            vec![drop_decl],
+                            Applicability::Maybe,
+                        ),
+                    };
+                    self.warn(
+                        Diagnostic::warning(
+                            codes::W1002,
+                            mode_tok.span,
+                            format!("`{name}` is `mut`, and the body never writes it"),
+                        )
+                        .with_label("writeback nothing uses")
+                        .with_note(
+                            "every call site surrenders exclusive access for a write \
+                             that never happens; the read default is the honest mode."
+                                .to_string(),
+                        )
+                        .with_suggestion(sugg),
+                    );
+                }
+                ParamMode::Take => {
+                    if !returns_bare(body_node, &name, self.src) {
+                        continue;
+                    }
+                    self.warn(
+                        Diagnostic::warning(
+                            codes::W1003,
+                            mode_tok.span,
+                            format!("`{name}` is taken, never touched, and returned"),
+                        )
+                        .with_label("consumption that consumes nothing")
+                        .with_note(
+                            "the caller gives the value up only to receive it back; \
+                             if callers could reasonably keep it, the signature is \
+                             wrong."
+                                .to_string(),
+                        )
+                        .with_suggestion(Suggestion::new(
+                            "drop the `take` (call sites drop theirs and keep their \
+                             binding; owned payloads may then need a real transform)",
+                            vec![drop_decl],
+                            Applicability::Maybe,
+                        )),
+                    );
+                }
+            }
+        }
+    }
+
+    /// The call-site half of W1002's machine-applicable fix: every
+    /// mention of `fname` across the module must be its declaration or
+    /// the callee of a plain call — then the edits removing each call's
+    /// `mut` at `arg_index` are returned. Any other use (a value
+    /// position, a dotted path, a shadowing risk) refuses with `None`
+    /// and the fix stays `Maybe`.
+    fn callsite_mut_edits(
+        &self,
+        fname: &str,
+        decl_span: Span,
+        arg_index: usize,
+    ) -> Option<Vec<(Span, String)>> {
+        let mut edits = Vec::new();
+        for &fi in &self.pkg.modules[self.module].files {
+            let src = &self.pkg.files[fi].raw.src;
+            let root = &self.pkg.files[fi].parse.root;
+            let mut callee_idents: Vec<Span> = Vec::new();
+            for call in descendants(root).filter_map(CallExpr::cast) {
+                let Some(callee) = call.callee() else {
+                    continue;
+                };
+                if callee.kind != SyntaxKind::PathExpr {
+                    continue;
+                }
+                let idents: Vec<&GreenToken> = callee
+                    .tokens()
+                    .filter(|t| t.kind == SyntaxKind::Ident)
+                    .collect();
+                // A bare name, not a dotted path.
+                let [ident] = idents[..] else { continue };
+                if ident.text(src) != fname.as_bytes() {
+                    continue;
+                }
+                callee_idents.push(ident.span);
+                let Some(args) = call.args() else { continue };
+                let Some(arg) = args.args().nth(arg_index) else {
+                    continue;
+                };
+                if arg.mode() == Some(ParamMode::Mut) {
+                    let mt = arg
+                        .syntax()
+                        .tokens()
+                        .find(|t| t.kind == SyntaxKind::MutKw)?;
+                    let v = arg.value()?;
+                    edits.push((
+                        Span::new(mt.span.file, mt.span.lo, v.span.lo),
+                        String::new(),
+                    ));
+                }
+            }
+            // Every other mention refuses the machine-applicable claim.
+            let mut ok = true;
+            all_tokens(root, &mut |t| {
+                if t.kind == SyntaxKind::Ident
+                    && t.text(src) == fname.as_bytes()
+                    && t.span != decl_span
+                    && !callee_idents.contains(&t.span)
+                {
+                    ok = false;
+                }
+            });
+            if !ok {
+                return None;
+            }
+        }
+        Some(edits)
     }
 
     // ------------------------------------------------- statements --
@@ -800,12 +1186,15 @@ fn text_of(src: &[u8], t: &GreenToken) -> String {
     String::from_utf8_lossy(&src[t.span.lo as usize..t.span.hi as usize]).into_owned()
 }
 
-/// The leftmost identifier of a place expression (`a`, `a.b`, `a[i]`).
+/// The leftmost identifier of a place expression (`a`, `a.b`, `a[i]`,
+/// `self.f`).
 fn place_root(mut e: &GreenNode, src: &[u8]) -> Option<(String, Span)> {
     loop {
         match e.kind {
             SyntaxKind::PathExpr => {
-                let t = e.tokens().find(|t| t.kind == SyntaxKind::Ident)?;
+                let t = e
+                    .tokens()
+                    .find(|t| matches!(t.kind, SyntaxKind::Ident | SyntaxKind::SelfKw))?;
                 return Some((
                     String::from_utf8_lossy(&src[t.span.lo as usize..t.span.hi as usize])
                         .into_owned(),
@@ -818,6 +1207,128 @@ fn place_root(mut e: &GreenNode, src: &[u8]) -> Option<(String, Span)> {
             _ => return None,
         }
     }
+}
+
+/// The first token of `node` in document order (for leading-trivia
+/// questions like "is there a `///` above this declaration?").
+fn first_token(node: &GreenNode) -> Option<&GreenToken> {
+    for child in &node.children {
+        match child {
+            wolf_ast::Child::Token(t) => return Some(t),
+            wolf_ast::Child::Node(n) => {
+                if let Some(t) = first_token(n) {
+                    return Some(t);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Visit every token beneath `node`, depth-first.
+fn all_tokens(node: &GreenNode, f: &mut impl FnMut(&GreenToken)) {
+    for child in &node.children {
+        match child {
+            wolf_ast::Child::Token(t) => f(t),
+            wolf_ast::Child::Node(n) => all_tokens(n, f),
+        }
+    }
+}
+
+/// Every name bound *inside* `body` — `let`/`var`/`const` patterns,
+/// match/`for` binders, closure parameters. A parameter whose name is
+/// in this set is shadowed somewhere, and the flat write scan cannot
+/// tell the two apart.
+fn rebound_names(body: &GreenNode, src: &[u8]) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for d in descendants(body) {
+        match d.kind {
+            SyntaxKind::LetDecl => {
+                if let Some(pat) = LetDecl::cast(d).and_then(|x| x.pattern()) {
+                    out.extend(pattern_names(pat, src).into_iter().map(|(n, _)| n));
+                }
+            }
+            SyntaxKind::VarDecl => {
+                if let Some(pat) = VarDecl::cast(d).and_then(|x| x.pattern()) {
+                    out.extend(pattern_names(pat, src).into_iter().map(|(n, _)| n));
+                }
+            }
+            SyntaxKind::ConstDecl => {
+                if let Some(t) = ConstDecl::cast(d).and_then(|x| x.name()) {
+                    out.insert(text_of(src, t));
+                }
+            }
+            SyntaxKind::IdentPat | SyntaxKind::BindingPat => {
+                out.extend(pattern_names(d, src).into_iter().map(|(n, _)| n));
+            }
+            SyntaxKind::ClosureExpr => {
+                if let Some(cl) = ClosureExpr::cast(d)
+                    && let Some(params) = cl.params()
+                {
+                    for p in params.params() {
+                        if let Some(t) = p.name() {
+                            out.insert(text_of(src, t));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Does `body` ever write `name`? Writes are assignments whose place
+/// roots at the name (projections included — `p.f = v` mutates `p`),
+/// and `mut`/`take` positions handing it onward: call arguments and
+/// moded receivers.
+fn body_writes(body: &GreenNode, name: &str, src: &[u8]) -> bool {
+    for n in descendants(body) {
+        let hit = match n.kind {
+            SyntaxKind::AssignStmt => AssignStmt::cast(n)
+                .and_then(|a| a.place())
+                .and_then(|p| place_root(p, src))
+                .is_some_and(|(root, _)| root == name),
+            SyntaxKind::Arg => Arg::cast(n).is_some_and(|a| {
+                a.mode().is_some()
+                    && a.value()
+                        .and_then(|v| place_root(v, src))
+                        .is_some_and(|(root, _)| root == name)
+            }),
+            SyntaxKind::ParenExpr => ParenExpr::cast(n).is_some_and(|p| {
+                p.mode().is_some()
+                    && p.expr()
+                        .and_then(|v| place_root(v, src))
+                        .is_some_and(|(root, _)| root == name)
+            }),
+            _ => false,
+        };
+        if hit {
+            return true;
+        }
+    }
+    false
+}
+
+/// Does the function hand `name` back unchanged — a `return name`, or
+/// the body block's trailing value being the bare name?
+fn returns_bare(body: &GreenNode, name: &str, src: &[u8]) -> bool {
+    let bare = |e: &GreenNode| {
+        e.kind == SyntaxKind::PathExpr
+            && String::from_utf8_lossy(&src[e.span.lo as usize..e.span.hi as usize]) == name
+    };
+    for n in descendants(body).filter(|n| n.kind == SyntaxKind::ReturnExpr) {
+        if n.nodes().next().is_some_and(bare) {
+            return true;
+        }
+    }
+    let last = body
+        .nodes()
+        .filter(|n| wolf_ast::is_stmt_kind(n.kind))
+        .last();
+    last.and_then(ExprStmt::cast)
+        .and_then(|x| x.expr())
+        .is_some_and(bare)
 }
 
 /// Every node beneath `node`, depth-first (excluding `node` itself).
@@ -834,12 +1345,12 @@ fn descendants(node: &GreenNode) -> impl Iterator<Item = &GreenNode> {
 }
 
 /// Row entries in a function's *signature* (body excluded): the tag
-/// text and its span.
+/// text, its span, and how many payload types it declares.
 fn collect_row_entries(
     node: &GreenNode,
     body_span: Option<Span>,
     src: &[u8],
-    out: &mut Vec<(String, Span)>,
+    out: &mut Vec<(String, Span, usize)>,
 ) {
     for row in descendants(node).filter(|n| n.kind == SyntaxKind::ErrorRow) {
         if body_span.is_some_and(|b| row.span.lo >= b.lo && row.span.hi <= b.hi) {
@@ -851,9 +1362,9 @@ fn collect_row_entries(
                 let tag =
                     String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]).into_owned();
                 // Dotted tags (`io.Error`) name a foreign row; the
-                // collision lint concerns bare names only.
+                // shape and collision lints concern bare names only.
                 if !tag.contains('.') {
-                    out.push((tag, span));
+                    out.push((tag, span, entry.payload().count()));
                 }
             }
         }
@@ -885,6 +1396,130 @@ fn interp_shaped(text: &str) -> Option<(usize, usize, String)> {
         i += 1;
     }
     None
+}
+
+// ==================================================== package shape ==
+
+/// The package-shape pass (the idiom arbiter's structure lints), run
+/// once over the resolved module graph: W0314 one-item modules, W0315
+/// `pub(pkg)` items nothing else in the package uses, W0316 modules
+/// importing their own ancestor. The std tree is exempt exactly as in
+/// [`check_file`].
+pub(crate) fn check_package(pkg: &Package, sink: &mut Diagnostics) {
+    let is_std = |m: usize| pkg.modules[m].path.first().is_some_and(|s| s == "std");
+    // Ident inventory per module (W0315's conservative "used" test: any
+    // mention of the name anywhere in another module counts).
+    let idents: Vec<Option<BTreeSet<String>>> = (0..pkg.modules.len())
+        .map(|m| {
+            if is_std(m) {
+                return None;
+            }
+            let mut set = BTreeSet::new();
+            for &fi in &pkg.modules[m].files {
+                let src = &pkg.files[fi].raw.src;
+                all_tokens(&pkg.files[fi].parse.root, &mut |t| {
+                    if t.kind == SyntaxKind::Ident {
+                        set.insert(text_of(src, t));
+                    }
+                });
+            }
+            Some(set)
+        })
+        .collect();
+    for m in 0..pkg.modules.len() {
+        if is_std(m) {
+            continue;
+        }
+        let path = &pkg.modules[m].path;
+        // W0314 — a non-root module holding exactly one item. Namespace
+        // parents (modules with child modules) are structure, not
+        // ceremony, and stay silent.
+        if !path.is_empty() {
+            let is_parent = pkg.modules.iter().enumerate().any(|(o, om)| {
+                o != m && om.path.len() > path.len() && om.path[..path.len()] == path[..]
+            });
+            if !is_parent && pkg.tables[m].items.len() == 1 {
+                let item = &pkg.tables[m].items[0];
+                sink.push(
+                    Diagnostic::warning(
+                        codes::W0314,
+                        item.name_span,
+                        format!("{} holds exactly one item", pkg.modules[m].display_name()),
+                    )
+                    .with_label("a directory of ceremony around it")
+                    .with_note(
+                        "fold the item into the module that uses it, or grow the \
+                         module into the family its name promises; a deliberate seam \
+                         says so with `#[allow(w0314)]` and a reason."
+                            .to_string(),
+                    ),
+                );
+            }
+        }
+        // W0316 — an import reaching up into an ancestor module.
+        for file_bindings in &pkg.modules[m].bindings {
+            for b in file_bindings {
+                let target = match &b.target {
+                    BindTarget::PkgModule(i) => Some(*i),
+                    BindTarget::Item { module, .. } => Some(*module),
+                    _ => None,
+                };
+                if let Some(t) = target
+                    && !is_std(t)
+                    && pkg.modules[t].path.len() < path.len()
+                    && path.starts_with(&pkg.modules[t].path)
+                {
+                    sink.push(
+                        Diagnostic::warning(
+                            codes::W0316,
+                            b.name_span,
+                            format!(
+                                "{} imports {}, its own ancestor",
+                                pkg.modules[m].display_name(),
+                                pkg.modules[t].display_name()
+                            ),
+                        )
+                        .with_label("one edit away from an import cycle")
+                        .with_note(
+                            "the ancestor owns this module structurally, and this \
+                             import couples the two the other way; move the shared \
+                             items down (or into a sibling) so the dependency runs \
+                             parent to child."
+                                .to_string(),
+                        ),
+                    );
+                }
+            }
+        }
+        // W0315 — a `pub(pkg)` item no other loaded module mentions.
+        for item in &pkg.tables[m].items {
+            if item.vis != Vis::Pkg {
+                continue;
+            }
+            let used = idents
+                .iter()
+                .enumerate()
+                .any(|(o, set)| o != m && set.as_ref().is_some_and(|s| s.contains(&item.name)));
+            if !used {
+                sink.push(
+                    Diagnostic::warning(
+                        codes::W0315,
+                        item.name_span,
+                        format!(
+                            "nothing else in the package uses the `pub(pkg)` item `{}`",
+                            item.name
+                        ),
+                    )
+                    .with_label("package visibility, unearned")
+                    .with_note(
+                        "the widened visibility claims another module needs this; \
+                         make the item private, and widen it back the day one does."
+                            .to_string(),
+                    ),
+                );
+            }
+        }
+    }
 }
 
 // ==================================================== typecheck rung ==

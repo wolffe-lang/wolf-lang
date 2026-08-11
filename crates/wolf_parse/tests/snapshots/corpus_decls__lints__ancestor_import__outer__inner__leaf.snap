@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 88..98 path=outer
+FnDecl 138..183 name=leaf pub body=Block
+FnDecl 238..269 name=leaf2 pub body=Block

@@ -1,6 +1,7 @@
 //! check: run(exit=0)
 //! phase: run
 //! conforms: ty.match.exhaustive, err.rows
+//! warns: W0603
 //!
 //! Exhaustiveness (s17): enums split by full case analysis, sealed
 //! error rows are closed over their tag set — the `_`-free matches

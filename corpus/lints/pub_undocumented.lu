@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, mod.vis.pub
+//! warns: W0313
+//!
+//! W0313 — a `pub` item with no `///`: the export is a promise to
+//! other modules, and the doc comment is where the promise is written
+//! down. Warn-by-default, deny-able like every warning.
+
+pub fn exported(n: int) -> int {
+    n + 1
+}
+
+fn main() -> !int {
+    exported(1) - 2
+}

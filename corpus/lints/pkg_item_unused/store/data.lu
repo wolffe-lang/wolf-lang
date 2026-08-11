@@ -1,0 +1,12 @@
+//! member: true
+//!
+//! One taken-up export and one unearned `pub(pkg)`.
+
+/// The item the entry actually uses.
+pub fn used() -> int {
+    2
+}
+
+pub(pkg) fn spare() -> int {
+    9
+}

@@ -77,20 +77,31 @@ json/rows.lu: refused — json builtins in native lowering (checked lane only at
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers
+lints/ancestor_import/main.lu: lowers
+lints/as_view_consuming.lu: lowers
 lints/assume_reassigned.lu: refused — assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)
 lints/binder_capitalized.lu: lowers
 lints/discarded_result.lu: lowers
 lints/else_comparison.lu: lowers
 lints/float_zero_minus.lu: lowers
+lints/get_prefix.lu: lowers
+lints/get_without_row.lu: lowers
 lints/match_str_arm_unreachable.lu: lowers
 lints/mut_in_interp.lu: lowers
+lints/mut_param_unwritten.lu: lowers
 lints/narrowing_literal.lu: lowers
+lints/one_item_module/main.lu: lowers
+lints/pkg_item_unused/main.lu: lowers
+lints/predicate_shape.lu: lowers
 lints/prefix_statement.lu: lowers
+lints/pub_undocumented.lu: lowers
 lints/raw_interp_braces.lu: lowers
 lints/region_never_allocates.lu: lowers
 lints/safety_comment_missing.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 lints/shadow_prelude.lu: lowers
+lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
+lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/checked_unsigned.lu: lowers
 memory/defer_order.lu: lowers

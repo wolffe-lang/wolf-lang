@@ -4,6 +4,7 @@
 //! The `geometry` module: one `pub` export and one private helper that
 //! stays out of the module's interface.
 
+/// The square's area; total for any `side`.
 pub fn area(side: int) -> int {
     side * side
 }

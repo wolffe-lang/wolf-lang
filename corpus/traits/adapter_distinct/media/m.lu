@@ -2,14 +2,17 @@
 //!
 //! The foreign module: it owns both the trait and the type.
 
+/// Rendering to `str`; the foreign trait of the orphan story.
 pub trait Show {
     fn show(x: Self) -> str
 }
 
+/// A titled song; the foreign type of the orphan story.
 pub struct Song {
     pub title: str,
 }
 
+/// One fixed `Song` for the adapter to wrap.
 pub fn make() -> Song {
     Song { title: "t" }
 }

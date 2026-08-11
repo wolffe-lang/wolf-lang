@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0311
+//!
+//! W0311 — a predicate-named function must answer `bool`: `is_`/`has_`
+//! names promise a yes-or-no question, and this one answers `int`, so
+//! every call site reads as a test and is not one.
+
+fn is_positive(n: int) -> int {
+    if n > 0 { 1 } else { 0 }
+}
+
+fn main() -> !int {
+    is_positive(3) - 1
+}

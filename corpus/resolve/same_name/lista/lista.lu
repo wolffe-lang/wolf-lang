@@ -3,6 +3,7 @@
 //!
 //! One of two same-named `len`s (issue #26): doubles.
 
+/// Doubles its argument — this module's `len`.
 pub fn len(n: int) -> int {
     n + n
 }

@@ -1,0 +1,21 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0603]: the mark `Stale` is spelled CapCase
+ --> mem:///main.lu:1:28
+  |
+1 | fn fetch(n: int) -> int ! {Stale, flat(int)} {
+  |                            ^^^^^ reads as if there were data to destructure
+  |
+  = note: payload-free marks are lowercase bare words (`none`, `eof`, `parse`); CapCase is the
+    reader's signal that a payload waits inside.
+
+warning[W0603]: the tag `flat` carries a payload but is spelled like a mark
+ --> mem:///main.lu:1:35
+  |
+1 | fn fetch(n: int) -> int ! {Stale, flat(int)} {
+  |                                   ^^^^ lowercase reads as nothing-to-destructure
+  |
+  = note: payload-carrying tags are CapCase and name their payload type (`Parse(ParseErr)`);
+    lowercase bare words are reserved for payload-free marks.

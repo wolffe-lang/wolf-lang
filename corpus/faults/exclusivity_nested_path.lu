@@ -1,6 +1,7 @@
 //! check: run(exit=trap(exclusivity))
 //! phase: typecheck
 //! conforms: mem.tier0.excl.1, mem.tier0.excl.2, mem.model.path.disjoint
+//! warns: W1002
 //!
 //! `[mem.model.path.disjoint]`: "Two paths conflict iff one is a prefix of the
 //! other." The first call is the legal half — two disjoint nested paths, both

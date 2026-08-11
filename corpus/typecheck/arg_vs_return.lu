@@ -6,7 +6,7 @@
 //! result was meant. The mismatch renders the whole `fn() -> int`
 //! against `int` and hints at the missing `()`.
 
-fn get_num() -> int {
+fn answer() -> int {
     41
 }
 
@@ -15,5 +15,5 @@ fn add(a: int, b: int) -> int {
 }
 
 fn main() -> !int {
-    add(get_num, 1)
+    add(answer, 1)
 }

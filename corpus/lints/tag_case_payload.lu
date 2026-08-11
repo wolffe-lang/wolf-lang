@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, err.rows
+//! warns: W0603
+//!
+//! W0603 — a row tag's case contradicts its payload, both ways at
+//! once: `Stale` is a payload-free mark spelled CapCase, and
+//! `flat(int)` carries a payload but is spelled like a mark. The case
+//! is the reader's signal about whether there is anything to
+//! destructure.
+
+fn fetch(n: int) -> int ! {Stale, flat(int)} {
+    if n < 0 { return Stale }
+    n
+}
+
+fn main() -> !int {
+    let v = fetch(3) else 0
+    v - 3
+}

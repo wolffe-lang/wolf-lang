@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_lex/tests/corpus_snapshots.rs
-assertion_line: 41
 expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..15 "//! check: pass"
@@ -59,10 +58,10 @@ Ident 209..212 "int"
 Punct(Not) 213..214 "!"
     trail Whitespace 214..215 " "
 Punct(LBrace) 215..216 "{"
-Ident 216..222 "Failed"
+Ident 216..222 "failed"
 Punct(Comma) 222..223 ","
     trail Whitespace 223..224 " "
-Ident 224..228 "Slow"
+Ident 224..228 "slow"
 Punct(RBrace) 228..229 "}"
     trail Whitespace 229..230 " "
 Punct(LBrace) 230..231 "{"

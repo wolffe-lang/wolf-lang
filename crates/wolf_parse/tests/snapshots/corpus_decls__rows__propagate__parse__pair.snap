@@ -3,4 +3,4 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 UseDecl 248..255 path=io
-FnDecl 256..436 name=pair pub body=Block
+FnDecl 312..493 name=pair pub body=Block

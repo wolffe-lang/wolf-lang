@@ -1,6 +1,7 @@
 //! check: run(exit=0)
 //! phase: run
 //! conforms: mod.vis.pkg
+//! warns: W0314
 //!
 //! `pub(pkg)` is visible package-wide (D32): this entry and `store/`
 //! live in the same package, so the access resolves. Only `pkg_hash`

@@ -1566,6 +1566,93 @@ apart and produce different strings with no diagnostic.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__raw_interp_braces.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0309_raw_braces.snap
 
+## W0310 — the `get_` prefix names nothing
+
+House convention, applied mechanically: no function wears a `get_`
+prefix. The prefix carries no information — every function gets
+something — so the name that matters is the noun after it: `get_len`
+is `len`, `get_first` is `first`. The one blessed `get` spelling is
+the bare word itself, the checked-access operation that answers with
+an absence row instead of a sentinel. Rename the function to the noun
+it fetches; if it is genuinely checked access, name it `get` and give
+it the absence row.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__get_prefix.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0310_get_prefix.snap
+
+## W0311 — a predicate-named function must answer `bool`
+
+Names spelling `is_` or `has_` are the predicate convention: callers
+read `is_empty(x)` as a yes-or-no question, and nothing else is
+allowed to wear the shape. This function has the prefix but does not
+return `bool`, so every call site reads as a test and is not one.
+Either return `bool`, or rename the function after what it actually
+produces — the prefix is the promise, and a signature that does not
+keep it is worse than no convention at all.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__predicate_shape.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0311_predicate_int.snap
+
+## W0312 — an `as_` conversion must borrow, and this one does not
+
+The naming split for conversions is allocation and ownership: `to_x`
+builds a new value, while `as_x` (and bare nouns) are views that
+borrow their operand and leave it untouched in the caller's hands.
+This `as_` function takes an operand `mut` or `take`, so it mutates
+or consumes what a caller reads as a borrowed view — the name
+promises one cost and the signature charges another. Rename it `to_x`
+(or after the operation it really performs), or change the mode to
+the read default a view deserves.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__as_view_consuming.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0312_as_view_take.snap
+
+## W0313 — this `pub` item has no doc comment
+
+A `pub` item is a promise to other modules, and the doc comment is
+where the promise is written down: the contract sentence, the meaning
+of each row tag, the trap conditions. This exported item carries no
+`///` at all, so its callers get a name and a signature and must read
+the body for everything else. Write the contract line above the
+declaration; if the item is not worth documenting, it is usually not
+worth exporting — make it private instead.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__pub_undocumented.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0313_pub_undocumented.snap
+
+## W0314 — this module contains exactly one item
+
+A module is a namespace, a visibility boundary, and a directory (D32)
+— real structure with a real reading cost. This one holds a single
+item, so the structure is all ceremony: importers write the module's
+name to reach one thing, and the tree grows a directory per function.
+Fold the item into the module that uses it, or grow the module into
+the family of items its name promises. A one-item module that is a
+deliberate seam can say so with an `#[allow]` and a reason.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__one_item_module__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__cycle__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__pkgvis__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__same_name__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__unused__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__propagate__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__coherence_orphan__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_scope__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0314_one_item_module.snap
+
+## W0315 — nothing else in this package uses this `pub(pkg)` item
+
+`pub(pkg)` widens an item's visibility to the whole package — a claim
+that some other module in the package needs it. No other loaded
+module mentions this item's name, so the widened visibility is
+unearned: the item behaves as private and the declaration says
+otherwise, which misleads exactly the reader deciding whether a
+change to it is safe. Make it private; when another module really
+does take it up, widening back is a one-word change.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__pkg_item_unused__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0315_pkg_unused.snap
+
+## W0316 — this module imports its own ancestor
+
+A child module reaching up into its ancestor couples the two in both
+directions at once: the ancestor owns the child structurally, and now
+the child depends on the ancestor's items too. The shape is legal —
+no cycle exists yet — but it sits one ordinary edit from the
+hard-error import cycle, because the ancestor importing any of its
+descendants closes the loop. Move the shared items down into the
+child (or into a sibling both can import) so the dependency runs one
+way, parent to child.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__ancestor_import__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0316_ancestor_import.snap
+
 ## W0401 — this literal does not fit the type it is cast to
 
 The value of this literal is known at compile time, and it lies
@@ -1619,6 +1706,33 @@ that shares it.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__propagate__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0602_pub_row.snap
 
+## W0603 — this row tag's case contradicts its payload
+
+A row tag's case is the reader's signal about whether there is
+anything to destructure: payload-free marks are lowercase bare words
+(`none`, `eof`, `parse`), payload-carrying tags are CapCase and name
+their payload type (`Parse(ParseErr)`). This tag breaks the pact —
+a CapCase mark implies data that is not there, a lowercase tag hides
+data that is, and `none` in particular never carries a payload,
+because "there is nothing here" and "this went wrong, here is how"
+are different answers on purpose. Rename the tag to match its
+payload, or move the payload to a tag whose case admits it.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_case_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_exhaustive.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0603_none_payload.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0603_tag_case_payload.snap
+
+## W0604 — bare `get` is the checked-access spelling, and this one cannot miss
+
+The convention reserves the bare name `get` for checked access: the
+operation that can find nothing and says so with an absence row
+(`-> T ! {none}`), consumed by `else` and `?`. This function is named
+`get` but declares no error row, so it promises a lookup and delivers
+a total function — callers reach for the `else` that checked access
+trains them to write, and there is nothing to handle. Give it the
+absence row if it can miss; name it after what it computes if it
+cannot.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__get_without_row.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0604_get_total_fn.snap
+
 ## W0801 — a capitalized name in this pattern binds instead of matching
 
 This scrutinee has no cases for the name to test, so the bare
@@ -1643,6 +1757,32 @@ one written for it. Delete the region, or move the allocation it was
 written for inside it.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__region_never_allocates.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1001_region_never_allocates.snap
+
+## W1002 — this `mut` parameter is never written
+
+The parameter is declared `mut`, and the body never assigns to it,
+never passes it onward as `mut` or `take`, and never mutates through
+it — the mode buys writeback nothing uses. The cost lands on callers:
+every call site must spell `f(mut x)` and surrender exclusive access
+for a write that never happens, and every reader budgets for a
+mutation that is not there. Drop the `mut` from the parameter and
+from the call sites that pass it; the read default is the honest
+mode. (X1: the absence of a keyword is the mode.)
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__faults__exclusivity_nested_path.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__mut_param_unwritten.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1002_mut_unwritten.snap
+
+## W1003 — this `take` parameter is returned unchanged
+
+`take` is for true consumption — the caller gives the value up and it
+is gone. This function's body never touches the taken parameter and
+hands it straight back as its result, so the caller loses the value
+only to be handed it again through the return: a round trip that
+consumes nothing and costs every call site its binding. If the caller
+could reasonably keep using the value, the signature is wrong — take
+the read default (copying what it returns), or make the consumption
+real by transforming the value before it leaves.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__take_returned.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1003_take_returned.snap
 
 ## W1101 — this write stays inside the task
 

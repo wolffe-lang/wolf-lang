@@ -65,7 +65,7 @@ fn e0804_bare_mut_receiver() {
     snap_one(
         "e0804_bare_mut_receiver",
         "struct P {\n    x: int,\n}\n\n\
-         impl P {\n    fn bump(mut self) -> int {\n        self.x\n    }\n}\n\n\
+         impl P {\n    fn bump(mut self) -> int {\n        self.x += 1\n        self.x\n    }\n}\n\n\
          fn main() -> !int {\n    var p = P { x: 1 }\n    p.bump()\n}\n",
     );
 }
@@ -133,12 +133,13 @@ fn e0807_out_of_scope_trait() {
             (
                 &["fmt"],
                 "f.lu",
-                "pub trait Show {\n    fn show(self) -> str\n}\n",
+                "/// Rendering.\npub trait Show {\n    fn show(self) -> str\n}\n\
+                 /// A width hint.\npub fn width() -> int {\n    4\n}\n",
             ),
             (
                 &[],
                 "p.lu",
-                "use fmt.Show\n\npub struct P {\n    pub x: int,\n}\n\n\
+                "use fmt.Show\n\n/// A point.\npub struct P {\n    pub x: int,\n}\n\n\
                  impl Show for P {\n    fn show(self) -> str {\n        \"p\"\n    }\n}\n",
             ),
             (

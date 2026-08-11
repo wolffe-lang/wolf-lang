@@ -7,7 +7,8 @@
 
 use io
 
-pub fn pair(path: str) -> int ! {BadDigit, Locked(str), NotFound(str)} {
+/// Two digits of `io.read`'s answer; the widening hop.
+pub fn pair(path: str) -> int ! {bad_digit, Locked(str), NotFound(str)} {
     let raw = io.read(path)?
     let lo = digit(raw % 10)?
     let hi = digit(raw / 10)?

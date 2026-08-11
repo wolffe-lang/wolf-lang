@@ -11,8 +11,8 @@ fn apply[T, E](x: T, f: fn(T) -> T ! {E}) -> T ! {E} {
     f(x)?
 }
 
-fn half(n: int) -> int ! {Negative} {
-    if n < 0 { return Negative }
+fn half(n: int) -> int ! {negative} {
+    if n < 0 { return negative }
     n / 2
 }
 

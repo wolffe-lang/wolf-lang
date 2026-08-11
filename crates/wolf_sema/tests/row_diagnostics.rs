@@ -39,7 +39,7 @@ fn snap_one(name: &str, src: &str) {
 fn e0601_duplicate_tag_in_row() {
     snap_one(
         "e0601_duplicate_tag",
-        "fn go() -> int ! {Io(str), Io} {\n    7\n}\n\nfn main() -> !int {\n    go() else 0\n}\n",
+        "fn go() -> int ! {Io(str), Io(str)} {\n    7\n}\n\nfn main() -> !int {\n    go() else 0\n}\n",
     );
 }
 
@@ -51,7 +51,7 @@ fn e0601_duplicate_tag_in_row() {
 fn e0602_missing_tag_with_fixit() {
     snap_one(
         "e0602_missing_tag",
-        "fn read(path: str) -> int ! {Io(str), NotFound(str)} {\n    NotFound(path)\n}\n\nfn render(path: str) -> int ! {Empty} {\n    read(path)?\n}\n\nfn main() -> !int {\n    render(\"cfg\") else 0\n}\n",
+        "fn read(path: str) -> int ! {Io(str), NotFound(str)} {\n    NotFound(path)\n}\n\nfn render(path: str) -> int ! {empty} {\n    read(path)?\n}\n\nfn main() -> !int {\n    render(\"cfg\") else 0\n}\n",
     );
 }
 
@@ -61,7 +61,7 @@ fn e0602_missing_tag_with_fixit() {
 fn e0602_large_rows_render_tags_only() {
     snap_one(
         "e0602_large_rows",
-        "fn deep() -> int ! {A, B, C, D, E2, F, G} {\n    7\n}\n\nfn shallow() -> int ! {H, I, J, K, L, M} {\n    deep()?\n}\n\nfn main() -> !int {\n    shallow() else 0\n}\n",
+        "fn deep() -> int ! {A, B, C, D, Q, F, G} {\n    7\n}\n\nfn shallow() -> int ! {H, I, J, K, L, M} {\n    deep()?\n}\n\nfn main() -> !int {\n    shallow() else 0\n}\n",
     );
 }
 
@@ -81,7 +81,7 @@ fn e0603_try_on_infallible() {
 fn e0604_try_in_infallible_fn() {
     snap_one(
         "e0604_nonfallible_caller",
-        "fn may() -> int ! {Bad} {\n    Bad\n}\n\nfn calm() -> int {\n    may()?\n}\n\nfn main() -> !int {\n    calm()\n}\n",
+        "fn may() -> int ! {bad} {\n    bad\n}\n\nfn calm() -> int {\n    may()?\n}\n\nfn main() -> !int {\n    calm()\n}\n",
     );
 }
 
@@ -91,7 +91,7 @@ fn e0604_try_in_infallible_fn() {
 fn e0605_pub_inferred_row() {
     snap_one(
         "e0605_pub_inferred",
-        "pub fn boom(n: int) -> !int {\n    if n == 0 { return Empty }\n    n\n}\n\nfn main() -> !int {\n    0\n}\n",
+        "/// Booms.\npub fn boom(n: int) -> !int {\n    if n == 0 { return Empty }\n    n\n}\n\nfn main() -> !int {\n    0\n}\n",
     );
 }
 

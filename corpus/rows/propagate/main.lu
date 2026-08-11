@@ -1,7 +1,7 @@
 //! check: run(exit=0)
 //! phase: run
 //! conforms: err.rows, err.propagate, err.union
-//! warns: W0602
+//! warns: W0314, W0602
 //!
 //! Three-module propagation with widening at each hop (D30/s15):
 //! `io.read`'s row widens into `parse.pair`'s, which the handler here

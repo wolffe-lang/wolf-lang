@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-UseDecl 271..281 path=store
-FnDecl 282..346 name=main body=Block
+UseDecl 288..298 path=store
+FnDecl 299..363 name=main body=Block

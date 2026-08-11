@@ -3,4 +3,4 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 UseDecl 18..27 path=beta
-FnDecl 28..104 name=ping pub body=Block
+FnDecl 93..169 name=ping pub body=Block

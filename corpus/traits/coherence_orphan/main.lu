@@ -1,6 +1,7 @@
 //! check: fail(E0504)
 //! phase: resolve
 //! conforms: ty.trait.coherence.orphan
+//! warns: W0314
 //!
 //! The simple orphan rule: this module owns neither `Show` nor
 //! `Thing`, so the impl may not live here — the sanctioned escape is

@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0603]: `none` carries a payload here
+ --> mem:///main.lu:1:29
+  |
+1 | fn lookup(n: int) -> int ! {none(int)} {
+  |                             ^^^^ absence is not an error
+  |
+  = note: "there is nothing here" and "this went wrong, here is how" are different answers on
+    purpose: `none` stays payload-free, and a failure that has something to say gets its own
+    CapCase tag.

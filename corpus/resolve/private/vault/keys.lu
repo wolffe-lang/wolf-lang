@@ -4,6 +4,7 @@ fn secret() -> !int {
     41
 }
 
+/// The exported door: delegates to the private `secret`.
 pub fn open() -> !int {
     secret()
 }

@@ -65,7 +65,7 @@ fn e0401_return_mismatch_provenance() {
 fn e0401_argument_vs_return_confusion() {
     snap_one(
         "e0401_arg_vs_return",
-        "fn get_num() -> int {\n    41\n}\n\nfn add(a: int, b: int) -> int {\n    a + b\n}\n\nfn main() -> !int {\n    add(get_num, 1)\n}\n",
+        "fn answer() -> int {\n    41\n}\n\nfn add(a: int, b: int) -> int {\n    a + b\n}\n\nfn main() -> !int {\n    add(answer, 1)\n}\n",
     );
 }
 

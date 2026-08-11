@@ -1,5 +1,6 @@
 //! member: true
 
+/// Rendering to `str`; in scope only where imported.
 pub trait Show {
     fn show(self) -> str
 }

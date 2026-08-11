@@ -2,6 +2,7 @@
 
 use alpha
 
+/// Counts down through `alpha.ping`; answers 1 on an even start.
 pub fn pong(n: int) -> int {
     if n == 0 { 1 } else { alpha.ping(n - 1) }
 }

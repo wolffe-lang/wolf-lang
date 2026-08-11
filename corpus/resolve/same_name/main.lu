@@ -1,6 +1,7 @@
 //! check: run(exit=0)
 //! phase: run
 //! conforms: mod.dir, mod.use.pub
+//! warns: W0314
 //!
 //! The same-name two-module case (issue #26, wolf-std F-0026):
 //! `lista.len` and `stra.len` share an item name AND a signature —

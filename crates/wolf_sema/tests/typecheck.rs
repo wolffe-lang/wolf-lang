@@ -175,7 +175,8 @@ fn cross_module_calls_check_against_dependency_signatures() {
         (
             &["geometry"],
             "shapes.lu",
-            "pub fn area(side: int) -> int {\n    side * side\n}\n",
+            "/// Area.\npub fn area(side: int) -> int {\n    side * side\n}\n\
+             /// Twice.\npub fn twice(side: int) -> int {\n    side + side\n}\n",
         ),
     ]);
     assert!(

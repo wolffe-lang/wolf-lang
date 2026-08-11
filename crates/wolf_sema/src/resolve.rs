@@ -112,6 +112,17 @@ pub fn resolve_package_with(
     for d in per_module {
         diagnostics.extend(d);
     }
+    // The package-shape pass (the idiom arbiter): module-graph lints
+    // that no per-module walk can see. Cascade suppression applies as
+    // everywhere on the resolve rung.
+    let mut pkg_sink = Diagnostics::new();
+    for unit in &package.files {
+        for &region in &unit.parse.error_regions {
+            pkg_sink.suppress(region);
+        }
+    }
+    crate::wave::check_package(&package, &mut pkg_sink);
+    diagnostics.extend(pkg_sink.into_vec());
     wolf_diag::sort_diagnostics(&mut diagnostics);
     Ok(Resolution {
         package,
@@ -1120,7 +1131,11 @@ mod tests {
     fn unused_import_is_machine_fixable() {
         let r = resolve(&[
             (&[], "main.lu", "use util\nfn main() -> !int { 0 }\n"),
-            (&["util"], "u.lu", "pub fn helper() -> int { 1 }\n"),
+            (
+                &["util"],
+                "u.lu",
+                "/// One.\npub fn helper() -> int { 1 }\n/// Two.\npub fn also() -> int { 2 }\n",
+            ),
         ]);
         assert_eq!(codes_of(&r), ["E0305"]);
         let s = &r.diagnostics[0].suggestions[0];
@@ -1140,7 +1155,7 @@ mod tests {
             (
                 &["vault"],
                 "v.lu",
-                "fn secret() -> int { 41 }\npub fn open() -> int { secret() }\n",
+                "fn secret() -> int { 41 }\n/// The door.\npub fn open() -> int { secret() }\n",
             ),
         ]);
         assert_eq!(codes_of(&r), ["E0304"]);
@@ -1155,7 +1170,11 @@ mod tests {
                 "main.lu",
                 "use store\nfn main() -> !int { store.limit() }\n",
             ),
-            (&["store"], "s.lu", "pub(pkg) fn limit() -> int { 8 }\n"),
+            (
+                &["store"],
+                "s.lu",
+                "pub(pkg) fn limit() -> int { 8 }\n/// Two.\npub fn cap() -> int { 9 }\n",
+            ),
         ]);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
     }
@@ -1190,7 +1209,11 @@ mod tests {
                 "main.lu",
                 "use util\nfn main() -> !int { util.helper() }\n",
             ),
-            (&["util"], "u.lu", "pub fn helper() -> int { 1 }\n"),
+            (
+                &["util"],
+                "u.lu",
+                "/// One.\npub fn helper() -> int { 1 }\n/// Two.\npub fn also() -> int { 2 }\n",
+            ),
         ];
         let a = resolve(files);
         let mut ml = MemoryLoader::new("t");

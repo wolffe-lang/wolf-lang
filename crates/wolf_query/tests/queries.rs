@@ -42,7 +42,9 @@ fn diagnostics_carry_structured_suggestions() {
             ("main.lu", "use util\n\nfn main() -> int {\n    0\n}\n"),
             (
                 "util/u.lu",
-                "//! member: true\npub fn helper() -> int {\n    1\n}\n",
+                "//! member: true\n/// One.\npub fn helper() -> int {\n    1\n}\n\
+                 /// Two — a second item keeps the module-shape lints quiet.\n\
+                 pub fn helper2() -> int {\n    2\n}\n",
             ),
         ],
     );

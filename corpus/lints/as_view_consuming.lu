@@ -1,0 +1,17 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0312
+//!
+//! W0312 — an `as_` conversion must borrow: the `to_`/`as_` naming
+//! split is allocation and ownership, and an `as_` function that
+//! consumes its operand charges a cost the name denies.
+
+fn as_length(take s: str) -> int {
+    s.len
+}
+
+fn main() -> !int {
+    let t = "four"
+    as_length(take t) - 4
+}

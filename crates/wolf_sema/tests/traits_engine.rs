@@ -167,9 +167,9 @@ fn adapter_types_are_their_own_nominals_with_free_casts() {
         (
             &["media"],
             "m.lu",
-            "pub trait Show {\n    fn show(x: Self) -> str\n}\n\n\
-             pub struct Song {\n    pub title: str,\n}\n\n\
-             pub fn make() -> Song {\n    Song { title: \"t\" }\n}\n",
+            "/// Rendering.\npub trait Show {\n    fn show(x: Self) -> str\n}\n\n\
+             /// A song.\npub struct Song {\n    pub title: str,\n}\n\n\
+             /// One song.\npub fn make() -> Song {\n    Song { title: \"t\" }\n}\n",
         ),
     ]);
     assert!(
@@ -331,12 +331,13 @@ fn orphan_impls_are_e0504() {
         (
             &["fmt"],
             "f.lu",
-            "pub trait Show {\n    fn show(x: Self) -> str\n}\n",
+            "/// Rendering.\npub trait Show {\n    fn show(x: Self) -> str\n}\n\
+             /// A width hint.\npub fn width() -> int {\n    4\n}\n",
         ),
         (
             &["data"],
             "d.lu",
-            "pub struct Thing {\n    pub n: int,\n}\npub fn make() -> Thing {\n    Thing { n: 0 }\n}\n",
+            "/// A thing.\npub struct Thing {\n    pub n: int,\n}\n/// One thing.\npub fn make() -> Thing {\n    Thing { n: 0 }\n}\n",
         ),
     ]);
     assert!(codes(&tc).contains(&"E0504"), "{:?}", tc.diagnostics);

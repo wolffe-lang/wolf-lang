@@ -6,6 +6,7 @@
 
 use fmt.Show
 
+/// The local type carrying the foreign trait's impl.
 pub struct P {
     pub x: int,
 }

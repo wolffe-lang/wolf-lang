@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0312]: `as_length` reads as a borrowed view, but this parameter consumes its operand
+ --> mem:///main.lu:1:14
+  |
+1 | fn as_length(take s: str) -> int {
+  |              ^^^^^^^^^^^ a view must borrow
+  |
+  = note: `as_x` (and bare nouns) are views over an untouched operand; `to_x` is the spelling that
+    builds a new value. Rename the function, or give the parameter the read default.

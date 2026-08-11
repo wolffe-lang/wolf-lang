@@ -1,0 +1,8 @@
+//! member: true
+//!
+//! A whole module for one function — the W0314 shape.
+
+/// The module's only item.
+pub fn only() -> int {
+    1
+}

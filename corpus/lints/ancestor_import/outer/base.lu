@@ -1,0 +1,13 @@
+//! member: true
+//!
+//! The ancestor: structure above, imported from below.
+
+/// The base value.
+pub fn base() -> int {
+    2
+}
+
+/// A second item; the module is more than ceremony.
+pub fn twice() -> int {
+    4
+}

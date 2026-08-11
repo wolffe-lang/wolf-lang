@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 98..128 name=base pub body=Block
+FnDecl 183..214 name=twice pub body=Block

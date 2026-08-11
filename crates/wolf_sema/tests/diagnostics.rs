@@ -47,7 +47,8 @@ fn e0301_missing_module_item() {
         (
             &["geometry"],
             "shapes.lu",
-            "pub fn area(side: int) -> int {\n    side * side\n}\n",
+            "/// Area.\npub fn area(side: int) -> int {\n    side * side\n}\n\
+             /// Twice.\npub fn twice(side: int) -> int {\n    side + side\n}\n",
         ),
     ]);
     insta::assert_snapshot!("e0301_member", render(&res));
@@ -77,12 +78,14 @@ fn e0303_import_cycle_full_path() {
         (
             &["alpha"],
             "a.lu",
-            "use beta\n\npub fn ping(n: int) -> int {\n    beta.pong(n)\n}\n",
+            "use beta\n\n/// Ping.\npub fn ping(n: int) -> int {\n    beta.pong(n)\n}\n\
+             /// Rest.\npub fn rest() -> int {\n    0\n}\n",
         ),
         (
             &["beta"],
             "b.lu",
-            "use alpha\n\npub fn pong(n: int) -> int {\n    alpha.ping(n)\n}\n",
+            "use alpha\n\n/// Pong.\npub fn pong(n: int) -> int {\n    alpha.ping(n)\n}\n\
+             /// Halt.\npub fn halt() -> int {\n    1\n}\n",
         ),
     ]);
     insta::assert_snapshot!("e0303_cycle", render(&res));
@@ -99,7 +102,7 @@ fn e0304_private_item_names_required_visibility() {
         (
             &["vault"],
             "keys.lu",
-            "fn secret() -> int {\n    41\n}\n\npub fn open() -> int {\n    secret()\n}\n",
+            "fn secret() -> int {\n    41\n}\n\n/// The door.\npub fn open() -> int {\n    secret()\n}\n",
         ),
     ]);
     insta::assert_snapshot!("e0304_private", render(&res));
@@ -116,7 +119,7 @@ fn e0305_unused_import_machine_applicable_fix() {
         (
             &["tools"],
             "kit.lu",
-            "pub fn sharpen() -> int {\n    1\n}\n",
+            "/// Sharpen.\npub fn sharpen() -> int {\n    1\n}\n/// Dull.\npub fn dull() -> int {\n    3\n}\n",
         ),
     ]);
     insta::assert_snapshot!("e0305_unused", render(&res));
@@ -133,9 +136,13 @@ fn e0306_duplicate_import() {
         (
             &["tools"],
             "kit.lu",
-            "pub fn sharpen() -> int {\n    1\n}\n",
+            "/// Sharpen.\npub fn sharpen() -> int {\n    1\n}\n/// Dull.\npub fn dull() -> int {\n    3\n}\n",
         ),
-        (&["gear"], "g.lu", "pub fn sharpen() -> int {\n    2\n}\n"),
+        (
+            &["gear"],
+            "g.lu",
+            "/// Sharpen.\npub fn sharpen() -> int {\n    2\n}\n/// Dull.\npub fn dull() -> int {\n    4\n}\n",
+        ),
     ]);
     insta::assert_snapshot!("e0306_duplicate_import", render(&res));
 }

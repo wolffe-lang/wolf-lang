@@ -1,0 +1,15 @@
+//! member: true
+//!
+//! The child that reaches up — `use outer` is the W0316 shape.
+
+use outer
+
+/// One more than the ancestor's base.
+pub fn leaf() -> int {
+    outer.base() + 1
+}
+
+/// A second item; the module is more than ceremony.
+pub fn leaf2() -> int {
+    5
+}

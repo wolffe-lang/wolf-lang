@@ -1,5 +1,6 @@
 //! member: true
 
+/// Answers 1; imported and (in the negative case) never used.
 pub fn sharpen() -> int {
     1
 }
