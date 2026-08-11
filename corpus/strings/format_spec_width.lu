@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="[hi      ]\n[      42]\n[******42]")
+//! phase: mem
+//! conforms: str.interp
+//!
+//! The s37 format-spec subset (`[[fill]align][width]`, wolf-lang#28's
+//! candidate semantics): width in bytes, numbers default right,
+//! strings default left. Anything beyond the subset REFUSES — a spec
+//! is never silently ignored (wolf-lang#10): the native lane refuses
+//! spec-carrying holes until s38 lowers them, which is why this file
+//! pins `mem` while carrying its run expectation.
+
+fn main() -> !int {
+    let s = "hi"
+    let n = 42
+    print("[{s:8}]")
+    print("[{n:8}]")
+    print("[{n:*>8}]")
+    0
+}

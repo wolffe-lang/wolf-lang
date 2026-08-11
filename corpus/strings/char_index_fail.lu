@@ -1,0 +1,16 @@
+//! check: fail(E0411)
+//! phase: resolve
+//! conforms: str.slice
+//!
+//! No `s[i]` character indexing exists, by decision (D25): a single
+//! index cannot honestly name "a character". E0411 points at the
+//! honest alternatives — byte slices, `bytes()`, offset-returning
+//! `find`. (`s[-1]` is caught earlier still, as E0209 with a `^n`
+//! fix-it.)
+
+fn main() -> !int {
+    let s = "wolf"
+    let i = 2
+    let c = s[i]
+    0
+}

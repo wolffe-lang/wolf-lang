@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: resolve
+//! phase: mem
 //! conforms: gram.amb.fmtcolon, gram.lex.str
 //! Nested strings inside interpolations need NO escapes (mode stack);
 //! `{{` and `}}` are literal braces.

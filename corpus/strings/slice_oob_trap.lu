@@ -1,0 +1,13 @@
+//! check: run(exit=trap(bounds))
+//! phase: mem
+//! conforms: str.slice, mem.ub.defined
+//!
+//! D25's first defined fault: a byte range outside the string is a
+//! deterministic `bounds` trap in safe builds — never UB. The
+//! recoverable twin is `s.get(a..b)` (see builtin_methods.lu).
+
+fn main() -> !int {
+    let s = "wolf"
+    let x = s[0..9]
+    if x == "" { 1 } else { 2 }
+}
