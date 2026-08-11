@@ -1403,6 +1403,14 @@ fn static_code_to_trap(code: &str) -> Option<&'static str> {
         "E1001" => Some("use-after-move"),
         "E1002" => Some("exclusivity"),
         "E1004" | "E1005" | "E1010" | "E1011" | "E1012" => Some("region-fault"),
+        // The conc family (spec 03): E1101's shape is the data race
+        // an oracle's detector reports ([conc.mm.race.3]); E1103's is
+        // the self-acquisition deadlock ([conc.deadlock.self]). E1102
+        // has no dynamic counterpart — capture-by-copy machines run
+        // the unsendable-payload shape with task-local effects, so an
+        // oracle that runs it clean is a completeness note.
+        "E1101" => Some("race"),
+        "E1103" => Some("deadlock"),
         _ => None,
     }
 }

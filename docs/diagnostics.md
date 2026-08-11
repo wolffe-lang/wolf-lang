@@ -1311,6 +1311,51 @@ that must keep changing.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_freeze_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_reopen_frozen.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_write_through_frozen.snap
 
+## E1101 — a task may not mutate state it captured from the enclosing function
+
+A spawned task's closure captures by value: `Copy` data copies, `imm`
+data shares, and a region must `move` (D14's verbs). What no capture
+mode provides is a mutable window onto the enclosing function's
+locals — this closure writes to a captured binding, which would be
+exactly the shared-mutable-state shape the memory model exists to
+forbid ([conc.task.spawn]). Tasks share by communicating instead:
+make a `channel` and send the result to the one owner who mutates,
+or, when the state truly is shared, guard it with a `Mutex` and do
+every access inside a `when` block, whose body has exclusive access
+to the payloads. The write the checker flagged would otherwise land
+on the task's private copy at best and race at worst.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap
+
+## E1102 — this channel's payload type is not sendable
+
+`channel[T](n)` carries values between tasks, so `T` must be safe to
+hand across a task boundary: `Copy` data, `imm` data, a region value
+(the send is its affine `move`), or a `sync` type ([conc.chan.type]).
+The payload type here is none of those — sending it would either
+alias one mutable value from two tasks or silently copy something
+whose identity matters. D14's three verbs are the ways out: `move`
+the data into a region and send the region, `freeze` it into `imm`
+data that shares by reference, or wrap it in a `sync` type such as a
+`Mutex` and share that.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_unsendable.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1102_unsendable_payload.snap
+
+## E1103 — `when` blocks do not nest
+
+`when (a, b, …)` acquires its whole operand set before the body runs,
+in one canonical order — which is the construction that makes
+lock-order deadlock impossible ([conc.when.nodeadlock]). A `when`
+inside another `when` body is incremental acquisition by another
+spelling, and it would reopen the exact deadlock the construct
+closed, so the nesting is rejected where it is written
+([conc.when.nonest]). Merge the two operand sets into the outer
+block — `when (a, b, c) { … }` acquires everything at once — or end
+the outer block before acquiring the next set. The same acquisition
+reached through a call is detected at run time as trap(deadlock).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__when_nested.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1103_nested_through_closure.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1103_nested_when.snap
+
 ## E1301 — this raw-tier operation needs an `unsafe` block
 
 Raw pointers themselves are inert values: creating, copying, storing,
@@ -1609,7 +1654,7 @@ value that was never updated. Send the result over a channel, or
 return it through the scope's join, so the data flow between tasks is
 explicit; cross-task shared mutation is what `sync` types are for.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
 
 ## W1102 — the closure captured this value before it changed
 
