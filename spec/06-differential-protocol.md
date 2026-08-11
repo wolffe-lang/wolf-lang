@@ -34,6 +34,7 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   "phase_reached": "none",
   "seeded": false,
   "diagnostics": [ { "code": "E1002", "span": [120, 133], "severity": "error" } ],
+  "warnings": [ { "code": "W1301", "span": [356, 362] } ],
   "verdict": "unsupported",
   "stdout_sha256": null,
   "stdout_inline": null
@@ -67,6 +68,18 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   feature is outside this implementation's current scope. Excluded from
   divergence counting; reported in the **conservatism ledger** so scope
   gaps stay visible, never silent.
+- `[proto.record.warn]` `warnings` (added s67, additive within
+  `"protocol": 1` — validators accept records with or without it) is
+  the warning observations as `{code, span}` entries: every
+  warning-severity diagnostic the run produced *after* source-level
+  `#[allow]` suppression (the attribute is part of the program, so
+  every implementation honors it; spec/01 §9.3). An implementation
+  includes the array whenever it runs warning analyses and omits it
+  entirely otherwise — **honest-absent**: an implementation that has
+  not built a lint reports no array rather than an empty one it
+  cannot stand behind. Severity is not repeated (the array is
+  warnings by definition); `diagnostics` continues to carry the same
+  observations with `"severity": "warning"` per `[proto.record.diag]`.
 - `[proto.record.ext]` Keys beginning `x-` are implementation
   extensions. They participate in equality only when both records carry
   the same key.
@@ -80,11 +93,18 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   At `resolve|typecheck|mem`: same, plus `fail` codes drawn from the
   E1xxx+ families. At `run`: compare `verdict`; for `exit`, compare
   status and `stdout_sha256`; for `trap`, compare kind only.
+- `[proto.cmp.warn]` Warning parity (s67): when **both** records carry
+  the `warnings` array, the sorted `{code, span}` sets must agree —
+  a mismatch is a span/code-class divergence. Absent on either side is
+  never a divergence (`[proto.record.warn]`'s honest-absent), so lupin
+  implements the subset whose analyses it has and parity grows
+  lint-by-lint.
 - `[proto.cmp.defined-divergence]` Never divergences: schedule-dependent
   output *ordering* when the litmus is tagged concurrency-nondeterministic
   and `seeded` is false on either side; unspecified layout observations
   (Tier-3 address inspection); diagnostic count beyond the first;
-  `x-` keys absent on one side; `unsupported` on either side.
+  `x-` keys absent on one side; the `warnings` array absent on one side;
+  `unsupported` on either side.
 - `[proto.cmp.triage]` Everything else is a divergence and files a bug.
   Triage rule, normative: **the spec document is the defendant first** —
   an ambiguous clause is presumed the root cause until the clause is

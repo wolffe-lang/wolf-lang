@@ -1,0 +1,17 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.level.attr
+//! warns: W0303
+//!
+//! `#[allow]` with no arguments allows nothing — it is inert, and
+//! wolf reports the dead attribute (W0303) rather than letting it
+//! imply a suppression that never happens.
+
+#[allow]
+fn f() -> int {
+    1
+}
+
+fn main() -> !int {
+    if f() == 1 { 0 } else { 1 }
+}

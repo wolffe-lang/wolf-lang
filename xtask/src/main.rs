@@ -247,6 +247,32 @@ fn corpus_cmd() -> ExitCode {
                 );
                 bad += 1;
             }
+            // The warning ledger (s67): the record's `warnings` array
+            // must carry exactly the codes the `warns:` directive
+            // declares — the repo's own `--deny-warnings` posture (an
+            // undeclared warning fails CI; a declared one that stops
+            // firing is a stale header, equally loud).
+            let mut fired: Vec<String> = rec["warnings"]
+                .as_array()
+                .map(|ws| {
+                    ws.iter()
+                        .filter_map(|w| w["code"].as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            fired.sort();
+            fired.dedup();
+            if fired != d.warns {
+                eprintln!(
+                    "corpus: {}: warning ledger mismatch — fired [{}], header declares [{}] \
+                     (declare with `//! warns:` or fix the warning; the corpus is \
+                     --deny-warnings clean by decree)",
+                    f.display(),
+                    fired.join(", "),
+                    d.warns.join(", "),
+                );
+                bad += 1;
+            }
             // Expected-code matching (s10): a `check: fail(CODE)` file whose
             // failure is observable today must fail with exactly that code.
             if let Some(corpus::Check::Fail(expected)) = &d.check
@@ -601,6 +627,42 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         }
     } else {
         eprintln!("bench: native pipeline unavailable on this host — wolf compile metrics skipped");
+    }
+    // (c-w) the s67 cost gate: one `conform-run` sweep of the corpus per
+    // run — the clean-code diagnostic path, where the warning machinery
+    // (allow scan + level application) rides every file. `bench diff
+    // --gate` holds this within noise of its baseline per D5: warning
+    // infrastructure must cost nothing when no warning fires.
+    {
+        let mut sweep_files = Vec::new();
+        collect_wolf_files(Path::new("corpus"), &mut sweep_files);
+        sweep_files.sort();
+        sweep_files.retain(|f| {
+            std::fs::read_to_string(f)
+                .ok()
+                .and_then(|src| corpus::parse_directives(&src).ok())
+                .is_some_and(|d| !d.member)
+        });
+        for _ in 0..runs {
+            let t = Instant::now();
+            for f in &sweep_files {
+                let _ = Command::new("target/debug/wolf")
+                    .arg("conform-run")
+                    .arg(f)
+                    .arg("--json")
+                    .output();
+            }
+            records.push(record(
+                "corpus",
+                "compile",
+                "wolf",
+                "corpus_conform_wall_s",
+                t.elapsed().as_secs_f64(),
+                "s",
+                commit,
+                config,
+            ));
+        }
     }
     // (c') checker throughput (s13, D5): bodies-checked-per-second over
     // the corpus, from wolf_sema's bench example. Skips gracefully until

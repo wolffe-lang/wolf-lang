@@ -1,0 +1,21 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.boundary.doc
+//! warns: W1301
+//!
+//! The grandfathered s22 lint, formalized (s67): an `unsafe` block
+//! without a `# Safety:` comment stating its invariant is W1301 —
+//! advisory, never load-bearing; the block still checks and runs.
+
+import c "stdlib.h"
+
+fn main() -> !int {
+    var out = 0
+    unsafe {
+        let p = c.malloc(8) as *u8
+        p[0] = 3
+        out = p[0] as int
+        c.free(p)
+    }
+    if out == 3 { 0 } else { 1 }
+}
