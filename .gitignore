@@ -5,3 +5,5 @@ CLAUDE.md
 AGENTS.md
 /target
 bench-results/
+corpus/.lu-cache/
+/hello
