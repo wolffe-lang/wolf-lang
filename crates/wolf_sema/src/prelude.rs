@@ -14,9 +14,13 @@
 /// retire the moment the real std surface (s05) replaces them — keeping
 /// the corpus resolving cleanly is what the stub is *for* this sprint.
 pub const PRELUDE: &[&str] = &[
-    // io
+    // io (s38: stderr writers mirror print; `read_line` is the stdin
+    // read — checked lane only until native str materialization lands)
     "print",
     "print_raw",
+    "eprint",
+    "eprint_raw",
+    "read_line",
     // collections & sync (report 07, D13–D16 surface)
     "List",
     "Map",
@@ -44,6 +48,18 @@ pub const PRELUDE: &[&str] = &[
     "env_var",
     "clock_ms",
     "random_seed",
+    // the fs builtin tier (s38, D30 payload-less rows at v0; I13: all
+    // tagged `fs` in the sandbox table). std.fs (stdc02) DELEGATES to
+    // these — the builtin spelling is not the std API.
+    "fs_read_text",
+    "fs_write_text",
+    "fs_open",
+    "fs_create",
+    "fs_read",
+    "fs_write",
+    "fs_close",
+    "fs_remove",
+    "fs_exists",
     // provisional corpus stand-ins (retire with s05's real std surface)
     "acquire",
     "release",

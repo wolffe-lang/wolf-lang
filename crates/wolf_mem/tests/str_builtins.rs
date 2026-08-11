@@ -374,31 +374,111 @@ fn format_spec_fill_align_width() {
 }
 
 #[test]
-fn format_spec_beyond_subset_refuses() {
-    // wolf-lang#10's smallest ask: an unimplemented spec REFUSES —
-    // wolfc printing the bare value while the reference pads was a
-    // stdout divergence with no diagnostic.
-    assert_refuses(
+fn format_spec_sign_zero_and_bases() {
+    // s38: the full §7.4 candidate evaluates. `+` marks non-negative
+    // numbers (zero takes `+` — the wolf-std `with_sign` pin); `08`
+    // is the zero FLAG plus width, zero-padding after the sign (the
+    // `{n:08}` mis-read as width-8-space-fill was #28 item 3);
+    // `b`/`o`/`x`/`X` are sign-magnitude with no prefix.
+    assert_stdout(
         "fn main() -> !int {\n\
          let n = 42\n\
-         print(\"[{n:+}]\")\n\
+         let z = 0\n\
+         let neg = 0 - 42\n\
+         print(\"[{n:+}][{z:+}][{neg:+}]\")\n\
+         print(\"[{n:08}][{neg:06}]\")\n\
+         print(\"[{n:x}][{n:X}][{n:b}][{n:o}]\")\n\
+         print(\"[{neg:x}][{n:>8x}][{n:+06}]\")\n\
          0\n\
          }\n",
-        "format spec",
+        "[+42][+0][-42]\n[00000042][-00042]\n[2a][2A][101010][52]\n[-2a][      2a][+00042]\n",
     );
 }
 
 #[test]
-fn format_spec_zero_pad_refuses() {
-    // `{n:08}` silently reading as width 8 with a space fill was the
-    // reference implementation's own bug — refusing beats guessing.
+fn format_spec_str_precision_respects_boundaries() {
+    // `.N` on a `str` is a byte cap that never splits a code point —
+    // the one clause the spec must say "boundary" out loud for (#28);
+    // "aé" capped at 2 backs off to "a".
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let s = \"wolf\"\n\
+         let u = \"a\u{e9}\"\n\
+         print(\"[{s:.2}][{u:.2}][{u:.3}][{s:>6.2}]\")\n\
+         0\n\
+         }\n",
+        "[wo][a][a\u{e9}][    wo]\n",
+    );
+}
+
+#[test]
+fn format_spec_floats_evaluate() {
+    // The #10 headline: `{x:>8.2}` evaluates. Bare precision means
+    // fixed; `e`/`E` carry a signed two-digit exponent; the default
+    // rendering is the shortest round-trip decimal in the wolf-std
+    // `decimal.to_str` layout.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let x = 3.14159\n\
+         let half = 0.5\n\
+         print(\"[{x:>8.2}]\")\n\
+         print(\"[{x:.2f}][{half:.0f}]\")\n\
+         print(\"[{x:.2e}][{x:.2E}]\")\n\
+         print(\"[{x}][{half}]\")\n\
+         0\n\
+         }\n",
+        "[    3.14]\n[3.14][0]\n[3.14e+00][3.14E+00]\n[3.14159][0.5]\n",
+    );
+}
+
+#[test]
+fn float_arithmetic_is_ieee() {
+    // Floats never trap (X3 is integer law): division by zero is
+    // `inf`, and the shortest-round-trip rendering shows it.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let a = 1.5\n\
+         let b = 0.25\n\
+         let zero = 0.0\n\
+         print(\"{a + b} {a * b} {a / zero}\")\n\
+         if a > b { print(\"ordered\") }\n\
+         0\n\
+         }\n",
+        "1.75 0.375 inf\nordered\n",
+    );
+}
+
+#[test]
+fn format_spec_computed_still_refuses() {
+    // `{x:{w}}` has no pinned semantics — a #28 question, an honest
+    // refusal here (never a guess).
     assert_refuses(
         "fn main() -> !int {\n\
          let n = 42\n\
-         print(\"[{n:08}]\")\n\
+         let w = 8\n\
+         print(\"[{n:{w}}]\")\n\
          0\n\
          }\n",
-        "zero-padded",
+        "computed format spec",
+    );
+}
+
+#[test]
+fn interpolated_str_as_a_value() {
+    // The checked-lane twin of corpus/strings/interp_value_position.lu
+    // — the most user-visible native refusal (a function RETURNING an
+    // interpolated string). The checked lane materializes it; the
+    // native allocating path is the owed design.
+    assert_stdout(
+        "fn greet(name: str) -> str {\n\
+         \x20   \"hello, {name}\"\n\
+         }\n\
+         \n\
+         fn main() -> !int {\n\
+         \x20   print(greet(\"wolf\"))\n\
+         \x20   0\n\
+         }\n",
+        "hello, wolf\n",
     );
 }
 

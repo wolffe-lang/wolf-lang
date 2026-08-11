@@ -2802,16 +2802,23 @@ impl<'a> Checker<'a> {
     }
 
     /// Whole strings are `str`. Interpolation holes synthesize and are
-    /// accepted at any sized primitive / `str` type; full format-spec
-    /// validation (alignment, precision, argument kinds) is s16 (D26).
+    /// accepted at any sized primitive / `str` type. Format specs are
+    /// comptime-known (the grammar admits no computed spec except the
+    /// nested-hole form, which stays an honest lane refusal), so they
+    /// parse and validate HERE: a malformed spec is E0412 and a spec
+    /// that does not fit the hole's type is E0413 — at the span inside
+    /// the user's literal, never a runtime surprise (s38, D26, #28).
     fn synth_string(&mut self, e: &GreenNode) -> R<TyId> {
         let d = StringExpr::cast(e).expect("kind");
         for i in d.interps() {
+            let mut hole_ty = None;
             if let Some(expr) = i.expr() {
                 let t = self.synth_expr(expr)?;
                 self.hole_ok(expr.span, t)?;
+                hole_ty = Some(t);
             }
             if let Some(spec) = i.format_spec() {
+                let computed = spec.nodes().any(|n| n.kind == SyntaxKind::Interp);
                 // A spec's own `{…}` holes (e.g. interpolated widths).
                 for nested in spec.nodes().filter_map(wolf_ast::Interp::cast) {
                     if let Some(expr) = nested.expr() {
@@ -2819,9 +2826,61 @@ impl<'a> Checker<'a> {
                         self.hole_ok(expr.span, t)?;
                     }
                 }
+                if !computed {
+                    self.check_format_spec(spec, hole_ty);
+                }
             }
         }
         Ok(self.lo.table.prim(Prim::Str))
+    }
+
+    /// Parse and validate one non-computed format spec against its
+    /// hole's type. Diagnoses; never fails the body.
+    fn check_format_spec(&mut self, spec: &GreenNode, hole_ty: Option<TyId>) {
+        let text = self.text(spec.span);
+        let src = text.strip_prefix(':').unwrap_or(&text);
+        let parsed = match crate::fmtspec::parse(src) {
+            Ok(p) => p,
+            Err(err) => {
+                self.diags.push(
+                    Diagnostic::error(codes::E0412, spec.span, err.message())
+                        .with_label("in this format spec"),
+                );
+                return;
+            }
+        };
+        let Some(class) = hole_ty.and_then(|t| self.hole_class(t)) else {
+            // The hole's numeric class is genuinely open (a generic
+            // parameter, an error type) — the lanes stay honest about
+            // anything that slips this far.
+            return;
+        };
+        if let Err(mm) = crate::fmtspec::validate(&parsed, class) {
+            self.diags.push(
+                Diagnostic::error(codes::E0413, spec.span, mm.message())
+                    .with_label("in this format spec"),
+            );
+        }
+    }
+
+    /// The format-spec class of a hole type, when it is resolved
+    /// enough to have one. Unresolved numeric literals classify by
+    /// their `NumKind` (an integer literal is an integer hole even
+    /// before defaulting picks its width).
+    fn hole_class(&self, ty: TyId) -> Option<crate::fmtspec::HoleClass> {
+        use crate::fmtspec::HoleClass;
+        match self.kind_of(ty) {
+            TyKind::Prim(Prim::Str) => Some(HoleClass::Str),
+            TyKind::Prim(Prim::Bool) => Some(HoleClass::Bool),
+            TyKind::Prim(Prim::F32 | Prim::F64) => Some(HoleClass::Float),
+            TyKind::Prim(_) | TyKind::Wrapping(_) => Some(HoleClass::Int),
+            TyKind::Var(v) => match self.vars.kind_of(v) {
+                NumKind::Integer => Some(HoleClass::Int),
+                NumKind::Float => Some(HoleClass::Float),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     fn hole_ok(&mut self, span: Span, ty: TyId) -> R<()> {
@@ -4224,8 +4283,12 @@ impl<'a> Checker<'a> {
             if let Some(t) = t {
                 let name = self.text(t.span);
                 if self.lookup_local(&name).is_none() {
-                    // print/print_raw builtin signature.
-                    if name == "print" || name == "print_raw" {
+                    // print/print_raw builtin signature; the stderr
+                    // writers type identically (s38 io v0).
+                    if matches!(
+                        name.as_str(),
+                        "print" | "print_raw" | "eprint" | "eprint_raw"
+                    ) {
                         return self.call_print(&name, e, d.args());
                     }
                     // Ambient host surfaces (s16): typed here, callable
@@ -4631,15 +4694,53 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// An ambient host stub's builtin signature (s16). These type like
-    /// `print`: real signatures so runtime code checks, with the
+    /// An ambient host stub's builtin signature (s16/s38). These type
+    /// like `print`: real signatures so runtime code checks, with the
     /// comptime sandbox refusing every one of them by category.
+    ///
+    /// The s38 io/fs tier speaks D30: errors are payload rows, never
+    /// sentinels or traps — `not_found`/`denied`/`io` for the
+    /// filesystem family, `utf8` where text decoding can fail, `eof`
+    /// where an end is an outcome. (`eof`/`utf8` are exactly the tags
+    /// wolf-std's taxonomy reserved for the io tier.) Payload-carrying
+    /// forms (`NotFound{path}`) are the recorded stdc02 retrofit.
     fn call_host_stub(&mut self, name: &str, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
         let str_ = self.lo.table.prim(Prim::Str);
         let int_ = self.lo.table.prim(Prim::Int);
+        let bool_ = self.lo.table.prim(Prim::Bool);
+        let unit = self.lo.table.unit();
+        let rowed = |zelf: &mut Self, ok: TyId, tags: &[&str]| {
+            let row = zelf.lo.table.row(
+                tags.iter().map(|t| (t.to_string(), Vec::new())).collect(),
+                None,
+            );
+            zelf.lo.table.intern(TyKind::ErrUnion(ok, row))
+        };
         let (params, ret): (Vec<TyId>, TyId) = match name {
             "read_text" | "net_fetch" | "env_var" => (vec![str_], str_),
             "clock_ms" | "random_seed" => (Vec::new(), int_),
+            "read_line" => (Vec::new(), rowed(self, str_, &["eof", "io", "utf8"])),
+            "fs_read_text" => (
+                vec![str_],
+                rowed(self, str_, &["not_found", "denied", "io", "utf8"]),
+            ),
+            "fs_write_text" => (
+                vec![str_, str_],
+                rowed(self, unit, &["not_found", "denied", "io"]),
+            ),
+            "fs_open" => (
+                vec![str_],
+                rowed(self, int_, &["not_found", "denied", "io"]),
+            ),
+            "fs_create" => (vec![str_], rowed(self, int_, &["denied", "io"])),
+            "fs_read" => (vec![int_, int_], rowed(self, str_, &["eof", "io", "utf8"])),
+            "fs_write" => (vec![int_, str_], rowed(self, unit, &["io"])),
+            "fs_close" => (vec![int_], rowed(self, unit, &["io"])),
+            "fs_remove" => (
+                vec![str_],
+                rowed(self, unit, &["not_found", "denied", "io"]),
+            ),
+            "fs_exists" => (vec![str_], bool_),
             _ => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)

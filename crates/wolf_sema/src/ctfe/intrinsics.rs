@@ -121,8 +121,13 @@ pub fn intrinsic(name: &str) -> Option<Intrinsic> {
 /// *never* at comptime.
 pub fn host_stub(name: &str) -> Option<SandboxCategory> {
     Some(match name {
-        "print" | "print_raw" => SandboxCategory::Io,
-        "read_text" => SandboxCategory::Fs,
+        "print" | "print_raw" | "eprint" | "eprint_raw" | "read_line" => SandboxCategory::Io,
+        // The s38 fs builtin tier: every entry point carries the `fs`
+        // capability in this table (I13's tagging discipline — the
+        // enforcement/audit UX is s40+s51, the no-untagged-syscall
+        // rule starts here).
+        "read_text" | "fs_read_text" | "fs_write_text" | "fs_open" | "fs_create" | "fs_read"
+        | "fs_write" | "fs_close" | "fs_remove" | "fs_exists" => SandboxCategory::Fs,
         "net_fetch" => SandboxCategory::Net,
         "env_var" => SandboxCategory::Env,
         "clock_ms" => SandboxCategory::Clock,
