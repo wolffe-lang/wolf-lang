@@ -17,6 +17,38 @@ fn main() -> ExitCode {
         Some("corpus") => corpus_cmd(),
         Some("abi-check") => abi_check(),
         Some("debug-check") => debug_check(),
+        Some("install") => {
+            // `cargo xtask install [DIR]` — the two-artifact install: the
+            // driver locates libwolf_rt.a NEXT TO the `wolf` binary (or via
+            // WOLF_RT_LIB), so the binary never travels alone.
+            let dest = args
+                .get(1)
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| {
+                    let home = std::env::var_os("HOME").expect("HOME unset");
+                    std::path::Path::new(&home).join(".local/bin")
+                });
+            assert!(
+                run_ok(
+                    "cargo",
+                    &["build", "--release", "-p", "wolf_driver", "-p", "wolf_rt"]
+                ),
+                "release build failed"
+            );
+            std::fs::create_dir_all(&dest).expect("create install dir");
+            for f in ["wolf", "libwolf_rt.a"] {
+                let from = std::path::Path::new("target/release").join(f);
+                let to = dest.join(f);
+                // unlink first: a running `wolf lsp` holds the old inode
+                // (ETXTBSY on in-place copy); the unlinked file lives on
+                // for its holders and the new one takes the name.
+                let _ = std::fs::remove_file(&to);
+                std::fs::copy(&from, &to)
+                    .unwrap_or_else(|e| panic!("copy {f} -> {}: {e}", to.display()));
+            }
+            println!("install: wolf + libwolf_rt.a -> {}", dest.display());
+            ExitCode::SUCCESS
+        }
         Some("bench") => bench_cmd(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("dist") => dist(),
