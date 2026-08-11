@@ -57,7 +57,12 @@ parser contract):
 - `[conf.directive.check]` `check: pass | fail(CODE) | run(exit=N |
   exit=trap | exit=trap(kind) [, stdout="…"])` — kinds from
   `[conf.trap.set]`; unknown kinds/phases are errors. A `fail(CODE)`
-  expectation matches the failing code exactly.
+  expectation matches the failing code exactly. A `stdout="…"`
+  expectation matches the program's stdout byte-exactly EXCEPT that one
+  trailing newline in the observed output is ignored (`print` appends
+  one; directives stay single-line). Cross-implementation stdout
+  comparison ([proto.record]'s `stdout_sha256`) remains byte-exact —
+  the newline allowance is the directive matcher's alone.
 - `[conf.directive.phase]` `phase:` names the deepest rung of the
   canonical ladder (`none, lex, parse, resolve, typecheck, mem, wir,
   run`) that succeeds today — the truthful-ledger contract.

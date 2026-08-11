@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: arith.cmp.float
 //!
 //! The float-compare litmus (issue #22, wolf-std F-0027): IEEE-754

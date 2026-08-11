@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mem.tier0.excl.2, mem.tier0.excl.3, mem.tier0.move.1, mem.tier0.move.4
 //!
 //! The s18 acceptance file: everything Tier-0 exclusivity must PERMIT,

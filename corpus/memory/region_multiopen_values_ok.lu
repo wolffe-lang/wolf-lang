@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mem.region.multiopen, mem.region.open.2, mem.region.create.2
 //! The multiopen ANTICHAIN, legal direction: two sibling region
 //! values (neither owns the other) open simultaneously, with writes

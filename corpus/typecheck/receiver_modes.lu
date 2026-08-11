@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: ty.method.receiver-mode, mem.tier0.mode.mut, mem.tier0.mode.take
 //!
 //! X1 receiver modes: the call site spells exactly what the method

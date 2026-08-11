@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mod.dir, mod.use.pub
 //!
 //! The same-name two-module case (issue #26, wolf-std F-0026):

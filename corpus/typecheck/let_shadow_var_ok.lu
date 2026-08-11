@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: gram.item.let
 //!
 //! The non-cases around E0410, pinned green: `var` reassigns (plain

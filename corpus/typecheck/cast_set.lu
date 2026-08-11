@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: ty.cast.closed-set, ty.trait.adapter
 //!
 //! The closed cast set (s17): numeric casts convert explicitly (X3 —

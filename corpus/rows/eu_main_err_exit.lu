@@ -1,5 +1,5 @@
 //! check: run(exit=1, stdout="error: Boom")
-//! phase: wir
+//! phase: run
 //! conforms: abi.err.repr, err.union
 //!
 //! eu-main (s29): a `!int` main that returns an error value ends the

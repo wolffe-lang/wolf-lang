@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mem.region.create.3, mem.model.alloc
 //! Cyclone porting-study shape 2 (tree-transform): build a fixed-shape
 //! tree, transform it into a NEW tree — every allocation lands in the

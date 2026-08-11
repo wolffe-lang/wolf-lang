@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mem.region.freeze.1, mem.region.freeze.2, mem.region.create.1
 //! The clean freeze flow (the head of regions.lu, mem-checkable
 //! today): build in r, freeze — consuming the affine value — and

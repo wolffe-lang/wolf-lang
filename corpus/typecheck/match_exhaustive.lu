@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: ty.match.exhaustive, err.rows
 //!
 //! Exhaustiveness (s17): enums split by full case analysis, sealed

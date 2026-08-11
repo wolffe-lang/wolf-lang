@@ -1,5 +1,5 @@
 //! check: run(exit=trap(div-zero))
-//! phase: wir
+//! phase: run
 //! conforms: mem.ub.defined
 //!
 //! Division by zero is defined behavior with a defined outcome — it traps, it

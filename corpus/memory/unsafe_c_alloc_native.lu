@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: abi.c.seams, mem.unsafe.scope
 //!
 //! The is04-modelled C set gets its NATIVE truth (s29): `c.malloc`,

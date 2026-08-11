@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mem.region.create.3, mem.region.intra.2, mem.region.promote.1
 //! Cyclone porting-study shape 1 (list-builder), s19's annotation-
 //! freedom demonstration: a batch of records built in a scratch

@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: arith.checked
 //! The s26 unsigned decision, exercised: `uint` rides the same-width
 //! scalar with the `u*.chk` family selected — checked in all profiles

@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: err.propagate, err.errdefer, mem.model.order
 //!
 //! The s27 control witness (D30): `?` is ordinary control flow — the

@@ -1,11 +1,10 @@
 ---
 source: crates/wolf_lex/tests/corpus_snapshots.rs
-assertion_line: 41
 expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..33 "//! check: run(exit=trap(assert))"
     lead  Whitespace 33..34 "\n"
-    lead  InnerDocComment 34..48 "//! phase: wir"
+    lead  InnerDocComment 34..48 "//! phase: run"
     lead  Whitespace 48..49 "\n"
     lead  InnerDocComment 49..77 "//! conforms: mem.ub.defined"
     lead  Whitespace 77..78 "\n"

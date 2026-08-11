@@ -16,6 +16,7 @@ fn main() -> ExitCode {
         Some("deps-check") => deps_check(),
         Some("corpus") => corpus_cmd(),
         Some("abi-check") => abi_check(),
+        Some("debug-check") => debug_check(),
         Some("bench") => bench_cmd(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("dist") => dist(),
@@ -56,6 +57,7 @@ fn ci() -> ExitCode {
         ("deps-check", &["xtask", "deps-check"]),
         ("corpus", &["xtask", "corpus"]),
         ("abi-check", &["xtask", "abi-check"]),
+        ("debug-check", &["xtask", "debug-check"]),
         ("spec-extract", &["xtask", "spec-extract", "--check"]),
         ("conformance", &["xtask", "conformance"]),
         ("print-gate", &["xtask", "print-gate"]),
@@ -104,6 +106,36 @@ fn abi_check() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         eprintln!("abi-check: ABI divergence against host cc");
+        ExitCode::FAILURE
+    }
+}
+
+// -------------------------------------------------------------- debug-check --
+
+/// `xtask debug-check` — the s30/s31 debuggability gate as a NAMED
+/// PR-CI step (same rationale as `abi-check`): wolf's own DWARF in the
+/// binary, the gdb transcript over the stepping fixture AND
+/// `corpus/hello.lu`, and the issue-#26 mangling end-to-end. The tests
+/// skip loudly where gdb or a native toolchain is absent — the linux
+/// CI lane installs both, so a silent skip there is a lane bug, not a
+/// green.
+fn debug_check() -> ExitCode {
+    let ok = run_ok(
+        "cargo",
+        &[
+            "test",
+            "-p",
+            "wolf_driver",
+            "--test",
+            "debug_native",
+            "--quiet",
+        ],
+    );
+    if ok {
+        eprintln!("debug-check: debug sections + gdb transcripts green");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("debug-check: debuggability regression");
         ExitCode::FAILURE
     }
 }
@@ -164,11 +196,16 @@ fn corpus_cmd() -> ExitCode {
     let mut executed = false;
     if run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
         for (f, d) in &parsed {
-            let out = Command::new("target/debug/wolf")
-                .arg("conform-run")
-                .arg(f)
-                .arg("--json")
-                .output();
+            // `phase: run` files execute NATIVELY (s31: compile, link,
+            // run — the M1 gate). WOLF_NATIVE=1 keeps the argv shape
+            // protocol-stable.
+            let native = d.phase.as_deref() == Some("run");
+            let mut cmd = Command::new("target/debug/wolf");
+            cmd.arg("conform-run").arg(f).arg("--json");
+            if native {
+                cmd.env("WOLF_NATIVE", "1");
+            }
+            let out = cmd.output();
             let Ok(out) = out else { continue };
             if !out.status.success() {
                 eprintln!("corpus: {}: conform-run failed", f.display());
@@ -219,6 +256,39 @@ fn corpus_cmd() -> ExitCode {
                     f.display()
                 );
                 bad += 1;
+            }
+            // `check: run(...)` assertion (s31 — the M1 gate): a file
+            // that reaches the run rung must exit/trap exactly as the
+            // directive says, and its stdout must match with the
+            // trailing newline ignored (`print` appends one;
+            // [conf.directive.check]).
+            if let Some(corpus::Check::Run(exp)) = &d.check
+                && (verdict.starts_with("exit(") || verdict.starts_with("trap("))
+            {
+                let exit_ok = match &exp.exit {
+                    corpus::ExitExpect::Code(n) => verdict == format!("exit({n})"),
+                    corpus::ExitExpect::Trap(None) => verdict.starts_with("trap("),
+                    corpus::ExitExpect::Trap(Some(kind)) => verdict == format!("trap({kind})"),
+                };
+                if !exit_ok {
+                    eprintln!(
+                        "corpus: {}: expected run({:?}) but the program's verdict is {verdict}",
+                        f.display(),
+                        exp.exit,
+                    );
+                    bad += 1;
+                }
+                if let Some(want) = &exp.stdout {
+                    let got = rec["stdout_inline"].as_str().unwrap_or("");
+                    let trimmed = got.strip_suffix('\n').unwrap_or(got);
+                    if trimmed != want && got != want {
+                        eprintln!(
+                            "corpus: {}: expected stdout {want:?} but got {got:?}",
+                            f.display()
+                        );
+                        bad += 1;
+                    }
+                }
             }
         }
     }
@@ -400,47 +470,133 @@ fn bench_runtime(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
     Some(records)
 }
 
-/// Compile-track metrics against the bootstrap toolchain. The incremental
-/// metric is a stub-for-wolf until s31 wires `wolf build`; the schema and
-/// gating machinery are the deliverable now (s01).
+/// Compile-track metrics over the REAL pipeline (s31, D5): `wolf
+/// build` on a generated N-module project — clean-build wall time and
+/// the **incremental single-function-edit rebuild latency** through
+/// `.lu-cache` (the M3 headline metric's first honest numbers; they
+/// are module-grain and deliberately ugly — c12's before/after story
+/// baselines here). The sema/CTFE/WIR example micro-metrics ride
+/// along unchanged.
 fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
     let mut records = Vec::new();
-    let config = "bootstrap-cargo-stub";
-    for _ in 0..runs {
-        // (a) clean rebuild of the driver crate
-        if !run_ok("cargo", &["clean", "-p", "wolf_driver", "--quiet"]) {
-            return None;
+    let config = "wolf-batch-v0";
+    if !run_ok(
+        "cargo",
+        &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
+    ) {
+        return None;
+    }
+    // The generated project: a chain of NMOD modules (m01 → m02 → … →
+    // leaf), each with one `pub fn`; main sums through the chain.
+    const NMOD: usize = 12;
+    let proj = Path::new("target/bench-nmod");
+    let _ = std::fs::remove_dir_all(proj);
+    std::fs::create_dir_all(proj).expect("mkdir bench project");
+    let leaf = NMOD;
+    for k in 1..=NMOD {
+        let dir = proj.join(format!("m{k:02}"));
+        std::fs::create_dir_all(&dir).expect("mkdir module");
+        let body = if k == leaf {
+            format!("//! member: true\n\npub fn f{k:02}(x: int) -> int {{\n    x + {k}\n}}\n")
+        } else {
+            let next = k + 1;
+            format!(
+                "//! member: true\nuse m{next:02}\n\npub fn f{k:02}(x: int) -> int {{\n    m{next:02}.f{next:02}(x) + {k}\n}}\n"
+            )
+        };
+        std::fs::write(dir.join(format!("m{k:02}.lu")), body).expect("write module");
+    }
+    std::fs::write(
+        proj.join("main.lu"),
+        "use m01\n\nfn main() -> !int {\n    if m01.f01(0) > 0 { 0 } else { 1 }\n}\n",
+    )
+    .expect("write main");
+    let wolf = Path::new("target/debug/wolf");
+    let entry = proj.join("main.lu");
+    let prog = proj.join("prog");
+    let wolf_build = |extra: &[&str]| -> bool {
+        let mut cmd = Command::new(wolf);
+        cmd.arg("build").arg(&entry).arg("-o").arg(&prog);
+        cmd.args(extra);
+        cmd.status().map(|s| s.success()).unwrap_or(false)
+    };
+    // One probe: hosts that cannot link natively (non-linux-x86-64,
+    // no cc) skip the wolf metrics but keep the micro-metrics.
+    if wolf_build(&[]) {
+        let mut flip = false;
+        for _ in 0..runs {
+            // (a) clean build: no cache at all.
+            let _ = std::fs::remove_dir_all(proj.join(".lu-cache"));
+            let t = Instant::now();
+            if !wolf_build(&[]) {
+                return None;
+            }
+            records.push(record(
+                "nmod",
+                "compile",
+                "wolf",
+                "clean_build_wall_s",
+                t.elapsed().as_secs_f64(),
+                "s",
+                commit,
+                config,
+            ));
+            // (b) the M3 headline: touch ONE function body in the
+            // leaf module, rebuild through the cache.
+            flip = !flip;
+            let expr = if flip {
+                format!("{leaf} + x")
+            } else {
+                format!("x + {leaf}")
+            };
+            std::fs::write(
+                proj.join(format!("m{leaf:02}"))
+                    .join(format!("m{leaf:02}.lu")),
+                format!(
+                    "//! member: true\n\npub fn f{leaf:02}(x: int) -> int {{\n    {expr}\n}}\n"
+                ),
+            )
+            .expect("edit leaf");
+            let t = Instant::now();
+            if !wolf_build(&[]) {
+                return None;
+            }
+            records.push(record(
+                "nmod",
+                "compile",
+                "wolf",
+                "incr_rebuild_wall_s",
+                t.elapsed().as_secs_f64(),
+                "s",
+                commit,
+                config,
+            ));
         }
-        let t = Instant::now();
-        if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
-            return None;
+        // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v.
+        touch(&proj.join("m01").join("m01.lu"));
+        match max_rss_kb(
+            "target/debug/wolf",
+            &[
+                "build",
+                entry.to_str().expect("utf8 path"),
+                "-o",
+                prog.to_str().expect("utf8 path"),
+            ],
+        ) {
+            Some(kb) => records.push(record(
+                "nmod",
+                "compile",
+                "wolf",
+                "max_rss_kb",
+                kb,
+                "kB",
+                commit,
+                config,
+            )),
+            None => eprintln!("bench: /usr/bin/time unavailable — max_rss_kb skipped"),
         }
-        records.push(record(
-            "driver",
-            "compile",
-            "rust",
-            "clean_build_wall_s",
-            t.elapsed().as_secs_f64(),
-            "s",
-            commit,
-            config,
-        ));
-        // (b) incremental rebuild after touching one file
-        touch(Path::new("crates/wolf_driver/src/main.rs"));
-        let t = Instant::now();
-        if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
-            return None;
-        }
-        records.push(record(
-            "driver",
-            "compile",
-            "rust",
-            "incr_rebuild_wall_s",
-            t.elapsed().as_secs_f64(),
-            "s",
-            commit,
-            config,
-        ));
+    } else {
+        eprintln!("bench: native pipeline unavailable on this host — wolf compile metrics skipped");
     }
     // (c') checker throughput (s13, D5): bodies-checked-per-second over
     // the corpus, from wolf_sema's bench example. Skips gracefully until
@@ -538,21 +694,6 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         }
         _ => eprintln!("bench: wolf_wir wir_build_bench unavailable — wir-build skipped"),
     }
-    // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v
-    touch(Path::new("crates/wolf_driver/src/main.rs"));
-    match max_rss_kb("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
-        Some(kb) => records.push(record(
-            "driver",
-            "compile",
-            "rust",
-            "max_rss_kb",
-            kb,
-            "kB",
-            commit,
-            config,
-        )),
-        None => eprintln!("bench: /usr/bin/time unavailable — max_rss_kb skipped"),
-    }
     Some(records)
 }
 
@@ -593,13 +734,23 @@ fn bench_diff(args: &[String]) -> ExitCode {
         match stats::compare(bvals, cvals) {
             Some(stats::Verdict::Unchanged) => eprintln!("  {key}: unchanged"),
             Some(stats::Verdict::Significant { delta_pct }) => {
-                let dir = if delta_pct > 0.0 {
-                    "REGRESSED"
+                // Metric polarity (s31 fix): wall times, RSS, ns/op
+                // and instruction counts are lower-is-better;
+                // throughput (`*_per_sec`) and hit-rate metrics are
+                // bigger-is-better — an improvement there must never
+                // trip the gate.
+                let metric = key.rsplit('/').next().unwrap_or("");
+                let lower_is_better = !(metric.ends_with("per_sec")
+                    || metric.ends_with("hit_rate")
+                    || metric.ends_with("_hits"));
+                let regressed = if lower_is_better {
+                    delta_pct > 0.0
                 } else {
-                    "improved"
+                    delta_pct < 0.0
                 };
+                let dir = if regressed { "REGRESSED" } else { "improved" };
                 eprintln!("  {key}: {dir} {delta_pct:+.1}%");
-                if delta_pct > 0.0 {
+                if regressed {
                     regressions += 1;
                 }
             }

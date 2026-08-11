@@ -4,7 +4,7 @@ expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..44 "//! check: run(exit=1, stdout=\"error…"
     lead  Whitespace 44..45 "\n"
-    lead  InnerDocComment 45..59 "//! phase: wir"
+    lead  InnerDocComment 45..59 "//! phase: run"
     lead  Whitespace 59..60 "\n"
     lead  InnerDocComment 60..97 "//! conforms: abi.err.repr, err.unio…"
     lead  Whitespace 97..98 "\n"

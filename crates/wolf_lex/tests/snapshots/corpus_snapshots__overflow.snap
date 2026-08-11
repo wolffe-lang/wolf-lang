@@ -4,7 +4,7 @@ expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..35 "//! check: run(exit=trap(overflow))"
     lead  Whitespace 35..36 "\n"
-    lead  InnerDocComment 36..50 "//! phase: wir"
+    lead  InnerDocComment 36..50 "//! phase: run"
     lead  Whitespace 50..51 "\n"
     lead  InnerDocComment 51..110 "//! conforms: arith.checked, arith.w…"
     lead  Whitespace 110..111 "\n"

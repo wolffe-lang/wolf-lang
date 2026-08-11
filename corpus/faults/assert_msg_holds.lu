@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: wir
+//! phase: run
 //! conforms: mem.ub.defined
 //!
 //! The #19 regression witness: a two-argument `assert` whose condition
