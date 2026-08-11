@@ -1,0 +1,21 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, err.else
+//! warns: W0307
+//!
+//! W0307 — a comparison in `else` fallback position: `flag() else
+//! a == b` compares first and defaults a boolean, because `else`
+//! binds loosest. Legal both ways; the lint asks for parentheses so
+//! the grouping is chosen, not inherited.
+
+fn maybe(n: int) -> bool ! {empty} {
+    if n == 0 { return empty }
+    n > 1
+}
+
+fn main() -> !int {
+    let a = 1
+    let b = 1
+    let ok = maybe(0) else a == b
+    if ok { 0 } else { 1 }
+}

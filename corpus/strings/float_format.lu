@@ -19,6 +19,6 @@ fn main() -> !int {
     print("[{x:>8.2}]")
     print("[{x:.2f}][{x:.2e}][{x:.2E}]")
     print("[{x}][{half}][{three + half:.0f}][{three / zero}]")
-    print("[{zero:+.2f}][{0.0 - three:08.2f}]")
+    print("[{zero:+.2f}][{-three:08.2f}]")
     0
 }

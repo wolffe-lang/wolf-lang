@@ -7035,6 +7035,25 @@ impl<'a> Checker<'a> {
                         self.unknown_case(scrut, t.span, &name);
                         return Ok(Pat::Wild);
                     }
+                } else if name.chars().next().is_some_and(char::is_uppercase) {
+                    // W0801 (s68): the scrutinee has no cases, so a
+                    // capitalized bare name BINDS — the arm matches
+                    // everything, and it reads as a variant test (the
+                    // first-arm-always scar).
+                    self.diags.push(
+                        Diagnostic::warning(
+                            codes::W0801,
+                            t.span,
+                            format!("`{name}` binds a new name here — it does not match a case"),
+                        )
+                        .with_label("matches every value")
+                        .with_note(
+                            "the scrutinee has no variants or tags, so a bare name is a \
+                             binding; compare with a guard (`n if n == …`), or use a \
+                             lowercase name so it reads as the binding it is."
+                                .to_string(),
+                        ),
+                    );
                 }
                 self.bind(name, t.span, scrut);
                 Ok(Pat::Wild)

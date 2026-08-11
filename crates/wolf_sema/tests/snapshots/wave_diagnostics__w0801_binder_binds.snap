@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, true)"
+---
+warning[W0801]: `Zed` binds a new name here — it does not match a case
+ --> mem:///main.lu:5:9
+  |
+5 |         Zed => Zed + 1,
+  |         ^^^ matches every value
+  |
+  = note: the scrutinee has no variants or tags, so a bare name is a binding; compare with a guard
+    (`n if n == …`), or use a lowercase name so it reads as the binding it is.

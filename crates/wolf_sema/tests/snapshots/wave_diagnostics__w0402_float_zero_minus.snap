@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, true)"
+---
+warning[W0402]: `0.0 - x` is not negation
+ --> mem:///main.lu:3:19
+  |
+3 |     let flipped = 0.0 - x
+  |                   ^^^^^^^ erases the sign of `-0.0`
+  |
+  = note: subtracting from zero maps `-0.0` to `+0.0`; unary minus negates every value, zeros
+    included.
+help: negate with unary minus
+  |
+3 |     let flipped = -x
+  |

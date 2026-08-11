@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0305]: the row tag `stuck` shares its name with an item of this module
+ --> mem:///main.lu:4:28
+  |
+4 | fn probe(n: int) -> int ! {stuck} {
+  |                            ^^^^^ one word, two meanings
+  |
+  = note: in raise position this word is the tag; everywhere else it is the thing it collides with
+    — programs with this collision have returned a module as a value. Rename the tag.

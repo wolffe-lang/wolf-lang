@@ -1,0 +1,12 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+warning[W1001]: the region `scratch` never allocates
+ --> mem:///main.lu:3:12
+  |
+3 |     region scratch {
+  |            ^^^^^^^ nothing lives here
+  |
+  = note: no allocation is attributed to this region and its handle stays in this frame; delete
+    the region, or move the allocation it was written for inside it.

@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0401
+//!
+//! W0401 — a literal that cannot fit the cast's target type: the
+//! value is compile-time-known and out of range, so the conversion
+//! can never preserve it (the literal-width surprise family). The
+//! cast sits on the untaken branch, so the program still runs clean.
+
+fn main() -> !int {
+    let flag = 1
+    if flag == 0 {
+        let tiny = 300 as u8
+        return tiny as int
+    }
+    0
+}

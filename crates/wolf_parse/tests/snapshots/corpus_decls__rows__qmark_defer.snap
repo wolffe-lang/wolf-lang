@@ -6,7 +6,7 @@ FnDecl 587..621 name=bump body=Block
 FnDecl 623..673 name=mark body=Block
 FnDecl 675..762 name=source body=Block
 FnDecl 764..1021 name=tally body=Block
-FnDecl 1023..1176 name=probe body=Block
-FnDecl 1178..1447 name=depth body=Block
-FnDecl 1449..1582 name=classify body=Block
-FnDecl 1584..2270 name=main body=Block
+FnDecl 1214..1383 name=probe attrs=1 body=Block
+FnDecl 1385..1654 name=depth body=Block
+FnDecl 1656..1789 name=classify body=Block
+FnDecl 1791..2477 name=main body=Block

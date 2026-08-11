@@ -1,0 +1,16 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0402
+//!
+//! W0402 — `0.0 - x` as negation: it erases the sign of `-0.0`, so
+//! sign-honoring code misbehaves on exactly one input (the float
+//! library scar — `copysign` and rounding built on this idiom
+//! returned wrong signs). `-x` is the negation that keeps every
+//! value.
+
+fn main() -> !int {
+    let x = 1.5
+    let flipped = 0.0 - x
+    if flipped < 0.0 { 0 } else { 1 }
+}

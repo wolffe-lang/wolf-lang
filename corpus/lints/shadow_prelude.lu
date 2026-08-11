@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0304
+//!
+//! W0304 — a declaration shadowing a prelude name (the intrinsic-
+//! shadowing scar: a module that defines its own `min` silently cuts
+//! itself off from the ambient one, and one that defines `assert`
+//! loses the assertion trap entirely). Advisory: the program still
+//! runs, with the local `min` winning module-wide.
+
+fn min(a: int, b: int) -> int {
+    if a < b { a } else { b }
+}
+
+fn main() -> !int {
+    min(0, 3)
+}

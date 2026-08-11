@@ -1,6 +1,7 @@
 //! check: fail(E1101)
 //! phase: resolve
 //! conforms: conc.task.spawn, conc.mm.advice
+//! warns: W1101, W1102
 //! The store-buffer litmus is INEXPRESSIBLE in safe wolf: two tasks
 //! capturing plain mutable state don't typecheck. This file is the
 //! proof-by-error — the classic relaxed-memory shape dies at compile.

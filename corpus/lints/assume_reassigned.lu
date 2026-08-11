@@ -1,0 +1,30 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: diag.sev.warn, mem.unsafe.raw.2
+//! warns: W1302
+//!
+//! W1302 — an `assume noalias` operand reassigned while the
+//! assumption stands: after `q = p` the two names alias, and the
+//! license granted at the assume is talking about a pointer `q` no
+//! longer holds. Undefined behavior waiting for an optimizer;
+//! advisory because the assume itself was legal where written.
+
+import c "stdlib.h"
+
+fn main() -> !int {
+    var out = 0
+    // # Safety: p and q are distinct live allocations; after the
+    // reassignment below only p's cell is touched.
+    unsafe {
+        let p = c.malloc(4) as *u8
+        var q = c.malloc(4) as *u8
+        assume noalias p, q
+        let spare = q
+        q = p
+        p[0] = 7
+        out = q[0] as int
+        c.free(spare)
+        c.free(p)
+    }
+    out - 7
+}

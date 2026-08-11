@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, true)"
+---
+warning[W0601]: this `int ! {empty}` result is discarded, error row and all
+ --> mem:///main.lu:6:5
+  |
+6 |     fetch(3)
+  |     ^^^^^^^^ a failure here vanishes silently
+  |
+  = note: propagate it with `?`, handle it with `else`, or bind it away explicitly so the discard
+    is visible.

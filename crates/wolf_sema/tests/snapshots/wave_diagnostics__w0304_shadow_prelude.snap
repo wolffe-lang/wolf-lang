@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0304]: this function shadows the prelude name `min`
+ --> mem:///main.lu:1:4
+  |
+1 | fn min(a: int, b: int) -> int {
+  |    ^^^ shadows an ambient name
+  |
+  = note: `min` resolves without an import in every file; this declaration silently wins over it
+    for the whole module (file boundaries create no scopes). Pick another name so both stay
+    reachable.

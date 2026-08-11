@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, true)"
+---
+warning[W0401]: `300` does not fit `u8`
+ --> mem:///main.lu:4:20
+  |
+4 |         let tiny = 300 as u8
+  |                    ^^^^^^^^^ u8 holds 0..=255
+  |
+  = note: the value is known here, and the target type cannot hold it — the conversion can never
+    preserve it. Widen the target, or make intended wraparound part of the type with
+    `wrapping`.

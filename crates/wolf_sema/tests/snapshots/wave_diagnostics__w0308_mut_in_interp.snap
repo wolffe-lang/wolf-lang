@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0308]: this interpolation mutates its argument
+ --> mem:///main.lu:7:18
+  |
+7 |     print("{bump(mut a)}")
+  |                  ^^^^^ a write, hidden inside formatting
+  |
+  = note: interpolations read as pure formatting; hoist the call onto its own line and interpolate
+    the result.

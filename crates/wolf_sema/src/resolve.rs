@@ -149,6 +149,11 @@ fn resolve_module(pkg: &Package, module: usize) -> Vec<Diagnostic> {
     for &fi in &pkg.modules[module].files {
         crate::letcheck::check_file(pkg, fi, &globals, &mut sink);
     }
+    // The s68 lint wave's resolve-rung pass (syntax + lexical binding
+    // structure only — see `wave`): warnings, never errors.
+    for &fi in &pkg.modules[module].files {
+        crate::wave::check_file(pkg, module, fi, &mut sink);
+    }
     sink.into_vec()
 }
 

@@ -1,0 +1,17 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn
+//! warns: W0306
+//!
+//! W0306 — a statement that is only a prefix operator applied to a
+//! value: almost always a broken continuation (the author meant
+//! `a - b` on one line; the newline made two statements, the second
+//! inert). Legal, and it computes nothing anybody sees.
+
+fn main() -> !int {
+    let a = 2
+    let b = 2
+    a
+    -b
+    a - b
+}

@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0307]: this `==` applies to the fallback only
+ --> mem:///main.lu:8:30
+  |
+8 |     let ok = maybe(0) else a == b
+  |                              ^^ compared before the `else` defaults
+  |
+  = note: `else` binds loosest, so the fallback is the whole operator chain after it; parenthesize
+    the reading you mean.
+help: to default first and compare second, group the `else`
+  |
+8 |     let ok = (maybe(0) else a) == b
+  |

@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W1102]: the closure above captured `total` by value, so it will not see this assignment
+ --> mem:///main.lu:4:5
+  |
+3 |     let add = fn(c: int) total + c
+  |               -------------------- captured by value when this was created
+4 |     total = 5
+  |     ^^^^^^^^^ invisible to the closure
+  |
+  = note: closures copy their captures at creation; create the closure after the last assignment,
+    or pass the value as a call argument instead.

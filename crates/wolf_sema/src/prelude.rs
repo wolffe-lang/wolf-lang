@@ -122,6 +122,26 @@ pub fn in_prelude(name: &str) -> bool {
     PRELUDE.contains(&name)
 }
 
+/// The provisional corpus stand-ins at the tail of [`PRELUDE`]: names
+/// that exist precisely so early corpus programs can define them, and
+/// that retire with the real std surface. Shadowing one is expected,
+/// not hazardous, so the W0304 lint exempts them.
+pub const PRELUDE_PROVISIONAL: &[&str] = &[
+    "acquire",
+    "release",
+    "build_config",
+    "build_batch",
+    "worker",
+    "sleeper",
+];
+
+/// Would declaring `name` silently shadow an ambient name worth
+/// keeping (W0304)? True for every prelude name except the
+/// provisional stand-ins, and for every built-in type name.
+pub fn shadow_hazard(name: &str) -> bool {
+    (in_prelude(name) && !PRELUDE_PROVISIONAL.contains(&name)) || is_builtin_type(name)
+}
+
 /// Is `name` a built-in type name?
 pub fn is_builtin_type(name: &str) -> bool {
     BUILTIN_TYPES.contains(&name)

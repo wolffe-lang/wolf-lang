@@ -14,8 +14,10 @@ fn render_mem(src: &str) -> String {
     ml.add_file(&[], "main.lu", src);
     let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
     assert!(
-        res.diagnostics.is_empty(),
-        "snapshot inputs resolve clean: {:?}",
+        !res.diagnostics
+            .iter()
+            .any(|d| d.severity == wolf_diag::Severity::Error),
+        "snapshot inputs resolve without errors: {:?}",
         res.diagnostics
     );
     let tc = typecheck_package_with(&res.package, true);
@@ -444,8 +446,8 @@ fn clean_region_scratch_and_defaults() {
                  total = p.x + q.y\n    \
              }\n    \
              let keep = region()\n    \
-             let n = in keep { 21 }\n    \
-             if total + n == 24 { 0 } else { 1 }\n\
+             let far = in keep { make(21) }\n    \
+             if total + far.x == 24 { 0 } else { 1 }\n\
          }\n",
     );
 }
@@ -462,8 +464,9 @@ fn clean_in_redirect_outlives_scratch() {
              var out = Node { value: 0 }\n    \
              let dst = region()\n    \
              region tmp {\n        \
+                 let scratch = Node { value: 1 }\n        \
                  in dst {\n            \
-                     out = Node { value: 7 }\n        \
+                     out = Node { value: 6 + scratch.value }\n        \
                  }\n    \
              }\n    \
              if out.value == 7 { 0 } else { 1 }\n\
@@ -603,14 +606,17 @@ fn clean_sibling_multiopen() {
     // antichain, pinned next to the illegal one above.
     snap(
         "clean_sibling_multiopen",
-        "fn main() -> !int {\n    \
+        "struct Cell { v: int }\n\
+         fn main() -> !int {\n    \
              let a = region()\n    \
              let b = region()\n    \
              var total = 0\n    \
              in a {\n        \
-                 total += 1\n        \
+                 let one = Cell { v: 1 }\n        \
+                 total += one.v\n        \
                  in b {\n            \
-                     total += 2\n        \
+                     let two = Cell { v: 2 }\n            \
+                     total += two.v\n        \
                  }\n    \
              }\n    \
              if total == 3 { 0 } else { 1 }\n\
@@ -625,11 +631,13 @@ fn clean_iso_edge_then_open_after_close() {
     snap(
         "clean_iso_open_after_close",
         "struct Holder { child: region }\n\
+         struct Note { n: int }\n\
          fn main() -> !int {\n    \
              let c = region()\n    \
              var keep = 0\n    \
              region p {\n        \
-                 keep = 1\n    \
+                 let note = Note { n: 1 }\n        \
+                 keep = note.n\n    \
              }\n    \
              let h = Holder { child: move c }\n    \
              let n = in h.child { 41 }\n    \
@@ -879,6 +887,22 @@ fn clean_unsafe_tier_surface() {
                  c.free(q)\n    \
              }\n    \
              out - out\n\
+         }\n",
+    );
+}
+
+#[test]
+fn w1001_region_never_allocates() {
+    // The s68 free-`region()` smell: nothing is ever built in
+    // `scratch`, its handle never leaves the frame — pure ceremony.
+    snap(
+        "w1001_region_never_allocates",
+        "fn main() -> !int {\n    \
+             var total = 0\n    \
+             region scratch {\n        \
+                 total = 2\n    \
+             }\n    \
+             total - 2\n\
          }\n",
     );
 }

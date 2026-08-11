@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 348..375 name=stuck body=Block
+FnDecl 377..461 name=probe body=Block
+FnDecl 463..544 name=main body=Block
