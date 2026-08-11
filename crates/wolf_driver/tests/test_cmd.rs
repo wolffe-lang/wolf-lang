@@ -206,7 +206,14 @@ fn schedules_failure_prints_replay_line() {
 #[test]
 fn replay_accepts_every_schedule_spelling() {
     let dir = fixture("x12-replay", &[("d_test.lu", PASSING)]);
-    for spec in ["42", "4611686018427387916", "w1-5", "ev:0,1,0"] {
+    // The `w1-` token decoder shares the task layer's linux-only
+    // posture; elsewhere the spelling is a usage error like any other
+    // unparseable schedule, so only linux exercises it here.
+    #[cfg(target_os = "linux")]
+    let specs = ["42", "4611686018427387916", "w1-5", "ev:0,1,0"];
+    #[cfg(not(target_os = "linux"))]
+    let specs = ["42", "4611686018427387916", "ev:0,1,0"];
+    for spec in specs {
         let (code, _out, err) = run_test(&dir, &[&format!("--replay={spec}")]);
         assert_eq!(code, 0, "`--replay={spec}` runs:\n{err}");
         assert!(
