@@ -227,3 +227,69 @@ fn native_two_modules_share_an_item_name() {
     assert_eq!(record["phase_reached"], "run", "record: {record}");
     assert_eq!(record["verdict"], "exit(0)", "record: {record}");
 }
+
+/// Gate 4 (s31, the M1 debug clause on a REAL corpus program):
+/// `corpus/hello.lu` under gdb — `break main` lands on the first user
+/// statement, `next` steps to the print, `bt` shows the wolf frame
+/// with file:line, and the continued program prints its literal
+/// output. (`errors.lu` joins when its sema surface lands — recorded
+/// in the c06 closeout; lldb is s54's second consumer.)
+#[test]
+fn gdb_steps_hello_lu() {
+    if Command::new("gdb").arg("--version").output().is_err() {
+        eprintln!("SKIP: gdb not installed (required on the linux CI lane)");
+        return;
+    }
+    let hello = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/hello.lu");
+    let src = std::fs::read_to_string(&hello).expect("corpus/hello.lu");
+    let Some(exe) = build_fixture("dwarf_hello", &src) else {
+        return;
+    };
+    let dir = exe.parent().expect("dir");
+    let script = dir.join("hello.gdb");
+    std::fs::write(
+        &script,
+        "set confirm off\n\
+         set pagination off\n\
+         break main\n\
+         run\n\
+         continue\n\
+         next\n\
+         bt\n\
+         continue\n\
+         quit\n",
+    )
+    .expect("write script");
+    let out = Command::new("gdb")
+        .arg("--batch")
+        .arg("-x")
+        .arg(&script)
+        .arg(&exe)
+        .output()
+        .expect("gdb runs");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("main () at") && text.contains("debuggable.lu:10"),
+        "break main did not land on `let who`:\n{text}"
+    );
+    assert!(
+        text.contains("11\t    print(\"hello, {who}\")"),
+        "next did not reach the print line:\n{text}"
+    );
+    assert!(
+        text.contains("#0  main () at") && text.contains("debuggable.lu:11"),
+        "bt frame 0 (wolf main at the print) wrong:\n{text}"
+    );
+    assert!(
+        text.contains("hello, wolf"),
+        "continued program did not print:\n{text}"
+    );
+    assert!(
+        text.contains("exited normally"),
+        "program did not exit 0 under gdb:\n{text}"
+    );
+}

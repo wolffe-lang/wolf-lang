@@ -22,13 +22,21 @@ fn main() {
         Some("--version") => println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION")),
         Some("--explain") => explain(&args[1..]),
         Some("build") => build(&args[1..]),
+        Some("run") => run(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("audit-surface") => audit_surface(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
         Some("lsp") => lsp(&args[1..]),
+        // D34: the single binary grows per-campaign; stubs are honest.
+        Some(cmd @ ("test" | "doc" | "bench" | "dbg" | "add" | "vendor" | "audit" | "publish")) => {
+            eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
+            std::process::exit(2);
+        }
         _ => {
-            eprintln!("wolf: pre-alpha scaffold; `wolf build|run` lands at sprint s31");
+            eprintln!(
+                "usage: wolf build|run|fmt|lsp|interface|audit-surface|conform-run|--explain|--version"
+            );
             std::process::exit(2);
         }
     }
@@ -511,14 +519,81 @@ enum BuildStop {
     Environment(String),
 }
 
-/// Compile one entry file to a native executable at `out` (s28: the
-/// v0 `wolf build` pipeline — sema → mem → wir → CLIF → object → cc).
+/// What `wolf build` emits ([--emit], s31).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Emit {
+    /// Link an executable (the default).
+    Bin,
+    /// Stop at relocatable objects.
+    Obj,
+    /// Dump the canonical WIR text (s24 round-trip format).
+    Wir,
+}
+
+/// Build options (s31 driver v0).
+struct BuildOpts {
+    /// Bypass `.lu-cache` reads AND writes (the determinism oracle:
+    /// a `--no-cache` build must be bit-identical to a cached one).
+    no_cache: bool,
+    /// Cache-hit accounting on stderr (the D7 acceptance surface).
+    verbose: bool,
+    /// The `--checked` profile: quarantine allocator + checked-tier
+    /// runtime hooks (plumbing only at v0; matures in s54). Folds into
+    /// every rebuild key.
+    checked: bool,
+    emit: Emit,
+    /// Where `.lu-cache/` lives; `None` disables persistence entirely
+    /// (conform-run's native rung — corpus directories must not grow
+    /// cache droppings).
+    cache_root: Option<PathBuf>,
+}
+
+impl BuildOpts {
+    fn ephemeral() -> BuildOpts {
+        BuildOpts {
+            no_cache: true,
+            verbose: false,
+            checked: false,
+            emit: Emit::Bin,
+            cache_root: None,
+        }
+    }
+}
+
+/// One per-module compilation unit (s31): a sema module's functions in
+/// the whole-package WIR module, plus its rebuild key.
+struct ModUnit {
+    /// Cache-friendly display name (`root` for the package root).
+    name: String,
+    funcs: Vec<wolf_wir::FuncId>,
+    /// Full rebuild key (hex); the first 16 chars name the object.
+    key: String,
+    /// Key components, for cache-miss reason reporting.
+    comps: KeyComps,
+    /// This unit carries the entry shim + trap table.
+    is_entry: bool,
+}
+
+/// The rebuild key's components (each a sha256 hex): toolchain/ABI/
+/// profile environment, module source, direct-dep interface hashes,
+/// and the printed-WIR codegen input.
+struct KeyComps {
+    env: String,
+    src: String,
+    deps: String,
+    wir: String,
+}
+
+/// Compile one entry file to a native executable at `out` (s31: the
+/// `wolf build` pipeline — sema → mem → wir → per-module CLIF objects
+/// through the `.lu-cache` interface-hash skeleton → lld/cc link).
 /// Diagnostics are rendered to stderr by the caller's `sources`.
 fn compile_native(
     file: &Path,
     std_root: Option<&Path>,
     out: &Path,
     sources: &mut Sources,
+    opts: &BuildOpts,
 ) -> Result<(), BuildStop> {
     let mut sm = wolf_span::SourceMap::new();
     let res =
@@ -570,6 +645,14 @@ fn compile_native(
         eprintln!("wolf build: ICE: lowered WIR failed verification\n{e}");
         std::process::exit(2);
     }
+    // `--emit=wir`: the canonical textual dump (s24 round-trip format)
+    // — every stage inspectable.
+    if opts.emit == Emit::Wir {
+        let text = wolf_wir::print_module(&module);
+        std::fs::write(out, text)
+            .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
+        return Ok(());
+    }
     // Backend: the driver drives the TRAIT; ClifBackend is the s28
     // implementation behind it (capabilities, never identity).
     let refuse = |phase: &'static str, e: wolf_backend::BackendError| match e {
@@ -580,16 +663,295 @@ fn compile_native(
         }
     };
     let shim = wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?;
+
+    // ---- per-module units (s31: the D7 spine, coarse and batch) ----
+    let pkg = &res.package;
+    // FileId index → sema module.
+    let mut file_mod: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+    for (mi, md) in pkg.modules.iter().enumerate() {
+        for &fi in &md.files {
+            file_mod.insert(pkg.files[fi].raw.file.index() as u32, mi);
+        }
+    }
+    // Group WIR functions by defining module; synthetic functions (the
+    // entry shim) ride the root module's object (index 0 by s12
+    // construction).
+    let mut by_module: std::collections::HashMap<usize, Vec<wolf_wir::FuncId>> =
+        std::collections::HashMap::new();
+    for (fid, f) in module.funcs.iter() {
+        let mi = f
+            .src_file
+            .and_then(|fi| file_mod.get(&fi).copied())
+            .unwrap_or(0);
+        by_module.entry(mi).or_default().push(fid);
+    }
+    // s12 interfaces, topo-indexed → per-module (pkg_hash covers the
+    // package-visible surface: what in-package dependents can see).
+    let ifaces = wolf_sema::build_interfaces(pkg);
+    let mut iface_of: std::collections::HashMap<usize, &wolf_sema::Interface> =
+        std::collections::HashMap::new();
+    for (i, &mi) in pkg.topo.iter().enumerate() {
+        iface_of.insert(mi, &ifaces[i]);
+    }
+    // A dep's key contribution is its SURFACE hash — items, impls,
+    // dyn records, trusted rows — deliberately NOT `pkg_hash`, whose
+    // header chains dep hashes transitively: a pub edit in a leaf must
+    // rebuild its direct dependents (their sema rests on the surface)
+    // but not the whole downstream cone (D7's two granularities; the
+    // wir component still catches genuine transitive codegen effects).
+    let surface_hash = |i: &wolf_sema::Interface| -> String {
+        let mut acc = String::new();
+        for it in &i.items {
+            acc.push_str(&format!(
+                "item {:?} {:?} {} {}\n",
+                it.kind, it.vis, it.name, it.sig
+            ));
+        }
+        for im in &i.impls {
+            acc.push_str(&format!(
+                "impl {} [{}]\n",
+                im.header,
+                im.rewrites.join(", ")
+            ));
+        }
+        for d in &i.dyns {
+            acc.push_str(&format!(
+                "dyn {} {} [{}]\n",
+                d.name,
+                d.dyn_safe,
+                d.methods.join(", ")
+            ));
+        }
+        for (m, o) in &i.trusted {
+            acc.push_str(&format!("trusted {m} {o}\n"));
+        }
+        sha256_hex(acc.as_bytes())
+    };
+    let env_comp = format!(
+        "wolf {} commit {} abi {} profile {}",
+        env!("CARGO_PKG_VERSION"),
+        option_env!("WOLF_COMMIT").unwrap_or("unknown"),
+        wolf_backend::abi::CONVENTION_VERSION,
+        if opts.checked { "checked" } else { "debug" },
+    );
+    let mut units: Vec<ModUnit> = Vec::new();
+    for &mi in &pkg.topo {
+        let Some(funcs) = by_module.get(&mi) else {
+            continue; // type-only modules produce no object
+        };
+        let md = &pkg.modules[mi];
+        let dotted = md.dotted();
+        let name = if dotted.is_empty() {
+            "root".to_string()
+        } else {
+            dotted
+        };
+        // (a) module source: (FileId index, display, bytes) — the file
+        // indices anchor the DWARF file table, so they key too.
+        let mut src_acc = String::new();
+        for &fi in &md.files {
+            let raw = &pkg.files[fi].raw;
+            src_acc.push_str(&format!("{}#{}\n", raw.file.index(), raw.display));
+            src_acc.push_str(&sha256_hex(&raw.src));
+            src_acc.push('\n');
+        }
+        // (b) direct dep interface hashes (pkg_hash chains through dep
+        // export hashes, so transitive interface changes flow).
+        let mut deps_acc = String::new();
+        for &d in &md.deps {
+            let h = iface_of
+                .get(&d)
+                .map(|i| surface_hash(i))
+                .unwrap_or_default();
+            deps_acc.push_str(&format!("{}={h}\n", pkg.modules[d].dotted()));
+        }
+        // (c) the exact codegen input: the canonical printed WIR of
+        // this module's functions (D8 — catches everything the source
+        // ⊕ iface key cannot see: CTFE folds from dep bodies, the
+        // package-global error-tag table, convention-visible types).
+        let wir_text = wolf_wir::print_selected(&module, funcs);
+        let comps = KeyComps {
+            env: env_comp.clone(),
+            src: sha256_hex(src_acc.as_bytes()),
+            deps: sha256_hex(deps_acc.as_bytes()),
+            wir: sha256_hex(format!("{wir_text}\ntags:{}", module.tags.join(",")).as_bytes()),
+        };
+        let key = sha256_hex(
+            format!(
+                "{}\n{}\n{}\n{}\n{}",
+                comps.env, name, comps.src, comps.deps, comps.wir
+            )
+            .as_bytes(),
+        );
+        let is_entry = funcs.contains(&shim);
+        units.push(ModUnit {
+            name,
+            funcs: funcs.clone(),
+            key,
+            comps,
+            is_entry,
+        });
+    }
+
+    // The cache root (`.lu-cache/`, D7): `--no-cache` bypasses reads
+    // AND writes — the determinism oracle builds fully fresh.
+    let cache = if opts.no_cache {
+        None
+    } else {
+        opts.cache_root.as_ref().map(|r| r.join(".lu-cache"))
+    };
+    // s12 interface-file emission: every module's `.wolfi` + content
+    // hash persists next to the objects it keys.
+    if let Some(cache) = &cache {
+        let ifdir = cache.join("ifaces");
+        let _ = std::fs::create_dir_all(&ifdir);
+        for (i, &mi) in pkg.topo.iter().enumerate() {
+            let dotted = pkg.modules[mi].dotted();
+            let name = if dotted.is_empty() { "root" } else { &dotted };
+            let _ = std::fs::write(
+                ifdir.join(format!("{name}.wolfi")),
+                wolf_sema::encode(&ifaces[i]),
+            );
+        }
+    }
+
+    // Acquire object bytes per unit: cache hit or compile.
+    let mut objects: Vec<(String, Vec<u8>)> = Vec::new();
+    for u in &units {
+        let obj_file = cache
+            .as_ref()
+            .map(|c| c.join("obj").join(format!("{}-{}.o", u.name, &u.key[..16])));
+        let manifest_file = cache
+            .as_ref()
+            .map(|c| c.join("modules").join(format!("{}.json", u.name)));
+        if let Some(p) = &obj_file
+            && p.is_file()
+        {
+            let bytes = std::fs::read(p)
+                .map_err(|e| BuildStop::Environment(format!("read {}: {e}", p.display())))?;
+            if opts.verbose {
+                eprintln!(
+                    "wolf build: {}: reused object (key {})",
+                    u.name,
+                    &u.key[..16]
+                );
+            }
+            objects.push((u.name.clone(), bytes));
+            continue;
+        }
+        if opts.verbose {
+            let old = manifest_file
+                .as_ref()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+            let reason = match old {
+                None => "new".to_string(),
+                Some(old) => {
+                    if old["env"].as_str() != Some(&u.comps.env) {
+                        "toolchain/profile changed".to_string()
+                    } else if old["src"].as_str() != Some(&u.comps.src) {
+                        "source changed".to_string()
+                    } else if old["deps"].as_str() != Some(&u.comps.deps) {
+                        "dep interface changed".to_string()
+                    } else if old["wir"].as_str() != Some(&u.comps.wir) {
+                        "codegen input changed".to_string()
+                    } else {
+                        "object missing".to_string()
+                    }
+                }
+            };
+            eprintln!("wolf build: {}: compiled ({reason})", u.name);
+        }
+        let bytes = compile_unit(&module, u, shim, pkg)?;
+        if let Some(p) = &obj_file {
+            if let Some(dir) = p.parent() {
+                let _ = std::fs::create_dir_all(dir);
+                // Prune stale keys of this module (one live object per
+                // module; the cache never grows unboundedly).
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for e in entries.flatten() {
+                        let fname = e.file_name().to_string_lossy().into_owned();
+                        if fname.starts_with(&format!("{}-", u.name))
+                            && fname.ends_with(".o")
+                            && e.path() != *p
+                        {
+                            let _ = std::fs::remove_file(e.path());
+                        }
+                    }
+                }
+            }
+            let _ = std::fs::write(p, &bytes);
+        }
+        if let Some(p) = &manifest_file {
+            if let Some(dir) = p.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let manifest = serde_json::json!({
+                "key": u.key,
+                "env": u.comps.env,
+                "src": u.comps.src,
+                "deps": u.comps.deps,
+                "wir": u.comps.wir,
+            });
+            let _ = std::fs::write(p, manifest.to_string());
+        }
+        objects.push((u.name.clone(), bytes));
+    }
+
+    // `--emit=obj`: write the relocatable objects and stop.
+    if opts.emit == Emit::Obj {
+        if let [(_, bytes)] = objects.as_slice() {
+            std::fs::write(out, bytes)
+                .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
+        } else {
+            for (name, bytes) in &objects {
+                let p = out.with_extension(format!("{name}.o"));
+                std::fs::write(&p, bytes)
+                    .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
+            }
+        }
+        return Ok(());
+    }
+    link_objects(&objects, out)
+}
+
+/// Compile one module unit to relocatable object bytes: its own
+/// backend instance, its own DWARF builder over ONLY its files (the
+/// object must not observe other modules' file tables — cache keys
+/// don't fold them), trap table + entry shim only in the entry unit.
+fn compile_unit(
+    module: &wolf_wir::Module,
+    u: &ModUnit,
+    shim: wolf_wir::FuncId,
+    pkg: &wolf_sema::Package,
+) -> Result<Vec<u8>, BuildStop> {
+    let refuse = |e: wolf_backend::BackendError| match e {
+        wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused {
+            phase: "wir",
+            reason,
+        },
+        wolf_backend::BackendError::Internal(msg) => {
+            eprintln!("wolf build: ICE: backend: {msg}");
+            std::process::exit(2);
+        }
+    };
     let mut backend: Box<dyn wolf_backend::Backend> =
-        Box::new(wolf_codegen_clif::ClifBackend::new().map_err(|e| refuse("wir", e))?);
+        Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?);
     // DWARF v0 (s30): the debug tier always carries debug info — the
     // Cranelift backend IS the debug tier (release is the LLVM tier,
-    // s41). The builder collects the DebugSink stream and hands the
-    // finished .debug_* sections back through the trait; the driver
-    // gates on capabilities, never backend identity.
+    // s41). The builder collects the DebugSink stream per object.
     let mut dwarf = if backend.capabilities().dwarf_fidelity != wolf_backend::DwarfFidelity::None {
         let mut files = std::collections::HashMap::new();
-        for unit in &res.package.files {
+        let unit_files: std::collections::HashSet<u32> = u
+            .funcs
+            .iter()
+            .filter_map(|&f| module.funcs[f].src_file)
+            .collect();
+        for unit in &pkg.files {
+            let idx = unit.raw.file.index() as u32;
+            if !unit_files.contains(&idx) {
+                continue;
+            }
             let mut line_starts = vec![0u32];
             for (i, &b) in unit.raw.src.iter().enumerate() {
                 if b == b'\n' {
@@ -597,7 +959,7 @@ fn compile_native(
                 }
             }
             files.insert(
-                unit.raw.file.index() as u32,
+                idx,
                 wolf_backend::dwarf::SourceFile {
                     path: unit.raw.display.clone(),
                     line_starts,
@@ -616,25 +978,49 @@ fn compile_native(
         Some(d) => d,
         None => &mut null,
     };
-    wolf_codegen_clif::compile_module(backend.as_mut(), &module, Some(shim), sink)
-        .map_err(|e| refuse("wir", e))?;
+    wolf_codegen_clif::compile_selected(
+        backend.as_mut(),
+        module,
+        &u.funcs,
+        u.is_entry.then_some(shim),
+        u.is_entry,
+        true,
+        sink,
+    )
+    .map_err(refuse)?;
     if let Some(dwarf) = &dwarf {
         let sections = dwarf.finish().unwrap_or_else(|e| {
             eprintln!("wolf build: ICE: DWARF emission failed: {e}");
             std::process::exit(2);
         });
-        backend
-            .add_debug_sections(sections)
-            .map_err(|e| refuse("wir", e))?;
+        backend.add_debug_sections(sections).map_err(refuse)?;
     }
-    let product = backend.finish().map_err(|e| refuse("wir", e))?;
-    link_object(&product.bytes, out)
+    let product = backend.finish().map_err(refuse)?;
+    Ok(product.bytes)
 }
 
-/// Link one relocatable object + `libwolf_rt.a` into an executable via
-/// the system C compiler (the v0 link step; s31 owns the real driver
-/// integration).
-fn link_object(object: &[u8], out: &Path) -> Result<(), BuildStop> {
+/// Probe (once) for `ld.lld` on PATH; `Some("-fuse-ld=lld")` routes
+/// the link through lld (D1: lld ships with the toolchain — packaging
+/// is c13/s66's problem, the probe is v0's honest posture).
+fn lld_fuse_flag() -> Option<&'static str> {
+    use std::sync::OnceLock;
+    static PROBE: OnceLock<bool> = OnceLock::new();
+    let have = *PROBE.get_or_init(|| {
+        std::process::Command::new("ld.lld")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok()
+    });
+    have.then_some("-fuse-ld=lld")
+}
+
+/// Link the module objects + `libwolf_rt.a` into an executable via the
+/// system C driver, `-fuse-ld=lld` when the probe finds lld. Objects
+/// are staged under deterministic temp names so cached and `--no-cache`
+/// links see identical inputs (the CI determinism check's ground).
+fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildStop> {
     let rt = find_rt_lib().ok_or_else(|| {
         BuildStop::Environment(
             "libwolf_rt.a not found next to the `wolf` binary (build it with \
@@ -642,21 +1028,40 @@ fn link_object(object: &[u8], out: &Path) -> Result<(), BuildStop> {
                 .to_string(),
         )
     })?;
-    let obj_path = out.with_extension("o");
-    std::fs::write(&obj_path, object)
-        .map_err(|e| BuildStop::Environment(format!("write {}: {e}", obj_path.display())))?;
+    let dir = std::env::temp_dir().join(format!(
+        "wolf-link-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| BuildStop::Environment(format!("create {}: {e}", dir.display())))?;
+    let mut paths = Vec::new();
+    for (i, (name, bytes)) in objects.iter().enumerate() {
+        let p = dir.join(format!("{i:02}-{name}.o"));
+        std::fs::write(&p, bytes)
+            .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
+        paths.push(p);
+    }
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
-    let status = std::process::Command::new(&cc)
-        .arg("-o")
-        .arg(out)
-        .arg(&obj_path)
-        .arg(&rt)
-        // What a Rust staticlib needs from the platform (linux x86-64,
-        // the s28 target).
-        .args(["-lpthread", "-ldl", "-lm"])
+    let mut cmd = std::process::Command::new(&cc);
+    cmd.arg("-o").arg(out);
+    for p in &paths {
+        cmd.arg(p);
+    }
+    // What a Rust staticlib needs from the platform (linux x86-64,
+    // the s28 target).
+    cmd.arg(&rt).args(["-lpthread", "-ldl", "-lm"]);
+    if let Some(flag) = lld_fuse_flag() {
+        cmd.arg(flag);
+    }
+    let status = cmd
         .status()
-        .map_err(|e| BuildStop::Environment(format!("cannot run `{cc}`: {e}")))?;
-    let _ = std::fs::remove_file(&obj_path);
+        .map_err(|e| BuildStop::Environment(format!("cannot run `{cc}`: {e}")));
+    let _ = std::fs::remove_dir_all(&dir);
+    let status = status?;
     if !status.success() {
         return Err(BuildStop::Environment(format!(
             "`{cc}` failed linking {}",
@@ -678,77 +1083,223 @@ fn find_rt_lib() -> Option<PathBuf> {
     p.is_file().then_some(p)
 }
 
-/// `wolf build <file.lu> [-o OUT] [--std-root <dir>]` — the s28 v0
-/// build: an entry file becomes a native executable. Refusals name the
-/// construct and the deepest completed phase (the conservatism ledger
-/// extends to codegen; nothing is silently interpreted instead).
-fn build(args: &[String]) {
+/// Parsed `wolf build`/`wolf run` command line.
+struct BuildCli {
+    file: String,
+    out: Option<PathBuf>,
+    std_root: Option<PathBuf>,
+    opts: BuildOpts,
+    /// Arguments after the file (`wolf run prog.lu -- args…` or just
+    /// trailing words): the program's argv.
+    prog_args: Vec<String>,
+}
+
+/// Parse the shared build/run flag surface (s31): `-o|--out`,
+/// `--emit=wir|obj|bin`, `--no-cache`, `--verbose`, `--checked`,
+/// `--debug` (the default; accepted), `--release` (honest refusal —
+/// the release tier is c09), `--std-root`.
+fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
+    let usage = || -> ! {
+        eprintln!(
+            "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin] [--no-cache] \
+             [--verbose] [--checked] [--std-root <dir>]{}",
+            if run_mode { " [prog args…]" } else { "" }
+        );
+        std::process::exit(2);
+    };
+    let fail = |msg: &str| -> ! {
+        eprintln!("wolf {cmd}: {msg}");
+        std::process::exit(2);
+    };
     let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
         let root = effective_std_root(f)?;
         Ok((a, root))
     }) {
         Ok(v) => v,
-        Err(e) => {
-            eprintln!("wolf build: {e}");
-            std::process::exit(2);
-        }
+        Err(e) => fail(&e),
     };
     let mut file: Option<String> = None;
     let mut out: Option<PathBuf> = None;
+    let mut opts = BuildOpts {
+        no_cache: false,
+        verbose: false,
+        checked: false,
+        emit: Emit::Bin,
+        cache_root: None,
+    };
+    let mut prog_args: Vec<String> = Vec::new();
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
-        if a == "-o" {
+        if run_mode && file.is_some() {
+            // Everything after the file belongs to the program.
+            prog_args.push(a.clone());
+            i += 1;
+            continue;
+        }
+        if a == "-o" || a == "--out" {
             i += 1;
             match args.get(i) {
                 Some(v) => out = Some(PathBuf::from(v)),
-                None => {
-                    eprintln!("wolf build: -o needs a path");
-                    std::process::exit(2);
-                }
+                None => fail("-o/--out needs a path"),
             }
+        } else if let Some(v) = a.strip_prefix("--out=") {
+            out = Some(PathBuf::from(v));
         } else if let Some(v) = a.strip_prefix("-o") {
             out = Some(PathBuf::from(v));
+        } else if let Some(e) = a.strip_prefix("--emit=") {
+            opts.emit = match e {
+                "wir" => Emit::Wir,
+                "obj" => Emit::Obj,
+                "bin" => Emit::Bin,
+                other => fail(&format!("unknown emit `{other}` (wir, obj, bin)")),
+            };
+        } else if a == "--no-cache" {
+            opts.no_cache = true;
+        } else if a == "--verbose" {
+            opts.verbose = true;
+        } else if a == "--checked" {
+            opts.checked = true;
+        } else if a == "--debug" {
+            // The default (and only) tier until c09: DWARF on, checked
+            // everything. Accepted for symmetry.
+        } else if a == "--release" {
+            fail(
+                "the release tier is c09's LLVM backend; v0 has exactly one tier \
+                 (debug: DWARF on, checked arithmetic everywhere)",
+            );
         } else if a.starts_with('-') {
-            eprintln!("wolf build: unknown flag `{a}`");
-            std::process::exit(2);
+            fail(&format!("unknown flag `{a}`"));
         } else {
             file = Some(a.clone());
         }
         i += 1;
     }
-    let Some(file) = file else {
-        eprintln!("usage: wolf build <file.lu> [-o OUT] [--std-root <dir>]");
-        std::process::exit(2);
-    };
-    let path = Path::new(&file);
-    if !path.is_file() {
-        eprintln!("wolf build: no such file: {file}");
-        std::process::exit(2);
+    let Some(file) = file else { usage() };
+    if !Path::new(&file).is_file() {
+        fail(&format!("no such file: {file}"));
     }
-    let out = out.unwrap_or_else(|| {
-        PathBuf::from(
-            path.file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "a.out".to_string()),
-        )
-    });
-    let mut sources = Sources::new();
-    match compile_native(path, std_root.as_deref(), &out, &mut sources) {
-        Ok(()) => {}
-        Err(BuildStop::Errors) => {
-            eprintln!("wolf build: the package does not compile; fix the errors above");
+    // A bare file name has an empty parent; anchor it so the package
+    // root (= the entry's directory) is a readable path.
+    let file = if Path::new(&file)
+        .parent()
+        .is_none_or(|p| p.as_os_str().is_empty())
+    {
+        format!("./{file}")
+    } else {
+        file
+    };
+    // The cache lives at the package root (`.lu-cache/` next to the
+    // entry file).
+    opts.cache_root = Path::new(&file).parent().map(Path::to_path_buf);
+    BuildCli {
+        file,
+        out,
+        std_root,
+        opts,
+        prog_args,
+    }
+}
+
+fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
+    match stop {
+        BuildStop::Errors => {
+            eprintln!("wolf {cmd}: the package does not compile; fix the errors above");
             std::process::exit(1);
         }
-        Err(BuildStop::Refused { phase, reason }) => {
+        BuildStop::Refused { phase, reason } => {
             eprintln!(
-                "wolf build: cannot compile this yet — {reason} (pipeline is honest \
+                "wolf {cmd}: cannot compile this yet — {reason} (pipeline is honest \
                  through `{phase}`; the conservatism ledger, not a bug in your program)"
             );
             std::process::exit(1);
         }
-        Err(BuildStop::Environment(msg)) => {
-            eprintln!("wolf build: {msg}");
+        BuildStop::Environment(msg) => {
+            eprintln!("wolf {cmd}: {msg}");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// `wolf build <file.lu> [-o OUT] [--emit=…] [--no-cache] [--verbose]
+/// [--checked] [--std-root <dir>]` — an entry file becomes a native
+/// executable through the `.lu-cache` rebuild skeleton (s31). Refusals
+/// name the construct and the deepest completed phase (the
+/// conservatism ledger extends to codegen; nothing is silently
+/// interpreted instead).
+fn build(args: &[String]) {
+    let cli = parse_build_cli("build", args, false);
+    if lld_fuse_flag().is_none() && cli.opts.emit == Emit::Bin {
+        eprintln!(
+            "wolf build: note: ld.lld not found on PATH — linking with the system \
+             linker (lld ships with the toolchain; packaging is c13)"
+        );
+    }
+    let path = Path::new(&cli.file);
+    let out = cli.out.clone().unwrap_or_else(|| {
+        let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "a.out".to_string());
+        match cli.opts.emit {
+            Emit::Bin => PathBuf::from(stem),
+            Emit::Obj => PathBuf::from(format!("{stem}.o")),
+            Emit::Wir => PathBuf::from(format!("{stem}.wir")),
+        }
+    });
+    let mut sources = Sources::new();
+    match compile_native(path, cli.std_root.as_deref(), &out, &mut sources, &cli.opts) {
+        Ok(()) => {}
+        Err(stop) => report_build_stop("build", stop),
+    }
+}
+
+/// `wolf run <file.lu> [prog args…]` — build into the package cache
+/// and exec, exit code propagated (the cargo-run sugar promised at
+/// s12). All build flags apply; the binary lands in `.lu-cache/bin/`.
+fn run(args: &[String]) {
+    let cli = parse_build_cli("run", args, true);
+    if cli.opts.emit != Emit::Bin {
+        eprintln!("wolf run: --emit makes no sense here; use `wolf build`");
+        std::process::exit(2);
+    }
+    let path = Path::new(&cli.file);
+    let stem = path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "a.out".to_string());
+    let out = match &cli.out {
+        Some(o) => o.clone(),
+        None => match (&cli.opts.cache_root, cli.opts.no_cache) {
+            (Some(root), false) => {
+                let bin = root.join(".lu-cache").join("bin");
+                if let Err(e) = std::fs::create_dir_all(&bin) {
+                    eprintln!("wolf run: create {}: {e}", bin.display());
+                    std::process::exit(2);
+                }
+                bin.join(&stem)
+            }
+            _ => std::env::temp_dir().join(format!("wolf-run-{}-{stem}", std::process::id())),
+        },
+    };
+    let mut sources = Sources::new();
+    match compile_native(path, cli.std_root.as_deref(), &out, &mut sources, &cli.opts) {
+        Ok(()) => {}
+        Err(stop) => report_build_stop("run", stop),
+    }
+    let status = std::process::Command::new(&out)
+        .args(&cli.prog_args)
+        .status();
+    match status {
+        Ok(s) => match s.code() {
+            Some(code) => std::process::exit(code),
+            None => {
+                eprintln!("wolf run: program terminated by a signal");
+                std::process::exit(2);
+            }
+        },
+        Err(e) => {
+            eprintln!("wolf run: cannot run {}: {e}", out.display());
             std::process::exit(2);
         }
     }
@@ -780,7 +1331,15 @@ fn native_run(
     }
     let exe = dir.join("a.out");
     let mut scratch_sources = Sources::new();
-    let result = compile_native(file, std_root, &exe, &mut scratch_sources);
+    // Fully ephemeral: the native rung must not grow `.lu-cache`
+    // droppings in corpus directories.
+    let result = compile_native(
+        file,
+        std_root,
+        &exe,
+        &mut scratch_sources,
+        &BuildOpts::ephemeral(),
+    );
     let outcome = match result {
         Ok(()) => {
             let run = std::process::Command::new(&exe).output();
