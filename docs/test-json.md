@@ -56,6 +56,10 @@ rejects unknown *events*.
 ## Exit codes
 
 `0` — every discovered, unfiltered test passed (including zero tests).
-`1` — any failure, unsupported test, or compile error.
-`2` — usage or environment error (including the reserved X12 flags
-`--schedules`/`--replay`/`--chaos` until the s36 scheduler lands).
+`1` — any failure, unsupported test, or compile error — schedule
+divergence under `--schedules=N` included (the finding's `detail`
+carries the diverging seeds and the `--replay=` line; spec/07
+`[sched.flags]`).
+`2` — usage or environment error (a malformed `--replay` schedule
+spec, `--schedules` combined with `--replay`, or `--chaos`, whose
+injection engine is a parked c07-closeout handoff).

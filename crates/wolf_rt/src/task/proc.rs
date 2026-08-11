@@ -1534,6 +1534,22 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         kill(w).unwrap();
+        // The exit-reason determination is asynchronous to `kill`:
+        // teardown reaches the blocked recv at its next poll (the 5ms
+        // backstop), so wait for proc.exit before asserting — the
+        // event's EXISTENCE is the contract, not its promptness.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if seen
+                .lock()
+                .unwrap()
+                .contains(&SchedEvent::ProcExit { proc: w, kind: 2 })
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "proc.exit never observed");
+            std::thread::sleep(Duration::from_millis(2));
+        }
         test_hook::set_test_hook(None);
         let seen = seen.lock().unwrap();
         assert!(seen.contains(&SchedEvent::ProcSpawn { proc: w }));

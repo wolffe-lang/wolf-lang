@@ -139,7 +139,11 @@ impl WaitCell {
     /// self-committing through the same exactly-once gate, so a peer
     /// commit that wins the race is honored and never torn.
     fn wait(&self, deadline: Option<Instant>) -> (u32, Committed) {
-        blocking(|| {
+        // det (s36): a deadline in the det domain becomes a VIRTUAL
+        // timer — it fires when the scheduler decides (whole-domain
+        // quiescence), never off the real clock; no real sleeping.
+        let timer = super::hooks::det_timer_register(deadline);
+        let out = blocking(|| {
             let scope = current_scope();
             let mut st = self.st.lock().unwrap();
             loop {
@@ -154,24 +158,35 @@ impl WaitCell {
                     });
                     return st.unwrap();
                 }
-                if let Some(d) = deadline
-                    && Instant::now() >= d
-                {
+                let fired = match timer {
+                    Some(t) => super::hooks::det_timer_fired(t),
+                    None => deadline.is_some_and(|d| Instant::now() >= d),
+                };
+                if fired {
                     sched_point(SchedEvent::TimerFire);
                     *st = Some((ARM_NONE, Committed::Timeout));
                     return st.unwrap();
                 }
+                // det: drive grant/fire evaluation from parked
+                // waiters (no dedicated scheduler thread exists).
+                super::hooks::det_poll_tick();
                 // 5ms poll backstop covers enclosing-scope
                 // cancellation (the same posture as Gate/
                 // wait_cancelled); real wakeups arrive via notify.
-                let mut dur = Duration::from_millis(5);
-                if let Some(d) = deadline {
+                // Det waits poll tighter so the quiet window keeps
+                // its margin.
+                let mut dur = super::hooks::det_poll_period(Duration::from_millis(5));
+                if timer.is_none()
+                    && let Some(d) = deadline
+                {
                     dur = dur.min(d.saturating_duration_since(Instant::now()));
                 }
                 let (g, _) = self.cv.wait_timeout(st, dur).unwrap();
                 st = g;
             }
-        })
+        });
+        super::hooks::det_timer_done(timer);
+        out
     }
 }
 
@@ -491,6 +506,11 @@ pub fn select_with(
     assert!(!arms.is_empty() || timeout.is_some() || has_else);
     assert!(arms.len() <= 64, "select supports at most 64 arms");
     let deadline = timeout.map(|d| Instant::now() + d);
+    // det (s36): carry the timeout's DURATION to the wait side — the
+    // virtual timer orders by (duration, arm order), not wall clock.
+    if let Some(d) = timeout {
+        super::hooks::det_arm_timer(d);
+    }
     loop {
         // Lock every involved channel in canonical id order (dedup):
         // readiness evaluation and the committed op are atomic
@@ -524,8 +544,13 @@ pub fn select_with(
 
         if !ready.is_empty() {
             let mask: u64 = ready.iter().fold(0, |m, &i| m | (1 << i));
-            // The tie-break: seeded PRNG, never ambient entropy.
-            let choice = ready[rng.below(ready.len())];
+            // The tie-break: seeded PRNG, never ambient entropy. In
+            // the det domain the choice is the SCHEDULER's (drawn
+            // from the seed or a replay stream, recorded with the
+            // select.arm event — s36).
+            let idx =
+                super::hooks::det_choose(ready.len()).unwrap_or_else(|| rng.below(ready.len()));
+            let choice = ready[idx];
             let st = st_of(&mut guards, arms[choice].chan().id);
             let done = match &arms[choice] {
                 Arm::Recv(c) => {

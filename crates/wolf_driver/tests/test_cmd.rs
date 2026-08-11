@@ -168,19 +168,80 @@ fn deny_warnings_promotes_and_fails_the_run() {
     );
 }
 
-// -------------------------------------------- the X12 flags (s36) --
+// ------------------- the X12 flags (s36; spec/07 [sched.flags]) --
 
+/// `--schedules=N` explores: runs each test N times under derived
+/// seeds, prints the root seed, and a stable suite stays green.
 #[test]
-fn determinism_flags_refuse_helpfully_until_s36() {
-    let dir = fixture("x12", &[("d_test.lu", PASSING)]);
-    for flag in ["--schedules=16", "--replay=42", "--chaos"] {
-        let (code, _out, err) = run_test(&dir, &[flag]);
-        assert_eq!(code, 2, "`{flag}` is reserved, not silently ignored");
+fn schedules_explores_and_prints_root_seed() {
+    let dir = fixture("x12-explore", &[("d_test.lu", PASSING)]);
+    let (code, out, err) = run_test(&dir, &["--schedules=3", "--json"]);
+    assert_eq!(code, 0, "a verdict-stable suite is green:\n{out}\n{err}");
+    assert!(
+        err.contains("root seed"),
+        "exploration prints its root seed:\n{err}"
+    );
+    assert!(
+        out.contains("[3 schedule(s)]"),
+        "the test detail names the exploration:\n{out}"
+    );
+}
+
+/// A failure under exploration prints the seed and the copy-pasteable
+/// replay line — the X12 contract's front half.
+#[test]
+fn schedules_failure_prints_replay_line() {
+    let dir = fixture("x12-fail", &[("f_test.lu", FAILING)]);
+    let (code, out, _err) = run_test(&dir, &["--schedules=2"]);
+    assert_eq!(code, 1);
+    assert!(
+        out.contains("replay: wolf test --replay="),
+        "every finding carries its replay command:\n{out}"
+    );
+}
+
+/// `--replay` accepts every schedule spelling (`[sched.seed]`):
+/// decimal seed, `w1-` token, explicit `ev:` stream — and rejects
+/// nonsense with usage exit 2.
+#[test]
+fn replay_accepts_every_schedule_spelling() {
+    let dir = fixture("x12-replay", &[("d_test.lu", PASSING)]);
+    for spec in ["42", "4611686018427387916", "w1-5", "ev:0,1,0"] {
+        let (code, _out, err) = run_test(&dir, &[&format!("--replay={spec}")]);
+        assert_eq!(code, 0, "`--replay={spec}` runs:\n{err}");
         assert!(
-            err.contains("s36") && err.contains("--replay=SEED"),
-            "the refusal names the scheduler and the replay contract:\n{err}"
+            err.contains("replaying schedule"),
+            "the replay banner names the schedule:\n{err}"
         );
     }
+    let (code, _out, err) = run_test(&dir, &["--replay=nonsense"]);
+    assert_eq!(code, 2, "a malformed schedule is a usage error");
+    assert!(
+        err.contains("sched.seed"),
+        "the refusal cites the spec:\n{err}"
+    );
+}
+
+/// `--schedules` and `--replay` are exclusive verbs.
+#[test]
+fn schedules_and_replay_are_exclusive() {
+    let dir = fixture("x12-excl", &[("d_test.lu", PASSING)]);
+    let (code, _out, err) = run_test(&dir, &["--schedules=2", "--replay=1"]);
+    assert_eq!(code, 2);
+    assert!(err.contains("exclusive"), "{err}");
+}
+
+/// `--chaos` keeps its decided name but the engine is parked: loud
+/// refusal naming the seams and the owner, never a silent ignore.
+#[test]
+fn chaos_is_parked_with_owner_named() {
+    let dir = fixture("x12-chaos", &[("d_test.lu", PASSING)]);
+    let (code, _out, err) = run_test(&dir, &["--chaos"]);
+    assert_eq!(code, 2);
+    assert!(
+        err.contains("c07") && err.contains("--replay="),
+        "the refusal names the owner and the replay contract:\n{err}"
+    );
 }
 
 // --------------------------------------- wolf-test/0 conformance --
