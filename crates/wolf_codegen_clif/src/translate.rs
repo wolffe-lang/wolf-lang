@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 13] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 48] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -74,6 +74,46 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 13] = [
     ("__wolf_rt_write_i64", 3, false),
     ("__wolf_rt_write_bool", 3, false),
     ("__wolf_rt_write_f64", 3, false),
+    // The s40 str/List/fs families (wolf_rt::{str,list,fs}): token
+    // params in the WIR sigs erase here, so the counts below are the
+    // REAL machine params — pointers/lens/codes as i64 (str values
+    // travel as {ptr, len} pairs through caller out slots), and one
+    // f64 for the float strbuf hole.
+    ("__wolf_rt_strbuf_new", 0, true),
+    ("__wolf_rt_strbuf_str", 4, false),
+    ("__wolf_rt_strbuf_i64", 3, false),
+    ("__wolf_rt_strbuf_bool", 3, false),
+    ("__wolf_rt_strbuf_f64", 3, false),
+    ("__wolf_rt_strbuf_finish", 2, false),
+    ("__wolf_rt_str_eq", 4, true),
+    ("__wolf_rt_str_cmp", 4, true),
+    ("__wolf_rt_str_get", 5, true),
+    ("__wolf_rt_str_find", 5, true),
+    ("__wolf_rt_str_probe", 5, true),
+    ("__wolf_rt_str_count", 4, true),
+    ("__wolf_rt_str_trim", 4, false),
+    ("__wolf_rt_str_case", 4, false),
+    ("__wolf_rt_str_strip", 6, true),
+    ("__wolf_rt_str_repeat", 4, false),
+    ("__wolf_rt_str_replace", 7, false),
+    ("__wolf_rt_str_split", 5, true),
+    ("__wolf_rt_str_bytes", 2, true),
+    ("__wolf_rt_list_new", 1, true),
+    ("__wolf_rt_list_push", 2, false),
+    ("__wolf_rt_list_pop", 2, true),
+    ("__wolf_rt_list_read", 3, true),
+    ("__wolf_rt_list_write", 3, true),
+    ("__wolf_rt_list_len", 1, true),
+    ("__wolf_rt_list_clear", 1, false),
+    ("__wolf_rt_fs_read_text", 3, true),
+    ("__wolf_rt_fs_write_text", 4, true),
+    ("__wolf_rt_fs_open", 3, true),
+    ("__wolf_rt_fs_read", 3, true),
+    ("__wolf_rt_fs_write", 3, true),
+    ("__wolf_rt_fs_close", 1, true),
+    ("__wolf_rt_fs_remove", 2, true),
+    ("__wolf_rt_fs_exists", 2, true),
+    ("__wolf_rt_read_line", 1, true),
 ];
 
 /// How one WIR parameter crosses the call boundary (the mechanical
@@ -650,10 +690,13 @@ impl<'a, 'b> Tx<'a, 'b> {
                     let ty = if name == "__wolf_rt_trap" && i == 0 {
                         ctypes::I32
                     } else if (name == "__wolf_rt_print_bool" && i == 0)
-                        || (name == "__wolf_rt_write_bool" && i == 1)
+                        || ((name == "__wolf_rt_write_bool" || name == "__wolf_rt_strbuf_bool")
+                            && i == 1)
                     {
                         ctypes::I8
-                    } else if name == "__wolf_rt_write_f64" && i == 1 {
+                    } else if (name == "__wolf_rt_write_f64" || name == "__wolf_rt_strbuf_f64")
+                        && i == 1
+                    {
                         ctypes::F64
                     } else {
                         ctypes::I64
