@@ -50,6 +50,18 @@ interleaving. The closed v1 set:
   `[sched.stable]`'s append rule — the module's "proc events join in
   s34" reservation, activated; cross-version comparison stays by
   verdict.)
+- `io.arrive` — a pending io completion is delivered to its parked
+  waiter (s35's reactor; subject: the submission token). WHICH
+  pending completion is delivered next, and when, is the
+  interleaving decision; s36's `--chaos` delay/reorder injection
+  lands on this seam, and the simulated reactor implements it.
+  `timer.fire` gains the reactor's timer wheel as a second producer
+  — same activated kind, inherited per this section's rule; a fired
+  io deadline is a `timer.fire` event. (Appended 2026-08-11 by s35
+  per `[sched.stable]`'s append rule — the net module's reserved
+  "completion-arrival appends its own kind" note, activated;
+  sched-ev/0 has no counterpart, and cross-version comparison is by
+  verdict, so the append is safe.)
 
 ## 2. The hook shape `[sched.point.hook]`
 

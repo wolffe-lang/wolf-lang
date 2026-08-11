@@ -10,6 +10,11 @@ pub mod io;
 pub mod native;
 pub mod net;
 pub mod quarantine;
+// The io reactor (s35) shares the task layer's platform posture:
+// epoll first (this campaign's floor); the kqueue/IOCP port sprints
+// widen against its interface, readiness adapted underneath.
+#[cfg(target_os = "linux")]
+pub mod reactor;
 // The task layer is linux-only at this campaign stage — the same
 // platform posture as native codegen (s28: M1 targets linux/x86-64;
 // mmap/pthread stack plumbing uses linux-specific surface). Other

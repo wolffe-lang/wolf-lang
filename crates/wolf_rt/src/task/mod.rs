@@ -89,6 +89,13 @@ pub use chan::{
     Chan, ChanErr, Selected, WolfSelectArm, select, select_verdict, select_with,
 };
 pub use hooks::{ChanPhase, SchedEvent, SchedRng};
+// The reactor (crate::reactor, s35) composes with the task layer
+// through these crate-internal seams: the one sched_point site rule
+// and the kill-teardown discipline hold there too.
+pub(crate) use hooks::sched_point;
+#[cfg(test)]
+pub(crate) use hooks::test_hook;
+pub(crate) use pool::kill_teardown_check;
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{
     __wolf_rt_proc_cancel, __wolf_rt_proc_kill, __wolf_rt_proc_link, __wolf_rt_proc_monitor,
@@ -584,6 +591,7 @@ mod tests {
                 SchedEvent::SelectArm { .. } => "select-arm",
                 SchedEvent::Acquire { .. } => "acquire",
                 SchedEvent::TimerFire => "timer",
+                SchedEvent::IoArrive { .. } => "io-arrive",
                 SchedEvent::ProcSpawn { .. } => "proc-spawn",
                 SchedEvent::ProcKill { .. } => "proc-kill",
                 SchedEvent::ProcExit { .. } => "proc-exit",
