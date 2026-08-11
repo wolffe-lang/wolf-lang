@@ -423,6 +423,11 @@ enum Stop {
     Ub(UbFinding),
     Refuse(NotYet),
     Budget(&'static str),
+    /// `os_exit(code)` (s40): the program asked to stop — an ordinary
+    /// exit verdict, not a trap. Defers do NOT run (the documented
+    /// `os.exit` contract: immediate termination; native calls the
+    /// runtime exit with the same rule).
+    Exit(u8),
 }
 
 /// Control flow out of an expression.
@@ -540,6 +545,27 @@ struct Machine<'t> {
     /// `files`, same discipline — index = the `int` fd, `None` after
     /// close, forged/foreign fds are the `io` row.
     socks: Vec<Option<NetSock>>,
+    /// Spawned OS children (s40 os tier): a third handle namespace,
+    /// same discipline — index = the `int` handle, `None` after a
+    /// successful `os_wait` (the reap tombstones; double wait is
+    /// `io`). `os_kill` does NOT tombstone: kill-then-wait is the
+    /// natural pair and the wait observes the `signal` outcome.
+    children: Vec<Option<std::process::Child>>,
+    /// The program's argv (s40 `env_args`): conform-run supplies none
+    /// — the checked lane's default is empty, mirroring the stdin
+    /// posture (the native lane reads the process's real argv; `wolf
+    /// run file.lu args…` passes them through).
+    args: Vec<String>,
+    /// Machine-local environment overlay (s40 `env_set`): checked
+    /// writes land HERE, never in the host process's environment —
+    /// the checked machine is a threaded test host and `setenv` is
+    /// unsound under threads. Reads consult the overlay first, then
+    /// the real environment. Documented lane asymmetry: native
+    /// `env_set` writes the compiled program's own environment.
+    env_overlay: HashMap<String, String>,
+    /// The monotonic anchor (s40 `time_now_ms`): an arbitrary
+    /// process-local epoch, per X12's "monotonic, never wall".
+    t0: std::time::Instant,
     steps: u64,
     mem_used: u64,
     budget: Budget,
@@ -1030,6 +1056,13 @@ pub fn run_checked_fn(
             construct: what,
             span: root_span,
         }),
+        // `os_exit` (s40): everything printed so far stands; the code
+        // is the verdict.
+        Err(Stop::Exit(code)) => Ok(RunOutcome {
+            verdict: Verdict::Exit(code),
+            stdout: m.stdout,
+            stderr: m.stderr,
+        }),
     }
 }
 
@@ -1090,6 +1123,10 @@ impl<'t> Machine<'t> {
             stdin_pos: 0,
             files: Vec::new(),
             socks: Vec::new(),
+            children: Vec::new(),
+            args: Vec::new(),
+            env_overlay: HashMap::new(),
+            t0: std::time::Instant::now(),
             steps: 0,
             mem_used: 0,
             budget: Budget::default(),
@@ -3064,6 +3101,293 @@ impl<'t> Machine<'t> {
             .and_then(Option::as_mut)
     }
 
+    /// The s40 os/env builtin tier (checked lane): real host argv/
+    /// env/cwd/processes, D30 rows only. `env_set` writes the
+    /// machine-local overlay (never the threaded host process's
+    /// environment — the struct field documents the asymmetry);
+    /// `os_spawn` is argv-array only with v0 stdio null-wired; every
+    /// operation on a reaped or foreign child handle is `io`, never a
+    /// trap.
+    fn os_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        fn tag(t: &str) -> Flow {
+            Flow::Err(Value::ErrTag {
+                tag: t.to_string(),
+                payload: Vec::new(),
+            })
+        }
+        let str_arg = |i: usize| -> Option<String> {
+            match argv.get(i) {
+                Some(Value::Str(s)) => Some(s.clone()),
+                _ => None,
+            }
+        };
+        let int_arg = |i: usize| -> Option<i64> {
+            match argv.get(i) {
+                Some(Value::Int(n)) => Some(*n),
+                _ => None,
+            }
+        };
+        match name {
+            "env_args" => {
+                let items: Vec<Value> = self.args.iter().cloned().map(Value::Str).collect();
+                self.charge_mem(self.args.iter().map(|a| a.len() as u64).sum())?;
+                let id = self.lists.len();
+                self.lists.push(items);
+                Ok(Flow::Val(Value::List(id)))
+            }
+            "env_get" => {
+                let Some(key) = str_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if let Some(v) = self.env_overlay.get(&key) {
+                    let v = v.clone();
+                    self.charge_mem(v.len() as u64)?;
+                    return Ok(Flow::Val(Value::Str(v)));
+                }
+                match std::env::var(&key) {
+                    Ok(v) => {
+                        self.charge_mem(v.len() as u64)?;
+                        Ok(Flow::Val(Value::Str(v)))
+                    }
+                    Err(std::env::VarError::NotPresent) => Ok(tag("missing")),
+                    Err(std::env::VarError::NotUnicode(_)) => Ok(tag("utf8")),
+                }
+            }
+            "env_set" => {
+                let (Some(key), Some(val)) = (str_arg(0), str_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if key.is_empty() || key.contains('=') || key.contains('\0') || val.contains('\0') {
+                    return Ok(tag("invalid"));
+                }
+                self.charge_mem((key.len() + val.len()) as u64)?;
+                self.env_overlay.insert(key, val);
+                Ok(Flow::Val(Value::Unit))
+            }
+            "env_vars" => {
+                // Host vars under the overlay, non-UTF-8 entries
+                // skipped (their values are unreachable through this
+                // str tier), rendered `K=V` and SORTED — determinism
+                // over environ order.
+                let mut map: std::collections::BTreeMap<String, String> = std::env::vars_os()
+                    .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
+                    .collect();
+                for (k, v) in &self.env_overlay {
+                    map.insert(k.clone(), v.clone());
+                }
+                let items: Vec<Value> = map
+                    .into_iter()
+                    .map(|(k, v)| Value::Str(format!("{k}={v}")))
+                    .collect();
+                let bytes: u64 = items
+                    .iter()
+                    .map(|v| match v {
+                        Value::Str(s) => s.len() as u64,
+                        _ => 0,
+                    })
+                    .sum();
+                self.charge_mem(bytes)?;
+                let id = self.lists.len();
+                self.lists.push(items);
+                Ok(Flow::Val(Value::List(id)))
+            }
+            "os_cwd" => match std::env::current_dir() {
+                Err(_) => Ok(tag("io")),
+                Ok(p) => match p.to_str() {
+                    // A non-UTF-8 cwd is unreachable through the str
+                    // tier: `io`, same coarsening rule as fs.
+                    None => Ok(tag("io")),
+                    Some(s) => {
+                        self.charge_mem(s.len() as u64)?;
+                        Ok(Flow::Val(Value::Str(s.to_string())))
+                    }
+                },
+            },
+            "os_exit" => {
+                let Some(code) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                Err(Stop::Exit(code.rem_euclid(256) as u8))
+            }
+            "os_spawn" => {
+                let Some(Value::List(id)) = argv.first() else {
+                    return self.refuse("this os call shape", span);
+                };
+                let mut words = Vec::new();
+                for v in self.lists.get(*id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => words.push(s.clone()),
+                        _ => return self.refuse("a non-str argv element", span),
+                    }
+                }
+                // An empty argv names no program: `not_found`.
+                let Some((prog, rest)) = words.split_first() else {
+                    return Ok(tag("not_found"));
+                };
+                let spawned = std::process::Command::new(prog)
+                    .args(rest)
+                    .stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
+                match spawned {
+                    Err(e) => Ok(tag(match e.kind() {
+                        std::io::ErrorKind::NotFound => "not_found",
+                        std::io::ErrorKind::PermissionDenied => "denied",
+                        _ => "io",
+                    })),
+                    Ok(child) => {
+                        let h = self.children.len() as i64;
+                        self.children.push(Some(child));
+                        Ok(Flow::Val(Value::Int(h)))
+                    }
+                }
+            }
+            "os_wait" => {
+                let Some(h) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Some(slot) = usize::try_from(h)
+                    .ok()
+                    .and_then(|i| self.children.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                let Some(child) = slot.as_mut() else {
+                    return Ok(tag("io")); // double wait
+                };
+                match child.wait() {
+                    Err(_) => Ok(tag("io")),
+                    Ok(status) => {
+                        *slot = None; // reaped
+                        match status.code() {
+                            Some(c) => Ok(Flow::Val(Value::Int(i64::from(c)))),
+                            // Died without a code (a signal, unix):
+                            // its own outcome, never a fake code.
+                            None => Ok(tag("signal")),
+                        }
+                    }
+                }
+            }
+            "os_kill" => {
+                let Some(h) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Some(Some(child)) = usize::try_from(h)
+                    .ok()
+                    .and_then(|i| self.children.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                match child.kill() {
+                    // Already exited is `io` (the child is not yours
+                    // to kill anymore); the handle stays live for the
+                    // wait that reaps it.
+                    Err(_) => Ok(tag("io")),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            _ => self.refuse("this os builtin", span),
+        }
+    }
+
+    /// The s40 time builtin tier (checked lane): ms integers, X12
+    /// posture — `time_now_ms` counts from the machine's own anchor
+    /// (monotonic, arbitrary epoch), `time_unix_ms` is the wall clock,
+    /// `time_sleep_ms` really blocks (the checked machine is a host
+    /// process; virtualization under `--schedules`/`--replay` rides
+    /// the s36 seam as it widens to clock reads — the tracked
+    /// campaign-closeout item).
+    fn time_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        match name {
+            "time_now_ms" => {
+                let ms = self.t0.elapsed().as_millis().min(i64::MAX as u128) as i64;
+                Ok(Flow::Val(Value::Int(ms)))
+            }
+            "time_unix_ms" => {
+                let ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis().min(i64::MAX as u128) as i64)
+                    .unwrap_or(0);
+                Ok(Flow::Val(Value::Int(ms)))
+            }
+            "time_sleep_ms" => {
+                let Some(Value::Int(ms)) = argv.first() else {
+                    return self.refuse("this time call shape", span);
+                };
+                if *ms > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(*ms as u64));
+                }
+                Ok(Flow::Val(Value::Unit))
+            }
+            _ => self.refuse("this time builtin", span),
+        }
+    }
+
+    /// The s40 json builtin tier (checked lane): PURE — the reference
+    /// implementation lives in [`crate::json`] (RFC 8259; the module
+    /// doc pins rendering and error semantics), this dispatcher only
+    /// maps its three error kinds onto the declared D30 rows.
+    fn json_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        use crate::json as jr;
+        fn tag(e: jr::JsonErr) -> Flow {
+            Flow::Err(Value::ErrTag {
+                tag: match e {
+                    jr::JsonErr::Parse => "parse",
+                    jr::JsonErr::Missing => "missing",
+                    jr::JsonErr::Kind => "kind",
+                }
+                .to_string(),
+                payload: Vec::new(),
+            })
+        }
+        let str_arg = |i: usize| -> Option<String> {
+            match argv.get(i) {
+                Some(Value::Str(s)) => Some(s.clone()),
+                _ => None,
+            }
+        };
+        match name {
+            "json_valid" => {
+                let Some(s) = str_arg(0) else {
+                    return self.refuse("this json call shape", span);
+                };
+                Ok(Flow::Val(Value::Bool(jr::valid(&s))))
+            }
+            "json_get" => {
+                let (Some(s), Some(path)) = (str_arg(0), str_arg(1)) else {
+                    return self.refuse("this json call shape", span);
+                };
+                match jr::get(&s, &path) {
+                    Err(e) => Ok(tag(e)),
+                    Ok(out) => {
+                        self.charge_mem(out.len() as u64)?;
+                        Ok(Flow::Val(Value::Str(out)))
+                    }
+                }
+            }
+            "json_type" => {
+                let (Some(s), Some(path)) = (str_arg(0), str_arg(1)) else {
+                    return self.refuse("this json call shape", span);
+                };
+                match jr::type_of(&s, &path) {
+                    Err(e) => Ok(tag(e)),
+                    Ok(k) => Ok(Flow::Val(Value::Str(k.to_string()))),
+                }
+            }
+            "json_len" => {
+                let (Some(s), Some(path)) = (str_arg(0), str_arg(1)) else {
+                    return self.refuse("this json call shape", span);
+                };
+                match jr::len_of(&s, &path) {
+                    Err(e) => Ok(tag(e)),
+                    Ok(n) => Ok(Flow::Val(Value::Int(n))),
+                }
+            }
+            _ => self.refuse("this json builtin", span),
+        }
+    }
+
     /// Is this expression an injected raise of a declared row tag?
     /// True when the checker recorded the `!T` union as the node's
     /// type and the node's own text names one of the row's tags —
@@ -3594,6 +3918,31 @@ impl<'t> Machine<'t> {
                     }
                 }
                 return self.net_builtin(&callee_name, argv, e.span);
+            }
+            // The s40 os/env, time, and json builtin tiers: fs/net
+            // posture again — the checked machine performs the real
+            // host operation (json is pure computation), errors are
+            // the declared D30 rows, and the comptime sandbox is the
+            // one refusal site.
+            "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exit" | "os_spawn"
+            | "os_wait" | "os_kill" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms"
+            | "json_valid" | "json_get" | "json_type" | "json_len" => {
+                let mut argv = Vec::new();
+                for a in d.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = Arg::value(a) {
+                        let x = if let Some(place) = self.place_of(v)? {
+                            self.read_place(&place, v.span)?
+                        } else {
+                            val!(self.eval(v))
+                        };
+                        argv.push(x);
+                    }
+                }
+                return match callee_name.as_str() {
+                    n if n.starts_with("json_") => self.json_builtin(n, argv, e.span),
+                    n if n.starts_with("time_") => self.time_builtin(n, argv, e.span),
+                    n => self.os_builtin(n, argv, e.span),
+                };
             }
             "assert" => {
                 // Only the FIRST argument is the condition; the
