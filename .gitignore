@@ -7,3 +7,4 @@ AGENTS.md
 bench-results/
 corpus/.lu-cache/
 /hello
+.claude/
