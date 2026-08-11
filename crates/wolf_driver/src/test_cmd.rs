@@ -539,7 +539,14 @@ fn parse_schedule_spec(s: &str) -> Option<()> {
         return Some(());
     }
     if s.starts_with("w1-") {
+        // Token decode lives in the task layer, which shares the s28
+        // linux-only campaign posture; off-linux the replay flags refuse
+        // before this validator matters, so an invalid verdict here stays
+        // honest rather than silently accepting an uncheckable token.
+        #[cfg(target_os = "linux")]
         return wolf_rt::task::seed_spec::parse_token(s).map(|_| ());
+        #[cfg(not(target_os = "linux"))]
+        return None;
     }
     s.parse::<u64>().ok().map(|_| ())
 }
