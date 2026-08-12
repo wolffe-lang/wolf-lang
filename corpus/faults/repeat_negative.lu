@@ -1,0 +1,15 @@
+//! check: run(exit=trap(assert))
+//! phase: run
+//! conforms: mem.str.repeat, conf.trap.map
+//!
+//! The negative-repeat ruling (s71, #57 — wolf-std F-0056): a
+//! negative count is a caller contract violation, the deterministic
+//! `assert` trap on every lane. Not `bounds` — no access is out of
+//! range — and not the empty string (the sc03-era interpreter
+//! answer, retired by [mem.str.repeat]).
+
+fn main() -> !int {
+    let n = 0 - 1
+    print("[{"ab".repeat(n)}]")
+    0
+}

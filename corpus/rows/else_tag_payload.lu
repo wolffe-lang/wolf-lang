@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="offset 2 kind 1 | miss -1")
+//! phase: run
+//! conforms: err.union, err.rows, err.else
+//!
+//! `else |Tag(p)|` (s71, #43 — sc08's row-expectation convention):
+//! the refutable handler form destructures a single-tag row's payload
+//! at the handler itself, tag and payload both. The pattern must
+//! cover the row entire (E0809 otherwise); here the row carries
+//! exactly one tag, so `Parse(p)` is total and `p` binds the payload
+//! — not the tag — on both executing lanes.
+
+struct ParseErr {
+    offset: int,
+    kind: int,
+}
+
+fn digit_value(s: str) -> int ! {Parse(ParseErr)} {
+    if s.starts_with("2") { return 2 }
+    return Parse(ParseErr { offset: 2, kind: 1 })
+}
+
+fn main() -> !int {
+    let hit = digit_value("2") else 0 - 1
+    var offset: int = 0 - 1
+    var kind: int = 0 - 1
+    let miss = digit_value("x") else |Parse(p)| {
+        offset = p.offset
+        kind = p.kind
+        0 - 1
+    }
+    print("offset {offset} kind {kind} | miss {miss}")
+    if hit != 2 { return 1 }
+    if miss != 0 - 1 { return 2 }
+    0
+}

@@ -123,6 +123,34 @@ fn e0806_refutable_let() {
     );
 }
 
+// ---------------------------------------------------------- E0809 -----
+
+/// `else |Tag(p)|` over a wider row: the handler pattern must cover
+/// the row entire (s71, #43) — the diagnostic names the missing case
+/// and points at the match-over-row shape.
+#[test]
+fn e0809_handler_uncovered() {
+    snap_one(
+        "e0809_handler_uncovered",
+        "fn poke(n: int) -> int ! {Io(int), timeout} {\n    \
+         if n == 0 {\n        return Io(9)\n    }\n    \
+         if n == 1 {\n        return timeout\n    }\n    n\n}\n\n\
+         fn main() -> !int {\n    let v = poke(2) else |Io(e)| { e }\n    v\n}\n",
+    );
+}
+
+/// The covering form is clean: a single-tag row destructured at the
+/// handler binds the payload, not the tag (sc08's convention).
+#[test]
+fn e0809_single_tag_covers() {
+    snap_one(
+        "e0809_single_tag_covers",
+        "fn f(n: int) -> int ! {Io(int)} {\n    \
+         if n == 0 {\n        return Io(1)\n    }\n    n\n}\n\n\
+         fn main() -> !int {\n    let v = f(0) else |Io(e)| { e }\n    v\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0808 -----
 
 /// A variant pattern over a plain integer.

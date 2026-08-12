@@ -267,6 +267,21 @@ pub fn sort_diagnostics(diags: &mut [Diagnostic]) {
     });
 }
 
+/// Collapse repeated teach notes (s71, #59): within one sorted batch,
+/// a note that already appeared verbatim on an earlier diagnostic of
+/// the same code renders once per group — the first occurrence keeps
+/// the teaching, the rest stay lean (two spawns no longer render the
+/// E1101 channels lesson twice). Messages, labels, and suggestions
+/// are untouched; codes never share notes across groups.
+pub fn dedup_notes(diags: &mut [Diagnostic]) {
+    let mut seen: std::collections::HashSet<(&'static str, String)> =
+        std::collections::HashSet::new();
+    for d in diags {
+        let code = d.code.as_str();
+        d.notes.retain(|n| seen.insert((code, n.clone())));
+    }
+}
+
 /// A rollback point for [`Diagnostics`] (speculative parsing rewinds
 /// diagnostics and suppressions together).
 #[derive(Clone, Copy, Debug)]

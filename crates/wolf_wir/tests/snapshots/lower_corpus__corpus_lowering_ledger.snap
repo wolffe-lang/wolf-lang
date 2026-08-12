@@ -5,13 +5,14 @@ expression: "lines.join(\"\\n\")"
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
 comptime/budget_zero.lu: not mem-clean (pre-wir rungs own it)
 comptime/depth_spiral.lu: not mem-clean (pre-wir rungs own it)
-comptime/derive_eq.lu: refused — trait-impl method lowering (dispatch tables, c06); comptime-function lowering (D29 CTFE owns these); comptime calls (D29 CTFE owns these)
+comptime/derive_eq.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+comptime/fold_reaches_lane.lu: lowers
 comptime/fuel_loop.lu: not mem-clean (pre-wir rungs own it)
 comptime/heap_flood.lu: not mem-clean (pre-wir rungs own it)
 comptime/norm_linear.lu: refused — generic-function lowering (monomorphization); generic-function lowering (monomorphization); this type in WIR lowering
 comptime/norm_witness.lu: not mem-clean (pre-wir rungs own it)
 comptime/overflow_i32.lu: not mem-clean (pre-wir rungs own it)
-comptime/reflect_fields.lu: refused — trait-impl method lowering (dispatch tables, c06); comptime-function lowering (D29 CTFE owns these); comptime-function lowering (D29 CTFE owns these); comptime calls (D29 CTFE owns these)
+comptime/reflect_fields.lu: refused — trait-impl method lowering (dispatch tables, c06)
 comptime/runtime_arg.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_clock.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_env.lu: not mem-clean (pre-wir rungs own it)
@@ -23,7 +24,7 @@ comptime/sandbox_net.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_net_socket.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/size_of_layout.lu: not mem-clean (pre-wir rungs own it)
-comptime.lu: refused — comptime-function lowering (D29 CTFE owns these); comptime-function lowering (D29 CTFE owns these); comptime calls (D29 CTFE owns these)
+comptime.lu: lowers
 conc/cancel_sibling.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
 conc/freeze_publish.lu: not mem-clean (pre-wir rungs own it)
@@ -47,6 +48,7 @@ faults/overflow_elem_read.lu: lowers
 faults/overflow_elem_write.lu: lowers
 faults/overflow_field_read.lu: lowers
 faults/overflow_interp_operand.lu: lowers
+faults/repeat_negative.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/error_row.lu: lowers
@@ -169,12 +171,14 @@ resolve/same_name/main.lu: lowers
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: refused — generic-function lowering (monomorphization); generic-function calls (monomorphization)
 rows/inferred_private.lu: refused — module-item reads (globals, c06)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
@@ -184,6 +188,7 @@ rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
+strings/empty_needle.lu: lowers
 strings/float_format.lu: lowers
 strings/format_spec_full.lu: lowers
 strings/format_spec_malformed.lu: not mem-clean (pre-wir rungs own it)

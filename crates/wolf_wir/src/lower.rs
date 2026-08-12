@@ -53,7 +53,7 @@ use wolf_ast::{
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::{FnSig, ItemSig, SigTables};
 use wolf_sema::types::{Prim, TyId, TyKind, TypeTable};
-use wolf_sema::{BodyResult, NotYet, Package, Typecheck, TypedBody};
+use wolf_sema::{BodyResult, Fold, NotYet, Package, Typecheck, TypedBody};
 use wolf_span::Span;
 
 use crate::build::{FuncBuilder, InsOut, Stats, Var};
@@ -203,10 +203,11 @@ fn lower_body(
         return Err(refuse("generic-function lowering (monomorphization)", span));
     }
     if fsig.comptime {
-        return Err(refuse(
-            "comptime-function lowering (D29 CTFE owns these)",
-            span,
-        ));
+        // A `comptime fn` is CTFE's alone (D29): its call sites fold
+        // to constants (s71), so the definition simply does not lower
+        // — and its presence no longer poisons the module's runtime
+        // build.
+        return Ok(None);
     }
     // The WIR signature (modes carried; s26 attaches the fact slots).
     let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, span)?;
@@ -222,6 +223,7 @@ fn lower_body(
         sig_table: &sigs.table,
         sigs,
         calls: tb.calls.iter().map(|(s, c)| (*s, c)).collect(),
+        folds: tb.comptime_folds.iter().map(|(s, f)| (*s, f)).collect(),
         expr_tys: tb.exprs.iter().map(|(s, t)| (*s, *t)).collect(),
         local_tys: tb.locals.iter().map(|(_, s, t)| (*s, *t)).collect(),
         casts: tb
@@ -840,6 +842,9 @@ struct Lowerer<'t, 'b, 'm> {
     /// The whole signature set (adapter-type base resolution).
     sigs: &'t SigTables,
     calls: HashMap<Span, &'t CallSig>,
+    /// Folded comptime call sites by span (s71): the site lowers to
+    /// this constant; the comptime callee itself never lowers.
+    folds: HashMap<Span, &'t Fold>,
     expr_tys: HashMap<Span, TyId>,
     local_tys: HashMap<Span, TyId>,
     casts: HashMap<Span, (TyId, TyId, CastKind)>,
@@ -2955,8 +2960,69 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     // --------------------------------------------------- calls ----
 
+    /// Materialize a folded comptime value (s71) as ordinary constants
+    /// at the call site's checked type — the fold reaches the lane.
+    fn lower_fold(&mut self, f: &'t Fold, e: &'t GreenNode) -> R<Flow> {
+        match f {
+            Fold::Unit => Ok(Flow::Val(None)),
+            Fold::Bool(b) => Ok(Flow::Val(Some(self.b.bconst(*b)))),
+            Fold::Str(s) => Ok(Flow::Val(Some(self.str_value(s.as_bytes())))),
+            Fold::Int(v) => {
+                let Some(sema_ty) = self.expr_sema_ty(e.span) else {
+                    return Err(refuse("a comptime fold without a recorded type", e.span));
+                };
+                let Some(wty) = wir_ty(
+                    &mut self.b.module.types,
+                    self.table,
+                    self.sigs,
+                    sema_ty,
+                    e.span,
+                )?
+                else {
+                    return Err(refuse("a unit-typed integer fold", e.span));
+                };
+                if sema_unsigned(self.table, sema_ty) {
+                    let Some(width) = self.b.module.types.int_bits(wty) else {
+                        return Err(refuse("a non-integer unsigned fold", e.span));
+                    };
+                    let payload = wrap_bits(*v as u64, width);
+                    return Ok(Flow::Val(Some(self.b.iconst(wty, payload))));
+                }
+                Ok(Flow::Val(Some(self.b.iconst(wty, *v as i64))))
+            }
+            Fold::Float(v) => {
+                let Some(sema_ty) = self.expr_sema_ty(e.span) else {
+                    return Err(refuse("a comptime fold without a recorded type", e.span));
+                };
+                let Some(wty) = wir_ty(
+                    &mut self.b.module.types,
+                    self.table,
+                    self.sigs,
+                    sema_ty,
+                    e.span,
+                )?
+                else {
+                    return Err(refuse("a unit-typed float fold", e.span));
+                };
+                let bits = if wty == types::F32 {
+                    (*v as f32).to_bits() as u64
+                } else {
+                    v.to_bits()
+                };
+                Ok(Flow::Val(Some(self.b.fconst(wty, bits))))
+            }
+        }
+    }
+
     fn lower_call(&mut self, e: &'t GreenNode) -> R<Flow> {
         let d = CallExpr::cast(e).expect("kind");
+        // A folded comptime call site (s71) IS its value: emit the
+        // constant and never look at the callee or arguments (a type
+        // argument has no runtime lowering at all).
+        if let Some(f) = self.folds.get(&e.span) {
+            let f = *f;
+            return self.lower_fold(f, e);
+        }
         let cs: Option<&CallSig> = self.calls.get(&e.span).copied();
         // Builtins without a signature: assert / print.
         let callee_text = d.callee().map(|c| self.text(c.span)).unwrap_or_default();
@@ -3110,7 +3176,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("generic-function calls (monomorphization)", e.span));
         }
         if callee_sig.comptime {
-            return Err(refuse("comptime calls (D29 CTFE owns these)", e.span));
+            // Folded sites returned above (s71); reaching here means
+            // the evaluated value has no scalar/str runtime shape yet.
+            return Err(refuse(
+                "a comptime fold without a runtime value shape (aggregates)",
+                e.span,
+            ));
         }
         // Arguments under their declared modes. A `mut` argument is
         // s25's refusal repaid: the local spills to a `stack.alloc`
@@ -3865,7 +3936,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             "repeat" => {
                 let n = arg_val(self, 0)?;
-                // A negative count is the checked lane's `bounds` trap.
+                // A negative count is a caller contract violation:
+                // the `assert` trap, ruled by [mem.str.repeat] (#57)
+                // — not an out-of-range access.
                 let z = self.b.iconst(types::I64, 0);
                 let ok = self
                     .b
@@ -3876,7 +3949,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         Aux::IntCc(IntCc::Sge),
                     )
                     .one();
-                if self.trap_unless(ok, TrapKind::Bounds) {
+                if self.trap_unless(ok, TrapKind::Assert) {
                     return Ok(Flow::Diverged);
                 }
                 let (region, slot) = self.rt_slot(16);
@@ -5354,7 +5427,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("generic-method calls (monomorphization)", e.span));
         }
         if msig.comptime {
-            return Err(refuse("comptime calls (D29 CTFE owns these)", e.span));
+            // Comptime method sites are not registered fold sites
+            // (the s16 pass folds `CallExpr` spans only) — an honest
+            // refusal until a consumer needs them.
+            return Err(refuse(
+                "comptime method calls (D29 CTFE owns these)",
+                e.span,
+            ));
         }
         let mut args = Vec::new();
         let mut formal_regions: HashMap<u32, RegionId> = HashMap::new();
@@ -5804,6 +5883,51 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     ));
                 }
                 SyntaxKind::WildcardPat => {}
+                SyntaxKind::PathPat => {
+                    // `else |Tag(p)|` (s71, #43): sema proved the
+                    // pattern covers the row entire (E0809), so no
+                    // tag test is needed — the payload sub-patterns
+                    // bind the eu slots directly.
+                    let subs: Vec<&GreenNode> = p
+                        .nodes()
+                        .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                        .collect();
+                    if subs.len() != slots.len() {
+                        self.scopes.pop();
+                        return Err(refuse(
+                            "payload arity in a handler pattern (checker contract)",
+                            p.span,
+                        ));
+                    }
+                    for (k, sub) in subs.iter().enumerate() {
+                        match sub.kind {
+                            SyntaxKind::IdentPat => {
+                                let name = self.text(sub.span);
+                                let pv = self.b.ins_eu_err_slot(v, k);
+                                let fty = self.b.func.value_ty(pv);
+                                let var = self.b.declare_var(fty);
+                                self.b.def_var(var, pv);
+                                self.scopes.last_mut().expect("scope").binds.push((
+                                    name,
+                                    LocalBind::Val {
+                                        var,
+                                        wrapping: false,
+                                        unsigned: false,
+                                        wir_ty: fty,
+                                    },
+                                ));
+                            }
+                            SyntaxKind::WildcardPat => {}
+                            _ => {
+                                self.scopes.pop();
+                                return Err(refuse(
+                                    "nested `else` handler payload patterns",
+                                    sub.span,
+                                ));
+                            }
+                        }
+                    }
+                }
                 _ => {
                     self.scopes.pop();
                     return Err(refuse("destructuring `else` handler patterns", p.span));

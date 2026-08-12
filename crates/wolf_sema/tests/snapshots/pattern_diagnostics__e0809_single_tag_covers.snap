@@ -1,0 +1,6 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+assertion_line: 41
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+

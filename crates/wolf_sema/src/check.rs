@@ -173,6 +173,11 @@ pub struct TypedBody {
     /// order. The package-level comptime pass evaluates exactly
     /// these ([`crate::ctfe::run_package`]).
     pub comptime_calls: Vec<Span>,
+    /// Folded comptime values (s71): the subset of `comptime_calls`
+    /// whose evaluation succeeded with a runtime-shaped value, keyed
+    /// by call-site span. Both executing lanes read the constant from
+    /// here instead of stepping into (or refusing) the comptime call.
+    pub comptime_folds: Vec<(Span, crate::ctfe::Fold)>,
     /// Warnings from an otherwise-clean body (E0802 unreachable arms):
     /// the body still counts as `Checked` — warnings never fail a
     /// rung — but every one is surfaced and snapshot-reviewed.
@@ -660,6 +665,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     cleanups: c.cleanups,
                     trace_points: c.trace_points,
                     comptime_calls: c.comptime_calls,
+                    comptime_folds: Vec::new(),
                     warnings: diags,
                     dispatch: c.dispatch,
                     casts,
@@ -3985,8 +3991,48 @@ impl<'a> Checker<'a> {
                 self.trace_points.push(e.span);
                 self.push_scope();
                 if let Some(pat) = d.handler_pattern() {
-                    // The caught error's type is the row itself.
-                    self.bind_pattern(pat, row)?;
+                    if pat.kind == SyntaxKind::PathPat {
+                        // `else |Tag(p)|` (s71, #43): the refutable
+                        // handler form. The pattern types against the
+                        // row exactly as a match arm would (unknown
+                        // tag E0602, payload arity E0808) — and must
+                        // cover the row ENTIRE: an `else` handler runs
+                        // for every error, so a pattern that leaves a
+                        // tag uncovered is E0809 with the
+                        // match-over-row shape as the fix.
+                        let p = self.match_pattern(pat, row)?;
+                        let zonked = zonk(&mut self.lo.table, &self.vars, row);
+                        if let Some(col) = self.col_ty(zonked, 0) {
+                            let tys = [col];
+                            let ws = exhaust::witnesses(&[vec![p]], &tys, 3);
+                            if !ws.is_empty() {
+                                let rendered: Vec<String> = ws
+                                    .iter()
+                                    .map(|w| format!("`{}`", exhaust::render_pat(w)))
+                                    .collect();
+                                self.diags.push(
+                                    Diagnostic::error(
+                                        codes::E0809,
+                                        pat.span,
+                                        format!(
+                                            "this handler pattern does not cover {}",
+                                            rendered.join(", ")
+                                        ),
+                                    )
+                                    .with_label("the row carries cases this pattern misses")
+                                    .with_note(
+                                        "an `else` handler runs for every error its operand \
+                                         can carry, so its pattern must cover the whole row: \
+                                         bind and branch — `else |e| match e { … }` — or \
+                                         handle the one tag the row declares.",
+                                    ),
+                                );
+                            }
+                        }
+                    } else {
+                        // The caught error's type is the row itself.
+                        self.bind_pattern(pat, row)?;
+                    }
                 }
                 if let Some(fb) = d.fallback() {
                     let fexp = Expect {

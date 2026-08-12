@@ -48,6 +48,46 @@ pub struct CtfePass {
     /// like a checker refusal.
     pub not_yet: Vec<NotYet>,
     pub stats: CtfeStats,
+    /// The fold table (s71): every successfully evaluated comptime
+    /// call site whose value has a runtime shape, as (outcome index,
+    /// site span, value). `typecheck` patches these into each body's
+    /// [`crate::check::TypedBody::comptime_folds`] so both executing
+    /// lanes materialize the fold as an ordinary constant.
+    pub folds: Vec<(usize, Span, Fold)>,
+}
+
+/// A lane-neutral folded comptime constant (s71): the value a comptime
+/// call site evaluated to, in a shape both executing lanes can emit as
+/// an ordinary constant. Aggregates, types, and functions stay out —
+/// a site folding to one keeps its honest lowering refusal.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Fold {
+    Unit,
+    Bool(bool),
+    /// The integer value; the site's checked type carries the width
+    /// (comptime arithmetic already faulted anything outside it).
+    Int(i128),
+    /// The float value; exact for both widths (an `f32` result embeds
+    /// losslessly).
+    Float(f64),
+    Str(String),
+}
+
+/// Convert an engine value to its lane-neutral fold, if it has one.
+fn fold_of(arena: &value::ValueArena, v: ValId) -> Option<Fold> {
+    use crate::types::Prim;
+    match arena.kind(v) {
+        ValueKind::Unit => Some(Fold::Unit),
+        ValueKind::Bool(b) => Some(Fold::Bool(*b)),
+        ValueKind::Int { v, .. } => Some(Fold::Int(*v)),
+        ValueKind::Float { bits, w } => Some(Fold::Float(if *w == Prim::F32 {
+            f32::from_bits(*bits as u32) as f64
+        } else {
+            f64::from_bits(*bits)
+        })),
+        ValueKind::Str(s) => Some(Fold::Str(s.clone())),
+        _ => None,
+    }
 }
 
 /// Evaluate every registered comptime call site in the package.
@@ -56,7 +96,7 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
     let mut pass = CtfePass::default();
     let mut engine = Engine::new(pkg, sigs, outcomes);
     let mut seen: HashSet<(u32, u32, u32)> = HashSet::new();
-    for o in outcomes {
+    for (oi, o) in outcomes.iter().enumerate() {
         let BodyResult::Checked(tb) = &o.result else {
             continue;
         };
@@ -91,7 +131,14 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
             let (budget, fix_at, mut attr_diags) = budget_for(pkg, o.body.file, node, site_span);
             pass.diagnostics.append(&mut attr_diags);
             match engine.evaluate_site(&o.body, tb, node, site, budget) {
-                Ok(_) => {}
+                Ok(v) => {
+                    // The fold reaches the lane (s71): record the
+                    // evaluated value so execution sees a constant
+                    // where the source spells a comptime call.
+                    if let Some(f) = fold_of(&engine.arena, v) {
+                        pass.folds.push((oi, site_span, f));
+                    }
+                }
                 Err(f) => match f.kind {
                     FaultKind::EngineGap { construct } => pass.not_yet.push(NotYet {
                         construct,

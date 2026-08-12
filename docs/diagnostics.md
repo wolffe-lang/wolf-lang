@@ -1142,6 +1142,19 @@ you do not need.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_shape.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_payload_arity.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
 
+## E0809 — the handler pattern does not cover the row
+
+An `else` handler runs for every error its operand can carry — there
+is no second handler waiting behind it. A payload pattern in handler
+position (`else |Tag(p)|`) therefore has to cover the operand's whole
+row: on a single-tag row it destructures that tag's payload directly,
+and that is the form's purpose. On a wider row some error would reach
+a handler whose pattern rejects it, and no meaning exists for that
+moment. Bind the error and branch instead — `else |e| match e { … }`
+— which checks every arm for coverage the ordinary way.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__else_tag_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__handler_uncovered.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0809_handler_uncovered.snap
+
 ## E1001 — this value was moved away (or never given one) before this use
 
 In wolf, assignment and argument passing *move* a value: after
@@ -1325,7 +1338,7 @@ every access inside a `when` block, whose body has exclusive access
 to the payloads. The write the checker flagged would otherwise land
 on the task's private copy at best and race at worst.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap
 
 ## E1102 — this channel's payload type is not sendable
 
@@ -1794,7 +1807,7 @@ value that was never updated. Send the result over a channel, or
 return it through the scope's join, so the data flow between tasks is
 explicit; cross-task shared mutation is what `sync` types are for.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
 
 ## W1102 — the closure captured this value before it changed
 

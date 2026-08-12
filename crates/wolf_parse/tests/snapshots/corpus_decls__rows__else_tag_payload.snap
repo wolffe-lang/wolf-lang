@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 514..565 name=ParseErr fields=2
+FnDecl 567..709 name=digit_value body=Block
+FnDecl 711..1070 name=main body=Block

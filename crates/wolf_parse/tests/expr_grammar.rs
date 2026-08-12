@@ -245,6 +245,23 @@ fn else_defaulting_forms() {
     );
 }
 
+/// The payload handler form (s71, #43): `else |Tag(p)|` parses to a
+/// `PathPat` handler with the payload sub-pattern intact.
+#[test]
+fn else_handler_payload_pattern() {
+    let src = "fn f() -> !int {\n    let a = parse(s) else |Parse(p)| { p }\n    let b = parse(s) else |io.Error(e)| { e }\n    0\n}\n";
+    let root = clean(src);
+    let mut elses = Vec::new();
+    find(&root, SyntaxKind::ElseExpr, &mut elses);
+    assert_eq!(elses.len(), 2);
+    for e in &elses {
+        let d = ElseExpr::cast(e).expect("else");
+        let pat = d.handler_pattern().expect("handler pattern");
+        assert_eq!(pat.kind, SyntaxKind::PathPat);
+        assert_eq!(count(pat, SyntaxKind::IdentPat), 1);
+    }
+}
+
 #[test]
 fn else_after_if_belongs_to_if_when_viable() {
     // `} else if` / `} else {` continue the if ([gram.amb.else]).

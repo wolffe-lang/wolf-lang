@@ -136,11 +136,15 @@ fn main() -> !int {
     let ls = "a\nb".lines()
     let bs = "é".bytes()
     print("{parts.len} {ws.len} {ls.len} {bs.len} {bs[0]}")
+    // [mem.str.empty] (s71, #56): the empty-needle family is defined
+    // identically on both lanes — count 0, one whole piece, identity.
+    let ep = "abc".split("")
+    print("{"abc".count("")} {ep.len} {ep[0]} {"abc".replace("", "-")}")
     0
 }
 "#,
         "exit(0)",
-        "THE WOLF RUNS\nthe wolf runs\n13 false 15 15\ntrue true true\n4 12 1\nWolf ?\nWolf sleeps\nababab\n3 3 2 2 195\n",
+        "THE WOLF RUNS\nthe wolf runs\n13 false 15 15\ntrue true true\n4 12 1\nWolf ?\nWolf sleeps\nababab\n3 3 2 2 195\n0 1 abc abc\n",
     );
 }
 
