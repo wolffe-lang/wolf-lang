@@ -1,0 +1,13 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+fn @f() -> i64 {
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2 = iconst.i64 8
+  %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1
+  %5 = iconst.i64 7
+  region.free %0, %4
+  ret %5
+}

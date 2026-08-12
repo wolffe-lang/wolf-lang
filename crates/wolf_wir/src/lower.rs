@@ -3661,10 +3661,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let join = self.b.create_block();
         let mut cursor = self.b.current_block();
         let mut arm_blocks = Vec::with_capacity(n);
+        // The dispatch chain's constants (arm indices, the -2 timeout
+        // sentinel) and comparisons are minted in CHAIN blocks that do
+        // not dominate the join or anything after the select — scope
+        // every chain step so none of it enters GVN visibility (#64:
+        // the second select's sentinel was hash-consed onto the
+        // first's, the #40 if-join cross-arm dominance class at s73's
+        // select shape).
         for i in 0..n {
             let hit = self.b.create_block();
             let next = self.b.create_block();
             self.b.switch_to_block(cursor);
+            self.b.gvn_push_scope();
             let iv = self.b.iconst(types::I64, i as i64);
             let is_i = self
                 .b
@@ -3676,6 +3684,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )
                 .one();
             self.b.ins_br(is_i, hit, &[], next, &[]);
+            self.b.gvn_pop_scope();
             self.b.seal_block(hit);
             self.b.seal_block(next);
             arm_blocks.push(hit);
@@ -3685,6 +3694,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.switch_to_block(cursor);
         let timeout_bb = self.b.create_block();
         let other_bb = self.b.create_block();
+        self.b.gvn_push_scope();
         let tv = self.b.iconst(types::I64, -2);
         let is_t = self
             .b
@@ -3696,6 +3706,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             )
             .one();
         self.b.ins_br(is_t, timeout_bb, &[], other_bb, &[]);
+        self.b.gvn_pop_scope();
         self.b.seal_block(timeout_bb);
         self.b.seal_block(other_bb);
         // other: CANCELLED (or an unexpected verdict) — teardown

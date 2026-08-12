@@ -87,6 +87,7 @@ pub mod entity;
 pub mod facts;
 pub mod ir;
 pub mod lower;
+pub mod midend;
 pub mod ops;
 pub mod parse;
 pub mod peephole_rules;

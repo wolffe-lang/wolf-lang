@@ -1,0 +1,24 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+fn @churn(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  jmp b1(%1)
+b1(%2: i64):
+  %3 = icmp.slt %2, %0
+  br %3, b2, b3
+b2:
+  %4 = iconst.i64 32
+  %5: ptr, %6: mem.r1 = stack.alloc %4
+  %7 = iconst.i64 32
+  %8 = iconst.i64 0
+  %9 = ptr.off %5, %8, 1
+  %10 = store.i64 %2, %9, %6
+  %11 = iconst.i64 1
+  %12 = iadd.chk %2, %11
+  jmp b1(%12)
+b3:
+  ret %2
+}

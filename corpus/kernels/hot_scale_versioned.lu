@@ -1,0 +1,27 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: arith.checked
+//! s42 checked-arith kernel tier: index SCALING against an opaque
+//! bound. `walk` is self-recursive, so it never inlines and `n` stays
+//! a runtime value; `i * 8` cannot be proven from `i < n` alone —
+//! this is exactly the demand the loop-versioning backstop
+//! (amendment 3) answers: a guarded fast copy under `n <= MAX/8`
+//! carries no checks, the slow copy keeps them all, behavior
+//! identical either way.
+
+fn walk(n: int, depth: int) -> int {
+    var acc = 0
+    var i = 0
+    while i < n {
+        // The scaled index: provable only under the version guard.
+        acc = acc % 1048576 + i * 8
+        i = i + 1
+    }
+    if depth > 0 { acc = acc % 1048576 + walk(n, depth - 1) % 16 }
+    acc
+}
+
+fn main() -> !int {
+    let a = walk(500, 2)
+    if a >= 0 { 0 } else { 1 }
+}

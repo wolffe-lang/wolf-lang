@@ -1,0 +1,30 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: conc.select.timeout, conc.select.ready
+//! The #64 regression litmus: TWO selects with timeout arms in one
+//! body. Each select's dispatch chain compares the runtime verdict
+//! against the timeout sentinel (-2) in a chain block that does NOT
+//! dominate the code after the join; GVN hash-consing the second
+//! select's sentinel onto the first's definition is the cross-arm
+//! dominance class the #40 sprint fixed at if-joins, resurfacing at
+//! s73's select shape. Lowering must scope the dispatch-chain
+//! constants like any other arm-local value.
+
+fn main() -> !int {
+    let a = channel[int](1)
+    let b = channel[int](1)
+    a.send(7)
+    var got = 0
+    select {
+        v from a => { got = v },
+        timeout(1.s) => { got = -1 },
+    }
+    if got != 7 { return 1 }
+    b.send(9)
+    select {
+        v from b => { got = v },
+        timeout(1.s) => { got = -1 },
+    }
+    if got != 9 { return 2 }
+    0
+}

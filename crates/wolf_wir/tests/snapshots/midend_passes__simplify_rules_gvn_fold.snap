@@ -1,0 +1,10 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+fn @f(i64) -> i64 {
+b0(%0: i64):
+  %1 = iadd.chk %0, %0
+  %2 = imul.chk %1, %1
+  ret %2
+}

@@ -46,7 +46,7 @@
 //! deferred until a source construct demands it).
 
 /// Comparison condition for `icmp.*` (s = signed, u = unsigned order).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum IntCc {
     Eq,
     Ne,
@@ -95,7 +95,7 @@ impl IntCc {
 /// negation of `eq`, so it is UNORDERED (true when either operand is
 /// NaN) — `x != x` is the portable NaN test and must hold on every
 /// rung (issue #22).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum FloatCc {
     Eq,
     Ne,
@@ -140,7 +140,7 @@ impl FloatCc {
 /// as bare `trap` (the pre-s28 textual form); other kinds print as a
 /// dotted suffix (`trap.overflow`). `Bounds` is reserved vocabulary for
 /// `bounds.br` (c06 containers).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TrapKind {
     /// A user assertion failed (`[conf.trap.assert]`) — also the kind
     /// of sema-licensed unreachable residual edges (never executable).
@@ -185,7 +185,7 @@ impl TrapKind {
 
 /// Every WIR opcode. One doc line of semantics each — this is the
 /// reference.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Opcode {
     // ---- constants -----------------------------------------------------
     /// `%r = iconst.T N` — integer constant of type T; N must fit T.

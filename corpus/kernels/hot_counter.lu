@@ -1,0 +1,22 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: arith.checked
+//! s42 checked-arith kernel tier: counter-and-guard hot loops. Every
+//! overflow check here is a loop counter or a guard-bounded add — the
+//! π-range analysis must prove ALL of them (the X3 claw-back's bread
+//! and butter; the ≥80% elimination gate reads this tier).
+
+fn main() -> !int {
+    var total = 0
+    var i = 0
+    while i < 1000 {
+        var j = 0
+        while j < 8 {
+            // j bounded by the guard; j*4 stays tiny.
+            total = total % 65536 + j * 4
+            j = j + 1
+        }
+        i = i + 1
+    }
+    if total >= 0 && total < 65564 { 0 } else { 1 }
+}

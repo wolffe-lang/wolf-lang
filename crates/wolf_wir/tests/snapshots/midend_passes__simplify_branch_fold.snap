@@ -1,0 +1,11 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+fn @g() -> i64 {
+b0:
+  jmp b1
+b1:
+  %0 = iconst.i64 3
+  ret %0
+}

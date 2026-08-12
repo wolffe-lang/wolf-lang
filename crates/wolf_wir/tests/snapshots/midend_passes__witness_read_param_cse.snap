@@ -1,0 +1,14 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+decl @opaque()
+
+fn @f(read ptr, mem.r0) -> i64 {
+  fact frozen %0 : frozen.read
+b0(%0: ptr, %1: mem.r0):
+  %2 = load.i64 %0, %1
+  call @opaque()
+  %3 = iadd.chk %2, %2
+  ret %3
+}

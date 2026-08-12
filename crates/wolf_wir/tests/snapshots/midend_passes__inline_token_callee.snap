@@ -1,0 +1,17 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+decl @bump(mut ptr, mem.r0) -> i64
+
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 16
+  %1: ptr, %2: mem.r1 = stack.alloc %0
+  jmp b1
+b1:
+  %3 = iconst.i64 42
+  jmp b2
+b2:
+  ret %3
+}

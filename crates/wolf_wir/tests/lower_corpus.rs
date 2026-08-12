@@ -303,6 +303,17 @@ fn golden_memory_region_infer_request_handler() {
     golden("memory/region_infer_request_handler.lu");
 }
 
+/// The #64 regression: two selects with timeout arms in one body. The
+/// dispatch chain's `-2` sentinel is minted in a chain block that does
+/// not dominate the join; GVN hash-consing the second select's
+/// sentinel onto the first's definition was a dominance verify ICE.
+/// `lower_entry` verifies the module, so this golden IS the wir-verify
+/// regression net for the class.
+#[test]
+fn golden_conc_select_two_timeouts() {
+    golden("conc/select_two_timeouts.lu");
+}
+
 // ------------------------------------------------- the whole corpus ----
 
 /// Which files lower today. Snapshot-pinned: every advance or retreat
