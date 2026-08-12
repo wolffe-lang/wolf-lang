@@ -117,63 +117,30 @@ fn lead_start(n: &GreenNode) -> u32 {
 /// Start of the node's first *comment* (or the token itself) — the
 /// position blank-line gaps are measured to.
 fn comment_or_token_start(src: &[u8], n: &GreenNode) -> u32 {
-    match first_token(n) {
-        Some(t) => t
+    // Zero-width tokens (`Missing`, the recovery placeholder) are
+    // transparent: they own no trivia and sit *after* the comment, so
+    // stopping at one measured the gap across the comment's own line
+    // and read it as a blank. A damaged match arm then gained a blank
+    // line per pass — an idempotence class the well-formed arm hid.
+    let mut toks: Vec<&GreenToken> = Vec::new();
+    collect_tokens(n, &mut toks);
+    for t in toks {
+        if let Some(s) = t
             .leading
             .iter()
             .find(|s| src[s.lo as usize..].starts_with(b"//"))
-            .map_or(t.span.lo, |s| s.lo),
-        None => n.span.lo,
+        {
+            return s.lo;
+        }
+        if t.span.lo < t.span.hi {
+            return t.span.lo;
+        }
     }
+    n.span.lo
 }
 
-/// Source column (bytes since line start) of a position.
 /// Did this trivia span start its own source line (only whitespace
 /// between the previous newline, or file start, and it)?
-/// Token stream with each token's post-deferral trailing-comment flag:
-/// inside a `PrefixExpr`, operator comments ride the subtree's last
-/// token (mirroring the emission deferral in the `PrefixExpr` arm).
-fn collect_carriers<'a>(
-    lw: &Fmt<'a>,
-    n: &'a GreenNode,
-    out: &mut Vec<(&'a GreenToken, bool)>,
-    _in_prefix: bool,
-) {
-    if n.kind == K::PrefixExpr {
-        let start = out.len();
-        let mut deferred = false;
-        for c in &n.children {
-            match c {
-                Child::Token(t) => {
-                    let has = t.trailing.iter().any(|s| is_comment(lw.slice(*s)));
-                    deferred |= has;
-                    out.push((t, false));
-                }
-                Child::Node(m) => {
-                    collect_carriers(lw, m, out, true);
-                    if deferred && out.len() > start {
-                        out.last_mut().expect("nonempty").1 = true;
-                        deferred = false;
-                    }
-                }
-            }
-        }
-        if deferred && out.len() > start {
-            out.last_mut().expect("nonempty").1 = true;
-        }
-        return;
-    }
-    for c in &n.children {
-        match c {
-            Child::Token(t) => {
-                let has = t.trailing.iter().any(|s| is_comment(lw.slice(*s)));
-                out.push((t, has));
-            }
-            Child::Node(m) => collect_carriers(lw, m, out, false),
-        }
-    }
-}
-
 fn own_line(src: &[u8], lo: u32) -> bool {
     let lo = lo as usize;
     src[..lo]
@@ -183,6 +150,7 @@ fn own_line(src: &[u8], lo: u32) -> bool {
         .all(|b| b.is_ascii_whitespace())
 }
 
+/// Source column (bytes since line start) of a position.
 fn src_col(src: &[u8], pos: u32) -> usize {
     let mut i = pos as usize;
     let mut col = 0usize;
@@ -574,23 +542,45 @@ impl<'a> Fmt<'a> {
         self.trail(t, out);
     }
 
-    /// Any trailing comment on any token of the subtree except the very
-    /// last token? (Those force multiline layout so no comment can
-    /// slide across code.)
+    /// Would a trailing comment land mid-construct? (Those force
+    /// multiline layout so no comment can slide across code.)
+    ///
+    /// The unit is the *direct child* — an operand of a chain, a
+    /// statement of a block — not the lexical token. A trailing comment
+    /// renders as a `Doc::LineSuffix`, which floats to the end of the
+    /// line it lands on, so inside one child it can only ever reach
+    /// that child's end: exactly where breaking would put it. Only a
+    /// comment in a non-final child has code left to slide across.
+    ///
+    /// Attributing the comment to the token it lexically trails was an
+    /// idempotence class in every shape the emitter re-homes — `x +
+    /// f.//\ny` forced a break on pass one and joined on pass two, once
+    /// the comment had floated onto the chain's last token. The old
+    /// `PrefixExpr`-only deferral was this same rule discovered one
+    /// node kind at a time; per-child subsumes it.
     fn has_inner_trailing_comment(&self, n: &GreenNode) -> bool {
-        // Deferral-aware: a trailing comment on a prefix OPERATOR is
-        // re-homed after its operand at emission, so its effective
-        // carrier is the PrefixExpr's last token — counting it at the
-        // operator made pass one force a break pass two would not (the
-        // fmt fuzz's fifth idempotence class).
-        let mut carriers: Vec<(&GreenToken, bool)> = Vec::new();
-        collect_carriers(self, n, &mut carriers, false);
-        let cut = carriers.len().saturating_sub(1);
-        carriers[..cut].iter().any(|(_, has)| *has)
+        let mut flags: Vec<bool> = Vec::new();
+        for c in &n.children {
+            let mut toks: Vec<&GreenToken> = Vec::new();
+            match c {
+                Child::Token(t) => toks.push(t),
+                Child::Node(m) => collect_tokens(m, &mut toks),
+            }
+            if toks.is_empty() {
+                continue;
+            }
+            flags.push(toks.iter().any(|t| self.has_trail_comment(t)));
+        }
+        let cut = flags.len().saturating_sub(1);
+        flags[..cut].iter().any(|f| *f)
     }
 
     fn has_lead_comment(&self, t: &GreenToken) -> bool {
         t.leading.iter().any(|s| is_comment(self.slice(*s)))
+    }
+
+    fn has_trail_comment(&self, t: &GreenToken) -> bool {
+        t.trailing.iter().any(|s| is_comment(self.slice(*s)))
     }
 
     fn subtree_has_comment(&self, n: &GreenNode) -> bool {
@@ -606,6 +596,22 @@ impl<'a> Fmt<'a> {
 
     /// Byte-identical pass-through of a statement/item, leading
     /// comments included (Target 3).
+    /// Where a verbatim run over `n` may begin: [`lead_start`], but
+    /// never inside trivia another emitter already consumed (the `//!`
+    /// module-header block is the only such emitter today).
+    fn unconsumed_start(&self, n: &GreenNode) -> u32 {
+        let start = lead_start(n);
+        let Some(t) = first_token(n) else {
+            return start;
+        };
+        let consumed = self.consumed.borrow();
+        t.leading
+            .iter()
+            .find(|s| !consumed.contains(&(s.lo, s.hi)))
+            .map_or_else(|| t.span.lo, |s| s.lo)
+            .max(start)
+    }
+
     fn verbatim(&self, from: u32, to: u32) -> Doc {
         let mut lo = from as usize;
         let hi = to as usize;
@@ -709,7 +715,18 @@ impl<'a> Fmt<'a> {
                 while end + 1 < ordered.len() && broken.contains(&(end + 1)) {
                     end += 1;
                 }
-                out.push(self.verbatim(lead_start(ordered[start].0), trail_end(ordered[end].0)));
+                // `unconsumed_start`, not `lead_start`: the `//!`
+                // header block already emitted the module doc comments,
+                // and they live in the FIRST item's leading trivia. A
+                // verbatim run from `lead_start` re-emitted them, so
+                // the comment showed up twice — pass one got away with
+                // it because a *different* comment went missing in the
+                // same output and the multiset balanced, and pass two
+                // then failed the formatter's own self-check.
+                out.push(self.verbatim(
+                    self.unconsumed_start(ordered[start].0),
+                    trail_end(ordered[end].0),
+                ));
                 i = end + 1;
                 continue;
             }
@@ -725,11 +742,35 @@ impl<'a> Fmt<'a> {
                 let mut tail = Vec::new();
                 self.lead(t, &mut tail);
                 if !tail.is_empty() {
-                    if !first {
+                    // Two separate idempotence classes met here.
+                    //
+                    // The anchor: the last item, or — in a file that is
+                    // nothing but comments — the end of the `//!`
+                    // header. Without the header arm the blank after
+                    // the header was dropped, and since the header
+                    // block absorbs one more `//!` per pass (it stops
+                    // at the first blank) the loss took two passes to
+                    // converge.
+                    //
+                    // And `code_end`, not `trail_end`: the gap must be
+                    // measured from the last *code* byte so the item's
+                    // own terminating newline counts as part of it.
+                    // From `trail_end` it ate one newline per pass —
+                    // two blank lines became one, then none.
+                    let prev = ordered.last().map(|(n, _)| code_end(n)).or(header_end);
+                    if let Some(prev) = prev {
                         // Preserve blank (capped) before the tail
-                        // comments.
-                        let lo = t.leading.first().map(|s| s.lo).unwrap_or(t.span.lo);
-                        let prev = ordered.last().map(|(n, _)| trail_end(n)).unwrap_or(0);
+                        // comments, measured from the first comment the
+                        // header did not consume.
+                        let lo = t
+                            .leading
+                            .iter()
+                            .find(|s| {
+                                is_comment(self.slice(**s))
+                                    && !self.consumed.borrow().contains(&(s.lo, s.hi))
+                            })
+                            .map(|s| s.lo)
+                            .unwrap_or(t.span.lo);
                         if self.blank_between(prev, lo) {
                             out.push(Doc::Blankline);
                         } else {
@@ -743,18 +784,39 @@ impl<'a> Fmt<'a> {
         Doc::Concat(out)
     }
 
+    /// The token text of a subtree with trivia erased — the *formatted*
+    /// spelling, not the source bytes.
+    ///
+    /// Sort keys must be invariant under formatting or the sort is not
+    /// a fixpoint: keying on the raw source slice let `use//\ne` and
+    /// its own formatted form `use e` compare differently, so pass one
+    /// and pass two ordered the imports differently. Whitespace and
+    /// comments cannot decide an import's place.
+    fn code_key(&self, n: &GreenNode) -> Vec<u8> {
+        let mut toks: Vec<&GreenToken> = Vec::new();
+        collect_tokens(n, &mut toks);
+        let mut out = Vec::new();
+        for t in toks {
+            if matches!(t.kind, K::Term | K::Missing | K::Eof) {
+                continue;
+            }
+            out.extend_from_slice(self.slice(t.span));
+        }
+        out
+    }
+
     fn use_sort_key(&self, n: &GreenNode) -> (u8, Vec<u8>) {
         let path = n
             .child_node(K::Path)
-            .map(|p| self.slice(p.span).to_vec())
+            .map(|p| self.code_key(p))
             .unwrap_or_default();
         let std = path == b"std" || path.starts_with(b"std.");
-        (u8::from(!std), self.slice(n.span).to_vec())
+        (u8::from(!std), self.code_key(n))
     }
 
     fn import_sort_key(&self, n: &GreenNode) -> Vec<u8> {
         n.child_node(K::StringLit)
-            .map(|s| self.slice(s.span).to_vec())
+            .map(|s| self.code_key(s))
             .unwrap_or_default()
     }
 
@@ -1696,11 +1758,25 @@ impl<'a> Fmt<'a> {
             out.push(Doc::Concat(g));
             return;
         }
+        // Droppability consults LEADING comments only, and the split is
+        // load-bearing in both directions.
+        //
+        // A *trailing* comment renders as a line suffix and floats to
+        // the end of its output line, so which token owns it changes
+        // from pass to pass: `(//\n0)` hangs the comment off `(` and
+        // prints `(0) //`, where it now trails `)`. Any guard reading a
+        // trailing run therefore flips between passes.
+        //
+        // A *leading* comment does not float — but dropping the parens
+        // re-homes it from the delimiter to the expression's own first
+        // token, and an own-line comment forces its group broken, so
+        // `//\n(r.0)` printed flat on pass one and broken on pass two.
+        // Keeping the parens keeps the ownership, and that is stable.
         let droppable = match inner {
             Some(e) => {
                 !paren_blacklisted(e.kind)
-                    && lp.is_none_or(|t| !self.subtree_token_has_comment(t))
-                    && rp.is_none_or(|t| !self.subtree_token_has_comment(t))
+                    && lp.is_none_or(|t| !self.has_lead_comment(t))
+                    && rp.is_none_or(|t| !self.has_lead_comment(t))
                     && ctx_allows_bare(ctx, e)
             }
             None => false,

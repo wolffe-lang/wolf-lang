@@ -52,6 +52,7 @@ fn main() -> ExitCode {
         }
         Some("bench") => bench_cmd(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
+        Some("fmt-fuzz") => fmt_fuzz(&args[1..]),
         Some("dist") => dist(),
         Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
         Some("conformance") => conformance_cmd(&args[1..]),
@@ -62,10 +63,16 @@ fn main() -> ExitCode {
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface|midend-rate>"
             );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
+            eprintln!(
+                "       cargo xtask fmt-fuzz [--ci] [--seconds=N] [--seed=N] [--cases=N] [--out=DIR]"
+            );
+            eprintln!(
+                "                            [--expect=N] [--allow-open] [--file=PATH] [--triage=DIR]"
+            );
             ExitCode::from(2)
         }
     }
@@ -97,6 +104,7 @@ fn ci() -> ExitCode {
         ("print-gate", &["xtask", "print-gate"]),
         ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
         ("fmt-lu", &["xtask", "fmt-lu"]),
+        ("fmt-fuzz", &["xtask", "fmt-fuzz", "--ci"]),
         ("audit-surface", &["xtask", "audit-surface"]),
         // The release archive is public-facing product: staging it in
         // CI keeps a broken manifest from reaching a release page again
@@ -1234,6 +1242,71 @@ fn fuzz_smoke() -> ExitCode {
     }
 }
 
+// -------------------------------------------------------------- fmt-fuzz --
+
+/// The formatter's idempotence hunt, stable-Rust and CI-runnable: a
+/// corpus-seeded, SplitMix64-driven mutation loop over
+/// `wolf_fmt`'s invariants (the loop itself is
+/// `crates/wolf_fmt/examples/fmt_fuzz.rs` — xtask depends on no
+/// workspace crate, so it drives the example as a subprocess).
+///
+/// Every fmt idempotence class found so far has been a comment-layout
+/// class, and comments only appear in bulk in *real programs*: seeding
+/// from the corpus rather than from bytes is why this loop out-finds
+/// the nightly's libFuzzer lane by roughly an order of magnitude on the
+/// same well.
+///
+/// `--ci` is the bounded, fixed-count slice `cargo xtask ci` runs; a
+/// bare invocation defaults to a ten-second local sweep, and the
+/// nightly hands it `--seconds=` in the hours. Every finding is
+/// minimized and printed; a bare run exits nonzero on any of them,
+/// while `--ci` fails only on the classes that must never bend (see
+/// `--allow-open` in the loop's own docs).
+fn fmt_fuzz(args: &[String]) -> ExitCode {
+    if !run_ok(
+        "cargo",
+        &[
+            "build",
+            "--release",
+            "-p",
+            "wolf_fmt",
+            "--example",
+            "fmt_fuzz",
+        ],
+    ) {
+        eprintln!("fmt-fuzz: failed to build the loop");
+        return ExitCode::FAILURE;
+    }
+    let ci = args.iter().any(|a| a == "--ci");
+    let mut pass: Vec<String> = args.iter().filter(|a| *a != "--ci").cloned().collect();
+    if ci {
+        // A fixed case count (not a clock) so the lane costs the same
+        // on every machine, and `--allow-open` because the layout well
+        // is not dry yet: CI holds the invariants that must never bend
+        // — no panic, no lost comment, no changed tree, no fallback
+        // that rewrote its input — and reports the convergence classes
+        // still banked. The nightly runs the long sweep.
+        pass.push("--cases=60000".to_string());
+        pass.push("--seed=63".to_string());
+        pass.push("--allow-open".to_string());
+    }
+    let ok = Command::new("target/release/examples/fmt_fuzz")
+        .args(&pass)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if ok {
+        eprintln!("fmt-fuzz: invariants held");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("fmt-fuzz: findings above — minimize, fix, and bank the fixture in");
+        eprintln!(
+            "          crates/wolf_fmt/tests/regressions/ (unfixed/ for a banked-but-open class)"
+        );
+        ExitCode::FAILURE
+    }
+}
+
 // ---------------------------------------------------------- spec-extract --
 
 /// Extract the normative EBNF from spec/01-grammar.md into
@@ -1319,6 +1392,9 @@ fn spec_extract(check: bool) -> ExitCode {
 /// fixture rule: every registered code appears in ≥1 committed snapshot
 /// (the s01 hook, armed for real in s10). `--check` verifies sync.
 fn diag_catalog(check: bool) -> ExitCode {
+    if !diag_voice() {
+        return ExitCode::FAILURE;
+    }
     let registry = std::fs::read_to_string("crates/wolf_diag/src/registry.rs")
         .expect("read wolf_diag registry");
     // Parse the rigid one-entry-per-code format:
@@ -1451,6 +1527,196 @@ fn diag_catalog(check: bool) -> ExitCode {
         );
     }
     ExitCode::SUCCESS
+}
+
+// ------------------------------------------------------------- voice ---
+
+/// Call sites whose string arguments are read by a *user*: the
+/// diagnostic engine's prose builders, and the honest-refusal templates
+/// that print as "cannot compile this yet — {construct}".
+const PROSE_SITES: &[&str] = &[
+    ".with_note(",
+    ".with_label(",
+    ".with_help(",
+    ".with_secondary(",
+    ".with_suggestion(",
+    "Diagnostic::error(",
+    "Diagnostic::warning(",
+    ".refuse(",
+    "gap!(",
+    "construct:",
+];
+
+/// Files whose every string literal ends up in a user's working tree:
+/// the generated headers of files the tools write and the user commits.
+const EMITTER_FILES: &[&str] = &["crates/wolf_pkg/src/lock.rs"];
+
+/// `s68`, `c05`, `is04`: a lowercase marker (`s`, `c`, or `is`) followed
+/// by exactly two digits, standing alone. Spec anchors
+/// (`[mem.ub.defined]`) and D-numbered decisions are public vocabulary
+/// and stay; so does anything with three digits or a letter attached.
+fn internal_id(text: &str) -> Option<String> {
+    let b = text.as_bytes();
+    for i in 0..b.len() {
+        let (mark, digits) = if b[i..].starts_with(b"is") {
+            (2, &b[i + 2..])
+        } else if b[i] == b's' || b[i] == b'c' {
+            (1, &b[i + 1..])
+        } else {
+            continue;
+        };
+        let boundary_ok = i == 0 || !(b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_');
+        if !boundary_ok || digits.len() < 2 {
+            continue;
+        }
+        let two = digits[0].is_ascii_digit() && digits[1].is_ascii_digit();
+        let closed = digits.len() == 2 || !(digits[2].is_ascii_alphanumeric() || digits[2] == b'_');
+        if two && closed {
+            return Some(text[i..i + mark + 2].to_string());
+        }
+    }
+    None
+}
+
+/// Contents of the string literals starting at `i`, joined. `single`
+/// takes the first literal only (for `construct:`-style fields);
+/// otherwise literals are gathered until the call's parens rebalance,
+/// which picks up `format!(…)` arguments and `\`-continued lines.
+fn literal_run(b: &[u8], mut i: usize, single: bool) -> String {
+    let mut depth = 1i32;
+    let mut out: Vec<u8> = Vec::new();
+    let limit = (i + 4096).min(b.len());
+    while i < limit && depth > 0 {
+        match b[i] {
+            b'"' => {
+                i += 1;
+                while i < b.len() && b[i] != b'"' {
+                    if b[i] == b'\\' {
+                        i += 2;
+                    } else {
+                        out.push(b[i]);
+                        i += 1;
+                    }
+                }
+                i += 1;
+                if single {
+                    break;
+                }
+                out.push(b' ');
+                continue;
+            }
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            _ => {}
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// The voice gate: no internal identifier may reach a reader.
+///
+/// wolf_diag's own unit test covers `--explain` summaries and
+/// explanations, but the leaks that actually shipped lived in the text
+/// it cannot see — a note built in wolf_pkg, a refusal template in
+/// wolf_sema, and the header the lockfile writer stamps into every
+/// user's version control. This walks all three: the prose builders'
+/// string arguments across every compiler crate, the generated catalog
+/// pages, and every literal in the files that write user artifacts.
+fn diag_voice() -> bool {
+    let mut bad: Vec<String> = Vec::new();
+    let mut checked = 0usize;
+
+    let mut files = Vec::new();
+    for krate in std::fs::read_dir("crates").expect("crates dir").flatten() {
+        collect_rs_files(&krate.path().join("src"), &mut files);
+    }
+    files.sort();
+    for f in &files {
+        // The registry has its own test, and its prose is r#"…"# raw
+        // strings this scanner deliberately does not read.
+        if f.ends_with("registry.rs") {
+            continue;
+        }
+        let body = std::fs::read_to_string(f).unwrap_or_default();
+        // `#[cfg(test)]` prose is not read by users.
+        let body = match body.find("\n#[cfg(test)]") {
+            Some(i) => &body[..i],
+            None => &body[..],
+        };
+        let emitter = EMITTER_FILES
+            .iter()
+            .any(|e| f.to_string_lossy().replace('\\', "/").ends_with(e));
+        let b = body.as_bytes();
+        for site in PROSE_SITES {
+            let mut from = 0usize;
+            while let Some(j) = body[from..].find(site) {
+                let at = from + j;
+                from = at + site.len();
+                let text = literal_run(b, from, *site == "construct:");
+                checked += 1;
+                if let Some(id) = internal_id(&text) {
+                    bad.push(format!(
+                        "{}:{}: internal identifier `{id}` in reader-facing prose: {}",
+                        f.display(),
+                        body[..at].lines().count(),
+                        text.trim().chars().take(90).collect::<String>()
+                    ));
+                }
+            }
+        }
+        if emitter {
+            // Every literal, not only the diagnostic ones: this file
+            // writes a header into a file the user commits.
+            let mut i = 0usize;
+            while i < b.len() {
+                if b[i] == b'"' {
+                    let text = literal_run(b, i, true);
+                    checked += 1;
+                    if let Some(id) = internal_id(&text) {
+                        bad.push(format!(
+                            "{}:{}: internal identifier `{id}` in a generated header: {}",
+                            f.display(),
+                            body[..i].lines().count(),
+                            text.trim().chars().take(90).collect::<String>()
+                        ));
+                    }
+                    i += 1 + text.len() + 1;
+                    continue;
+                }
+                i += 1;
+            }
+        }
+    }
+
+    // The generated pages are product too.
+    for page in ["docs/diagnostics.md", "docs/warnings.md"] {
+        let body = std::fs::read_to_string(page).unwrap_or_default();
+        for (n, line) in body.lines().enumerate() {
+            checked += 1;
+            if let Some(id) = internal_id(line) {
+                bad.push(format!(
+                    "{page}:{}: internal identifier `{id}` on a catalog page: {}",
+                    n + 1,
+                    line.trim().chars().take(90).collect::<String>()
+                ));
+            }
+        }
+    }
+
+    for b in &bad {
+        eprintln!("diag-catalog: voice: {b}");
+    }
+    if bad.is_empty() {
+        eprintln!("diag-catalog: voice: {checked} reader-facing strings carry no internal ids");
+        true
+    } else {
+        eprintln!(
+            "diag-catalog: voice: {} leak(s) — sprint and campaign ids are ours, not the reader's",
+            bad.len()
+        );
+        false
+    }
 }
 
 /// The hand-written half of docs/warnings.md (the generated W-catalog

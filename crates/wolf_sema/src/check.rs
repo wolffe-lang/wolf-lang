@@ -1174,7 +1174,7 @@ impl<'a> Checker<'a> {
         };
         if !td.params.is_empty() {
             return Err(NotYet {
-                construct: "default bodies of parameterized traits (c14 backlog)",
+                construct: "default bodies of parameterized traits",
                 span: node.span,
             });
         }
@@ -2389,14 +2389,14 @@ impl<'a> Checker<'a> {
         let segs: Vec<_> = path.segments().collect();
         let [seg] = segs.as_slice() else {
             return Err(NotYet {
-                construct: "a dotted proc path (s39 module procs)",
+                construct: "a dotted proc path (module procs)",
                 span: e.span,
             });
         };
         let name = self.text(seg.span);
         if self.lookup_local(&name).is_some() {
             return Err(NotYet {
-                construct: "`spawn proc` through a fn value (c05 indirect calls)",
+                construct: "`spawn proc` through a fn value (indirect calls)",
                 span: e.span,
             });
         }
@@ -2427,7 +2427,7 @@ impl<'a> Checker<'a> {
         };
         if !int_ok {
             return Err(NotYet {
-                construct: "proc completion values beyond the int slot (s39 rows)",
+                construct: "proc completion values beyond the int slot",
                 span: e.span,
             });
         }
@@ -2516,7 +2516,7 @@ impl<'a> Checker<'a> {
                                 _ => {
                                     self.pop_scope();
                                     return Err(NotYet {
-                                        construct: "this `exit(…)` arm payload shape (s73)",
+                                        construct: "this `exit(…)` arm payload shape",
                                         span: pat.span,
                                     });
                                 }
@@ -2526,7 +2526,7 @@ impl<'a> Checker<'a> {
                         _ => {
                             self.pop_scope();
                             return Err(NotYet {
-                                construct: "this select-arm pattern shape (s35)",
+                                construct: "this select-arm pattern shape",
                                 span: pat.span,
                             });
                         }
@@ -2635,14 +2635,14 @@ impl<'a> Checker<'a> {
                 Some(t) => t,
                 None => {
                     return Err(NotYet {
-                        construct: "this channel payload shape (s16 generic data)",
+                        construct: "this channel payload shape (generic data)",
                         span: e.span,
                     });
                 }
             },
             _ => {
                 return Err(NotYet {
-                    construct: "this channel instantiation (s16 generic data)",
+                    construct: "this channel instantiation (generic data)",
                     span: e.span,
                 });
             }
@@ -3168,7 +3168,7 @@ impl<'a> Checker<'a> {
             // never a place.
             SyntaxKind::BracketApply => self.bracket_place_type(place),
             _ => Err(NotYet {
-                construct: "assignment through this place (s17)",
+                construct: "assignment through this place",
                 span: place.span,
             }),
         }
@@ -3199,7 +3199,7 @@ impl<'a> Checker<'a> {
             }
             TyKind::Error | TyKind::Never => Ok(self.error_ty()),
             _ => Err(NotYet {
-                construct: "assignment through this place (s17)",
+                construct: "assignment through this place",
                 span: place.span,
             }),
         }
@@ -3336,7 +3336,7 @@ impl<'a> Checker<'a> {
             // ---- outside the s13-checkable set: honest refusals ----
             SyntaxKind::BracketApply => self.synth_bracket(e),
             SyntaxKind::FromEndExpr => Err(NotYet {
-                construct: "end-relative `^n` position (s17)",
+                construct: "end-relative `^n` position",
                 span: e.span,
             }),
             // ---- the region surface (X4, s19): the three creation /
@@ -3368,7 +3368,7 @@ impl<'a> Checker<'a> {
             // Inline C and asm have no pinned semantics yet (c10:
             // s48/s50) — only the rule that they are unsafe-tier.
             SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
-                construct: "inline C / asm typing (c10)",
+                construct: "inline C / asm typing",
                 span: e.span,
             }),
             // Broken trees type as `<error>`, silently (D22).
@@ -3483,7 +3483,7 @@ impl<'a> Checker<'a> {
             | TyKind::Never
             | TyKind::Var(_) => Ok(()),
             _ => Err(NotYet {
-                construct: "string interpolation of a non-primitive value (s16/D26)",
+                construct: "string interpolation of a non-primitive value",
                 span,
             }),
         }
@@ -3564,7 +3564,7 @@ impl<'a> Checker<'a> {
             // Bound as a local inside impl member bodies (s14); bare
             // elsewhere it is s17's receiver machinery.
             return Err(NotYet {
-                construct: "`self` receivers (s17 methods)",
+                construct: "`self` receivers",
                 span: e.span,
             });
         }
@@ -3586,11 +3586,11 @@ impl<'a> Checker<'a> {
                         span: e.span,
                     }),
                     BindTarget::StdItem => Err(NotYet {
-                        construct: "a std stub item (s05 std surface)",
+                        construct: "a std stub item (the std surface)",
                         span: e.span,
                     }),
                     BindTarget::CNamespace => Err(NotYet {
-                        construct: "the `c` namespace (c10 FFI)",
+                        construct: "the `c` namespace (FFI)",
                         span: e.span,
                     }),
                     BindTarget::Poisoned => Ok(self.error_ty()),
@@ -3607,7 +3607,7 @@ impl<'a> Checker<'a> {
         }
         if prelude::in_prelude(&name) {
             return Err(NotYet {
-                construct: "a std/prelude stub without a signature (s05)",
+                construct: "a std/prelude stub without a signature",
                 span: e.span,
             });
         }
@@ -3617,7 +3617,7 @@ impl<'a> Checker<'a> {
         }
         if self.deferred_tag(e, None).is_some() {
             return Err(NotYet {
-                construct: "an error-row tag outside `!T` context (s15)",
+                construct: "an error-row tag outside `!T` context",
                 span: e.span,
             });
         }
@@ -3631,7 +3631,7 @@ impl<'a> Checker<'a> {
             Some(ItemSig::Fn(f)) => {
                 if !f.generics.is_empty() {
                     return Err(NotYet {
-                        construct: "a generic function used as a value (s16 comptime)",
+                        construct: "a generic function used as a value (comptime)",
                         span,
                     });
                 }
@@ -3656,7 +3656,7 @@ impl<'a> Checker<'a> {
                 Ok(self.lo.table.intern(TyKind::TypeTy))
             }
             Some(ItemSig::Trait) => Err(NotYet {
-                construct: "a trait used as a value (comptime, s16)",
+                construct: "a trait used as a value (comptime)",
                 span,
             }),
             None => Ok(self.error_ty()),
@@ -3696,7 +3696,7 @@ impl<'a> Checker<'a> {
             }
             Some(SyntaxKind::MoveKw | SyntaxKind::CopyKw) => self.synth_expr(operand),
             Some(SyntaxKind::Amp) => Err(NotYet {
-                construct: "borrow expressions (c04)",
+                construct: "borrow expressions",
                 span: e.span,
             }),
             Some(SyntaxKind::Star) => Err(NotYet {
@@ -3880,7 +3880,7 @@ impl<'a> Checker<'a> {
                 Ok(())
             }
             _ => Err(NotYet {
-                construct: "`==` on non-primitive types (s17 operator traits)",
+                construct: "`==` on non-primitive types (operator traits)",
                 span,
             }),
         }
@@ -4035,7 +4035,7 @@ impl<'a> Checker<'a> {
         let endpoints: Vec<&GreenNode> = d.endpoints().collect();
         if endpoints.len() != 2 || endpoints.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
             return Err(NotYet {
-                construct: "open-ended or end-relative ranges (s17 slicing)",
+                construct: "open-ended or end-relative ranges (slicing)",
                 span: e.span,
             });
         }
@@ -4076,7 +4076,7 @@ impl<'a> Checker<'a> {
                     // `in_closure` holds (both closure paths push).
                     let Some(_) = self.closure_rows.last() else {
                         return Err(NotYet {
-                            construct: "`?` inside a closure (s17 closure rows)",
+                            construct: "`?` inside a closure (closure rows)",
                             span: e.span,
                         });
                     };
@@ -4084,7 +4084,7 @@ impl<'a> Checker<'a> {
                     let resolved = self.resolve_row(row);
                     let TyKind::Row { tags, .. } = self.lo.table.kind(resolved).clone() else {
                         return Err(NotYet {
-                            construct: "`?` on an abstract error row inside a closure (s73)",
+                            construct: "`?` on an abstract error row inside a closure",
                             span: e.span,
                         });
                     };
@@ -4330,7 +4330,7 @@ impl<'a> Checker<'a> {
             TyKind::Error | TyKind::Never => self.error_ty(),
             _ => {
                 return Err(NotYet {
-                    construct: "indexing / generic application (s17)",
+                    construct: "indexing / generic application",
                     span: e.span,
                 });
             }
@@ -4354,7 +4354,7 @@ impl<'a> Checker<'a> {
             .collect();
         let [one] = arg_nodes.as_slice() else {
             return Err(NotYet {
-                construct: "this `str` index shape (one range argument, s37)",
+                construct: "this `str` index shape (one range argument)",
                 span: e.span,
             });
         };
@@ -4439,7 +4439,7 @@ impl<'a> Checker<'a> {
             let Some(v) = Arg::value(*a) else { continue };
             if is_type_kind(v.kind) {
                 return Err(NotYet {
-                    construct: "type arguments in bracket position (s17)",
+                    construct: "type arguments in bracket position",
                     span: v.span,
                 });
             }
@@ -4482,14 +4482,14 @@ impl<'a> Checker<'a> {
                 Some(t) => t,
                 None => {
                     return Err(NotYet {
-                        construct: "this prelude container instantiation (s16 generic data)",
+                        construct: "this prelude container instantiation (generic data)",
                         span: e.span,
                     });
                 }
             },
             _ => {
                 return Err(NotYet {
-                    construct: "this prelude container instantiation (s16 generic data)",
+                    construct: "this prelude container instantiation (generic data)",
                     span: e.span,
                 });
             }
@@ -4710,7 +4710,7 @@ impl<'a> Checker<'a> {
             }
             _ => {
                 return Err(NotYet {
-                    construct: "methods on generic std data (s05 std surface)",
+                    construct: "methods on generic std data (the std surface)",
                     span: e.span,
                 });
             }
@@ -4835,7 +4835,7 @@ impl<'a> Checker<'a> {
             }
             _ => {
                 return Err(NotYet {
-                    construct: "this method on the conc surface (s35 std sync API)",
+                    construct: "this method on the conc surface (the std sync API)",
                     span: e.span,
                 });
             }
@@ -5000,7 +5000,7 @@ impl<'a> Checker<'a> {
             ),
             _ => {
                 return Err(NotYet {
-                    construct: "this `str` method (outside the s37 builtin set)",
+                    construct: "this `str` method (outside the builtin set)",
                     span: e.span,
                 });
             }
@@ -5074,7 +5074,7 @@ impl<'a> Checker<'a> {
             "with_exposed" => (vec![p("self", recv_ty), p("addr", uint_)], recv_ty),
             _ => {
                 return Err(NotYet {
-                    construct: "this raw-pointer operation (the s22 surface is \
+                    construct: "this raw-pointer operation (the surface is \
                                 is_null/addr/with_addr/expose/with_exposed)",
                     span: e.span,
                 });
@@ -5163,7 +5163,7 @@ impl<'a> Checker<'a> {
                     }
                     if self.deferred_tag(callee, None).is_some() {
                         return Err(NotYet {
-                            construct: "an error-row tag outside `!T` context (s15)",
+                            construct: "an error-row tag outside `!T` context",
                             span: callee.span,
                         });
                     }
@@ -5490,7 +5490,7 @@ impl<'a> Checker<'a> {
             "memcpy" => (vec![u8p, u8p, uint_], u8p),
             _ => {
                 return Err(NotYet {
-                    construct: "imported C beyond the modelled intrinsic set (c10's \
+                    construct: "imported C beyond the modelled intrinsic set (the \
                                 header importer)",
                     span: e.span,
                 });
@@ -6174,7 +6174,7 @@ impl<'a> Checker<'a> {
             }) => {
                 if generic {
                     return Err(NotYet {
-                        construct: "a generic enum's variants (s16 generic data)",
+                        construct: "a generic enum's variants (generic data)",
                         span: e.span,
                     });
                 }
@@ -6271,7 +6271,7 @@ impl<'a> Checker<'a> {
                     let imp = &self.sigs.impls[idx];
                     if !imp.generics.is_empty() {
                         return Err(NotYet {
-                            construct: "associated functions of a generic impl (s16 generic data)",
+                            construct: "associated functions of a generic impl (generic data)",
                             span: e.span,
                         });
                     }
@@ -6369,7 +6369,7 @@ impl<'a> Checker<'a> {
                 span: e.span,
             }),
             TyKind::Unsupported(_) => Err(NotYet {
-                construct: "methods on generic std data (s05 std surface)",
+                construct: "methods on generic std data (the std surface)",
                 span: e.span,
             }),
             // The s21 Tier-2 builtins: shared/weak cells and the
@@ -6630,7 +6630,7 @@ impl<'a> Checker<'a> {
                 // refusal, not a typo report, until s05 lands.
                 if !matches!(self.kind_of(recv_ty), TyKind::Nominal { .. }) {
                     return Err(NotYet {
-                        construct: "methods on builtin types (s05 std surface)",
+                        construct: "methods on builtin types (the std surface)",
                         span: e.span,
                     });
                 }
@@ -7246,7 +7246,7 @@ impl<'a> Checker<'a> {
             let mname = self.text(member.span);
             if generic {
                 return Err(NotYet {
-                    construct: "a generic enum's variants (s16 generic data)",
+                    construct: "a generic enum's variants (generic data)",
                     span: e.span,
                 });
             }
@@ -7315,7 +7315,7 @@ impl<'a> Checker<'a> {
                 }
                 if self.trait_target(&bname).is_some() {
                     return Err(NotYet {
-                        construct: "a trait method used as a value (s17)",
+                        construct: "a trait method used as a value",
                         span: e.span,
                     });
                 }
@@ -7334,7 +7334,7 @@ impl<'a> Checker<'a> {
                     Some(ItemSig::Struct(s)) => {
                         if s.generic {
                             return Err(NotYet {
-                                construct: "fields of a generic struct (s16 generic data)",
+                                construct: "fields of a generic struct (generic data)",
                                 span: e.span,
                             });
                         }
@@ -7367,11 +7367,11 @@ impl<'a> Checker<'a> {
                         }
                     }
                     Some(ItemSig::Enum { .. }) => Err(NotYet {
-                        construct: "a method or variant used as a value (c14 backlog)",
+                        construct: "a method or variant used as a value",
                         span: e.span,
                     }),
                     _ => Err(NotYet {
-                        construct: "member access on this type (s05 std surface)",
+                        construct: "member access on this type (the std surface)",
                         span: e.span,
                     }),
                 }
@@ -7397,7 +7397,7 @@ impl<'a> Checker<'a> {
                         Ok(self.error_ty())
                     }
                     Err(_) => Err(NotYet {
-                        construct: "a method used as a value (c14 backlog)",
+                        construct: "a method used as a value",
                         span: e.span,
                     }),
                 }
@@ -7411,7 +7411,7 @@ impl<'a> Checker<'a> {
                     Ok(self.lo.table.prim(Prim::Int))
                 } else {
                     Err(NotYet {
-                        construct: "members on generic std data (s05 std surface)",
+                        construct: "members on generic std data (the std surface)",
                         span: e.span,
                     })
                 }
@@ -7425,7 +7425,7 @@ impl<'a> Checker<'a> {
                     Ok(self.lo.table.prim(Prim::Int))
                 } else {
                     Err(NotYet {
-                        construct: "this `str` member (the s37 surface is `len` + methods)",
+                        construct: "this `str` member (the surface is `len` + methods)",
                         span: e.span,
                     })
                 }
@@ -7448,13 +7448,13 @@ impl<'a> Checker<'a> {
                             }
                         }
                         _ => Err(NotYet {
-                            construct: "member access on this type (s05 std surface)",
+                            construct: "member access on this type (the std surface)",
                             span: e.span,
                         }),
                     }
                 }
                 _ => Err(NotYet {
-                    construct: "member access on this type (s05 std surface)",
+                    construct: "member access on this type (the std surface)",
                     span: e.span,
                 }),
             },
@@ -7475,7 +7475,7 @@ impl<'a> Checker<'a> {
                 span: e.span,
             }),
             _ => Err(NotYet {
-                construct: "members on this type (s05 std surface)",
+                construct: "members on this type (the std surface)",
                 span: e.span,
             }),
         }
@@ -7542,8 +7542,8 @@ impl<'a> Checker<'a> {
                 .with_label("ambiguous member")
                 .with_note(
                     "trait namespaces are isolated, so two bounds may collide on a \
-                     name; qualification through the trait arrives with s17 — until \
-                     then, drop one of the colliding bounds here.",
+                     name; qualification through the trait is not available yet — for \
+                     now, drop one of the colliding bounds here.",
                 ),
             );
             return Ok(self.error_ty());
@@ -7555,13 +7555,13 @@ impl<'a> Checker<'a> {
         }
         if assoc_ty {
             return Err(NotYet {
-                construct: "an associated type used as a value (comptime, s16)",
+                construct: "an associated type used as a value (comptime)",
                 span,
             });
         }
         if method {
             return Err(NotYet {
-                construct: "a trait method used as a value (s17)",
+                construct: "a trait method used as a value",
                 span,
             });
         }
@@ -7628,19 +7628,19 @@ impl<'a> Checker<'a> {
             // Unresolved or non-struct head: resolution reported it, or
             // it is a construct we refuse rather than guess.
             return Err(NotYet {
-                construct: "this struct-literal head (s17)",
+                construct: "this struct-literal head",
                 span: path.span,
             });
         };
         let Some(ItemSig::Struct(sig)) = self.sigs.get(module, &name).cloned() else {
             return Err(NotYet {
-                construct: "a literal of a non-struct type (s17)",
+                construct: "a literal of a non-struct type",
                 span: path.span,
             });
         };
         if sig.generic {
             return Err(NotYet {
-                construct: "a generic struct literal (s16 generic data)",
+                construct: "a generic struct literal (generic data)",
                 span: e.span,
             });
         }
@@ -8525,7 +8525,7 @@ impl<'a> Checker<'a> {
                     TyKind::Error | TyKind::Never => self.error_ty(),
                     _ => {
                         return Err(NotYet {
-                            construct: "the iteration protocol (s17 for-trait wiring)",
+                            construct: "the iteration protocol (for-trait wiring)",
                             span: it.span,
                         });
                     }
@@ -8594,7 +8594,7 @@ impl<'a> Checker<'a> {
         let d = wolf_ast::BreakExpr::cast(e).expect("kind");
         if let Some(v) = d.value() {
             return Err(NotYet {
-                construct: "`break` with a value (s17 loop values)",
+                construct: "`break` with a value (loop values)",
                 span: v.span,
             });
         }
@@ -8607,7 +8607,7 @@ impl<'a> Checker<'a> {
     fn synth_return(&mut self, e: &GreenNode) -> R<TyId> {
         if self.in_closure {
             return Err(NotYet {
-                construct: "`return` inside a closure (s17 control typing)",
+                construct: "`return` inside a closure (control typing)",
                 span: e.span,
             });
         }

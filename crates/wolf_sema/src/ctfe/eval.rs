@@ -955,7 +955,7 @@ impl<'a> Engine<'a> {
                                 };
                                 frames.last_mut().expect("frame").stack.push(v);
                             }
-                            _ => gap!(span, "this method at comptime (s71 subset)"),
+                            _ => gap!(span, "this method at comptime"),
                         }
                     }
                     Callee::UserFn { module, name } => {
@@ -1084,7 +1084,7 @@ impl<'a> Engine<'a> {
                         );
                     }
                     if interps.iter().any(|i| i.format_spec().is_some()) {
-                        gap!(node.span, "format specs at comptime (s71 subset)");
+                        gap!(node.span, "format specs at comptime");
                     }
                     let mut holes = Vec::with_capacity(interps.len());
                     let mut exprs = Vec::with_capacity(interps.len());
@@ -1220,7 +1220,7 @@ impl<'a> Engine<'a> {
                     gap!(node.span, "a binding without an initializer at comptime");
                 };
                 let Some(name) = single_ident_name(pat, self.src(file)) else {
-                    gap!(node.span, "a pattern binding at comptime (s17 patterns)");
+                    gap!(node.span, "a pattern binding at comptime");
                 };
                 let frame = frames.last_mut().expect("frame");
                 frame.work.push(Step::Bind { name });
@@ -1438,11 +1438,11 @@ impl<'a> Engine<'a> {
             }
             // Honest gaps — constructs the s16 evaluator subset does
             // not cover. Each is a NotYetCheckable-style refusal.
-            SyntaxKind::MatchExpr => gap!(node.span, "`match` at comptime (s17 patterns)"),
-            SyntaxKind::ForExpr => gap!(node.span, "`for` at comptime (s17 iteration)"),
-            SyntaxKind::LoopExpr => gap!(node.span, "`loop` at comptime (s17)"),
+            SyntaxKind::MatchExpr => gap!(node.span, "`match` at comptime"),
+            SyntaxKind::ForExpr => gap!(node.span, "`for` at comptime"),
+            SyntaxKind::LoopExpr => gap!(node.span, "`loop` at comptime"),
             SyntaxKind::BreakExpr | SyntaxKind::ContinueExpr => {
-                gap!(node.span, "`break`/`continue` at comptime (s17)")
+                gap!(node.span, "`break`/`continue` at comptime")
             }
             SyntaxKind::RangeExpr => {
                 // The s71 subset: the exclusive two-endpoint form
@@ -1450,18 +1450,18 @@ impl<'a> Engine<'a> {
                 // and end-relative forms stay honest gaps.
                 let d = wolf_ast::RangeExpr::cast(node).expect("kind");
                 if d.is_inclusive() {
-                    gap!(node.span, "inclusive ranges at comptime (s71 subset)");
+                    gap!(node.span, "inclusive ranges at comptime");
                 }
                 let eps: Vec<&GreenNodeAlias> = d.endpoints().collect();
                 if eps.len() != 2 || eps.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
-                    gap!(node.span, "this range shape at comptime (s71 subset)");
+                    gap!(node.span, "this range shape at comptime");
                 }
                 let frame = frames.last_mut().expect("frame");
                 frame.work.push(Step::RangeBuild { span: node.span });
                 frame.work.push(Step::Eval(eps[1]));
                 frame.work.push(Step::Eval(eps[0]));
             }
-            SyntaxKind::CastExpr => gap!(node.span, "`as` conversions at comptime (s17)"),
+            SyntaxKind::CastExpr => gap!(node.span, "`as` conversions at comptime"),
             SyntaxKind::ElseExpr => {
                 // `expr else fallback` / `expr else |e| body` (s71
                 // subset): the caught value is the tag itself; payload
@@ -1474,7 +1474,7 @@ impl<'a> Engine<'a> {
                     None => None,
                     Some(p) if p.kind == SyntaxKind::WildcardPat => None,
                     Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(file, p.span)),
-                    Some(p) => gap!(p.span, "this handler pattern at comptime (s71 subset)"),
+                    Some(p) => gap!(p.span, "this handler pattern at comptime"),
                 };
                 let frame = frames.last_mut().expect("frame");
                 frame.work.push(Step::ElseUnwrap {
@@ -1485,16 +1485,16 @@ impl<'a> Engine<'a> {
                 frame.work.push(Step::Eval(scrut));
             }
             SyntaxKind::TryExpr => {
-                gap!(node.span, "the error channel at comptime (s17)")
+                gap!(node.span, "the error channel at comptime")
             }
-            SyntaxKind::ClosureExpr => gap!(node.span, "closures at comptime (s17)"),
+            SyntaxKind::ClosureExpr => gap!(node.span, "closures at comptime"),
             SyntaxKind::BracketApply => {
-                gap!(node.span, "indexing/generic application at comptime (s17)")
+                gap!(node.span, "indexing/generic application at comptime")
             }
-            SyntaxKind::DeferStmt => gap!(node.span, "`defer` at comptime (s27)"),
+            SyntaxKind::DeferStmt => gap!(node.span, "`defer` at comptime"),
             _ => gap!(
                 node.span,
-                "this construct at comptime (s16 evaluator subset)"
+                "this construct at comptime (outside the evaluator's subset)"
             ),
         }
         Ok(None)

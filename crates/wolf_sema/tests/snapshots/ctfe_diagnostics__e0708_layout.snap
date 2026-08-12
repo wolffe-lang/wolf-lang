@@ -6,8 +6,8 @@ error[E0708]: the size of `Vec2` is not resolved until codegen lays it out
  --> mem:///main.lu:7:15
   |
 7 |     const S = size_of(Vec2)
-  |               ^^^^^^^^^^^^^ unresolved until codegen (c05)
+  |               ^^^^^^^^^^^^^ unresolved until codegen
   |               ------------- while evaluating `main`, entered here
   |
   = note: layout (sizes, offsets) is decided by the code generator, not the type checker; comptime
-    can answer for fixed-width primitives today and for aggregates once c05 lands.
+    can answer for fixed-width primitives today, but not yet for aggregates.

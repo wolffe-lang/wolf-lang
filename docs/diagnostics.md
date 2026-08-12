@@ -1373,7 +1373,7 @@ every access inside a `when` block, whose body has exclusive access
 to the payloads. The write the checker flagged would otherwise land
 on the task's private copy at best and race at worst.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__teach_note_grouped.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap
 
 ## E1102 — this channel's payload type is not sendable
 
@@ -1928,7 +1928,7 @@ value that was never updated. Send the result over a channel, or
 return it through the scope's join, so the data flow between tasks is
 explicit; cross-task shared mutation is what `sync` types are for.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__teach_note_grouped.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
 
 ## W1102 — the closure captured this value before it changed
 

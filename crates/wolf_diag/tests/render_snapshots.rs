@@ -224,3 +224,41 @@ fn color_is_behind_the_flag() {
     };
     assert_eq!(stripped, plain);
 }
+
+/// The teach note renders once per (code, note) group, not once per
+/// occurrence — a program with five offending spawns should not print
+/// the channels lesson five times. Note-grouping is the reporter's job
+/// (every driver path funnels through it); the reviewed shape is a
+/// *run* of diagnostics, so this snapshot is the whole report.
+#[test]
+fn a_repeated_teach_note_renders_once_per_group() {
+    use wolf_diag::{HumanReporter, Reporter};
+
+    let src = "fn main() -> !int {\n    var n = 0\n    n = 1\n    n = 2\n    0\n}\n";
+    let (sources, f) = one_file(src);
+    let lesson = "task captures are copies, `imm` shares, or region moves (D14) — never mutable \
+                  windows onto the parent's locals.";
+    let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+    for (lo, hi, name) in [(38u32, 39u32, "first"), (48, 49, "second")] {
+        reporter.report(
+            &Diagnostic::error(
+                codes::E1101,
+                Span::new(f, lo, hi),
+                format!("this task writes to `n` ({name} spawn)"),
+            )
+            .with_label("tasks cannot mutate captured state")
+            .with_note(lesson),
+        );
+    }
+    // A different code with the same words keeps its own copy: groups
+    // are per code, never global.
+    reporter.report(
+        &Diagnostic::warning(
+            codes::W1101,
+            Span::new(f, 48, 49),
+            "this write stays inside the task",
+        )
+        .with_note(lesson),
+    );
+    insta::assert_snapshot!("teach_note_grouped", reporter.take_output());
+}

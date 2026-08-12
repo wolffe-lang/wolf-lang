@@ -4,9 +4,9 @@ expression: "facts(&corpus(\"memory/unsafe_creation_not_use.lu\"))"
 ---
 facts fn main
   unsafe-block @647..653 -> D11 ring 1 (audit surface)
-  raw-write p @699..703 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2 (s23/is04)
-  raw-write p @783..787 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2 (s23/is04)
-  raw-read q @872..876 -> unchecked here; dynamic rows P1/P3/P4/L1/L2 (s23/is04)
-  raw-read p @879..883 -> unchecked here; dynamic rows P1/P3/P4/L1/L2 (s23/is04)
+  raw-write p @699..703 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2
+  raw-write p @783..787 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2
+  raw-read q @872..876 -> unchecked here; dynamic rows P1/P3/P4/L1/L2
+  raw-read p @879..883 -> unchecked here; dynamic rows P1/P3/P4/L1/L2
   c-call c.malloc @672..683 -> implicit region for the call's extent ([mem.boundary.ffi])
   c-call c.free @951..960 -> implicit region for the call's extent ([mem.boundary.ffi])

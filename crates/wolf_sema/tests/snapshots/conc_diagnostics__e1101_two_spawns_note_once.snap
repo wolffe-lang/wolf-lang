@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_sema/tests/conc_diagnostics.rs
-assertion_line: 54
 expression: "render_types(&[(&[], \"main.lu\", src)])"
 ---
 error[E1101]: this task writes to `hits`, which it captures from the enclosing function
@@ -41,5 +40,3 @@ warning[W1101]: this write to `says` stays inside the task
   |                 ------------------ the closure captured it at spawn
   |                        ^^^^ lands on the task's own copy
   |
-  = note: task captures copy (or move); the enclosing binding never sees this assignment. Send the
-    result over a channel, or return it through the scope's join.

@@ -69,7 +69,7 @@ pub fn derive_eq(
                     prov.call_site,
                     format!(
                         "the field `{}` of `{type_name}` is not primitive, and `==` \
-                         beyond primitives waits for the operator traits (s17)",
+                         beyond primitives waits for the operator traits",
                         f.name
                     ),
                 )

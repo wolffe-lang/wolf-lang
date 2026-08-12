@@ -1,0 +1,28 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: reporter.take_output()
+---
+error[E1101]: this task writes to `n` (first spawn)
+ --> demo.lu:3:5
+  |
+3 |     n = 1
+  |     ^ tasks cannot mutate captured state
+  |
+  = note: task captures are copies, `imm` shares, or region moves (D14) — never mutable windows
+    onto the parent's locals.
+
+error[E1101]: this task writes to `n` (second spawn)
+ --> demo.lu:4:5
+  |
+4 |     n = 2
+  |     ^ tasks cannot mutate captured state
+  |
+
+warning[W1101]: this write stays inside the task
+ --> demo.lu:4:5
+  |
+4 |     n = 2
+  |     ^
+  |
+  = note: task captures are copies, `imm` shares, or region moves (D14) — never mutable windows
+    onto the parent's locals.

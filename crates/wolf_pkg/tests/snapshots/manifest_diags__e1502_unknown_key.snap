@@ -9,7 +9,7 @@ error[E1502]: unknown manifest key `homepage`
 4 |     homepage: "https://example.org",
   |     ^^^^^^^^
   |
-  = note: the wolf.pkg schema (s51): `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
+  = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
     `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
     `trusted`. Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
     "owner/name", major: N, min: "X.Y.Z" }`.

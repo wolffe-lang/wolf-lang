@@ -198,12 +198,27 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                 pending_indent = Some(ind);
             }
             Doc::FreshLine => {
-                if pending_indent.is_none() && col > 0 {
-                    newline(&mut out, &mut suffixes, &mut col);
-                    pending_indent = Some(ind);
-                } else if pending_indent.is_some() {
+                if pending_indent.is_some() {
                     // Already at a line start awaiting indent: adopt this
                     // context's indent, emit nothing.
+                    pending_indent = Some(ind);
+                } else if col > 0 {
+                    let start = out.iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
+                    if out[start..].iter().all(|&b| b == b' ') {
+                        // Nothing but indentation has been written to
+                        // this line, so it has not really started:
+                        // rewind it instead of ending it. Ending it
+                        // left an empty line that the *next* pass read
+                        // as a source blank and preserved — a blank
+                        // line per pass, forever (an emitter that
+                        // pushes a separator before an empty operand,
+                        // such as a damaged match arm's missing
+                        // pattern, is enough to trigger it).
+                        out.truncate(start);
+                        col = 0;
+                    } else {
+                        newline(&mut out, &mut suffixes, &mut col);
+                    }
                     pending_indent = Some(ind);
                 }
             }

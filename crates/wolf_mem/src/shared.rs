@@ -155,7 +155,7 @@ fn collect(
         // An opaque generic instantiation could hide a `shared` edge:
         // refuse honestly rather than pass unchecked.
         TyKind::Unsupported(s) if s.contains("shared ") => not_yet.push(NotYet {
-            construct: "`shared` acyclicity through opaque generic std types (s16 generic data)",
+            construct: "`shared` acyclicity through opaque generic std types (generic data)",
             span,
         }),
         // `weak`/`handle`/`*T`/fn types: the sanctioned non-strong
