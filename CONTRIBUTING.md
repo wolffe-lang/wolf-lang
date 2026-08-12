@@ -2,8 +2,7 @@
 
 ## Commits
 - Commit often, in chunks: one logical change per commit. Never `git add -A`.
-- Messages: terse, imperative, under 250 characters. No coauthor lines, no
-  generated-with trailers.
+- Messages: terse, imperative, under 250 characters.
 - Tests land in the same commit as the code they test. Benchmarks land with
   the perf claims they prove.
 
