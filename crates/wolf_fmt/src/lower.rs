@@ -130,6 +130,50 @@ fn comment_or_token_start(src: &[u8], n: &GreenNode) -> u32 {
 /// Source column (bytes since line start) of a position.
 /// Did this trivia span start its own source line (only whitespace
 /// between the previous newline, or file start, and it)?
+/// Token stream with each token's post-deferral trailing-comment flag:
+/// inside a `PrefixExpr`, operator comments ride the subtree's last
+/// token (mirroring the emission deferral in the `PrefixExpr` arm).
+fn collect_carriers<'a>(
+    lw: &Fmt<'a>,
+    n: &'a GreenNode,
+    out: &mut Vec<(&'a GreenToken, bool)>,
+    _in_prefix: bool,
+) {
+    if n.kind == K::PrefixExpr {
+        let start = out.len();
+        let mut deferred = false;
+        for c in &n.children {
+            match c {
+                Child::Token(t) => {
+                    let has = t.trailing.iter().any(|s| is_comment(lw.slice(*s)));
+                    deferred |= has;
+                    out.push((t, false));
+                }
+                Child::Node(m) => {
+                    collect_carriers(lw, m, out, true);
+                    if deferred && out.len() > start {
+                        out.last_mut().expect("nonempty").1 = true;
+                        deferred = false;
+                    }
+                }
+            }
+        }
+        if deferred && out.len() > start {
+            out.last_mut().expect("nonempty").1 = true;
+        }
+        return;
+    }
+    for c in &n.children {
+        match c {
+            Child::Token(t) => {
+                let has = t.trailing.iter().any(|s| is_comment(lw.slice(*s)));
+                out.push((t, has));
+            }
+            Child::Node(m) => collect_carriers(lw, m, out, false),
+        }
+    }
+}
+
 fn own_line(src: &[u8], lo: u32) -> bool {
     let lo = lo as usize;
     src[..lo]
@@ -534,12 +578,15 @@ impl<'a> Fmt<'a> {
     /// last token? (Those force multiline layout so no comment can
     /// slide across code.)
     fn has_inner_trailing_comment(&self, n: &GreenNode) -> bool {
-        let mut toks: Vec<&GreenToken> = Vec::new();
-        collect_tokens(n, &mut toks);
-        let cut = toks.len().saturating_sub(1);
-        toks[..cut]
-            .iter()
-            .any(|t| t.trailing.iter().any(|s| is_comment(self.slice(*s))))
+        // Deferral-aware: a trailing comment on a prefix OPERATOR is
+        // re-homed after its operand at emission, so its effective
+        // carrier is the PrefixExpr's last token — counting it at the
+        // operator made pass one force a break pass two would not (the
+        // fmt fuzz's fifth idempotence class).
+        let mut carriers: Vec<(&GreenToken, bool)> = Vec::new();
+        collect_carriers(self, n, &mut carriers, false);
+        let cut = carriers.len().saturating_sub(1);
+        carriers[..cut].iter().any(|(_, has)| *has)
     }
 
     fn has_lead_comment(&self, t: &GreenToken) -> bool {
