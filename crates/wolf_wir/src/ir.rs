@@ -103,7 +103,7 @@ pub struct ExtFuncData {
 
 /// Non-operand instruction payload. Small and closed: everything else
 /// about an instruction is its opcode, operands, and result values.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Aux {
     None,
     /// `iconst` payload (sign-extended to i64) / `agg.get` field index.
@@ -133,7 +133,7 @@ pub enum Aux {
 }
 
 /// A branch edge: target block plus the arguments passed to its params.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct BlockCall {
     pub block: Block,
     pub args: EntityList<Value>,

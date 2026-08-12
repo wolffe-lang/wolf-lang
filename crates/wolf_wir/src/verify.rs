@@ -1780,6 +1780,12 @@ impl PassCtx {
     pub fn invalidate(&mut self, fact: crate::facts::FactId, why: Invalidation) {
         self.invalidated.push((fact, why));
     }
+
+    /// The invalidations a pass recorded (s42: the real pass manager
+    /// audits these against the compacted function).
+    pub fn invalidations(&self) -> &[(crate::facts::FactId, Invalidation)] {
+        &self.invalidated
+    }
 }
 
 /// The s24 pass-manager contract stub (real manager in s42): snapshot

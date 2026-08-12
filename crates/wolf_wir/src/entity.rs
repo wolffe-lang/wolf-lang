@@ -188,7 +188,7 @@ pub struct ListPool<T: EntityRef> {
 }
 
 /// A handle to a list in a [`ListPool`]. Copyable, 8 bytes.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct EntityList<T: EntityRef> {
     off: u32,
     len: u32,
@@ -230,6 +230,15 @@ impl<T: EntityRef> ListPool<T> {
             .iter()
             .map(|&raw| T::new(raw))
             .collect()
+    }
+
+    /// Overwrite element `i` of a list in place (s42 pass infrastructure:
+    /// operand rewriting). Lists are interned per instruction/edge and
+    /// never shared (only the empty list aliases, and it has no elements
+    /// to write), so in-place element writes cannot alias another list.
+    pub fn set(&mut self, list: EntityList<T>, i: usize, v: T) {
+        debug_assert!(i < list.len as usize, "list element out of range");
+        self.data[list.off as usize + i] = v.as_u32();
     }
 
     /// Total packed length (for arena-layout tests).
