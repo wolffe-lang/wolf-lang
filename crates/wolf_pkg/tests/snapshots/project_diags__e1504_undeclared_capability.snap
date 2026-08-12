@@ -1,0 +1,13 @@
+---
+source: crates/wolf_pkg/tests/project_diags.rs
+expression: reporter.take_output()
+---
+error[E1504]: this package uses `std.net` but does not declare the `net` capability
+ --> wolf.pkg:5:19
+  |
+5 |     capabilities: [fs],
+  |                   ^^^^ declared capabilities: [fs]
+  |
+  = note: the root module imports `std.net`. Add `net` to this package's `capabilities: [ … ]`
+    (making the footprint visible to every consumer running `wolf audit`, I13), or drop the
+    import.

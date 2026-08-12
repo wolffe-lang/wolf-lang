@@ -1,0 +1,13 @@
+---
+source: crates/wolf_pkg/tests/manifest_diags.rs
+expression: out
+---
+refused
+error[E1501]: expected `:` after key `name`
+ --> wolf.pkg:2:10
+  |
+2 |     name = "acme/redis",
+  |          ^
+  |
+  = note: wolf.pkg is declarative data (D33): one `pkg { }` block of `key: value` entries —
+    strings, integers, bare capability words, `[ ]` lists, `{ }` maps.

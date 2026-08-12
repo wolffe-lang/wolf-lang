@@ -1,0 +1,10 @@
+---
+source: crates/wolf_pkg/tests/project_diags.rs
+expression: render(&project)
+---
+error[E1506]: file:///pinned.example/g.git (tag v1.0.0): the store tree hashes b3:9ee435e2f3152a961f8a61dee05a55ff071682d62fba5c044a2c3c01945e7fbe, wolf.sum pins b3:1111111111111111111111111111111111111111111111111111111111111111 — the bits are not the bits the ledger witnessed
+ --> wolf.pkg:6:9
+  |
+6 |         g: { git: "file:///pinned.example/g.git", tag: "v1.0.0" },
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

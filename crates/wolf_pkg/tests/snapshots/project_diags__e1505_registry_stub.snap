@@ -1,0 +1,12 @@
+---
+source: crates/wolf_pkg/tests/project_diags.rs
+expression: render(&project)
+---
+error[E1505]: `wolf-std/json` is a registry dependency, and the hosted registry arrives at c15
+ --> wolf.pkg:6:9
+  |
+6 |         json: { pkg: "wolf-std/json", major: 1, min: "1.2.0" },
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: v0 sources are `path:` and `git:` + `tag:` (X7: the entry form is stable now, the
+    service later — only the fetch transport changes).
