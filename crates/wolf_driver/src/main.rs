@@ -20,11 +20,11 @@ mod test_cmd;
 
 /// The reference-interpreter pairing (r01 criteria row 7): the lupin
 /// version this wolf release is differentially tested against.
-const LUPIN_PIN_VERSION: &str = "0.1.7";
+const LUPIN_PIN_VERSION: &str = "0.1.8";
 /// The wolf-interp commit sha of the pairing. Placeholder until the
 /// integrator stamps it at tag time (tags are the integrator's act);
 /// a release tag never ships with this value unstamped.
-const LUPIN_PIN_SHA: &str = "UNSTAMPED";
+const LUPIN_PIN_SHA: &str = "7886559";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

@@ -193,3 +193,24 @@ elsewhere today**
 | 8 release notes | GREEN wolf-side; wolf-interp pending |
 | 9 tags | PENDING (integrator) |
 | 10 CI | RED (tree-sitter-wolf, metarepo have no CI); others green |
+
+
+## Final verdicts at tag time (integrator, 2026-08-12)
+
+- Row 1 GREEN: #27 and #15 ruled (D39/D40) and implemented (s72,
+  E1013/E1014/E1002-static); #16/#17/#21/#22 closed by lupin
+  v0.1.7/v0.1.8. Residue #60 (take-through-read) filed, ruled
+  post-release.
+- Row 3 GREEN: diff-run at the pairing = zero unexplained
+  divergences; DIV-2026-016 unreproducible at the release sha,
+  held open with evidence, not carried as a blocker.
+- Row 4 GREEN: [proto.cmp.rung] adopted both sides (s70 /
+  v0.1.7).
+- Row 7 GREEN: wolf 0.1.0 (wolfgang) paired with lupin 0.1.8 at
+  7886559; lupin --version names the reference posture at pin
+  26fa98e.
+- Row 9: the tag set cut by the integrator with this commit as
+  wolf-lang v0.1.0.
+- Row 10 GREEN: seven repos, seven green CIs.
+
+Ten rows green. The identity release ships.
