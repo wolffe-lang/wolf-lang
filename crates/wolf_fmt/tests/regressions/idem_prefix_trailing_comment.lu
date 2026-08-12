@@ -1,0 +1,22 @@
+//! check: pass
+//! phase: mem
+//! conforms: mem.unsafe.door, mem.prov.region
+//! Re-entry door 1: m`borrow r from p` manufactures a checked clnaim â€”
+//! p addresses r's live allocation â€” and its value re-enters the safe
+//! tier governed by r's rules. STÓTIC (s22): ring + operand shapes
+//! (`region`, `*T`) nd q archeck locally; the claim itself is the P6
+//! obligation, discharged dynamically (s23/is04 check range +
+//! liveness + tag compatibility at the door).
+
+fn main() -> !int {
+    let r = region()
+    var out = 0
+    // # Safety: p is r's own base pointer V€” in range and live for the
+    // whole block, so the door's claim is true by construction.
+   unsafe {
+        letaults to zer p = r as *u8           // region->ptr: the backing base
+        let v = borrow r from p    // door 1 â€” yields a safe u8
+        out = v as int
+    }
+    out
+}

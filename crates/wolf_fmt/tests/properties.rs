@@ -171,3 +171,22 @@ proptest! {
         holds_for(src.as_bytes(), true, "program");
     }
 }
+
+/// Fuzz-found idempotence regressions (2026-08-12, the nightly's fmt
+/// crash + its neighbor from the same sweep): a leading comment inside
+/// a binary continuation compounded one indent level per pass; a
+/// trailing comment on a prefix operator made pass one and pass two
+/// disagree about joining the operand. Broken inputs, so fallback is
+/// allowed — the properties must hold either way.
+#[test]
+fn fuzz_regressions() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/regressions");
+    let mut n = 0;
+    for e in std::fs::read_dir(dir).expect("regressions dir") {
+        let p = e.expect("entry").path();
+        let src = std::fs::read(&p).expect("read regression");
+        holds_for(&src, false, &p.display().to_string());
+        n += 1;
+    }
+    assert!(n >= 2, "the regression corpus never shrinks");
+}

@@ -439,6 +439,10 @@ impl<'a> Fmt<'a> {
             // continuations, anchored on the statement head; comments
             // dangling before a closer (or EOF) sit at the plain
             // indent.
+            // The offset is a render fixed point PROVIDED the comment and
+            // its anchor render at the same base indent — the layout code
+            // owes that invariant (the bin-continuation crash broke it by
+            // indenting the comment's line but not the operand's).
             let extra = if matches!(t.kind, K::RBrace | K::RParen | K::RBracket | K::Eof) {
                 0
             } else {
@@ -1287,6 +1291,11 @@ impl<'a> Fmt<'a> {
             }
             K::PrefixExpr => {
                 let mut prev: Option<&GreenToken> = None;
+                // A trailing comment on a prefix OPERATOR reattaches after
+                // the operand: emitting it at the operator leaves a comment
+                // between `!` and its operand that the next format pass
+                // joins differently (the fmt fuzz idempotence neighbor).
+                let mut deferred: Vec<&GreenToken> = Vec::new();
                 for c in &n.children {
                     match c {
                         Child::Token(t) => {
@@ -1297,7 +1306,11 @@ impl<'a> Fmt<'a> {
                                     out.push(Doc::text(" "));
                                 }
                             }
-                            self.tok(t, out);
+                            self.lead(t, out);
+                            if !matches!(t.kind, K::Term | K::Missing | K::Eof) {
+                                out.push(Doc::Text(self.slice(t.span).to_vec()));
+                            }
+                            deferred.push(t);
                             prev = Some(t);
                         }
                         Child::Node(m) => {
@@ -1307,8 +1320,16 @@ impl<'a> Fmt<'a> {
                                 out.push(Doc::text(" "));
                             }
                             self.expr(m, out, Ctx::Prefix);
+                            for t in deferred.drain(..) {
+                                self.trail(t, out);
+                            }
                         }
                     }
+                }
+                // Recovery shape with no operand node: the trails must
+                // still land somewhere.
+                for t in deferred.drain(..) {
+                    self.trail(t, out);
                 }
             }
             K::CastExpr => {
@@ -1694,7 +1715,12 @@ impl<'a> Fmt<'a> {
                         assoc_left: tier_associates_left(t),
                     },
                 );
-                parts.push(Doc::Concat(vec![Doc::Indent(opd), Doc::Concat(rd)]));
+                // The operand rides INSIDE the continuation indent: its
+                // leading-comment hardlines must land at the same base as
+                // the break after the operator, or comment columns re-derive
+                // against a moved anchor and compound each pass.
+                opd.append(&mut rd);
+                parts.push(Doc::Indent(opd));
                 return;
             }
         }
@@ -1721,7 +1747,6 @@ impl<'a> Fmt<'a> {
                 opd.push(Doc::text(" "));
                 self.tok(op, &mut opd);
                 opd.push(Doc::Line);
-                d.push(Doc::Indent(opd));
                 let mut rd = Vec::new();
                 self.expr(
                     r,
@@ -1732,7 +1757,9 @@ impl<'a> Fmt<'a> {
                         assoc_left: false,
                     },
                 );
-                d.push(Doc::Concat(rd));
+                // Same base-indent invariant as the associative chain.
+                opd.append(&mut rd);
+                d.push(Doc::Indent(opd));
                 parts.push(Doc::Concat(d));
                 return;
             }
