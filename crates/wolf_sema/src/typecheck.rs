@@ -123,9 +123,12 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
         }
     }
     wolf_diag::sort_diagnostics(&mut diagnostics);
-    // #59: a teach note renders once per diagnostic group — the
-    // second spawn's E1101 no longer repeats the channels lesson.
-    wolf_diag::dedup_notes(&mut diagnostics);
+    // Note-grouping (the teach note renders once per code, not once per
+    // spawn) is NOT done here any more: stripping notes from the
+    // diagnostic values also stripped them from the JSON stream and the
+    // LSP, which want every note on every item. `HumanReporter` groups
+    // at render time instead, which also covers the warnings this pass
+    // never sees.
     Typecheck {
         sigs,
         bodies,

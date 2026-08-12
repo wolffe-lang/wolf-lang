@@ -2000,7 +2000,7 @@ impl<'t> Lowerer<'t> {
             }
             SyntaxKind::ClosureExpr => self.eval_closure(e),
             SyntaxKind::FromEndExpr => Err(NotYet {
-                construct: "end-relative `^n` slicing places (s05 std surface)",
+                construct: "end-relative `^n` slicing places (the std surface)",
                 span: e.span,
             }),
             SyntaxKind::RegionBlock => self.eval_region_block(e),
@@ -2032,7 +2032,7 @@ impl<'t> Lowerer<'t> {
             // Inline C and asm have no pinned semantics (c10: s48/s50)
             // — only the rule that they are unsafe-tier.
             SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(NotYet {
-                construct: "inline C / asm (unsafe tier, c10)",
+                construct: "inline C / asm (unsafe tier)",
                 span: e.span,
             }),
             // s73 — the conc surface. The single-threaded check CFG
@@ -2171,7 +2171,7 @@ impl<'t> Lowerer<'t> {
                     Some(rid) => rid,
                     None => {
                         return Err(NotYet {
-                            construct: "region flow beyond bindings and one-step iso fields (c05 backlog)",
+                            construct: "region flow beyond bindings and one-step iso fields",
                             span: rexpr.span,
                         });
                     }
@@ -2252,7 +2252,7 @@ impl<'t> Lowerer<'t> {
         };
         let Some(rid) = rid else {
             return Err(NotYet {
-                construct: "freezing a region whose identity is not statically known (c05 backlog)",
+                construct: "freezing a region whose identity is not statically known",
                 span: operand.span,
             });
         };
@@ -2369,7 +2369,7 @@ impl<'t> Lowerer<'t> {
                 span: e.span,
             }),
             Some(SyntaxKind::Star) => Err(NotYet {
-                construct: "the unsafe tier (s22)",
+                construct: "the unsafe tier",
                 span: e.span,
             }),
             Some(SyntaxKind::SharedKw) => {
@@ -3512,7 +3512,7 @@ impl<'t> Lowerer<'t> {
                 SyntaxKind::AssumeStmt => self.lower_assume(stmt)?,
                 k if k.is_item() => {
                     return Err(NotYet {
-                        construct: "nested item declarations (c14 backlog)",
+                        construct: "nested item declarations",
                         span: stmt.span,
                     });
                 }

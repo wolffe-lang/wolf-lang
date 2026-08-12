@@ -127,8 +127,8 @@ fn nested_hook_is_refused_d33() {
       |
       = note: adding a wolf dependency never means arbitrary code runs on your machine: no build.rs,
         no post-install hooks, no Turing-complete manifest (D33). Declare C-library needs in the
-        declarative `c: { }` recipe (c10), compute in sandboxed `comptime`, or wrap a
-        system/prebuilt library.
+        declarative `c: { }` recipe, compute in sandboxed `comptime`, or wrap a system/prebuilt
+        library.
     "#);
 }
 
@@ -190,7 +190,7 @@ fn dep_without_source_is_schema_error() {
     5 |         util: { major: 1 },
       |               ^^^^^^^^^^^^
       |
-      = note: the wolf.pkg schema (s51): `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
+      = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
         `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
         `trusted`. Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
         "owner/name", major: N, min: "X.Y.Z" }`.
@@ -219,7 +219,7 @@ fn version_range_is_refused() {
     5 |         json: { pkg: "wolf-std/json", major: 1, min: "^1.2" },
       |                                                      ^^^^^^
       |
-      = note: the wolf.pkg schema (s51): `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
+      = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
         `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
         `trusted`. Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
         "owner/name", major: N, min: "X.Y.Z" }`.
@@ -245,7 +245,7 @@ fn bad_capability_word_is_schema_error() {
     4 |     capabilities: [net, teleport],
       |                         ^^^^^^^^
       |
-      = note: the wolf.pkg schema (s51): `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
+      = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
         `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
         `trusted`. Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
         "owner/name", major: N, min: "X.Y.Z" }`.

@@ -278,7 +278,7 @@ impl FnFacts {
         for (ops, span) in &self.assumes {
             let _ = writeln!(
                 out,
-                "  assume-noalias {ops} @{}..{} -> O5 licence; violation = UB P5 (s23 checks)",
+                "  assume-noalias {ops} @{}..{} -> O5 licence; violation = UB P5",
                 span.lo, span.hi
             );
         }
@@ -290,7 +290,7 @@ impl FnFacts {
             };
             let _ = writeln!(
                 out,
-                "  {verb} {ptr} @{}..{} -> unchecked here; dynamic rows {rows} (s23/is04)",
+                "  {verb} {ptr} @{}..{} -> unchecked here; dynamic rows {rows}",
                 span.lo, span.hi
             );
         }

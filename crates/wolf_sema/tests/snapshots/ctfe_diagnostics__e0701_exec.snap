@@ -16,5 +16,5 @@ error[E0701]: `os_exit` reaches child processes, which comptime code can never t
     programs on the machine that compiles it.
   = note: the comptime sandbox is hermetic (D33): the intrinsics available at compile time are an
     explicit allowlist, and nothing ambient is on it. Compute this value at runtime instead;
-    file contents will arrive later as declared build inputs (s51), never as an evaluator
-    capability.
+    file contents belong in declared build inputs through the package manifest, never in an
+    evaluator capability.

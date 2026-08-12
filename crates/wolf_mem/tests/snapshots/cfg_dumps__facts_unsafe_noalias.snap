@@ -4,11 +4,11 @@ expression: "facts(&corpus(\"memory/unsafe_noalias.lu\"))"
 ---
 facts fn main
   unsafe-block @564..570 -> D11 ring 1 (audit surface)
-  assume-noalias p, q @651..710 -> O5 licence; violation = UB P5 (s23 checks)
-  raw-write p @718..722 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2 (s23/is04)
-  raw-write q @735..739 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2 (s23/is04)
-  raw-read p @759..763 -> unchecked here; dynamic rows P1/P3/P4/L1/L2 (s23/is04)
-  raw-read q @766..770 -> unchecked here; dynamic rows P1/P3/P4/L1/L2 (s23/is04)
+  assume-noalias p, q @651..710 -> O5 licence; violation = UB P5
+  raw-write p @718..722 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2
+  raw-write q @735..739 -> unchecked here; dynamic rows P1/P2/P3/P4/L2/T2
+  raw-read p @759..763 -> unchecked here; dynamic rows P1/P3/P4/L1/L2
+  raw-read q @766..770 -> unchecked here; dynamic rows P1/P3/P4/L1/L2
   c-call c.malloc @589..600 -> implicit region for the call's extent ([mem.boundary.ffi])
   c-call c.malloc @624..635 -> implicit region for the call's extent ([mem.boundary.ffi])
   c-call c.free @787..796 -> implicit region for the call's extent ([mem.boundary.ffi])

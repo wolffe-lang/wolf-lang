@@ -340,8 +340,9 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
         .with_note(
             "the comptime sandbox is hermetic (D33): the intrinsics available at \
              compile time are an explicit allowlist, and nothing ambient is on it. \
-             Compute this value at runtime instead; file contents will arrive later \
-             as declared build inputs (s51), never as an evaluator capability.",
+             Compute this value at runtime instead; file contents belong in declared \
+             build inputs through the package manifest, never in an evaluator \
+             capability.",
         ),
         FaultKind::Fuel { spent } => Diagnostic::error(
             codes::E0702,
@@ -403,11 +404,11 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
             f.span,
             format!("the size of {what} is not resolved until codegen lays it out"),
         )
-        .with_label("unresolved until codegen (c05)")
+        .with_label("unresolved until codegen")
         .with_note(
             "layout (sizes, offsets) is decided by the code generator, not the \
-             type checker; comptime can answer for fixed-width primitives today \
-             and for aggregates once c05 lands.",
+             type checker; comptime can answer for fixed-width primitives today, \
+             but not yet for aggregates.",
         ),
         FaultKind::AssertFailed { msg } => {
             let message = match msg {

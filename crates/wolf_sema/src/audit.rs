@@ -102,7 +102,7 @@ pub fn surface(pkg: &Package) -> Vec<ModuleSurface> {
 /// unsafety anywhere. Greppable and diffable on purpose.
 pub fn render(surfaces: &[ModuleSurface]) -> String {
     use std::fmt::Write;
-    let mut out = String::from("unsafety surface (D11 rings; s22)\n");
+    let mut out = String::from("unsafety surface (D11 rings)\n");
     let mut any = false;
     for s in surfaces {
         if s.is_empty() {

@@ -273,7 +273,7 @@ impl<'a> Parser<'a> {
                 "adding a wolf dependency never means arbitrary code runs on your \
                  machine: no build.rs, no post-install hooks, no Turing-complete \
                  manifest (D33). Declare C-library needs in the declarative `c: { }` \
-                 recipe (c10), compute in sandboxed `comptime`, or wrap a \
+                 recipe, compute in sandboxed `comptime`, or wrap a \
                  system/prebuilt library."
                     .to_string(),
             ),
@@ -496,7 +496,7 @@ fn unescape(raw: &str) -> String {
 
 fn schema_err(span: Span, msg: impl Into<String>) -> Diagnostic {
     Diagnostic::error(codes::E1502, span, msg).with_note(
-        "the wolf.pkg schema (s51): `name`, `version`, `edition`, `wolf`, \
+        "the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, \
          `fingerprint`, `deps`, `test`, `bench`, `features`, `capabilities`, \
          `paths`, `min_age`, `c`, `lints`, `trusted`. Dependency sources: \
          `{ path: \"…\" }`, `{ git: \"…\", tag: \"…\" }`, or \

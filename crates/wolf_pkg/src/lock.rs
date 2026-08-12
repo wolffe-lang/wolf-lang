@@ -92,7 +92,7 @@ impl Lock {
     /// Byte-stable rendering: sorted by name, one line each.
     pub fn render(&self) -> String {
         let mut out = String::from(
-            "# wolf.sum — integrity ledger (s51). Do not edit; `wolf add/rm/update` rewrite it.\n",
+            "# wolf.sum — integrity ledger. Do not edit; `wolf add/rm/update` rewrite it.\n",
         );
         for e in self.entries.values() {
             let hash = e.hash.as_deref().unwrap_or("-");
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn lock_round_trips_byte_stable() {
         let text = "\
-# wolf.sum — integrity ledger (s51). Do not edit; `wolf add/rm/update` rewrite it.
+# wolf.sum — integrity ledger. Do not edit; `wolf add/rm/update` rewrite it.
 acme/redis 1.4.0 b3:aa11 caps=net
 local/util 0.1.0 - caps=-
 ";

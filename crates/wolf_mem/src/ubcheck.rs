@@ -1020,7 +1020,7 @@ pub fn run_checked_fn(
         && entry != "main"
     {
         return Err(NotYet {
-            construct: "a test entry with parameters (s39 runs zero-parameter tests)",
+            construct: "a test entry with parameters (only zero-parameter tests run)",
             span: ctx.node.span,
         });
     }
@@ -2069,7 +2069,7 @@ impl<'t> Machine<'t> {
                 }
             }
             SyntaxKind::BorrowExpr => self.eval_door(e),
-            SyntaxKind::ClosureExpr => self.refuse("closures in checked execution (c05)", e.span),
+            SyntaxKind::ClosureExpr => self.refuse("closures in checked execution", e.span),
             SyntaxKind::ScopeExpr
             | SyntaxKind::SelectExpr
             | SyntaxKind::WhenExpr
@@ -2077,9 +2077,7 @@ impl<'t> Machine<'t> {
                 "structured concurrency in checked execution (C1 deferred)",
                 e.span,
             ),
-            SyntaxKind::InlineC | SyntaxKind::AsmExpr => {
-                self.refuse("inline C / asm (c10)", e.span)
-            }
+            SyntaxKind::InlineC | SyntaxKind::AsmExpr => self.refuse("inline C / asm", e.span),
             _ => self.refuse("this expression shape in checked execution", e.span),
         }
     }
@@ -2724,7 +2722,10 @@ impl<'t> Machine<'t> {
                 };
             }
             Some(TyKind::Prim(Prim::F32)) => {
-                return self.refuse("`f32` in checked execution (f64 is the s38 float)", e.span);
+                return self.refuse(
+                    "`f32` in checked execution (f64 is the supported float)",
+                    e.span,
+                );
             }
             _ => {}
         }
@@ -2773,7 +2774,7 @@ impl<'t> Machine<'t> {
         if bytes.starts_with(b"\"\"\"") {
             if !holes.is_empty() {
                 return Err(Stop::Refuse(NotYet {
-                    construct: "interpolation inside a multiline string (s38 formatting)",
+                    construct: "interpolation inside a multiline string",
                     span: e.span,
                 }));
             }
@@ -2861,7 +2862,7 @@ impl<'t> Machine<'t> {
         // A computed spec (`{x:{w}}`) has no pinned semantics.
         if spec.nodes().any(|n| n.kind == SyntaxKind::Interp) {
             return Err(Stop::Refuse(NotYet {
-                construct: "a computed format spec (s38 formatting)",
+                construct: "a computed format spec",
                 span: spec.span,
             }));
         }

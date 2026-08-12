@@ -4,7 +4,7 @@
 //! [conc.when.nonest]) — plus the clean twins that pin what the conc
 //! surface typing accepts. Reviewed artifacts, one per shape (D22).
 
-use wolf_diag::{RenderOptions, Sources, render_human};
+use wolf_diag::{RenderOptions, Sources};
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
 
 fn render_types(files: &[(&[&str], &str, &str)]) -> String {
@@ -39,11 +39,15 @@ fn render_types(files: &[(&[&str], &str, &str)]) -> String {
         .cloned()
         .collect();
     wolf_diag::sort_diagnostics(&mut all);
-    let mut out = String::new();
+    // Through the reporter, not diagnostic-by-diagnostic: what the
+    // reader gets is a *report*, and note-grouping only exists at that
+    // scale (rendering each one alone reprints every teach note and
+    // hides the ergonomics these snapshots are here to review).
+    let mut reporter = wolf_diag::HumanReporter::new(&sources, RenderOptions::default());
     for d in &all {
-        out.push_str(&render_human(d, &sources, &RenderOptions::default()));
-        out.push('\n');
+        wolf_diag::Reporter::report(&mut reporter, d);
     }
+    let mut out = wolf_diag::Reporter::take_output(&mut reporter);
     if out.is_empty() {
         out.push_str("(clean)");
     }

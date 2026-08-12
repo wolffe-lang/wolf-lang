@@ -604,6 +604,13 @@ struct BuildOpts {
     /// whose own reporter renders the diagnostic set — twice would be
     /// noise).
     report_warnings: bool,
+    /// How many diagnostics a report may print before it stops and
+    /// counts the rest; `0` prints everything (`--error-limit=N`).
+    /// A wall of errors is not more information than a screenful: a
+    /// few kilobytes of garbage answered with hundreds of diagnostics
+    /// across thousands of lines, which scrolls the *first* and most
+    /// fixable one off the top of the terminal.
+    error_limit: usize,
 }
 
 impl BuildOpts {
@@ -617,8 +624,51 @@ impl BuildOpts {
             cache_root: None,
             lints: LintLevels::new(),
             report_warnings: false,
+            // The differential/conformance rungs compare whole
+            // diagnostic sets: never truncate what a machine reads.
+            error_limit: 0,
         }
     }
+}
+
+/// The default report cap. Big enough that a real program's error list
+/// arrives whole, small enough that a wrecked file does not scroll the
+/// first diagnostic away.
+const DEFAULT_ERROR_LIMIT: usize = 25;
+
+/// Render at most `limit` diagnostics, then say how many were held
+/// back and how to see them. `limit == 0` means no cap.
+fn report_capped(
+    sources: &Sources,
+    diags: &[Diagnostic],
+    limit: usize,
+    opts: RenderOptions,
+) -> String {
+    let mut reporter = HumanReporter::new(sources, opts);
+    let shown = if limit == 0 {
+        diags.len()
+    } else {
+        limit.min(diags.len())
+    };
+    for d in &diags[..shown] {
+        reporter.report(d);
+    }
+    let mut out = reporter.take_output();
+    if shown < diags.len() {
+        let held = diags.len() - shown;
+        let errors = diags[shown..]
+            .iter()
+            .filter(|d| d.severity == wolf_diag::Severity::Error)
+            .count();
+        out.push_str(&format!(
+            "... and {held} more diagnostic{} ({errors} error{}) not shown. \
+             Fix the first one — later reports are often echoes of it; \
+             `--error-limit=0` prints them all.\n",
+            if held == 1 { "" } else { "s" },
+            if errors == 1 { "" } else { "s" },
+        ));
+    }
+    out
 }
 
 /// Parse a lint selector as given on a flag: shape via
@@ -722,12 +772,12 @@ fn compile_native(
     // reported, or promoted to an error that stops the build.
     let scan = wolf_sema::scan_allows(&res.package);
     let levels = effective_lints(file, &opts.lints).map_err(BuildStop::Environment)?;
-    let render = |sources: &Sources, diags: &[Diagnostic]| {
-        let mut reporter = HumanReporter::new(sources, RenderOptions::default());
-        for d in diags {
-            reporter.report(d);
-        }
-        eprint!("{}", reporter.take_output());
+    let limit = opts.error_limit;
+    let render = move |sources: &Sources, diags: &[Diagnostic]| {
+        eprint!(
+            "{}",
+            report_capped(sources, diags, limit, RenderOptions::default())
+        );
     };
     let has_errors =
         |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
@@ -1315,7 +1365,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         eprintln!(
             "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache] \
              [--verbose] [--checked] [--release] [--std-root <dir>] \
-             [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]{}",
+             [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings] \
+             [--error-limit=N]{}",
             if run_mode { " [prog args…]" } else { "" }
         );
         std::process::exit(2);
@@ -1342,6 +1393,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         cache_root: None,
         lints: LintLevels::new(),
         report_warnings: true,
+        error_limit: DEFAULT_ERROR_LIMIT,
     };
     let mut prog_args: Vec<String> = Vec::new();
     let mut i = 0;
@@ -1371,6 +1423,11 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 "llvm-ir" => Emit::LlvmIr,
                 other => fail(&format!("unknown emit `{other}` (wir, obj, bin, llvm-ir)")),
             };
+        } else if let Some(v) = a.strip_prefix("--error-limit=") {
+            match v.parse::<usize>() {
+                Ok(n) => opts.error_limit = n,
+                Err(_) => fail("--error-limit needs a count (0 for no limit)"),
+            }
         } else if a == "--deny-warnings" {
             opts.lints.deny_warnings();
         } else if let Some((flag, level)) = match a.as_str() {
@@ -1451,7 +1508,13 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
 fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
     match stop {
         BuildStop::Errors => {
-            eprintln!("wolf {cmd}: the package does not compile; fix the errors above");
+            // Every code carries an explanation, and nothing in the
+            // report said so: a reader who does not already know the
+            // catalog exists never finds it.
+            eprintln!(
+                "wolf {cmd}: the package does not compile; fix the errors above \
+                 (`wolf --explain E0201` explains any code by name)"
+            );
             std::process::exit(1);
         }
         BuildStop::Refused { phase, reason } => {

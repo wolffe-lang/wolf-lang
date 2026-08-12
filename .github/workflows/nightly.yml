@@ -55,6 +55,41 @@ jobs:
           path: fuzz/artifacts/
           if-no-files-found: ignore
 
+  fmt-fuzz-long:
+    name: fmt idempotence sweep (4 x 30m)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Stable Rust, no libFuzzer: the corpus-seeded mutation loop that
+      # drained the comment-layout well. Four seeds in parallel, each
+      # reporting its own findings; `--allow-open` keeps the still-open
+      # convergence classes from failing the job while the invariants
+      # that must never bend (panic, lost comment, changed tree, a
+      # fallback that rewrote its input) still do.
+      - name: build the loop
+        run: cargo build --release -p wolf_fmt --example fmt_fuzz
+      - name: sweep
+        run: |
+          for seed in 1 2 3 4; do
+            ./target/release/examples/fmt_fuzz --seconds=1800 --seed=$seed \
+              --allow-open --out=fmt-fuzz-findings > "fmt-fuzz-$seed.log" 2>&1 &
+          done
+          # A failing worker must still get its log printed — the
+          # findings ARE the report, and a red step that shows nothing
+          # names nothing.
+          failed=0
+          wait || failed=1
+          cat fmt-fuzz-*.log
+          exit $failed
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fmt-fuzz-findings
+          path: fmt-fuzz-findings/
+          if-no-files-found: ignore
+
   bench-full:
     name: full benchmarks -> bench-data branch
     runs-on: ubuntu-latest
