@@ -1,6 +1,8 @@
 # Wolf Language Specification — 01: Surface Grammar
 
-Status: normative, v0 (sprint s03). Clause anchors (`[gram.*]`) are stable:
+Status: normative, **grammar/1** (declared at v0.1.0 by r01; drafted
+sprint s03). The surface grammar is additive-only until v0.2 — see §10
+`[gram.version]`. Clause anchors (`[gram.*]`) are stable:
 they are cited by later spec documents, conformance tags (`conforms:`), and
 diagnostics. EBNF blocks tagged ` ```ebnf ` are extracted to
 `spec/grammar.ebnf` by `cargo xtask spec-extract` (CI-enforced sync).
@@ -751,3 +753,30 @@ idiomatic wolf (D33's spirit; c16).
 edits — dry-run by default, `--apply` writes, idempotent because a
 fix removes the diagnostic that carried it. Only `MachineApplicable`
 suggestions are ever applied unattended.
+
+## 10. Grammar versioning `[gram.version]` (declared at v0.1.0, r01)
+
+- `[gram.version.1]` **grammar/1** is the surface grammar this document
+  defines as of wolf v0.1.0. Until v0.2, changes to the surface grammar
+  are **additive-only**: a new production, a new alternative on an
+  existing production, a new anchor. No published production is removed
+  or narrowed — every program that parses under grammar/1 parses under
+  every 0.1.x successor, with the same syntax tree shape for the forms
+  grammar/1 defines. Non-additive change (removal, narrowing, or a
+  re-reading of an existing form) is a grammar/2 act and waits for v0.2.
+- `[gram.version.anchor]` **The anchors are the contract.** The unit of
+  the additive-only promise is the `[gram.*]` anchor set: anchors are
+  stable once published (`[conf.anchor.stable]` — never renumbered,
+  never reused; deletion leaves a tombstone), and a conformance tag
+  citing a grammar/1 anchor keeps its meaning across every 0.1.x
+  release. What an anchor's clause says a form parses as, it keeps
+  parsing as.
+- `[gram.version.enforce]` **Enforcement is the extraction machinery.**
+  `cargo xtask spec-extract` extracts every ` ```ebnf ` block to
+  `spec/grammar.ebnf` and every anchor to `spec/anchors.json`
+  (`[conf.anchor.index]`), and CI fails when either committed artifact
+  is out of sync with this document. A grammar change therefore lands
+  as a reviewable diff against both artifacts: an anchor vanishing from
+  `anchors.json` or a production shrinking in `grammar.ebnf` is the
+  additive-only violation made visible, and review of that diff is the
+  gate.

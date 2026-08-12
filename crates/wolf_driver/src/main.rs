@@ -18,11 +18,27 @@ use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter
 
 mod test_cmd;
 
+/// The reference-interpreter pairing (r01 criteria row 7): the lupin
+/// version this wolf release is differentially tested against.
+const LUPIN_PIN_VERSION: &str = "0.1.7";
+/// The wolf-interp commit sha of the pairing. Placeholder until the
+/// integrator stamps it at tag time (tags are the integrator's act);
+/// a release tag never ships with this value unstamped.
+const LUPIN_PIN_SHA: &str = "UNSTAMPED";
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         // D38: the compiler is named wolfgang; the command stays `wolf`.
-        Some("--version") => println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION")),
+        // Second line: the release pairing (r01 criteria row 7) — lupin is
+        // the reference interpreter this release was differentially tested
+        // against. LUPIN_PIN_SHA is stamped by the integrator at tag time.
+        Some("--version") => {
+            println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION"));
+            println!(
+                "paired with lupin {LUPIN_PIN_VERSION} (reference interpreter), pin {LUPIN_PIN_SHA}"
+            );
+        }
         Some("--explain") => explain(&args[1..]),
         Some("build") => build(&args[1..]),
         Some("run") => run(&args[1..]),
