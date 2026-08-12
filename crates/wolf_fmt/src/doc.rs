@@ -137,7 +137,15 @@ pub fn render(doc: &Doc) -> Vec<u8> {
 
     fn newline(out: &mut Vec<u8>, suffixes: &mut Vec<u8>, col: &mut usize) {
         if !suffixes.is_empty() {
-            out.append(suffixes);
+            // Overlap-merge: the line's own trailing spaces and the
+            // suffix's preserved leading run count ONCE (total = max,
+            // not sum) — summing added one space per format pass and
+            // broke idempotence (the fmt fuzz's fourth find).
+            let line_ws = out.iter().rev().take_while(|&&b| b == b' ').count();
+            let suffix_ws = suffixes.iter().take_while(|&&b| b == b' ').count();
+            let drop = line_ws.min(suffix_ws);
+            out.extend_from_slice(&suffixes[drop..]);
+            suffixes.clear();
         }
         while out.last() == Some(&b' ') {
             out.pop();
