@@ -1,0 +1,20 @@
+//! check: fail(E1013)
+//! phase: typecheck
+//! conforms: mem.iter.excl.1, mem.iter.excl.2
+//! D40 (resolves S-11, #15): the for-loop holds a read claim on its
+//! container for the loop's whole extent, so growing it mid-walk is
+//! iteration exclusivity's static half — E1013 with the
+//! collect-then-apply teaching, never the old E1001 reads-as-moves
+//! accident. lupin's dynamic mirror (trap(exclusivity) at the push)
+//! lands with v0.1.8; its 0.1.1 pin runs the loop-entry snapshot
+//! clean — the expected conservatism note, not a divergence.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    for x in xs {
+        (mut xs).push(x)           // ERROR E1013: the loop holds `xs`
+    }
+    0
+}

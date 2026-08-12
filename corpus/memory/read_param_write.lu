@@ -1,0 +1,20 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read
+//! The callee-side half of the mode rules (D39, #27): a `read`
+//! parameter is immutable for the whole call, projections included.
+//! lupin's dynamic mirror (a trap at the write) lands with v0.1.8;
+//! until that pin the oracle runs this shape clean — the expected
+//! conservatism note, not a divergence.
+
+struct P { x: int, y: int }
+
+fn poke(p: P) -> int {
+    p.x = 7                        // ERROR E1014: `p` is `read`
+    p.x
+}
+
+fn main() -> !int {
+    var v = P { x: 1, y: 2 }
+    poke(v) - 7
+}

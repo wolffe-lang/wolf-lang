@@ -179,7 +179,7 @@ and rule (T-*). 132 entries, 132 examined.
 | L-63 | one body downgrades a shared module's lane | LINT (deferred) | the module-budget lint; needs a lane-cost model — s69 material | type |
 | L-64 | `Type.method(recv)` is variant lookup | ALREADY-ERROR | E0403; wording chore | type |
 | L-65 | bare `==` on unbounded generic | PROMOTE | E0501 exists; lupin parity | type |
-| L-66 | `for x in xs` moves under the mem tier | LINT (deferred) | S-11-adjacent; see INT A13 | mem |
+| L-66 | `for x in xs` moves under the mem tier | RESOLVED (D40, s72) | S-11 ruled: `for` holds a read claim, never a move — the container stays live behind and after the walk (`[mem.iter.excl]`) | mem |
 | L-67 | `var k = 0` is `i32` by documented rule | DECLINE (compiler-side) | as L-36/L-54 | type |
 | L-68 | omitted call-site `mut` dropped writeback | ALREADY-ERROR | E1007 both sides | type |
 | L-69 | builtin `pop()` traps where std's raises | LINT (deferred) | needs the std surface split to settle (s37) | type |
@@ -200,7 +200,7 @@ and rule (T-*). 132 entries, 132 examined.
 | F-0011 | absent Map key reads `()` | PROMOTE | see L-18a | type |
 | F-0012 | untouched trait/enum poisons importers | DECLINE | honest ceiling (lang#12) | type |
 | F-0013 | false `ub(mem.ub)` positives | DECLINE | oracle bug, retired (interp#7); L-16's readability lint survives | mem |
-| F-0014 | mutate-while-iterating diverges three ways | LINT (gated on S-11) | see INT A13 — ruling still open; fixture exists upstream, implementation held | mem |
+| F-0014 | mutate-while-iterating diverges three ways | **PROMOTED → E1013** (D40, s72) | S-11 ruled extent-hold: the held lint died by promotion — static E1013 in wolfgang, trap(exclusivity) in lupin (its mirror rides v0.1.8); the E1001 accident demoted with the read-claim model | mem |
 | F-0015 | miss paths unsupported | DECLINE | ceiling | type |
 | F-0016 | fmt comment-split | DECLINE | tool defect (lang#14) | syn |
 | F-0017 | `let` reassignment ran | ALREADY-ERROR | E0410 | syn |
@@ -310,9 +310,9 @@ non-obvious rows:
 |---|---|---|---|
 | lang#2 + interp#8 | `let` reassignment's pre-fix era | ALREADY-ERROR | E0410 both sides; the sprint's named closed scar |
 | lang#9 | user `assert` shadows the intrinsic module-wide | **LINT → W0304** | with interp B20's sharper local-binding case |
-| lang#15 + interp#9 | mutate-while-iterating | LINT (gated on S-11) | ruling open — see INT §E; wolfc's E1001-by-accident stands meanwhile |
+| lang#15 + interp#9 | mutate-while-iterating | **PROMOTED → E1013** (D40, s72) | ruled — one rule, two enforcement modes; wolfc's E1001-by-accident displaced by the loop's read claim |
 | lang#22 | native `!=` ordered on f64 | DECLINE | codegen bug, fixed; `x != x` stays lintless (NaN probe) |
-| lang#27 | read-mode immutability unenforced both sides | PROMOTE | soundness; a lint would under-sell a spec mandate |
+| lang#27 | read-mode immutability unenforced both sides | **PROMOTED → E1014 + E1002** (D39, s72) | soundness; a lint would under-sell a spec mandate — landed as E1014 (callee-side writes through `read`) and E1002's static overlap half (`f(mut a, a.x)`); lupin's dynamic mirrors ride v0.1.8 |
 | lang#28 | format specs silently ignored | ALREADY-ERROR | E0412/E0413 landed |
 | lang#29 | duplicate module leaf | ALREADY-ERROR (wolfc) + PROMOTE (lupin) | E0306 |
 | lang#30 | row tag resolving to a module and riding out | ALREADY-ERROR + **LINT → W0305** | raise-position resolves row-first now; the collision lint is the residue |
@@ -339,7 +339,7 @@ examined. Rows that shaped the wave:
 | Row | Hazard | Verdict | Rationale |
 |---|---|---|---|
 | S-10 / C3 (`store_buffer.lu`) / B37 / A24 | task writes its captured copy; enclosing state never sees it | **LINT → W1101** | named in four places; `store_buffer.lu` now declares `warns: W1101, W1102` and is the corpus witness |
-| S-11 / A13 / B18 (`for` operand semantics unstated) | `for x in xs { xs.push(x) }`: three readings, three verdicts | **LINT (gated on S-11 — ruling OPEN)** | verified open: listed under "remain open" in the divergence log, absent from spec/01 and spec/02, tracked as interp#9/F-0014/lang#15. Under loop-entry copy the lint is the answer and E1001 must demote; under move or extent-hold the lint is redundant. Fixture exists (wolf-std `mutate_while_iterating.lu`); implementation held per the contract's "coordinate" |
+| S-11 / A13 / B18 (`for` operand semantics unstated) | `for x in xs { xs.push(x) }`: three readings, three verdicts | **PROMOTED → E1013 (D40, s72 — S-11 RESOLVED)** | the ruling chose extent-hold (`[mem.iter.excl]`: the loop holds a read claim for its extent), under which the lint is redundant and dies by promotion — E1013 static in wolfgang, trap(exclusivity) dynamic in lupin (v0.1.8 mirror); E1001 demoted from the shape exactly as the loop-entry-copy analysis predicted it must |
 | B17 / B20 | capitalized binding over a case-less scrutinee binds silently; local `assert` rebinding | **LINT → W0801, W0304** | the checker resolves case-names type-directed already; the binder residue ships |
 | B30 (AC §7.8) | `assume noalias` checked where written; reassignment voids it silently | **LINT → W1302** | sharp, cheap, UB-adjacent. The clause's anchor mismatch (`[ub.assume.noalias]` unregistered; the real clause is `[mem.unsafe.raw.2]`) noted for the spec owner |
 | B19a / B16 / B21 | narrowing casts of known literals; struct-position literal adoption | **LINT → W0401** | the wide-literal narrowing member, confirmed |
@@ -397,9 +397,12 @@ scars, and the strongest members have several.)
 
 ## Standing coordination
 
-- **S-11** — open; the `for`-operand ruling decides whether the
-  mutate-while-iterating lint ships, demotes E1001, or dies. This
-  document is the coordination record the contract asked for.
+- **S-11** — RESOLVED (D40, ruled 2026-08-12; implemented s72). The
+  `for`-operand ruling chose extent-hold: the mutate-while-iterating
+  lint died by promotion to **E1013**, E1001 demoted from the shape
+  (the iterable is read, never moved), and lupin's trap(exclusivity)
+  mirror rides v0.1.8. This document remains the coordination record
+  the contract asked for; the tracker context is closed.
 - **E0004** — stays an error; correction filed against lupin's
   `CHOICES["gram.lex.number"]` note.
 - **wolf-std / book posture** — the wave was tuned against wolf-lang's
@@ -455,10 +458,11 @@ deny-warnings run stays owned by its rig at its next toolchain pin.
 
 ## Standing coordination, updated
 
-- **S-11 — still OPEN** (re-verified via the issue tracker:
-  mutate-while-iterating, wolf-lang#15). The for-over-mutated-container
-  lint stays held per the s68 contract's "coordinate"; nothing here
-  pre-empts the ruling.
+- **S-11 — RESOLVED (D40, s72)** (was: re-verified open via the issue
+  tracker — mutate-while-iterating, wolf-lang#15). The
+  for-over-mutated-container lint held per the s68 contract's
+  "coordinate" was **promoted to E1013**: the ruling's extent-hold
+  read claim makes the shape an error, not a warning.
 - **The cancellation-absorption ask (net-tier sprint, evaluated):**
   `ch.recv() else …` at a cancellation point absorbs the cancellation
   row along with `closed`, turning structured cancellation into a

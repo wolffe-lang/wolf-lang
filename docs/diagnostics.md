@@ -1182,7 +1182,7 @@ the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1004 — this value is placed in one region, but needed in another
 
@@ -1323,6 +1323,41 @@ or keep a mutable `copy` alongside the frozen original for the part
 that must keep changing.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_freeze_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_reopen_frozen.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1012_write_through_frozen.snap
+
+## E1013 — the container changes while a `for` loop iterates it
+
+`for x in xs` walks the container in place: the loop holds a read
+claim on `xs` for its whole extent, so the sequence being walked
+cannot grow, shrink, or move away mid-flight ([mem.iter.excl]). A
+`push`, `pop`, `clear`, element write, or move of `xs` inside the
+body changes the very thing the loop is standing on, and there is no
+coherent answer for what the next iteration should see. Collect the
+changes first and apply them after: gather them into a second list
+inside the loop, then apply to `xs` once the loop is done. Or take
+explicit control with an index loop — `var i = 0` and
+`while i < xs.len { …; i += 1 }` — where every pass re-reads the
+length and every access is its own bounds-checked read, so the loop's
+condition decides what growth means. (The claim is a read, not a
+move: `xs` stays live behind the walk and after it.)
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__list_mutate_while_iter.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1013_move_while_iterating.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1013_push_while_iterating.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1013_reassign_while_iterating.snap
+
+## E1014 — a `read` parameter cannot be written
+
+A parameter with no mode word is `read`: the callee sees a value that
+is immutable for the whole call, and the caller keeps it
+([mem.tier0.mode.read]) — absence is the syntax, and immutability is
+the deal it spells. This write reaches such a parameter; writes
+through its fields and elements count too, because the immutability
+is deep for the call's duration, and so does lending it `mut` to
+another call. Declare the parameter `mut` if this function's purpose
+is to change the caller's value — call sites then spell `f(mut x)`,
+so readers see the mutation. Declare it `take` if the function
+consumes the value and the caller is done with it. Or keep it `read`
+and work on this function's own duplicate: `var local = copy p` gives
+a value it owns outright.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
 ## E1101 — a task may not mutate state it captured from the enclosing function
 

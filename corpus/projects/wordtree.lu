@@ -13,9 +13,10 @@
 //! unique-word collection, then a selection walk by
 //! byte-lexicographic order ([mem.str.order]) — natively exercising
 //! `words()`, checked `l[i]` reads, `List.len`, str equality and
-//! ordering, and value-position interpolation. `for` stays off the
-//! reused lists deliberately: `for x in xs` consumes the iterable
-//! ([mem.tier0.move]); the index walk is the non-consuming read.
+//! ordering, and value-position interpolation. The index walks
+//! predate D40's [mem.iter.excl] read claim (under which `for x in
+//! xs` no longer consumes the iterable) and stay as written: the
+//! witness pins the output, not the walk's spelling.
 
 fn has(xs: List[str], w: str) -> bool {
     var i = 0

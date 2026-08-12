@@ -117,6 +117,24 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   scope-exit; the spec constrains observations, not the inference
   algorithm.
 
+### Iteration exclusivity `[mem.iter.excl]`
+
+(Added 2026-08-12 by ruling D40, resolving the S-11 `for`-operand
+question — wolf-lang#15 / wolf-interp#9.)
+
+- `[mem.iter.excl.1]` `for x in xs` over a place: the loop holds a
+  **read claim** on that place for the loop's whole extent. The claim
+  is a read, not a move — the place stays live behind the walk and
+  after the loop. A `Copy` iterable is copied at loop entry and
+  carries no claim (the same instant-read model as `Copy` call
+  arguments, `[mem.tier0.mode.mut]`'s leniency).
+- `[mem.iter.excl.2]` While the claim is live, a mutating use of the
+  claimed place or any conflicting path (`[mem.model.path.disjoint]`)
+  — a write or element write, a `mut` lend, a move — is a **compile
+  error** (E1013) in the safe tiers. Dynamic meaning (for the machine
+  that checks at runtime what the compiler proves statically): the
+  mutating operation traps with kind `exclusivity`.
+
 ## §3 Tier 1 — regions `[mem.region]`
 
 Lineage: `.docs/refs/papers/cyclone-regions.pdf` (identity as a static
