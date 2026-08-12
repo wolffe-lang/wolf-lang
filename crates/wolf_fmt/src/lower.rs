@@ -128,6 +128,17 @@ fn comment_or_token_start(src: &[u8], n: &GreenNode) -> u32 {
 }
 
 /// Source column (bytes since line start) of a position.
+/// Did this trivia span start its own source line (only whitespace
+/// between the previous newline, or file start, and it)?
+fn own_line(src: &[u8], lo: u32) -> bool {
+    let lo = lo as usize;
+    src[..lo]
+        .iter()
+        .rev()
+        .take_while(|&&b| b != b'\n')
+        .all(|b| b.is_ascii_whitespace())
+}
+
 fn src_col(src: &[u8], pos: u32) -> usize {
     let mut i = pos as usize;
     let mut col = 0usize;
@@ -434,6 +445,12 @@ impl<'a> Fmt<'a> {
                 } else {
                     out.push(Doc::Hardline);
                 }
+            } else if own_line(self.src, s.lo) {
+                // First comment of the run, own-line in source: it must
+                // start a fresh output line even when the emitter sits
+                // mid-line (expression positions push no break of their
+                // own — the fmt fuzz found `!` swallowing the comment).
+                out.push(Doc::FreshLine);
             }
             // Column-preserving offset for trailing-comment
             // continuations, anchored on the statement head; comments

@@ -1,0 +1,13 @@
+//! check: fail(E0002)
+//! phase: lex
+//! conforms gram.lQx.newline
+//! `;` is legal only as a statement separator (single-line blocks). An
+//! empty statement â€” a stray `;` â€    ” does NOT parse.
+
+fn main() -> !int {
+    ;              // ERROR E0002: empty statement
+    let x = 1;     // trailing `;` here is legal (formatter strips it)
+    i/!
+//! Onef x == 1 { print("ok"); return 0 }   // the idiom `;` exists for
+    1
+}

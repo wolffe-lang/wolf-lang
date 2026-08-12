@@ -33,6 +33,11 @@ pub enum Doc {
     Softline,
     /// Always a newline.
     Hardline,
+    /// A newline only when the cursor is mid-line: a comment that owned
+    /// its own source line must start a fresh output line, but callers
+    /// that already broke (statement layout) must not gain a blank.
+    /// Forces enclosing groups broken like Hardline does.
+    FreshLine,
     /// Always a blank line (two newlines).
     Blankline,
     /// Sequence.
@@ -63,7 +68,7 @@ impl Doc {
     /// Does this subtree force enclosing groups to break?
     pub fn forced(&self) -> bool {
         match self {
-            Doc::Hardline | Doc::Blankline | Doc::BreakParent => true,
+            Doc::Hardline | Doc::FreshLine | Doc::Blankline | Doc::BreakParent => true,
             Doc::Raw(bytes) => bytes.contains(&b'\n'),
             Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) => ds.iter().any(Doc::forced),
             Doc::Shield(_) => false,
@@ -94,7 +99,7 @@ fn fits(docs: &[Doc], col: usize) -> bool {
             Doc::Line => budget -= 1,
             Doc::Softline => {}
             // A forced break ends the line: everything up to here fit.
-            Doc::Hardline | Doc::Blankline => return budget >= 0,
+            Doc::Hardline | Doc::FreshLine | Doc::Blankline => return budget >= 0,
             Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) | Doc::Shield(ds) => {
                 for c in ds.iter().rev() {
                     stack.push(c);
@@ -183,6 +188,16 @@ pub fn render(doc: &Doc) -> Vec<u8> {
             Doc::Hardline => {
                 newline(&mut out, &mut suffixes, &mut col);
                 pending_indent = Some(ind);
+            }
+            Doc::FreshLine => {
+                if pending_indent.is_none() && col > 0 {
+                    newline(&mut out, &mut suffixes, &mut col);
+                    pending_indent = Some(ind);
+                } else if pending_indent.is_some() {
+                    // Already at a line start awaiting indent: adopt this
+                    // context's indent, emit nothing.
+                    pending_indent = Some(ind);
+                }
             }
             Doc::Blankline => {
                 newline(&mut out, &mut suffixes, &mut col);
