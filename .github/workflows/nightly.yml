@@ -46,6 +46,14 @@ jobs:
           for t in $(cargo +nightly fuzz list --fuzz-dir fuzz); do
             cargo +nightly fuzz run --fuzz-dir fuzz "$t" -- -max_total_time=900
           done
+      # A crash without its input is a red gate that names nothing:
+      # ship the artifacts with the failure.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-crash-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
 
   bench-full:
     name: full benchmarks -> bench-data branch
