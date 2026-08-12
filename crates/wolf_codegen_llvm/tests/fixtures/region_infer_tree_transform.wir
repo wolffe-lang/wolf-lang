@@ -1,0 +1,50 @@
+decl @grow(i64) -> {{i64}, {i64}}
+decl @scale({{i64}, {i64}}, i64) -> {{i64}, {i64}}
+
+fn @grow(i64) -> {{i64}, {i64}} {
+b0(%0: i64):
+  %1 = agg.make %0
+  %2 = iconst.i64 2
+  %3 = imul.chk %0, %2
+  %4 = agg.make %3
+  %5 = agg.make %1, %4
+  ret %5
+}
+
+fn @scale({{i64}, {i64}}, i64) -> {{i64}, {i64}} {
+b0(%0: {{i64}, {i64}}, %1: i64):
+  %2 = agg.get %0, 0
+  %3 = agg.get %2, 0
+  %4 = imul.chk %3, %1
+  %5 = agg.make %4
+  %6 = agg.get %0, 1
+  %7 = agg.get %6, 0
+  %8 = imul.chk %7, %1
+  %9 = agg.make %8
+  %10 = agg.make %5, %9
+  ret %10
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 3
+  %1 = call @grow(%0)
+  %2 = iconst.i64 7
+  %3 = call @scale(%1, %2)
+  %4 = agg.get %3, 0
+  %5 = agg.get %4, 0
+  %6 = agg.get %3, 1
+  %7 = agg.get %6, 0
+  %8 = iadd.chk %5, %7
+  %9 = iconst.i64 63
+  %10 = icmp.eq %8, %9
+  br %10, b1, b2
+b1:
+  %11 = iconst.i64 0
+  jmp b3(%11)
+b2:
+  %12 = iconst.i64 1
+  jmp b3(%12)
+b3(%13: i64):
+  ret %13
+}

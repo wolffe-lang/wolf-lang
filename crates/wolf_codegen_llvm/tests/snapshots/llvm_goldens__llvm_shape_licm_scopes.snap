@@ -1,0 +1,61 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  %t1 = call ptr @__wolf_rt_region_new()
+  %t2 = call noalias align 16 ptr @__wolf_rt_region_alloc(ptr %t1, i64 8)
+  store i64 7, ptr %t2, align 8, !alias.scope !3, !noalias !4
+  call void @__wolf_rt_region_freeze(ptr %t1)
+  %t3 = call ptr @__wolf_rt_region_new()
+  %t4 = call noalias align 16 ptr @__wolf_rt_region_alloc(ptr %t3, i64 8)
+  store i64 0, ptr %t4, align 8, !alias.scope !5, !noalias !6
+  br label %b1
+b1:
+  %v14 = phi i64 [ 0, %b0 ], [ %t13, %cont15 ]
+  %t5 = icmp slt i64 %v14, 5
+  %t6 = zext i1 %t5 to i8
+  %t7 = icmp ne i8 %t6, 0
+  br i1 %t7, label %b2, label %b3
+b2:
+  %t8 = load i64, ptr %t2, align 8, !alias.scope !3, !noalias !4, !invariant.load !7
+  %t9 = load i64, ptr %t4, align 8, !alias.scope !5, !noalias !6
+  %t10 = add i64 %t9, %t8
+  %t11 = add i64 %t10, %v14
+  store i64 %t11, ptr %t4, align 8, !alias.scope !5, !noalias !6
+  %t12 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %v14, i64 1)
+  %t13 = extractvalue { i64, i1 } %t12, 0
+  %t14 = extractvalue { i64, i1 } %t12, 1
+  br i1 %t14, label %trap1, label %cont15, !prof !8
+cont15:
+  br label %b1
+b3:
+  %t16 = load i64, ptr %t4, align 8, !alias.scope !5, !noalias !6
+  %t17 = and i64 %t16, 63
+  ret i64 %t17
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+declare noalias noundef align 16 ptr @__wolf_rt_region_alloc(ptr, i64) nounwind
+declare void @__wolf_rt_region_freeze(ptr) nounwind
+declare ptr @__wolf_rt_region_new() nounwind
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+
+!0 = distinct !{!"wolf.region.domain.main"}
+!1 = distinct !{!"main.r0", !0}
+!2 = distinct !{!"main.r1", !0}
+!3 = !{!1}
+!4 = !{!2}
+!5 = !{!2}
+!6 = !{!1}
+!7 = !{}
+!8 = !{!"branch_weights", i32 1, i32 2000}

@@ -8,3 +8,11 @@ rust-version.workspace = true
 
 [dependencies]
 wolf_wir.workspace = true
+wolf_backend.workspace = true
+# Shared trap-kind table only (single authority for codegen and the
+# runtime, like the debug tier); wolf_rt itself stays dependency-thin
+# (D15) and never sees the compiler.
+wolf_rt.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

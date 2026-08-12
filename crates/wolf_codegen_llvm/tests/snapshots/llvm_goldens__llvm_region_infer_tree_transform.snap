@@ -1,0 +1,125 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal { i64, i64 } @"_Wgrow$208837f81074d40d"(i64 %p0) nounwind {
+b0:
+  %slot1 = alloca [8 x i8], align 8
+  %slot2 = alloca [8 x i8], align 8
+  %slot3 = alloca [16 x i8], align 8
+  store i64 %p0, ptr %slot1, align 8
+  %t1 = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %p0, i64 2)
+  %t2 = extractvalue { i64, i1 } %t1, 0
+  %t3 = extractvalue { i64, i1 } %t1, 1
+  br i1 %t3, label %trap1, label %cont4, !prof !0
+cont4:
+  store i64 %t2, ptr %slot2, align 8
+  %t5 = load i64, ptr %slot1, align 1
+  store i64 %t5, ptr %slot3, align 1
+  %t6 = getelementptr i8, ptr %slot3, i64 8
+  %t7 = load i64, ptr %slot2, align 1
+  store i64 %t7, ptr %t6, align 1
+  %t8 = load i64, ptr %slot3, align 1
+  %t9 = getelementptr i8, ptr %slot3, i64 8
+  %t10 = load i64, ptr %t9, align 1
+  %t11 = insertvalue { i64, i64 } undef, i64 %t8, 0
+  %t12 = insertvalue { i64, i64 } %t11, i64 %t10, 1
+  ret { i64, i64 } %t12
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal { i64, i64 } @"_Wscale$2110593b0450d0c1"(i64 %p0, i64 %p1, i64 %p2) nounwind {
+b0:
+  %slot1 = alloca [16 x i8], align 8
+  %slot2 = alloca [8 x i8], align 8
+  %slot3 = alloca [8 x i8], align 8
+  %slot4 = alloca [16 x i8], align 8
+  store i64 %p0, ptr %slot1, align 1
+  %t1 = getelementptr i8, ptr %slot1, i64 8
+  store i64 %p1, ptr %t1, align 1
+  %t2 = load i64, ptr %slot1, align 8
+  %t3 = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %t2, i64 %p2)
+  %t4 = extractvalue { i64, i1 } %t3, 0
+  %t5 = extractvalue { i64, i1 } %t3, 1
+  br i1 %t5, label %trap1, label %cont6, !prof !0
+cont6:
+  store i64 %t4, ptr %slot2, align 8
+  %t7 = getelementptr i8, ptr %slot1, i64 8
+  %t8 = load i64, ptr %t7, align 8
+  %t9 = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %t8, i64 %p2)
+  %t10 = extractvalue { i64, i1 } %t9, 0
+  %t11 = extractvalue { i64, i1 } %t9, 1
+  br i1 %t11, label %trap1, label %cont12, !prof !0
+cont12:
+  store i64 %t10, ptr %slot3, align 8
+  %t13 = load i64, ptr %slot2, align 1
+  store i64 %t13, ptr %slot4, align 1
+  %t14 = getelementptr i8, ptr %slot4, i64 8
+  %t15 = load i64, ptr %slot3, align 1
+  store i64 %t15, ptr %t14, align 1
+  %t16 = load i64, ptr %slot4, align 1
+  %t17 = getelementptr i8, ptr %slot4, i64 8
+  %t18 = load i64, ptr %t17, align 1
+  %t19 = insertvalue { i64, i64 } undef, i64 %t16, 0
+  %t20 = insertvalue { i64, i64 } %t19, i64 %t18, 1
+  ret { i64, i64 } %t20
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  %slot1 = alloca [16 x i8], align 8
+  %slot2 = alloca [16 x i8], align 8
+  %t1 = call { i64, i64 } @"_Wgrow$208837f81074d40d"(i64 3)
+  %t2 = extractvalue { i64, i64 } %t1, 0
+  %t3 = extractvalue { i64, i64 } %t1, 1
+  store i64 %t2, ptr %slot1, align 1
+  %t4 = getelementptr i8, ptr %slot1, i64 8
+  store i64 %t3, ptr %t4, align 1
+  %t5 = load i64, ptr %slot1, align 1
+  %t6 = getelementptr i8, ptr %slot1, i64 8
+  %t7 = load i64, ptr %t6, align 1
+  %t8 = call { i64, i64 } @"_Wscale$2110593b0450d0c1"(i64 %t5, i64 %t7, i64 7)
+  %t9 = extractvalue { i64, i64 } %t8, 0
+  %t10 = extractvalue { i64, i64 } %t8, 1
+  store i64 %t9, ptr %slot2, align 1
+  %t11 = getelementptr i8, ptr %slot2, i64 8
+  store i64 %t10, ptr %t11, align 1
+  %t12 = load i64, ptr %slot2, align 8
+  %t13 = getelementptr i8, ptr %slot2, i64 8
+  %t14 = load i64, ptr %t13, align 8
+  %t15 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t12, i64 %t14)
+  %t16 = extractvalue { i64, i1 } %t15, 0
+  %t17 = extractvalue { i64, i1 } %t15, 1
+  br i1 %t17, label %trap1, label %cont18, !prof !0
+cont18:
+  %t19 = icmp eq i64 %t16, 63
+  %t20 = zext i1 %t19 to i8
+  %t21 = icmp ne i8 %t20, 0
+  br i1 %t21, label %b1, label %b2
+b1:
+  br label %b3
+b2:
+  br label %b3
+b3:
+  %v0 = phi i64 [ 0, %b1 ], [ 1, %b2 ]
+  ret i64 %v0
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
+
+!0 = !{!"branch_weights", i32 1, i32 2000}

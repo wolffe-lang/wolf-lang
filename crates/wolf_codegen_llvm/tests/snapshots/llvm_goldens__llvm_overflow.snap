@@ -1,0 +1,42 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  br label %b1
+b1:
+  %v0 = phi i32 [ 0, %b0 ], [ %t7, %cont9 ]
+  %v1 = phi i32 [ -1640531527, %b0 ], [ %t5, %cont9 ]
+  %t1 = icmp slt i32 %v0, 8
+  %t2 = zext i1 %t1 to i8
+  %t3 = icmp ne i8 %t2, 0
+  br i1 %t3, label %b2, label %b4
+b2:
+  %t4 = mul i32 %v1, 1664525
+  %t5 = add i32 %t4, 1013904223
+  br label %b3
+b3:
+  %t6 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v0, i32 1)
+  %t7 = extractvalue { i32, i1 } %t6, 0
+  %t8 = extractvalue { i32, i1 } %t6, 1
+  br i1 %t8, label %trap1, label %cont9, !prof !0
+cont9:
+  br label %b1
+b4:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i32, i1 } @llvm.sadd.with.overflow.i32(i32, i32)
+
+!0 = !{!"branch_weights", i32 1, i32 2000}

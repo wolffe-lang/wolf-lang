@@ -22,10 +22,16 @@ jobs:
       PROPTEST_CASES: "4096"
       # deep blast-radius sweep (s09): 100x the PR-time mutation budget
       MUTATE_BUDGET: "300"
+      # s41: the metadata differential fuzz rig's long lane (the
+      # LLVM-version bump policy requires this green first)
+      WOLF_FACT_FUZZ_N: "400"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: install native toolchain (clang for the s41 release tier's
+          long differential lane; a skip here would be a lane bug)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang lld
       - run: cargo test --workspace
 
   fuzz-long:

@@ -561,7 +561,7 @@ enum BuildStop {
     Environment(String),
 }
 
-/// What `wolf build` emits ([--emit], s31).
+/// What `wolf build` emits ([--emit], s31; `llvm-ir` added s41).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Emit {
     /// Link an executable (the default).
@@ -570,6 +570,8 @@ enum Emit {
     Obj,
     /// Dump the canonical WIR text (s24 round-trip format).
     Wir,
+    /// Dump the release tier's LLVM IR (s41; requires `--release`).
+    LlvmIr,
 }
 
 /// Build options (s31 driver v0).
@@ -583,6 +585,11 @@ struct BuildOpts {
     /// runtime hooks (plumbing only at v0; matures in s54). Folds into
     /// every rebuild key.
     checked: bool,
+    /// The `--release` tier (s41/c09): the LLVM backend behind the
+    /// same seam, checked semantics IDENTICAL (X3 is
+    /// profile-independent — only the speed changes). Folds into
+    /// every rebuild key.
+    release: bool,
     emit: Emit,
     /// Where `.lu-cache/` lives; `None` disables persistence entirely
     /// (conform-run's native rung — corpus directories must not grow
@@ -605,6 +612,7 @@ impl BuildOpts {
             no_cache: true,
             verbose: false,
             checked: false,
+            release: false,
             emit: Emit::Bin,
             cache_root: None,
             lints: LintLevels::new(),
@@ -806,6 +814,26 @@ fn compile_native(
     };
     let shim = wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?;
 
+    // `--emit=llvm-ir` (s41): the release tier's whole-module IR, one
+    // inspectable text — every stage inspectable, like `--emit=wir`.
+    if opts.emit == Emit::LlvmIr {
+        let mut backend = wolf_codegen_llvm::LlvmBackend::new().map_err(|e| refuse("wir", e))?;
+        let all: Vec<wolf_wir::FuncId> = module.funcs.keys().collect();
+        wolf_codegen_clif::compile_selected(
+            &mut backend,
+            &module,
+            &all,
+            Some(shim),
+            true,
+            false,
+            &mut wolf_backend::NullDebugSink,
+        )
+        .map_err(|e| refuse("wir", e))?;
+        std::fs::write(out, backend.module_ir())
+            .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
+        return Ok(());
+    }
+
     // ---- per-module units (s31: the D7 spine, coarse and batch) ----
     let pkg = &res.package;
     // FileId index → sema module.
@@ -874,7 +902,11 @@ fn compile_native(
         env!("CARGO_PKG_VERSION"),
         option_env!("WOLF_COMMIT").unwrap_or("unknown"),
         wolf_backend::abi::CONVENTION_VERSION,
-        if opts.checked { "checked" } else { "debug" },
+        match (opts.release, opts.checked) {
+            (true, _) => "release",
+            (false, true) => "checked",
+            (false, false) => "debug",
+        },
     );
     let mut units: Vec<ModUnit> = Vec::new();
     for &mi in &pkg.topo {
@@ -1004,7 +1036,7 @@ fn compile_native(
             };
             eprintln!("wolf build: {}: compiled ({reason})", u.name);
         }
-        let bytes = compile_unit(&module, u, shim, pkg)?;
+        let bytes = compile_unit(&module, u, shim, pkg, opts.release)?;
         if let Some(p) = &obj_file {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -1061,11 +1093,14 @@ fn compile_native(
 /// backend instance, its own DWARF builder over ONLY its files (the
 /// object must not observe other modules' file tables — cache keys
 /// don't fold them), trap table + entry shim only in the entry unit.
+/// `release` selects the LLVM tier (s41) behind the SAME trait — the
+/// driver branches on capabilities below, never on identity.
 fn compile_unit(
     module: &wolf_wir::Module,
     u: &ModUnit,
     shim: wolf_wir::FuncId,
     pkg: &wolf_sema::Package,
+    release: bool,
 ) -> Result<Vec<u8>, BuildStop> {
     let refuse = |e: wolf_backend::BackendError| match e {
         wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused {
@@ -1077,8 +1112,11 @@ fn compile_unit(
             std::process::exit(2);
         }
     };
-    let mut backend: Box<dyn wolf_backend::Backend> =
-        Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?);
+    let mut backend: Box<dyn wolf_backend::Backend> = if release {
+        Box::new(wolf_codegen_llvm::LlvmBackend::new().map_err(refuse)?)
+    } else {
+        Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?)
+    };
     // DWARF v0 (s30): the debug tier always carries debug info — the
     // Cranelift backend IS the debug tier (release is the LLVM tier,
     // s41). The builder collects the DebugSink stream per object.
@@ -1246,14 +1284,14 @@ struct BuildCli {
 }
 
 /// Parse the shared build/run flag surface (s31): `-o|--out`,
-/// `--emit=wir|obj|bin`, `--no-cache`, `--verbose`, `--checked`,
-/// `--debug` (the default; accepted), `--release` (honest refusal —
-/// the release tier is c09), `--std-root`.
+/// `--emit=wir|obj|bin|llvm-ir`, `--no-cache`, `--verbose`,
+/// `--checked`, `--debug` (the default; accepted), `--release` (the
+/// s41 LLVM tier), `--std-root`.
 fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     let usage = || -> ! {
         eprintln!(
-            "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin] [--no-cache] \
-             [--verbose] [--checked] [--std-root <dir>] \
+            "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache] \
+             [--verbose] [--checked] [--release] [--std-root <dir>] \
              [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]{}",
             if run_mode { " [prog args…]" } else { "" }
         );
@@ -1276,6 +1314,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         no_cache: false,
         verbose: false,
         checked: false,
+        release: false,
         emit: Emit::Bin,
         cache_root: None,
         lints: LintLevels::new(),
@@ -1306,7 +1345,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 "wir" => Emit::Wir,
                 "obj" => Emit::Obj,
                 "bin" => Emit::Bin,
-                other => fail(&format!("unknown emit `{other}` (wir, obj, bin)")),
+                "llvm-ir" => Emit::LlvmIr,
+                other => fail(&format!("unknown emit `{other}` (wir, obj, bin, llvm-ir)")),
             };
         } else if a == "--deny-warnings" {
             opts.lints.deny_warnings();
@@ -1343,13 +1383,12 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         } else if a == "--checked" {
             opts.checked = true;
         } else if a == "--debug" {
-            // The default (and only) tier until c09: DWARF on, checked
-            // everything. Accepted for symmetry.
+            // The default tier: DWARF on, Cranelift. Accepted for
+            // symmetry.
         } else if a == "--release" {
-            fail(
-                "the release tier is c09's LLVM backend; v0 has exactly one tier \
-                 (debug: DWARF on, checked arithmetic everywhere)",
-            );
+            // The s41 LLVM tier. Checked semantics are IDENTICAL (X3
+            // is profile-independent) — only the speed changes.
+            opts.release = true;
         } else if a.starts_with('-') {
             fail(&format!("unknown flag `{a}`"));
         } else {
@@ -1358,6 +1397,9 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         i += 1;
     }
     let Some(file) = file else { usage() };
+    if opts.emit == Emit::LlvmIr && !opts.release {
+        fail("--emit=llvm-ir is the release tier's IR; pass --release");
+    }
     if !Path::new(&file).is_file() {
         fail(&format!("no such file: {file}"));
     }
@@ -1427,6 +1469,7 @@ fn build(args: &[String]) {
             Emit::Bin => PathBuf::from(stem),
             Emit::Obj => PathBuf::from(format!("{stem}.o")),
             Emit::Wir => PathBuf::from(format!("{stem}.wir")),
+            Emit::LlvmIr => PathBuf::from(format!("{stem}.ll")),
         }
     });
     let mut sources = Sources::new();
@@ -1674,10 +1717,12 @@ fn fix(args: &[String]) {
 /// verdict — `exit(N)`, or `trap(kind)` recovered from the
 /// `wolf-trap:` stderr contract ([`wolf_rt::native`]). Refusals keep
 /// the honest phase: `mem` when lowering refused, `wir` when the
-/// backend did.
+/// backend did. `release` routes codegen through the s41 LLVM tier —
+/// the differential lane that holds the two tiers to ONE behavior.
 fn native_run(
     file: &Path,
     std_root: Option<&Path>,
+    release: bool,
     all: Vec<Diagnostic>,
     run_stdout: &mut Option<String>,
 ) -> (&'static str, String, Vec<Diagnostic>) {
@@ -1697,13 +1742,11 @@ fn native_run(
     let mut scratch_sources = Sources::new();
     // Fully ephemeral: the native rung must not grow `.lu-cache`
     // droppings in corpus directories.
-    let result = compile_native(
-        file,
-        std_root,
-        &exe,
-        &mut scratch_sources,
-        &BuildOpts::ephemeral(),
-    );
+    let opts = BuildOpts {
+        release,
+        ..BuildOpts::ephemeral()
+    };
+    let result = compile_native(file, std_root, &exe, &mut scratch_sources, &opts);
     let outcome = match result {
         Ok(()) => {
             let run = std::process::Command::new(&exe).output();
@@ -1995,6 +2038,11 @@ fn conform_run(args: &[String]) {
     let mut native = std::env::var("WOLF_NATIVE")
         .map(|v| v == "1")
         .unwrap_or(false);
+    // `--release` (or WOLF_RELEASE=1) routes the native rung through
+    // the s41 LLVM tier — the corpus/differ release lane.
+    let mut release = std::env::var("WOLF_RELEASE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     // `--zstats` (s25): peephole hit-rate counters from the wir rung's
     // builder, dumped on stderr — the Click claim, measured.
     let mut zstats = false;
@@ -2008,6 +2056,10 @@ fn conform_run(args: &[String]) {
         }
         if a == "--native" {
             native = true;
+            continue;
+        }
+        if a == "--release" {
+            release = true;
             continue;
         }
         if let Some(f) = a.strip_prefix("--error-format=") {
@@ -2051,7 +2103,7 @@ fn conform_run(args: &[String]) {
         eprintln!(
             "usage: wolf conform-run <file.lu> [--phase=<p>] [--seed=N] [--json] \
              [--error-format=human|json] [--dump=regions|cfg|wir] [--zstats] \
-             [--checked] [--native] [--std-root <dir>]"
+             [--checked] [--native] [--release] [--std-root <dir>]"
         );
         std::process::exit(2);
     };
@@ -2200,12 +2252,15 @@ fn conform_run(args: &[String]) {
                                                 &mut run_stdout,
                                                 &mut x_ext,
                                             )
-                                        } else if native {
+                                        } else if native || release {
                                             // The s28 native rung:
-                                            // machine code, executed.
+                                            // machine code, executed
+                                            // (s41: --release selects
+                                            // the LLVM tier).
                                             native_run(
                                                 Path::new(&file),
                                                 std_root.as_deref(),
+                                                release,
                                                 all,
                                                 &mut run_stdout,
                                             )

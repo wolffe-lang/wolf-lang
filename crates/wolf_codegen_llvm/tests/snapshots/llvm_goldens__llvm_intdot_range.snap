@@ -1,0 +1,77 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  br label %b1
+b1:
+  %v0 = phi i32 [ 1, %b0 ], [ %t9, %cont11 ]
+  %v1 = phi i32 [ 0, %b0 ], [ %t5, %cont11 ]
+  %t1 = icmp slt i32 %v0, 10
+  %t2 = zext i1 %t1 to i8
+  %t3 = icmp ne i8 %t2, 0
+  br i1 %t3, label %b2, label %b4
+b2:
+  %t4 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v1, i32 %v0)
+  %t5 = extractvalue { i32, i1 } %t4, 0
+  %t6 = extractvalue { i32, i1 } %t4, 1
+  br i1 %t6, label %trap1, label %cont7, !prof !0
+cont7:
+  br label %b3
+b3:
+  %t8 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v0, i32 1)
+  %t9 = extractvalue { i32, i1 } %t8, 0
+  %t10 = extractvalue { i32, i1 } %t8, 1
+  br i1 %t10, label %trap1, label %cont11, !prof !0
+cont11:
+  br label %b1
+b4:
+  br label %b5
+b5:
+  %v2 = phi i32 [ 1, %b4 ], [ %t23, %cont25 ]
+  %v3 = phi i32 [ %v1, %b4 ], [ %t13, %cont25 ]
+  %t12 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v3, i32 %v2)
+  %t13 = extractvalue { i32, i1 } %t12, 0
+  %t14 = extractvalue { i32, i1 } %t12, 1
+  br i1 %t14, label %trap1, label %cont15, !prof !0
+cont15:
+  br label %b6
+b6:
+  %t16 = icmp eq i32 %v2, 10
+  %t17 = zext i1 %t16 to i8
+  %t18 = icmp ne i8 %t17, 0
+  br i1 %t18, label %b7, label %b11
+b7:
+  %t19 = icmp eq i32 %t13, 100
+  %t20 = zext i1 %t19 to i8
+  %t21 = icmp ne i8 %t20, 0
+  br i1 %t21, label %b8, label %b9
+b8:
+  br label %b10
+b9:
+  br label %b10
+b10:
+  %v4 = phi i64 [ 0, %b8 ], [ 1, %b9 ]
+  ret i64 %v4
+b11:
+  %t22 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v2, i32 1)
+  %t23 = extractvalue { i32, i1 } %t22, 0
+  %t24 = extractvalue { i32, i1 } %t22, 1
+  br i1 %t24, label %trap1, label %cont25, !prof !0
+cont25:
+  br label %b5
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i32, i1 } @llvm.sadd.with.overflow.i32(i32, i32)
+
+!0 = !{!"branch_weights", i32 1, i32 2000}

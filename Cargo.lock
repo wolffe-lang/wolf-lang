@@ -1116,6 +1116,9 @@ dependencies = [
 name = "wolf_codegen_llvm"
 version = "0.1.0"
 dependencies = [
+ "insta",
+ "wolf_backend",
+ "wolf_rt",
  "wolf_wir",
 ]
 
@@ -1136,6 +1139,7 @@ dependencies = [
  "serde_json",
  "wolf_backend",
  "wolf_codegen_clif",
+ "wolf_codegen_llvm",
  "wolf_diag",
  "wolf_fmt",
  "wolf_lex",

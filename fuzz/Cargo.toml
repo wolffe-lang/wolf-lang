@@ -20,6 +20,8 @@ wolf_ast = { path = "../crates/wolf_ast" }
 wolf_parse = { path = "../crates/wolf_parse" }
 wolf_fmt = { path = "../crates/wolf_fmt" }
 wolf_wir = { path = "../crates/wolf_wir" }
+wolf_backend = { path = "../crates/wolf_backend" }
+wolf_codegen_llvm = { path = "../crates/wolf_codegen_llvm" }
 
 [[bin]]
 name = "fuzz_corpus_directives"
@@ -59,6 +61,13 @@ bench = false
 [[bin]]
 name = "wir_parse"
 path = "fuzz_targets/wir_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "llvm_fact_emit"
+path = "fuzz_targets/llvm_fact_emit.rs"
 test = false
 doc = false
 bench = false
