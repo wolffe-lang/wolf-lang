@@ -1099,6 +1099,17 @@ the declared shape — the diagnostic names it — adding `_` for pieces
 you do not need.
 "#);
 
+code!(E0809, "the handler pattern does not cover the row", r#"
+An `else` handler runs for every error its operand can carry — there
+is no second handler waiting behind it. A payload pattern in handler
+position (`else |Tag(p)|`) therefore has to cover the operand's whole
+row: on a single-tag row it destructures that tag's payload directly,
+and that is the form's purpose. On a wider row some error would reach
+a handler whose pattern rejects it, and no meaning exists for that
+moment. Bind the error and branch instead — `else |e| match e { … }`
+— which checks every arm for coverage the ordinary way.
+"#);
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004

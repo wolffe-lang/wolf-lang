@@ -541,3 +541,31 @@ fn t2_and_c1_are_out_of_single_threaded_scope() {
         );
     }
 }
+
+// ------------------------------------- s71: the fold reaches the lane --
+
+/// A module holding `comptime fn`s executes on the checked lane, and
+/// each fold's value arrives as an ordinary constant: an int fold, a
+/// reflection fold (`typeinfo(T).fields.len` — the intrinsic never
+/// reaches the machine), and a str fold built with comptime
+/// interpolation, `str.get` behind an `else` handler, and `str.len`.
+#[test]
+fn comptime_folds_execute_checked() {
+    assert_exit(
+        "struct Howl {\n    pitch: int,\n    length: int,\n    at_moon: bool,\n}\n\
+         comptime fn sum_squares(n: int) -> int {\n    var acc = 0\n    var i = 1\n    \
+         while i <= n {\n        acc += i * i\n        i += 1\n    }\n    acc\n}\n\
+         comptime fn field_count(T: type) -> int {\n    typeinfo(T).fields.len\n}\n\
+         comptime fn expand(axiom: str, steps: int) -> str {\n    var cur = axiom\n    \
+         var step = 0\n    while step < steps {\n        var next = \"\"\n        var i = 0\n        \
+         while i < cur.len {\n            let ch = cur.get(i..i + 1) else |_| { \"\" }\n            \
+         if ch == \"A\" {\n                next = \"{next}A-B\"\n            } else {\n                \
+         next = \"{next}{ch}\"\n            }\n            i += 1\n        }\n        \
+         cur = next\n        step += 1\n    }\n    cur\n}\n\
+         fn main() -> !int {\n    const T = sum_squares(9)\n    const N = field_count(Howl)\n    \
+         const CURVE = expand(\"A\", 2)\n    \
+         if T != 285 { return 1 }\n    if N != 3 { return 2 }\n    \
+         if CURVE != \"A-B-B\" { return 3 }\n    0\n}\n",
+        0,
+    );
+}

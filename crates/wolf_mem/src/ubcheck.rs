@@ -69,7 +69,7 @@ use wolf_diag::{Diagnostic, codes};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::ItemSig;
 use wolf_sema::types::{Prim, TyId, TyKind};
-use wolf_sema::{BodyResult, NotYet, Package, Typecheck, TypedBody};
+use wolf_sema::{BodyResult, Fold, NotYet, Package, Typecheck, TypedBody};
 use wolf_span::Span;
 
 // ------------------------------------------------------------ verdicts --
@@ -499,6 +499,9 @@ struct Ctx<'t> {
     tb: &'t TypedBody,
     node: &'t GreenNode,
     calls: HashMap<Span, &'t CallSig>,
+    /// Folded comptime call sites by span (s71): the site evaluates
+    /// to this constant; the machine never steps into the callee.
+    folds: HashMap<Span, &'t Fold>,
     casts: HashMap<Span, (TyId, TyId, CastKind)>,
     expr_tys: HashMap<Span, TyId>,
     dispatch: HashMap<Span, &'t Dispatch>,
@@ -1194,6 +1197,7 @@ impl<'t> Machine<'t> {
                 tb,
                 node,
                 calls: tb.calls.iter().map(|(s, c)| (*s, c)).collect(),
+                folds: tb.comptime_folds.iter().map(|(s, f)| (*s, f)).collect(),
                 casts: tb
                     .casts
                     .iter()
@@ -1766,6 +1770,44 @@ impl<'t> Machine<'t> {
         Ok(Flow::Val(Value::Unit))
     }
 
+    /// `else |Tag(p)|` (s71, #43): destructure the caught error at
+    /// the handler. Sema proved coverage (E0809), so a tag mismatch
+    /// here is unreachable for checked programs; it stays a defensive
+    /// refusal rather than a silent bind.
+    fn bind_handler_path(&mut self, pat: &'t GreenNode, err: Value) -> E<()> {
+        let Value::ErrTag { tag, payload } = err else {
+            return self.refuse("a payload handler over this error value", pat.span);
+        };
+        let dotted = pat
+            .nodes()
+            .find(|n| n.kind == SyntaxKind::Path)
+            .map(|p| self.text(p.span))
+            .unwrap_or_default();
+        let last = dotted.rsplit('.').next().unwrap_or(dotted.as_str());
+        if tag != dotted && tag != last {
+            return self.refuse("a handler tag the row did not prove", pat.span);
+        }
+        let subs: Vec<&GreenNode> = pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+        for (k, sub) in subs.iter().enumerate() {
+            let Some(v) = payload.get(k) else {
+                return self.refuse("a payload the tag does not carry", sub.span);
+            };
+            match sub.kind {
+                SyntaxKind::WildcardPat => {}
+                SyntaxKind::IdentPat | SyntaxKind::BindingPat => {
+                    self.bind_pattern(sub, v.clone())?;
+                }
+                _ => {
+                    return self.refuse(
+                        "nested handler payload patterns in checked execution",
+                        sub.span,
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn bind_pattern(&mut self, pat: &'t GreenNode, v: Value) -> E<()> {
         let mut binds = Vec::new();
         collect_binding_spans(pat, &mut binds);
@@ -2313,7 +2355,16 @@ impl<'t> Machine<'t> {
             Flow::Err(err) => {
                 self.push_scope();
                 if let Some(pat) = d.handler_pattern() {
-                    self.bind_pattern(pat, err)?;
+                    if pat.kind == SyntaxKind::PathPat {
+                        // `else |Tag(p)|` (s71, #43): sema proved the
+                        // pattern covers the row, so the tag test
+                        // cannot miss; the sub-patterns bind the
+                        // payload slots, exactly as a match arm's
+                        // would.
+                        self.bind_handler_path(pat, err)?;
+                    } else {
+                        self.bind_pattern(pat, err)?;
+                    }
                 }
                 let out = match d.fallback() {
                     Some(fb) => self.eval(fb)?,
@@ -3873,6 +3924,19 @@ impl<'t> Machine<'t> {
 
     fn eval_call(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = CallExpr::cast(e).expect("kind");
+        // A folded comptime call site (s71) IS its value: the machine
+        // never steps into the comptime callee, and never evaluates
+        // the arguments (a type argument has no runtime value at all).
+        if let Some(f) = self.ctx().folds.get(&e.span) {
+            let v = match f {
+                Fold::Unit => Value::Unit,
+                Fold::Bool(b) => Value::Bool(*b),
+                Fold::Int(n) => Value::Int(*n as i64),
+                Fold::Float(v) => Value::F64(*v),
+                Fold::Str(s) => Value::Str(s.clone()),
+            };
+            return Ok(Flow::Val(v));
+        }
         let cs: Option<&CallSig> = self.ctx().calls.get(&e.span).copied();
         // C intrinsics (the is04 modelled set).
         if cs.map(|c| c.c_call).unwrap_or(false) {
@@ -4514,14 +4578,16 @@ impl<'t> Machine<'t> {
                         }
                     }
                     "count" => match needle(0) {
-                        Some(n) if n.is_empty() => self.refuse("count of an empty needle", e.span),
+                        // `[mem.str.empty]` (#56): an empty needle
+                        // matches nothing — the count is 0.
+                        Some(n) if n.is_empty() => Ok(Flow::Val(Value::Int(0))),
                         Some(n) => Ok(Flow::Val(Value::Int(s.matches(&n).count() as i64))),
                         None => self.refuse("count without a str needle", e.span),
                     },
                     "split" => match needle(0) {
-                        Some(n) if n.is_empty() => {
-                            self.refuse("split on an empty separator", e.span)
-                        }
+                        // `[mem.str.empty]` (#56): an empty separator
+                        // splits nowhere — the whole string, one piece.
+                        Some(n) if n.is_empty() => make_list(self, vec![Value::Str(s.clone())]),
                         Some(n) => {
                             let items: Vec<Value> = s
                                 .split(n.as_str())
@@ -4569,7 +4635,11 @@ impl<'t> Machine<'t> {
                             return self.refuse("repeat without a count", e.span);
                         };
                         if *n < 0 {
-                            return self.trap("bounds", "mem.ub.defined", e.span);
+                            // A negative count is a caller contract
+                            // violation, ruled `assert` — not an
+                            // out-of-range access ([mem.str.repeat],
+                            // #57).
+                            return self.trap("assert", "mem.str.repeat", e.span);
                         }
                         self.charge_mem(s.len() as u64 * *n as u64 + 16)?;
                         Ok(Flow::Val(Value::Str(s.repeat(*n as usize))))
@@ -4579,7 +4649,9 @@ impl<'t> Machine<'t> {
                             return self.refuse("replace without str arguments", e.span);
                         };
                         if from.is_empty() {
-                            return self.refuse("replace of an empty needle", e.span);
+                            // `[mem.str.empty]` (#56): an empty needle
+                            // matches nothing — replace is identity.
+                            return Ok(Flow::Val(Value::Str(s.clone())));
                         }
                         self.charge_mem(s.len() as u64 + 16)?;
                         Ok(Flow::Val(Value::Str(s.replace(&from, &to))))

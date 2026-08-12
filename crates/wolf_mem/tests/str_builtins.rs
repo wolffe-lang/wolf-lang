@@ -271,6 +271,9 @@ fn case_count_repeat_replace() {
     );
 }
 
+/// A negative count is a caller contract violation: `assert`, ruled
+/// by [mem.str.repeat] (s71, #57 — previously `bounds`, which no
+/// clause ever defined).
 #[test]
 fn repeat_negative_traps() {
     assert_trap(
@@ -279,7 +282,24 @@ fn repeat_negative_traps() {
          let x = \"ab\".repeat(n)\n\
          if x == \"\" { 1 } else { 2 }\n\
          }\n",
-        "bounds",
+        "assert",
+    );
+}
+
+/// [mem.str.empty] (s71, #56): the searching family is defined on an
+/// empty needle — count 0, split one whole piece, replace identity.
+/// The checked lane's refusals die here; native always answered this.
+#[test]
+fn empty_needle_is_defined() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let a = \"abc\".count(\"\") == 0\n\
+         let p = \"abc\".split(\"\")\n\
+         let b = p.len == 1 && p[0] == \"abc\"\n\
+         let c = \"abc\".replace(\"\", \"-\") == \"abc\"\n\
+         if a && b && c { 0 } else { 1 }\n\
+         }\n",
+        0,
     );
 }
 
