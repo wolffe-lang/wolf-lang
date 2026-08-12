@@ -199,6 +199,24 @@ pub struct TypedBody {
     /// construction (`ctor`). `wolf_mem` reads argument modes and
     /// view sets from here — never by re-resolving.
     pub calls: Vec<(Span, CallSig)>,
+    /// The s73 conc lowering handoff: per `s.spawn(fn() { … })` call
+    /// site (keyed by the METHOD-CALL expression's span), the task
+    /// closure's capture set in first-use order — every enclosing
+    /// binding the closure body reads, with its final type. Captures
+    /// are by-copy (S-10; E1101 already rejected the dangerous
+    /// shapes), so this list IS the closure environment layout input
+    /// for wolf_wir. Bindings are named — lowering resolves each name
+    /// in its own scope at the spawn site.
+    pub task_captures: Vec<(Span, Vec<TaskCapture>)>,
+}
+
+/// One captured binding of a task closure (the s73 handoff record).
+#[derive(Debug, Clone)]
+pub struct TaskCapture {
+    /// The binding's name, resolvable at the spawn site.
+    pub name: String,
+    /// The binding's (zonked) type.
+    pub ty: TyId,
 }
 
 impl TypedBody {
@@ -468,6 +486,29 @@ struct Checker<'a> {
     /// captured enclosing state — E1101, unless the binding is a
     /// `sync` type or a `when`-body payload rebind.
     spawn_ctx: Option<(usize, Span)>,
+    /// Per-closure raised-row frames (s73 closure rows): a `?` inside
+    /// a closure absorbs its operand's tags into the innermost frame,
+    /// and the closure's return type wraps into `!T` with the union.
+    closure_rows: Vec<Vec<(String, Vec<TyId>)>>,
+    /// Active task-capture collection frames (s73 handoff): pushed
+    /// around a spawn argument's checking; a local resolving BELOW
+    /// the frame's depth limit records into the frame — the
+    /// resolution-driven capture set, S-10's by-copy law made data.
+    capture_frames: Vec<CaptureFrame>,
+    /// Finished capture sets, keyed by spawn call-site span (s73).
+    task_captures: Vec<(Span, Vec<TaskCapture>)>,
+    /// The most recently finished closure's raised row (s73): what
+    /// its `?`s absorbed, empty when it cannot fail. The spawn typing
+    /// consumes this to type the scope re-raise ([conc.task.fail]).
+    last_closure_row: Vec<(String, Vec<TyId>)>,
+}
+
+/// One in-flight capture-collection frame (s73).
+struct CaptureFrame {
+    /// Bindings at depths below this capture (the spawn site's depth).
+    limit: usize,
+    /// (name, type) in first-use order, deduped by name.
+    caps: Vec<(String, TyId)>,
 }
 
 /// One `match` recorded for the body-end exhaustiveness pass (s17):
@@ -601,6 +642,10 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
+        closure_rows: Vec::new(),
+        capture_frames: Vec::new(),
+        task_captures: Vec::new(),
+        last_closure_row: Vec::new(),
     };
     let outcome = match body.member {
         None => c.run(node, body),
@@ -658,6 +703,15 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                         )
                     })
                     .collect();
+                let task_captures = {
+                    let mut tc = c.task_captures;
+                    for (_, caps) in &mut tc {
+                        for cap in caps {
+                            cap.ty = zonk(&mut c.lo.table, &c.vars, cap.ty);
+                        }
+                    }
+                    tc
+                };
                 BodyResult::Checked(TypedBody {
                     table: c.lo.table,
                     exprs,
@@ -672,6 +726,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     coercions: c.coercions,
                     matches: c.match_facts,
                     calls: c.calls,
+                    task_captures,
                 })
             } else {
                 BodyResult::Errors(diags)
@@ -735,6 +790,10 @@ pub(crate) fn collect_body_rows(
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
+        closure_rows: Vec::new(),
+        capture_frames: Vec::new(),
+        task_captures: Vec::new(),
+        last_closure_row: Vec::new(),
     };
     let _ = c.run(node, body);
     // Solve what the body pinned, then default the rest so payload
@@ -874,14 +933,32 @@ impl<'a> Checker<'a> {
     /// The innermost binding of `name`. Shadowing-correct by
     /// construction: the first match in reverse scope order decides.
     fn lookup_local(&self, name: &str) -> Option<TyId> {
-        for scope in self.scopes.iter().rev() {
+        self.lookup_local_depth(name).map(|(_, t)| t)
+    }
+
+    /// [`Self::lookup_local`] with the binding's scope depth — the
+    /// capture classifier's input (s73: depth below the spawn site's
+    /// limit means the closure captures the binding).
+    fn lookup_local_depth(&self, name: &str) -> Option<(usize, TyId)> {
+        for (depth, scope) in self.scopes.iter().enumerate().rev() {
             for (n, t) in scope.iter().rev() {
                 if n == name {
-                    return Some(*t);
+                    return Some((depth, *t));
                 }
             }
         }
         None
+    }
+
+    /// A local resolved at `depth`: record it into every active
+    /// capture frame whose spawn site sits above it (s73 — the
+    /// resolution-driven capture set; by-copy per S-10).
+    fn note_capture(&mut self, depth: usize, name: &str, ty: TyId) {
+        for frame in &mut self.capture_frames {
+            if depth < frame.limit && !frame.caps.iter().any(|(n, _)| n == name) {
+                frame.caps.push((name.to_string(), ty));
+            }
+        }
     }
 
     fn error_ty(&mut self) -> TyId {
@@ -2295,6 +2372,68 @@ impl<'a> Checker<'a> {
         Ok(ty)
     }
 
+    /// `spawn proc f(args)` — spawn `f` as a proc under the root
+    /// supervisor ([conc.task.root]); the value is the opaque proc
+    /// handle ([conc.proc.1]). The callee types exactly like a direct
+    /// call (the CallSig records at this span for lowering); its
+    /// completion value is the v0 int slot of `normal(value)` —
+    /// richer completion values ride the s39 row work. A fallible
+    /// callee's row is ABSORBED by the proc boundary: it becomes the
+    /// `error(tag)` exit reason, never a propagation into the
+    /// spawner ([conc.proc.exit]).
+    fn synth_spawn(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
+        let Some(path) = d.proc_path() else {
+            return Ok(self.error_ty());
+        };
+        let segs: Vec<_> = path.segments().collect();
+        let [seg] = segs.as_slice() else {
+            return Err(NotYet {
+                construct: "a dotted proc path (s39 module procs)",
+                span: e.span,
+            });
+        };
+        let name = self.text(seg.span);
+        if self.lookup_local(&name).is_some() {
+            return Err(NotYet {
+                construct: "`spawn proc` through a fn value (c05 indirect calls)",
+                span: e.span,
+            });
+        }
+        let Some((module, item)) = self.named_fn_target(&name) else {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0301,
+                    seg.span,
+                    format!("cannot find `{name}` for `spawn proc`"),
+                )
+                .with_label("no function by this name")
+                .with_note("`spawn proc f(args)` names a function item ([conc.task.root])."),
+            );
+            return Ok(self.error_ty());
+        };
+        let ret = self.call_named(&item, module, seg.span, e, d.args())?;
+        // v0 completion values: the int slot (or nothing), possibly
+        // behind an error row (the row becomes `error(tag)`).
+        let ok_half = match self.kind_of(ret) {
+            TyKind::ErrUnion(ok, _) => ok,
+            _ => ret,
+        };
+        let int_ok = match self.kind_of(ok_half) {
+            TyKind::Unit | TyKind::Error | TyKind::Never => true,
+            TyKind::Prim(p) => p.is_integer(),
+            TyKind::Var(v) => matches!(self.vars.kind_of(v), NumKind::Integer | NumKind::Any),
+            _ => false,
+        };
+        if !int_ok {
+            return Err(NotYet {
+                construct: "proc completion values beyond the int slot (s39 rows)",
+                span: e.span,
+            });
+        }
+        Ok(self.lo.table.intern(TyKind::Proc))
+    }
+
     /// `select { pat from ch => body, timeout(d) => body, … }` —
     /// readiness choice over channels ([conc.select.ready]). Each
     /// arm's source must be a channel; a simple binder pattern takes
@@ -2345,8 +2484,45 @@ impl<'a> Checker<'a> {
                             }
                         }
                         SyntaxKind::WildcardPat => {}
-                        // Destructuring arms (`exit(reason) from m`)
-                        // ride the proc surface's typing.
+                        // `exit(reason) from m` — the monitor-delivery
+                        // arm (s73; [conc.proc.2]): the source is a
+                        // `channel[ExitReason]` and the payload binds
+                        // the reason value.
+                        SyntaxKind::PathPat
+                            if pat
+                                .nodes()
+                                .find_map(wolf_ast::Path::cast)
+                                .and_then(|p| p.segments().next())
+                                .is_some_and(|t| self.text(t.span) == "exit") =>
+                        {
+                            let reason_t = self.lo.table.intern(TyKind::ExitReason);
+                            let exp = Expect {
+                                ty: reason_t,
+                                reason: Reason::Pattern,
+                                because: Some(pat.span),
+                            };
+                            self.expect_unify(pat.span, elem, &exp);
+                            let payload: Vec<_> = pat
+                                .nodes()
+                                .filter(|n| n.kind == SyntaxKind::IdentPat)
+                                .collect();
+                            match payload.as_slice() {
+                                [one] => {
+                                    if let Some(t) = one.child_token(SyntaxKind::Ident) {
+                                        let name = self.text(t.span);
+                                        self.bind(name, t.span, reason_t);
+                                    }
+                                }
+                                _ => {
+                                    self.pop_scope();
+                                    return Err(NotYet {
+                                        construct: "this `exit(…)` arm payload shape (s73)",
+                                        span: pat.span,
+                                    });
+                                }
+                            }
+                        }
+                        // Other destructuring arms stay refused.
                         _ => {
                             self.pop_scope();
                             return Err(NotYet {
@@ -2430,6 +2606,10 @@ impl<'a> Checker<'a> {
             TyKind::Tuple(xs) => xs.iter().all(|x| self.sendable(*x)),
             TyKind::RegionTy => true,
             TyKind::Chan(_) | TyKind::Mutex(_) => true,
+            // s73: exit reasons are values delivered over monitor
+            // channels ([conc.proc.exit]); proc handles are opaque
+            // ids ([conc.proc.1]) — both cross freely.
+            TyKind::ExitReason | TyKind::Proc => true,
             _ => false,
         }
     }
@@ -3175,12 +3355,9 @@ impl<'a> Checker<'a> {
             SyntaxKind::ScopeExpr => self.synth_scope(e),
             SyntaxKind::SelectExpr => self.synth_select(e),
             SyntaxKind::WhenExpr => self.synth_when(e),
-            // `spawn proc` — the proc surface (handles, monitors,
-            // exit reasons) types with the supervisor work (s34/s35).
-            SyntaxKind::SpawnExpr => Err(NotYet {
-                construct: "proc spawn typing (s35)",
-                span: e.span,
-            }),
+            // `spawn proc f(args)` — the proc surface (s73):
+            // handles, monitors, exit reasons ([conc.proc.model]).
+            SyntaxKind::SpawnExpr => self.synth_spawn(e),
             // ---- the unsafe tier (s22): `unsafe { }` types as its
             // body's value inside a fully safe signature
             // ([mem.unsafe.scope]); `borrow r from p` is re-entry
@@ -3379,7 +3556,8 @@ impl<'a> Checker<'a> {
             return Ok(self.error_ty());
         };
         let name = self.text(t.span);
-        if let Some(ty) = self.lookup_local(&name) {
+        if let Some((depth, ty)) = self.lookup_local_depth(&name) {
+            self.note_capture(depth, &name, ty);
             return Ok(ty);
         }
         if name == "self" {
@@ -3890,10 +4068,33 @@ impl<'a> Checker<'a> {
         match self.kind_of(t) {
             TyKind::ErrUnion(ok, row) => {
                 if self.in_closure {
-                    return Err(NotYet {
-                        construct: "`?` inside a closure (s17 closure rows)",
-                        span: e.span,
-                    });
+                    // s73 closure rows: `?` inside a closure raises
+                    // into the CLOSURE's own (inferred) row — the
+                    // innermost frame collects the tags, and the
+                    // closure's return type wraps into `!T` at its
+                    // end. The frame is always present when
+                    // `in_closure` holds (both closure paths push).
+                    let Some(_) = self.closure_rows.last() else {
+                        return Err(NotYet {
+                            construct: "`?` inside a closure (s17 closure rows)",
+                            span: e.span,
+                        });
+                    };
+                    self.trace_points.push(e.span);
+                    let resolved = self.resolve_row(row);
+                    let TyKind::Row { tags, .. } = self.lo.table.kind(resolved).clone() else {
+                        return Err(NotYet {
+                            construct: "`?` on an abstract error row inside a closure (s73)",
+                            span: e.span,
+                        });
+                    };
+                    let frame = self.closure_rows.last_mut().expect("frame present");
+                    for (n, p) in tags {
+                        if !frame.iter().any(|(m, _)| m == &n) {
+                            frame.push((n, p));
+                        }
+                    }
+                    return Ok(ok);
                 }
                 // Every `?` is an error-trace point ([abi.err.trace];
                 // the runtime buffer is s32).
@@ -4579,11 +4780,17 @@ impl<'a> Checker<'a> {
             // `[conc.chan.close]` — receives on a drained-closed
             // channel return the closed error value, so `recv` is
             // row-shaped: handle it with `else`, `?`, or `match`.
+            // `cancelled` joined the row in s73 ([conc.cancel.points]:
+            // cancellation surfaces as an error VALUE at blocking
+            // points — recv is one).
             (TyKind::Chan(t), "recv") => {
-                let row = self
-                    .lo
-                    .table
-                    .row(vec![("closed".to_string(), Vec::new())], None);
+                let row = self.lo.table.row(
+                    vec![
+                        ("closed".to_string(), Vec::new()),
+                        ("cancelled".to_string(), Vec::new()),
+                    ],
+                    None,
+                );
                 let r = self.lo.table.intern(TyKind::ErrUnion(t, row));
                 (vec![p("self", recv_ty)], r)
             }
@@ -4599,6 +4806,32 @@ impl<'a> Checker<'a> {
                 let task = self.lo.table.intern(TyKind::Fn(Vec::new(), ret_v));
                 let u = self.lo.table.unit();
                 (vec![p("self", recv_ty), p("task", task)], u)
+            }
+            // ---- the proc surface (s73; [conc.proc.model]) ----
+            // `monitor` delivers exit REASONS over an ordinary channel
+            // ([conc.proc.2]); `kill`/`cancel` are the two teardown
+            // verbs (D14's signature distinction); `link` couples
+            // fates per pair ([conc.proc.link.pair]).
+            (TyKind::Proc, "monitor") => {
+                let reason = self.lo.table.intern(TyKind::ExitReason);
+                let ch = self.lo.table.intern(TyKind::Chan(reason));
+                (vec![p("self", recv_ty)], ch)
+            }
+            (TyKind::Proc, "kill" | "cancel") => {
+                let u = self.lo.table.unit();
+                (vec![p("self", recv_ty)], u)
+            }
+            (TyKind::Proc, "link") => {
+                let u = self.lo.table.unit();
+                let other = self.lo.table.intern(TyKind::Proc);
+                (vec![p("self", recv_ty), p("other", other)], u)
+            }
+            // `[conc.proc.exit]`'s closed set, observed as class
+            // predicates on the reason value (D30: values, never
+            // unwinding).
+            (TyKind::ExitReason, "is_normal" | "is_error" | "is_killed" | "is_cancelled") => {
+                let b = self.lo.table.prim(Prim::Bool);
+                (vec![p("self", recv_ty)], b)
             }
             _ => {
                 return Err(NotYet {
@@ -4631,6 +4864,14 @@ impl<'a> Checker<'a> {
         let saved = self.spawn_ctx;
         if is_spawn {
             self.spawn_ctx = Some((self.scopes.len(), e.span));
+            // s73 handoff: collect what the task closure captures
+            // while its body resolves (note_capture records every
+            // local resolving below this depth).
+            self.capture_frames.push(CaptureFrame {
+                limit: self.scopes.len(),
+                caps: Vec::new(),
+            });
+            self.last_closure_row.clear();
         }
         let out = self.dispatch_method(
             mname,
@@ -4645,6 +4886,28 @@ impl<'a> Checker<'a> {
         );
         if is_spawn {
             self.spawn_ctx = saved;
+            let frame = self.capture_frames.pop().expect("spawn capture frame");
+            let caps = frame
+                .caps
+                .into_iter()
+                .map(|(name, ty)| TaskCapture { name, ty })
+                .collect();
+            self.task_captures.push((e.span, caps));
+            // The scope re-raise ([conc.task.fail]): a fallible task
+            // closure's row propagates into the enclosing function's
+            // row at the spawn — the same width check as `?`, because
+            // the failure re-raises at the scope exit, after the join.
+            let raised = std::mem::take(&mut self.last_closure_row);
+            if !raised.is_empty() && out.is_ok() {
+                let row = self.lo.table.row(raised, None);
+                match self.caller_row() {
+                    Some(crow) => {
+                        let because = self.ret.as_ref().map(|(_, _, b)| *b);
+                        self.require_row_widening(e.span, row, crow, because);
+                    }
+                    None => self.report_nonfallible_try(e.span, row),
+                }
+            }
         }
         out
     }
@@ -6114,10 +6377,15 @@ impl<'a> Checker<'a> {
             TyKind::Shared(_) | TyKind::Weak(_) | TyKind::List(_) | TyKind::Pool(_) => {
                 self.tier2_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
-            // The conc builtins (spec 03): channel ops and the
-            // scope's `spawn`. `Mutex` has no methods by design —
+            // The conc builtins (spec 03): channel ops, the scope's
+            // `spawn`, and (s73) the proc verbs + exit-reason
+            // predicates. `Mutex` has no methods by design —
             // acquisition is the `when` construct.
-            TyKind::Chan(_) | TyKind::TaskScope | TyKind::Mutex(_) => {
+            TyKind::Chan(_)
+            | TyKind::TaskScope
+            | TyKind::Mutex(_)
+            | TyKind::Proc
+            | TyKind::ExitReason => {
                 self.conc_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
             // s37 — the builtin `str` surface (D24/D25).
@@ -6934,6 +7202,34 @@ impl<'a> Checker<'a> {
                     )),
                 );
                 return Ok(self.fresh(NumKind::Float, e.span));
+            }
+        }
+        // s73 — duration members on integer literals ([gram.amb.intdot]
+        // resolves `1.s` as member access; the member scales into the
+        // v0 int nanosecond currency `timeout` consumes —
+        // [conc.select.timeout]). Literal bases only: fields named
+        // `s`/`ms` on real types stay theirs.
+        if let (Some(base), Some(member)) = (d.base(), d.member())
+            && base.kind == SyntaxKind::LiteralExpr
+            && base
+                .tokens()
+                .next()
+                .is_some_and(|t| t.kind == SyntaxKind::Int)
+        {
+            let mtext = self.text(member.span);
+            if matches!(mtext.as_str(), "s" | "ms" | "us" | "ns") {
+                let bt = self.synth_expr(base)?;
+                let int_ = self.lo.table.prim(Prim::Int);
+                let exp = Expect {
+                    ty: int_,
+                    reason: Reason::ArgOfCall {
+                        callee: "duration".to_string(),
+                        index: 0,
+                    },
+                    because: None,
+                };
+                self.expect_unify(base.span, bt, &exp);
+                return Ok(int_);
             }
         }
         // `Type.Member` in value position (s17): enum variant values.
@@ -8221,6 +8517,11 @@ impl<'a> Checker<'a> {
                     // litmuses iterate lists; the general iteration
                     // protocol stays s17's).
                     TyKind::List(elem) => elem,
+                    // s73: `for v in ch` drains a channel to
+                    // drained-close ([conc.chan.close]: iteration
+                    // ends there; cancellation also ends it —
+                    // [conc.cancel.points]).
+                    TyKind::Chan(elem) => elem,
                     TyKind::Error | TyKind::Never => self.error_ty(),
                     _ => {
                         return Err(NotYet {
@@ -8401,17 +8702,40 @@ impl<'a> Checker<'a> {
                 }
                 let was = self.in_closure;
                 self.in_closure = true;
-                if let Some(body) = d.body() {
+                self.closure_rows.push(Vec::new());
+                // The body checks against its OWN result var; the
+                // context's `ret` unifies afterwards, wrapped in the
+                // closure's raised row when its `?`s made it fallible
+                // (s73 closure rows).
+                let body_t = self.fresh(NumKind::Any, e.span);
+                let r = if let Some(body) = d.body() {
                     let exp2 = Expect {
-                        ty: ret,
+                        ty: body_t,
                         reason: Reason::ClosureBody,
                         because: Some(e.span),
                     };
-                    self.check_expr(body, &exp2)?;
-                }
+                    self.check_expr(body, &exp2)
+                } else {
+                    Ok(())
+                };
+                let raised = self.closure_rows.pop().expect("closure row frame");
                 self.in_closure = was;
                 self.level -= 1;
                 self.pop_scope();
+                r?;
+                let final_t = if raised.is_empty() {
+                    body_t
+                } else {
+                    let row = self.lo.table.row(raised.clone(), None);
+                    self.lo.table.intern(TyKind::ErrUnion(body_t, row))
+                };
+                self.last_closure_row = raised;
+                let exp2 = Expect {
+                    ty: ret,
+                    reason: Reason::ClosureBody,
+                    because: Some(e.span),
+                };
+                self.expect_unify(e.span, final_t, &exp2);
                 self.record(e.span, expected);
                 Ok(())
             }
@@ -8456,13 +8780,25 @@ impl<'a> Checker<'a> {
         }
         let was = self.in_closure;
         self.in_closure = true;
+        self.closure_rows.push(Vec::new());
         let ret = match d.body() {
-            Some(body) => self.synth_expr(body)?,
-            None => self.lo.table.unit(),
+            Some(body) => self.synth_expr(body),
+            None => Ok(self.lo.table.unit()),
         };
+        let raised = self.closure_rows.pop().expect("closure row frame");
         self.in_closure = was;
         self.level -= 1;
         self.pop_scope();
+        let ret = ret?;
+        // A closure whose `?`s raised becomes fallible: its return
+        // type wraps into `!T` with the collected row (s73).
+        let ret = if raised.is_empty() {
+            ret
+        } else {
+            let row = self.lo.table.row(raised.clone(), None);
+            self.lo.table.intern(TyKind::ErrUnion(ret, row))
+        };
+        self.last_closure_row = raised;
         Ok(self.lo.table.intern(TyKind::Fn(ptys, ret)))
     }
 

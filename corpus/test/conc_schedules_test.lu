@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: test.discovery, conc.select.fair, conc.det.events
+//!
+//! The s73 dogfood witness (X12 end to end): a main-shaped concurrent
+//! test body `wolf test --schedules=N` explores NATIVELY — each run's
+//! derived seed lands in the runtime scheduler's PRNG root, so the
+//! select tie-break below genuinely varies across seeds while the
+//! VERDICT stays stable (both outcomes exit 0 — [sched.stable]'s
+//! CI-checkable property). `--replay=SEED` reruns one schedule.
+//! The driver's `test_cmd` CLI tests pin the exploration surface.
+
+fn main() -> !int {
+    let a = channel[int](1)
+    let b = channel[int](1)
+    var got = 0
+    scope s {
+        s.spawn(fn() { a.send(1) })
+        s.spawn(fn() { b.send(2) })
+    }
+    select {
+        v from a => { got = v },
+        v from b => { got = v },
+    }
+    if got == 1 || got == 2 { 0 } else { 1 }
+}

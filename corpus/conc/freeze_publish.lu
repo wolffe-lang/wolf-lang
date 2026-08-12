@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: run
 //! conforms: conc.mm.hb.freeze, mem.region.freeze.1
 //! `freeze` happens-before every cross-task read: imm data is shared by
 //! reference, no copies, no synchronization.

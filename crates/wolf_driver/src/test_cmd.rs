@@ -47,11 +47,13 @@
 //!   injection engine lands on the s35 submit/deliver seams) and
 //!   refuses loudly until then.
 //!
-//! Honesty note: v0 tests execute on the checked machine, which is
-//! serial and seed-blind — exploration today detects nondeterminism
-//! in the test itself, and the seed plumbs through to the native
-//! runtime (`WOLF_SCHED_SEED`, wolf_rt's det engine) when the native
-//! test harness lands (recorded s39/s36 delta).
+//! Honesty note (s73 updates the s39 posture): under `--schedules`
+//! and decimal `--replay`, MAIN-SHAPED tests compile natively and run
+//! per seed with `WOLF_SCHED_SEED` set — the seed genuinely reaches
+//! the runtime scheduler's PRNG (X12 end to end). `test_*` fns still
+//! execute on the checked machine (serial, seed-blind) until the
+//! native multi-test harness lands; packed `w1-`/`ev:` replays await
+//! the det-engine runtime build (both recorded, tier named).
 //!
 //! # Machine output (`--json`, wolf-test/0)
 //!
@@ -415,6 +417,71 @@ pub fn test_cmd(args: &[String]) {
                     "a test fn with parameters (s39 runs zero-parameter tests)".to_string(),
                     None,
                 )
+            } else if name == "main"
+                && (schedules.is_some()
+                    || replay
+                        .as_deref()
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .is_some())
+            {
+                // s73 — the native schedule lane: a main-shaped test
+                // explores/replays on the REAL runtime, each run's
+                // seed in `WOLF_SCHED_SEED` (X12 end to end). The
+                // packed `w1-`/`ev:` forms still need the det-engine
+                // harness (they fall through to the checked machine's
+                // honest note).
+                let seeds: Vec<Option<u64>> = match (schedules, &replay) {
+                    (Some(n), _) => (0..u64::from(n))
+                        .map(|k| Some(derive_seed(root_seed, &qualified, k)))
+                        .collect(),
+                    (None, Some(spec)) => {
+                        vec![Some(spec.parse::<u64>().expect("checked decimal"))]
+                    }
+                    _ => unreachable!("guard requires schedules or a decimal replay"),
+                };
+                match native_schedule_runs(file, std_root.as_deref(), &seeds) {
+                    Err((s, d)) => (s, d, None),
+                    Ok(runs) => {
+                        let (seed0, s0, d0) =
+                            (runs[0].0.unwrap_or(0), runs[0].1, runs[0].2.clone());
+                        let divergence = runs
+                            .iter()
+                            .find(|(_, s, d, _, _)| *s != s0 || *d != d0)
+                            .map(|(seed, _, d, _, _)| (seed.unwrap_or(0), d.clone()));
+                        let mk_out = |r: &(Option<u64>, Status, String, String, String)| {
+                            Some(ubcheck::RunOutcome {
+                                verdict: Verdict::Exit(0),
+                                stdout: r.3.clone(),
+                                stderr: r.4.clone(),
+                            })
+                        };
+                        match divergence {
+                            Some((seed_div, d_div)) => (
+                                Status::Fail,
+                                format!(
+                                    "schedule divergence: seed {seed0} → {d0}, seed \
+                                     {seed_div} → {d_div} — replay: wolf test \
+                                     --replay={seed_div} {display}"
+                                ),
+                                runs.iter()
+                                    .find(|(sd, ..)| sd.unwrap_or(0) == seed_div)
+                                    .and_then(mk_out),
+                            ),
+                            None => {
+                                let nn = runs.len();
+                                let detail = if s0 == Status::Pass {
+                                    format!("{d0} [native, {nn} schedule(s)]")
+                                } else {
+                                    format!(
+                                        "{d0} [native, {nn} schedule(s); replay: wolf test \
+                                         --replay={seed0} {display}]"
+                                    )
+                                };
+                                (s0, detail, mk_out(&runs[0]))
+                            }
+                        }
+                    }
+                }
             } else if let Some(n) = schedules {
                 // Exploration (spec/07 [sched.flags]): N runs under
                 // derived seeds; the CI-checkable property is verdict
@@ -453,7 +520,30 @@ pub fn test_cmd(args: &[String]) {
                     }
                 }
             } else {
-                run_once()
+                // s73: a main-shaped test the checked machine refuses
+                // (concurrency, C1 deferred) falls back to one native
+                // black-box run — the conservatism ledger stays for
+                // `test_*` fns, but a runnable program runs.
+                let r = run_once();
+                if r.0 == Status::Unsupported && name == "main" {
+                    match native_schedule_runs(file, std_root.as_deref(), &[None]) {
+                        Ok(runs) => {
+                            let (_, s, d, stdout, stderr) = runs.into_iter().next().expect("one");
+                            (
+                                s,
+                                format!("{d} [native]"),
+                                Some(ubcheck::RunOutcome {
+                                    verdict: Verdict::Exit(0),
+                                    stdout,
+                                    stderr,
+                                }),
+                            )
+                        }
+                        Err((s, d)) => (s, d, None),
+                    }
+                } else {
+                    r
+                }
             };
             match status {
                 Status::Pass => tally.passed += 1,
@@ -549,6 +639,83 @@ fn parse_schedule_spec(s: &str) -> Option<()> {
         return None;
     }
     s.parse::<u64>().ok().map(|_| ())
+}
+
+/// s73 — the native schedule lane (X12's promise, end to end): a
+/// main-shaped test under `--schedules`/`--replay` compiles ONCE and
+/// runs once per seed with `WOLF_SCHED_SEED` set, so every derived
+/// seed genuinely reaches the runtime's scheduler PRNG (steal
+/// victims, select tie-breaks — `wolf_rt::task::hooks::root_seed`).
+/// Returns per-seed (seed, status, detail, stdout, stderr), or the
+/// honest refusal.
+#[allow(clippy::type_complexity)]
+fn native_schedule_runs(
+    file: &std::path::Path,
+    std_root: Option<&std::path::Path>,
+    seeds: &[Option<u64>],
+) -> Result<Vec<(Option<u64>, Status, String, String, String)>, (Status, String)> {
+    let dir = std::env::temp_dir().join(format!(
+        "wolf-test-native-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0)
+    ));
+    if std::fs::create_dir_all(&dir).is_err() {
+        return Err((Status::Fail, "cannot create a scratch dir".to_string()));
+    }
+    let exe = dir.join("a.out");
+    let mut scratch = Sources::new();
+    let compiled = crate::compile_native(
+        file,
+        std_root,
+        &exe,
+        &mut scratch,
+        &crate::BuildOpts::ephemeral(),
+    );
+    let out = match compiled {
+        Ok(()) => {
+            let mut runs = Vec::with_capacity(seeds.len());
+            for &seed in seeds {
+                let mut cmd = std::process::Command::new(&exe);
+                if let Some(s) = seed {
+                    cmd.env("WOLF_SCHED_SEED", s.to_string());
+                }
+                let run = cmd.output();
+                match run {
+                    Err(e) => {
+                        let _ = std::fs::remove_dir_all(&dir);
+                        return Err((Status::Fail, format!("cannot run the test binary: {e}")));
+                    }
+                    Ok(o) => {
+                        let stdout = String::from_utf8_lossy(&o.stdout).into_owned();
+                        let stderr = String::from_utf8_lossy(&o.stderr).into_owned();
+                        let trap_kind = stderr.lines().find_map(|l| {
+                            l.trim()
+                                .strip_prefix("wolf-trap:")
+                                .map(|k| k.trim().to_string())
+                        });
+                        let (status, detail) = match (o.status.code(), trap_kind) {
+                            (Some(code), Some(kind)) if code == wolf_rt::native::TRAP_EXIT_CODE => {
+                                (Status::Fail, format!("trap({kind})"))
+                            }
+                            (Some(0), _) => (Status::Pass, "exit(0)".to_string()),
+                            (Some(code), _) => (Status::Fail, format!("exit({code})")),
+                            (None, _) => (Status::Fail, "died without an exit code".to_string()),
+                        };
+                        runs.push((seed, status, detail, stdout, stderr));
+                    }
+                }
+            }
+            Ok(runs)
+        }
+        Err(crate::BuildStop::Refused { reason, .. }) => Err((Status::Unsupported, reason)),
+        Err(crate::BuildStop::Errors) => Err((Status::Fail, "does not compile".to_string())),
+        Err(crate::BuildStop::Environment(msg)) => Err((Status::Fail, msg)),
+    };
+    let _ = std::fs::remove_dir_all(&dir);
+    out
 }
 
 /// Split a per-run seed from the root (SplitMix64 over root, test

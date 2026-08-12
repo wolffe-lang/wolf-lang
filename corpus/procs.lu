@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: resolve
+//! phase: run
 //! conforms: task.scope, task.channel, task.select, proc.spawn, proc.monitor, sync.when
 //!
 //! Concurrency surface (D13–D16): scoped spawn only, typed channels,

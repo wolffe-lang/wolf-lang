@@ -1,7 +1,6 @@
 ---
 source: crates/wolf_parse/tests/corpus_decls.rs
-assertion_line: 58
 expression: dump
 ---
-FnDecl 349..605 name=observe body=Block
-FnDecl 607..739 name=main body=Block
+FnDecl 489..745 name=observe body=Block
+FnDecl 747..879 name=main body=Block

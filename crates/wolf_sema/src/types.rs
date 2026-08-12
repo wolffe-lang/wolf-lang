@@ -237,6 +237,14 @@ pub enum TyKind {
     Chan(TyId),
     Mutex(TyId),
     TaskScope,
+    /// A proc handle — `spawn proc f(args)`'s value ([conc.proc.1]:
+    /// an unforgeable generational id; no memory handle crosses the
+    /// proc API). Methods: `monitor`/`kill`/`cancel`/`link` (s73).
+    Proc,
+    /// A proc exit reason ([conc.proc.exit]'s closed set as a value,
+    /// D30) — what a monitor channel delivers; `is_normal`/
+    /// `is_error`/`is_killed`/`is_cancelled` observe the class.
+    ExitReason,
     /// `dyn Trait` with the trait resolved to its defining module
     /// (s14). Dyn-safety is checked where the type is written; witness
     /// layout is c05's.
@@ -502,6 +510,8 @@ pub fn render(
         TyKind::Chan(t) => format!("channel[{}]", render(table, *t, resolve)),
         TyKind::Mutex(t) => format!("Mutex[{}]", render(table, *t, resolve)),
         TyKind::TaskScope => "scope".to_string(),
+        TyKind::Proc => "proc".to_string(),
+        TyKind::ExitReason => "ExitReason".to_string(),
         TyKind::Dyn { name, .. } => format!("dyn {name}"),
         TyKind::Proj(base, name) => format!("{}.{name}", render(table, *base, resolve)),
         TyKind::RegionTy => "region".to_string(),
