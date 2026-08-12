@@ -184,6 +184,12 @@ fn fuzz_regressions() {
     let mut n = 0;
     for e in std::fs::read_dir(dir).expect("regressions dir") {
         let p = e.expect("entry").path();
+        // unfixed/ holds banked-but-unfixed finds (s63's queue) — the
+        // properties must NOT run over them, and a directory is not a
+        // regression file.
+        if !p.is_file() {
+            continue;
+        }
         let src = std::fs::read(&p).expect("read regression");
         holds_for(&src, false, &p.display().to_string());
         n += 1;
