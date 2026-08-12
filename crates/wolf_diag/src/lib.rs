@@ -267,12 +267,15 @@ pub fn sort_diagnostics(diags: &mut [Diagnostic]) {
     });
 }
 
-/// Collapse repeated teach notes (s71, #59): within one sorted batch,
-/// a note that already appeared verbatim on an earlier diagnostic of
-/// the same code renders once per group — the first occurrence keeps
-/// the teaching, the rest stay lean (two spawns no longer render the
-/// E1101 channels lesson twice). Messages, labels, and suggestions
-/// are untouched; codes never share notes across groups.
+/// Collapse repeated teach notes *destructively*: within one sorted
+/// batch, a note that already appeared verbatim on an earlier
+/// diagnostic of the same code is dropped from the later ones.
+///
+/// Prefer [`HumanReporter`], which does the same grouping at render
+/// time and therefore leaves the diagnostic values whole — a JSON or
+/// LSP consumer wants every note on every item, and a phase that
+/// deletes notes from the data cannot tell the two audiences apart.
+/// This remains for a caller that owns its own text rendering.
 pub fn dedup_notes(diags: &mut [Diagnostic]) {
     let mut seen: std::collections::HashSet<(&'static str, String)> =
         std::collections::HashSet::new();
@@ -318,6 +321,24 @@ impl Diagnostics {
     /// (cascade suppression — see the crate docs).
     pub fn push(&mut self, d: Diagnostic) {
         if self.is_suppressed(d.primary.span) {
+            return;
+        }
+        // One position, one expectation miss. E0201 is the parser's
+        // workhorse ("expected X here"), and recovery routinely asks
+        // twice about the same character: `spawn {` used to answer with
+        // both "expected `proc` after `spawn`" and "expected the line
+        // to end after the expression" under one caret — two sentences,
+        // one mistake, and the reader has to guess which to fix. Only
+        // E0201 is folded, and only against its own span: codes that
+        // report a *set* of facts at one span (an impl missing two
+        // associated types, say) each still speak, and `push_forced`
+        // pierces this as it pierces suppression.
+        if d.code == codes::E0201
+            && self
+                .diags
+                .iter()
+                .any(|p| p.code == d.code && p.primary.span == d.primary.span)
+        {
             return;
         }
         self.diags.push(d);
@@ -406,6 +427,11 @@ pub struct HumanReporter<'s> {
     sources: &'s Sources,
     opts: RenderOptions,
     out: String,
+    /// Teach notes already rendered in this run, keyed by (code, text).
+    /// Reading the same paragraph five times teaches nothing the first
+    /// reading did not — the group keeps it once and the rest stay
+    /// lean. Machine consumers (`JsonReporter`) keep every note.
+    taught: std::collections::HashSet<(&'static str, String)>,
 }
 
 impl<'s> HumanReporter<'s> {
@@ -414,14 +440,33 @@ impl<'s> HumanReporter<'s> {
             sources,
             opts,
             out: String::new(),
+            taught: std::collections::HashSet::new(),
         }
     }
 }
 
 impl Reporter for HumanReporter<'_> {
     fn report(&mut self, d: &Diagnostic) {
-        self.out
-            .push_str(&render_human(d, self.sources, &self.opts));
+        // Note-grouping is a *rendering* decision, so it lives here
+        // rather than at each of the driver's many assembly points —
+        // one of which is always the one that gets forgotten (the
+        // typecheck batch was deduped; every warning the later phases
+        // raised still repeated its paragraph per occurrence).
+        let code = d.code.as_str();
+        let fresh: Vec<String> = d
+            .notes
+            .iter()
+            .filter(|n| self.taught.insert((code, (*n).clone())))
+            .cloned()
+            .collect();
+        let rendered = if fresh.len() == d.notes.len() {
+            render_human(d, self.sources, &self.opts)
+        } else {
+            let mut lean = d.clone();
+            lean.notes = fresh;
+            render_human(&lean, self.sources, &self.opts)
+        };
+        self.out.push_str(&rendered);
         self.out.push('\n');
     }
 

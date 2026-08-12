@@ -172,21 +172,17 @@ proptest! {
     }
 }
 
-/// Fuzz-found idempotence regressions (2026-08-12, the nightly's fmt
-/// crash + its neighbor from the same sweep): a leading comment inside
-/// a binary continuation compounded one indent level per pass; a
-/// trailing comment on a prefix operator made pass one and pass two
-/// disagree about joining the operand. Broken inputs, so fallback is
-/// allowed — the properties must hold either way.
+/// Fuzz-found idempotence regressions — every class the mutation loop
+/// (`cargo xtask fmt-fuzz`) has closed, replayed forever. Broken inputs,
+/// so fallback is allowed; the properties must hold either way.
 #[test]
 fn fuzz_regressions() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/regressions");
     let mut n = 0;
     for e in std::fs::read_dir(dir).expect("regressions dir") {
         let p = e.expect("entry").path();
-        // unfixed/ holds banked-but-unfixed finds (s63's queue) — the
-        // properties must NOT run over them, and a directory is not a
-        // regression file.
+        // unfixed/ holds banked-but-open classes — the properties must
+        // NOT run over them, and a directory is not a regression file.
         if !p.is_file() {
             continue;
         }
@@ -195,4 +191,41 @@ fn fuzz_regressions() {
         n += 1;
     }
     assert!(n >= 2, "the regression corpus never shrinks");
+}
+
+/// The bank is honest in both directions: an `unfixed/` fixture that
+/// has started holding is a *fixed* class whose fixture belongs in the
+/// regression corpus, and leaving it banked hides the win. The loop
+/// found these; only a move out of `unfixed/` may retire one.
+#[test]
+fn banked_classes_are_still_open() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/regressions/unfixed");
+    let Ok(rd) = std::fs::read_dir(&dir) else {
+        return; // the well ran dry; nothing banked
+    };
+    for e in rd {
+        let p = e.expect("entry").path();
+        if !p.is_file() || p.extension().is_none_or(|x| x != "pending") {
+            continue;
+        }
+        let src = std::fs::read(&p).expect("read banked case");
+        // Exactly the mutation loop's invariant set, or the two
+        // disagree about what "open" means: a fallback that returns the
+        // input is a *pass* (the documented escape hatch), not a class.
+        let out = wolf_fmt::format_text(&src);
+        let converged = if out.fell_back {
+            out.text == src
+        } else {
+            let again = wolf_fmt::format_text(&out.text);
+            !again.fell_back
+                && again.text == out.text
+                && comments(&src) == comments(&out.text)
+                && norm(&src) == norm(&out.text)
+        };
+        assert!(
+            !converged,
+            "{}: this banked class now holds — move it into tests/regressions/",
+            p.display()
+        );
+    }
 }
