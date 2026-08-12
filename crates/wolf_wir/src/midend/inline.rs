@@ -25,8 +25,16 @@
 //! syntactically evident); multi-block pure/eu callees inline freely
 //! with a join continuation. Recursive and SCC-internal calls never
 //! inline.
+//!
+//! s43 adds a [`Scope`]: which callees this run may CONSIDER at all.
+//! The whole-program pipeline uses it twice — the module phase sees
+//! only same-module callees (thin-LTO's per-module optimization), the
+//! cross-cluster phase sees its cluster's members plus the bodies the
+//! summary-driven import decision brought in. [`Scope::all`] is the
+//! s42 behaviour verbatim (every module function), which is what the
+//! plain [`super::optimize_module`] pipeline still passes.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::entity::EntityRef;
 use crate::facts::{FactKind, Just};
@@ -36,7 +44,33 @@ use crate::types::{RegionId, TypeData, TypeId};
 use crate::verify::VerifyError;
 
 use super::analysis;
+use super::summary::Homes;
 use super::{OptStats, Thresholds, run_managed};
+
+/// Which callees one inline run may consider, and how to account for
+/// the ones it accepts.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct Scope<'a> {
+    /// Callee names the run may consider; `None` = every module
+    /// function (the s42 whole-module behaviour).
+    pub allow: Option<&'a BTreeSet<String>>,
+    /// Names imported from ANOTHER cluster: accepting one is a
+    /// cross-cluster inline (the s43 evidence counter).
+    pub imported: Option<&'a BTreeSet<String>>,
+    /// Home modules, for the cross-module counter.
+    pub homes: Option<&'a Homes>,
+}
+
+impl Scope<'_> {
+    /// Every module function is a candidate — s42's posture.
+    pub(crate) fn all() -> Scope<'static> {
+        Scope::default()
+    }
+
+    fn allows(&self, name: &str) -> bool {
+        self.allow.is_none_or(|a| a.contains(name))
+    }
+}
 
 /// Bottom-up (callees-first) traversal order of the module call graph.
 /// Deterministic: DFS post-order from each function in id order.
@@ -112,6 +146,7 @@ pub(crate) fn run(
     verify_each: bool,
     th: &Thresholds,
     stats: &mut OptStats,
+    scope: Scope<'_>,
 ) -> Result<bool, VerifyError> {
     // ---- phase 1: decide (immutable module) ------------------------------
     let by_name: HashMap<String, FuncId> =
@@ -143,11 +178,15 @@ pub(crate) fn run(
             let Aux::Callee(ef) = caller.insts[inst].aux else {
                 continue;
             };
-            let Some(&cid) = by_name.get(&caller.ext_funcs[ef].name) else {
+            let name = &caller.ext_funcs[ef].name;
+            let Some(&cid) = by_name.get(name) else {
                 continue; // external — including every __wolf_rt_* seam
             };
             if cid == fid {
                 continue; // no self-inlining
+            }
+            if !scope.allows(name) {
+                continue; // outside this run's cluster/module horizon
             }
             let callee = &m.funcs[cid];
             if decide(m, callee, caller, inst, &loops, b, site_count[&cid], th) {
@@ -157,6 +196,26 @@ pub(crate) fn run(
     }
     if accepted.is_empty() {
         return Ok(false);
+    }
+    // Whole-program accounting (s43): a call the module phase could
+    // not even see is the win the summaries bought.
+    let mut cross_module = 0usize;
+    let mut cross_cluster = 0usize;
+    {
+        let caller_home = scope
+            .homes
+            .map(|h| h.home_of(&m.funcs[fid].name).to_string());
+        for &(_, _, cid) in &accepted {
+            let callee_name = &m.funcs[cid].name;
+            if let (Some(home), Some(homes)) = (&caller_home, scope.homes)
+                && homes.home_of(callee_name) != home.as_str()
+            {
+                cross_module += 1;
+            }
+            if scope.imported.is_some_and(|i| i.contains(callee_name)) {
+                cross_cluster += 1;
+            }
+        }
     }
     // ---- phase 1.5: prepare (needs &mut m.types) --------------------------
     // Fresh caller region ids: allocated past everything the caller or
@@ -248,6 +307,8 @@ pub(crate) fn run(
     })?;
     if changed {
         stats.inlined_calls += n;
+        stats.cross_module_inlined += cross_module;
+        stats.cross_cluster_inlined += cross_cluster;
     }
     Ok(changed)
 }

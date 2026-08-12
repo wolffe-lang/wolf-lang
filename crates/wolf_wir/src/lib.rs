@@ -85,6 +85,7 @@
 pub mod build;
 pub mod entity;
 pub mod facts;
+pub mod hash;
 pub mod ir;
 pub mod lower;
 pub mod midend;
@@ -97,6 +98,7 @@ pub mod verify;
 
 pub use build::{Const, FuncBuilder, InsOut, Stats, Var};
 pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
+pub use hash::sha256_hex;
 pub use ir::{
     Aux, Block, BlockCall, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst, InstData, Mode,
     Module, Param, SigData, SigId, Value, ValueData, ValueDef,

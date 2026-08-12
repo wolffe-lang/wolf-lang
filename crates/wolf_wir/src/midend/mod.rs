@@ -43,14 +43,18 @@
 //! barrier falls out of the token discipline plus the escape checks.
 
 pub(crate) mod analysis;
+pub mod cluster;
 mod coalesce;
 mod compact;
+pub mod dedup;
 mod inline;
 mod licm;
 mod memopt;
 mod rangeopt;
 mod simplify;
 mod sink;
+pub mod summary;
+mod wp;
 
 use crate::facts::FactData;
 use crate::ir::{FuncId, Function, Module, SigData, SigId};
@@ -58,6 +62,7 @@ use crate::types::TypeInterner;
 use crate::verify::{ErrClass, Invalidation, PassCtx, VerifyError, verify_function, verify_module};
 
 pub use rangeopt::HOT_LOOP_NOTE;
+pub use wp::{WholeProgram, WpStats, member_ids, optimize_whole_program, owner};
 
 /// The ONE tunable table (target 2 + amendment 4): every heuristic
 /// threshold the mid-end consults, in one place, adjusted by s44's
@@ -85,6 +90,18 @@ pub struct Thresholds {
     pub version_max_insts: u32,
     /// Loop-versioning: minimum remaining checks to pay for a guard.
     pub version_min_checks: u32,
+    /// Whole-program (s43): target summed WIR size per codegen
+    /// cluster — the cluster COUNT falls out of it, so this and
+    /// `cluster_max` are the whole partition's only inputs besides the
+    /// graph itself (D4: no core count, no wall clock).
+    pub cluster_target_size: u32,
+    /// Whole-program: hard cap on the cluster count.
+    pub cluster_max: usize,
+    /// Whole-program: largest callee eligible for cross-cluster
+    /// import, in WIR instructions.
+    pub import_max: u32,
+    /// Whole-program: total imported WIR instructions per cluster.
+    pub import_budget: u32,
 }
 
 impl Default for Thresholds {
@@ -100,6 +117,10 @@ impl Default for Thresholds {
             coalesce_max_bytes: 4096,
             version_max_insts: 48,
             version_min_checks: 1,
+            cluster_target_size: 512,
+            cluster_max: 8,
+            import_max: 96,
+            import_budget: 512,
         }
     }
 }
@@ -138,6 +159,12 @@ pub struct OptStats {
     pub trivial_params: usize,
     pub dce_removed: usize,
     pub inlined_calls: usize,
+    /// Of those, call sites whose callee lives in ANOTHER source
+    /// module (s43: the whole-program win, counted).
+    pub cross_module_inlined: usize,
+    /// Of those, callees imported across a cluster boundary by the
+    /// summary-driven import decision (thin-LTO import semantics).
+    pub cross_cluster_inlined: usize,
     pub loads_eliminated: usize,
     pub stores_forwarded: usize,
     pub dead_stores: usize,
@@ -188,7 +215,11 @@ impl std::fmt::Display for OptStats {
             self.trivial_params,
             self.dce_removed
         )?;
-        writeln!(f, "  inline: {} call site(s)", self.inlined_calls)?;
+        writeln!(
+            f,
+            "  inline: {} call site(s) ({} cross-module, {} cross-cluster)",
+            self.inlined_calls, self.cross_module_inlined, self.cross_cluster_inlined
+        )?;
         writeln!(
             f,
             "  memopt: {} load(s) eliminated, {} store(s) forwarded, {} dead store(s)",
@@ -323,18 +354,7 @@ pub fn optimize_module(m: &mut Module, opts: &Options) -> Result<OptStats, Verif
     let ve = opts.verify_each;
     let order = inline::bottom_up_order(m);
     for fid in order {
-        // Callee-simplify-before-inline: this function was already
-        // simplified in its own visit when a caller reaches here; the
-        // first visit simplifies before anything else looks at it.
-        simplify::run(m, fid, ve, th, &mut stats)?;
-        inline::run(m, fid, ve, th, &mut stats)?;
-        simplify::run(m, fid, ve, th, &mut stats)?;
-        memopt::run(m, fid, ve, &mut stats)?;
-        rangeopt::run(m, fid, ve, th, &mut stats)?;
-        sink::run(m, fid, ve, th, &mut stats)?;
-        coalesce::run(m, fid, ve, th, &mut stats)?;
-        licm::run(m, fid, ve, &mut stats)?;
-        simplify::run(m, fid, ve, th, &mut stats)?;
+        optimize_one(m, fid, ve, th, &mut stats, inline::Scope::all())?;
     }
     // Dead-function elimination: after inlining, callee bodies with no
     // remaining reference are ballast the backend would still compile.
@@ -348,6 +368,34 @@ pub fn optimize_module(m: &mut Module, opts: &Options) -> Result<OptStats, Verif
     // optimized module verifies before any backend sees it.
     verify_module(m)?;
     Ok(stats)
+}
+
+/// One function's full pass sequence, in the fixed order — the unit
+/// both [`optimize_module`] and the whole-program phase drive. The
+/// only difference between them is the inliner's [`inline::Scope`].
+///
+/// Callee-simplify-before-inline holds by construction: the CGSCC
+/// order means a function was already simplified in its own visit when
+/// a caller reaches here, and the first visit simplifies before
+/// anything else looks at it.
+fn optimize_one(
+    m: &mut Module,
+    fid: FuncId,
+    ve: bool,
+    th: &Thresholds,
+    stats: &mut OptStats,
+    scope: inline::Scope<'_>,
+) -> Result<(), VerifyError> {
+    simplify::run(m, fid, ve, th, stats)?;
+    inline::run(m, fid, ve, th, stats, scope)?;
+    simplify::run(m, fid, ve, th, stats)?;
+    memopt::run(m, fid, ve, stats)?;
+    rangeopt::run(m, fid, ve, th, stats)?;
+    sink::run(m, fid, ve, th, stats)?;
+    coalesce::run(m, fid, ve, th, stats)?;
+    licm::run(m, fid, ve, stats)?;
+    simplify::run(m, fid, ve, th, stats)?;
+    Ok(())
 }
 
 fn dead_function_elim(m: &mut Module, stats: &mut OptStats) {
@@ -411,7 +459,7 @@ pub fn run_named_pass(
     let ve = opts.verify_each;
     match name {
         "simplify" => simplify::run(m, func, ve, th, stats),
-        "inline" => inline::run(m, func, ve, th, stats),
+        "inline" => inline::run(m, func, ve, th, stats, inline::Scope::all()),
         "memopt" => memopt::run(m, func, ve, stats),
         "rangeopt" => rangeopt::run(m, func, ve, th, stats),
         "sink" => sink::run(m, func, ve, th, stats),
