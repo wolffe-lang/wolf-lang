@@ -1,0 +1,446 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal void @"_Wbump$0a6564b4ca44a6ca"(ptr noalias noundef dereferenceable(8) %p0) nounwind {
+b0:
+  %t1 = load i64, ptr %p0, align 8, !alias.scope !2
+  %t2 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t1, i64 1)
+  %t3 = extractvalue { i64, i1 } %t2, 0
+  %t4 = extractvalue { i64, i1 } %t2, 1
+  br i1 %t4, label %trap1, label %cont5, !prof !3
+cont5:
+  store i64 %t3, ptr %p0, align 8, !alias.scope !2
+  ret void
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal void @"_Wmark$5e4e7a5947cfb309"(ptr noalias noundef dereferenceable(8) %p0, i64 %p1) nounwind {
+b0:
+  %t1 = load i64, ptr %p0, align 8, !alias.scope !6
+  %t2 = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %t1, i64 10)
+  %t3 = extractvalue { i64, i1 } %t2, 0
+  %t4 = extractvalue { i64, i1 } %t2, 1
+  br i1 %t4, label %trap1, label %cont5, !prof !3
+cont5:
+  %t6 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t3, i64 %p1)
+  %t7 = extractvalue { i64, i1 } %t6, 0
+  %t8 = extractvalue { i64, i1 } %t6, 1
+  br i1 %t8, label %trap1, label %cont9, !prof !3
+cont9:
+  store i64 %t7, ptr %p0, align 8, !alias.scope !6
+  ret void
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal { i64, i64 } @"_Wsource$a44532fd5c8a03f4"(i64 %p0) nounwind {
+b0:
+  %slot1 = alloca [16 x i8], align 8
+  %slot2 = alloca [16 x i8], align 8
+  %t1 = icmp eq i64 %p0, 0
+  %t2 = zext i1 %t1 to i8
+  %t3 = icmp ne i8 %t2, 0
+  br i1 %t3, label %b1, label %b2
+b1:
+  store i64 1, ptr %slot1, align 1
+  %t4 = load i64, ptr %slot1, align 1
+  %t5 = getelementptr i8, ptr %slot1, i64 8
+  %t6 = load i64, ptr %t5, align 1
+  %t7 = insertvalue { i64, i64 } undef, i64 %t4, 0
+  %t8 = insertvalue { i64, i64 } %t7, i64 %t6, 1
+  ret { i64, i64 } %t8
+b2:
+  store i64 0, ptr %slot2, align 1
+  %t9 = getelementptr i8, ptr %slot2, i64 8
+  store i64 %p0, ptr %t9, align 8
+  %t10 = load i64, ptr %slot2, align 1
+  %t11 = getelementptr i8, ptr %slot2, i64 8
+  %t12 = load i64, ptr %t11, align 1
+  %t13 = insertvalue { i64, i64 } undef, i64 %t10, 0
+  %t14 = insertvalue { i64, i64 } %t13, i64 %t12, 1
+  ret { i64, i64 } %t14
+}
+
+define internal { i64, i64 } @"_Wtally$20e5a3ae60d22ba2"(i64 %p0, ptr noalias noundef dereferenceable(8) %p1, ptr noalias noundef dereferenceable(8) %p2) nounwind {
+b0:
+  %slot1 = alloca [16 x i8], align 8
+  %slot2 = alloca [16 x i8], align 8
+  %slot3 = alloca [16 x i8], align 8
+  %t1 = icmp slt i64 %p0, 0
+  %t2 = zext i1 %t1 to i8
+  %t3 = icmp ne i8 %t2, 0
+  br i1 %t3, label %b1, label %b2
+b1:
+  store i64 2, ptr %slot1, align 1
+  call void @"_Wbump$0a6564b4ca44a6ca"(ptr %p1)
+  call void @"_Wbump$0a6564b4ca44a6ca"(ptr %p2)
+  %t4 = load i64, ptr %slot1, align 1
+  %t5 = getelementptr i8, ptr %slot1, i64 8
+  %t6 = load i64, ptr %t5, align 1
+  %t7 = insertvalue { i64, i64 } undef, i64 %t4, 0
+  %t8 = insertvalue { i64, i64 } %t7, i64 %t6, 1
+  ret { i64, i64 } %t8
+b2:
+  %t9 = call { i64, i64 } @"_Wsource$a44532fd5c8a03f4"(i64 %p0)
+  %t10 = extractvalue { i64, i64 } %t9, 0
+  %t11 = extractvalue { i64, i64 } %t9, 1
+  store i64 %t10, ptr %slot2, align 1
+  %t12 = getelementptr i8, ptr %slot2, i64 8
+  store i64 %t11, ptr %t12, align 1
+  %t13 = load i64, ptr %slot2, align 1
+  %t14 = icmp ne i64 %t13, 0
+  %t15 = zext i1 %t14 to i8
+  %t16 = icmp ne i8 %t15, 0
+  br i1 %t16, label %b3, label %b4, !prof !3
+b3:
+  call void @"_Wbump$0a6564b4ca44a6ca"(ptr %p1)
+  call void @"_Wbump$0a6564b4ca44a6ca"(ptr %p2)
+  %t17 = load i64, ptr %slot2, align 1
+  %t18 = getelementptr i8, ptr %slot2, i64 8
+  %t19 = load i64, ptr %t18, align 1
+  %t20 = insertvalue { i64, i64 } undef, i64 %t17, 0
+  %t21 = insertvalue { i64, i64 } %t20, i64 %t19, 1
+  ret { i64, i64 } %t21
+b4:
+  %t22 = getelementptr i8, ptr %slot2, i64 8
+  %t23 = load i64, ptr %t22, align 8
+  %t24 = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %t23, i64 2)
+  %t25 = extractvalue { i64, i1 } %t24, 0
+  %t26 = extractvalue { i64, i1 } %t24, 1
+  br i1 %t26, label %trap1, label %cont27, !prof !3
+cont27:
+  store i64 0, ptr %slot3, align 1
+  %t28 = getelementptr i8, ptr %slot3, i64 8
+  store i64 %t25, ptr %t28, align 8
+  call void @"_Wbump$0a6564b4ca44a6ca"(ptr %p1)
+  %t29 = load i64, ptr %slot3, align 1
+  %t30 = getelementptr i8, ptr %slot3, i64 8
+  %t31 = load i64, ptr %t30, align 1
+  %t32 = insertvalue { i64, i64 } undef, i64 %t29, 0
+  %t33 = insertvalue { i64, i64 } %t32, i64 %t31, 1
+  ret { i64, i64 } %t33
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal i64 @"_Wprobe$fd21955509642ce2"(i8 %p0) nounwind {
+b0:
+  %t1 = call ptr @__wolf_rt_region_new()
+  %t2 = icmp ne i8 %p0, 0
+  br i1 %t2, label %b1, label %b2
+b1:
+  call void @__wolf_rt_region_free(ptr %t1)
+  ret i64 7
+b2:
+  call void @__wolf_rt_region_free(ptr %t1)
+  ret i64 3
+}
+
+define internal i64 @"_Wdepth$01e5da05a974d922"() nounwind {
+b0:
+  %slot1 = alloca [8 x i8], align 16
+  %slot2 = alloca [8 x i8], align 16
+  br label %b1
+b1:
+  store i64 0, ptr %slot1, align 8, !alias.scope !10, !noalias !11
+  call void @"_Wmark$5e4e7a5947cfb309"(ptr %slot1, i64 2)
+  %t1 = load i64, ptr %slot1, align 8, !alias.scope !10, !noalias !11
+  store i64 %t1, ptr %slot2, align 8, !alias.scope !12, !noalias !13
+  call void @"_Wmark$5e4e7a5947cfb309"(ptr %slot2, i64 1)
+  %t2 = load i64, ptr %slot2, align 8, !alias.scope !12, !noalias !13
+  br label %b2
+b2:
+  %t3 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 5, i64 %t2)
+  %t4 = extractvalue { i64, i1 } %t3, 0
+  %t5 = extractvalue { i64, i1 } %t3, 1
+  br i1 %t5, label %trap1, label %cont6, !prof !3
+cont6:
+  ret i64 %t4
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal i64 @"_Wclassify$1b1397f0823b1752"(i64 %p0, i8 %p1) nounwind {
+b0:
+  %t1 = icmp eq i64 %p0, 0
+  %t2 = zext i1 %t1 to i8
+  %t3 = icmp ne i8 %t2, 0
+  br i1 %t3, label %b2, label %b1
+b1:
+  %t4 = icmp eq i64 %p0, 1
+  %t5 = zext i1 %t4 to i8
+  %t6 = icmp ne i8 %t5, 0
+  br i1 %t6, label %b2, label %b4
+b2:
+  %t7 = icmp ne i8 %p1, 0
+  br i1 %t7, label %b3, label %b4
+b3:
+  br label %b8
+b4:
+  %t8 = icmp ne i8 %t2, 0
+  br i1 %t8, label %b6, label %b5
+b5:
+  %t9 = icmp eq i64 %p0, 1
+  %t10 = zext i1 %t9 to i8
+  %t11 = icmp ne i8 %t10, 0
+  br i1 %t11, label %b6, label %b7
+b6:
+  br label %b8
+b7:
+  br label %b8
+b8:
+  %v2 = phi i64 [ 10, %b3 ], [ 20, %b6 ], [ 30, %b7 ]
+  ret i64 %v2
+}
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  %slot1 = alloca [8 x i8], align 16
+  %slot2 = alloca [8 x i8], align 16
+  %slot3 = alloca [16 x i8], align 8
+  %slot4 = alloca [8 x i8], align 16
+  %slot5 = alloca [8 x i8], align 16
+  %slot6 = alloca [16 x i8], align 8
+  %slot7 = alloca [8 x i8], align 16
+  %slot8 = alloca [8 x i8], align 16
+  %slot9 = alloca [16 x i8], align 8
+  store i64 0, ptr %slot1, align 8, !alias.scope !21, !noalias !22
+  store i64 0, ptr %slot2, align 8, !alias.scope !23, !noalias !24
+  %t1 = call { i64, i64 } @"_Wtally$20e5a3ae60d22ba2"(i64 21, ptr %slot1, ptr %slot2)
+  %t2 = extractvalue { i64, i64 } %t1, 0
+  %t3 = extractvalue { i64, i64 } %t1, 1
+  store i64 %t2, ptr %slot3, align 1
+  %t4 = getelementptr i8, ptr %slot3, i64 8
+  store i64 %t3, ptr %t4, align 1
+  %t5 = load i64, ptr %slot1, align 8, !alias.scope !21, !noalias !22
+  %t6 = load i64, ptr %slot2, align 8, !alias.scope !23, !noalias !24
+  %t7 = load i64, ptr %slot3, align 1
+  %t8 = icmp ne i64 %t7, 0
+  %t9 = zext i1 %t8 to i8
+  %t10 = icmp ne i8 %t9, 0
+  br i1 %t10, label %b1, label %b5, !prof !3
+b1:
+  %t11 = load i64, ptr %slot3, align 1
+  %t12 = icmp eq i64 %t11, 1
+  %t13 = zext i1 %t12 to i8
+  %t14 = icmp ne i8 %t13, 0
+  br i1 %t14, label %b2, label %b3
+b2:
+  br label %b4
+b3:
+  br label %b4
+b4:
+  %v0 = phi i64 [ 90, %b2 ], [ 91, %b3 ]
+  br label %b6
+b5:
+  %t15 = getelementptr i8, ptr %slot3, i64 8
+  %t16 = load i64, ptr %t15, align 8
+  br label %b6
+b6:
+  %v1 = phi i64 [ %v0, %b4 ], [ %t16, %b5 ]
+  store i64 %t5, ptr %slot4, align 8, !alias.scope !25, !noalias !26
+  store i64 %t6, ptr %slot5, align 8, !alias.scope !27, !noalias !28
+  %t17 = call { i64, i64 } @"_Wtally$20e5a3ae60d22ba2"(i64 0, ptr %slot4, ptr %slot5)
+  %t18 = extractvalue { i64, i64 } %t17, 0
+  %t19 = extractvalue { i64, i64 } %t17, 1
+  store i64 %t18, ptr %slot6, align 1
+  %t20 = getelementptr i8, ptr %slot6, i64 8
+  store i64 %t19, ptr %t20, align 1
+  %t21 = load i64, ptr %slot4, align 8, !alias.scope !25, !noalias !26
+  %t22 = load i64, ptr %slot5, align 8, !alias.scope !27, !noalias !28
+  %t23 = load i64, ptr %slot6, align 1
+  %t24 = icmp ne i64 %t23, 0
+  %t25 = zext i1 %t24 to i8
+  %t26 = icmp ne i8 %t25, 0
+  br i1 %t26, label %b7, label %b8, !prof !3
+b7:
+  br label %b9
+b8:
+  %t27 = getelementptr i8, ptr %slot6, i64 8
+  %t28 = load i64, ptr %t27, align 8
+  br label %b9
+b9:
+  %v2 = phi i64 [ 7, %b7 ], [ %t28, %b8 ]
+  store i64 %t21, ptr %slot7, align 8, !alias.scope !29, !noalias !30
+  store i64 %t22, ptr %slot8, align 8, !alias.scope !31, !noalias !32
+  %t29 = call { i64, i64 } @"_Wtally$20e5a3ae60d22ba2"(i64 -1, ptr %slot7, ptr %slot8)
+  %t30 = extractvalue { i64, i64 } %t29, 0
+  %t31 = extractvalue { i64, i64 } %t29, 1
+  store i64 %t30, ptr %slot9, align 1
+  %t32 = getelementptr i8, ptr %slot9, i64 8
+  store i64 %t31, ptr %t32, align 1
+  %t33 = load i64, ptr %slot7, align 8, !alias.scope !29, !noalias !30
+  %t34 = load i64, ptr %slot8, align 8, !alias.scope !31, !noalias !32
+  %t35 = load i64, ptr %slot9, align 1
+  %t36 = icmp ne i64 %t35, 0
+  %t37 = zext i1 %t36 to i8
+  %t38 = icmp ne i8 %t37, 0
+  br i1 %t38, label %b10, label %b14, !prof !3
+b10:
+  %t39 = load i64, ptr %slot9, align 1
+  %t40 = icmp eq i64 %t39, 1
+  %t41 = zext i1 %t40 to i8
+  %t42 = icmp ne i8 %t41, 0
+  br i1 %t42, label %b11, label %b12
+b11:
+  br label %b13
+b12:
+  br label %b13
+b13:
+  %v3 = phi i64 [ 90, %b11 ], [ 91, %b12 ]
+  br label %b15
+b14:
+  %t43 = getelementptr i8, ptr %slot9, i64 8
+  %t44 = load i64, ptr %t43, align 8
+  br label %b15
+b15:
+  %v4 = phi i64 [ %v3, %b13 ], [ %t44, %b14 ]
+  %t45 = icmp eq i64 %v1, 42
+  %t46 = zext i1 %t45 to i8
+  %t47 = icmp ne i8 %t46, 0
+  br i1 %t47, label %b16, label %b17
+b16:
+  %t48 = icmp eq i64 %v2, 7
+  %t49 = zext i1 %t48 to i8
+  br label %b17
+b17:
+  %v5 = phi i8 [ 0, %b15 ], [ %t49, %b16 ]
+  %t50 = icmp ne i8 %v5, 0
+  br i1 %t50, label %b18, label %b19
+b18:
+  %t51 = icmp eq i64 %v4, 91
+  %t52 = zext i1 %t51 to i8
+  br label %b19
+b19:
+  %v6 = phi i8 [ 0, %b17 ], [ %t52, %b18 ]
+  %t53 = icmp ne i8 %v6, 0
+  br i1 %t53, label %b20, label %b21
+b20:
+  %t54 = icmp eq i64 %t33, 3
+  %t55 = zext i1 %t54 to i8
+  br label %b21
+b21:
+  %v7 = phi i8 [ 0, %b19 ], [ %t55, %b20 ]
+  %t56 = icmp ne i8 %v7, 0
+  br i1 %t56, label %b22, label %b23
+b22:
+  %t57 = icmp eq i64 %t34, 2
+  %t58 = zext i1 %t57 to i8
+  br label %b23
+b23:
+  %v8 = phi i8 [ 0, %b21 ], [ %t58, %b22 ]
+  %t59 = call i64 @"_Wprobe$fd21955509642ce2"(i8 1)
+  %t60 = icmp eq i64 %t59, 7
+  %t61 = zext i1 %t60 to i8
+  %t62 = icmp ne i8 %t61, 0
+  br i1 %t62, label %b24, label %b25
+b24:
+  %t63 = call i64 @"_Wprobe$fd21955509642ce2"(i8 0)
+  %t64 = icmp eq i64 %t63, 3
+  %t65 = zext i1 %t64 to i8
+  br label %b25
+b25:
+  %v9 = phi i8 [ 0, %b23 ], [ %t65, %b24 ]
+  %t66 = icmp ne i8 %v9, 0
+  br i1 %t66, label %b26, label %b27
+b26:
+  %t67 = call i64 @"_Wdepth$01e5da05a974d922"()
+  %t68 = icmp eq i64 %t67, 26
+  %t69 = zext i1 %t68 to i8
+  br label %b27
+b27:
+  %v10 = phi i8 [ 0, %b25 ], [ %t69, %b26 ]
+  %t70 = call i64 @"_Wclassify$1b1397f0823b1752"(i64 1, i8 1)
+  %t71 = icmp eq i64 %t70, 10
+  %t72 = zext i1 %t71 to i8
+  %t73 = icmp ne i8 %t72, 0
+  br i1 %t73, label %b28, label %b29
+b28:
+  %t74 = call i64 @"_Wclassify$1b1397f0823b1752"(i64 1, i8 0)
+  %t75 = icmp eq i64 %t74, 20
+  %t76 = zext i1 %t75 to i8
+  br label %b29
+b29:
+  %v11 = phi i8 [ 0, %b27 ], [ %t76, %b28 ]
+  %t77 = icmp ne i8 %v11, 0
+  br i1 %t77, label %b30, label %b31
+b30:
+  %t78 = call i64 @"_Wclassify$1b1397f0823b1752"(i64 5, i8 1)
+  %t79 = icmp eq i64 %t78, 30
+  %t80 = zext i1 %t79 to i8
+  br label %b31
+b31:
+  %v12 = phi i8 [ 0, %b29 ], [ %t80, %b30 ]
+  %t81 = icmp ne i8 %v8, 0
+  br i1 %t81, label %b32, label %b33
+b32:
+  br label %b33
+b33:
+  %v13 = phi i8 [ 0, %b31 ], [ %v10, %b32 ]
+  %t82 = icmp ne i8 %v13, 0
+  br i1 %t82, label %b34, label %b35
+b34:
+  br label %b35
+b35:
+  %v14 = phi i8 [ 0, %b33 ], [ %v12, %b34 ]
+  %t83 = icmp ne i8 %v14, 0
+  br i1 %t83, label %b36, label %b37
+b36:
+  br label %b38
+b37:
+  br label %b38
+b38:
+  %v15 = phi i64 [ 0, %b36 ], [ 1, %b37 ]
+  ret i64 %v15
+}
+
+declare void @__wolf_rt_region_free(ptr) nounwind
+declare ptr @__wolf_rt_region_new() nounwind
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
+
+!0 = distinct !{!"wolf.region.domain.bump"}
+!1 = distinct !{!"bump.r0", !0}
+!2 = !{!1}
+!3 = !{!"branch_weights", i32 1, i32 2000}
+!4 = distinct !{!"wolf.region.domain.mark"}
+!5 = distinct !{!"mark.r0", !4}
+!6 = !{!5}
+!7 = distinct !{!"wolf.region.domain.depth"}
+!8 = distinct !{!"depth.r0", !7}
+!9 = distinct !{!"depth.r1", !7}
+!10 = !{!8}
+!11 = !{!9}
+!12 = !{!9}
+!13 = !{!8}
+!14 = distinct !{!"wolf.region.domain.main"}
+!15 = distinct !{!"main.r0", !14}
+!16 = distinct !{!"main.r1", !14}
+!17 = distinct !{!"main.r2", !14}
+!18 = distinct !{!"main.r3", !14}
+!19 = distinct !{!"main.r4", !14}
+!20 = distinct !{!"main.r5", !14}
+!21 = !{!15}
+!22 = !{!16, !17, !18, !19, !20}
+!23 = !{!16}
+!24 = !{!15, !17, !18, !19, !20}
+!25 = !{!17}
+!26 = !{!15, !16, !18, !19, !20}
+!27 = !{!18}
+!28 = !{!15, !16, !17, !19, !20}
+!29 = !{!19}
+!30 = !{!15, !16, !17, !18, !20}
+!31 = !{!20}
+!32 = !{!15, !16, !17, !18, !19}

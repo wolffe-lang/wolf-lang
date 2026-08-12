@@ -1,0 +1,22 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal i64 @"_Wparam_facts$adb394e97ad2a986"(ptr noalias noundef dereferenceable(8) %p0, ptr noalias readonly noundef dereferenceable(8) %p1) nounwind {
+b0:
+  %t1 = load i64, ptr %p0, align 8, !alias.scope !2
+  %t2 = load i64, ptr %p1, align 8, !alias.scope !2, !invariant.load !3
+  %t3 = add i64 %t1, %t2
+  ret i64 %t3
+}
+
+
+!0 = distinct !{!"wolf.region.domain.param_facts"}
+!1 = distinct !{!"param_facts.r0", !0}
+!2 = !{!1}
+!3 = !{}

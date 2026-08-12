@@ -1,0 +1,469 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal i64 @"_WV.norm$dd74aa86acb928c5"(ptr noalias noundef dereferenceable(24) %p0) nounwind {
+b0:
+  %slot1 = alloca [24 x i8], align 8
+  %slot2 = alloca [24 x i8], align 8
+  %t1 = load i64, ptr %p0, align 8, !alias.scope !2
+  %t2 = mul i64 8, 1
+  %t3 = getelementptr i8, ptr %p0, i64 %t2
+  %t4 = load i64, ptr %t3, align 8, !alias.scope !2
+  %t5 = mul i64 16, 1
+  %t6 = getelementptr i8, ptr %p0, i64 %t5
+  %t7 = load i64, ptr %t6, align 8, !alias.scope !2
+  store i64 %t1, ptr %slot1, align 8
+  %t8 = getelementptr i8, ptr %slot1, i64 8
+  store i64 %t4, ptr %t8, align 8
+  %t9 = getelementptr i8, ptr %slot1, i64 16
+  store i64 %t7, ptr %t9, align 8
+  %t10 = load i64, ptr %slot1, align 8
+  %t11 = getelementptr i8, ptr %slot1, i64 8
+  %t12 = load i64, ptr %t11, align 8
+  %t13 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t10, i64 %t12)
+  %t14 = extractvalue { i64, i1 } %t13, 0
+  %t15 = extractvalue { i64, i1 } %t13, 1
+  br i1 %t15, label %trap1, label %cont16, !prof !3
+cont16:
+  store i64 %t14, ptr %p0, align 8, !alias.scope !2
+  store i64 0, ptr %t3, align 8, !alias.scope !2
+  %t17 = load i64, ptr %p0, align 8, !alias.scope !2
+  %t18 = load i64, ptr %t6, align 8, !alias.scope !2
+  store i64 %t17, ptr %slot2, align 8
+  %t19 = getelementptr i8, ptr %slot2, i64 8
+  store i64 0, ptr %t19, align 8
+  %t20 = getelementptr i8, ptr %slot2, i64 16
+  store i64 %t18, ptr %t20, align 8
+  %t21 = load i64, ptr %slot2, align 8
+  ret i64 %t21
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal void @"_WV.set_x$84f3cbb04cbd3927"(ptr noalias noundef dereferenceable(24) %p0, i64 %p1) nounwind {
+b0:
+  store i64 %p1, ptr %p0, align 8, !alias.scope !6
+  ret void
+}
+
+define internal void @"_Wswap_fields$0c5c9488fa716bf8"(ptr noalias noundef dereferenceable(8) %p0, ptr noalias noundef dereferenceable(8) %p1) nounwind {
+b0:
+  %t1 = load i64, ptr %p0, align 8, !alias.scope !10, !noalias !11
+  %t2 = load i64, ptr %p1, align 8, !alias.scope !12, !noalias !13
+  store i64 %t2, ptr %p0, align 8, !alias.scope !10, !noalias !11
+  store i64 %t1, ptr %p1, align 8, !alias.scope !12, !noalias !13
+  ret void
+}
+
+define internal i64 @"_Weat$9752258b14112037"(ptr readonly %p0) nounwind {
+b0:
+  %t1 = load i64, ptr %p0, align 8
+  %t2 = getelementptr i8, ptr %p0, i64 8
+  %t3 = load i64, ptr %t2, align 8
+  %t4 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t1, i64 %t3)
+  %t5 = extractvalue { i64, i1 } %t4, 0
+  %t6 = extractvalue { i64, i1 } %t4, 1
+  br i1 %t6, label %trap1, label %cont7, !prof !3
+cont7:
+  %t8 = getelementptr i8, ptr %p0, i64 16
+  %t9 = load i64, ptr %t8, align 8
+  %t10 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t5, i64 %t9)
+  %t11 = extractvalue { i64, i1 } %t10, 0
+  %t12 = extractvalue { i64, i1 } %t10, 1
+  br i1 %t12, label %trap1, label %cont13, !prof !3
+cont13:
+  ret i64 %t11
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  %slot1 = alloca [24 x i8], align 8
+  %slot2 = alloca [24 x i8], align 8
+  %slot3 = alloca [48 x i8], align 8
+  %slot4 = alloca [8 x i8], align 16
+  %slot5 = alloca [8 x i8], align 16
+  %slot6 = alloca [24 x i8], align 8
+  %slot7 = alloca [48 x i8], align 8
+  %slot8 = alloca [24 x i8], align 8
+  %slot9 = alloca [48 x i8], align 8
+  %slot10 = alloca [8 x i8], align 16
+  %slot11 = alloca [8 x i8], align 16
+  %slot12 = alloca [24 x i8], align 8
+  %slot13 = alloca [48 x i8], align 8
+  %slot14 = alloca [24 x i8], align 8
+  %slot15 = alloca [48 x i8], align 8
+  %slot16 = alloca [24 x i8], align 16
+  %slot17 = alloca [24 x i8], align 8
+  %slot18 = alloca [48 x i8], align 8
+  %slot19 = alloca [24 x i8], align 16
+  %slot20 = alloca [24 x i8], align 8
+  %slot21 = alloca [48 x i8], align 8
+  %slot22 = alloca [24 x i8], align 8
+  %slot23 = alloca [48 x i8], align 8
+  store i64 1, ptr %slot1, align 8
+  %t1 = getelementptr i8, ptr %slot1, i64 8
+  store i64 2, ptr %t1, align 8
+  %t2 = getelementptr i8, ptr %slot1, i64 16
+  store i64 3, ptr %t2, align 8
+  store i64 4, ptr %slot2, align 8
+  %t3 = getelementptr i8, ptr %slot2, i64 8
+  store i64 5, ptr %t3, align 8
+  %t4 = getelementptr i8, ptr %slot2, i64 16
+  store i64 6, ptr %t4, align 8
+  %t5 = load i64, ptr %slot1, align 1
+  %t6 = getelementptr i8, ptr %slot1, i64 8
+  %t7 = load i64, ptr %t6, align 1
+  %t8 = getelementptr i8, ptr %slot1, i64 16
+  %t9 = load i64, ptr %t8, align 1
+  store i64 %t5, ptr %slot3, align 1
+  %t10 = getelementptr i8, ptr %slot3, i64 8
+  store i64 %t7, ptr %t10, align 1
+  %t11 = getelementptr i8, ptr %slot3, i64 16
+  store i64 %t9, ptr %t11, align 1
+  %t12 = getelementptr i8, ptr %slot3, i64 24
+  %t13 = load i64, ptr %slot2, align 1
+  %t14 = getelementptr i8, ptr %slot2, i64 8
+  %t15 = load i64, ptr %t14, align 1
+  %t16 = getelementptr i8, ptr %slot2, i64 16
+  %t17 = load i64, ptr %t16, align 1
+  store i64 %t13, ptr %t12, align 1
+  %t18 = getelementptr i8, ptr %t12, i64 8
+  store i64 %t15, ptr %t18, align 1
+  %t19 = getelementptr i8, ptr %t12, i64 16
+  store i64 %t17, ptr %t19, align 1
+  %t20 = load i64, ptr %slot3, align 8
+  store i64 %t20, ptr %slot4, align 8, !alias.scope !21, !noalias !22
+  %t21 = getelementptr i8, ptr %slot3, i64 8
+  %t22 = load i64, ptr %t21, align 8
+  store i64 %t22, ptr %slot5, align 8, !alias.scope !23, !noalias !24
+  call void @"_Wswap_fields$0c5c9488fa716bf8"(ptr %slot4, ptr %slot5)
+  %t23 = load i64, ptr %slot4, align 8, !alias.scope !21, !noalias !22
+  %t24 = getelementptr i8, ptr %slot3, i64 16
+  %t25 = load i64, ptr %t24, align 8
+  store i64 %t23, ptr %slot6, align 8
+  %t26 = getelementptr i8, ptr %slot6, i64 8
+  store i64 %t22, ptr %t26, align 8
+  %t27 = getelementptr i8, ptr %slot6, i64 16
+  store i64 %t25, ptr %t27, align 8
+  %t28 = getelementptr i8, ptr %slot3, i64 24
+  %t29 = load i64, ptr %slot6, align 1
+  %t30 = getelementptr i8, ptr %slot6, i64 8
+  %t31 = load i64, ptr %t30, align 1
+  %t32 = getelementptr i8, ptr %slot6, i64 16
+  %t33 = load i64, ptr %t32, align 1
+  store i64 %t29, ptr %slot7, align 1
+  %t34 = getelementptr i8, ptr %slot7, i64 8
+  store i64 %t31, ptr %t34, align 1
+  %t35 = getelementptr i8, ptr %slot7, i64 16
+  store i64 %t33, ptr %t35, align 1
+  %t36 = getelementptr i8, ptr %slot7, i64 24
+  %t37 = load i64, ptr %t28, align 1
+  %t38 = getelementptr i8, ptr %t28, i64 8
+  %t39 = load i64, ptr %t38, align 1
+  %t40 = getelementptr i8, ptr %t28, i64 16
+  %t41 = load i64, ptr %t40, align 1
+  store i64 %t37, ptr %t36, align 1
+  %t42 = getelementptr i8, ptr %t36, i64 8
+  store i64 %t39, ptr %t42, align 1
+  %t43 = getelementptr i8, ptr %t36, i64 16
+  store i64 %t41, ptr %t43, align 1
+  %t44 = load i64, ptr %slot5, align 8, !alias.scope !23, !noalias !24
+  %t45 = load i64, ptr %slot7, align 8
+  %t46 = getelementptr i8, ptr %slot7, i64 16
+  %t47 = load i64, ptr %t46, align 8
+  store i64 %t45, ptr %slot8, align 8
+  %t48 = getelementptr i8, ptr %slot8, i64 8
+  store i64 %t44, ptr %t48, align 8
+  %t49 = getelementptr i8, ptr %slot8, i64 16
+  store i64 %t47, ptr %t49, align 8
+  %t50 = getelementptr i8, ptr %slot7, i64 24
+  %t51 = load i64, ptr %slot8, align 1
+  %t52 = getelementptr i8, ptr %slot8, i64 8
+  %t53 = load i64, ptr %t52, align 1
+  %t54 = getelementptr i8, ptr %slot8, i64 16
+  %t55 = load i64, ptr %t54, align 1
+  store i64 %t51, ptr %slot9, align 1
+  %t56 = getelementptr i8, ptr %slot9, i64 8
+  store i64 %t53, ptr %t56, align 1
+  %t57 = getelementptr i8, ptr %slot9, i64 16
+  store i64 %t55, ptr %t57, align 1
+  %t58 = getelementptr i8, ptr %slot9, i64 24
+  %t59 = load i64, ptr %t50, align 1
+  %t60 = getelementptr i8, ptr %t50, i64 8
+  %t61 = load i64, ptr %t60, align 1
+  %t62 = getelementptr i8, ptr %t50, i64 16
+  %t63 = load i64, ptr %t62, align 1
+  store i64 %t59, ptr %t58, align 1
+  %t64 = getelementptr i8, ptr %t58, i64 8
+  store i64 %t61, ptr %t64, align 1
+  %t65 = getelementptr i8, ptr %t58, i64 16
+  store i64 %t63, ptr %t65, align 1
+  %t66 = load i64, ptr %slot9, align 8
+  store i64 %t66, ptr %slot10, align 8, !alias.scope !25, !noalias !26
+  %t67 = getelementptr i8, ptr %slot9, i64 24
+  %t68 = load i64, ptr %t67, align 8
+  store i64 %t68, ptr %slot11, align 8, !alias.scope !27, !noalias !28
+  call void @"_Wswap_fields$0c5c9488fa716bf8"(ptr %slot10, ptr %slot11)
+  %t69 = load i64, ptr %slot10, align 8, !alias.scope !25, !noalias !26
+  %t70 = getelementptr i8, ptr %slot9, i64 8
+  %t71 = load i64, ptr %t70, align 8
+  %t72 = getelementptr i8, ptr %slot9, i64 16
+  %t73 = load i64, ptr %t72, align 8
+  store i64 %t69, ptr %slot12, align 8
+  %t74 = getelementptr i8, ptr %slot12, i64 8
+  store i64 %t71, ptr %t74, align 8
+  %t75 = getelementptr i8, ptr %slot12, i64 16
+  store i64 %t73, ptr %t75, align 8
+  %t76 = load i64, ptr %slot12, align 1
+  %t77 = getelementptr i8, ptr %slot12, i64 8
+  %t78 = load i64, ptr %t77, align 1
+  %t79 = getelementptr i8, ptr %slot12, i64 16
+  %t80 = load i64, ptr %t79, align 1
+  store i64 %t76, ptr %slot13, align 1
+  %t81 = getelementptr i8, ptr %slot13, i64 8
+  store i64 %t78, ptr %t81, align 1
+  %t82 = getelementptr i8, ptr %slot13, i64 16
+  store i64 %t80, ptr %t82, align 1
+  %t83 = getelementptr i8, ptr %slot13, i64 24
+  %t84 = load i64, ptr %t67, align 1
+  %t85 = getelementptr i8, ptr %t67, i64 8
+  %t86 = load i64, ptr %t85, align 1
+  %t87 = getelementptr i8, ptr %t67, i64 16
+  %t88 = load i64, ptr %t87, align 1
+  store i64 %t84, ptr %t83, align 1
+  %t89 = getelementptr i8, ptr %t83, i64 8
+  store i64 %t86, ptr %t89, align 1
+  %t90 = getelementptr i8, ptr %t83, i64 16
+  store i64 %t88, ptr %t90, align 1
+  %t91 = load i64, ptr %slot11, align 8, !alias.scope !27, !noalias !28
+  %t92 = getelementptr i8, ptr %slot13, i64 24
+  %t93 = getelementptr i8, ptr %t92, i64 8
+  %t94 = load i64, ptr %t93, align 8
+  %t95 = getelementptr i8, ptr %t92, i64 16
+  %t96 = load i64, ptr %t95, align 8
+  store i64 %t91, ptr %slot14, align 8
+  %t97 = getelementptr i8, ptr %slot14, i64 8
+  store i64 %t94, ptr %t97, align 8
+  %t98 = getelementptr i8, ptr %slot14, i64 16
+  store i64 %t96, ptr %t98, align 8
+  %t99 = load i64, ptr %slot13, align 1
+  %t100 = getelementptr i8, ptr %slot13, i64 8
+  %t101 = load i64, ptr %t100, align 1
+  %t102 = getelementptr i8, ptr %slot13, i64 16
+  %t103 = load i64, ptr %t102, align 1
+  store i64 %t99, ptr %slot15, align 1
+  %t104 = getelementptr i8, ptr %slot15, i64 8
+  store i64 %t101, ptr %t104, align 1
+  %t105 = getelementptr i8, ptr %slot15, i64 16
+  store i64 %t103, ptr %t105, align 1
+  %t106 = getelementptr i8, ptr %slot15, i64 24
+  %t107 = load i64, ptr %slot14, align 1
+  %t108 = getelementptr i8, ptr %slot14, i64 8
+  %t109 = load i64, ptr %t108, align 1
+  %t110 = getelementptr i8, ptr %slot14, i64 16
+  %t111 = load i64, ptr %t110, align 1
+  store i64 %t107, ptr %t106, align 1
+  %t112 = getelementptr i8, ptr %t106, i64 8
+  store i64 %t109, ptr %t112, align 1
+  %t113 = getelementptr i8, ptr %t106, i64 16
+  store i64 %t111, ptr %t113, align 1
+  %t114 = load i64, ptr %slot15, align 8
+  store i64 %t114, ptr %slot16, align 8, !alias.scope !29, !noalias !30
+  %t115 = getelementptr i8, ptr %slot15, i64 8
+  %t116 = load i64, ptr %t115, align 8
+  %t117 = mul i64 8, 1
+  %t118 = getelementptr i8, ptr %slot16, i64 %t117
+  store i64 %t116, ptr %t118, align 8, !alias.scope !29, !noalias !30
+  %t119 = getelementptr i8, ptr %slot15, i64 16
+  %t120 = load i64, ptr %t119, align 8
+  %t121 = mul i64 16, 1
+  %t122 = getelementptr i8, ptr %slot16, i64 %t121
+  store i64 %t120, ptr %t122, align 8, !alias.scope !29, !noalias !30
+  %t123 = call i64 @"_WV.norm$dd74aa86acb928c5"(ptr %slot16)
+  %t124 = load i64, ptr %slot16, align 8, !alias.scope !29, !noalias !30
+  %t125 = load i64, ptr %t118, align 8, !alias.scope !29, !noalias !30
+  %t126 = load i64, ptr %t122, align 8, !alias.scope !29, !noalias !30
+  store i64 %t124, ptr %slot17, align 8
+  %t127 = getelementptr i8, ptr %slot17, i64 8
+  store i64 %t125, ptr %t127, align 8
+  %t128 = getelementptr i8, ptr %slot17, i64 16
+  store i64 %t126, ptr %t128, align 8
+  %t129 = getelementptr i8, ptr %slot15, i64 24
+  %t130 = load i64, ptr %slot17, align 1
+  %t131 = getelementptr i8, ptr %slot17, i64 8
+  %t132 = load i64, ptr %t131, align 1
+  %t133 = getelementptr i8, ptr %slot17, i64 16
+  %t134 = load i64, ptr %t133, align 1
+  store i64 %t130, ptr %slot18, align 1
+  %t135 = getelementptr i8, ptr %slot18, i64 8
+  store i64 %t132, ptr %t135, align 1
+  %t136 = getelementptr i8, ptr %slot18, i64 16
+  store i64 %t134, ptr %t136, align 1
+  %t137 = getelementptr i8, ptr %slot18, i64 24
+  %t138 = load i64, ptr %t129, align 1
+  %t139 = getelementptr i8, ptr %t129, i64 8
+  %t140 = load i64, ptr %t139, align 1
+  %t141 = getelementptr i8, ptr %t129, i64 16
+  %t142 = load i64, ptr %t141, align 1
+  store i64 %t138, ptr %t137, align 1
+  %t143 = getelementptr i8, ptr %t137, i64 8
+  store i64 %t140, ptr %t143, align 1
+  %t144 = getelementptr i8, ptr %t137, i64 16
+  store i64 %t142, ptr %t144, align 1
+  %t145 = getelementptr i8, ptr %slot18, i64 24
+  %t146 = load i64, ptr %t145, align 8
+  %t147 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t123, i64 %t146)
+  %t148 = extractvalue { i64, i1 } %t147, 0
+  %t149 = extractvalue { i64, i1 } %t147, 1
+  br i1 %t149, label %trap1, label %cont150, !prof !3
+cont150:
+  %t151 = load i64, ptr %slot18, align 8
+  store i64 %t151, ptr %slot19, align 8, !alias.scope !31, !noalias !32
+  %t152 = getelementptr i8, ptr %slot18, i64 8
+  %t153 = load i64, ptr %t152, align 8
+  %t154 = mul i64 8, 1
+  %t155 = getelementptr i8, ptr %slot19, i64 %t154
+  store i64 %t153, ptr %t155, align 8, !alias.scope !31, !noalias !32
+  %t156 = getelementptr i8, ptr %slot18, i64 16
+  %t157 = load i64, ptr %t156, align 8
+  %t158 = mul i64 16, 1
+  %t159 = getelementptr i8, ptr %slot19, i64 %t158
+  store i64 %t157, ptr %t159, align 8, !alias.scope !31, !noalias !32
+  call void @"_WV.set_x$84f3cbb04cbd3927"(ptr %slot19, i64 %t157)
+  %t160 = load i64, ptr %slot19, align 8, !alias.scope !31, !noalias !32
+  %t161 = load i64, ptr %t155, align 8, !alias.scope !31, !noalias !32
+  %t162 = load i64, ptr %t159, align 8, !alias.scope !31, !noalias !32
+  store i64 %t160, ptr %slot20, align 8
+  %t163 = getelementptr i8, ptr %slot20, i64 8
+  store i64 %t161, ptr %t163, align 8
+  %t164 = getelementptr i8, ptr %slot20, i64 16
+  store i64 %t162, ptr %t164, align 8
+  %t165 = load i64, ptr %slot20, align 1
+  %t166 = getelementptr i8, ptr %slot20, i64 8
+  %t167 = load i64, ptr %t166, align 1
+  %t168 = getelementptr i8, ptr %slot20, i64 16
+  %t169 = load i64, ptr %t168, align 1
+  store i64 %t165, ptr %slot21, align 1
+  %t170 = getelementptr i8, ptr %slot21, i64 8
+  store i64 %t167, ptr %t170, align 1
+  %t171 = getelementptr i8, ptr %slot21, i64 16
+  store i64 %t169, ptr %t171, align 1
+  %t172 = getelementptr i8, ptr %slot21, i64 24
+  %t173 = load i64, ptr %t145, align 1
+  %t174 = getelementptr i8, ptr %t145, i64 8
+  %t175 = load i64, ptr %t174, align 1
+  %t176 = getelementptr i8, ptr %t145, i64 16
+  %t177 = load i64, ptr %t176, align 1
+  store i64 %t173, ptr %t172, align 1
+  %t178 = getelementptr i8, ptr %t172, i64 8
+  store i64 %t175, ptr %t178, align 1
+  %t179 = getelementptr i8, ptr %t172, i64 16
+  store i64 %t177, ptr %t179, align 1
+  %t180 = call i64 @"_Weat$9752258b14112037"(ptr %slot21)
+  %t181 = getelementptr i8, ptr %slot21, i64 24
+  %t182 = getelementptr i8, ptr %t181, i64 8
+  %t183 = load i64, ptr %t182, align 8
+  store i64 0, ptr %slot22, align 8
+  %t184 = getelementptr i8, ptr %slot22, i64 8
+  store i64 0, ptr %t184, align 8
+  %t185 = getelementptr i8, ptr %slot22, i64 16
+  store i64 0, ptr %t185, align 8
+  %t186 = load i64, ptr %slot22, align 1
+  %t187 = getelementptr i8, ptr %slot22, i64 8
+  %t188 = load i64, ptr %t187, align 1
+  %t189 = getelementptr i8, ptr %slot22, i64 16
+  %t190 = load i64, ptr %t189, align 1
+  store i64 %t186, ptr %slot23, align 1
+  %t191 = getelementptr i8, ptr %slot23, i64 8
+  store i64 %t188, ptr %t191, align 1
+  %t192 = getelementptr i8, ptr %slot23, i64 16
+  store i64 %t190, ptr %t192, align 1
+  %t193 = getelementptr i8, ptr %slot23, i64 24
+  %t194 = load i64, ptr %t181, align 1
+  %t195 = getelementptr i8, ptr %t181, i64 8
+  %t196 = load i64, ptr %t195, align 1
+  %t197 = getelementptr i8, ptr %t181, i64 16
+  %t198 = load i64, ptr %t197, align 1
+  store i64 %t194, ptr %t193, align 1
+  %t199 = getelementptr i8, ptr %t193, i64 8
+  store i64 %t196, ptr %t199, align 1
+  %t200 = getelementptr i8, ptr %t193, i64 16
+  store i64 %t198, ptr %t200, align 1
+  %t201 = load i64, ptr %slot23, align 8
+  %t202 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t201, i64 %t148)
+  %t203 = extractvalue { i64, i1 } %t202, 0
+  %t204 = extractvalue { i64, i1 } %t202, 1
+  br i1 %t204, label %trap1, label %cont205, !prof !3
+cont205:
+  %t206 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t203, i64 %t180)
+  %t207 = extractvalue { i64, i1 } %t206, 0
+  %t208 = extractvalue { i64, i1 } %t206, 1
+  br i1 %t208, label %trap1, label %cont209, !prof !3
+cont209:
+  %t210 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t207, i64 %t183)
+  %t211 = extractvalue { i64, i1 } %t210, 0
+  %t212 = extractvalue { i64, i1 } %t210, 1
+  br i1 %t212, label %trap1, label %cont213, !prof !3
+cont213:
+  %t214 = icmp eq i64 %t211, 18
+  %t215 = zext i1 %t214 to i8
+  %t216 = icmp ne i8 %t215, 0
+  br i1 %t216, label %b1, label %b2
+b1:
+  br label %b3
+b2:
+  br label %b3
+b3:
+  %v0 = phi i64 [ 0, %b1 ], [ 1, %b2 ]
+  ret i64 %v0
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+
+!0 = distinct !{!"wolf.region.domain.V.norm"}
+!1 = distinct !{!"V.norm.r0", !0}
+!2 = !{!1}
+!3 = !{!"branch_weights", i32 1, i32 2000}
+!4 = distinct !{!"wolf.region.domain.V.set_x"}
+!5 = distinct !{!"V.set_x.r0", !4}
+!6 = !{!5}
+!7 = distinct !{!"wolf.region.domain.swap_fields"}
+!8 = distinct !{!"swap_fields.r0", !7}
+!9 = distinct !{!"swap_fields.r1", !7}
+!10 = !{!8}
+!11 = !{!9}
+!12 = !{!9}
+!13 = !{!8}
+!14 = distinct !{!"wolf.region.domain.main"}
+!15 = distinct !{!"main.r0", !14}
+!16 = distinct !{!"main.r1", !14}
+!17 = distinct !{!"main.r2", !14}
+!18 = distinct !{!"main.r3", !14}
+!19 = distinct !{!"main.r4", !14}
+!20 = distinct !{!"main.r5", !14}
+!21 = !{!15}
+!22 = !{!16, !17, !18, !19, !20}
+!23 = !{!16}
+!24 = !{!15, !17, !18, !19, !20}
+!25 = !{!17}
+!26 = !{!15, !16, !18, !19, !20}
+!27 = !{!18}
+!28 = !{!15, !16, !17, !19, !20}
+!29 = !{!19}
+!30 = !{!15, !16, !17, !18, !20}
+!31 = !{!20}
+!32 = !{!15, !16, !17, !18, !19}

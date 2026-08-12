@@ -1,0 +1,24 @@
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i32 -1640531527
+  %1 = iconst.i32 0
+  %2 = iconst.i32 8
+  jmp b1(%1, %0)
+b1(%3: i32, %4: i32):
+  %5 = icmp.slt %3, %2
+  br %5, b2, b4
+b2:
+  %6 = iconst.i32 1664525
+  %7 = imul.wrap %4, %6
+  %8 = iconst.i32 1013904223
+  %9 = iadd.wrap %7, %8
+  jmp b3
+b3:
+  %10 = iconst.i32 1
+  %11 = iadd.chk %3, %10
+  jmp b1(%11, %9)
+b4:
+  %12 = iconst.i32 2147483647
+  %13 = iconst.i32 1
+  trap.overflow
+}
