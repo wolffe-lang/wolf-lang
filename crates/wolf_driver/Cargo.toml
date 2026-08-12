@@ -27,6 +27,11 @@ wolf_rt.workspace = true
 wolf_query.workspace = true
 wolf_lsp.workspace = true
 wolf_pkg.workspace = true
+# s43: clusters lower through the backend independently, so the release
+# tier fans them out over the machine's cores. Already the workspace's
+# data-parallel dependency (wolf_sema resolves and typechecks with it);
+# no new crate enters the graph.
+rayon.workspace = true
 
 [dev-dependencies]
 # s30 debug tests: parse the built executable's ELF sections to assert

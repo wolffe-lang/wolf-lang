@@ -1,0 +1,9 @@
+---
+source: crates/wolf_wir/tests/whole_program.rs
+expression: "print_selected(&m, &[m.funcs.keys().next().expect(\"a func\")])"
+---
+fn @inst00(i64) -> i64 {
+b0(%0: i64):
+  %1 = iadd.chk %0, %0
+  ret %1
+}

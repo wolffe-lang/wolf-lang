@@ -598,6 +598,115 @@ fn bench_runtime(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
 /// are module-grain and deliberately ugly — c12's before/after story
 /// baselines here). The sema/CTFE/WIR example micro-metrics ride
 /// along unchanged.
+/// The WIDE bench project (s43): 8 modules × 8 functions whose bodies
+/// are deliberately past the inliner's largest budget, so the
+/// whole-program phase produces MANY clusters and the parallel codegen
+/// lane has something real to measure. The narrow `nmod` chain stays
+/// exactly as it was (its baselines must remain comparable) — this is
+/// a second project, not a redefinition of the first.
+fn bench_wide_project(proj: &Path) {
+    const MODS: usize = 8;
+    const FNS: usize = 8;
+    const STMTS: usize = 120; // > every inline budget in the table
+    let _ = std::fs::remove_dir_all(proj);
+    std::fs::create_dir_all(proj).expect("mkdir wide project");
+    for k in 1..=MODS {
+        let dir = proj.join(format!("w{k:02}"));
+        std::fs::create_dir_all(&dir).expect("mkdir module");
+        let mut src = String::from("//! member: true\n");
+        for j in 1..=FNS {
+            src.push_str(&format!(
+                "\n/// Wide body {k}.{j}.\npub fn h{k:02}{j:02}(x: int) -> int {{\n    let v0 = x + {j}\n"
+            ));
+            for s in 1..=STMTS {
+                let op = match s % 4 {
+                    0 => "+",
+                    1 => "*",
+                    2 => "-",
+                    _ => "+",
+                };
+                src.push_str(&format!("    let v{s} = v{} {op} {}\n", s - 1, (s % 7) + 1));
+            }
+            src.push_str(&format!("    v{STMTS}\n}}\n"));
+        }
+        // One aggregator per module: keeps every body reachable
+        // (dead-function elimination would otherwise take them).
+        src.push_str("\n/// Aggregate.\npub fn agg(x: int) -> int {\n    ");
+        let calls: Vec<String> = (1..=FNS).map(|j| format!("h{k:02}{j:02}(x)")).collect();
+        src.push_str(&calls.join(" + "));
+        src.push_str("\n}\n");
+        std::fs::write(dir.join(format!("w{k:02}.lu")), src).expect("write wide module");
+    }
+    let uses: String = (1..=MODS).map(|k| format!("use w{k:02}\n")).collect();
+    let sum: Vec<String> = (1..=MODS).map(|k| format!("w{k:02}.agg(1)")).collect();
+    std::fs::write(
+        proj.join("main.lu"),
+        format!(
+            "{uses}\nfn main() -> !int {{\n    if {} > 0 {{ 0 }} else {{ 1 }}\n}}\n",
+            sum.join(" + ")
+        ),
+    )
+    .expect("write wide main");
+}
+
+/// Scrape the whole-program counters off one `--release
+/// --codegen-report` build (s43): cross-module inlines, cross-cluster
+/// inlines, imports, clusters, and the D8 dedup ratio. Deterministic
+/// counts, not timings — they say what the optimizer DID, so a silent
+/// loss of cross-module optimization shows up as a number, not as a
+/// mystery in a wall clock.
+fn whole_program_counts(
+    wolf: &Path,
+    entry: &Path,
+    prog: &Path,
+) -> Option<Vec<(&'static str, f64, &'static str)>> {
+    let out = Command::new(wolf)
+        .arg("build")
+        .arg(entry)
+        .arg("-o")
+        .arg(prog)
+        .arg("--release")
+        .arg("--no-cache")
+        .arg("--codegen-report")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stderr).into_owned();
+    // "  whole-program: N module(s) -> N cluster(s), N import(s); N
+    //   cross-module inline(s), N cross-cluster"
+    let wp = text.lines().find(|l| l.contains("whole-program:"))?;
+    let dd = text.lines().find(|l| l.contains("dedup:"))?;
+    // Label-anchored, never positional: the number immediately before
+    // the label word. A stats-line reword breaks the lane loudly (the
+    // metric vanishes) instead of silently reporting the wrong field.
+    let before = |line: &str, label: &str| -> Option<f64> {
+        let idx = line.find(label)?;
+        line[..idx].split_whitespace().last()?.parse().ok()
+    };
+    let mut v: Vec<(&'static str, f64, &'static str)> = Vec::new();
+    for (metric, label, line) in [
+        ("clusters", "cluster(s)", wp),
+        ("cluster_imports", "import(s)", wp),
+        ("cross_module_inlines", "cross-module inline(s)", wp),
+        ("cross_cluster_inlines", "cross-cluster", wp),
+        ("dedup_bodies_seen", "bodies ->", dd),
+        ("dedup_bodies_unique", "unique", dd),
+    ] {
+        if let Some(value) = before(line, label) {
+            v.push((metric, value, "count"));
+        }
+    }
+    // The tracked D8 health metric: instantiations to unique bodies.
+    if let (Some(seen), Some(unique)) = (before(dd, "bodies ->"), before(dd, "unique"))
+        && unique > 0.0
+    {
+        v.push(("dedup_ratio", seen / unique, "ratio"));
+    }
+    (!v.is_empty()).then_some(v)
+}
+
 fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
     let mut records = Vec::new();
     let config = "wolf-batch-v0";
@@ -713,6 +822,124 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
                     commit,
                     config,
                 ));
+            }
+            // (b'') the s43 whole-program lane. Two halves:
+            //
+            // - PARALLEL SCALING: the same clean release build at one
+            //   worker and at eight. Clusters lower independently, so
+            //   the ratio is the codegen phase's scaling (contract
+            //   target 4). Report-only until s44's variance work; the
+            //   BUILDS themselves stay byte-identical either way,
+            //   which the driver's `release_builds_are_reproducible`
+            //   test gates.
+            // - WHOLE-PROGRAM COUNTS: cross-module inlines, imports,
+            //   clusters, and the D8 instantiations-to-unique-bodies
+            //   ratio — the health metrics the contract tracks forever.
+            let release_1t = |threads: &str| -> Option<f64> {
+                let _ = std::fs::remove_dir_all(proj.join(".lu-cache"));
+                let t = Instant::now();
+                let ok = Command::new(wolf)
+                    .arg("build")
+                    .arg(&entry)
+                    .arg("-o")
+                    .arg(&prog)
+                    .arg("--release")
+                    .env("RAYON_NUM_THREADS", threads)
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false);
+                ok.then(|| t.elapsed().as_secs_f64())
+            };
+            for _ in 0..runs {
+                if let (Some(one), Some(eight)) = (release_1t("1"), release_1t("8")) {
+                    records.push(record(
+                        "nmod",
+                        "compile",
+                        "wolf",
+                        "release_clean_build_1t_wall_s",
+                        one,
+                        "s",
+                        commit,
+                        config,
+                    ));
+                    records.push(record(
+                        "nmod",
+                        "compile",
+                        "wolf",
+                        "release_clean_build_8t_wall_s",
+                        eight,
+                        "s",
+                        commit,
+                        config,
+                    ));
+                }
+            }
+            if let Some(counts) = whole_program_counts(wolf, &entry, &prog) {
+                for (metric, value, unit) in counts {
+                    records.push(record(
+                        "nmod", "compile", "wolf", metric, value, unit, commit, config,
+                    ));
+                }
+            }
+            // (b''') the WIDE project: enough WIR volume to partition,
+            // so the parallel codegen lane measures clusters lowering
+            // side by side rather than one cluster twice.
+            let wide = Path::new("target/bench-wide");
+            bench_wide_project(wide);
+            let wentry = wide.join("main.lu");
+            let wprog = wide.join("prog");
+            // Returns (total wall, codegen-phase wall): the phase
+            // number is what parallel scaling is ABOUT — the frontend
+            // and mid-end ahead of it are serial, so a total-wall
+            // ratio would understate the partition's effect.
+            let wide_build = |threads: &str| -> Option<(f64, f64)> {
+                let _ = std::fs::remove_dir_all(wide.join(".lu-cache"));
+                let t = Instant::now();
+                let out = Command::new(wolf)
+                    .arg("build")
+                    .arg(&wentry)
+                    .arg("-o")
+                    .arg(&wprog)
+                    .arg("--release")
+                    .arg("--verbose")
+                    .env("RAYON_NUM_THREADS", threads)
+                    .output()
+                    .ok()?;
+                if !out.status.success() {
+                    return None;
+                }
+                let total = t.elapsed().as_secs_f64();
+                let text = String::from_utf8_lossy(&out.stderr).into_owned();
+                let phase = text
+                    .lines()
+                    .find_map(|l| l.split("unit(s) in ").nth(1))
+                    .and_then(|s| s.trim_end_matches('s').parse::<f64>().ok())?;
+                Some((total, phase))
+            };
+            if wide_build("8").is_some() {
+                for _ in 0..runs {
+                    if let (Some(one), Some(eight)) = (wide_build("1"), wide_build("8")) {
+                        for (metric, value) in [
+                            ("release_clean_build_1t_wall_s", one.0),
+                            ("release_clean_build_8t_wall_s", eight.0),
+                            ("release_codegen_1t_wall_s", one.1),
+                            ("release_codegen_8t_wall_s", eight.1),
+                        ] {
+                            records.push(record(
+                                "nmodwide", "compile", "wolf", metric, value, "s", commit, config,
+                            ));
+                        }
+                    }
+                }
+                if let Some(counts) = whole_program_counts(wolf, &wentry, &wprog) {
+                    for (metric, value, unit) in counts {
+                        records.push(record(
+                            "nmodwide", "compile", "wolf", metric, value, unit, commit, config,
+                        ));
+                    }
+                }
+            } else {
+                eprintln!("bench: wide project did not build — parallel codegen lane skipped");
             }
         } else {
             eprintln!("bench: release tier unavailable (clang?) — Tier-R compile lane skipped");

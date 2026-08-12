@@ -1136,6 +1136,7 @@ name = "wolf_driver"
 version = "0.1.0"
 dependencies = [
  "object",
+ "rayon",
  "serde_json",
  "wolf_backend",
  "wolf_codegen_clif",

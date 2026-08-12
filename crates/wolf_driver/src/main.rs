@@ -604,6 +604,11 @@ struct BuildOpts {
     /// whose own reporter renders the diagnostic set — twice would be
     /// noise).
     report_warnings: bool,
+    /// `--codegen-report` (s43): dump the frozen summary index and the
+    /// cluster/import decisions to stderr. OUR diagnostic surface, not
+    /// a tuning knob — cluster count and size stay compiler-chosen
+    /// (s43 non-target: no user-facing knobs at v1).
+    codegen_report: bool,
 }
 
 impl BuildOpts {
@@ -617,6 +622,7 @@ impl BuildOpts {
             cache_root: None,
             lints: LintLevels::new(),
             report_warnings: false,
+            codegen_report: false,
         }
     }
 }
@@ -660,10 +666,19 @@ fn effective_lints(entry: &Path, cli: &LintLevels) -> Result<LintLevels, String>
     Ok(levels)
 }
 
-/// One per-module compilation unit (s31): a sema module's functions in
-/// the whole-package WIR module, plus its rebuild key.
+/// One acquired unit: its object bytes plus the `--verbose`
+/// accounting line, deferred so parallel cluster codegen still reports
+/// in unit order.
+type UnitResult = Result<(Vec<u8>, Option<String>), BuildStop>;
+
+/// One compilation unit: a sema MODULE's functions on the debug tier
+/// (s31, the D7 spine), a codegen CLUSTER's functions on the release
+/// tier (s43 target 5) — plus its rebuild key. One shape, because the
+/// cache, the DWARF split, and the entry/trap-table rule are the same
+/// question either way; only the partition differs.
 struct ModUnit {
-    /// Cache-friendly display name (`root` for the package root).
+    /// Cache-friendly display name (`root` for the package root on the
+    /// debug tier; `c00`, `c01`, … for release clusters).
     name: String,
     funcs: Vec<wolf_wir::FuncId>,
     /// Full rebuild key (hex); the first 16 chars name the object.
@@ -676,12 +691,18 @@ struct ModUnit {
 
 /// The rebuild key's components (each a sha256 hex): toolchain/ABI/
 /// profile environment, module source, direct-dep interface hashes,
-/// and the printed-WIR codegen input.
+/// the printed-WIR codegen input, and — on the release tier — the
+/// whole-program summary state this unit rests on.
 struct KeyComps {
     env: String,
     src: String,
     deps: String,
     wir: String,
+    /// s43: `summary-format <v> <cluster content key>` for a release
+    /// cluster, `-` for a debug-tier module unit (whose objects must
+    /// NOT be invalidated by a summary-format bump — the dev loop is
+    /// Tier-F's, D4's honest-tiers tradeoff).
+    sum: String,
 }
 
 /// Compile one entry file to a native executable at `out` (s31: the
@@ -805,26 +826,49 @@ fn compile_native(
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
         return Ok(());
     }
-    // The Tier-R mid-end (s42): optimize WIR before any backend sees
-    // it. Release-only by default; WOLF_MIDEND=1 forces it on the
-    // debug tier too (the conc-conservatism differential litmus runs
-    // spawn corpus through Tier-F with and without the optimizer).
-    if opts.release || std::env::var("WOLF_MIDEND").as_deref() == Ok("1") {
-        match wolf_wir::midend::optimize_module(&mut module, &wolf_wir::midend::Options::default())
-        {
-            Ok(stats) => {
-                if std::env::var("WOLF_MIDEND_STATS").as_deref() == Ok("1") {
-                    eprintln!("{stats}");
-                }
-                if std::env::var("WOLF_MIDEND_DUMP").as_deref() == Ok("1") {
-                    eprintln!("{}", wolf_wir::print_module(&module));
-                }
-            }
-            Err(e) => {
-                eprintln!("wolf build: ICE: mid-end broke the module\n{e}");
-                std::process::exit(2);
-            }
+    // The Tier-R mid-end (s42) and the whole-program phase (s43).
+    //
+    // `--release` compiles the module graph as ONE program (D4: LTO is
+    // the model, not a flag): the s42 pipeline runs per module, bodies
+    // dedup by content hash, summaries drive clustering and the import
+    // decision, and cross-cluster inlining follows. The debug tier
+    // keeps the plain s42 pipeline — its own dev loop, its own
+    // granularity (D4's honest tiers). `WOLF_MIDEND=1` forces the s42
+    // pipeline onto the debug tier (the conc-conservatism differential
+    // litmus runs spawn corpus through Tier-F with and without it).
+    let ice = |e: wolf_wir::VerifyError| -> ! {
+        eprintln!("wolf build: ICE: mid-end broke the module\n{e}");
+        std::process::exit(2);
+    };
+    let mid_stats = std::env::var("WOLF_MIDEND_STATS").as_deref() == Ok("1");
+    let mut whole: Option<wolf_wir::midend::WholeProgram> = None;
+    if opts.release {
+        let homes = wolf_wir::midend::summary::Homes::from_package(&res.package, &module);
+        let wp = wolf_wir::midend::optimize_whole_program(
+            &mut module,
+            &homes,
+            &wolf_wir::midend::Options::default(),
+        )
+        .unwrap_or_else(|e| ice(e));
+        if mid_stats {
+            eprintln!("{}", wp.stats);
         }
+        if opts.codegen_report {
+            eprint!("{}", codegen_report(&wp));
+        }
+        whole = Some(wp);
+    } else if std::env::var("WOLF_MIDEND").as_deref() == Ok("1") {
+        let stats =
+            wolf_wir::midend::optimize_module(&mut module, &wolf_wir::midend::Options::default())
+                .unwrap_or_else(|e| ice(e));
+        if mid_stats {
+            eprintln!("{stats}");
+        }
+    }
+    if (opts.release || std::env::var("WOLF_MIDEND").as_deref() == Ok("1"))
+        && std::env::var("WOLF_MIDEND_DUMP").as_deref() == Ok("1")
+    {
+        eprintln!("{}", wolf_wir::print_module(&module));
     }
     // Backend: the driver drives the TRAIT; ClifBackend is the s28
     // implementation behind it (capabilities, never identity).
@@ -932,7 +976,71 @@ fn compile_native(
         },
     );
     let mut units: Vec<ModUnit> = Vec::new();
+    // ---- release: cluster units (s43 target 5) -------------------------
+    //
+    // Release-mode incrementality is deliberately COARSE (D4): the
+    // object cache is keyed per cluster on (member + import body
+    // hashes, summary format, toolchain/ABI/profile). A clean hit
+    // skips LLVM for that cluster; no finer promise is made, because
+    // the dev loop is Tier-F's job.
+    if let Some(wp) = &whole {
+        // Functions minted AFTER clustering (the entry shim) belong to
+        // no cluster; they ride the one that owns `main`.
+        let extras: Vec<wolf_wir::FuncId> = module
+            .funcs
+            .iter()
+            .filter(|(_, f)| wolf_wir::midend::owner(&wp.clusters, &f.name).is_none())
+            .map(|(fid, _)| fid)
+            .collect();
+        let extra_owner = wp
+            .clusters
+            .iter()
+            .position(|c| c.members.iter().any(|m| m == "main"))
+            .unwrap_or(0);
+        for (i, c) in wp.clusters.iter().enumerate() {
+            let mut funcs = wolf_wir::midend::member_ids(&module, c);
+            if i == extra_owner {
+                funcs.extend(extras.iter().copied());
+                funcs.sort();
+                funcs.dedup();
+            }
+            if funcs.is_empty() {
+                continue;
+            }
+            let wir_text = wolf_wir::print_selected(&module, &funcs);
+            let comps = KeyComps {
+                env: env_comp.clone(),
+                src: "-".to_string(),
+                deps: "-".to_string(),
+                wir: sha256_hex(format!("{wir_text}\ntags:{}", module.tags.join(",")).as_bytes()),
+                sum: format!("summary-format {} {}", wp.stats.summary_version, c.key),
+            };
+            let key = sha256_hex(
+                format!(
+                    "{}\n{}\n{}\n{}\n{}\n{}",
+                    comps.env, c.name, comps.src, comps.deps, comps.wir, comps.sum
+                )
+                .as_bytes(),
+            );
+            units.push(ModUnit {
+                name: c.name.clone(),
+                is_entry: funcs.contains(&shim),
+                funcs,
+                key,
+                comps,
+            });
+        }
+        // The entry shim must land in exactly one object.
+        debug_assert_eq!(
+            units.iter().filter(|u| u.is_entry).count(),
+            1,
+            "exactly one cluster carries the entry shim"
+        );
+    }
     for &mi in &pkg.topo {
+        if whole.is_some() {
+            break; // clusters replaced the module partition
+        }
         let Some(funcs) = by_module.get(&mi) else {
             continue; // type-only modules produce no object
         };
@@ -972,11 +1080,12 @@ fn compile_native(
             src: sha256_hex(src_acc.as_bytes()),
             deps: sha256_hex(deps_acc.as_bytes()),
             wir: sha256_hex(format!("{wir_text}\ntags:{}", module.tags.join(",")).as_bytes()),
+            sum: "-".to_string(),
         };
         let key = sha256_hex(
             format!(
-                "{}\n{}\n{}\n{}\n{}",
-                comps.env, name, comps.src, comps.deps, comps.wir
+                "{}\n{}\n{}\n{}\n{}\n{}",
+                comps.env, name, comps.src, comps.deps, comps.wir, comps.sum
             )
             .as_bytes(),
         );
@@ -1012,9 +1121,13 @@ fn compile_native(
         }
     }
 
-    // Acquire object bytes per unit: cache hit or compile.
-    let mut objects: Vec<(String, Vec<u8>)> = Vec::new();
-    for u in &units {
+    // Acquire object bytes per unit: cache hit or compile. Clusters
+    // lower through the backend INDEPENDENTLY (s43 target 4), so the
+    // release tier fans them out over the machine's cores — one
+    // backend instance per worker, results collected IN UNIT ORDER so
+    // the link inputs (and the accounting lines) stay byte-stable
+    // whatever the thread schedule did (D4).
+    let acquire = |u: &ModUnit| -> UnitResult {
         let obj_file = cache
             .as_ref()
             .map(|c| c.join("obj").join(format!("{}-{}.o", u.name, &u.key[..16])));
@@ -1026,17 +1139,16 @@ fn compile_native(
         {
             let bytes = std::fs::read(p)
                 .map_err(|e| BuildStop::Environment(format!("read {}: {e}", p.display())))?;
-            if opts.verbose {
-                eprintln!(
+            let log = opts.verbose.then(|| {
+                format!(
                     "wolf build: {}: reused object (key {})",
                     u.name,
                     &u.key[..16]
-                );
-            }
-            objects.push((u.name.clone(), bytes));
-            continue;
+                )
+            });
+            return Ok((bytes, log));
         }
-        if opts.verbose {
+        let log = opts.verbose.then(|| {
             let old = manifest_file
                 .as_ref()
                 .and_then(|p| std::fs::read_to_string(p).ok())
@@ -1050,6 +1162,8 @@ fn compile_native(
                         "source changed".to_string()
                     } else if old["deps"].as_str() != Some(&u.comps.deps) {
                         "dep interface changed".to_string()
+                    } else if old["sum"].as_str() != Some(&u.comps.sum) {
+                        "summary/cluster changed".to_string()
                     } else if old["wir"].as_str() != Some(&u.comps.wir) {
                         "codegen input changed".to_string()
                     } else {
@@ -1057,14 +1171,14 @@ fn compile_native(
                     }
                 }
             };
-            eprintln!("wolf build: {}: compiled ({reason})", u.name);
-        }
+            format!("wolf build: {}: compiled ({reason})", u.name)
+        });
         let bytes = compile_unit(&module, u, shim, pkg, opts.release)?;
         if let Some(p) = &obj_file {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
-                // Prune stale keys of this module (one live object per
-                // module; the cache never grows unboundedly).
+                // Prune stale keys of this unit (one live object per
+                // unit; the cache never grows unboundedly).
                 if let Ok(entries) = std::fs::read_dir(dir) {
                     for e in entries.flatten() {
                         let fname = e.file_name().to_string_lossy().into_owned();
@@ -1089,10 +1203,39 @@ fn compile_native(
                 "src": u.comps.src,
                 "deps": u.comps.deps,
                 "wir": u.comps.wir,
+                "sum": u.comps.sum,
             });
             let _ = std::fs::write(p, manifest.to_string());
         }
+        Ok((bytes, log))
+    };
+    let codegen_start = std::time::Instant::now();
+    let acquired: Vec<UnitResult> = if whole.is_some() && units.len() > 1 {
+        use rayon::prelude::*;
+        units.par_iter().map(&acquire).collect()
+    } else {
+        units.iter().map(&acquire).collect()
+    };
+    let codegen_wall = codegen_start.elapsed();
+    let mut objects: Vec<(String, Vec<u8>)> = Vec::new();
+    for (u, got) in units.iter().zip(acquired) {
+        let (bytes, log) = got?;
+        if let Some(log) = log {
+            eprintln!("{log}");
+        }
         objects.push((u.name.clone(), bytes));
+    }
+    if opts.verbose {
+        // Phase-resolved codegen wall time: the number the parallel
+        // scaling lane scrapes (the frontend and mid-end ahead of it
+        // are serial, so total wall would understate the phase). No
+        // colon after `codegen` — the cache-accounting scrapers key on
+        // `wolf build: <unit>: <verdict>`.
+        eprintln!(
+            "wolf build: codegen {} unit(s) in {:.3}s",
+            units.len(),
+            codegen_wall.as_secs_f64()
+        );
     }
 
     // `--emit=obj`: write the relocatable objects and stop.
@@ -1110,6 +1253,26 @@ fn compile_native(
         return Ok(());
     }
     link_objects(&objects, out)
+}
+
+/// `--codegen-report` (s43): the whole-program phase's decisions, in
+/// the frozen summary format plus one line per cluster. OUR diagnostic
+/// surface — the partition itself stays compiler-chosen.
+fn codegen_report(wp: &wolf_wir::midend::WholeProgram) -> String {
+    let mut out = String::from("wolf codegen-report\n");
+    out.push_str(&wp.summary.render());
+    for c in &wp.clusters {
+        out.push_str(&format!(
+            "cluster {} size={} key={} members=[{}] imports=[{}]\n",
+            c.name,
+            c.size,
+            &c.key[..16],
+            c.members.join(","),
+            c.imports.join(",")
+        ));
+    }
+    out.push_str(&format!("{}\n", wp.stats));
+    out
 }
 
 /// Compile one module unit to relocatable object bytes: its own
@@ -1314,7 +1477,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     let usage = || -> ! {
         eprintln!(
             "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache] \
-             [--verbose] [--checked] [--release] [--std-root <dir>] \
+             [--verbose] [--checked] [--release] [--codegen-report] \
+             [--std-root <dir>] \
              [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]{}",
             if run_mode { " [prog args…]" } else { "" }
         );
@@ -1342,6 +1506,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         cache_root: None,
         lints: LintLevels::new(),
         report_warnings: true,
+        codegen_report: false,
     };
     let mut prog_args: Vec<String> = Vec::new();
     let mut i = 0;
@@ -1412,6 +1577,9 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
             // The s41 LLVM tier. Checked semantics are IDENTICAL (X3
             // is profile-independent) — only the speed changes.
             opts.release = true;
+        } else if a == "--codegen-report" {
+            // s43: dump the summary index + cluster/import decisions.
+            opts.codegen_report = true;
         } else if a.starts_with('-') {
             fail(&format!("unknown flag `{a}`"));
         } else {
@@ -1949,78 +2117,14 @@ fn wir_rung(
     }
 }
 
-/// A minimal, dependency-free SHA-256 (FIPS 180-4) for the observation
-/// record's `stdout_sha256` — wolf stays build-script- and
-/// heavy-dependency-free (D33/D15), and the protocol needs one hash.
+/// SHA-256 (FIPS 180-4) for the observation record's `stdout_sha256`
+/// and every `.lu-cache` rebuild key. The implementation lives in
+/// `wolf_wir::hash` — ONE hash for the toolchain, shared with the D8
+/// content addressing the whole-program phase does over bodies (s43
+/// moved it there; wolf stays build-script- and heavy-dependency-free,
+/// D33/D15).
 fn sha256_hex(data: &[u8]) -> String {
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    let mut msg = data.to_vec();
-    let bitlen = (data.len() as u64) * 8;
-    msg.push(0x80);
-    while msg.len() % 64 != 56 {
-        msg.push(0);
-    }
-    msg.extend_from_slice(&bitlen.to_be_bytes());
-    for chunk in msg.chunks(64) {
-        let mut w = [0u32; 64];
-        for (i, word) in chunk.chunks(4).enumerate() {
-            w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-        let (mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut hh) =
-            (h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]);
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ (!e & g);
-            let t1 = hh
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(K[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let t2 = s0.wrapping_add(maj);
-            hh = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
-        }
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(hh);
-    }
-    h.iter().map(|x| format!("{x:08x}")).collect()
+    wolf_wir::sha256_hex(data)
 }
 
 /// Observation record ([proto.record]). The deepest implemented phase is

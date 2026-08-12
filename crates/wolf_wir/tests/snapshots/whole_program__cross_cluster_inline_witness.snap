@@ -1,0 +1,19 @@
+---
+source: crates/wolf_wir/tests/whole_program.rs
+expression: out
+---
+decl @helper(i64) -> i64
+
+fn @main() -> i64 {
+b0:
+  jmp b1
+b1:
+  jmp b2
+b2:
+  jmp b3
+b3:
+  %0 = iconst.i64 84
+  jmp b4
+b4:
+  ret %0
+}
