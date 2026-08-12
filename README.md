@@ -15,4 +15,6 @@ grow into) in [`corpus/`](corpus/).
 
 ## License
 
-Licensed under [MIT](LICENSE).
+Licensed under [GPL-3.0-or-later](LICENSE). The runtime library
+(`wolf_rt`) carries the [wolf Runtime Library Exception](crates/wolf_rt/LICENSE-EXCEPTION):
+programs you compile with wolf are yours, under any license you choose.

@@ -1734,7 +1734,7 @@ fn dist() -> ExitCode {
     std::fs::create_dir_all(&stage).expect("mkdir dist stage");
     std::fs::copy(Path::new("target/release").join(exe), stage.join(exe))
         .expect("stage wolf binary");
-    for f in ["README.md", "LICENSE"] {
+    for f in ["README.md", "LICENSE", "crates/wolf_rt/LICENSE-EXCEPTION"] {
         std::fs::copy(f, stage.join(f)).expect("stage metadata file");
     }
     let archive = format!("target/dist/{name}.tar.gz");
