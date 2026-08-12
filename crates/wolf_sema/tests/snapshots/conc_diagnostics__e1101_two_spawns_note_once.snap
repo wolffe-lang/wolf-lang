@@ -1,0 +1,45 @@
+---
+source: crates/wolf_sema/tests/conc_diagnostics.rs
+assertion_line: 54
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1101]: this task writes to `hits`, which it captures from the enclosing function
+ --> mem:///main.lu:5:24
+  |
+5 |         s.spawn(fn() { hits += 1 })
+  |         --------------------------- the task's closure captures it at this spawn
+  |                        ^^^^ tasks cannot mutate captured state
+  |
+  = note: task captures are copies, `imm` shares, or region moves (D14) — never mutable windows
+    onto the parent's locals; two tasks writing one binding is the data race the memory
+    model forbids. Three ways out: send results over a `channel` and let one owner mutate;
+    guard truly shared state with a `Mutex` acquired in a `when` block; or, for loop-shaped
+    work, use `par` with a reduction.
+
+warning[W1101]: this write to `hits` stays inside the task
+ --> mem:///main.lu:5:24
+  |
+5 |         s.spawn(fn() { hits += 1 })
+  |                 ------------------ the closure captured it at spawn
+  |                        ^^^^ lands on the task's own copy
+  |
+  = note: task captures copy (or move); the enclosing binding never sees this assignment. Send the
+    result over a channel, or return it through the scope's join.
+
+error[E1101]: this task writes to `says`, which it captures from the enclosing function
+ --> mem:///main.lu:6:24
+  |
+6 |         s.spawn(fn() { says += 1 })
+  |         --------------------------- the task's closure captures it at this spawn
+  |                        ^^^^ tasks cannot mutate captured state
+  |
+
+warning[W1101]: this write to `says` stays inside the task
+ --> mem:///main.lu:6:24
+  |
+6 |         s.spawn(fn() { says += 1 })
+  |                 ------------------ the closure captured it at spawn
+  |                        ^^^^ lands on the task's own copy
+  |
+  = note: task captures copy (or move); the enclosing binding never sees this assignment. Send the
+    result over a channel, or return it through the scope's join.

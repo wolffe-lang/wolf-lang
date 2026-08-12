@@ -82,6 +82,19 @@ fn e1101_projection_write() {
     );
 }
 
+/// Two spawns, two E1101s, ONE teach note (s71, #59): the second
+/// diagnostic keeps its message and labels but the channels lesson
+/// renders once per group — rp01 measured 57 lines for two tasks.
+#[test]
+fn e1101_two_spawns_note_once() {
+    snap_one(
+        "e1101_two_spawns_note_once",
+        "fn main() -> !int {\n    var hits = 0\n    var says = 0\n    scope s {\n        \
+         s.spawn(fn() { hits += 1 })\n        s.spawn(fn() { says += 1 })\n    }\n    \
+         hits + says\n}\n",
+    );
+}
+
 /// The sync-type carve-out and the `when`-payload rebind: writes to
 /// Mutex payloads inside a `when` body are synchronized, not capture
 /// writes — the clean twin ([conc.when.body], `conc/when_multi.lu`).

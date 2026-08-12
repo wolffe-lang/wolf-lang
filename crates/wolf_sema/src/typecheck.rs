@@ -114,7 +114,18 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
     let ctfe_pass = crate::ctfe::run_package(pkg, &sigs, &bodies);
     diagnostics.extend(ctfe_pass.diagnostics);
     not_yet.extend(ctfe_pass.not_yet);
+    // The fold reaches the lane (s71): patch each successfully
+    // evaluated site's value into its body, where both executing
+    // lanes read it as an ordinary constant.
+    for (oi, span, fold) in ctfe_pass.folds {
+        if let BodyResult::Checked(tb) = &mut bodies[oi].result {
+            tb.comptime_folds.push((span, fold));
+        }
+    }
     wolf_diag::sort_diagnostics(&mut diagnostics);
+    // #59: a teach note renders once per diagnostic group — the
+    // second spawn's E1101 no longer repeats the channels lesson.
+    wolf_diag::dedup_notes(&mut diagnostics);
     Typecheck {
         sigs,
         bodies,

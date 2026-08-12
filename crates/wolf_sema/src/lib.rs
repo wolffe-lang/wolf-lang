@@ -225,7 +225,7 @@ pub(crate) mod wave;
 
 pub use check::{BodyRef, BodyResult, CallSig, CastKind, Dispatch, NotYet, TypedBody, check_body};
 pub use coerce::Coercion;
-pub use ctfe::{Budget, CtfeStats, Engine, ValueArena, ValueKind};
+pub use ctfe::{Budget, CtfeStats, Engine, Fold, ValueArena, ValueKind};
 pub use graph::{
     AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, MemoryLoader, ModuleData,
     ModuleLoader, Package, RawFile, SourceUnit, Vis, load_package,

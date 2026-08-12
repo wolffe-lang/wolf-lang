@@ -222,6 +222,23 @@ enum Step<'a> {
         name: String,
         span: Span,
     },
+    /// Pop hi then lo; push the `lo..hi` range value (s71).
+    RangeBuild {
+        span: Span,
+    },
+    /// Pop the scrutinee; an error value evaluates the handler with
+    /// an optional binder scope, anything else passes through (s71).
+    ElseUnwrap {
+        binder: Option<String>,
+        fallback: Option<&'a GreenNodeAlias>,
+        span: Span,
+    },
+    /// Pop one rendered value per hole (deepest = first hole) and
+    /// splice them into the literal segments (s71).
+    StrBuild {
+        node: &'a GreenNodeAlias,
+        holes: Vec<Span>,
+    },
     TupleBuild {
         n: usize,
     },
@@ -243,6 +260,11 @@ type GreenNodeAlias = wolf_ast::GreenNode;
 enum Callee {
     UserFn {
         module: usize,
+        name: String,
+    },
+    /// A builtin method on a value receiver (s71 subset): the
+    /// receiver evaluates as the first "argument".
+    Method {
         name: String,
     },
     Intrinsic(Intrinsic),
@@ -770,6 +792,11 @@ impl<'a> Engine<'a> {
                     ValueKind::Slice(xs) if name == "len" => {
                         self.arena.int(xs.len() as i128, Prim::Int)
                     }
+                    // `str.len` is the byte length (D25), exactly the
+                    // executing lanes' answer.
+                    ValueKind::Str(s) if name == "len" => {
+                        self.arena.int(s.len() as i128, Prim::Int)
+                    }
                     ValueKind::Tuple(xs) => match name.parse::<usize>() {
                         Ok(i) if i < xs.len() => xs[i],
                         _ => gap!(span, "a tuple member at comptime"),
@@ -777,6 +804,70 @@ impl<'a> Engine<'a> {
                     _ => gap!(span, "member access on this value at comptime"),
                 };
                 frames.last_mut().expect("frame").stack.push(out);
+            }
+            Step::RangeBuild { span } => {
+                let frame = frames.last_mut().expect("frame");
+                let hi = frame.stack.pop().expect("range hi");
+                let lo = frame.stack.pop().expect("range lo");
+                let (ValueKind::Int { v: a, .. }, ValueKind::Int { v: b, .. }) =
+                    (self.arena.kind(lo).clone(), self.arena.kind(hi).clone())
+                else {
+                    gap!(span, "non-integer range endpoints at comptime");
+                };
+                let v = self.arena.intern(ValueKind::Range { lo: a, hi: b });
+                frames.last_mut().expect("frame").stack.push(v);
+            }
+            Step::ElseUnwrap {
+                binder,
+                fallback,
+                span,
+            } => {
+                let frame = frames.last_mut().expect("frame");
+                let scrut = frame.stack.pop().expect("else scrutinee");
+                if let ValueKind::ErrTag(_) = self.arena.kind(scrut) {
+                    let Some(fb) = fallback else {
+                        gap!(span, "an `else` without a fallback at comptime");
+                    };
+                    let frame = frames.last_mut().expect("frame");
+                    let mut scope = Vec::new();
+                    if let Some(name) = binder {
+                        // The binder sees the caught error value (the
+                        // tag itself in the s71 comptime subset).
+                        scope.push((name, scrut));
+                    }
+                    frame.scopes.push(scope);
+                    frame.work.push(Step::PopScope);
+                    frame.work.push(Step::Eval(fb));
+                } else {
+                    frame.stack.push(scrut);
+                }
+            }
+            Step::StrBuild { node, holes } => {
+                let file = frames.last().expect("frame").file;
+                let frame = frames.last_mut().expect("frame");
+                let mut vals = Vec::with_capacity(holes.len());
+                for _ in 0..holes.len() {
+                    vals.push(frame.stack.pop().expect("interpolation hole"));
+                }
+                vals.reverse();
+                let mut rendered = Vec::with_capacity(vals.len());
+                for v in vals {
+                    let text = match self.arena.kind(v) {
+                        ValueKind::Str(s) => s.clone(),
+                        ValueKind::Int { v, .. } => v.to_string(),
+                        ValueKind::Bool(b) => b.to_string(),
+                        _ => gap!(node.span, "interpolating this value at comptime"),
+                    };
+                    rendered.push(text);
+                }
+                let raw = self.text(file, node.span);
+                match splice_interp(&raw, node.span.lo, &holes, &rendered) {
+                    Ok(s) => {
+                        let v = self.arena.str_(s);
+                        frames.last_mut().expect("frame").stack.push(v);
+                    }
+                    Err(c) => gap!(node.span, c),
+                }
             }
             Step::TupleBuild { n } => {
                 let frame = frames.last_mut().expect("frame");
@@ -837,6 +928,34 @@ impl<'a> Engine<'a> {
                         match self.eval_implements(&args, &tr, span) {
                             Ok(v) => frames.last_mut().expect("frame").stack.push(v),
                             Err(kind) => fault!(span, kind),
+                        }
+                    }
+                    Callee::Method { name } => {
+                        // The s71 builtin-method subset: the boundary
+                        // primitive `str.get` ([mem.str.get]) — the
+                        // one str method a comptime string walker
+                        // cannot spell any other way.
+                        let recv = args.first().map(|&v| self.arena.kind(v).clone());
+                        match (recv, name.as_str()) {
+                            (Some(ValueKind::Str(s)), "get") => {
+                                let Some(ValueKind::Range { lo, hi }) =
+                                    args.get(1).map(|&v| self.arena.kind(v).clone())
+                                else {
+                                    gap!(span, "`str.get` without a range at comptime");
+                                };
+                                let miss = lo < 0
+                                    || hi < lo
+                                    || hi > s.len() as i128
+                                    || !s.is_char_boundary(lo as usize)
+                                    || !s.is_char_boundary(hi as usize);
+                                let v = if miss {
+                                    self.arena.intern(ValueKind::ErrTag("none".to_string()))
+                                } else {
+                                    self.arena.str_(&s[lo as usize..hi as usize])
+                                };
+                                frames.last_mut().expect("frame").stack.push(v);
+                            }
+                            _ => gap!(span, "this method at comptime (s71 subset)"),
                         }
                     }
                     Callee::UserFn { module, name } => {
@@ -952,10 +1071,38 @@ impl<'a> Engine<'a> {
             }
             SyntaxKind::StringExpr => {
                 let d = StringExpr::cast(node).expect("kind");
-                if d.interps().any(|i| i.expr().is_some()) {
-                    gap!(node.span, "string interpolation at comptime (s38, D26)");
-                }
                 let raw = self.text(file, node.span);
+                let interps: Vec<_> = d.interps().collect();
+                if interps.iter().any(|i| i.expr().is_some()) {
+                    // The s71 interpolation subset: single-line
+                    // strings, plain `{x}` holes. Format specs and
+                    // multiline dedent stay honest gaps.
+                    if raw.starts_with("\"\"\"") {
+                        gap!(
+                            node.span,
+                            "interpolation inside a multiline string at comptime"
+                        );
+                    }
+                    if interps.iter().any(|i| i.format_spec().is_some()) {
+                        gap!(node.span, "format specs at comptime (s71 subset)");
+                    }
+                    let mut holes = Vec::with_capacity(interps.len());
+                    let mut exprs = Vec::with_capacity(interps.len());
+                    for i in &interps {
+                        holes.push(i.syntax().span);
+                        exprs.push(i.expr());
+                    }
+                    let empty = self.arena.str_("");
+                    let frame = frames.last_mut().expect("frame");
+                    frame.work.push(Step::StrBuild { node, holes });
+                    for x in exprs.into_iter().rev() {
+                        match x {
+                            Some(n) => frame.work.push(Step::Eval(n)),
+                            None => frame.work.push(Step::PushVal(empty)),
+                        }
+                    }
+                    return Ok(None);
+                }
                 let v = self.arena.str_(unquote(&raw));
                 frames.last_mut().expect("frame").stack.push(v);
             }
@@ -1256,6 +1403,16 @@ impl<'a> Engine<'a> {
                     _ => args.iter().filter_map(|a| Arg::value(*a)).collect(),
                 };
                 let mut prepared: Vec<Step<'a>> = Vec::new();
+                // A method callee evaluates its receiver as the first
+                // "argument" (s71).
+                if let Callee::Method { .. } = &callee {
+                    let base = MemberExpr::cast(callee_node).and_then(|m| m.base());
+                    let Some(base) = base else {
+                        gap!(callee_node.span, "a broken method receiver at comptime");
+                    };
+                    prepared.push(Step::Eval(base));
+                }
+                let recv = usize::from(matches!(&callee, Callee::Method { .. }));
                 for v in &arg_nodes {
                     if is_type_kind(v.kind) {
                         match self.type_node_value(module, file, v) {
@@ -1272,7 +1429,7 @@ impl<'a> Engine<'a> {
                 let frame = frames.last_mut().expect("frame");
                 frame.work.push(Step::Call {
                     callee,
-                    argc: arg_nodes.len(),
+                    argc: arg_nodes.len() + recv,
                     span: node.span,
                 });
                 for s in prepared.into_iter().rev() {
@@ -1287,9 +1444,47 @@ impl<'a> Engine<'a> {
             SyntaxKind::BreakExpr | SyntaxKind::ContinueExpr => {
                 gap!(node.span, "`break`/`continue` at comptime (s17)")
             }
-            SyntaxKind::RangeExpr => gap!(node.span, "range values at comptime (s17)"),
+            SyntaxKind::RangeExpr => {
+                // The s71 subset: the exclusive two-endpoint form
+                // (`a..b`) — `str.get`'s argument shape. Inclusive
+                // and end-relative forms stay honest gaps.
+                let d = wolf_ast::RangeExpr::cast(node).expect("kind");
+                if d.is_inclusive() {
+                    gap!(node.span, "inclusive ranges at comptime (s71 subset)");
+                }
+                let eps: Vec<&GreenNodeAlias> = d.endpoints().collect();
+                if eps.len() != 2 || eps.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
+                    gap!(node.span, "this range shape at comptime (s71 subset)");
+                }
+                let frame = frames.last_mut().expect("frame");
+                frame.work.push(Step::RangeBuild { span: node.span });
+                frame.work.push(Step::Eval(eps[1]));
+                frame.work.push(Step::Eval(eps[0]));
+            }
             SyntaxKind::CastExpr => gap!(node.span, "`as` conversions at comptime (s17)"),
-            SyntaxKind::TryExpr | SyntaxKind::ElseExpr => {
+            SyntaxKind::ElseExpr => {
+                // `expr else fallback` / `expr else |e| body` (s71
+                // subset): the caught value is the tag itself; payload
+                // destructuring stays a gap.
+                let d = wolf_ast::ElseExpr::cast(node).expect("kind");
+                let Some(scrut) = d.scrutinized() else {
+                    gap!(node.span, "a broken `else` at comptime");
+                };
+                let binder = match d.handler_pattern() {
+                    None => None,
+                    Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+                    Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(file, p.span)),
+                    Some(p) => gap!(p.span, "this handler pattern at comptime (s71 subset)"),
+                };
+                let frame = frames.last_mut().expect("frame");
+                frame.work.push(Step::ElseUnwrap {
+                    binder,
+                    fallback: d.fallback(),
+                    span: node.span,
+                });
+                frame.work.push(Step::Eval(scrut));
+            }
+            SyntaxKind::TryExpr => {
                 gap!(node.span, "the error channel at comptime (s17)")
             }
             SyntaxKind::ClosureExpr => gap!(node.span, "closures at comptime (s17)"),
@@ -1513,12 +1708,21 @@ impl<'a> Engine<'a> {
         }
         if callee.kind == SyntaxKind::MemberExpr
             && let Some(m) = MemberExpr::cast(callee)
-            && let Some((tm, tn)) = self.namespace_member(module, file, m)
         {
-            return Ok(Callee::UserFn {
-                module: tm,
-                name: tn,
-            });
+            if let Some((tm, tn)) = self.namespace_member(module, file, m) {
+                return Ok(Callee::UserFn {
+                    module: tm,
+                    name: tn,
+                });
+            }
+            // A method on a value receiver (s71): the receiver
+            // evaluates as the first "argument"; the dispatch is on
+            // its comptime value.
+            if let Some(t) = m.member() {
+                return Ok(Callee::Method {
+                    name: self.text(file, t.span),
+                });
+            }
         }
         Err(FaultKind::EngineGap {
             construct: "calling through this callee at comptime",
@@ -1975,6 +2179,64 @@ fn parse_int(text: &str) -> Option<i128> {
 }
 
 /// Strip quotes and process escapes of a string literal's source text.
+/// Rebuild an interpolated single-line string at comptime (s71):
+/// literal bytes copied as-is, escapes decoded exactly as the checked
+/// executor decodes them, rendered hole text spliced at each hole's
+/// span. Code-point escapes (`\xNN`, `\u{…}`) stay a gap here — the
+/// checked lane owns their decoding and a silent mismatch would be a
+/// fold that lies.
+fn splice_interp(
+    raw: &str,
+    base: u32,
+    holes: &[Span],
+    rendered: &[String],
+) -> Result<String, &'static str> {
+    let bytes = raw.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let (start, end) = if bytes.len() >= 2 {
+        (1usize, bytes.len() - 1)
+    } else {
+        (0, bytes.len())
+    };
+    let mut i = start;
+    while i < end {
+        if let Some(k) = holes.iter().position(|h| (h.lo - base) as usize == i) {
+            out.extend_from_slice(rendered[k].as_bytes());
+            i = (holes[k].hi - base) as usize;
+            continue;
+        }
+        let c = bytes[i];
+        if c == b'\\' && i + 1 < end {
+            let esc = bytes[i + 1];
+            if esc == b'x' || esc == b'u' {
+                return Err("code-point escapes in an interpolated string at comptime");
+            }
+            out.push(match esc {
+                b'n' => b'\n',
+                b't' => b'\t',
+                b'r' => b'\r',
+                b'\\' => b'\\',
+                b'"' => b'"',
+                b'{' => b'{',
+                b'}' => b'}',
+                b'0' => b'\0',
+                other => other,
+            });
+            i += 2;
+            continue;
+        }
+        // `{{` / `}}` are literal braces ([gram.lex.str]).
+        if (c == b'{' || c == b'}') && i + 1 < end && bytes[i + 1] == c {
+            out.push(c);
+            i += 2;
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
 fn unquote(raw: &str) -> String {
     let inner = raw
         .strip_prefix('"')

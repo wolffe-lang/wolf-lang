@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+assertion_line: 41
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0809]: this handler pattern does not cover `timeout`
+  --> mem:///main.lu:12:27
+   |
+12 |     let v = poke(2) else |Io(e)| { e }
+   |                           ^^^^^ the row carries cases this pattern misses
+   |
+   = note: an `else` handler runs for every error its operand can carry, so its pattern must cover
+     the whole row: bind and branch — `else |e| match e { … }` — or handle the one tag the
+     row declares.

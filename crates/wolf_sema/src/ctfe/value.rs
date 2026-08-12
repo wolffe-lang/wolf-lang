@@ -126,6 +126,16 @@ pub enum ValueKind {
     },
     /// A type as a value (D29).
     Type(CtType),
+    /// A half-open int range `a..b` (s71): the argument shape of the
+    /// `str.get` boundary primitive at comptime.
+    Range {
+        lo: i128,
+        hi: i128,
+    },
+    /// An error-channel value (s71): the row tag an operation
+    /// answered (`get`'s `none`). Payload-carrying tags stay an
+    /// engine gap.
+    ErrTag(String),
 }
 
 /// The hash-consing arena with per-value content hashes and a logical
@@ -155,6 +165,8 @@ impl ValueArena {
             ValueKind::Tuple(xs) | ValueKind::Slice(xs) => 1 + xs.len() as u64,
             ValueKind::Struct { fields, .. } => 1 + fields.len() as u64,
             ValueKind::Type(_) => 2,
+            ValueKind::Range { .. } => 1,
+            ValueKind::ErrTag(t) => 1 + (t.len() as u64).div_ceil(8),
         }
     }
 
@@ -220,6 +232,15 @@ impl ValueArena {
             ValueKind::Type(t) => {
                 out.push(9);
                 out.extend_from_slice(t.render().as_bytes());
+            }
+            ValueKind::Range { lo, hi } => {
+                out.push(10);
+                out.extend_from_slice(&lo.to_le_bytes());
+                out.extend_from_slice(&hi.to_le_bytes());
+            }
+            ValueKind::ErrTag(t) => {
+                out.push(11);
+                out.extend_from_slice(t.as_bytes());
             }
         }
         out
@@ -313,6 +334,8 @@ impl ValueArena {
             }
             ValueKind::Fn { name, .. } => format!("fn {name}"),
             ValueKind::Type(t) => t.render(),
+            ValueKind::Range { lo, hi } => format!("{lo}..{hi}"),
+            ValueKind::ErrTag(t) => format!("!{t}"),
         }
     }
 }
