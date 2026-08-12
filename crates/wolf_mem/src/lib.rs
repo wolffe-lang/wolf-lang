@@ -101,6 +101,20 @@
 //!   `# Safety:` comment lint is W1301 (advisory). The `#[trusted]`
 //!   manifest rule (E1303) lives in `wolf_sema::audit` with `wolf
 //!   audit-surface`.
+//! - **Mode enforcement** ([`lower`]-integrated, s72 — D39/D40, the
+//!   last red row of the v0.1.0 audit): writes reaching a `read`
+//!   parameter — projections and `mut`-lends included — are E1014
+//!   (`[mem.tier0.mode.read]`, the callee-side half #27 found
+//!   missing); a `Copy` read evaluated after an earlier spelled `mut`
+//!   argument of the same call is the overlap rule's static half
+//!   (E1002, `f(mut a, a.x)` — receiver claims stay two-phase, so
+//!   `xs.push(xs.len)` stays legal); and `for x in xs` holds a READ
+//!   claim on the iterated place for the loop's extent
+//!   (`[mem.iter.excl]`) — the container never moves (the #15
+//!   reads-as-moves accident is dead), stays live after the loop, and
+//!   mut uses inside the body (push/pop/clear, element writes,
+//!   `mut`-lends, moves) are E1013 with the collect-then-apply /
+//!   index-loop teaching.
 //! - **Honest refusals**: inline C/asm (c10),
 //!   closures/concurrency (c05), region identity through conflicting
 //!   rebinds or multi-step paths (c05 backlog), `shared` acyclicity

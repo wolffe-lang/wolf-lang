@@ -275,6 +275,13 @@ pub(crate) struct Lowerer<'t> {
     /// results), in mint order — the fact record's spine.
     rc_cells: Vec<SiteId>,
 
+    // ------------------------------------- iteration claims (s72, D40) ----
+    /// The places the enclosing `for` loops iterate, innermost last —
+    /// each holds a read claim for its loop's extent
+    /// (`[mem.iter.excl]`); mut uses of a conflicting path inside are
+    /// E1013 at their emission sites.
+    iter_claims: Vec<(PlaceId, Span)>,
+
     // ------------------------------------------ the unsafe tier (s22) ----
     /// `unsafe { }` nesting depth: the ring the raw-tier operations
     /// demand (E1301 outside; `[mem.unsafe.scope]`).
@@ -1032,6 +1039,120 @@ impl<'t> Lowerer<'t> {
         );
     }
 
+    /// A write reaching a `read`-mode parameter — E1014 (s72, D39:
+    /// `[mem.tier0.mode.read]` — immutable for the whole call, and the
+    /// immutability is deep, so projections count and so does lending
+    /// the binding `mut` onward). The caller-side half of the mode
+    /// rules always held; this is the callee's.
+    fn check_read_param_write(&mut self, place: PlaceId, span: Span, verb: &str) {
+        let Base::Local(l) = self.places.get(place).base else {
+            return;
+        };
+        if self.locals[l as usize].param_mode != Some(None) {
+            return;
+        }
+        let name = self.locals[l as usize].name.clone();
+        let decl = self.locals[l as usize].span;
+        let shown = self.show_place_now(place);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1014,
+                span,
+                format!("`{shown}` is `read` for the whole call, so it cannot be {verb}"),
+            )
+            .with_label("write through a `read` parameter")
+            .with_secondary(
+                decl,
+                format!("`{name}` is declared without a mode — that spells `read`, immutable for the call"),
+            )
+            .with_note(
+                "a `read` parameter is the caller's value, lent immutably \
+                 [mem.tier0.mode.read]. Declare it `mut` if this function's purpose is \
+                 to change it (call sites then spell the mutation), `take` it if the \
+                 function consumes it, or mutate this function's own `copy`.",
+            ),
+        );
+    }
+
+    /// A mutating use of a place the enclosing `for` iterates — E1013
+    /// (s72, D40: `[mem.iter.excl]` — the loop holds a read claim on
+    /// its container for the loop's whole extent). Returns whether it
+    /// reported, so moves can recover as reads instead of cascading
+    /// into the old E1001 reads-as-moves accident (#15).
+    fn check_iter_claim(&mut self, place: PlaceId, span: Span, verb: &str) -> bool {
+        let hit = self
+            .iter_claims
+            .iter()
+            .rev()
+            .find(|&&(claimed, _)| self.places.overlap(claimed, place))
+            .copied();
+        let Some((claimed, head)) = hit else {
+            return false;
+        };
+        let shown = self.show_place_now(place);
+        let container = self.show_place_now(claimed);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1013,
+                span,
+                format!("`{shown}` is being iterated, so it cannot be {verb}"),
+            )
+            .with_label("the container changes under the loop")
+            .with_secondary(
+                head,
+                format!("the `for` loop holds `{container}` from here, for its whole extent"),
+            )
+            .with_note(
+                "iterating holds a read claim on the container for the loop's extent \
+                 [mem.iter.excl]. Collect the changes into a second list and apply them \
+                 after the loop — or use an index loop (`var i = 0` … `while i < xs.len`), \
+                 whose condition re-reads the length every pass.",
+            ),
+        );
+        true
+    }
+
+    /// E1002 for a `Copy` read overlapping an EARLIER `mut` argument
+    /// of the same call (s72, D39). The non-`Copy` half of the rule is
+    /// pairwise over the call surface in [`crate::excl`]; the `Copy`
+    /// half lives here because it is order-sensitive — the read is an
+    /// instant, not a loan, so only a claim already active when it
+    /// evaluates conflicts.
+    fn check_copy_read_after_mut(
+        &mut self,
+        place: PlaceId,
+        span: Span,
+        arg_muts: &[(PlaceId, Span)],
+    ) {
+        let Some(&(m, mspan)) = arg_muts
+            .iter()
+            .find(|&&(m, _)| self.places.overlap(m, place))
+        else {
+            return;
+        };
+        let (a, b) = (self.show_place_now(m), self.show_place_now(place));
+        let relation = if self.places.covers(m, place) {
+            format!(
+                "`{b}` is inside `{a}` — a path and its prefix conflict [mem.model.path.disjoint]."
+            )
+        } else {
+            format!("`{a}` and `{b}` can reach the same memory.")
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1002,
+                span,
+                format!("`{b}` is read for this call after `{a}` goes `mut` in it"),
+            )
+            .with_label("read of a place being mutated")
+            .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
+            .with_note(format!(
+                "{relation} Read the value into a local before the call, or pass \
+                 disjoint fields."
+            )),
+        );
+    }
+
     // ---------------------------------------------------- places ----
 
     /// Struct field types of a place type, for sibling interning and
@@ -1275,6 +1396,13 @@ impl<'t> Lowerer<'t> {
             self.push(Stmt::Read { place, span });
             return;
         }
+        // Moving the iterated container out from under its loop is
+        // E1013; recover as a read so the one true error is not
+        // followed by an E1001 echo on the loop's back edge.
+        if self.check_iter_claim(place, span, "moved away") {
+            self.push(Stmt::Read { place, span });
+            return;
+        }
         // Moving a region value whole: affine transfer — its free is
         // no longer this frame's ([mem.region.freeze.2]). Moving it
         // while its window is open is E1005 (s20,
@@ -1293,16 +1421,31 @@ impl<'t> Lowerer<'t> {
         self.check_view(place, span);
         // A whole-place (re)binding replaces the value; a projected
         // init writes *into* the value — frozen data rejects the
-        // latter (s20, [mem.region.freeze.1]).
-        if !self.places.get(place).proj.is_empty() {
+        // latter (s20, [mem.region.freeze.1]). A `read` parameter
+        // rejects both (s72, D39: the binding holds the caller's
+        // value for the whole call).
+        let projected = !self.places.get(place).proj.is_empty();
+        if projected {
             self.check_frozen_write(place, span, "assigned through");
         }
+        self.check_read_param_write(
+            place,
+            span,
+            if projected {
+                "assigned through"
+            } else {
+                "assigned"
+            },
+        );
+        self.check_iter_claim(place, span, "assigned");
         self.push(Stmt::Init { place, span });
     }
 
     fn emit_mutate(&mut self, place: PlaceId, span: Span) {
         self.check_view(place, span);
         self.check_frozen_write(place, span, "modified");
+        self.check_read_param_write(place, span, "modified");
+        self.check_iter_claim(place, span, "modified");
         self.push(Stmt::Mutate { place, span });
     }
 
@@ -2459,8 +2602,28 @@ impl<'t> Lowerer<'t> {
 
     fn eval_for(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = ForExpr::cast(e).expect("kind");
+        // s72, D40 ([mem.iter.excl]): iterating a place is a READ
+        // with a claim held for the loop's extent — never a move. The
+        // container stays live behind the walk and after it (the
+        // E1001 reads-as-moves accident of #15 died here by ruling);
+        // mut uses inside the body are E1013's, checked at their own
+        // emission sites against the claim stack. A `Copy` iterable
+        // is copied at loop entry and carries no claim — the same
+        // instant-read model as `Copy` call arguments.
+        let mut claimed = false;
         if let Some(iter) = d.iterable() {
-            self.eval_value(iter)?;
+            match self.as_place(iter) {
+                Some((place, _)) => {
+                    self.emit_read(place, iter.span);
+                    if !self.places.is_copy(place) {
+                        self.iter_claims.push((place, iter.span));
+                        claimed = true;
+                    }
+                }
+                None => {
+                    self.eval_value(iter)?;
+                }
+            }
         }
         let head = self.new_block();
         self.goto(self.cur, head);
@@ -2499,6 +2662,9 @@ impl<'t> Lowerer<'t> {
             self.walk_block(b, false)?;
         }
         self.loops.pop();
+        if claimed {
+            self.iter_claims.pop();
+        }
         self.close_scope(end_span(e.span))?;
         self.goto(self.cur, head);
         self.cur = exit;
@@ -2688,6 +2854,10 @@ impl<'t> Lowerer<'t> {
         let args: Vec<Arg<'_>> = d.args().into_iter().flat_map(|a| a.args()).collect();
         let offset = usize::from(cs.map(|c| c.has_self).unwrap_or(false));
         let mut ctor_parts: Vec<(Val, Span)> = Vec::new();
+        // Spelled `mut` arguments seen so far, in evaluation order —
+        // the claims a later `Copy` read of this call evaluates inside
+        // (s72, D39). Receiver `mut`s are two-phase and stay out.
+        let mut arg_muts: Vec<(PlaceId, Span)> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
             let site_mode = Arg::mode(*arg);
@@ -2701,7 +2871,16 @@ impl<'t> Lowerer<'t> {
                     ctor_parts.push((pv, v.span));
                 }
                 (Some(cs), Some(param)) => {
-                    self.lower_arg(cs, param, *arg, v, site_mode, &mut surface, &mut carry)?;
+                    self.lower_arg(
+                        cs,
+                        param,
+                        *arg,
+                        v,
+                        site_mode,
+                        &mut surface,
+                        &mut carry,
+                        &mut arg_muts,
+                    )?;
                 }
                 _ => {
                     // No resolved signature (builtin `print`, host
@@ -2857,6 +3036,8 @@ impl<'t> Lowerer<'t> {
             Some(ParamMode::Mut) => match self.as_place(recv) {
                 Some((place, ty)) => {
                     self.check_frozen_write(place, recv_span, "passed as `mut`");
+                    self.check_read_param_write(place, recv_span, "lent `mut`");
+                    self.check_iter_claim(place, recv_span, "lent `mut`");
                     self.check_region_lend(place, recv_span);
                     self.escape_to_callee(place, carry);
                     match &selfp.view {
@@ -2912,6 +3093,7 @@ impl<'t> Lowerer<'t> {
         site_mode: Option<ParamMode>,
         surface: &mut CallSurface,
         carry: &mut Vec<SiteId>,
+        arg_muts: &mut Vec<(PlaceId, Span)>,
     ) -> R<()> {
         if site_mode != param.mode {
             self.mode_mismatch(cs, param, arg, v, site_mode, param.mode);
@@ -2933,6 +3115,20 @@ impl<'t> Lowerer<'t> {
                         // evaluation (which is what keeps the
                         // two-phase `xs.push(xs.len)` shape legal).
                         surface.read_args.push((place, v.span));
+                    } else {
+                        // s72, D39 — the overlap rule's static half:
+                        // a `Copy` read completes at its own
+                        // evaluation, and left-to-right order
+                        // ([mem.model.order]) puts that evaluation
+                        // INSIDE any exclusive claim an earlier `mut`
+                        // argument of this call already spelled —
+                        // f(mut a, a.x) reads a place the call holds.
+                        // Receiver claims stay two-phase (reserved
+                        // until entry), which is what keeps
+                        // xs.push(xs.len) legal; a read BEFORE the
+                        // `mut` (f(a.x, mut a)) finished before the
+                        // claim began and stays legal too.
+                        self.check_copy_read_after_mut(place, v.span, arg_muts);
                     }
                 } else {
                     self.eval_value(v)?;
@@ -2941,9 +3137,12 @@ impl<'t> Lowerer<'t> {
             Some(ParamMode::Mut) => match self.as_place(v) {
                 Some((place, _)) => {
                     self.check_frozen_write(place, v.span, "passed as `mut`");
+                    self.check_read_param_write(place, v.span, "lent `mut`");
+                    self.check_iter_claim(place, v.span, "lent `mut`");
                     self.check_region_lend(place, v.span);
                     self.escape_to_callee(place, carry);
                     surface.mut_args.push((place, v.span));
+                    arg_muts.push((place, v.span));
                 }
                 None => {
                     self.mut_needs_place(v.span);
@@ -3460,6 +3659,7 @@ impl<'t> Lowerer<'t> {
             shared_site: BTreeSet::new(),
             rc_cells: Vec::new(),
             region_field: HashMap::new(),
+            iter_claims: Vec::new(),
             unsafe_depth: 0,
             casts,
         }

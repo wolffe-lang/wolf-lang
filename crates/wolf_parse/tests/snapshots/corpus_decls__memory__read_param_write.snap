@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 390..417 name=P fields=2
+FnDecl 419..516 name=poke body=Block
+FnDecl 518..584 name=main body=Block

@@ -1500,7 +1500,14 @@ fn conformance_cmd(args: &[String]) -> ExitCode {
 fn static_code_to_trap(code: &str) -> Option<&'static str> {
     match code {
         "E1001" => Some("use-after-move"),
-        "E1002" => Some("exclusivity"),
+        // E1013 (s72, D40 [mem.iter.excl]): one rule, two enforcement
+        // modes — wolfgang rejects the mutated-while-iterated shape
+        // statically, lupin traps it. The lupin mirror lands in
+        // v0.1.8; until that pin, an oracle running the shape clean
+        // is the expected conservatism note, not a divergence. E1014
+        // (D39 callee-side read-mode) gets its row when the v0.1.8
+        // mirror pins the trap kind.
+        "E1002" | "E1013" => Some("exclusivity"),
         "E1004" | "E1005" | "E1010" | "E1011" | "E1012" => Some("region-fault"),
         // The conc family (spec 03): E1101's shape is the data race
         // an oracle's detector reports ([conc.mm.race.3]); E1103's is

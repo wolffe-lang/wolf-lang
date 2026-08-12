@@ -2,7 +2,7 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 1076..1243 name=has body=Block
-FnDecl 1245..1421 name=count_of body=Block
-FnDecl 1423..1770 name=smallest_above body=Block
-FnDecl 1772..2245 name=main body=Block
+FnDecl 1127..1294 name=has body=Block
+FnDecl 1296..1472 name=count_of body=Block
+FnDecl 1474..1821 name=smallest_above body=Block
+FnDecl 1823..2296 name=main body=Block
