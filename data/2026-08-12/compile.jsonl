@@ -1,0 +1,17 @@
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.182600636}
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.157002208}
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.177462583}
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.158235836}
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"clean_build_wall_s","style":"1","track":"compile","unit":"s","value":0.180016377}
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"incr_rebuild_wall_s","style":"1","track":"compile","unit":"s","value":0.180351336}
+{"bench":"nmod","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"max_rss_kb","style":"1","track":"compile","unit":"kB","value":91300.0}
+{"bench":"corpus","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"corpus_conform_wall_s","style":"1","track":"compile","unit":"s","value":2.370774367}
+{"bench":"corpus","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"corpus_conform_wall_s","style":"1","track":"compile","unit":"s","value":2.380910637}
+{"bench":"corpus","commit":"7a41402","config":"wolf-batch-v0","lang":"wolf","metric":"corpus_conform_wall_s","style":"1","track":"compile","unit":"s","value":2.362576413}
+{"bench":"sema","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"bodies_per_sec","style":"1","track":"compile","unit":"bodies/s","value":323.2}
+{"bench":"sema","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"ctfe_memo_hit_rate","style":"1","track":"compile","unit":"ratio","value":0.0304}
+{"bench":"wir","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"wir_insts_per_sec","style":"1","track":"compile","unit":"insts/s","value":101224.2}
+{"bench":"wir","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"wir_fold_hits","style":"1","track":"compile","unit":"hits","value":72.0}
+{"bench":"wir","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"wir_identity_hits","style":"1","track":"compile","unit":"hits","value":17.0}
+{"bench":"wir","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"wir_gvn_hits","style":"1","track":"compile","unit":"hits","value":936.0}
+{"bench":"wir","commit":"7a41402","config":"wolf-batch-v0","lang":"rust","metric":"wir_forward_hits","style":"1","track":"compile","unit":"hits","value":6.0}
