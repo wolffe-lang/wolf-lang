@@ -1,12 +1,14 @@
 //! check: run(exit=0, stdout="both-down")
-//! phase: resolve
+//! phase: run
 //! conforms: conc.proc.link.pair, conc.proc.kill
 //! [conc.proc.link.pair]: `a.link(b)` couples two procs symmetrically
 //! (the two-proc spelling is06 pinned — finding S-7); killing one of
 //! a linked pair takes both down, and the partner's monitor observes
 //! reason `killed`. Linking is idempotent per pair.
 
-fn parked() -> int {
+// s73: `-> !int` (was `-> int`) — `?` needs the row (E0604/D30); the
+// proc boundary absorbs it into the exit reason ([conc.proc.exit]).
+fn parked() -> !int {
     let ch = channel[int](0)
     let v = ch.recv()?                   // blocks forever
     v

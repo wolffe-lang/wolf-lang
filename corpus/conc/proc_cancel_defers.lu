@@ -1,5 +1,5 @@
 //! check: run(exit=0, stdout="defer-ran\nreleased")
-//! phase: resolve
+//! phase: run
 //! conforms: conc.proc.cancel, conc.cancel.defer
 //! THE decided rule's other half (contrast proc_kill_defers.lu):
 //! `w.cancel()` is STRUCTURED cancellation — cooperative at blocking
@@ -9,7 +9,9 @@
 //! ahead of the owner's release message ([conc.mm.hb.proc] orders the
 //! proc's exit before the monitor's delivery).
 
-fn dozer() -> int {
+// s73: `-> !int` (was `-> int`) — `?` needs the row (E0604/D30); the
+// proc boundary absorbs it into the exit reason ([conc.proc.exit]).
+fn dozer() -> !int {
     defer print_raw("defer-ran\n")       // MUST print: cancel runs defers
     let ch = channel[int](0)
     let v = ch.recv()?                   // blocks forever; cancelled here

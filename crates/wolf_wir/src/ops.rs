@@ -292,6 +292,11 @@ pub enum Opcode {
     /// (read-only bytes; string literals live here). Pure: the address
     /// is a link-time constant, so GVN may dedup it freely.
     DataAddr,
+    /// `%p = func.addr @f()` — address of a module function or known
+    /// symbol as an opaque `ptr` (s73: the compiled task-entry pointer
+    /// `__wolf_rt_scope_spawn`/`__wolf_rt_proc_spawn_outcome` consume).
+    /// Pure: a link-time constant, GVN-dedupable like `data.addr`.
+    FuncAddr,
 
     // ---- calls ---------------------------------------------------------
     /// `%res…, %tok… = call @f(%args…)` — call with the mode-carrying sig;
@@ -444,6 +449,7 @@ impl Opcode {
             Opcode::AggMake => "agg.make",
             Opcode::AggGet => "agg.get",
             Opcode::DataAddr => "data.addr",
+            Opcode::FuncAddr => "func.addr",
             Opcode::Call => "call",
             Opcode::Jmp => "jmp",
             Opcode::Br => "br",

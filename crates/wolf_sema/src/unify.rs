@@ -420,7 +420,9 @@ pub fn unify(
         (TyKind::Proj(ba, na), TyKind::Proj(bb, nb)) if na == nb => unify(table, store, ba, bb),
         (TyKind::RegionTy, TyKind::RegionTy)
         | (TyKind::TypeTy, TyKind::TypeTy)
-        | (TyKind::TaskScope, TyKind::TaskScope) => Ok(()),
+        | (TyKind::TaskScope, TyKind::TaskScope)
+        | (TyKind::Proc, TyKind::Proc)
+        | (TyKind::ExitReason, TyKind::ExitReason) => Ok(()),
         (TyKind::ErrUnion(x, rx), TyKind::ErrUnion(y, ry)) => {
             unify(table, store, x, y)?;
             unify(table, store, rx, ry)

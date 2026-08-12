@@ -211,6 +211,8 @@ fn lower_body(
     }
     // The WIR signature (modes carried; s26 attaches the fact slots).
     let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, span)?;
+    // s73: task bodies queued by spawn sites, synthesized post-pass.
+    let mut pending: Vec<PendingTask<'_>> = Vec::new();
     let mut b = FuncBuilder::new(module, wir_name, sig);
     // s30: spans thread from the typed HIR into WIR (the lossless s07
     // chain) — the file once per function, then a per-statement span
@@ -241,13 +243,305 @@ fn lower_body(
         fn_tail: None,
         callees: HashMap::new(),
         straight_line: false,
+        task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
+        pending_tasks: &mut pending,
         b: &mut b,
     };
     lowerer.lower_fn(fsig, block)?;
+    let mut stats = b.stats;
+    let func = b.finish();
+    module.add_func(func);
+    // s73: synthesize the queued task bodies and entry shims. A body
+    // may queue further tasks (nested spawns) — drain to fixpoint.
+    let mut guard = 0;
+    while let Some(task) = pending.pop() {
+        guard += 1;
+        if guard > 256 {
+            return Err(refuse("deeply nested task spawns", span));
+        }
+        if task.closure.is_some() {
+            stats.add(lower_task_body(
+                pkg,
+                sigs,
+                tb,
+                body,
+                fns,
+                module,
+                &task,
+                &mut pending,
+            )?);
+        }
+        build_task_shim(module, &task)?;
+    }
+    Ok(Some(stats))
+}
+
+/// Lower one queued closure task body (s73): an ordinary function
+/// whose parameters are the closure's captures (by copy, S-10) and
+/// whose fallible shape is the closure's raised row.
+#[allow(clippy::too_many_arguments)]
+fn lower_task_body<'t>(
+    pkg: &'t Package,
+    sigs: &'t SigTables,
+    tb: &'t TypedBody,
+    body: &wolf_sema::BodyRef,
+    fns: &'t HashMap<&'t str, Vec<(usize, &'t FnSig)>>,
+    module: &mut Module,
+    task: &PendingTask<'t>,
+    pending: &mut Vec<PendingTask<'t>>,
+) -> R<Stats> {
+    let closure = task.closure.expect("closure task");
+    let d = wolf_ast::ClosureExpr::cast(closure).expect("kind");
+    let mut b = FuncBuilder::new(module, task.body_name.clone(), task.body_sig);
+    b.func.src_file = Some(task.span.file.index() as u32);
+    b.set_span(task.span.lo, task.span.hi);
+    let mut lo = Lowerer {
+        src: &pkg.files[body.file].raw.src,
+        table: &tb.table,
+        sig_table: &sigs.table,
+        sigs,
+        calls: tb.calls.iter().map(|(s, c)| (*s, c)).collect(),
+        folds: tb.comptime_folds.iter().map(|(s, f)| (*s, f)).collect(),
+        expr_tys: tb.exprs.iter().map(|(s, t)| (*s, *t)).collect(),
+        local_tys: tb.locals.iter().map(|(_, s, t)| (*s, *t)).collect(),
+        casts: tb
+            .casts
+            .iter()
+            .map(|(s, f, t, k)| (*s, (*f, *t, *k)))
+            .collect(),
+        fns,
+        dispatch: tb.dispatch.iter().map(|(s, d)| (*s, d)).collect(),
+        matches: tb.matches.iter().copied().collect(),
+        scopes: Vec::new(),
+        visible: None,
+        loops: Vec::new(),
+        fn_eu: None,
+        fn_tail: None,
+        callees: HashMap::new(),
+        straight_line: false,
+        task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
+        pending_tasks: pending,
+        b: &mut b,
+    };
+    // The fallible shape: the body's result is an eu when the closure
+    // raised (s73 closure rows).
+    if let Some(ret) = task.body_ret
+        && matches!(lo.b.module.types.get(ret), types::TypeData::Eu { .. })
+    {
+        lo.fn_eu = Some(ret);
+    }
+    // Prologue: captures are the entry block's params, bound by name.
+    let entry_params = lo.b.block_params(lo.b.current_block());
+    lo.scopes.push(ScopeFrame::default());
+    for (i, (name, sema)) in task.caps.iter().enumerate() {
+        let wty = task.cap_wtys[i];
+        let val = entry_params[i];
+        let var = lo.b.declare_var(wty);
+        lo.b.def_var(var, val);
+        lo.b.func.add_debug_var(name.clone(), val, true);
+        let bind = LocalBind::Val {
+            var,
+            wrapping: matches!(lo.table.kind(*sema), TyKind::Wrapping(_)),
+            unsigned: sema_unsigned(lo.table, *sema),
+            wir_ty: wty,
+        };
+        lo.scopes
+            .last_mut()
+            .expect("scope")
+            .binds
+            .push((name.clone(), bind));
+    }
+    let Some(bnode) = d.body() else {
+        return Err(refuse("a task closure without a body", closure.span));
+    };
+    if bnode.kind == SyntaxKind::Block {
+        let blk = AstBlock::cast(bnode).expect("kind");
+        if lo.fn_eu.is_some() {
+            lo.fn_tail = blk.trailing_expr().map(|e| e.span);
+        }
+        match lo.lower_block(blk, task.body_ret.is_some())? {
+            Flow::Diverged => {}
+            Flow::Val(v) => {
+                let out = lo.arm_to_merge_ret(v, task.body_ret, closure.span)?;
+                let vals: Vec<Value> = out.into_iter().collect();
+                lo.b.ins_ret(&vals);
+            }
+        }
+    } else {
+        // Single-expression body: `fn() expr`.
+        match lo.lower_expr(bnode)? {
+            Flow::Diverged => {}
+            Flow::Val(v) => {
+                let out = lo.arm_to_merge_ret(v, task.body_ret, closure.span)?;
+                let vals: Vec<Value> = out.into_iter().collect();
+                lo.b.ins_ret(&vals);
+            }
+        }
+    }
+    lo.scopes.pop();
     let stats = b.stats;
     let func = b.finish();
     module.add_func(func);
-    Ok(Some(stats))
+    Ok(stats)
+}
+
+/// Build one task entry shim (s73): `fn(env: ptr) -> i64` per the
+/// frozen `__wolf_rt_scope_spawn`/`__wolf_rt_proc_spawn_outcome`
+/// contract — unpack the env words, call the body function, and map
+/// its outcome onto the task-return protocol: `0` normal, an error
+/// tag, or the reserved cancel sentinel `-2` (`wolf_rt`'s
+/// `CANCEL_TAG`) for a body whose error is the `cancelled` tag or
+/// whose scope was killed (the no-defer teardown branch, the c07
+/// handoff).
+fn build_task_shim(module: &mut Module, task: &PendingTask<'_>) -> R<()> {
+    let cancelled_id = module.tag_id("cancelled");
+    // Machine shape: (ptr) -> i64; the env token param erases.
+    let env_formal = RegionId::new(0);
+    let tok_ty = module.types.mem(env_formal);
+    let sig = module.make_sig(
+        vec![
+            Param {
+                ty: types::PTR,
+                mode: Mode::Mut,
+            },
+            Param {
+                ty: tok_ty,
+                mode: Mode::Val,
+            },
+        ],
+        vec![types::I64],
+    );
+    let mut b = FuncBuilder::new(module, task.shim_name.clone(), sig);
+    b.func.src_file = None; // synthetic: no line table
+    let entry = b.current_block();
+    let params = b.block_params(entry);
+    let (env, tok) = (params[0], params[1]);
+    b.def_mem(env_formal, tok);
+    // Unpack the env words.
+    let mut args = Vec::with_capacity(task.cap_wtys.len());
+    for (i, &wty) in task.cap_wtys.iter().enumerate() {
+        let off = task.cap_offs[i];
+        let addr = if off == 0 {
+            env
+        } else {
+            let k = b.iconst(types::I64, off as i64);
+            b.ins_ptr_off(env, k, 1)
+        };
+        args.push(load_flat_raw(&mut b, wty, addr, env_formal, task.span)?);
+    }
+    // Call the body.
+    let body_ext = b.func.import_func(task.body_name.clone(), task.body_sig);
+    let rets = b.ins_call(body_ext, &args);
+    // The raw outcome tag: 0 for ok bodies, the eu tag for fallible
+    // ones (module-interned, ≥ 1).
+    let tag = match (task.body_ret, rets.first()) {
+        (Some(rt), Some(&rv)) if matches!(module_types_get(&b, rt), types::TypeData::Eu { .. }) => {
+            let is_err = b.ins_eu_is_err(rv);
+            let err_bb = b.create_block();
+            let ok_bb = b.create_block();
+            let join = b.create_block();
+            let out = b.add_block_param(join, types::I64);
+            b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+            b.seal_block(err_bb);
+            b.seal_block(ok_bb);
+            b.switch_to_block(err_bb);
+            let t = b.ins_eu_err_tag(rv);
+            b.ins_jmp(join, &[t]);
+            b.switch_to_block(ok_bb);
+            let z = b.iconst(types::I64, 0);
+            b.ins_jmp(join, &[z]);
+            b.seal_block(join);
+            b.switch_to_block(join);
+            out
+        }
+        _ => b.iconst(types::I64, 0),
+    };
+    // Map onto the protocol: killed → -2 (kill teardown reached the
+    // task; [conc.proc.kill] step 1's compiled half), cancelled tag →
+    // -2 (polite cancel — the reason class, not a failure), else the
+    // tag itself.
+    let killed_ext = {
+        let s = b.module.make_sig(Vec::new(), vec![types::I8]);
+        b.func.import_func("__wolf_rt_task_killed".to_string(), s)
+    };
+    let killed = b
+        .ins_call(killed_ext, &[])
+        .first()
+        .copied()
+        .expect("killed poll result");
+    let kz = b.iconst(types::I8, 0);
+    let was_killed = b
+        .ins(
+            Opcode::Icmp,
+            &[killed, kz],
+            &[types::BOOL],
+            Aux::IntCc(IntCc::Ne),
+        )
+        .one();
+    // killed → -2; else cancelled-tag → -2; else the tag (a branch
+    // chain — WIR bools are not integer-op operands).
+    let cancel_bb = b.create_block();
+    let check_bb = b.create_block();
+    let plain_bb = b.create_block();
+    b.ins_br(was_killed, cancel_bb, &[], check_bb, &[]);
+    b.seal_block(check_bb);
+    b.switch_to_block(check_bb);
+    let cid = b.iconst(types::I64, cancelled_id);
+    let is_cancel = b
+        .ins(
+            Opcode::Icmp,
+            &[tag, cid],
+            &[types::BOOL],
+            Aux::IntCc(IntCc::Eq),
+        )
+        .one();
+    b.ins_br(is_cancel, cancel_bb, &[], plain_bb, &[]);
+    b.seal_block(cancel_bb);
+    b.seal_block(plain_bb);
+    b.switch_to_block(cancel_bb);
+    let minus2 = b.iconst(types::I64, -2);
+    b.ins_ret(&[minus2]);
+    b.switch_to_block(plain_bb);
+    b.ins_ret(&[tag]);
+    let func = b.finish();
+    module.add_func(func);
+    Ok(())
+}
+
+/// [`Lowerer::load_flat`]'s raw twin for shim building (no `Lowerer`
+/// in scope): scalars load directly, aggregates rebuild field-wise.
+fn load_flat_raw(
+    b: &mut FuncBuilder<'_>,
+    ty: TypeId,
+    ptr: Value,
+    region: RegionId,
+    span: Span,
+) -> R<Value> {
+    if scalar_size(ty).is_some() {
+        return Ok(b.ins_load(ty, ptr, region));
+    }
+    let types::TypeData::Agg(fields) = b.module.types.get(ty).clone() else {
+        return Err(refuse("task captures without a flat layout", span));
+    };
+    let Some(offs) = flat_offsets(&b.module.types, &fields) else {
+        return Err(refuse("task captures without a flat layout", span));
+    };
+    let mut parts = Vec::with_capacity(fields.len());
+    for (k, &fty) in fields.iter().enumerate() {
+        let addr = if offs[k] == 0 {
+            ptr
+        } else {
+            let i = b.iconst(types::I64, offs[k] as i64);
+            b.ins_ptr_off(ptr, i, 1)
+        };
+        parts.push(load_flat_raw(b, fty, addr, region, span)?);
+    }
+    Ok(b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
+}
+
+/// Borrow-friendly type peek while a `FuncBuilder` holds the module.
+fn module_types_get(b: &FuncBuilder<'_>, t: TypeId) -> types::TypeData {
+    b.module.types.get(t).clone()
 }
 
 fn refuse(construct: &'static str, span: Span) -> NotYet {
@@ -460,6 +754,11 @@ fn wir_ty_depth(
             "first-class region values beyond local bindings (c05)",
             span,
         )),
+        // s73 — the conc capability handles: opaque runtime pointers
+        // (channels, sync cells, task scopes); proc ids and exit
+        // reasons are plain words ([conc.proc.1], [conc.proc.exit]).
+        TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope => Ok(Some(types::PTR)),
+        TyKind::Proc | TyKind::ExitReason => Ok(Some(types::I64)),
         TyKind::Range(_) => Err(refuse(
             "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
             span,
@@ -712,6 +1011,11 @@ enum LocalBind {
     },
     /// A unit-typed binding (no runtime value).
     Unit,
+    /// A `when`-body payload rebind (s73, [conc.when.body]): reads and
+    /// writes go through the held cell's runtime accessors
+    /// (`__wolf_rt_sync_get`/`__wolf_rt_sync_set`) — valid exactly
+    /// while the set is held, which is the rebind's lexical extent.
+    SyncPayload { cell: Value },
 }
 
 /// One `defer`/`errdefer` entry: the typed AST fragment, re-lowered at
@@ -736,6 +1040,28 @@ struct ScopeFrame<'t> {
     binds: Vec<(String, LocalBind)>,
     defers: Vec<DeferEntry<'t>>,
     region: Option<(RegionId, Value)>,
+    /// s73: a held `when` set to release on every exit edge —
+    /// (cells array pointer, its slot region, set length).
+    when_release: Option<(Value, RegionId, i64)>,
+    /// s73: an open task scope's handle — join+free on every exit
+    /// edge crossing it ([conc.task.join]); the fall-through exit
+    /// clears this and re-raises the tag itself.
+    conc_scope: Option<Value>,
+}
+
+/// Strip a `move`/`copy` prefix off an argument expression.
+fn strip_move(e: &GreenNode) -> &GreenNode {
+    if e.kind == SyntaxKind::PrefixExpr
+        && let Some(d) = PrefixExpr::cast(e)
+        && matches!(
+            d.op().map(|t| t.kind),
+            Some(SyntaxKind::MoveKw | SyntaxKind::CopyKw)
+        )
+        && let Some(op) = d.operand()
+    {
+        return op;
+    }
+    e
 }
 
 struct LoopFrame {
@@ -872,7 +1198,42 @@ struct Lowerer<'t, 'b, 'm> {
     /// control construct is one block, so every variable is
     /// single-block and bypasses the global Braun maps.
     straight_line: bool,
+    /// s73: spawn-site capture sets by method-call span (sema's
+    /// conc-lowering handoff — the closure environment layout input).
+    task_captures: HashMap<Span, &'t [wolf_sema::TaskCapture]>,
+    /// s73: task bodies queued for synthesis after this function
+    /// finishes (a `FuncBuilder` borrows the module exclusively, so
+    /// nested functions build in a post-pass worklist).
+    pending_tasks: &'b mut Vec<PendingTask<'t>>,
     b: &'b mut FuncBuilder<'m>,
+}
+
+/// One queued task body (s73): the entry shim `fn(env) -> i64` plus —
+/// for closure tasks — the body function lowered from the closure with
+/// its captures as parameters. Proc spawns of named functions reuse
+/// the already-lowered callee as the body.
+struct PendingTask<'t> {
+    /// The entry shim's WIR name (what `func.addr` names).
+    shim_name: String,
+    /// The body function's WIR name.
+    body_name: String,
+    /// The body's WIR signature (params = env words, one result when
+    /// `body_ret` is set).
+    body_sig: SigId,
+    /// The closure to lower as the body (None: `body_name` is an
+    /// already-lowered named function — the proc-spawn form).
+    closure: Option<&'t GreenNode>,
+    /// Env-slot names + sema types, in layout order (closure captures
+    /// or evaluated spawn arguments).
+    caps: Vec<(String, TyId)>,
+    /// WIR types of the env slots, in order.
+    cap_wtys: Vec<TypeId>,
+    /// Byte offsets of the env slots (8-aligned).
+    cap_offs: Vec<u64>,
+    /// The body's result WIR type, if any (an eu for fallible bodies).
+    body_ret: Option<TypeId>,
+    /// The declaration span (diagnostics + line tables).
+    span: Span,
 }
 
 impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
@@ -1103,6 +1464,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Flow::Diverged => return Ok(false),
             }
         }
+        // s73: a held `when` set releases on every exit edge, after
+        // the body's defers ([conc.when.body]'s extent).
+        if let Some((slot, region, n)) = self.scopes[si].when_release {
+            let nv = self.b.iconst(types::I64, n);
+            self.call_with_slot_token("__wolf_rt_when_release", &[slot, nv], region, None);
+        }
+        // s73: an exit edge crossing an open task scope joins first
+        // ([conc.task.join]); the tag is dropped on non-fall-through
+        // edges (the explicit exit's value wins — recorded rule).
+        if let Some(handle) = self.scopes[si].conc_scope {
+            self.rt_call("__wolf_rt_scope_join_free", &[handle], Some(types::I64));
+        }
         if let Some((region, handle)) = self.scopes[si].region {
             // The X4 free point: LIFO-outermost in its scope, present
             // on EVERY exit edge; the verifier's per-path token
@@ -1313,6 +1686,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(sema_ty) = sema_ty else {
             return Err(refuse("a binding without a recorded type", span));
         };
+        // s73: a region value arriving as a VALUE (a recv'd region,
+        // adopted — [conc.chan.move]): bind identity + handle. The
+        // adopted arena is the runtime's to free (proc ledger /
+        // process exit); no local token chain roots here.
+        if matches!(self.table.kind(self.strip_sema(sema_ty)), TyKind::RegionTy) {
+            let Some(handle) = v else {
+                return Err(refuse("a region binding without a handle value", span));
+            };
+            let region = self.b.fresh_region();
+            self.scopes.last_mut().expect("scope").binds.push((
+                name,
+                LocalBind::Region {
+                    region,
+                    handle,
+                    frozen: false,
+                },
+            ));
+            return Ok(Flow::Val(None));
+        }
         let wty = wir_ty(
             &mut self.b.module.types,
             self.table,
@@ -1368,6 +1760,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(operand) = d.expr() else {
                     return Err(refuse("freeze without an operand", init.span));
                 };
+                if operand.kind == SyntaxKind::RegionBlock {
+                    // `let x = freeze region { … }` — build-then-
+                    // freeze yields the block's VALUE, not a region
+                    // binding; the expr path lowers it (s73).
+                    return Ok(None);
+                }
                 let (region, handle) = self.expect_region(operand)?;
                 let frozen_tok = self.b.ins_sync_freeze(region, handle);
                 // Deep immutability is a fact about the handle from the
@@ -1582,6 +1980,44 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 };
                 self.b.ins_store(newval, ptr, region);
+                Ok(Flow::Val(None))
+            }
+            // s73: a `when` payload write — through the held cell's
+            // accessor ([conc.when.body]; the checker keeps these
+            // inside the body's extent).
+            LocalBind::SyncPayload { cell } => {
+                let Some(value_expr) = d.value() else {
+                    return Ok(Flow::Val(None));
+                };
+                let rhs = flow_val!(self.lower_expr(value_expr));
+                let Some(rhs) = rhs else {
+                    return Err(refuse(
+                        "assignment of a valueless expression",
+                        value_expr.span,
+                    ));
+                };
+                let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
+                let newval = if op == SyntaxKind::Eq {
+                    rhs
+                } else {
+                    // The payload computes at its own width (checked
+                    // arithmetic included), then widens back to the
+                    // wire word.
+                    let wty = self.b.func.value_ty(rhs);
+                    let w = self
+                        .rt_call("__wolf_rt_sync_get", &[cell], Some(types::I64))
+                        .expect("payload word");
+                    let cur = self.narrow_from_wire(w, wty, stmt.span)?;
+                    let Some(bin) = Self::compound_bin(op) else {
+                        return Err(refuse("this compound assignment operator", stmt.span));
+                    };
+                    match self.arith(bin, cur, rhs, false, false, wty, stmt.span)? {
+                        Some(v) => v,
+                        None => return Ok(Flow::Diverged),
+                    }
+                };
+                let w = self.widen_to_wire(newval, stmt.span)?;
+                self.rt_call("__wolf_rt_sync_set", &[cell, w], None);
                 Ok(Flow::Val(None))
             }
         }
@@ -1821,6 +2257,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         "first-class region values beyond local bindings (c05)",
                         e.span,
                     )),
+                    // s73: a `when` payload read — through the held
+                    // cell's accessor ([conc.when.body]), narrowed to
+                    // the payload's own width.
+                    Some(LocalBind::SyncPayload { cell }) => {
+                        let w = self
+                            .rt_call("__wolf_rt_sync_get", &[cell], Some(types::I64))
+                            .expect("payload word");
+                        let wty = match self.expr_sema_ty(e.span) {
+                            Some(t) => self.wir_value_ty(t, e.span)?.unwrap_or(types::I64),
+                            None => types::I64,
+                        };
+                        Ok(Flow::Val(Some(self.narrow_from_wire(w, wty, e.span)?)))
+                    }
                     Some(LocalBind::Unit) => Ok(Flow::Val(None)),
                     None => {
                         // An unresolved bare name whose recorded type
@@ -1938,6 +2387,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             )),
             SyntaxKind::FreezeExpr => {
+                // `freeze region { … }` in value position yields the
+                // block's value with the region promoted to imm
+                // ([mem.region.freeze.1]; never freed — s73).
+                if let Some(operand) = wolf_ast::FreezeExpr::cast(e).and_then(|d| d.expr())
+                    && operand.kind == SyntaxKind::RegionBlock
+                {
+                    return self.lower_frozen_block(operand, want);
+                }
                 // Statement-position freeze: emit the freeze point; the
                 // (region-typed) result is not a runtime value.
                 if self.lower_region_init(e)?.is_some() {
@@ -1964,11 +2421,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "unsafe-tier WIR ops (deferred from s26 — see closeout)",
                 e.span,
             )),
-            SyntaxKind::ClosureExpr => Err(refuse("closure lowering (c05)", e.span)),
-            SyntaxKind::ScopeExpr
-            | SyntaxKind::SelectExpr
-            | SyntaxKind::WhenExpr
-            | SyntaxKind::SpawnExpr => Err(refuse("concurrency lowering (c05)", e.span)),
+            SyntaxKind::ClosureExpr => Err(refuse(
+                "closure lowering outside `spawn` (fn values, c05)",
+                e.span,
+            )),
+            // The conc surface (s73): native lowering onto the
+            // s32–s36 runtime ABI.
+            SyntaxKind::ScopeExpr => self.lower_conc_scope(e, want),
+            SyntaxKind::SelectExpr => self.lower_select_expr(e),
+            SyntaxKind::WhenExpr => self.lower_when_expr(e, want),
+            SyntaxKind::SpawnExpr => self.lower_proc_spawn(e),
             SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(refuse("inline C/asm (c10)", e.span)),
             _ => Err(refuse("this expression shape in WIR lowering", e.span)),
         }
@@ -2087,6 +2549,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(base) = m.base() else {
             return Ok(Flow::Val(None));
         };
+        // s73: duration members on integer literals — scale into the
+        // int nanosecond currency ([conc.select.timeout]'s v0 unit;
+        // sema admitted literal bases only).
+        if base.kind == SyntaxKind::LiteralExpr
+            && let Some(mtext) = m.member().map(|t| self.text(t.span))
+            && let Some(mult) = match mtext.as_str() {
+                "s" => Some(1_000_000_000i64),
+                "ms" => Some(1_000_000),
+                "us" => Some(1_000),
+                "ns" => Some(1),
+                _ => None,
+            }
+        {
+            let Some(v) = flow_val!(self.lower_expr(base)) else {
+                return Err(refuse("a valueless duration base", base.span));
+            };
+            let k = self.b.iconst(types::I64, mult);
+            let scaled = self.arith(SyntaxKind::Star, v, k, false, false, types::I64, e.span)?;
+            return Ok(match scaled {
+                Some(s) => Flow::Val(Some(s)),
+                None => Flow::Diverged,
+            });
+        }
         let Some(base_sema) = self.expr_sema_ty(base.span) else {
             return Err(refuse("a member access without a recorded type", e.span));
         };
@@ -2180,6 +2665,1351 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         self.lower_block(body, want)
+    }
+
+    // ------------------------------------- the conc surface (s73) ----
+    //
+    // scope/spawn/channel/select/when/proc lower onto the frozen
+    // s32–s36 runtime ABI: plain calls to `__wolf_rt_*` symbols, task
+    // bodies as synthesized functions behind `func.addr` entry
+    // pointers, and the kill-vs-cancel law as the status-2 teardown
+    // branch at every blocking point (c07's handoff — see
+    // `kill_teardown_branch`).
+
+    /// Merge a task body's trailing value into its declared result
+    /// (ok-injection for fallible bodies; identity otherwise).
+    fn arm_to_merge_ret(
+        &mut self,
+        v: Option<Value>,
+        ret: Option<TypeId>,
+        span: Span,
+    ) -> R<Option<Value>> {
+        let Some(rt) = ret else { return Ok(None) };
+        if matches!(self.b.module.types.get(rt), types::TypeData::Eu { .. }) {
+            return self.arm_to_merge(v, Some(rt), span);
+        }
+        match v {
+            Some(v) => Ok(Some(v)),
+            None => Err(refuse("a valueless task body with a typed result", span)),
+        }
+    }
+
+    /// A sema type as a WIR VALUE type, with the conc special case:
+    /// region values are opaque `ptr` handles when they cross a
+    /// channel (`[conc.chan.move]`); everywhere else `wir_ty` rules.
+    fn wir_value_ty(&mut self, sema: TyId, span: Span) -> R<Option<TypeId>> {
+        if matches!(self.table.kind(self.strip_sema(sema)), TyKind::RegionTy) {
+            return Ok(Some(types::PTR));
+        }
+        wir_ty(&mut self.b.module.types, self.table, self.sigs, sema, span)
+    }
+
+    /// The status-2 teardown branch (`[conc.proc.kill]` step 1 for
+    /// compiled bodies — the c07 refusal repaid at blocking points):
+    /// when the calling task's scope is KILLED, return straight out of
+    /// this frame — no defers, no handlers, no user code. Region
+    /// bookkeeping is skipped too (tokens are at-most-once per path;
+    /// the proc ledger bulk-frees, `[conc.proc.kill]` step 3). Merely
+    /// cancelled tasks fall through — cancellation is a VALUE
+    /// ([conc.cancel.points]) and the caller's else/`?` handles it,
+    /// defers running by ordinary returns ([conc.cancel.defer]).
+    fn kill_teardown_branch(&mut self, span: Span) -> R<()> {
+        let killed = self
+            .rt_call("__wolf_rt_task_killed", &[], Some(types::I8))
+            .expect("killed poll result");
+        let kz = self.b.iconst(types::I8, 0);
+        let was_killed = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[killed, kz],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Ne),
+            )
+            .one();
+        let dead_bb = self.b.create_block();
+        let cont_bb = self.b.create_block();
+        self.b.ins_br(was_killed, dead_bb, &[], cont_bb, &[]);
+        self.b.seal_block(dead_bb);
+        self.b.seal_block(cont_bb);
+        self.b.switch_to_block(dead_bb);
+        self.b.gvn_push_scope();
+        if let Some(eu) = self.fn_eu {
+            let cid = self.b.module.tag_id("cancelled");
+            let tag = self.b.iconst(types::I64, cid);
+            let out = self.b.ins_eu_make_err(eu, tag, &[]);
+            self.b.ins_ret(&[out]);
+        } else {
+            let results = self.b.module.sigs[self.b.func.sig].results.clone();
+            match results.as_slice() {
+                [] => {
+                    self.b.ins_ret(&[]);
+                }
+                [rt] => {
+                    let rt = *rt;
+                    let z = self.zero_of(rt, span)?;
+                    self.b.ins_ret(&[z]);
+                }
+                _ => return Err(refuse("multi-result teardown returns", span)),
+            }
+        }
+        self.b.gvn_pop_scope();
+        self.b.switch_to_block(cont_bb);
+        Ok(())
+    }
+
+    /// Cancellation surfaced at a blocking point with no row to carry
+    /// it (statement-position select/when in a row-less fn): propagate
+    /// through the enclosing row when one exists, else trap — the
+    /// checker's shapes make this path unreachable in v0 programs.
+    fn cancel_escape(&mut self, span: Span) -> R<()> {
+        if let Some(eu) = self.fn_eu {
+            let cid = self.b.module.tag_id("cancelled");
+            let tag = self.b.iconst(types::I64, cid);
+            let out = self.b.ins_eu_make_err(eu, tag, &[]);
+            if self.run_exits(0, true)? {
+                self.b.ins_ret(&[out]);
+            }
+        } else {
+            let _ = span;
+            self.b.ins_trap(TrapKind::Assert);
+        }
+        Ok(())
+    }
+
+    /// `scope name? { … }` — `[conc.task.scope]`: open the runtime
+    /// scope, run the body with the handle bound, join at every exit
+    /// edge (the handle rides the scope frame so early exits join
+    /// too), and re-raise the first failure at the fall-through exit
+    /// (`[conc.task.fail]`).
+    fn lower_conc_scope(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
+        let d = wolf_ast::ScopeExpr::cast(e).expect("kind");
+        let Some(body) = d.body() else {
+            return Ok(Flow::Val(None));
+        };
+        let name = d.name().map(|t| self.text(t.span)).unwrap_or_default();
+        let (np, nl) = self.name_bytes(&name);
+        let handle = self
+            .rt_call("__wolf_rt_scope_new", &[np, nl], Some(types::PTR))
+            .expect("scope handle");
+        // The handle binds in a wrapper frame; join+free rides the
+        // frame so `return`/`?` edges inside the body join first.
+        self.scopes.push(ScopeFrame::default());
+        if let Some(name_tok) = d.name() {
+            let nm = self.text(name_tok.span);
+            let var = self.b.declare_var(types::PTR);
+            self.b.def_var(var, handle);
+            self.scopes.last_mut().expect("scope").binds.push((
+                nm,
+                LocalBind::Val {
+                    var,
+                    wrapping: false,
+                    unsigned: false,
+                    wir_ty: types::PTR,
+                },
+            ));
+        }
+        self.scopes.last_mut().expect("scope").conc_scope = Some(handle);
+        let out = self.lower_block(body, want);
+        let flow = match out {
+            Ok(f) => f,
+            Err(x) => {
+                self.scopes.pop();
+                return Err(x);
+            }
+        };
+        // Fall-through: join here, then re-raise a failing child's
+        // tag into the enclosing row ([conc.task.fail] — the same
+        // width discipline as `?`; sema checked it at the spawn).
+        self.scopes.last_mut().expect("scope").conc_scope = None;
+        self.scopes.pop();
+        if matches!(flow, Flow::Diverged) {
+            return Ok(Flow::Diverged);
+        }
+        let tag = self
+            .rt_call("__wolf_rt_scope_join_free", &[handle], Some(types::I64))
+            .expect("join tag");
+        let z = self.b.iconst(types::I64, 0);
+        let failed = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[tag, z],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Ne),
+            )
+            .one();
+        if let Some(eu) = self.fn_eu {
+            let err_bb = self.b.create_block();
+            let cont_bb = self.b.create_block();
+            self.b.ins_br(failed, err_bb, &[], cont_bb, &[]);
+            self.b.seal_block(err_bb);
+            self.b.seal_block(cont_bb);
+            self.b.switch_to_block(err_bb);
+            self.b.gvn_push_scope();
+            let out = self.b.ins_eu_make_err(eu, tag, &[]);
+            let flowing = self.run_exits(0, true);
+            self.b.gvn_pop_scope();
+            if flowing? {
+                self.b.ins_ret(&[out]);
+            }
+            self.b.switch_to_block(cont_bb);
+        } else {
+            // No row to re-raise into: the spawn typing already
+            // required one for fallible children, so a nonzero tag
+            // here is a can't-happen (Rust-side panic tags aside).
+            let clean = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[tag, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            if self.trap_unless(clean, TrapKind::Assert) {
+                return Ok(Flow::Diverged);
+            }
+        }
+        match flow {
+            Flow::Val(v) => Ok(Flow::Val(v)),
+            Flow::Diverged => Ok(Flow::Diverged),
+        }
+    }
+
+    /// `freeze region { … }` in value position (s73): run the block
+    /// with the region's name bound, promote at the closing brace
+    /// (`sync.freeze`; the arena is imm forever, never freed — X4's
+    /// RC-owned end state), and yield the block's value.
+    fn lower_frozen_block(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
+        let d = wolf_ast::RegionBlock::cast(e).expect("kind");
+        let Some(body) = d.body() else {
+            return Ok(Flow::Val(None));
+        };
+        let (region, handle) = self.b.ins_region_new();
+        self.scopes.push(ScopeFrame::default());
+        if let Some(name_tok) = d.name() {
+            let name = self.text(name_tok.span);
+            self.scopes.last_mut().expect("scope").binds.push((
+                name,
+                LocalBind::Region {
+                    region,
+                    handle,
+                    frozen: false,
+                },
+            ));
+        }
+        let out = self.lower_block_in(body, want, None);
+        self.scopes.pop();
+        let flow = out?;
+        if matches!(flow, Flow::Diverged) {
+            return Ok(Flow::Diverged);
+        }
+        let frozen_tok = self.b.ins_sync_freeze(region, handle);
+        self.b.func.add_fact(FactData::new(
+            FactKind::Frozen(handle),
+            Just::Op(frozen_tok),
+        ));
+        Ok(flow)
+    }
+
+    /// Rodata (ptr, len) for a runtime name argument.
+    fn name_bytes(&mut self, name: &str) -> (Value, Value) {
+        let bytes: &[u8] = if name.is_empty() {
+            b"task"
+        } else {
+            name.as_bytes()
+        };
+        let idx = self.b.module.intern_data(bytes);
+        let p = self.b.ins_data_addr(idx);
+        let l = self.b.iconst(types::I64, bytes.len() as i64);
+        (p, l)
+    }
+
+    /// `s.spawn(fn() { … })` — [conc.task.spawn]: pack the capture
+    /// set (sema's s73 handoff) into a stack env, queue the body +
+    /// entry shim, and hand the runtime `entry(env)` through the
+    /// frozen five-parameter spawn.
+    fn lower_scope_spawn(
+        &mut self,
+        d: CallExpr<'t>,
+        recv: &'t GreenNode,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        if !self.loops.is_empty() {
+            return Err(refuse(
+                "spawn inside a loop (env-slot lifetime, c05 follow-up)",
+                e.span,
+            ));
+        }
+        let scope_h = flow_val!(self.lower_expr(recv));
+        let Some(scope_h) = scope_h else {
+            return Err(refuse("a spawn without a scope handle", recv.span));
+        };
+        let Some(closure) = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .find_map(Arg::value)
+            .filter(|n| n.kind == SyntaxKind::ClosureExpr)
+        else {
+            return Err(refuse(
+                "spawn of a non-closure task (fn values, c05)",
+                e.span,
+            ));
+        };
+        let caps: Vec<(String, TyId)> = self
+            .task_captures
+            .get(&e.span)
+            .map(|cs| cs.iter().map(|c| (c.name.clone(), c.ty)).collect())
+            .unwrap_or_default();
+        let (env, env_region, layout) = self.pack_task_env(&caps, e.span)?;
+        let task_no = self.pending_tasks.len();
+        let base = self.b.func.name.clone();
+        let body_name = format!("{base}.task{task_no}");
+        let shim_name = format!("{base}.task{task_no}.entry");
+        let body_ret = self.task_body_ret(closure)?;
+        let body_sig = {
+            let params: Vec<Param> = layout.0.iter().map(|&t| Param::val(t)).collect();
+            let results: Vec<TypeId> = body_ret.into_iter().collect();
+            self.b.module.make_sig(params, results)
+        };
+        self.pending_tasks.push(PendingTask {
+            shim_name: shim_name.clone(),
+            body_name,
+            body_sig,
+            closure: Some(closure),
+            caps,
+            cap_wtys: layout.0,
+            cap_offs: layout.1,
+            body_ret,
+            span: e.span,
+        });
+        // The entry pointer: func.addr of the (post-pass) shim.
+        let shim_sig = self.task_shim_sig();
+        let shim_ext = self.rt_like_import(&shim_name, shim_sig);
+        let entry = self.b.ins_func_addr(shim_ext);
+        let (np, nl) = self.name_bytes(&shim_name);
+        self.call_with_slot_token(
+            "__wolf_rt_scope_spawn",
+            &[scope_h, entry, env, np, nl],
+            env_region,
+            None,
+        );
+        Ok(Flow::Val(None))
+    }
+
+    /// The shim's WIR signature: `(env: ptr, mem.r0) -> i64`.
+    fn task_shim_sig(&mut self) -> SigId {
+        let formal = RegionId::new(0);
+        let tok = self.b.module.types.mem(formal);
+        self.b.module.make_sig(
+            vec![
+                Param {
+                    ty: types::PTR,
+                    mode: Mode::Mut,
+                },
+                Param {
+                    ty: tok,
+                    mode: Mode::Val,
+                },
+            ],
+            vec![types::I64],
+        )
+    }
+
+    /// Import a module-local synthesized function by (name, sig) —
+    /// the `func.addr` target (verify_module holds one sig per name).
+    fn rt_like_import(&mut self, name: &str, sig: SigId) -> ExtFunc {
+        match self.callees.get(name) {
+            Some(&ext) => ext,
+            None => {
+                let ext = self.b.func.import_func(name.to_string(), sig);
+                self.callees.insert(name.to_string(), ext);
+                ext
+            }
+        }
+    }
+
+    /// The declared result of a task closure body: sema recorded the
+    /// closure's `Fn(…, ret)` at its span. Fallible closures produce
+    /// a payload-free eu (payload rows refuse — the s39 row work).
+    fn task_body_ret(&mut self, closure: &'t GreenNode) -> R<Option<TypeId>> {
+        let Some(cty) = self.expr_sema_ty(closure.span) else {
+            return Err(refuse(
+                "a task closure without a recorded type",
+                closure.span,
+            ));
+        };
+        let TyKind::Fn(_, ret) = self.table.kind(self.strip_sema(cty)) else {
+            return Err(refuse("a task closure without a fn type", closure.span));
+        };
+        let ret = *ret;
+        match self.table.kind(self.strip_sema(ret)) {
+            TyKind::ErrUnion(_, row) if !row_is_empty(self.table, *row) => {
+                let eu = wir_ty(
+                    &mut self.b.module.types,
+                    self.table,
+                    self.sigs,
+                    ret,
+                    closure.span,
+                )?
+                .expect("a tagged union is a value");
+                let types::TypeData::Eu { slots, .. } = self.b.module.types.get(eu) else {
+                    unreachable!("eu shape");
+                };
+                if !slots.is_empty() {
+                    return Err(refuse("task error payloads (s39 typed rows)", closure.span));
+                }
+                Ok(Some(eu))
+            }
+            _ => self.wir_value_ty(ret, closure.span),
+        }
+    }
+
+    /// Evaluate + pack values into a fresh stack env slot; returns
+    /// (env ptr, its region, (wir types, offsets)).
+    #[allow(clippy::type_complexity)]
+    fn pack_task_env(
+        &mut self,
+        caps: &[(String, TyId)],
+        span: Span,
+    ) -> R<(Value, RegionId, (Vec<TypeId>, Vec<u64>))> {
+        let mut wtys = Vec::with_capacity(caps.len());
+        let mut offs = Vec::with_capacity(caps.len());
+        let mut size = 0u64;
+        for (name, sema) in caps {
+            let Some(wty) = self.wir_value_ty(*sema, span)? else {
+                return Err(refuse("unit-typed task captures", span));
+            };
+            if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
+                let _ = name;
+                return Err(refuse(
+                    "a region captured by a task (send it through a channel — [conc.chan.move])",
+                    span,
+                ));
+            }
+            let Some(sz) = flat_size(&self.b.module.types, wty) else {
+                return Err(refuse("task captures without a flat layout", span));
+            };
+            wtys.push(wty);
+            offs.push(size);
+            size += sz.next_multiple_of(8);
+        }
+        let (region, slot) = self.rt_slot(size.max(8));
+        for (i, (name, _)) in caps.iter().enumerate() {
+            let v = match self.lookup(name) {
+                Some(LocalBind::Val { var, .. }) => self.b.use_var(var),
+                Some(LocalBind::MutRef {
+                    ptr, region, elem, ..
+                }) => self.read_mut_ref(ptr, region, elem, span)?,
+                Some(LocalBind::SyncPayload { cell }) => self
+                    .rt_call("__wolf_rt_sync_get", &[cell], Some(types::I64))
+                    .expect("payload word"),
+                Some(LocalBind::Region { .. }) => {
+                    return Err(refuse(
+                        "a region captured by a task (send it through a channel — \
+                         [conc.chan.move])",
+                        span,
+                    ));
+                }
+                Some(LocalBind::Unit) | None => {
+                    return Err(refuse("an unresolvable task capture", span));
+                }
+            };
+            let addr = self.field_addr(slot, offs[i]);
+            self.store_flat(v, addr, region, span)?;
+        }
+        Ok((slot, region, (wtys, offs)))
+    }
+
+    /// A runtime call whose pointer arguments live in one stack slot
+    /// region: the trailing (erased) token param orders the caller's
+    /// stores/loads against the call, at the frozen ABI's positions.
+    fn call_with_slot_token(
+        &mut self,
+        name: &'static str,
+        args: &[Value],
+        slot_region: RegionId,
+        result: Option<TypeId>,
+    ) -> Option<Value> {
+        let mut params: Vec<Param> = args
+            .iter()
+            .map(|&a| Param::val(self.b.func.value_ty(a)))
+            .collect();
+        let formal = RegionId::new(0);
+        let tok = self.b.module.types.mem(formal);
+        params.push(Param {
+            ty: tok,
+            mode: Mode::Val,
+        });
+        let ext = self.rt_import(name, params, result.into_iter().collect());
+        let mut formal_regions = HashMap::new();
+        formal_regions.insert(0u32, slot_region);
+        self.b
+            .ins_call_regions(ext, args, &formal_regions)
+            .first()
+            .copied()
+    }
+
+    /// One-word channel payload conversions: widen to the wire i64.
+    fn widen_to_wire(&mut self, v: Value, span: Span) -> R<Value> {
+        let vt = self.b.func.value_ty(v);
+        if vt == types::I64 {
+            return Ok(v);
+        }
+        if vt == types::BOOL || types_is_int(vt) {
+            let op = if vt == types::BOOL {
+                Opcode::Zext
+            } else {
+                Opcode::Sext
+            };
+            return Ok(self.b.ins(op, &[v], &[types::I64], Aux::None).one());
+        }
+        Err(refuse(
+            "channel payloads beyond one word (s39 std sync)",
+            span,
+        ))
+    }
+
+    /// The wire word back to the element type.
+    fn narrow_from_wire(&mut self, w: Value, elem_wty: TypeId, span: Span) -> R<Value> {
+        if elem_wty == types::I64 {
+            return Ok(w);
+        }
+        if elem_wty == types::BOOL {
+            let z = self.b.iconst(types::I64, 0);
+            return Ok(self
+                .b
+                .ins(Opcode::Icmp, &[w, z], &[types::BOOL], Aux::IntCc(IntCc::Ne))
+                .one());
+        }
+        if types_is_int(elem_wty) {
+            return Ok(self
+                .b
+                .ins(Opcode::Itrunc, &[w], &[elem_wty], Aux::None)
+                .one());
+        }
+        Err(refuse(
+            "channel payloads beyond one word (s39 std sync)",
+            span,
+        ))
+    }
+
+    /// Channel methods — send/recv/close over the s33 runtime seam.
+    fn lower_chan_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv: &'t GreenNode,
+        elem: TyId,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let ch = flow_val!(self.lower_expr(recv));
+        let Some(ch) = ch else {
+            return Err(refuse("a channel op without a handle", recv.span));
+        };
+        let elem_is_region = matches!(self.table.kind(self.strip_sema(elem)), TyKind::RegionTy);
+        match mname {
+            "close" => {
+                self.rt_call("__wolf_rt_chan_close", &[ch], None);
+                Ok(Flow::Val(None))
+            }
+            "send" => {
+                let Some(arg) = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .find_map(Arg::value)
+                else {
+                    return Err(refuse("a send without a payload", e.span));
+                };
+                let status = if elem_is_region {
+                    // `send(move r)` — the affine move
+                    // ([conc.chan.move]): the handle crosses; the
+                    // donor's binding is moved-from (wolf_mem proved
+                    // it; the runtime routes the transfer seam).
+                    let operand = strip_move(arg);
+                    let (_rid, handle) = self.expect_region(operand)?;
+                    self.rt_call(
+                        "__wolf_rt_chan_send_region",
+                        &[ch, handle],
+                        Some(types::I32),
+                    )
+                } else {
+                    let v = flow_val!(self.lower_expr(arg));
+                    let Some(v) = v else {
+                        return Err(refuse("a unit-typed send payload", arg.span));
+                    };
+                    let w = self.widen_to_wire(v, arg.span)?;
+                    self.rt_call("__wolf_rt_chan_send", &[ch, w], Some(types::I32))
+                }
+                .expect("send status");
+                // Status 2 (cancelled): the kill teardown branch; a
+                // polite cancel (and 1, closed-send) falls through —
+                // send types as unit at v0, so the error value has no
+                // carrier yet (the s39 row work; ledgered).
+                let two = self.b.iconst(types::I32, 2);
+                let cancelled = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[status, two],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let cbb = self.b.create_block();
+                let cont = self.b.create_block();
+                self.b.ins_br(cancelled, cbb, &[], cont, &[]);
+                self.b.seal_block(cbb);
+                self.b.switch_to_block(cbb);
+                self.b.gvn_push_scope();
+                self.kill_teardown_branch(e.span)?;
+                self.b.ins_jmp(cont, &[]);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(cont);
+                self.b.switch_to_block(cont);
+                Ok(Flow::Val(None))
+            }
+            "recv" => {
+                let (region, slot) = self.rt_slot(8);
+                let status = self
+                    .rt_call_slot("__wolf_rt_chan_recv", &[ch], slot, region, Some(types::I32))
+                    .expect("recv status");
+                // The `!T {closed, cancelled}` union.
+                let eu = if elem_is_region {
+                    let it = &mut self.b.module.types;
+                    it.eu(Some(types::PTR), Vec::new())
+                } else {
+                    self.eu_ty_of(e.span)?
+                };
+                let v = self.chan_status_join(status, eu, e.span, |lo| {
+                    let types::TypeData::Eu { ok, .. } = lo.b.module.types.get(eu).clone() else {
+                        unreachable!("recv eu");
+                    };
+                    let Some(okt) = ok else {
+                        return Ok(None);
+                    };
+                    if elem_is_region {
+                        // The wire word IS the handle; adopt on
+                        // receipt ([conc.chan.move]'s ledger half).
+                        let h = lo.b.ins_load(types::PTR, slot, region);
+                        let adopted = lo
+                            .rt_call("__wolf_rt_region_adopt", &[h], Some(types::PTR))
+                            .expect("adopted handle");
+                        Ok(Some(adopted))
+                    } else {
+                        let w = lo.b.ins_load(types::I64, slot, region);
+                        Ok(Some(lo.narrow_from_wire(w, okt, e.span)?))
+                    }
+                })?;
+                Ok(Flow::Val(Some(v)))
+            }
+            _ => Err(refuse("this channel method (s39 std sync)", e.span)),
+        }
+    }
+
+    /// Join a chan-op status into its `!T {closed, cancelled}` union:
+    /// 0 → ok (via `mk_ok`), 1 → `closed`, 2 → the kill-teardown
+    /// check, then `cancelled` as a value ([conc.cancel.points]).
+    fn chan_status_join(
+        &mut self,
+        status: Value,
+        eu: TypeId,
+        span: Span,
+        mk_ok: impl FnOnce(&mut Self) -> R<Option<Value>>,
+    ) -> R<Value> {
+        let ok_bb = self.b.create_block();
+        let closed_bb = self.b.create_block();
+        let cancel_bb = self.b.create_block();
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, eu);
+        let zero = self.b.iconst(types::I32, 0);
+        let is_ok = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[status, zero],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let rest = self.b.create_block();
+        self.b.ins_br(is_ok, ok_bb, &[], rest, &[]);
+        self.b.seal_block(ok_bb);
+        self.b.seal_block(rest);
+        self.b.switch_to_block(rest);
+        self.b.gvn_push_scope();
+        let one = self.b.iconst(types::I32, 1);
+        let is_closed = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[status, one],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        self.b.ins_br(is_closed, closed_bb, &[], cancel_bb, &[]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(closed_bb);
+        self.b.seal_block(cancel_bb);
+        self.b.switch_to_block(ok_bb);
+        self.b.gvn_push_scope();
+        let okv = mk_ok(self)?;
+        let ov = self.b.ins_eu_make_ok(eu, okv);
+        self.b.ins_jmp(merge, &[ov]);
+        self.b.gvn_pop_scope();
+        self.b.switch_to_block(closed_bb);
+        self.b.gvn_push_scope();
+        let cid = self.b.module.tag_id("closed");
+        let ctag = self.b.iconst(types::I64, cid);
+        let cv = self.b.ins_eu_make_err(eu, ctag, &[]);
+        self.b.ins_jmp(merge, &[cv]);
+        self.b.gvn_pop_scope();
+        self.b.switch_to_block(cancel_bb);
+        self.b.gvn_push_scope();
+        self.kill_teardown_branch(span)?;
+        let xid = self.b.module.tag_id("cancelled");
+        let xtag = self.b.iconst(types::I64, xid);
+        let xv = self.b.ins_eu_make_err(eu, xtag, &[]);
+        self.b.ins_jmp(merge, &[xv]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        Ok(out)
+    }
+
+    /// Proc verbs (s73 — [conc.proc.model]): monitor/kill/cancel/link
+    /// over the s34 registry, ids as plain words.
+    fn lower_proc_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv: &'t GreenNode,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let id = flow_val!(self.lower_expr(recv));
+        let Some(id) = id else {
+            return Err(refuse("a proc op without a handle", recv.span));
+        };
+        match mname {
+            "monitor" => Ok(Flow::Val(Some(
+                self.rt_call("__wolf_rt_proc_monitor", &[id], Some(types::PTR))
+                    .expect("monitor channel"),
+            ))),
+            "kill" => {
+                self.rt_call("__wolf_rt_proc_kill", &[id], None);
+                Ok(Flow::Val(None))
+            }
+            "cancel" => {
+                self.rt_call("__wolf_rt_proc_cancel", &[id], None);
+                Ok(Flow::Val(None))
+            }
+            "link" => {
+                let Some(arg) = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .find_map(Arg::value)
+                else {
+                    return Err(refuse("a link without a partner", e.span));
+                };
+                let other = flow_val!(self.lower_expr(arg));
+                let Some(other) = other else {
+                    return Err(refuse("a link without a partner value", arg.span));
+                };
+                self.rt_call("__wolf_rt_proc_link", &[id, other], None);
+                Ok(Flow::Val(None))
+            }
+            _ => Err(refuse("this proc method (s39 supervisors)", e.span)),
+        }
+    }
+
+    /// Exit-reason class predicates ([conc.proc.exit]): the wire word
+    /// carries the class in its low byte.
+    fn lower_reason_method(
+        &mut self,
+        recv: &'t GreenNode,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let word = flow_val!(self.lower_expr(recv));
+        let Some(word) = word else {
+            return Err(refuse("a reason predicate without a value", recv.span));
+        };
+        let class = match mname {
+            "is_normal" => 0,
+            "is_error" => 1,
+            "is_killed" => 2,
+            "is_cancelled" => 3,
+            _ => return Err(refuse("this exit-reason method (s39)", e.span)),
+        };
+        let mask = self.b.iconst(types::I64, 0xFF);
+        let kind = self
+            .b
+            .ins(Opcode::Band, &[word, mask], &[types::I64], Aux::None)
+            .one();
+        let want = self.b.iconst(types::I64, class);
+        Ok(Flow::Val(Some(
+            self.b
+                .ins(
+                    Opcode::Icmp,
+                    &[kind, want],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one(),
+        )))
+    }
+
+    /// `spawn proc f(args)` — [conc.task.root]: pack the evaluated
+    /// arguments into an env, synthesize the entry shim over the
+    /// (already-lowered) named callee, and spawn under the root
+    /// supervisor with the three-outcome return protocol.
+    fn lower_proc_spawn(&mut self, e: &'t GreenNode) -> R<Flow> {
+        if !self.loops.is_empty() {
+            return Err(refuse(
+                "spawn inside a loop (env-slot lifetime, c05 follow-up)",
+                e.span,
+            ));
+        }
+        let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
+        let Some(cs) = self.calls.get(&e.span).copied() else {
+            return Err(refuse("a proc spawn without a call record", e.span));
+        };
+        let Some(cands) = self.fns.get(cs.callee.as_str()) else {
+            return Err(refuse("a proc spawn of an unresolvable callee", e.span));
+        };
+        let (callee_module, callee_sig) = if cands.len() == 1 {
+            cands[0]
+        } else {
+            let hits: Vec<&(usize, &FnSig)> = cands
+                .iter()
+                .filter(|(_, f)| Some(f.name_span) == cs.decl_span)
+                .collect();
+            match hits.as_slice() {
+                [one] => **one,
+                _ => {
+                    return Err(refuse(
+                        "a same-named proc callee without a unique declaration locus",
+                        e.span,
+                    ));
+                }
+            }
+        };
+        if !callee_sig.generics.is_empty() || callee_sig.comptime {
+            return Err(refuse("generic/comptime proc bodies", e.span));
+        }
+        if callee_sig
+            .params
+            .iter()
+            .any(|p| p.mode == Some(ParamMode::Mut))
+        {
+            return Err(refuse("`mut` parameters on proc bodies", e.span));
+        }
+        // Evaluate the arguments left to right and pack them.
+        let mut wtys = Vec::new();
+        let mut offs = Vec::new();
+        let mut vals = Vec::new();
+        let mut size = 0u64;
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed proc-spawn arguments", vexpr.span));
+            };
+            let wty = self.b.func.value_ty(v);
+            let Some(sz) = flat_size(&self.b.module.types, wty) else {
+                return Err(refuse(
+                    "proc-spawn arguments without a flat layout",
+                    vexpr.span,
+                ));
+            };
+            wtys.push(wty);
+            offs.push(size);
+            vals.push(v);
+            size += sz.next_multiple_of(8);
+        }
+        let (env_region, env) = self.rt_slot(size.max(8));
+        for (i, &v) in vals.iter().enumerate() {
+            let addr = self.field_addr(env, offs[i]);
+            self.store_flat(v, addr, env_region, e.span)?;
+        }
+        // The body: the callee's ordinary lowered function.
+        let body_name = qualify(self.sigs, callee_module, &cs.callee);
+        let body_sig = wir_sig_of(self.b.module, self.sigs, callee_sig, e.span)?;
+        let task_no = self.pending_tasks.len();
+        let base = self.b.func.name.clone();
+        let shim_name = format!("{base}.task{task_no}.entry");
+        // The declared result, mapped exactly as the sig build did.
+        let body_ret = self.b.module.sigs[body_sig].results.first().copied();
+        self.pending_tasks.push(PendingTask {
+            shim_name: shim_name.clone(),
+            body_name,
+            body_sig,
+            closure: None,
+            caps: Vec::new(),
+            cap_wtys: wtys,
+            cap_offs: offs,
+            body_ret,
+            span: e.span,
+        });
+        let shim_sig = self.task_shim_sig();
+        let shim_ext = self.rt_like_import(&shim_name, shim_sig);
+        let entry = self.b.ins_func_addr(shim_ext);
+        let (np, nl) = self.name_bytes(&cs.callee);
+        let id = self
+            .call_with_slot_token(
+                "__wolf_rt_proc_spawn_outcome",
+                &[entry, env, np, nl],
+                env_region,
+                Some(types::I64),
+            )
+            .expect("proc id");
+        Ok(Flow::Val(Some(id)))
+    }
+
+    /// `select { … }` — readiness choice over the s33 pick seam: the
+    /// arms array + out-params live in one stack slot; the committed
+    /// arm's body runs; TIMEOUT runs the timeout arm; CANCELLED takes
+    /// the teardown/escape path ([conc.select.*]).
+    fn lower_select_expr(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let d = wolf_ast::SelectExpr::cast(e).expect("kind");
+        struct ChanArm<'t> {
+            pat: Option<&'t GreenNode>,
+            body: Option<&'t GreenNode>,
+            elem: Option<TyId>,
+        }
+        let mut chan_arms: Vec<ChanArm<'t>> = Vec::new();
+        let mut timeout_arm: Option<(&'t GreenNode, Option<&'t GreenNode>)> = None;
+        let mut heads: Vec<&'t GreenNode> = Vec::new();
+        for arm in d.arms() {
+            let body = arm.body();
+            let head = arm
+                .syntax()
+                .nodes()
+                .filter(|n| wolf_ast::is_expr_kind(n.kind))
+                .find(|n| body.is_none_or(|b| !std::ptr::eq(*n as *const _, b as *const _)));
+            if arm.is_timeout() {
+                let Some(dur) = head else {
+                    return Err(refuse(
+                        "a timeout arm without a duration",
+                        arm.syntax().span,
+                    ));
+                };
+                timeout_arm = Some((dur, body));
+            } else {
+                let Some(src) = head else {
+                    return Err(refuse("a select arm without a source", arm.syntax().span));
+                };
+                let elem = self.expr_sema_ty(src.span).and_then(|t| {
+                    match self.table.kind(self.strip_sema(t)) {
+                        TyKind::Chan(el) => Some(*el),
+                        _ => None,
+                    }
+                });
+                heads.push(src);
+                chan_arms.push(ChanArm {
+                    pat: arm.pattern(),
+                    body,
+                    elem,
+                });
+            }
+        }
+        let n = chan_arms.len();
+        // One slot: [arms: 24n][out_val: 8][out_status: 8].
+        let arms_bytes = 24u64 * n as u64;
+        let (region, slot) = self.rt_slot(arms_bytes + 16);
+        for (i, src) in heads.iter().enumerate() {
+            let ch = flow_val!(self.lower_expr(src));
+            let Some(ch) = ch else {
+                return Err(refuse("a select source without a value", src.span));
+            };
+            let base = self.field_addr(slot, 24 * i as u64);
+            self.b.ins_store(ch, base, region);
+            let dir_addr = self.field_addr(slot, 24 * i as u64 + 8);
+            let zero64 = self.b.iconst(types::I64, 0);
+            self.b.ins_store(zero64, dir_addr, region); // dir=0 recv, pad=0
+            let val_addr = self.field_addr(slot, 24 * i as u64 + 16);
+            self.b.ins_store(zero64, val_addr, region);
+        }
+        let timeout_ns = match timeout_arm {
+            Some((dur, _)) => {
+                let v = flow_val!(self.lower_expr(dur));
+                let Some(v) = v else {
+                    return Err(refuse("a unit-typed timeout duration", dur.span));
+                };
+                self.widen_to_wire(v, dur.span)?
+            }
+            None => self.b.iconst(types::I64, -1),
+        };
+        let nv = self.b.iconst(types::I64, n as i64);
+        let has_else = self.b.iconst(types::I8, 0);
+        let out_val = self.field_addr(slot, arms_bytes);
+        let out_status = self.field_addr(slot, arms_bytes + 8);
+        let arms_ptr = slot;
+        let picked = self
+            .call_with_slot_token(
+                "__wolf_rt_select",
+                &[arms_ptr, nv, timeout_ns, has_else, out_val, out_status],
+                region,
+                Some(types::I64),
+            )
+            .expect("select verdict");
+        // Dispatch: 0..n arm bodies, -2 timeout, -4 cancelled.
+        let join = self.b.create_block();
+        let mut cursor = self.b.current_block();
+        let mut arm_blocks = Vec::with_capacity(n);
+        for i in 0..n {
+            let hit = self.b.create_block();
+            let next = self.b.create_block();
+            self.b.switch_to_block(cursor);
+            let iv = self.b.iconst(types::I64, i as i64);
+            let is_i = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[picked, iv],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            self.b.ins_br(is_i, hit, &[], next, &[]);
+            self.b.seal_block(hit);
+            self.b.seal_block(next);
+            arm_blocks.push(hit);
+            cursor = next;
+        }
+        // The residue: timeout, else cancelled/other.
+        self.b.switch_to_block(cursor);
+        let timeout_bb = self.b.create_block();
+        let other_bb = self.b.create_block();
+        let tv = self.b.iconst(types::I64, -2);
+        let is_t = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[picked, tv],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        self.b.ins_br(is_t, timeout_bb, &[], other_bb, &[]);
+        self.b.seal_block(timeout_bb);
+        self.b.seal_block(other_bb);
+        // other: CANCELLED (or an unexpected verdict) — teardown
+        // check, then the escape path.
+        self.b.switch_to_block(other_bb);
+        self.b.gvn_push_scope();
+        self.kill_teardown_branch(e.span)?;
+        self.cancel_escape(e.span)?;
+        self.b.gvn_pop_scope();
+        // timeout arm body.
+        self.b.switch_to_block(timeout_bb);
+        self.b.gvn_push_scope();
+        match timeout_arm {
+            Some((_, body)) => {
+                if self.lower_arm_body(body)? {
+                    self.b.ins_jmp(join, &[]);
+                }
+            }
+            None => {
+                // No timeout arm: the runtime cannot report TIMEOUT.
+                self.b.ins_trap(TrapKind::Assert);
+            }
+        }
+        self.b.gvn_pop_scope();
+        // Channel arm bodies.
+        for (i, arm) in chan_arms.iter().enumerate() {
+            self.b.switch_to_block(arm_blocks[i]);
+            self.b.gvn_push_scope();
+            self.scopes.push(ScopeFrame::default());
+            // Bind the arm pattern from out_val (a committed recv).
+            if let Some(pat) = arm.pat {
+                match pat.kind {
+                    SyntaxKind::IdentPat => {
+                        let name = self.text(pat.span);
+                        let Some(elem) = arm.elem else {
+                            return Err(refuse("a select arm without an element type", pat.span));
+                        };
+                        let Some(ewty) = self.wir_value_ty(elem, pat.span)? else {
+                            return Err(refuse("unit-typed select payloads", pat.span));
+                        };
+                        let w = self.b.ins_load(types::I64, out_val, region);
+                        let v = self.narrow_from_wire(w, ewty, pat.span)?;
+                        let var = self.b.declare_var(ewty);
+                        self.b.def_var(var, v);
+                        self.scopes.last_mut().expect("scope").binds.push((
+                            name,
+                            LocalBind::Val {
+                                var,
+                                wrapping: false,
+                                unsigned: false,
+                                wir_ty: ewty,
+                            },
+                        ));
+                    }
+                    SyntaxKind::WildcardPat => {}
+                    SyntaxKind::PathPat => {
+                        // `exit(reason) from m`: bind the payload
+                        // ident to the reason word.
+                        if let Some(one) = pat.nodes().find(|nn| nn.kind == SyntaxKind::IdentPat) {
+                            let name = self.text(one.span);
+                            let w = self.b.ins_load(types::I64, out_val, region);
+                            let var = self.b.declare_var(types::I64);
+                            self.b.def_var(var, w);
+                            self.scopes.last_mut().expect("scope").binds.push((
+                                name,
+                                LocalBind::Val {
+                                    var,
+                                    wrapping: false,
+                                    unsigned: false,
+                                    wir_ty: types::I64,
+                                },
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(refuse("this select-arm pattern in lowering", pat.span));
+                    }
+                }
+            }
+            let flowed = self.lower_arm_body(arm.body)?;
+            let si = self.scopes.len() - 1;
+            let still = if flowed {
+                self.run_one_scope_exit(si, false)?
+            } else {
+                false
+            };
+            self.scopes.pop();
+            if still {
+                self.b.ins_jmp(join, &[]);
+            }
+            self.b.gvn_pop_scope();
+        }
+        self.b.seal_block(join);
+        self.b.switch_to_block(join);
+        Ok(Flow::Val(None))
+    }
+
+    /// Lower a select arm's body (block or expression); true when the
+    /// path still flows.
+    fn lower_arm_body(&mut self, body: Option<&'t GreenNode>) -> R<bool> {
+        match body {
+            Some(b) if b.kind == SyntaxKind::Block => {
+                let blk = AstBlock::cast(b).expect("kind");
+                Ok(!matches!(self.lower_block(blk, false)?, Flow::Diverged))
+            }
+            Some(b) => Ok(!matches!(self.lower_expr_w(b, false)?, Flow::Diverged)),
+            None => Ok(true),
+        }
+    }
+
+    /// `when (a, b) { … }` — whole-set acquisition over the s33 seam
+    /// ([conc.when.order]): cells array in a slot, acquire, payload
+    /// rebinds over the body, release on every exit edge.
+    fn lower_when_expr(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
+        let d = wolf_ast::WhenExpr::cast(e).expect("kind");
+        let ops: Vec<&GreenNode> = d.operands().collect();
+        let n = ops.len() as i64;
+        let (region, slot) = self.rt_slot((ops.len() as u64 * 8).max(8));
+        let mut cells = Vec::with_capacity(ops.len());
+        for (i, op) in ops.iter().enumerate() {
+            let cell = flow_val!(self.lower_expr(op));
+            let Some(cell) = cell else {
+                return Err(refuse("a `when` operand without a value", op.span));
+            };
+            let addr = self.field_addr(slot, 8 * i as u64);
+            self.b.ins_store(cell, addr, region);
+            cells.push(cell);
+        }
+        let nv = self.b.iconst(types::I64, n);
+        let status = self
+            .call_with_slot_token(
+                "__wolf_rt_when_acquire",
+                &[slot, nv],
+                region,
+                Some(types::I32),
+            )
+            .expect("acquire status");
+        // Status 2: cancelled mid-set — teardown check, then escape.
+        let two = self.b.iconst(types::I32, 2);
+        let cancelled = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[status, two],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let cbb = self.b.create_block();
+        let body_bb = self.b.create_block();
+        self.b.ins_br(cancelled, cbb, &[], body_bb, &[]);
+        self.b.seal_block(cbb);
+        self.b.seal_block(body_bb);
+        self.b.switch_to_block(cbb);
+        self.b.gvn_push_scope();
+        self.kill_teardown_branch(e.span)?;
+        self.cancel_escape(e.span)?;
+        self.b.gvn_pop_scope();
+        self.b.switch_to_block(body_bb);
+        // The body, with payload rebinds and the release on every
+        // exit edge (the scope frame's when_release).
+        self.scopes.push(ScopeFrame {
+            when_release: Some((slot, region, n)),
+            ..ScopeFrame::default()
+        });
+        for (i, op) in ops.iter().enumerate() {
+            if op.kind == SyntaxKind::PathExpr {
+                let name = self.text(op.span);
+                self.scopes
+                    .last_mut()
+                    .expect("scope")
+                    .binds
+                    .push((name, LocalBind::SyncPayload { cell: cells[i] }));
+            }
+        }
+        let out = match d.body() {
+            Some(b) => self.lower_block(b, want),
+            None => Ok(Flow::Val(None)),
+        };
+        let flow = match out {
+            Ok(f) => f,
+            Err(x) => {
+                self.scopes.pop();
+                return Err(x);
+            }
+        };
+        if matches!(flow, Flow::Diverged) {
+            self.scopes.pop();
+            return Ok(Flow::Diverged);
+        }
+        // Fall-through: release now (the frame's entry), then pop.
+        let si = self.scopes.len() - 1;
+        let flowing = self.run_one_scope_exit(si, false);
+        self.scopes.pop();
+        if !flowing? {
+            return Ok(Flow::Diverged);
+        }
+        Ok(flow)
+    }
+
+    /// `for v in ch { … }` — drain to drained-close
+    /// ([conc.chan.close]); cancellation ends the iteration after the
+    /// teardown check ([conc.cancel.points]).
+    fn lower_for_chan(
+        &mut self,
+        d: ForExpr<'t>,
+        iter: &'t GreenNode,
+        elem: TyId,
+        span: Span,
+    ) -> R<Flow> {
+        let ch = flow_val!(self.lower_expr(iter));
+        let Some(ch) = ch else {
+            return Err(refuse("a channel iteration without a handle", iter.span));
+        };
+        let Some(ewty) = self.wir_value_ty(elem, span)? else {
+            return Err(refuse("unit-typed channel elements", span));
+        };
+        let bind_name = match d.pattern() {
+            None => None,
+            Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(p.span)),
+            Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+            Some(p) => {
+                return Err(refuse("destructuring channel `for` patterns", p.span));
+            }
+        };
+        let (region, slot) = self.rt_slot(8);
+        let header = self.b.create_block();
+        let body_bb = self.b.create_block();
+        let exit_bb = self.b.create_block();
+        self.b.ins_jmp(header, &[]);
+        self.b.switch_to_block(header);
+        let status = self
+            .rt_call_slot("__wolf_rt_chan_recv", &[ch], slot, region, Some(types::I32))
+            .expect("recv status");
+        let zero = self.b.iconst(types::I32, 0);
+        let is_ok = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[status, zero],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let notok_bb = self.b.create_block();
+        self.b.ins_br(is_ok, body_bb, &[], notok_bb, &[]);
+        self.b.seal_block(body_bb);
+        self.b.seal_block(notok_bb);
+        // Not ok: 1 closed → exit; 2 cancelled → teardown check, then
+        // exit (iteration ends; the frame's defers run by ordinary
+        // control flow — [conc.cancel.defer]).
+        self.b.switch_to_block(notok_bb);
+        self.b.gvn_push_scope();
+        let two = self.b.iconst(types::I32, 2);
+        let is_cancel = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[status, two],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let cancel_bb = self.b.create_block();
+        self.b.ins_br(is_cancel, cancel_bb, &[], exit_bb, &[]);
+        self.b.seal_block(cancel_bb);
+        self.b.switch_to_block(cancel_bb);
+        self.kill_teardown_branch(span)?;
+        self.b.ins_jmp(exit_bb, &[]);
+        self.b.gvn_pop_scope();
+        // The body.
+        self.b.switch_to_block(body_bb);
+        self.scopes.push(ScopeFrame::default());
+        if let Some(name) = bind_name {
+            let w = self.b.ins_load(types::I64, slot, region);
+            let v = self.narrow_from_wire(w, ewty, span)?;
+            let var = self.b.declare_var(ewty);
+            self.b.def_var(var, v);
+            self.scopes.last_mut().expect("scope").binds.push((
+                name,
+                LocalBind::Val {
+                    var,
+                    wrapping: false,
+                    unsigned: false,
+                    wir_ty: ewty,
+                },
+            ));
+        }
+        self.loops.push(LoopFrame {
+            continue_to: ContinueTo::Block(header),
+            exit: Some(exit_bb),
+            exit_param: None,
+            depth: self.scopes.len(),
+        });
+        let body_flow = match d.body() {
+            Some(b) => self.lower_block(b, false),
+            None => Ok(Flow::Val(None)),
+        };
+        self.loops.pop();
+        let body_flow = match body_flow {
+            Ok(f) => f,
+            Err(x) => {
+                self.scopes.pop();
+                return Err(x);
+            }
+        };
+        self.scopes.pop();
+        if !matches!(body_flow, Flow::Diverged) {
+            self.b.ins_jmp(header, &[]);
+        }
+        self.b.seal_block(header);
+        self.b.seal_block(exit_bb);
+        self.b.switch_to_block(exit_bb);
+        Ok(Flow::Val(None))
     }
 
     fn lower_literal(&mut self, e: &'t GreenNode) -> R<Flow> {
@@ -2676,9 +4506,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // when present; else-if chains inherit the caller's demand
         // (their nested node may carry no recorded type of its own).
         let want_v = match self.expr_sema_ty(e.span) {
-            Some(t) => {
-                wir_ty(&mut self.b.module.types, self.table, self.sigs, t, e.span)?.is_some()
-            }
+            // s73: region-typed results are ptr handles (a recv'd
+            // region unwrapping) — `wir_value_ty`'s rule.
+            Some(t) => self.wir_value_ty(t, e.span)?.is_some(),
             None => want,
         };
         // A fallible-typed if (its recorded type is a tagged union):
@@ -5308,6 +7138,50 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .expect("hdr");
             return Ok(Flow::Val(Some(hdr)));
         }
+        // s73: `channel[T](n)` — the runtime channel; omitted capacity
+        // is rendezvous ([conc.chan.default]).
+        if let TyKind::Chan(_) = self.table.kind(ty) {
+            let cap = match d
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .find_map(Arg::value)
+            {
+                Some(vexpr) => {
+                    let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                        return Err(refuse("a unit-typed channel capacity", vexpr.span));
+                    };
+                    self.widen_to_wire(v, vexpr.span)?
+                }
+                None => self.b.iconst(types::I64, 0),
+            };
+            let h = self
+                .rt_call("__wolf_rt_chan_new", &[cap], Some(types::PTR))
+                .expect("chan handle");
+            return Ok(Flow::Val(Some(h)));
+        }
+        // s73: `Mutex(v)` — a sync cell guarding one word
+        // ([conc.when.body]).
+        if let TyKind::Mutex(_) = self.table.kind(ty) {
+            let init = match d
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .find_map(Arg::value)
+            {
+                Some(vexpr) => {
+                    let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                        return Err(refuse("a unit-typed Mutex payload", vexpr.span));
+                    };
+                    self.widen_to_wire(v, vexpr.span)?
+                }
+                None => self.b.iconst(types::I64, 0),
+            };
+            let h = self
+                .rt_call("__wolf_rt_sync_new", &[init], Some(types::PTR))
+                .expect("sync handle");
+            return Ok(Flow::Val(Some(h)));
+        }
         if matches!(self.table.kind(ty), TyKind::Pool(_) | TyKind::Shared(_)) {
             return Err(refuse(
                 "Pool/shared constructor lowering (runtime shapes, c06)",
@@ -5400,6 +7274,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 TyKind::List(elem) => {
                     let elem = *elem;
                     return self.lower_list_method(d, recv_place, elem, &mname, e);
+                }
+                // s73: the conc receivers dispatch to the runtime
+                // seams, never to an impl.
+                TyKind::Chan(elem) => {
+                    let elem = *elem;
+                    return self.lower_chan_method(d, recv_place, elem, &mname, e);
+                }
+                TyKind::TaskScope if mname == "spawn" => {
+                    return self.lower_scope_spawn(d, recv_place, e);
+                }
+                TyKind::Proc => {
+                    return self.lower_proc_method(d, recv_place, &mname, e);
+                }
+                TyKind::ExitReason => {
+                    return self.lower_reason_method(recv_place, &mname, e);
                 }
                 _ => {}
             }
@@ -5774,9 +7663,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("an `else` without a fallback", e.span));
         };
         let want_v = match self.expr_sema_ty(e.span) {
-            Some(t) => {
-                wir_ty(&mut self.b.module.types, self.table, self.sigs, t, e.span)?.is_some()
-            }
+            // s73: region-typed results are ptr handles (a recv'd
+            // region unwrapping) — `wir_value_ty`'s rule.
+            Some(t) => self.wir_value_ty(t, e.span)?.is_some(),
             None => want,
         };
         let is_err = self.b.ins_eu_is_err(v);
@@ -6134,9 +8023,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             _ => sv,
         };
         let want_v = match self.expr_sema_ty(e.span) {
-            Some(t) => {
-                wir_ty(&mut self.b.module.types, self.table, self.sigs, t, e.span)?.is_some()
-            }
+            // s73: region-typed results are ptr handles (a recv'd
+            // region unwrapping) — `wir_value_ty`'s rule.
+            Some(t) => self.wir_value_ty(t, e.span)?.is_some(),
             None => want,
         };
         let merge_eu = self.eu_ty_of_span(e.span)?;
@@ -6589,6 +8478,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             {
                 let elem = *elem;
                 return self.lower_for_list(d, iter, elem, e.span);
+            }
+            // s73: `for v in ch` drains to drained-close.
+            if let Some(it) = self.expr_sema_ty(iter.span)
+                && let TyKind::Chan(elem) = self.table.kind(self.strip_sema(it))
+            {
+                let elem = *elem;
+                return self.lower_for_chan(d, iter, elem, e.span);
             }
             return Err(refuse(
                 "`for` over non-range iterables (the `Iter[T]` drive loop — Pool adopts \

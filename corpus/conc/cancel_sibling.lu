@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: resolve
+//! phase: run
 //! conforms: conc.task.fail, conc.cancel.points, conc.cancel.defer
 //! A failing child cancels its blocked sibling at a blocking point; the
 //! cancelled task's own defers run (cancellation is polite — contrast

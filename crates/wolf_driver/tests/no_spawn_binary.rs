@@ -99,6 +99,20 @@ fn no_spawn_binary_has_no_scheduler_symbols() {
         "__wolf_rt_proc_kill",
         "__wolf_rt_proc_cancel",
         "__wolf_rt_region_adopt",
+        // The s73 native-lowering additions (conc_abi.rs + the chan/
+        // sync/select seams): same law — a no-spawn binary links none
+        // of them.
+        "__wolf_rt_task_killed",
+        "__wolf_rt_proc_spawn_outcome",
+        "__wolf_rt_chan_new",
+        "__wolf_rt_chan_send",
+        "__wolf_rt_chan_recv",
+        "__wolf_rt_select",
+        "__wolf_rt_sync_new",
+        "__wolf_rt_sync_get",
+        "__wolf_rt_sync_set",
+        "__wolf_rt_when_acquire",
+        "__wolf_rt_when_release",
     ] {
         assert!(
             !syms.iter().any(|s| s == banned),

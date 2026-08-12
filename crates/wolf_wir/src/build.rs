@@ -845,6 +845,19 @@ impl<'m> FuncBuilder<'m> {
             .one()
     }
 
+    /// `func.addr @f()` (s73): the address of a module function or
+    /// known symbol as an opaque `ptr` — the compiled task-entry
+    /// pointer. Pure; GVN dedups it.
+    pub fn ins_func_addr(&mut self, callee: crate::ir::ExtFunc) -> Value {
+        self.ins(
+            Opcode::FuncAddr,
+            &[],
+            &[crate::types::PTR],
+            Aux::Callee(callee),
+        )
+        .one()
+    }
+
     pub fn ins_ptr_off(&mut self, base: Value, index: Value, scale: u64) -> Value {
         self.ins(
             Opcode::PtrOff,
@@ -1471,6 +1484,7 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::AggMake
                 | Opcode::AggGet
                 | Opcode::DataAddr
+                | Opcode::FuncAddr
                 | Opcode::EuMakeOk
                 | Opcode::EuMakeErr
                 | Opcode::EuIsErr

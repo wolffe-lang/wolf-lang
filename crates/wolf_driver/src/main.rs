@@ -1725,6 +1725,7 @@ fn native_run(
     release: bool,
     all: Vec<Diagnostic>,
     run_stdout: &mut Option<String>,
+    seed: Option<u64>,
 ) -> (&'static str, String, Vec<Diagnostic>) {
     let dir = std::env::temp_dir().join(format!(
         "wolf-native-{}-{}",
@@ -1749,7 +1750,13 @@ fn native_run(
     let result = compile_native(file, std_root, &exe, &mut scratch_sources, &opts);
     let outcome = match result {
         Ok(()) => {
-            let run = std::process::Command::new(&exe).output();
+            let mut cmd = std::process::Command::new(&exe);
+            if let Some(s) = seed {
+                // The one seed the runtime consumes (hooks.rs's
+                // `root_seed`): steal victims, select tie-breaks.
+                cmd.env("WOLF_SCHED_SEED", s.to_string());
+            }
+            let run = cmd.output();
             match run {
                 Err(e) => {
                     eprintln!("wolf conform-run: cannot run {}: {e}", exe.display());
@@ -2046,9 +2053,23 @@ fn conform_run(args: &[String]) {
     // `--zstats` (s25): peephole hit-rate counters from the wir rung's
     // builder, dumped on stderr — the Click claim, measured.
     let mut zstats = false;
+    // s73: `--seed=N` reaches the native runtime (`WOLF_SCHED_SEED`
+    // drives the s32/s36 scheduler PRNG) — `[proto.seed.flag]` made
+    // real for the native rung; the record reports `seeded` honestly.
+    let mut seed: Option<u64> = None;
     for a in args {
-        if a == "--json" || a.starts_with("--seed=") {
+        if a == "--json" {
             continue; // accepted per [proto.invoke.cli]
+        }
+        if let Some(v) = a.strip_prefix("--seed=") {
+            match v.parse::<u64>() {
+                Ok(n) => seed = Some(n),
+                Err(_) => {
+                    eprintln!("wolf conform-run: --seed needs a decimal u64");
+                    std::process::exit(2);
+                }
+            }
+            continue;
         }
         if a == "--checked" {
             checked = true;
@@ -2263,6 +2284,7 @@ fn conform_run(args: &[String]) {
                                                 release,
                                                 all,
                                                 &mut run_stdout,
+                                                seed,
                                             )
                                         } else {
                                             // The wir rung (s25):
@@ -2397,7 +2419,9 @@ fn conform_run(args: &[String]) {
         "commit": option_env!("WOLF_COMMIT").unwrap_or("unknown"),
         "file": file.replace('\\', "/"),
         "phase_reached": phase_reached,
-        "seeded": false,
+        // s73: true exactly when a --seed reached a native execution
+        // ([proto.seed.flag] — the checked machine stays seed-blind).
+        "seeded": seed.is_some() && native,
         "diagnostics": minimal,
         "warnings": warnings,
         "verdict": verdict,

@@ -967,6 +967,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("agg.make", Opcode::AggMake),
         ("agg.get", Opcode::AggGet),
         ("data.addr", Opcode::DataAddr),
+        ("func.addr", Opcode::FuncAddr),
         ("call", Opcode::Call),
         ("jmp", Opcode::Jmp),
         ("br", Opcode::Br),
@@ -1342,6 +1343,34 @@ fn parse_inst(
                 return line.fail(format!("`@{name}` is not a declared data symbol"));
             };
             aux = Aux::Data(idx as u32);
+            vec![types::PTR]
+        }
+        Opcode::FuncAddr => {
+            let callee = match line.peek() {
+                Some(Tok::Global(n)) => {
+                    let n = n.clone();
+                    line.next();
+                    n
+                }
+                _ => return line.fail("expected `@name` after `func.addr`"),
+            };
+            let Some(&sig) = p.known_sigs.get(&callee) else {
+                return line.fail(format!(
+                    "func.addr of `@{callee}` before its `decl` or definition"
+                ));
+            };
+            line.expect(Tok::LParen)?;
+            line.expect(Tok::RParen)?;
+            let existing = func
+                .ext_funcs
+                .iter()
+                .find(|(_, d)| d.name == callee)
+                .map(|(k, _)| k);
+            let ef = match existing {
+                Some(k) => k,
+                None => func.import_func(callee.clone(), sig),
+            };
+            aux = Aux::Callee(ef);
             vec![types::PTR]
         }
         Opcode::Call => {

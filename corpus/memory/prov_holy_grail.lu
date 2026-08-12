@@ -1,6 +1,8 @@
 //! check: run(exit=0)
-//! phase: typecheck
+//! phase: mem
 //! conforms: mem.tier0.mode.read, mem.ub, mem.prov.tag
+//! (phase typecheck → mem in s73: the memory tier lowers closures now
+//! — capture-as-read modeling; the wir rung still refuses fn values.)
 //! The SB "holy grail" shape: a `read` parameter is immutable for the
 //! whole call, so the second load may be hoisted/CSE'd across the opaque
 //! callback (§7/O2). This file is the CONFORMING side: the program can't

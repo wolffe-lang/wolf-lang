@@ -223,7 +223,9 @@ pub mod types;
 pub mod unify;
 pub(crate) mod wave;
 
-pub use check::{BodyRef, BodyResult, CallSig, CastKind, Dispatch, NotYet, TypedBody, check_body};
+pub use check::{
+    BodyRef, BodyResult, CallSig, CastKind, Dispatch, NotYet, TaskCapture, TypedBody, check_body,
+};
 pub use coerce::Coercion;
 pub use ctfe::{Budget, CtfeStats, Engine, Fold, ValueArena, ValueKind};
 pub use graph::{

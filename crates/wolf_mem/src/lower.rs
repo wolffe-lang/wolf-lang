@@ -128,6 +128,16 @@ fn is_copy(t: Ty<'_>, depth: u32) -> bool {
         | TyKind::Handle(_)
         | TyKind::Ptr(_)
         | TyKind::TypeTy => true,
+        // s73 — the conc capability handles: a channel/scope/sync
+        // value copied to another task crosses as a new reference to
+        // the SHARED runtime object (the interior is runtime-
+        // synchronized); proc ids and exit reasons are plain words
+        // ([conc.proc.1], [conc.proc.exit]).
+        TyKind::Chan(_)
+        | TyKind::Mutex(_)
+        | TyKind::TaskScope
+        | TyKind::Proc
+        | TyKind::ExitReason => true,
         TyKind::Distinct(inner) => is_copy(
             Ty {
                 table: t.table,
@@ -1988,10 +1998,7 @@ impl<'t> Lowerer<'t> {
                 self.cur = dead;
                 Ok(Val::none())
             }
-            SyntaxKind::ClosureExpr => Err(NotYet {
-                construct: "closure capture analysis (c05 tasks)",
-                span: e.span,
-            }),
+            SyntaxKind::ClosureExpr => self.eval_closure(e),
             SyntaxKind::FromEndExpr => Err(NotYet {
                 construct: "end-relative `^n` slicing places (s05 std surface)",
                 span: e.span,
@@ -2028,13 +2035,18 @@ impl<'t> Lowerer<'t> {
                 construct: "inline C / asm (unsafe tier, c10)",
                 span: e.span,
             }),
-            SyntaxKind::ScopeExpr
-            | SyntaxKind::SelectExpr
-            | SyntaxKind::WhenExpr
-            | SyntaxKind::SpawnExpr => Err(NotYet {
-                construct: "structured concurrency (c05)",
-                span: e.span,
-            }),
+            // s73 — the conc surface. The single-threaded check CFG
+            // models each construct conservatively: task closures run
+            // "once, here" (captures are by-copy reads per S-10;
+            // E1101 already rejected cross-task mutation), select
+            // arms are alternative branches, `when` bodies run under
+            // payload rebinds. Interleaving soundness is the type
+            // system's (E1101/E1102/E1103) + the runtime's; this
+            // tier checks moves/exclusivity/loans per task body.
+            SyntaxKind::ScopeExpr => self.eval_conc_scope(e),
+            SyntaxKind::SelectExpr => self.eval_select(e),
+            SyntaxKind::WhenExpr => self.eval_when(e),
+            SyntaxKind::SpawnExpr => self.eval_spawn(e),
             SyntaxKind::BorrowExpr => self.eval_borrow_from(e),
             _ => Err(NotYet {
                 construct: "this expression shape (memory tier)",
@@ -2390,6 +2402,177 @@ impl<'t> Lowerer<'t> {
             }
             _ => self.eval_value(operand),
         }
+    }
+
+    // ------------------------------------------- the conc surface ----
+    // (s73 — see the dispatch comment: single-threaded conservative
+    // models; the cross-task laws are typing's and the runtime's.)
+
+    /// Declare + init one binder at `span`, typed from sema's locals.
+    fn declare_init(&mut self, name: &str, span: Span) {
+        let ty = self.local_tys.get(&span).map(|&id| Ty {
+            table: &self.tb.table,
+            id,
+        });
+        let local = self.declare(name, span, ty);
+        let place = self.places.intern(
+            Place {
+                base: Base::Local(local.0),
+                proj: Vec::new(),
+            },
+            self.locals[local.0 as usize].is_copy,
+        );
+        self.push(Stmt::Init { place, span });
+    }
+
+    /// `scope name? { … }` — the handle binds over the body; the
+    /// block's value is the body's ([conc.task.scope]). The join is
+    /// the runtime's fact; here the body simply runs.
+    fn eval_conc_scope(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = wolf_ast::ScopeExpr::cast(e).expect("kind");
+        self.push_scope();
+        if let Some(name) = d.name() {
+            let nm = self.text(name.span);
+            self.declare_init(&nm, name.span);
+        }
+        let out = match d.body() {
+            Some(b) => self.walk_block(b, true),
+            None => Ok(Val::none()),
+        };
+        let out = out?;
+        self.close_scope(end_span(e.span))?;
+        Ok(out)
+    }
+
+    /// A task closure: models as "runs once, here" — captured reads
+    /// are reads (by-copy per S-10), closure locals live in their own
+    /// scope. The closure VALUE carries no sites (it is consumed by
+    /// its spawn).
+    fn eval_closure(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = wolf_ast::ClosureExpr::cast(e).expect("kind");
+        self.push_scope();
+        if let Some(params) = d.params() {
+            for p in params.params() {
+                if let Some(n) = p.name() {
+                    let nm = self.text(n.span);
+                    self.declare_init(&nm, n.span);
+                }
+            }
+        }
+        let r = match d.body() {
+            Some(b) if b.kind == SyntaxKind::Block => {
+                let blk = AstBlock::cast(b).expect("kind");
+                self.walk_block(blk, false).map(|_| ())
+            }
+            Some(b) => self.eval_value(b).map(|_| ()),
+            None => Ok(()),
+        };
+        r?;
+        self.close_scope(end_span(e.span))?;
+        Ok(Val::none())
+    }
+
+    /// `select { … }` — arms are alternative branches (exactly one
+    /// commits, [conc.select.ready]): a fan/join diamond, one scope
+    /// per arm with its binder.
+    fn eval_select(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = wolf_ast::SelectExpr::cast(e).expect("kind");
+        // Evaluate every arm's source/duration head in the fan block
+        // (readiness is observed before any arm body runs).
+        let arms: Vec<_> = d.arms().collect();
+        for arm in &arms {
+            let body = arm.body();
+            let head = arm
+                .syntax()
+                .nodes()
+                .filter(|n| wolf_ast::is_expr_kind(n.kind))
+                .find(|n| body.is_none_or(|b| !std::ptr::eq(*n as *const _, b as *const _)));
+            if let Some(h) = head {
+                match self.as_place(h) {
+                    Some((place, _)) => self.emit_read(place, h.span),
+                    None => {
+                        self.eval_value(h)?;
+                    }
+                }
+            }
+        }
+        let fan = self.cur;
+        let join = self.new_block();
+        for arm in &arms {
+            let arm_block = self.new_block();
+            self.goto(fan, arm_block);
+            self.cur = arm_block;
+            self.push_scope();
+            if let Some(pat) = arm.pattern() {
+                let mut binds = Vec::new();
+                collect_binding_spans(pat, &mut binds);
+                for span in binds {
+                    let name = self.text(span);
+                    self.declare_init(&name, span);
+                }
+            }
+            if let Some(b) = arm.body() {
+                match b.kind {
+                    SyntaxKind::Block => {
+                        let blk = AstBlock::cast(b).expect("kind");
+                        self.walk_block(blk, false)?;
+                    }
+                    _ => {
+                        self.eval_value(b)?;
+                    }
+                }
+            }
+            self.close_scope(end_span(arm.syntax().span))?;
+            self.goto(self.cur, join);
+        }
+        if arms.is_empty() {
+            self.goto(fan, join);
+        }
+        self.cur = join;
+        Ok(Val::none())
+    }
+
+    /// `when (a, b) { … }` — operands are read (acquisition borrows
+    /// the cells), simple paths rebind to their payloads over the
+    /// body ([conc.when.body]).
+    fn eval_when(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = wolf_ast::WhenExpr::cast(e).expect("kind");
+        self.push_scope();
+        for op in d.operands() {
+            match self.as_place(op) {
+                Some((place, _)) => self.emit_read(place, op.span),
+                None => {
+                    self.eval_value(op)?;
+                }
+            }
+            if op.kind == SyntaxKind::PathExpr
+                && let Some(t) = wolf_ast::PathExpr::cast(op).and_then(|p| p.ident())
+            {
+                let name = self.text(t.span);
+                self.declare_init(&name, t.span);
+            }
+        }
+        let out = match d.body() {
+            Some(b) => self.walk_block(b, true),
+            None => Ok(Val::none()),
+        };
+        let out = out?;
+        self.close_scope(end_span(e.span))?;
+        Ok(out)
+    }
+
+    /// `spawn proc f(args)` — args evaluate as call arguments (moves
+    /// out of places, D14); the handle value is a plain word.
+    fn eval_spawn(&mut self, e: &'t GreenNode) -> R<Val> {
+        let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
+        if let Some(args) = d.args() {
+            for a in args.args() {
+                if let Some(v) = a.value() {
+                    self.eval_value(v)?;
+                }
+            }
+        }
+        Ok(Val::none())
     }
 
     fn eval_bin(&mut self, e: &'t GreenNode) -> R<Val> {
@@ -2940,7 +3123,16 @@ impl<'t> Lowerer<'t> {
             table: &self.tb.table,
             id,
         });
-        let ret_region = matches!(ret_ty.map(|t| t.kind()), Some(TyKind::RegionTy));
+        // A region return counts behind an error row too (s73:
+        // `ch.recv()` on a `channel[region]` is `region ! {closed,
+        // cancelled}` — the ok half is the fresh region identity).
+        let ret_region = match ret_ty.map(|t| t.kind().clone()) {
+            Some(TyKind::RegionTy) => true,
+            Some(TyKind::ErrUnion(ok, _)) => {
+                matches!(ret_ty.map(|t| t.table.kind(ok)), Some(TyKind::RegionTy))
+            }
+            _ => false,
+        };
         let ret_heap = !ret_region && ret_ty.map(|t| !is_copy(t, 0)).unwrap_or(false);
         let mut_targets: Vec<PlaceId> = surface
             .mut_args
