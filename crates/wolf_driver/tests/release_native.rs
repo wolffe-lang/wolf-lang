@@ -90,8 +90,6 @@ fn lane(file: &Path, flag: &str) -> Option<(String, String)> {
     ))
 }
 
-/// The whole run-phase corpus, both tiers, one behavior.
-
 /// The native lanes link `libwolf_rt.a` found next to the `wolf`
 /// binary; `cargo test` alone does not produce the staticlib on a
 /// fresh target (CI's release-parity lane silently skipped for
@@ -107,6 +105,7 @@ fn ensure_rt_staticlib() {
     });
 }
 
+/// The whole run-phase corpus, both tiers, one behavior.
 #[test]
 fn release_tier_matches_debug_tier_on_the_corpus() {
     ensure_rt_staticlib();

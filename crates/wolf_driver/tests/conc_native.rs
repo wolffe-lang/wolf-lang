@@ -83,7 +83,6 @@ fn pinned(file: &str, want_verdict: &str, want_stdout: &str) {
 
 // ---- scope/spawn/channel/select/when ---------------------------------
 
-
 /// The native lanes link `libwolf_rt.a` found next to the `wolf`
 /// binary; `cargo test` alone does not produce the staticlib on a
 /// fresh target (CI's release-parity lane silently skipped for
