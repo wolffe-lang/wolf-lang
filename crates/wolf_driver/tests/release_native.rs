@@ -154,6 +154,17 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
         }
     }
     eprintln!("release-parity: {checked} checked, {conservatism} conservatism");
+    // The conservatism escape must never become a silent exit: if a
+    // change turns running files into release-lane refusals, this gate
+    // would stay green while comparing nothing. The floor ratchets —
+    // raise it when the compared set grows, never lower it to pass.
+    let compared = checked - conservatism;
+    assert!(
+        compared >= 99,
+        "the two tiers must stay compared on at least 99 files \
+         (compared {compared} of {checked}; {conservatism} refused) — \
+         if a refusal grew legitimately, raise the floor deliberately"
+    );
     assert!(
         divergences.is_empty(),
         "release tier diverges from debug tier on {} of {checked} file(s):\n{}",
