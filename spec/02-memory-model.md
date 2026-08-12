@@ -463,6 +463,26 @@ writing it requires itself.)
   resolve exactly as in `s[a..b]` before the domain question is
   asked.
 
+(Appended 2026-08-11, s71 — wolf-std F-0055/F-0056, issues #56/#57.
+Two lanes refused what one answered; a primitive whose meaning depends
+on which rung ran it cannot be delegated to. Both rulings adopt total
+definitions so `std.str` drops its guards and delegates.)
+
+- `[mem.str.empty]` The searching family is **defined** on an empty
+  needle, on every lane: an empty needle matches nothing.
+  `s.count("") == 0`; `s.split("")` yields the whole string as one
+  piece; `s.replace("", t) == s`. No lane refuses, no lane traps —
+  the three answers above are the only conforming ones. (These are
+  the answers the native runtime always gave; the checked lane and
+  the interpreter move to them.)
+- `[mem.str.repeat]` `s.repeat(n)` with `n < 0` is a caller contract
+  violation: the deterministic trap **`assert`** (`[conf.trap.map]`),
+  on every lane. It is not `bounds` — no access is out of range — and
+  it is not the empty string (the sc03-era interpreter answer, retired
+  deliberately here; the trap was already the executed behavior on all
+  three lanes, previously spelled `bounds` and cited against
+  `[mem.ub.defined]`, which never defined it). `n == 0` answers `""`.
+
 ---
 
 ## Appendix A — `corpus/regions.lu`, clause by clause `[mem.appendix]`

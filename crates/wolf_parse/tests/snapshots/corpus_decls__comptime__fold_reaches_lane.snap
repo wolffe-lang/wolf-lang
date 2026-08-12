@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 478..929 name=expand comptime body=Block
+FnDecl 931..978 name=len_of comptime body=Block
+FnDecl 980..1098 name=main body=Block

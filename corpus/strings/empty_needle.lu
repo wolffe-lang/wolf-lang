@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="0 1 abc abc")
+//! phase: run
+//! conforms: mem.str.empty
+//!
+//! The empty-needle ruling (s71, #56 — wolf-std F-0055): the
+//! searching family is DEFINED on an empty argument, on every lane —
+//! an empty needle matches nothing. `count("")` is 0, `split("")`
+//! yields the whole string as one piece, `replace("", t)` is
+//! identity. Two lanes used to refuse what one answered; a primitive
+//! whose meaning depends on which rung ran it cannot be delegated to.
+
+fn main() -> !int {
+    let c = "abc".count("")
+    let p = "abc".split("")
+    let r = "abc".replace("", "-")
+    print("{c} {p.len} {p[0]} {r}")
+    if c != 0 { return 1 }
+    if p.len != 1 { return 2 }
+    if r != "abc" { return 3 }
+    0
+}

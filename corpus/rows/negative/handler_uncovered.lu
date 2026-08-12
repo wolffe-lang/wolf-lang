@@ -1,0 +1,20 @@
+//! check: fail(E0809)
+//! phase: resolve
+//! conforms: err.rows, err.else
+//!
+//! An `else` handler runs for every error its operand can carry, so a
+//! payload pattern in handler position must cover the whole row
+//! (s71, #43). `Io(e)` leaves `timeout` unhandled — the diagnostic
+//! names the missing case and points at the match-over-row shape.
+
+fn poke(n: int) -> int ! {Io(int), timeout} {
+    if n == 0 { return Io(9) }
+    if n == 1 { return timeout }
+    n
+}
+
+fn main() -> !int {
+    let v = poke(2) else |Io(e)| { e }
+    print("{v}")
+    0
+}

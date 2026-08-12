@@ -474,8 +474,11 @@ when_expr   ::= 'when' '(' expr (',' expr)+ ','? ')' block
   proc linking/monitoring are methods (`w.monitor()`, `w.link()`), not
   keywords.
 - `from` and `timeout` are contextual (only meaningful in select arms).
-- `when` requires ≥2 operands (one operand is just a method on the sync
-  type).
+- `when` requires ≥2 operands — it acquires its whole set at once, so
+  every sync object the body touches is named in one `when` list.
+  (Sync types deliberately carry no methods; the one-operand "method"
+  framing this bullet once used described a method that never existed
+  — #41/#59.)
 
 ### 3.8 Unsafe tier `[gram.expr.unsafe]`
 

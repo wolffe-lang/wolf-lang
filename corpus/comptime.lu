@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: comptime.fn, comptime.types_as_values, perf.contract
 //!
 //! The single metaprogramming tier (D29): full CTFE, types as comptime

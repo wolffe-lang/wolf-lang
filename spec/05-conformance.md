@@ -96,7 +96,9 @@ parser contract):
   edge — and E1005 — transfer of an open region — plus rule violations
   the static tier cannot see), `stale-handle`
   (`[mem.shared.handle.2]`), `alloc-contract` (I15 `#[noalloc]`-family
-  violations in checked builds), `assert` (user assertions), `race`
+  violations in checked builds), `assert` (user assertions, and
+  ruled caller-contract violations of builtin surfaces —
+  `[mem.str.repeat]`), `race`
   (`[conc.mm.race.3]` — detection permitted, not required), `ub`
   (oracle-detected UB; `[proto.record.ub]` gives it comparison
   semantics), `deadlock` (`[conc.deadlock.trap]` — every live task

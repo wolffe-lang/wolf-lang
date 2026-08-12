@@ -315,9 +315,9 @@ pub unsafe extern "C" fn __wolf_rt_str_probe(sp: i64, sl: i64, np: i64, nl: i64,
     })
 }
 
-/// Non-overlapping occurrence count. Empty needle: 0 (the documented
-/// deterministic placeholder — the checked lane refuses, see the
-/// design note).
+/// Non-overlapping occurrence count. Empty needle: 0 — an empty
+/// needle matches nothing, ruled by [mem.str.empty] (#56); every
+/// lane answers the same.
 ///
 /// # Safety
 ///
@@ -398,8 +398,10 @@ pub unsafe extern "C" fn __wolf_rt_str_strip(
 }
 
 /// `repeat` — `count` copies, materialized. The count is non-negative
-/// by the caller's contract (lowering traps `bounds` first, matching
-/// the checked lane).
+/// by the caller's contract: lowering traps `assert` first, ruled by
+/// [mem.str.repeat] (#57). The clamp below stays regardless — it is
+/// the only thing between a direct FFI caller and
+/// `repeat(huge_negative as usize)`.
 ///
 /// # Safety
 ///
@@ -411,8 +413,9 @@ pub unsafe extern "C" fn __wolf_rt_str_repeat(sp: i64, sl: i64, count: i64, out:
     unsafe { write_owned(out, &t) };
 }
 
-/// `replace(from, to)` — materialized. Empty `from`: identity (the
-/// documented deterministic placeholder; the checked lane refuses).
+/// `replace(from, to)` — materialized. Empty `from`: identity — an
+/// empty needle matches nothing, ruled by [mem.str.empty] (#56);
+/// every lane answers the same.
 ///
 /// # Safety
 ///
@@ -439,8 +442,9 @@ pub unsafe extern "C" fn __wolf_rt_str_replace(
 /// The view family, materialized as `List[str]` (D25/s37 v0):
 /// `split(sep)` (mode 0), `words` (mode 1 — Unicode `White_Space`),
 /// `lines` (mode 2). Elements are zero-copy subslices of the
-/// receiver's bytes. Empty separator: the whole string as one element
-/// (deterministic placeholder; the checked lane refuses).
+/// receiver's bytes. Empty separator: the whole string as one
+/// element — an empty separator splits nowhere, ruled by
+/// [mem.str.empty] (#56); every lane answers the same.
 ///
 /// # Safety
 ///

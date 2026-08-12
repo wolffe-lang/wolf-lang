@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="A-B-B 5 done")
+//! phase: run
+//! conforms: comptime.fn, comptime.types_as_values
+//!
+//! The fold reaches the lane (s71, bs08's blocker family): a module
+//! holding `comptime fn`s builds and runs, and each fold's value
+//! arrives in the executing lane as an ordinary constant — a folded
+//! str built with comptime interpolation, `str.get` (the boundary
+//! primitive) behind an `else` handler, and a folded int through the
+//! same walker.
+
+comptime fn expand(axiom: str, steps: int) -> str {
+    var cur = axiom
+    var step = 0
+    while step < steps {
+        var next = ""
+        var i = 0
+        while i < cur.len {
+            let ch = cur.get(i..i + 1) else |_| { "" }
+            if ch == "A" {
+                next = "{next}A-B"
+            } else {
+                next = "{next}{ch}"
+            }
+            i += 1
+        }
+        cur = next
+        step += 1
+    }
+    cur
+}
+
+comptime fn len_of(s: str) -> int {
+    s.len
+}
+
+fn main() -> !int {
+    const CURVE = expand("A", 2)
+    const N = len_of(CURVE)
+    print("{CURVE} {N} done")
+    0
+}
