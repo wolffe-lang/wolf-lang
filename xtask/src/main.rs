@@ -1401,10 +1401,21 @@ fn diag_catalog(check: bool) -> ExitCode {
     //   code!(E0101, "summary", r#" explanation "#);
     let mut entries: Vec<(String, String, String)> = Vec::new();
     let mut rest = registry.as_str();
+    let mut consumed = 0usize;
     while let Some(pos) = rest.find("code!(") {
+        let abs = consumed + pos;
         rest = &rest[pos + 6..];
+        consumed = abs + 6;
         // skip the macro-definition template line (starts with `$`)
         if rest.trim_start().starts_with('$') {
+            continue;
+        }
+        // A `code!(` inside a comment documents the format; it is not a
+        // declaration. The module doc comment's example was harvested as
+        // a real code and published `E0101 - one-line summary` into the
+        // catalog, a page users read.
+        let line_start = registry[..abs].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        if registry[line_start..abs].trim_start().starts_with("//") {
             continue;
         }
         let Some((code, after)) = rest.split_once(',') else {
@@ -1431,6 +1442,7 @@ fn diag_catalog(check: bool) -> ExitCode {
             .trim()
             .to_string();
         entries.push((code, summary, explanation));
+        consumed = registry.len() - after.len();
         rest = after;
     }
     if entries.is_empty() {

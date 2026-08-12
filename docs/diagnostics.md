@@ -107,12 +107,6 @@ all, use a raw string `r"…"`, which has no escapes.
 
 Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap
 
-## E0101 — one-line summary
-
-extended explanation
-
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap
-
 ## E0102 — unterminated string literal or interpolation
 
 A plain `"…"` string must close before the end of its line — a newline
