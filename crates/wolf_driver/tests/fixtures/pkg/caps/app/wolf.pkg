@@ -1,0 +1,9 @@
+pkg {
+    name:    "demo/netless",
+    version: "0.1.0",
+    edition: "1",
+
+    deps: {
+        std: { path: "../std" },
+    },
+}

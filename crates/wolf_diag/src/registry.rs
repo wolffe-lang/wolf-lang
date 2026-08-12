@@ -1454,6 +1454,86 @@ defined shape for each row.
 "#);
 
 // ------------------------------------------------------------------------
+// E15xx — the package manager (s51): manifest, resolution, integrity,
+// and capability enforcement. The manifest is declarative data (D33) —
+// several of these codes exist precisely to keep it that way.
+// ------------------------------------------------------------------------
+
+code!(E1501, "the package manifest does not parse", r#"
+`wolf.pkg` is declarative data in wolf's literal syntax: one `pkg { }`
+block of `key: value` entries, where a value is a string, an integer, a
+bare capability word, a `[ ]` list, or a nested `{ }` map. This file
+strays from that shape at the reported location. Two deliberate
+restrictions are worth knowing: manifest strings never interpolate
+(`{x}` in a manifest string is an error — a manifest is data, and data
+does not compute, D33), and no key is ever an expression. Fix the
+syntax at the span; the note names what the parser expected.
+"#);
+
+code!(E1502, "the package manifest has a schema error", r#"
+The manifest parsed as data, but the data does not fit the `wolf.pkg`
+schema: an unknown key, a value of the wrong shape, a dependency
+entry that names no source, or a malformed version. Dependency entries
+take exactly one source form: `{ path: "…" }` for a local tree,
+`{ git: "…", tag: "…" }` for a pinned VCS fetch, or
+`{ pkg: "owner/name", major: N, min: "X.Y.Z" }` for a registry
+dependency (the hosted registry service arrives later; the entry form
+is stable now, X7). Versions are dotted numerics (`"1.4.0"`).
+The message names the offending key and the accepted alternatives.
+"#);
+
+code!(E1503, "the manifest declares a build-time script hook — wolf has none, ever", r#"
+This manifest carries a key (`build`, `script`, `hooks`, or another
+install-hook spelling) that asks for code to run on the host at build
+or fetch time. Wolf rejects the key unconditionally: D33 is the locked
+decision that adding a wolf dependency NEVER means arbitrary code runs
+on your machine — no build.rs, no post-install hooks, no Turing-complete
+manifest. This is the supply-chain posture the whole ecosystem leans
+on, so it is enforced at parse time, before any dependency content is
+trusted for anything. Express C-library needs through the declarative
+`c: { … }` recipe schema, compute values in sandboxed `comptime`
+(no ambient IO), or wrap a system/prebuilt library. The key is refused,
+not ignored: a manifest that asks for execution does not resolve.
+"#);
+
+code!(E1504, "this package uses a capability its manifest does not declare", r#"
+Capability manifests (I13) make a package's ambient-authority footprint
+a reviewable, diffable declaration: a package that touches `std.net`
+must say `capabilities: [net]` in its `wolf.pkg`, and likewise `fs` and
+`env` for those facades. The build found an import of a
+capability-carrying std module that the owning package's manifest does
+not declare. Declare the capability (making the footprint visible to
+every consumer running `wolf audit`) or drop the import. Undeclared
+capability use is a build error, not a warning — the audit tree is only
+trustworthy if it cannot silently under-report.
+"#);
+
+code!(E1505, "dependency resolution failed", r#"
+The dependency graph in `wolf.pkg` cannot be resolved: a `path`
+dependency points at a directory that does not exist or is not a
+package, a `git` dependency cannot be fetched or its pin is absent from
+the content store (run `wolf update` to fetch and record it), a
+dependency's own manifest fails to parse, or a registry-sourced entry
+was asked to resolve (the hosted registry arrives later; today's
+sources are `path` and `git`, X7). Resolution is deterministic — minimal version
+selection over declared minimums, no ranges, no solver — so this error
+is always about a source being unreachable or malformed, never about
+the resolver "choosing badly".
+"#);
+
+code!(E1506, "a dependency's content hash does not match wolf.sum", r#"
+`wolf.sum` is the integrity ledger: for every fetched dependency it
+records a content hash over the package's source tree, and every later
+build re-derives that hash and compares. A mismatch means the bits on
+disk are not the bits the ledger witnessed — an edited store entry, a
+moved tag, or a tampered mirror. The build refuses: mirrors and
+transports are untrusted by construction, only the hash is. If the
+change is intentional (you deliberately updated the dependency), run
+`wolf update` to refresh the ledger; otherwise treat the mismatch as
+the supply-chain alarm it is.
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — frontend/resolution-adjacent warnings (s67; W0301 is the
 // formatter's grandfathered s11 code). Warnings are leveled via
 // `wolf_diag::lint` — allow/warn/deny per code, per family
@@ -1918,11 +1998,12 @@ mod tests {
                 if let Some(id) = sprint_id(text) {
                     panic!("{c}: internal identifier `{id}` in reader-facing prose");
                 }
-                // Commands named must exist: `wolf audit` does not
-                // (the command is `wolf audit-surface`).
+                // Commands named must exist. `wolf audit` shipped with
+                // the package manager, so both audit spellings are
+                // real now; the vendor verb is still unbuilt.
                 assert!(
-                    !text.contains("wolf audit`") && !text.contains("wolf audit "),
-                    "{c}: names `wolf audit`, which is not a command"
+                    !text.contains("wolf vendor"),
+                    "{c}: names `wolf vendor`, which is not a command yet"
                 );
             }
         }

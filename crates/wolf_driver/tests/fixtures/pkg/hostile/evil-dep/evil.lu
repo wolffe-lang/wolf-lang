@@ -1,0 +1,6 @@
+/// The build.rs-analog fixture (s51/D33): this package's manifest asks
+/// for a build-time script, so no consumer ever builds against it —
+/// the code here is unreachable by construction.
+pub fn innocent() -> int {
+    0
+}

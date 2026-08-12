@@ -1,0 +1,11 @@
+/// The declared twin of `app`: same `std.net` use, `capabilities:
+/// [net]` in the manifest — builds and runs. Also the s51 acceptance
+/// story in miniature: std itself resolved as a `path:` dependency
+/// from the manifest, no --std-root flag anywhere.
+use std.net
+
+fn main() -> !int {
+    let h = net.ping("localhost")
+    print("{h}")
+    0
+}

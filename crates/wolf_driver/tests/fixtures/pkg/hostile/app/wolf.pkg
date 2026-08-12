@@ -1,0 +1,9 @@
+pkg {
+    name:    "victim/app",
+    version: "0.1.0",
+    edition: "1",
+
+    deps: {
+        evil: { path: "../evil-dep" },
+    },
+}

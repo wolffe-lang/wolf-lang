@@ -1,0 +1,10 @@
+/// The s51 dogfood: a fixture project depending on a second fixture
+/// package, end-to-end — `wolf.pkg` names `util` by path, resolution
+/// makes the alias a module root, and the built binary runs.
+use util
+
+fn main() -> !int {
+    let t = util.twist(20)
+    print("twist(20) = {t}")
+    0
+}
