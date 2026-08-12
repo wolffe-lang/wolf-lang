@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 57] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 78] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -128,6 +128,32 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 57] = [
     ("__wolf_rt_time_now_ms", 0, true),
     ("__wolf_rt_time_unix_ms", 0, true),
     ("__wolf_rt_time_sleep_ms", 1, false),
+    // The s73 conc families (wolf_rt::task, the frozen s32–s36 ABI +
+    // the conc_abi additions): handles/ids/words as i64|ptr; the
+    // narrow returns (i32 statuses, the i8 killed poll) and select's
+    // i8 `has_else` ride `rt_ref`'s per-symbol exceptions. Env/slot
+    // token params erase — counts are machine params.
+    ("__wolf_rt_scope_new", 2, true),
+    ("__wolf_rt_scope_spawn", 5, false),
+    ("__wolf_rt_scope_join_free", 1, true),
+    ("__wolf_rt_task_killed", 0, true),
+    ("__wolf_rt_chan_new", 1, true),
+    ("__wolf_rt_chan_send", 2, true),
+    ("__wolf_rt_chan_send_region", 2, true),
+    ("__wolf_rt_chan_recv", 2, true),
+    ("__wolf_rt_chan_close", 1, false),
+    ("__wolf_rt_select", 6, true),
+    ("__wolf_rt_sync_new", 1, true),
+    ("__wolf_rt_sync_get", 1, true),
+    ("__wolf_rt_sync_set", 2, false),
+    ("__wolf_rt_when_acquire", 2, true),
+    ("__wolf_rt_when_release", 2, false),
+    ("__wolf_rt_region_adopt", 1, true),
+    ("__wolf_rt_proc_spawn_outcome", 4, true),
+    ("__wolf_rt_proc_monitor", 1, true),
+    ("__wolf_rt_proc_kill", 1, false),
+    ("__wolf_rt_proc_cancel", 1, false),
+    ("__wolf_rt_proc_link", 2, false),
 ];
 
 /// How one WIR parameter crosses the call boundary (the mechanical
@@ -706,6 +732,8 @@ impl<'a, 'b> Tx<'a, 'b> {
                     } else if (name == "__wolf_rt_print_bool" && i == 0)
                         || ((name == "__wolf_rt_write_bool" || name == "__wolf_rt_strbuf_bool")
                             && i == 1)
+                        // s73: select's `has_else` flag crosses as i8.
+                        || (name == "__wolf_rt_select" && i == 3)
                     {
                         ctypes::I8
                     } else if (name == "__wolf_rt_write_f64" || name == "__wolf_rt_strbuf_f64")
@@ -718,7 +746,17 @@ impl<'a, 'b> Tx<'a, 'b> {
                     sig.params.push(AbiParam::new(ty));
                 }
                 if has_ret {
-                    sig.returns.push(AbiParam::new(ctypes::I64));
+                    // s73: the conc status returns are i32; the killed
+                    // poll is i8; everything else stays i64.
+                    let rty = match name {
+                        "__wolf_rt_chan_send"
+                        | "__wolf_rt_chan_send_region"
+                        | "__wolf_rt_chan_recv"
+                        | "__wolf_rt_when_acquire" => ctypes::I32,
+                        "__wolf_rt_task_killed" => ctypes::I8,
+                        _ => ctypes::I64,
+                    };
+                    sig.returns.push(AbiParam::new(rty));
                 }
                 let fid = self
                     .om
@@ -1226,6 +1264,23 @@ impl<'a, 'b> Tx<'a, 'b> {
                 };
                 let callee = self.f.ext_funcs[ef].clone();
                 self.lower_call(&callee.name, callee.sig, &args, &results)?;
+            }
+            Opcode::FuncAddr => {
+                // s73: the compiled task-entry pointer — a module
+                // function's address as an opaque i64/ptr (the same
+                // PIC regime as `symbol_value`).
+                let Aux::Callee(ef) = data.aux else {
+                    return Err(ice("func.addr without callee"));
+                };
+                let callee = self.f.ext_funcs[ef].name.clone();
+                let Some(entry) = self.funcs.get(&callee) else {
+                    return Err(nyi(format!(
+                        "func.addr of `@{callee}` outside this object's subset"
+                    )));
+                };
+                let fr = self.om.declare_func_in_func(entry.fid, self.b.func);
+                let p = self.b.ins().func_addr(ctypes::I64, fr);
+                self.vals.insert(results[0], Repr::Scalar(p));
             }
 
             // ---- the memory story (runtime shims) ----

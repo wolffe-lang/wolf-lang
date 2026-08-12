@@ -516,6 +516,12 @@ fn run_task(task: Box<Task>) {
             let tag = unsafe { entry(env.0) };
             if tag == 0 {
                 ExitReason::Normal
+            } else if tag == super::conc_abi::CANCEL_TAG {
+                // The s73 protocol extension (reviewed): the reserved
+                // cancel sentinel is the compiled body saying
+                // "structured cancellation stopped me" — a
+                // consequence, never a scope failure (conc_abi.rs).
+                ExitReason::Cancelled
             } else {
                 ExitReason::Error { tag }
             }
