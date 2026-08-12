@@ -111,6 +111,7 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
         runnable.len()
     );
     let mut checked = 0usize;
+    let mut conservatism = 0usize;
     let mut divergences = Vec::new();
     for f in &runnable {
         let Some(debug) = lane(f, "--native") else {
@@ -120,6 +121,15 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
             return;
         };
         checked += 1;
+        // [proto.record.unsupported]'s law applies between tiers too: a
+        // named refusal on either side is conservatism, never divergence
+        // (s73 runs conc on the debug tier while the release tier refuses
+        // it by name until c09 lowers task entries). Both-execute-and-
+        // differ is the only divergence.
+        if release.0 == "unsupported" || debug.0 == "unsupported" {
+            conservatism += 1;
+            continue;
+        }
         if debug != release {
             divergences.push(format!(
                 "{}: debug={debug:?} release={release:?}",
@@ -127,6 +137,7 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
             ));
         }
     }
+    eprintln!("release-parity: {checked} checked, {conservatism} conservatism");
     assert!(
         divergences.is_empty(),
         "release tier diverges from debug tier on {} of {checked} file(s):\n{}",

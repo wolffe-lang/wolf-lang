@@ -1112,6 +1112,15 @@ impl<'a> Fx<'a> {
         let args = self.args_of(inst);
         let results = self.results_of(inst);
         match op {
+            // s73's conc lowering targets the debug tier first; the
+            // release tier refuses task-entry addresses by name until
+            // c09 picks up conc kernels (the macro corpus needs them —
+            // s44's problem, not silently this backend's).
+            Opcode::FuncAddr => {
+                return Err(nyi(
+                    "func.addr (native conc task entries) — the release tier                      does not lower concurrency yet",
+                ));
+            }
             Opcode::Iconst => {
                 let Aux::Int(n) = data.aux else {
                     return Err(ice("iconst without payload"));
