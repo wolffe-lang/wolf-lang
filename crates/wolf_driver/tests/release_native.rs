@@ -91,8 +91,25 @@ fn lane(file: &Path, flag: &str) -> Option<(String, String)> {
 }
 
 /// The whole run-phase corpus, both tiers, one behavior.
+
+/// The native lanes link `libwolf_rt.a` found next to the `wolf`
+/// binary; `cargo test` alone does not produce the staticlib on a
+/// fresh target (CI's release-parity lane silently skipped for
+/// exactly this reason). Build it once, deterministically.
+fn ensure_rt_staticlib() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = std::process::Command::new(env!("CARGO"))
+            .args(["build", "-p", "wolf_rt"])
+            .status()
+            .expect("cargo builds wolf_rt");
+        assert!(status.success(), "wolf_rt staticlib build failed");
+    });
+}
+
 #[test]
 fn release_tier_matches_debug_tier_on_the_corpus() {
+    ensure_rt_staticlib();
     let root = corpus_root();
     assert!(root.is_dir(), "corpus directory exists");
     let mut files = Vec::new();

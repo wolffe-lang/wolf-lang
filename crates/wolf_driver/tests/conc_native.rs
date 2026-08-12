@@ -83,28 +83,49 @@ fn pinned(file: &str, want_verdict: &str, want_stdout: &str) {
 
 // ---- scope/spawn/channel/select/when ---------------------------------
 
+
+/// The native lanes link `libwolf_rt.a` found next to the `wolf`
+/// binary; `cargo test` alone does not produce the staticlib on a
+/// fresh target (CI's release-parity lane silently skipped for
+/// exactly this reason). Build it once, deterministically.
+fn ensure_rt_staticlib() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = std::process::Command::new(env!("CARGO"))
+            .args(["build", "-p", "wolf_rt"])
+            .status()
+            .expect("cargo builds wolf_rt");
+        assert!(status.success(), "wolf_rt staticlib build failed");
+    });
+}
+
 #[test]
 fn select_two_ready_arms_is_conforming_either_way() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/select_seeded.lu", "exit(0)", "");
 }
 
 #[test]
 fn when_multi_acquires_whole_sets() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/when_multi.lu", "exit(0)", "");
 }
 
 #[test]
 fn freeze_publishes_across_tasks() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/freeze_publish.lu", "exit(0)", "");
 }
 
 #[test]
 fn message_passing_moves_the_region() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/message_passing.lu", "exit(0)", "");
 }
 
 #[test]
 fn failing_child_cancels_sibling_and_reraises() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/cancel_sibling.lu", "exit(0)", "");
 }
 
@@ -112,11 +133,13 @@ fn failing_child_cancels_sibling_and_reraises() {
 
 #[test]
 fn killed_proc_skips_defers() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/proc_kill_defers.lu", "exit(0)", "released");
 }
 
 #[test]
 fn cancelled_proc_runs_defers() {
+    ensure_rt_staticlib();
     pinned(
         "corpus/conc/proc_cancel_defers.lu",
         "exit(0)",
@@ -126,11 +149,13 @@ fn cancelled_proc_runs_defers() {
 
 #[test]
 fn linked_procs_share_fate() {
+    ensure_rt_staticlib();
     pinned("corpus/conc/proc_link.lu", "exit(0)", "both-down");
 }
 
 #[test]
 fn the_kitchen_sink_procs_file_runs() {
+    ensure_rt_staticlib();
     pinned("corpus/procs.lu", "exit(0)", "");
 }
 
@@ -138,6 +163,7 @@ fn the_kitchen_sink_procs_file_runs() {
 
 #[test]
 fn wolf_test_schedules_explores_a_native_body() {
+    ensure_rt_staticlib();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let out = Command::new(wolf())
         .arg("test")

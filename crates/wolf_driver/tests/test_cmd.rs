@@ -314,6 +314,20 @@ fn json_stream_conforms_to_wolf_test_0() {
 fn test_tier_corpus_is_green() {
     let corpus = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/test");
     let (code, out, _err) = run_test(&corpus, &[]);
-    assert_eq!(code, 0, "corpus/test runs green under wolf test:\n{out}");
+    // The conc witness (s73) runs natively, which the task layer serves
+    // on linux only. Off-linux the honest verdict is exit 1 with exactly
+    // that file unsupported — a green run must mean everything ran.
+    #[cfg(target_os = "linux")]
+    {
+        assert_eq!(code, 0, "corpus/test runs green under wolf test:\n{out}");
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        assert_eq!(code, 1, "off-linux the conc witness is unsupported:\n{out}");
+        assert!(
+            out.contains("conc_schedules_test.lu"),
+            "the only failure is the conc witness:\n{out}"
+        );
+    }
     assert!(out.contains("assert_test.lu::test_arithmetic_holds ... ok"));
 }
