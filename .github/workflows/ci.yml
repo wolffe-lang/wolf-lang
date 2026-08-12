@@ -26,8 +26,10 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: install native toolchain (gdb for debug-check, lld for the link probe)
-        run: sudo apt-get update && sudo apt-get install -y gdb lld
+      - name: install native toolchain (gdb for debug-check, lld for the link
+          probe, clang for the s41 release tier — system LLVM is a NAMED
+          toolchain requirement per D33, never a build script)
+        run: sudo apt-get update && sudo apt-get install -y gdb lld clang
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
         run: cargo xtask ci
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)

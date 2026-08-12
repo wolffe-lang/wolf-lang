@@ -634,6 +634,30 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
                 config,
             ));
         }
+        // (b') the Tier-R compile lane (s41, REPORT-ONLY until s44
+        // sets gates): clean release builds through the LLVM tier.
+        // Skips loudly where the release toolchain (clang) is absent.
+        if wolf_build(&["--release"]) {
+            for _ in 0..runs {
+                let _ = std::fs::remove_dir_all(proj.join(".lu-cache"));
+                let t = Instant::now();
+                if !wolf_build(&["--release"]) {
+                    return None;
+                }
+                records.push(record(
+                    "nmod",
+                    "compile",
+                    "wolf",
+                    "release_clean_build_wall_s",
+                    t.elapsed().as_secs_f64(),
+                    "s",
+                    commit,
+                    config,
+                ));
+            }
+        } else {
+            eprintln!("bench: release tier unavailable (clang?) — Tier-R compile lane skipped");
+        }
         // (c) max-RSS of one incremental rebuild, via /usr/bin/time -v.
         touch(&proj.join("m01").join("m01.lu"));
         match max_rss_kb(
@@ -1917,9 +1941,19 @@ fn deps_check() -> ExitCode {
                 ][..],
             ),
         ),
+        // wolf_rt for the same reason as the Cranelift tier: the shared
+        // trap-kind table (single authority for codegen and runtime).
         (
             "wolf_codegen_llvm",
-            Some(&["wolf_span", "wolf_diag", "wolf_wir", "wolf_backend"][..]),
+            Some(
+                &[
+                    "wolf_span",
+                    "wolf_diag",
+                    "wolf_wir",
+                    "wolf_backend",
+                    "wolf_rt",
+                ][..],
+            ),
         ),
         // The editor stack (s52): wolf_query is the compiler-side query
         // contract over the analysis pipeline; wolf_lsp is the
