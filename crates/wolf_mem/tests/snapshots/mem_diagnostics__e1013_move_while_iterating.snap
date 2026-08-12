@@ -1,0 +1,15 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1013]: `xs` is being iterated, so it cannot be moved away
+ --> mem:///main.lu:6:18
+  |
+5 |     for x in xs {
+  |              -- the `for` loop holds `xs` from here, for its whole extent
+6 |         let ys = xs
+  |                  ^^ the container changes under the loop
+  |
+  = note: iterating holds a read claim on the container for the loop's extent [mem.iter.excl].
+    Collect the changes into a second list and apply them after the loop — or use an index
+    loop (`var i = 0` … `while i < xs.len`), whose condition re-reads the length every pass.

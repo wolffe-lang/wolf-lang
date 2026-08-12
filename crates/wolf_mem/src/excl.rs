@@ -7,7 +7,11 @@
 //! dataflow. Two-phase leniency is structural: `Copy` values passed
 //! `read` were copied during argument evaluation and never appear in
 //! the surface (the `xs.push(xs.len)` shape), so what remains here
-//! really is live for the whole call.
+//! really is live for the whole call. The `Copy` half of the overlap
+//! rule (s72, D39) is order-sensitive — an instant read evaluated
+//! inside an earlier spelled `mut` claim, `f(mut a, a.x)` — and lives
+//! in the lowerer (`check_copy_read_after_mut`), where evaluation
+//! order still exists.
 
 use wolf_diag::{Diagnostic, codes};
 

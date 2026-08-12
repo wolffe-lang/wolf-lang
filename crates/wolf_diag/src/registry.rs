@@ -1119,7 +1119,9 @@ moment. Bind the error and branch instead — `else |e| match e { … }`
 // data); s21 the shared tier's E1006 (strong `shared` cycle at the
 // type level — acyclicity is what lets RC drops skip cycle detection
 // forever, [mem.ub.defined]); s22 the unsafe tier's E13xx sub-family
-// (below, after E1012). The
+// (below, after E1014); s72 the mode-enforcement pair (E1013
+// iteration exclusivity per D40's [mem.iter.excl], E1014 callee-side
+// read-mode immutability per D39). The
 // dynamic counterparts are normative: E1001 ⇄ trap(use-after-move),
 // E1002 ⇄ trap(exclusivity), E1004/E1005/E1010 ⇄ region-fault per
 // [conf.trap.map] — the interpreter checks at runtime what these
@@ -1274,6 +1276,37 @@ that a `freeze` already promoted (the freeze site is marked). Do the
 mutation before freezing — build the value completely, freeze last —
 or keep a mutable `copy` alongside the frozen original for the part
 that must keep changing.
+"#);
+
+code!(E1013, "the container changes while a `for` loop iterates it", r#"
+`for x in xs` walks the container in place: the loop holds a read
+claim on `xs` for its whole extent, so the sequence being walked
+cannot grow, shrink, or move away mid-flight ([mem.iter.excl]). A
+`push`, `pop`, `clear`, element write, or move of `xs` inside the
+body changes the very thing the loop is standing on, and there is no
+coherent answer for what the next iteration should see. Collect the
+changes first and apply them after: gather them into a second list
+inside the loop, then apply to `xs` once the loop is done. Or take
+explicit control with an index loop — `var i = 0` and
+`while i < xs.len { …; i += 1 }` — where every pass re-reads the
+length and every access is its own bounds-checked read, so the loop's
+condition decides what growth means. (The claim is a read, not a
+move: `xs` stays live behind the walk and after it.)
+"#);
+
+code!(E1014, "a `read` parameter cannot be written", r#"
+A parameter with no mode word is `read`: the callee sees a value that
+is immutable for the whole call, and the caller keeps it
+([mem.tier0.mode.read]) — absence is the syntax, and immutability is
+the deal it spells. This write reaches such a parameter; writes
+through its fields and elements count too, because the immutability
+is deep for the call's duration, and so does lending it `mut` to
+another call. Declare the parameter `mut` if this function's purpose
+is to change the caller's value — call sites then spell `f(mut x)`,
+so readers see the mutation. Declare it `take` if the function
+consumes the value and the caller is done with it. Or keep it `read`
+and work on this function's own duplicate: `var local = copy p` gives
+a value it owns outright.
 "#);
 
 // ------------------------------------------------------------------------

@@ -922,3 +922,224 @@ fn clean_list_mut_receiver_len_and_index() {
          }\n",
     );
 }
+
+// ---------------------- s72 — the mode rules get their teeth (D39/D40) --
+
+#[test]
+fn e1014_write_through_read_param_projection() {
+    // D39, the callee-side half #27 found missing: a `read` parameter
+    // is immutable for the whole call, projections included.
+    snap(
+        "e1014_projected_write",
+        "struct P { x: int, y: int }\n\
+         fn poke(p: P) -> int {\n    \
+             p.x = 7\n    \
+             p.x\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var v = P { x: 1, y: 2 }\n    \
+             poke(v) - 7\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1014_whole_reassign_and_compound() {
+    // The binding itself is the caller's place: rebinding it whole and
+    // compound-assigning through it are both writes.
+    snap(
+        "e1014_whole_and_compound",
+        "struct P { x: int, y: int }\n\
+         fn wipe(p: P) -> int {\n    \
+             p = P { x: 0, y: 0 }\n    \
+             p.y += 1\n    \
+             p.y\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var v = P { x: 1, y: 2 }\n    \
+             wipe(v) - 1\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1014_mut_lend_of_read_param() {
+    // Lending the binding `mut` onward is a write by proxy: the deal
+    // with the caller does not transfer.
+    snap(
+        "e1014_mut_lend",
+        "struct P { x: int, y: int }\n\
+         fn bump(mut a: P) { a.x += 1 }\n\
+         fn relay(p: P) -> int {\n    \
+             bump(mut p)\n    \
+             p.x\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var v = P { x: 1, y: 2 }\n    \
+             relay(v) - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1014_read_self_method_write() {
+    // `self` without a mode is `read` like any other parameter.
+    snap(
+        "e1014_read_self_write",
+        "struct V { x: int }\n\
+         impl V {\n    \
+             fn peek(self) -> int {\n        \
+                 self.x = 9\n        \
+                 self.x\n    \
+             }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var v = V { x: 9 }\n    \
+             v.peek() - 9\n\
+         }\n",
+    );
+}
+
+#[test]
+fn read_param_reads_stay_silent() {
+    // The rule rejects writes only: reads, projections read, and
+    // passing the parameter onward `read` all stay silent.
+    snap(
+        "clean_read_param_reads",
+        "struct P { x: int, y: int }\n\
+         fn total(p: P) -> int { p.x + p.y }\n\
+         fn relay(p: P) -> int { total(p) }\n\
+         fn main() -> !int {\n    \
+             var v = P { x: 1, y: 2 }\n    \
+             relay(v) - 3\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_copy_read_after_mut_arg() {
+    // D39, the overlap rule's static half: the `Copy` read of `p.x`
+    // evaluates inside the exclusive claim `mut p` already spelled —
+    // f(mut a, a.x), the shape lupin traps dynamically.
+    snap(
+        "e1002_copy_read_after_mut",
+        "struct P { x: int, y: int }\n\
+         fn bump(mut a: P, n: int) { a.x += n }\n\
+         fn main() -> !int {\n    \
+             var p = P { x: 1, y: 2 }\n    \
+             bump(mut p, p.x)\n    \
+             p.x - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn copy_read_before_mut_stays_silent() {
+    // Left-to-right order is the rule's clock: a `Copy` read finished
+    // before the `mut` claim began never conflicts.
+    snap(
+        "clean_copy_read_before_mut",
+        "struct P { x: int, y: int }\n\
+         fn bump(n: int, mut a: P) { a.x += n }\n\
+         fn main() -> !int {\n    \
+             var p = P { x: 1, y: 2 }\n    \
+             bump(p.x, mut p)\n    \
+             p.x - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1013_push_while_iterating() {
+    // D40, the F-0014 acceptance shape (#15): the loop's read claim
+    // rejects the push — as E1013 with the collect-then-apply
+    // teaching, never the old E1001 reads-as-moves accident.
+    snap(
+        "e1013_push_while_iterating",
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             (mut xs).push(2)\n    \
+             for x in xs {\n        \
+                 (mut xs).push(x)\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1013_move_while_iterating() {
+    // Moving the container out from under the loop is the same
+    // conflict; the move recovers as a read, so exactly one error
+    // reports — no E1001 echo on the back edge.
+    snap(
+        "e1013_move_while_iterating",
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             var n = 0\n    \
+             for x in xs {\n        \
+                 let ys = xs\n        \
+                 n += x + ys.len\n    \
+             }\n    \
+             n - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1013_reassign_while_iterating() {
+    snap(
+        "e1013_reassign_while_iterating",
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             for x in xs {\n        \
+                 xs = List[int]()\n    \
+             }\n    \
+             xs.len - 1\n\
+         }\n",
+    );
+}
+
+#[test]
+fn iterate_then_mutate_stays_silent() {
+    // The claim is a read, not a move: the container is live behind
+    // the walk (reads inside are fine) and after it (mutation resumes
+    // the moment the loop ends).
+    snap(
+        "clean_iterate_then_mutate",
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             (mut xs).push(2)\n    \
+             var total = 0\n    \
+             for x in xs {\n        \
+                 total += x + xs.len - xs.len\n    \
+             }\n    \
+             (mut xs).push(total)\n    \
+             xs.len - 3\n\
+         }\n",
+    );
+}
+
+#[test]
+fn nested_read_iteration_stays_silent() {
+    // Two read claims on one container coexist: read never excludes
+    // read.
+    snap(
+        "clean_nested_iteration",
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             var total = 0\n    \
+             for x in xs {\n        \
+                 for y in xs {\n            \
+                     total += x + y\n        \
+                 }\n    \
+             }\n    \
+             total - 2\n\
+         }\n",
+    );
+}

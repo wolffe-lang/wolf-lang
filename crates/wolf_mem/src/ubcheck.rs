@@ -2313,7 +2313,18 @@ impl<'t> Machine<'t> {
     fn eval_for(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = ForExpr::cast(e).expect("kind");
         let iter = match d.iterable() {
-            Some(it) => val!(self.eval(it)),
+            // s72, D40 ([mem.iter.excl]): iterating a place is a
+            // READ, never a move — the container stays live behind
+            // the walk and after it, exactly as the static tier now
+            // guarantees. The machine keeps its loop-entry snapshot
+            // (the items clone below); the dynamic claim-and-trap
+            // mirror is the v0.1.8 interpreter's scope, and the
+            // static E1013 rejects the mutating shapes before this
+            // lane ever runs them.
+            Some(it) => match self.place_of(it)? {
+                Some(place) => self.read_place(&place, it.span)?,
+                None => val!(self.eval(it)),
+            },
             None => Value::Unit,
         };
         let items: Vec<Value> = match iter {

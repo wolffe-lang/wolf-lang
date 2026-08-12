@@ -569,3 +569,122 @@ fn comptime_folds_execute_checked() {
         0,
     );
 }
+
+// ------------------- s72 posture: the D39/D40 mode-rule shapes ----
+//
+// The three s72 shapes are rejected STATICALLY (E1014, E1002's
+// overlap half, E1013), so the driver's checked lane never executes
+// them; these tests drive the machine directly to pin what it models
+// today — the contract's "verify, don't assume". Verified: this
+// machine does NOT model the mode claims dynamically. `read`
+// arguments copy scalars and structs (a callee write lands on the
+// copy), a `mut` lend coexists with a later argument read of the same
+// place, and `for` iterates a loop-entry snapshot of the list. (The
+// verification also caught a real disagreement: eval_for consumed a
+// place iterable through reads-as-moves — the machine-side twin of
+// the #15 accident — which would have refused the newly-legal
+// mutate-AFTER-the-loop shape; it reads without consuming now, and
+// `iterate_then_mutate_agrees_checked` below pins the repair.) All
+// three shapes run clean here while lupin 0.1.1 runs two of them
+// clean (it traps f(mut a, a.x) already); the v0.1.8 mirrors bring
+// the traps. When this machine grows the claims, these pins fail
+// loudly and move deliberately.
+
+/// Run WITHOUT the static-acceptance gate: the s72 shapes fail the
+/// mem rung by design, and the dynamic machine itself is the subject.
+fn run_past_static(src: &str) -> Verdict {
+    let mut ml = MemoryLoader::new("ub");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty() && !tc.has_errors(),
+        "input typechecks fully (only the MEM rung rejects it)"
+    );
+    ubcheck::run_checked(&res.package, &tc, Budget::default())
+        .expect("the program is within the executable surface")
+        .verdict
+}
+
+#[test]
+fn posture_write_through_read_param_lands_on_the_copy() {
+    // E1014's shape (D39). Dynamically the machine passes `read`
+    // structs by value: the callee's write mutates its own copy (the
+    // caller never observes it), so the run exits clean — no trap.
+    match run_past_static(
+        "struct P { x: int, y: int }\n\
+         fn poke(p: P) -> int {\n    p.x = 7\n    p.x\n}\n\
+         fn main() -> !int {\n    \
+             var v = P { x: 1, y: 2 }\n    \
+             let n = poke(v)\n    \
+             if n == 7 && v.x == 1 { 0 } else { 1 }\n\
+         }\n",
+    ) {
+        Verdict::Exit(0) => {}
+        other => panic!("posture moved — update the s72 record: {other:?}"),
+    }
+}
+
+#[test]
+fn posture_copy_read_after_mut_runs_clean() {
+    // E1002's overlap shape (D39, f(mut a, a.x)). The machine reads
+    // `p.x` from the intact allocation while `p` is lent — no claim
+    // model, no trap. (lupin 0.1.1 already traps this one; the static
+    // rejection is what makes the pair agree under [proto.cmp.rung].)
+    match run_past_static(
+        "struct P { x: int, y: int }\n\
+         fn bump(mut a: P, n: int) { a.x += n }\n\
+         fn main() -> !int {\n    \
+             var p = P { x: 1, y: 2 }\n    \
+             bump(mut p, p.x)\n    \
+             p.x - 2\n\
+         }\n",
+    ) {
+        Verdict::Exit(0) => {}
+        other => panic!("posture moved — update the s72 record: {other:?}"),
+    }
+}
+
+#[test]
+fn iterate_then_mutate_agrees_checked() {
+    // The newly-legal shape under [mem.iter.excl.1]: the container is
+    // live after the walk. Statically accepted, so this runs through
+    // the gated harness — checked lane and static tier agree.
+    assert_exit(
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             (mut xs).push(2)\n    \
+             var total = 0\n    \
+             for x in xs {\n        \
+                 total += x\n    \
+             }\n    \
+             (mut xs).push(total)\n    \
+             if xs.len == 3 && total == 3 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+#[test]
+fn posture_mutate_while_iterating_walks_the_snapshot() {
+    // E1013's shape (D40, the F-0014 program). The machine clones the
+    // list at loop entry, so the pushes never feed the walk: the loop
+    // terminates and the run exits clean — the same loop-entry-copy
+    // reading lupin 0.1.1 exhibits, and exactly what [mem.iter.excl]
+    // now forbids ahead of it.
+    match run_past_static(
+        "fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             (mut xs).push(1)\n    \
+             (mut xs).push(2)\n    \
+             for x in xs {\n        \
+                 (mut xs).push(x)\n    \
+             }\n    \
+             if xs.len == 4 { 0 } else { 1 }\n\
+         }\n",
+    ) {
+        Verdict::Exit(0) => {}
+        other => panic!("posture moved — update the s72 record: {other:?}"),
+    }
+}

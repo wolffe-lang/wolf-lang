@@ -1,0 +1,15 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1014]: `p` is `read` for the whole call, so it cannot be lent `mut`
+ --> mem:///main.lu:4:14
+  |
+3 | fn relay(p: P) -> int {
+  |          - `p` is declared without a mode — that spells `read`, immutable for the call
+4 |     bump(mut p)
+  |              ^ write through a `read` parameter
+  |
+  = note: a `read` parameter is the caller's value, lent immutably [mem.tier0.mode.read]. Declare
+    it `mut` if this function's purpose is to change it (call sites then spell the
+    mutation), `take` it if the function consumes it, or mutate this function's own `copy`.
