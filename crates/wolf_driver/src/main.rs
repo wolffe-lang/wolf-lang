@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
+mod pkg_cmd;
 mod test_cmd;
 
 /// The reference-interpreter pairing (r01 criteria row 7): the lupin
@@ -49,14 +50,21 @@ fn main() {
         Some("audit-surface") => audit_surface(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
         Some("lsp") => lsp(&args[1..]),
+        // The s51 package verbs (D34: the names are forever).
+        Some("add") => pkg_cmd::add(&args[1..]),
+        Some("rm") => pkg_cmd::rm(&args[1..]),
+        Some("update") => pkg_cmd::update(&args[1..]),
+        Some("audit") => pkg_cmd::audit(&args[1..]),
+        Some("tree") => pkg_cmd::tree(&args[1..]),
+        Some("why") => pkg_cmd::why(&args[1..]),
         // D34: the single binary grows per-campaign; stubs are honest.
-        Some(cmd @ ("doc" | "bench" | "dbg" | "add" | "vendor" | "audit" | "publish")) => {
+        Some(cmd @ ("doc" | "bench" | "dbg" | "vendor" | "publish")) => {
             eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
             std::process::exit(2);
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|test|fix|fmt|lsp|interface|audit-surface|conform-run|--explain|--version"
+                "usage: wolf build|run|test|fix|fmt|lsp|add|rm|update|audit|tree|why|interface|audit-surface|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }
@@ -329,16 +337,29 @@ fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> 
 /// Run s12 resolution from an entry file; registers every loaded file
 /// with `sources` and returns the resolution (package + the full
 /// parse/graph/resolution diagnostic set in deterministic order).
+///
+/// `project` is the s51 dependency resolution, when the entry's
+/// directory holds a real `wolf.pkg`: dep aliases become loader roots,
+/// and a `std` path-dependency roots `use std.…` when neither the
+/// `--std-root` flag nor `WOLF_STD` said otherwise (explicit beats
+/// manifest).
 fn resolve_from_entry(
     entry: &Path,
     sm: &mut wolf_span::SourceMap,
     sources: &mut Sources,
     std_root: Option<&Path>,
+    project: Option<&wolf_pkg::Project>,
 ) -> Result<wolf_sema::Resolution, String> {
+    let std_root = std_root
+        .map(Path::to_path_buf)
+        .or_else(|| project.and_then(|p| p.std_root.clone()));
     let mut loader =
         wolf_sema::DiskLoader::from_entry(entry, sm, Box::new(|src: &[u8]| is_member_file(src)))
             .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
-            .with_std_root(std_root.map(Path::to_path_buf));
+            .with_std_root(std_root);
+    if let Some(p) = project {
+        loader = loader.with_dep_roots(p.dep_roots.clone());
+    }
     let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
     for unit in &res.package.files {
         sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
@@ -667,8 +688,27 @@ fn compile_native(
     opts: &BuildOpts,
 ) -> Result<(), BuildStop> {
     let mut sm = wolf_span::SourceMap::new();
-    let res =
-        resolve_from_entry(file, &mut sm, sources, std_root).map_err(BuildStop::Environment)?;
+    // The s51 hookup: a real `wolf.pkg` next to the entry file makes
+    // this a *project* build — the dependency graph resolves first
+    // (path trees in place, git trees via the pinned store; reading it
+    // executes nothing, D33), and its aliases become loader roots.
+    let root = file.parent().unwrap_or(Path::new("."));
+    let pkg_project = pkg_cmd::project_for_build(root, &mut sm);
+    if let Some(project) = &pkg_project {
+        for m in &project.manifests {
+            sources.add(m.file, m.display.clone(), m.text.as_bytes());
+        }
+        if project.has_errors() {
+            let mut reporter = HumanReporter::new(sources, RenderOptions::default());
+            for d in &project.diagnostics {
+                reporter.report(d);
+            }
+            eprint!("{}", reporter.take_output());
+            return Err(BuildStop::Errors);
+        }
+    }
+    let res = resolve_from_entry(file, &mut sm, sources, std_root, pkg_project.as_ref())
+        .map_err(BuildStop::Environment)?;
     // The warning system (s67): source `#[allow]` regions + manifest
     // levels + CLI levels decide each warning's fate — dropped,
     // reported, or promoted to an error that stops the build.
@@ -703,6 +743,16 @@ fn compile_native(
     let mut resolve_diags = res.diagnostics.clone();
     resolve_diags.extend(scan.diagnostics.iter().cloned());
     gate(sources, &mut pending, resolve_diags)?;
+    // I13's import-graph half (s51): a package whose modules import a
+    // capability-carrying std facade module must declare the
+    // capability in its manifest — E1504, an error, never a warning.
+    if let Some(project) = &pkg_project {
+        gate(
+            sources,
+            &mut pending,
+            pkg_cmd::capability_diagnostics(project, &res.package),
+        )?;
+    }
     let tc = wolf_sema::typecheck_package(&res);
     if let Some(nyc) = tc.not_yet.first() {
         return Err(BuildStop::Refused {
@@ -1482,7 +1532,7 @@ fn fix(args: &[String]) {
     }
     let mut sm = wolf_span::SourceMap::new();
     let mut sources = Sources::new();
-    let res = match resolve_from_entry(path, &mut sm, &mut sources, std_root.as_deref()) {
+    let res = match resolve_from_entry(path, &mut sm, &mut sources, std_root.as_deref(), None) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("wolf fix: {e}");
@@ -2071,6 +2121,7 @@ fn conform_run(args: &[String]) {
                     &mut sm,
                     &mut sources,
                     std_root.as_deref(),
+                    None,
                 ) {
                     Err(e) => {
                         eprintln!("wolf conform-run: {e}");
@@ -2198,6 +2249,7 @@ fn conform_run(args: &[String]) {
             &mut dump_sm,
             &mut dump_sources,
             std_root.as_deref(),
+            None,
         ) {
             let tc = wolf_sema::typecheck_package(&res);
             let text = match kind.as_str() {

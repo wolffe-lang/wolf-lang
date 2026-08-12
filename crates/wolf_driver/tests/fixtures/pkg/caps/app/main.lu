@@ -1,0 +1,10 @@
+/// Undeclared-capability fixture (s51/I13): this package touches
+/// `std.net` but its manifest declares no `net` capability — the
+/// build must fail with E1504, an error, never a warning.
+use std.net
+
+fn main() -> !int {
+    let h = net.ping("localhost")
+    print("{h}")
+    0
+}

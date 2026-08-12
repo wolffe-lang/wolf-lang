@@ -1942,6 +1942,14 @@ fn deps_check() -> ExitCode {
             "wolf_lsp",
             Some(&["wolf_span", "wolf_diag", "wolf_query"][..]),
         ),
+        // The package manager (s51): formats + resolution only — it
+        // lexes manifests with the compiler's own lexer (one grammar,
+        // D33) and never sees sema; the driver wires resolution into
+        // module loading, not this crate.
+        (
+            "wolf_pkg",
+            Some(&["wolf_span", "wolf_diag", "wolf_lex"][..]),
+        ),
         // wolf_rt links into user programs: dependency-thin by law (D15).
         ("wolf_rt", Some(&["wolf_span"][..])),
         ("wolf_driver", None), // top of the graph: unrestricted

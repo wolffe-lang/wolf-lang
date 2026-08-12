@@ -1,0 +1,5 @@
+/// Mini std facade for the s51 capability fixtures: importing
+/// `std.net` requires the importer's manifest to declare `net` (I13).
+pub fn ping(host: str) -> str {
+    host
+}

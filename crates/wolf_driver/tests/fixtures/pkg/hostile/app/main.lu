@@ -1,0 +1,7 @@
+/// Consumer of the hostile fixture: `wolf build` must refuse with the
+/// D33 diagnostic (E1503) before trusting the dependency for anything.
+use evil
+
+fn main() -> !int {
+    evil.innocent()
+}

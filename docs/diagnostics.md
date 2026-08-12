@@ -1493,6 +1493,92 @@ defined shape for each row.
 
 Fixtures: crates/wolf_mem/tests/snapshots/ubcheck__e1401_uaf.snap
 
+## E1501 — the package manifest does not parse
+
+`wolf.pkg` is declarative data in wolf's literal syntax: one `pkg { }`
+block of `key: value` entries, where a value is a string, an integer, a
+bare capability word, a `[ ]` list, or a nested `{ }` map. This file
+strays from that shape at the reported location. Two deliberate
+restrictions are worth knowing: manifest strings never interpolate
+(`{x}` in a manifest string is an error — a manifest is data, and data
+does not compute, D33), and no key is ever an expression. Fix the
+syntax at the span; the note names what the parser expected.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/manifest_diags__e1501_syntax_error.snap
+
+## E1502 — the package manifest has a schema error
+
+The manifest parsed as data, but the data does not fit the `wolf.pkg`
+schema: an unknown key, a value of the wrong shape, a dependency
+entry that names no source, or a malformed version. Dependency entries
+take exactly one source form: `{ path: "…" }` for a local tree,
+`{ git: "…", tag: "…" }` for a pinned VCS fetch, or
+`{ pkg: "owner/name", major: N, min: "X.Y.Z" }` for a registry
+dependency (the hosted registry service arrives later; the entry form
+is stable now, X7). Versions are dotted numerics (`"1.4.0"`).
+The message names the offending key and the accepted alternatives.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/manifest_diags__e1502_unknown_key.snap
+
+## E1503 — the manifest declares a build-time script hook — wolf has none, ever
+
+This manifest carries a key (`build`, `script`, `hooks`, or another
+install-hook spelling) that asks for code to run on the host at build
+or fetch time. Wolf rejects the key unconditionally: D33 is the locked
+decision that adding a wolf dependency NEVER means arbitrary code runs
+on your machine — no build.rs, no post-install hooks, no Turing-complete
+manifest. This is the supply-chain posture the whole ecosystem leans
+on, so it is enforced at parse time, before any dependency content is
+trusted for anything. Express C-library needs through the declarative
+`c: { … }` recipe schema, compute values in sandboxed `comptime`
+(no ambient IO), or wrap a system/prebuilt library. The key is refused,
+not ignored: a manifest that asks for execution does not resolve.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/manifest_diags__e1503_build_script_refused.snap
+
+## E1504 — this package uses a capability its manifest does not declare
+
+Capability manifests (I13) make a package's ambient-authority footprint
+a reviewable, diffable declaration: a package that touches `std.net`
+must say `capabilities: [net]` in its `wolf.pkg`, and likewise `fs` and
+`env` for those facades. The build found an import of a
+capability-carrying std module that the owning package's manifest does
+not declare. Declare the capability (making the footprint visible to
+every consumer running `wolf audit`) or drop the import. Undeclared
+capability use is a build error, not a warning — the audit tree is only
+trustworthy if it cannot silently under-report.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/project_diags__e1504_undeclared_capability.snap
+
+## E1505 — dependency resolution failed
+
+The dependency graph in `wolf.pkg` cannot be resolved: a `path`
+dependency points at a directory that does not exist or is not a
+package, a `git` dependency cannot be fetched or its pin is absent from
+the content store (run `wolf update` to fetch and record it), a
+dependency's own manifest fails to parse, or a registry-sourced entry
+was asked to resolve (the hosted registry arrives later; today's
+sources are `path` and `git`, X7). Resolution is deterministic — minimal version
+selection over declared minimums, no ranges, no solver — so this error
+is always about a source being unreachable or malformed, never about
+the resolver "choosing badly".
+
+Fixtures: crates/wolf_pkg/tests/snapshots/project_diags__e1505_registry_stub.snap
+
+## E1506 — a dependency's content hash does not match wolf.sum
+
+`wolf.sum` is the integrity ledger: for every fetched dependency it
+records a content hash over the package's source tree, and every later
+build re-derives that hash and compares. A mismatch means the bits on
+disk are not the bits the ledger witnessed — an edited store entry, a
+moved tag, or a tampered mirror. The build refuses: mirrors and
+transports are untrusted by construction, only the hash is. If the
+change is intentional (you deliberately updated the dependency), run
+`wolf update` to refresh the ledger; otherwise treat the mismatch as
+the supply-chain alarm it is.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/project_diags__e1506_tampered_store.snap
+
 ## W0301 — file only partially formatted: syntax errors present
 
 `wolf fmt` formats through the resilient parse tree, so a file with

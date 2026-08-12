@@ -93,6 +93,9 @@ pub struct DiskLoader<'a> {
     /// `<std_root>/X/` — the tree is the namespace (D32). `None`
     /// keeps the prelude-stub `std`.
     std_root: Option<PathBuf>,
+    /// Dependency package roots (s51): import alias → package root.
+    /// `use alias.X` is `<dep_roots[alias]>/X/`.
+    dep_roots: std::collections::BTreeMap<String, PathBuf>,
 }
 
 impl<'a> DiskLoader<'a> {
@@ -109,6 +112,7 @@ impl<'a> DiskLoader<'a> {
             sm,
             filter,
             std_root: None,
+            dep_roots: std::collections::BTreeMap::new(),
         })
     }
 
@@ -121,6 +125,7 @@ impl<'a> DiskLoader<'a> {
             sm,
             filter: Box::new(|_| true),
             std_root: None,
+            dep_roots: std::collections::BTreeMap::new(),
         }
     }
 
@@ -128,6 +133,18 @@ impl<'a> DiskLoader<'a> {
     /// `None` keeps the prelude-stub `std`.
     pub fn with_std_root(mut self, root: Option<PathBuf>) -> Self {
         self.std_root = root;
+        self
+    }
+
+    /// Configure dependency package roots (s51): `use alias.X` reads
+    /// `<dep_root>/X/`, and `use alias` reads the dep root itself. A
+    /// dep tree is a whole package (std's rationale): every `.lu` file
+    /// participates, the entry-mode member filter does not apply, and
+    /// displays use the deterministic `pkg://alias/…` scheme so a
+    /// dependency's on-disk location never leaks into diagnostics or
+    /// interfaces (D7).
+    pub fn with_dep_roots(mut self, roots: std::collections::BTreeMap<String, PathBuf>) -> Self {
+        self.dep_roots = roots;
         self
     }
 }
@@ -142,8 +159,17 @@ impl ModuleLoader for DiskLoader<'_> {
         // root's location must never leak into diagnostics or
         // interfaces (D7).
         let is_std = self.std_root.is_some() && path.first().is_some_and(|s| s == "std");
+        // A dep-alias first segment reads from that package's root
+        // (s51) — same whole-package rules as std, `pkg://` displays.
+        let dep = path
+            .first()
+            .and_then(|s| self.dep_roots.get(s))
+            .cloned()
+            .map(|root| (path[0].clone(), root));
         let (mut dir, segs) = if is_std {
             (self.std_root.clone().expect("checked above"), &path[1..])
+        } else if let Some((_, root)) = &dep {
+            (root.clone(), &path[1..])
         } else {
             (self.root.clone(), path)
         };
@@ -161,19 +187,26 @@ impl ModuleLoader for DiskLoader<'_> {
         for p in names {
             let src = std::fs::read(&p).ok()?;
             let is_entry = self.entry.as_deref() == Some(p.as_path());
-            if !is_std && !is_entry && !(self.filter)(&src) {
+            if !is_std && dep.is_none() && !is_entry && !(self.filter)(&src) {
                 continue;
             }
             let file = self.sm.intern(&p);
-            let display = if is_std {
-                let base = p
-                    .file_name()
+            let base = || {
+                p.file_name()
                     .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
+                    .unwrap_or_default()
+            };
+            let display = if is_std {
                 if segs.is_empty() {
-                    format!("std://{base}")
+                    format!("std://{}", base())
                 } else {
-                    format!("std://{}/{base}", segs.join("/"))
+                    format!("std://{}/{}", segs.join("/"), base())
+                }
+            } else if let Some((alias, _)) = &dep {
+                if segs.is_empty() {
+                    format!("pkg://{alias}/{}", base())
+                } else {
+                    format!("pkg://{alias}/{}/{}", segs.join("/"), base())
                 }
             } else {
                 p.display().to_string().replace('\\', "/")

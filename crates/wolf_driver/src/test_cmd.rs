@@ -263,11 +263,12 @@ pub fn test_cmd(args: &[String]) {
         let display = file.display().to_string().replace('\\', "/");
         let mut sm = wolf_span::SourceMap::new();
         let mut sources = Sources::new();
-        let res = match crate::resolve_from_entry(file, &mut sm, &mut sources, std_root.as_deref())
-        {
-            Ok(r) => r,
-            Err(e) => fail(&e),
-        };
+        let res =
+            match crate::resolve_from_entry(file, &mut sm, &mut sources, std_root.as_deref(), None)
+            {
+                Ok(r) => r,
+                Err(e) => fail(&e),
+            };
         // The s67 gate, build's posture exactly: allow regions +
         // manifest + CLI levels; errors (original or deny-promoted)
         // render and fail the file.

@@ -25,6 +25,7 @@ wolf_codegen_clif.workspace = true
 wolf_rt.workspace = true
 wolf_query.workspace = true
 wolf_lsp.workspace = true
+wolf_pkg.workspace = true
 
 [dev-dependencies]
 # s30 debug tests: parse the built executable's ELF sections to assert

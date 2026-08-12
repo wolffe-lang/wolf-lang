@@ -1142,6 +1142,7 @@ dependencies = [
  "wolf_lsp",
  "wolf_mem",
  "wolf_parse",
+ "wolf_pkg",
  "wolf_query",
  "wolf_rt",
  "wolf_sema",
@@ -1203,6 +1204,17 @@ version = "0.1.0"
 dependencies = [
  "insta",
  "wolf_ast",
+ "wolf_diag",
+ "wolf_lex",
+ "wolf_span",
+]
+
+[[package]]
+name = "wolf_pkg"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "insta",
  "wolf_diag",
  "wolf_lex",
  "wolf_span",
