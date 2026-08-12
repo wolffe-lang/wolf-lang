@@ -92,7 +92,8 @@ parser contract):
   alphabet of spec 06. Sources: `overflow`/`div-zero`/`bounds` (s04
   defined-behavior table), `use-after-move`/`exclusivity` (s04 dynamic
   meanings of E1001/E1002; `exclusivity` is also the dynamic meaning
-  of E1013's iteration claim — `[mem.iter.excl]`, D40), `region-fault`
+  of E1013's iteration claim — `[mem.iter.excl]`, D40 — and E1014's
+read-mode write barrier, D39), `region-fault`
   (dynamic region-rule
   violations: the runtime meanings of E1004 — illegal cross-region
   edge — and E1005 — transfer of an open region — plus rule violations

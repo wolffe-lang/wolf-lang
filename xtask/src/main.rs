@@ -1505,9 +1505,9 @@ fn static_code_to_trap(code: &str) -> Option<&'static str> {
         // statically, lupin traps it. The lupin mirror lands in
         // v0.1.8; until that pin, an oracle running the shape clean
         // is the expected conservatism note, not a divergence. E1014
-        // (D39 callee-side read-mode) gets its row when the v0.1.8
-        // mirror pins the trap kind.
-        "E1002" | "E1013" => Some("exclusivity"),
+        // E1014 (D39 callee-side read-mode) mirrors as exclusivity,
+        // pinned by the v0.1.8 write barrier.
+        "E1002" | "E1013" | "E1014" => Some("exclusivity"),
         "E1004" | "E1005" | "E1010" | "E1011" | "E1012" => Some("region-fault"),
         // The conc family (spec 03): E1101's shape is the data race
         // an oracle's detector reports ([conc.mm.race.3]); E1103's is
