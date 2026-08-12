@@ -1,0 +1,19 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+fn @sum(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  jmp b1(%1, %1)
+b1(%2: i64, %3: i64):
+  %4 = icmp.slt %2, %0
+  br %4, b2, b3
+b2:
+  %5 = iconst.i64 1
+  %6 = iadd.wrap %2, %5
+  %7 = iadd.chk %3, %2
+  jmp b1(%6, %7)
+b3:
+  ret %3
+}

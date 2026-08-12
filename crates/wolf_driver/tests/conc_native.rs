@@ -31,12 +31,22 @@ struct Obs {
 /// One native conform-run over a corpus file, optionally seeded.
 /// `None` (with a loud SKIP) only for environment failures.
 fn native(file: &str, seed: Option<u64>) -> Option<Obs> {
+    native_opt(file, seed, false)
+}
+
+/// As [`native`], with the s42 WIR mid-end forced on (`WOLF_MIDEND=1`
+/// is the debug-tier override the driver reads; the release tier runs
+/// it unconditionally). The optimizer must be behaviorally invisible.
+fn native_opt(file: &str, seed: Option<u64>, midend: bool) -> Option<Obs> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut cmd = Command::new(wolf());
     cmd.arg("conform-run")
         .arg(root.join(file))
         .arg("--native")
         .arg("--json");
+    if midend {
+        cmd.env("WOLF_MIDEND", "1");
+    }
     if let Some(s) = seed {
         cmd.arg(format!("--seed={s}"));
     }
@@ -120,6 +130,67 @@ fn freeze_publishes_across_tasks() {
 fn message_passing_moves_the_region() {
     ensure_rt_staticlib();
     pinned("corpus/conc/message_passing.lu", "exit(0)", "");
+}
+
+/// Issue #64: two selects with timeout arms in one body. The second
+/// select's `-2` timeout sentinel is minted in a dispatch-chain block
+/// that does not dominate the join, so GVN hash-consing it onto the
+/// first select's definition ICE'd the verifier (`dominance: %N is not
+/// dominated`). Lowering now scopes dispatch-chain constants like any
+/// other arm-local value; this is the native regression witness beside
+/// the WIR golden in `wolf_wir`'s `lower_corpus`.
+#[test]
+fn two_sequential_selects_with_timeouts_run() {
+    ensure_rt_staticlib();
+    pinned("corpus/conc/select_two_timeouts.lu", "exit(0)", "");
+}
+
+// ---- s42: the mid-end is behaviorally invisible ----------------------
+
+/// **Conc conservatism, behaviorally** (the s42 litmus's other half —
+/// the structural one is `wolf_wir`'s `midend_corpus.rs`).
+///
+/// Every spawn/channel/select corpus file, compiled through the WIR
+/// mid-end and compiled without it, under the SAME `--seed`: identical
+/// verdict, identical stdout. The optimizer sees the same schedule
+/// points either way, so the seeded scheduler makes the same decisions
+/// — a pass that sank, coalesced, or forwarded across a spawn edge or
+/// a `__wolf_rt_*` schedule point would show up here as a divergence,
+/// not as a crash somewhere downstream.
+#[test]
+fn mid_end_does_not_change_seeded_conc_behavior() {
+    ensure_rt_staticlib();
+    let files = [
+        "corpus/conc/select_two_timeouts.lu",
+        "corpus/conc/select_seeded.lu",
+        "corpus/conc/message_passing.lu",
+        "corpus/conc/cancel_sibling.lu",
+        "corpus/conc/freeze_publish.lu",
+        "corpus/conc/when_multi.lu",
+        "corpus/conc/proc_cancel_defers.lu",
+        "corpus/conc/proc_link.lu",
+    ];
+    let mut compared = 0;
+    for file in files {
+        for seed in [1u64, 2, 7] {
+            let Some(plain) = native_opt(file, Some(seed), false) else {
+                return; // environment cannot run the native lane
+            };
+            let opt = native_opt(file, Some(seed), true).expect("environment already proved");
+            assert!(plain.seeded && opt.seeded, "{file}: both runs are seeded");
+            assert_eq!(
+                plain.verdict, opt.verdict,
+                "{file} @ seed {seed}: the mid-end changed the verdict"
+            );
+            assert_eq!(
+                plain.stdout, opt.stdout,
+                "{file} @ seed {seed}: the mid-end changed stdout"
+            );
+            compared += 1;
+        }
+    }
+    eprintln!("mid-end conc differential: {compared} seeded run pair(s) identical");
+    assert_eq!(compared, 24, "every file × seed pair ran");
 }
 
 #[test]

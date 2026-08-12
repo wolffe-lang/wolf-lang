@@ -33,6 +33,7 @@ conc/proc_cancel_defers.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/select_seeded.lu: lowers
+conc/select_two_timeouts.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
 conc/when_nested.lu: not mem-clean (pre-wir rungs own it)
@@ -76,6 +77,9 @@ hello.lu: lowers
 io/eprint.lu: lowers
 json/query.lu: refused — json builtins in native lowering (checked lane only at s40)
 json/rows.lu: refused — json builtins in native lowering (checked lane only at s40)
+kernels/churn_b3.lu: lowers
+kernels/hot_counter.lu: lowers
+kernels/hot_scale_versioned.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers

@@ -796,12 +796,35 @@ fn compile_native(
         std::process::exit(2);
     }
     // `--emit=wir`: the canonical textual dump (s24 round-trip format)
-    // — every stage inspectable.
+    // — every stage inspectable. Deliberately BEFORE the mid-end: the
+    // dump shows lowering's honest output; `--release --emit=llvm-ir`
+    // shows the optimized module.
     if opts.emit == Emit::Wir {
         let text = wolf_wir::print_module(&module);
         std::fs::write(out, text)
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
         return Ok(());
+    }
+    // The Tier-R mid-end (s42): optimize WIR before any backend sees
+    // it. Release-only by default; WOLF_MIDEND=1 forces it on the
+    // debug tier too (the conc-conservatism differential litmus runs
+    // spawn corpus through Tier-F with and without the optimizer).
+    if opts.release || std::env::var("WOLF_MIDEND").as_deref() == Ok("1") {
+        match wolf_wir::midend::optimize_module(&mut module, &wolf_wir::midend::Options::default())
+        {
+            Ok(stats) => {
+                if std::env::var("WOLF_MIDEND_STATS").as_deref() == Ok("1") {
+                    eprintln!("{stats}");
+                }
+                if std::env::var("WOLF_MIDEND_DUMP").as_deref() == Ok("1") {
+                    eprintln!("{}", wolf_wir::print_module(&module));
+                }
+            }
+            Err(e) => {
+                eprintln!("wolf build: ICE: mid-end broke the module\n{e}");
+                std::process::exit(2);
+            }
+        }
     }
     // Backend: the driver drives the TRAIT; ClifBackend is the s28
     // implementation behind it (capabilities, never identity).

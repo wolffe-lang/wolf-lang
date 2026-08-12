@@ -1,0 +1,35 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+expression: out
+---
+fn @scale(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  jmp b1(%1, %1)
+b1(%2: i64, %3: i64):
+  %4 = iconst.i64 1152921504606846975
+  %5 = icmp.sle %0, %4
+  br %5, b2(%2, %3), b5(%2, %3)
+b2(%6: i64, %7: i64):
+  jmp b3(%6, %7)
+b3(%8: i64, %9: i64):
+  %10 = icmp.slt %8, %0
+  br %10, b4, b7(%9)
+b4:
+  %11 = iconst.i64 8
+  %12 = imul.wrap %8, %11
+  %13 = iconst.i64 1
+  %14 = iadd.wrap %8, %13
+  jmp b3(%14, %12)
+b5(%15: i64, %16: i64):
+  %17 = icmp.slt %15, %0
+  br %17, b6, b7(%16)
+b6:
+  %18 = iconst.i64 8
+  %19 = imul.chk %15, %18
+  %20 = iconst.i64 1
+  %21 = iadd.wrap %15, %20
+  jmp b5(%21, %19)
+b7(%22: i64):
+  ret %22
+}

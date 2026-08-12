@@ -17,6 +17,7 @@ fn main() -> ExitCode {
         Some("corpus") => corpus_cmd(),
         Some("abi-check") => abi_check(),
         Some("debug-check") => debug_check(),
+        Some("midend-rate") => midend_rate(),
         Some("install") => {
             // `cargo xtask install [DIR]` — the two-artifact install: the
             // driver locates libwolf_rt.a NEXT TO the `wolf` binary (or via
@@ -61,7 +62,7 @@ fn main() -> ExitCode {
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface|midend-rate>"
             );
             eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
@@ -90,6 +91,7 @@ fn ci() -> ExitCode {
         ("corpus", &["xtask", "corpus"]),
         ("abi-check", &["xtask", "abi-check"]),
         ("debug-check", &["xtask", "debug-check"]),
+        ("midend-rate", &["xtask", "midend-rate"]),
         ("spec-extract", &["xtask", "spec-extract", "--check"]),
         ("conformance", &["xtask", "conformance"]),
         ("print-gate", &["xtask", "print-gate"]),
@@ -140,6 +142,58 @@ fn abi_check() -> ExitCode {
         eprintln!("abi-check: ABI divergence against host cc");
         ExitCode::FAILURE
     }
+}
+
+// ------------------------------------------------------------ midend-rate --
+
+/// `xtask midend-rate` — the s42 X3 claw-back acceptance as a NAMED
+/// PR-CI step, and the per-commit REPORT of the number itself.
+///
+/// The contract gates ≥80% of the overflow checks inside hot loops on
+/// the checked-arith kernel tier (`corpus/kernels/`) being statically
+/// eliminated — directly by the π-range analysis or by amendment 3's
+/// loop-versioning backstop. The gate lives in `wolf_wir`'s
+/// `midend_corpus` test (that is where the compiler crates are); this
+/// lane runs exactly that test with output uncaptured and echoes the
+/// measured rate, so the number is visible per commit instead of being
+/// swallowed by the test harness on success.
+fn midend_rate() -> ExitCode {
+    let out = Command::new("cargo")
+        .args([
+            "test",
+            "-p",
+            "wolf_wir",
+            "--test",
+            "midend_corpus",
+            "kernel_tier_elimination_rate",
+            "--",
+            "--nocapture",
+        ])
+        .output();
+    let Ok(out) = out else {
+        eprintln!("midend-rate: cannot run cargo");
+        return ExitCode::FAILURE;
+    };
+    // The measurement prints on the test's stderr; echo the per-kernel
+    // lines and the tier total verbatim — this IS the report.
+    let text = String::from_utf8_lossy(&out.stderr);
+    let mut reported = false;
+    for line in text.lines() {
+        if line.starts_with("kernel ") {
+            eprintln!("midend-rate: {line}");
+            reported |= line.starts_with("kernel tier elimination rate:");
+        }
+    }
+    if !out.status.success() {
+        eprintln!("midend-rate: the ≥80% elimination-rate acceptance FAILED");
+        eprint!("{text}");
+        return ExitCode::FAILURE;
+    }
+    if !reported {
+        eprintln!("midend-rate: the test passed but printed no rate — the lane is stale");
+        return ExitCode::FAILURE;
+    }
+    ExitCode::SUCCESS
 }
 
 // -------------------------------------------------------------- debug-check --

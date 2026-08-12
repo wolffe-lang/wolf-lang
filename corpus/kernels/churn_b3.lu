@@ -1,0 +1,25 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.region.create.1, arith.checked
+//! s42 kernel: the b3 request-churn SHAPE at today's surface — a
+//! per-iteration scratch region inside the hot loop. Current lowering
+//! scalarizes the scratch work, so the mid-end's region machinery
+//! elides the `region.new`/`region.free` pair outright (the
+//! degenerate case of amendment 1's promotion; the allocation-bearing
+//! b3/b1 shapes are locked as WIR-fixture snapshots until the macro
+//! corpus lowers real per-request allocations, s44).
+
+struct Req { id: int, size: int }
+
+fn main() -> !int {
+    var handled = 0
+    var i = 0
+    while i < 200 {
+        region scratch {
+            let r = Req { id: i, size: i % 32 + 1 }
+            handled = handled % 4096 + r.size
+        }
+        i = i + 1
+    }
+    if handled > 0 { 0 } else { 1 }
+}
