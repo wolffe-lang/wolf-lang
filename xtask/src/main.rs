@@ -98,6 +98,11 @@ fn ci() -> ExitCode {
         ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
         ("fmt-lu", &["xtask", "fmt-lu"]),
         ("audit-surface", &["xtask", "audit-surface"]),
+        // The release archive is public-facing product: staging it in
+        // CI keeps a broken manifest from reaching a release page again
+        // (it did once — the archive shipped without the runtime lib,
+        // and a later license edit made staging panic outright).
+        ("dist-smoke", &["xtask", "dist"]),
         ("differ-self", &["xtask", "differ", "--self"]),
     ];
     for (name, args) in steps {
@@ -1794,9 +1799,21 @@ fn differ_cmd(args: &[String]) -> ExitCode {
 fn dist() -> ExitCode {
     let host = rustc_host_triple();
     let version = env!("CARGO_PKG_VERSION");
+    // Two artifacts, always: `wolf` cannot link a program without
+    // `libwolf_rt.a` beside it. Shipping the binary alone is the exact
+    // failure `cargo xtask install` exists to prevent, and v0.1.0's
+    // first tarballs shipped that way (#62).
     if !run_ok(
         "cargo",
-        &["build", "--release", "-p", "wolf_driver", "--quiet"],
+        &[
+            "build",
+            "--release",
+            "-p",
+            "wolf_driver",
+            "-p",
+            "wolf_rt",
+            "--quiet",
+        ],
     ) {
         eprintln!("dist: release build failed");
         return ExitCode::FAILURE;
@@ -1812,8 +1829,19 @@ fn dist() -> ExitCode {
     std::fs::create_dir_all(&stage).expect("mkdir dist stage");
     std::fs::copy(Path::new("target/release").join(exe), stage.join(exe))
         .expect("stage wolf binary");
+    let rt = Path::new("target/release").join("libwolf_rt.a");
+    if !rt.exists() {
+        eprintln!("dist: libwolf_rt.a missing — the archive would not link");
+        return ExitCode::FAILURE;
+    }
+    std::fs::copy(&rt, stage.join("libwolf_rt.a")).expect("stage runtime lib");
+    // Flatten: the archive is a flat directory, so a nested source path
+    // stages under its file name (copying to stage/crates/... panicked
+    // on the missing parents — dist only runs on tags, so nothing caught
+    // it until the release page did).
     for f in ["README.md", "LICENSE", "crates/wolf_rt/LICENSE-EXCEPTION"] {
-        std::fs::copy(f, stage.join(f)).expect("stage metadata file");
+        let dest = stage.join(Path::new(f).file_name().expect("named file"));
+        std::fs::copy(f, dest).expect("stage metadata file");
     }
     let archive = format!("target/dist/{name}.tar.gz");
     if !run_ok("tar", &["-C", "target/dist", "-czf", &archive, &name]) {
