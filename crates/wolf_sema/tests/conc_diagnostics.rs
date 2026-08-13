@@ -112,6 +112,49 @@ fn e1101_clean_when_guarded() {
     );
 }
 
+/// The lend spelling, receiver position (s74, #71): `(mut xs).push(1)`
+/// is a write to captured state. It compiled and raced before this
+/// landed — a `List` is handle-backed, so the task's "copy" shares the
+/// parent's allocation. Corpus witness: `conc/capture_mut_lend.lu`.
+#[test]
+fn e1101_mut_lend_receiver() {
+    snap_one(
+        "e1101_mut_lend_receiver",
+        "fn main() -> !int {\n    var xs = List[int]()\n    scope s {\n        \
+         s.spawn(fn() { (mut xs).push(1) })\n        \
+         s.spawn(fn() { (mut xs).push(2) })\n    }\n    xs.len\n}\n",
+    );
+}
+
+/// The lend spelling, argument position (s74, #71): the X1 call-site
+/// mode `f(mut n)` is the same write, so the law is uniform across the
+/// two places a `mut` window opens. Witness:
+/// `conc/capture_mut_arg.lu`.
+#[test]
+fn e1101_mut_lend_argument() {
+    snap_one(
+        "e1101_mut_lend_argument",
+        "fn bump(mut k: int) {\n    k = k + 1\n}\n\n\
+         fn main() -> !int {\n    var n = 0\n    scope s {\n        \
+         s.spawn(fn() { bump(mut n) })\n    }\n    n\n}\n",
+    );
+}
+
+/// The clean twin the lend rule must not swallow: a `mut` lend of a
+/// binding the task declares itself is task-local, whatever its depth,
+/// and a `read`-mode call on a captured binding is not a write.
+#[test]
+fn e1101_clean_task_local_lend() {
+    snap_one(
+        "e1101_clean_task_local_lend",
+        "fn bump(mut k: int) {\n    k = k + 1\n}\n\n\
+         fn main() -> !int {\n    var outer = List[int]()\n    scope s {\n        \
+         s.spawn(fn() {\n            var own = List[int]()\n            \
+         var k = 0\n            (mut own).push(outer.len)\n            \
+         bump(mut k)\n        })\n    }\n    outer.len\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E1102 -----
 
 /// A bare `List` cannot cross a channel: none of `Copy`, `imm`,
