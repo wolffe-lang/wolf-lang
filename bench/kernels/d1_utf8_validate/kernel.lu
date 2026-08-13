@@ -1,0 +1,65 @@
+// d1-utf8-validate (family D) — a UTF-8 structural scan over a ~1 MiB
+// buffer: classify every byte as ASCII / continuation / 2-, 3-, 4-byte
+// lead and reject a malformed sequence. wolf's `bytes()` is a zero-copy
+// byte view over the same storage (D25), so this is a pure byte loop in
+// every lane and the comparison is about codegen, not about libraries.
+//
+// Protocol: argv[1]=ops, prints {"ns":..,"ops":..,"sink":..}.
+
+fn ops_arg(fallback: int) -> int {
+    let args = env_args()
+    let first = args.first() else { return fallback }
+    var n = 0
+    for b in first.bytes() {
+        if b < 48 { return fallback }
+        if b > 57 { return fallback }
+        n = n * 10 + (b - 48)
+    }
+    if n == 0 { fallback } else { n }
+}
+
+fn validate(text: str) -> int {
+    var want = 0
+    var chars = 0
+    for b in text.bytes() {
+        if want > 0 {
+            if b < 128 { return 0 - 1 }
+            if b > 191 { return 0 - 1 }
+            want = want - 1
+        } else if b < 128 {
+            chars = chars + 1
+        } else if b < 194 {
+            return 0 - 1
+        } else if b < 224 {
+            want = 1
+            chars = chars + 1
+        } else if b < 240 {
+            want = 2
+            chars = chars + 1
+        } else if b < 245 {
+            want = 3
+            chars = chars + 1
+        } else {
+            return 0 - 1
+        }
+    }
+    if want == 0 { chars } else { 0 - 1 }
+}
+
+fn main() -> !int {
+    let ops = ops_arg(20)
+    // Mixed ASCII and multi-byte: 2-byte (é), 3-byte (€), 4-byte (🐺).
+    let chunk = "wolf pack ranges wide: é and € and 🐺 keep the scan honest. "
+    let text = chunk.repeat(15000)
+    let t0 = time_now_ms()
+    var sink = 0
+    var k = 0
+    while k < ops {
+        sink = validate(text)
+        k = k + 1
+    }
+    let t1 = time_now_ms()
+    let ns = (t1 - t0) * 1000000
+    print("{{\"ns\":{ns},\"ops\":{ops * text.len},\"sink\":{sink}}}")
+    0
+}

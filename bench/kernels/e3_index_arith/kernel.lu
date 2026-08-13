@@ -1,0 +1,53 @@
+// e3-index-arith (family E) — SCALED index arithmetic against an opaque
+// bound, the shape s42's loop-versioning backstop exists for. `walk` is
+// self-recursive so it never inlines and `n` stays a runtime value:
+// `i * 8` cannot be proven from `i < n` alone, so either the version
+// guard fires (fast copy, no checks) or every iteration carries a mul
+// check. This kernel is what makes that visible in nanoseconds.
+//
+// The contract's e3 is a bounds-checked INDEXED loop. Indexing today
+// means `List`, whose element traffic is an out-of-line runtime call
+// (see bench/loss-ledger.md), which would swamp the arithmetic this
+// kernel is about. The `a2_stencil1d`/`alias_daxpy` kernels carry the
+// container story; e3 keeps the pure index arithmetic.
+//
+// Protocol: argv[1]=ops, prints {"ns":..,"ops":..,"sink":..}.
+
+fn ops_arg(fallback: int) -> int {
+    let args = env_args()
+    let first = args.first() else { return fallback }
+    var n = 0
+    for b in first.bytes() {
+        if b < 48 { return fallback }
+        if b > 57 { return fallback }
+        n = n * 10 + (b - 48)
+    }
+    if n == 0 { fallback } else { n }
+}
+
+fn walk(n: int, depth: int) -> int {
+    var acc = 0
+    var i = 0
+    while i < n {
+        acc = (acc + i * 8) & 1048575
+        i = i + 1
+    }
+    if depth > 0 { acc = (acc + walk(n, depth - 1)) & 1048575 }
+    acc
+}
+
+fn main() -> !int {
+    let ops = ops_arg(2000)
+    let inner = 100000
+    let t0 = time_now_ms()
+    var sink = 0
+    var k = 0
+    while k < ops {
+        sink = (sink + walk(inner, 1)) & 1048575
+        k = k + 1
+    }
+    let t1 = time_now_ms()
+    let ns = (t1 - t0) * 1000000
+    print("{{\"ns\":{ns},\"ops\":{ops * inner * 2},\"sink\":{sink}}}")
+    0
+}

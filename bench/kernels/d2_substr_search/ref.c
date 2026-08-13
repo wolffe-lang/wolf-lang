@@ -1,7 +1,6 @@
-/* word_count = d3-split-count (family D), NAIVE C: two-state whitespace
- * scan over the same ~1 MiB buffer wolf's `words()` walks. The buffer is
- * built by repeating a fixed 58-byte chunk so all three lanes count the
- * same words over the same bytes.
+/* d2-substr-search (family D), NAIVE C: sliding `memcmp` over the same
+ * haystack. Deliberately not `strstr` — see bench/protocol.md on comparing
+ * hand loops to hand-vectorized library routines.
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
 #include <stdio.h>
@@ -9,8 +8,16 @@
 #include <string.h>
 #include <time.h>
 
-static const char CHUNK[] = "the quick brown fox jumped over the lazy dogs again now  ";
-#define REPS 18000
+static const char CHUNK[] = "the pack moves at dusk and the wolf waits for nothing at all ";
+#define REPS 9000
+#define M 5
+
+static int64_t count_occurrences(const char *hay, size_t len, const char *needle) {
+    int64_t hits = 0;
+    for (size_t i = 0; i + M <= len; i++)
+        if (memcmp(hay + i, needle, M) == 0) hits++;
+    return hits;
+}
 
 int main(int argc, char **argv) {
     int64_t ops = argc > 1 ? (int64_t)strtoull(argv[1], 0, 10) : 20;
@@ -22,17 +29,7 @@ int main(int argc, char **argv) {
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
     int64_t sink = 0;
-    for (int64_t k = 0; k < ops; k++) {
-        int64_t words = 0;
-        int in_word = 0;
-        for (size_t i = 0; i < len; i++) {
-            char c = buf[i];
-            int ws = c == ' ' || c == '\n' || c == '\t' || c == '\r';
-            words += (int64_t)(!ws && !in_word);
-            in_word = !ws;
-        }
-        sink = words;
-    }
+    for (int64_t k = 0; k < ops; k++) sink = count_occurrences(buf, len, "wolf ");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     free(buf);
     uint64_t ns = (uint64_t)(t1.tv_sec - t0.tv_sec) * 1000000000ull

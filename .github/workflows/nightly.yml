@@ -102,11 +102,42 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: install measurement tools
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq time linux-tools-common "linux-tools-$(uname -r)" || true
+        # `util-linux` carries setarch(1), the ASLR axis of the s44
+        # layout-noise floor; clang + llvm supply the release tier, the
+        # optimization-remark witnesses and the PGO scrutiny lane. A
+        # missing tool narrows the floor and says so on stderr rather than
+        # faking the axis, so this step is allowed to be best-effort.
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq time util-linux clang llvm lld linux-tools-common "linux-tools-$(uname -r)" || true
       - name: run both tracks
         run: |
           cargo xtask bench --track=runtime --runs=10 --out=bench-results/runtime.jsonl
           cargo xtask bench --track=compile --runs=3 --out=bench-results/compile.jsonl
+      # s44, the M2 lane. Everything here is WALL-DERIVED and therefore
+      # report-only (D5): it decides M2 over three consecutive nightly
+      # runs on the dedicated runner, and it never fails a PR. The
+      # deterministic half (IR-volume ratchet + vectorization witnesses)
+      # rides `cargo xtask ci` on every PR instead.
+      #
+      # Three amendment lanes ride inside `--track=t1` and are not
+      # optional: the LAYOUT-BIAS sweep (four env-size x ASLR
+      # configurations, from which each kernel's layout-noise floor is
+      # computed), the metadata-drop SENTINEL (permanent, family A, one
+      # extra compile+run — it prices the bonus channel per commit), and
+      # the ungated SCRUTINY lane (clang -O3 -march=native and PGO'd
+      # clang, published beside the gated naive-C number).
+      - name: T1 micro suite (the M2 gate) + issue #70's IR-volume metrics
+        run: |
+          cargo xtask bench --track=t1 --runs=10 --out=bench-results/t1.jsonl
+          cargo xtask bench --track=irvolume --out=bench-results/irvolume.jsonl
+      - name: the M2 verdict, straight
+        run: |
+          echo '## M2 gate (report-only; three consecutive greens declare M2)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          # `|| true` on purpose: a refuted gate is a RESULT, not a broken
+          # nightly. The verdict is in the summary and in t1.jsonl, where
+          # the three-run rule reads it.
+          cargo xtask bench gate bench-results/t1.jsonl 2>> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
       - name: conformance coverage report
         run: cargo xtask conformance --out=bench-results/conformance.jsonl
       - name: commit to bench-data branch
@@ -125,6 +156,11 @@ jobs:
           fi
           mkdir -p "/tmp/bd/data/$day"
           cp bench-results/runtime.jsonl bench-results/compile.jsonl bench-results/conformance.jsonl "/tmp/bd/data/$day/"
+          # The T1/IR files carry the M2 evidence: full per-kernel
+          # distributions, layout floors, witnesses, sentinel and scrutiny
+          # numbers. They are the record the three-consecutive-runs rule
+          # and bs08 read from.
+          cp bench-results/t1.jsonl bench-results/irvolume.jsonl "/tmp/bd/data/$day/" 2>/dev/null || true
           echo "$sha" > "/tmp/bd/data/$day/commit"
           git -C /tmp/bd add data
           git -C /tmp/bd commit -m "bench data $day ($sha)"

@@ -1,7 +1,6 @@
-/* list_alloc (family B), NAIVE C: build, walk and free a 10k-node
- * structure per sweep with malloc/free per node — the allocation
- * discipline most C actually has. `expert.c` hand-rolls a bump arena,
- * which is what wolf's regions are by default (D12).
+/* list_alloc (family B), EXPERT C: a hand-rolled bump arena with a
+ * wholesale free — what wolf regions do by default. This is the "expert
+ * on their own turf" comparison (secondary, report-only).
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
 #include <stdio.h>
@@ -11,21 +10,17 @@
 struct node { int64_t v; int64_t next; };
 
 static int64_t build_walk(int64_t nodes) {
-    struct node **slots = malloc((size_t)nodes * sizeof *slots);
+    struct node *arena = malloc((size_t)nodes * sizeof *arena);
     for (int64_t i = 0; i < nodes; i++) {
-        struct node *n = malloc(sizeof *n);
-        n->v = i & 1023;
-        n->next = i - 1;
-        slots[i] = n;
+        arena[i].v = i & 1023;
+        arena[i].next = i - 1;
     }
     int64_t sum = 0;
     for (int64_t idx = nodes - 1; idx >= 0;) {
-        struct node *n = slots[idx];
-        sum = (sum + n->v) & 1048575;
-        idx = n->next;
+        sum = (sum + arena[idx].v) & 1048575;
+        idx = arena[idx].next;
     }
-    for (int64_t i = 0; i < nodes; i++) free(slots[i]);
-    free(slots);
+    free(arena);
     return sum;
 }
 
