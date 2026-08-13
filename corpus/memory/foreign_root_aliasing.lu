@@ -1,0 +1,56 @@
+//! check: run(exit=0, stdout="x=5 y=7\n5 9\n")
+//! phase: run
+//! conforms: mem.region.intra
+//!
+//! s80 (#83): the release tier MISCOMPILED this. `region.foreign`
+//! roots container storage per FUNCTION, so inlining `peek` gave
+//! `main` a second root over the very buffers it already had one for,
+//! and one-`!alias.scope`-per-region declared the pair `!noalias`.
+//! LLVM cashed the claim: the store `a[j] = 7` was ruled unable to
+//! reach the second `peek`'s load, and the load forwarded the value
+//! from before it — `x=5 y=5`.
+//!
+//! Two details are load-bearing and neither is decoration:
+//!
+//! - the indices are opaque-but-equal (`a[0] + 2` and `a[1] + 2`, both
+//!   2, both read from memory a runtime call wrote). With one SSA
+//!   address, basic AA answers MustAlias and never consults the scope
+//!   metadata, and every earlier attempt at this witness came out
+//!   correct for that reason alone.
+//! - `peek` must INLINE. The whole hazard class hid behind inlining
+//!   for two sprints; here it is inlining that exposes it.
+//!
+//! The second line is the other half of the audit — a call that
+//! consumes none of the caller's foreign tokens and writes its
+//! container anyway (`@stencil`'s shape). `memopt` may not forward the
+//! reload across it and `licm` may not hoist one out of a loop over
+//! it; the token is not exhaustive across a call boundary.
+
+fn peek(l: List[int], i: int) -> int {
+    l[i]
+}
+
+fn writer(mut out: List[int]) {
+    out[0] = 9
+}
+
+fn main() -> !int {
+    var a = List[int]()
+    (mut a).push(0)
+    (mut a).push(0)
+    (mut a).push(5)
+    let i = a[0] + 2
+    let j = a[1] + 2
+    let x = peek(a, i)
+    a[j] = 7
+    let y = peek(a, i)
+    print("x={x} y={y}")
+
+    var b = List[int]()
+    (mut b).push(5)
+    let before = b[0]
+    writer(mut b)
+    let after = b[0]
+    print("{before} {after}")
+    0
+}
