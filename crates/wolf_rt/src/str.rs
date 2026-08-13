@@ -63,6 +63,51 @@
 //!
 //! `str` values handed to these shims are valid UTF-8 by construction
 //! (the language admits no other `str`); the shims trust it.
+//!
+//! # The byte view (s77, wolf-lang#80)
+//!
+//! `bytes()` used to MATERIALIZE — `__wolf_rt_str_bytes` built a
+//! `List[int]`, eight heap bytes per input byte, so every string kernel
+//! in the M2 suite measured an allocation (family D at 0.015x). It is
+//! now a **view**, and the view is the receiver's own `{ptr, len}`
+//! pair: the same two words a `str` is, and the same two words every
+//! zero-copy result in this file already was (`trim`, `get`,
+//! `strip_*`, the `split`/`words`/`lines` elements). One
+//! representation, one lifetime story — a view borrows exactly the
+//! storage a subslice borrows, so nothing new can dangle that a
+//! subslice could not.
+//!
+//! Element access is compiled, not called: lowering emits `ptr.off` at
+//! stride 1 plus `load.i8` plus `zext` (s75's gep+load at the stride
+//! bytes actually have), with the bounds check in the caller where the
+//! range analysis can see it. So `wolf_rt` owns no byte-view entry
+//! point at all — which is the point.
+//!
+//! **What the view cannot do.** It cannot be written: lowering emits no
+//! store path for it, the surface already refuses to name a temporary as
+//! a mutable place (E0804/E1009 for `s.bytes().push(1)` and
+//! `(mut s.bytes()).push(1)`), and lowering refuses the mutators on top
+//! of that. It cannot become a `str`: nothing turns
+//! bytes back into a `str`, because doing so honestly requires
+//! VALIDATION — a `List[int] -> str ! {utf8}` primitive that does not
+//! exist yet (wolf-std's `bytes.to_str` is blocked on exactly that, and
+//! a cast would be the soundness hole, not the fix). Both str-producing
+//! entries below (`str_get`, and the `s[a..b]` lowering that mirrors
+//! it) only ever narrow an ALREADY-valid `str` on code-point
+//! boundaries, so no operation in the language can build an invalid
+//! one.
+//!
+//! Two entries here are kept deliberately even though the compiler no
+//! longer calls them on the hot path:
+//!
+//! - [`__wolf_rt_str_bytes`] is the MATERIALIZING fallback. A view that
+//!   has to become a first-class `List[int]` value (a binding, an
+//!   argument, a return) still goes through it, bit-for-bit as before.
+//! - [`__wolf_rt_str_get`] is the reference semantics for the inline
+//!   domain test, and the C-ABI entry for an FFI caller. Its domain and
+//!   the compiled test are pinned equal by
+//!   `inline_domain_matches_the_shim` below — the `[mem.str.get]`
+//!   "same domain" law, checked rather than asserted.
 
 use std::sync::Mutex;
 
@@ -471,8 +516,15 @@ pub unsafe extern "C" fn __wolf_rt_str_split(sp: i64, sl: i64, np: i64, nl: i64,
     hdr as i64
 }
 
-/// `bytes()` — the byte view, materialized as `List[int]` (each byte
-/// an i64 element, exactly the checked lane's value shape).
+/// `bytes()` — the MATERIALIZING fallback (s77): a `List[int]` with
+/// each byte as an i64 element, exactly the checked lane's value shape.
+///
+/// Compiled code no longer calls this to WALK bytes — `for b in
+/// s.bytes()`, `s.bytes()[i]` and the `len`/`count`/`is_empty`/`get`/
+/// `first`/`last` family read the receiver's `{ptr, len}` pair
+/// directly (see the byte-view section of this module's docs). This
+/// stays for the positions that need a first-class `List[int]` value:
+/// a binding, a call argument, a return.
 ///
 /// # Safety
 ///
@@ -551,6 +603,113 @@ mod tests {
             let (wp, wl) = pair_of("a b  c");
             let hdr = __wolf_rt_str_split(wp, wl, 0, 0, 1);
             assert_eq!(crate::list::__wolf_rt_list_len(hdr), 3);
+        }
+    }
+
+    /// s77: the byte view IS the receiver's `{ptr, len}` pair, and the
+    /// i-th byte is `*(ptr + i)` — that is the whole ABI compiled code
+    /// relies on (`ptr.off` at stride 1 + `load.i8`), so it is pinned
+    /// here the way `list.rs` pins the header offsets. Move the pair
+    /// layout and this test is what tells you the lowering moved with
+    /// it.
+    #[test]
+    fn byte_view_is_the_receiver_pair() {
+        let s = "wolf é";
+        let (sp, sl) = pair_of(s);
+        assert_eq!(sl as usize, s.len(), "the view's length is the byte len");
+        for i in 0..s.len() {
+            let byte = unsafe { *((sp as *const u8).add(i)) };
+            assert_eq!(byte, s.as_bytes()[i], "byte {i} through the view");
+        }
+        // The pair layout the out-slot ABI writes: ptr at +0, len at +8.
+        let mut out = [0i64; 2];
+        unsafe { write_pair(out.as_mut_ptr() as i64, sp, sl) };
+        assert_eq!((out[0], out[1]), (sp, sl));
+    }
+
+    /// s77 target 2: the whole zero-copy family hands back subslices of
+    /// the RECEIVER's storage — one representation shared with the byte
+    /// view, not a second one. Every pair below must point inside the
+    /// receiver's bytes.
+    #[test]
+    fn zero_copy_results_share_the_receiver_storage() {
+        let s = "  the wolf runs  ";
+        let (sp, sl) = pair_of(s);
+        let inside = |p: i64, l: i64| p >= sp && p + l <= sp + sl;
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            __wolf_rt_str_trim(sp, sl, 0, o);
+            assert!(inside(out[0], out[1]), "trim is a subslice");
+            assert_eq!(__wolf_rt_str_get(sp, sl, 2, 5, o), 1);
+            assert!(inside(out[0], out[1]), "get is a subslice");
+            let (np, nl) = pair_of("  ");
+            assert_eq!(__wolf_rt_str_strip(sp, sl, np, nl, 0, o), 1);
+            assert!(inside(out[0], out[1]), "strip_prefix is a subslice");
+            let hdr = __wolf_rt_str_split(sp, sl, 0, 0, 1);
+            assert_eq!(crate::list::__wolf_rt_list_len(hdr), 3);
+            let mut elem = [0i64; 2];
+            for i in 0..3 {
+                assert_eq!(
+                    crate::list::__wolf_rt_list_read(hdr, i, elem.as_mut_ptr() as i64),
+                    1
+                );
+                assert!(inside(elem[0], elem[1]), "split element {i} is a subslice");
+            }
+        }
+    }
+
+    /// s77 target 4: the code-point test the COMPILER inlines is the
+    /// one this runtime makes. `wolf_wir::lower`'s `str_boundary_ok`
+    /// spells `off == len || (byte[off] & 0xC0) != 0x80`; that must be
+    /// `str::is_char_boundary`, offset for offset, or `s[a..b]` and
+    /// `s.get(a..b)` would stop trapping where they trap today.
+    #[test]
+    fn char_boundary_rule_is_the_two_bit_test() {
+        for s in ["", "wolf", "héllo", "é€🐺x", "🐺"] {
+            let b = s.as_bytes();
+            for off in 0..=b.len() {
+                // The compiled spelling: past-the-end is a boundary and
+                // reads nothing; otherwise the two top bits decide.
+                let inlined = b.get(off).is_none_or(|byte| (byte & 0xC0) != 0x80);
+                assert_eq!(
+                    inlined,
+                    s.is_char_boundary(off),
+                    "boundary rule at {off} of {s:?}"
+                );
+            }
+        }
+    }
+
+    /// s77 target 4, the other half: the inlined DOMAIN (`lo <=u hi
+    /// <=u len`, then both endpoints on boundaries) accepts exactly
+    /// what `__wolf_rt_str_get` accepts — `[mem.str.get]`'s "same
+    /// domain" law, checked over every endpoint pair of a mixed-width
+    /// string including the out-of-range and inverted ones.
+    #[test]
+    fn inline_domain_matches_the_shim() {
+        let s = "é€🐺x";
+        let (sp, sl) = pair_of(s);
+        let bytes = s.as_bytes();
+        let boundary = |off: i64| -> bool { off == sl || (bytes[off as usize] & 0xC0) != 0x80 };
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        for lo in -2i64..=sl + 2 {
+            for hi in -2i64..=sl + 2 {
+                // The compiled test, verbatim: two unsigned compares
+                // (a negative endpoint is a very large unsigned one),
+                // then the boundary probes — which are only reached
+                // because the range half already holds.
+                let in_range = (lo as u64) <= (hi as u64) && (hi as u64) <= (sl as u64);
+                let inlined = in_range && boundary(lo) && boundary(hi);
+                let shim = unsafe { __wolf_rt_str_get(sp, sl, lo, hi, o) } == 1;
+                assert_eq!(inlined, shim, "domain at {lo}..{hi} of {s:?}");
+                if shim {
+                    // And the pair is the same arithmetic the lowering
+                    // does: `ptr + lo`, `hi - lo`.
+                    assert_eq!((out[0], out[1]), (sp + lo, hi - lo));
+                }
+            }
         }
     }
 

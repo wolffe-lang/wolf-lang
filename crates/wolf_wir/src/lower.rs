@@ -2636,6 +2636,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // s40: the builtin `len` members — `s.len` is the byte length
         // half of the pair (D25), `l.len` reads the runtime header.
         if m.member().map(|t| self.text(t.span)).as_deref() == Some("len") {
+            // s77: `<str>.bytes().len` is the receiver's length half.
+            if let Some(view_recv) = self.bytes_view_recv(base) {
+                let Some((_, n)) = self.lower_bytes_view(view_recv)? else {
+                    return Ok(Flow::Diverged);
+                };
+                return Ok(Flow::Val(Some(n)));
+            }
             match self.table.kind(self.strip_sema(base_sema)) {
                 TyKind::Prim(Prim::Str) => {
                     let Some(sv) = flow_val!(self.lower_expr(base)) else {
@@ -5759,6 +5766,181 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(Some(v)))
     }
 
+    /// `[mem.str.get]`'s domain, INLINE (s77) — the test
+    /// `__wolf_rt_str_get` makes, spelled in WIR so a slice costs no
+    /// call. Two halves, exactly the shim's:
+    ///
+    /// - **range**: `lo <=u hi <=u len`. Unsigned covers the sign case
+    ///   in the same compare — a negative endpoint is a very large
+    ///   unsigned one — so this is the shim's `a < 0 || b < a || b >
+    ///   len` in two tests instead of three.
+    /// - **code-point boundary**: an endpoint is a boundary when it is
+    ///   the length or does NOT address a continuation byte, i.e.
+    ///   `off == len || (byte[off] & 0xC0) != 0x80`. That is
+    ///   `str::is_char_boundary` (offset 0 needs no case of its own: a
+    ///   valid str never opens with a continuation byte), and
+    ///   `wolf_rt::str`'s `char_boundary_rule_is_the_two_bit_test`
+    ///   pins the equivalence against Rust's own predicate.
+    ///
+    /// The `off == len` guard is load-bearing, not an optimization:
+    /// without it the boundary test would read one past the end.
+    ///
+    /// Returns the domain bool. The pair itself is address arithmetic
+    /// the caller does ([`Self::str_subslice`]) — one representation
+    /// for every zero-copy result, which is what the byte view shares.
+    fn str_slice_domain(&mut self, sp: Value, sl: Value, lo: Value, hi: Value) -> Value {
+        // The four tests, short-circuited left to right. `merge` is
+        // minted on the FIRST test that is not already decided — a
+        // fully-constant slice (`"wolf"[0..9]`) folds to one bool and
+        // emits no control flow at all, and a block nothing branches
+        // to is exactly the unreachable-block shape a folded edge left
+        // behind once before.
+        let mut merge: Option<(Block, Value)> = None;
+        let mut dead = false;
+        // The probe constants, minted in the block that DOMINATES every
+        // block below and before the scopes open: a constant minted
+        // inside a branch arm is visible only there, so both probes
+        // would mint their own.
+        let mask = self.b.iconst(types::I64, 0xC0);
+        let cont = self.b.iconst(types::I64, 0x80);
+        // Nothing computed inside the region dominates the join, so
+        // nothing inside it stays GVN-visible after it: the address
+        // arithmetic a boundary probe does is the SAME expression
+        // `str_subslice` does next, and handing that definition to the
+        // join is a dominance error (it was one).
+        self.b.gvn_push_scope();
+        for i in 0..4 {
+            let ok = match i {
+                // `lo <=u hi <=u len` — unsigned folds the sign case
+                // into the same compare: a negative endpoint is a very
+                // large unsigned one. The shim's three tests, in two.
+                0 => self.b.ins(
+                    Opcode::Icmp,
+                    &[lo, hi],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Ule),
+                ),
+                1 => self.b.ins(
+                    Opcode::Icmp,
+                    &[hi, sl],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Ule),
+                ),
+                // Boundaries LAST, and that ordering is load-bearing:
+                // the probe reads `sp[off]`, which is in bounds only
+                // because the range half already holds on this path.
+                2 => InsOut::Vals(vec![self.str_boundary_ok(sp, sl, lo, mask, cont)]),
+                _ => InsOut::Vals(vec![self.str_boundary_ok(sp, sl, hi, mask, cont)]),
+            }
+            .one();
+            match self.b.as_bool_const(ok) {
+                Some(true) => continue,
+                Some(false) => {
+                    dead = true;
+                    break;
+                }
+                None => {}
+            }
+            let (m, _) = *merge.get_or_insert_with(|| {
+                let m = self.b.create_block();
+                let p = self.b.add_block_param(m, types::BOOL);
+                (m, p)
+            });
+            let miss = self.b.bconst(false);
+            let next = self.b.create_block();
+            self.b.ins_br(ok, next, &[], m, &[miss]);
+            self.b.seal_block(next);
+            self.b.switch_to_block(next);
+        }
+        let decided = self.b.bconst(!dead);
+        let out = match merge {
+            None => decided,
+            Some((m, p)) => {
+                self.b.ins_jmp(m, &[decided]);
+                self.b.seal_block(m);
+                self.b.switch_to_block(m);
+                p
+            }
+        };
+        self.b.gvn_pop_scope();
+        out
+    }
+
+    /// One endpoint's code-point-boundary test: `off == len ||
+    /// (sp[off] & 0xC0) != 0x80`. The `off == len` half is what keeps
+    /// the probe from reading one past the end; when it is statically
+    /// decided the load needs no branch of its own.
+    fn str_boundary_ok(
+        &mut self,
+        sp: Value,
+        sl: Value,
+        off: Value,
+        mask: Value,
+        cont: Value,
+    ) -> Value {
+        let at_end = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[off, sl],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let probe = |z: &mut Self| -> Value {
+            let byte = z.bytes_load_at(sp, off);
+            let bits =
+                z.b.ins(Opcode::Band, &[byte, mask], &[types::I64], Aux::None)
+                    .one();
+            z.b.ins(
+                Opcode::Icmp,
+                &[bits, cont],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Ne),
+            )
+            .one()
+        };
+        match self.b.as_bool_const(at_end) {
+            // The endpoint IS the length: a boundary, no load.
+            Some(true) => self.b.bconst(true),
+            // Provably interior: the load needs no guard.
+            Some(false) => probe(self),
+            None => {
+                let probe_bb = self.b.create_block();
+                let join = self.b.create_block();
+                let out = self.b.add_block_param(join, types::BOOL);
+                let yes = self.b.bconst(true);
+                self.b.ins_br(at_end, join, &[yes], probe_bb, &[]);
+                self.b.seal_block(probe_bb);
+                self.b.switch_to_block(probe_bb);
+                self.b.gvn_push_scope();
+                let ok = probe(self);
+                self.b.ins_jmp(join, &[ok]);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(join);
+                self.b.switch_to_block(join);
+                out
+            }
+        }
+    }
+
+    /// The zero-copy subslice `s[lo..hi]` as a `{ptr, len}` pair —
+    /// `ptr + lo` and `hi - lo`, the same two words the shim wrote
+    /// through its out slot. Valid exactly when
+    /// [`Self::str_slice_domain`] held; every caller establishes that
+    /// first (a trap, or a `{none}` row).
+    fn str_subslice(&mut self, sp: Value, lo: Value, hi: Value) -> Value {
+        let p = self.b.ins_ptr_off(sp, lo, 1);
+        let n = self
+            .b
+            .ins(Opcode::IsubWrap, &[hi, lo], &[types::I64], Aux::None)
+            .one();
+        let sty = str_ty(self.b.types());
+        self.b
+            .ins(Opcode::AggMake, &[p, n], &[sty], Aux::None)
+            .one()
+    }
+
     /// The s37 builtin `str` method set, natively (s40): every method
     /// is one runtime call into `wolf_rt::str` (algorithms shared with
     /// the checked executor by construction), plus the miss spelling
@@ -5814,29 +5996,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let (lo, hi) = self.range_endpoints(rn, sl)?;
                 let eu = self.eu_ty_of(e.span)?;
-                let (region, slot) = self.rt_slot(16);
-                let rc = self
-                    .rt_call_slot(
-                        "__wolf_rt_str_get",
-                        &[sp, sl, lo, hi],
-                        slot,
-                        region,
-                        Some(types::I64),
-                    )
-                    .expect("rc");
-                let hit = self.nonzero(rc);
+                // s77: the domain inline, the pair by arithmetic — the
+                // recoverable spelling of the SAME test `s[a..b]` traps
+                // on ([mem.str.get]'s "same domain" law, now literally
+                // one helper).
+                let hit = self.str_slice_domain(sp, sl, lo, hi);
                 let out = self.eu_join(
                     eu,
                     hit,
-                    |z| Ok(Some(z.load_str_slot(slot, region, e.span)?)),
+                    |z| Ok(Some(z.str_subslice(sp, lo, hi))),
                     |z| Ok(z.none_tag()),
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            // These two MINT a `List` (`wolf_rt::str` builds one out of
-            // `list::new_list`/`push_raw`), so like `List[T]()` they
-            // thread the foreign chain: compiled code loads from that
-            // storage directly now (s75).
+            // s77: `bytes()` in a position lowering consumes on the
+            // spot is a VIEW (see the byte-view block below), and never
+            // reaches this arm. Here it is the fallback — a view that
+            // must become a first-class `List[int]` value (a binding, an
+            // argument, a return) materializes exactly as it always
+            // did, threading the foreign chain like `List[T]()`.
             "bytes" => {
                 let r = self
                     .rt_call_foreign("__wolf_rt_str_bytes", &[sp, sl], None, Some(types::PTR))
@@ -6623,6 +6801,28 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(base_sema) = self.expr_sema_ty(recv.span) else {
             return Err(refuse("an index without a recorded type", e.span));
         };
+        // s77: `<str>.bytes()[i]` reads the receiver's storage directly
+        // — s75's unsigned in-bounds test plus one `load.i8`, with no
+        // list to materialize first.
+        if let Some(view_recv) = self.bytes_view_recv(recv) {
+            let Some((base, n)) = self.lower_bytes_view(view_recv)? else {
+                return Ok(Flow::Diverged);
+            };
+            let ix = d
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .filter_map(Arg::value)
+                .next()
+                .ok_or_else(|| refuse("an index without an operand", e.span))?;
+            let Some(idx) = flow_val!(self.lower_expr(ix)) else {
+                return Err(refuse("a valueless List index", ix.span));
+            };
+            if self.list_bounds_trap(idx, n) {
+                return Ok(Flow::Diverged);
+            }
+            return Ok(Flow::Val(Some(self.bytes_load_at(base, idx))));
+        }
         match self.table.kind(self.strip_sema(base_sema)) {
             TyKind::Prim(Prim::Str) => {
                 let Some(sv) = flow_val!(self.lower_expr(recv)) else {
@@ -6637,21 +6837,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .find(|v| v.kind == SyntaxKind::RangeExpr)
                     .ok_or_else(|| refuse("str indexing outside range slices (D25)", e.span))?;
                 let (lo, hi) = self.range_endpoints(rn, sl)?;
-                let (region, slot) = self.rt_slot(16);
-                let rc = self
-                    .rt_call_slot(
-                        "__wolf_rt_str_get",
-                        &[sp, sl, lo, hi],
-                        slot,
-                        region,
-                        Some(types::I64),
-                    )
-                    .expect("rc");
-                let hit = self.nonzero(rc);
+                // s77: the domain inline (no `str_get` call), the trap
+                // spelling of the same test `get` reports as `{none}`.
+                let hit = self.str_slice_domain(sp, sl, lo, hi);
                 if self.trap_unless(hit, TrapKind::Bounds) {
                     return Ok(Flow::Diverged);
                 }
-                Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
+                Ok(Flow::Val(Some(self.str_subslice(sp, lo, hi))))
             }
             TyKind::List(elem) => {
                 let elem = *elem;
@@ -6709,6 +6901,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(base_sema) = self.expr_sema_ty(recv.span) else {
             return Err(refuse("an index without a recorded type", span));
         };
+        // s77: a byte view has NO write path — `s.bytes()[i] = v` would
+        // write a str's own bytes (rodata, for a literal) and could turn
+        // a valid `str` into an invalid one. The refusal is the
+        // enforcement; see the byte-view block.
+        if self.bytes_view_recv(recv).is_some() {
+            return Err(refuse(
+                "writing through a `bytes()` view (a byte view is read-only, s77)",
+                span,
+            ));
+        }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
             return Err(refuse(
                 "index writes outside List (raw-pointer writes c10; Pool/Map c06/std)",
@@ -6866,6 +7068,258 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.seal_block(exit);
         self.b.switch_to_block(exit);
         Ok(Flow::Val(None))
+    }
+
+    // ------------------------------ the byte view (s77, #80) --------
+    //
+    // `s.bytes()` is a VIEW: the receiver's own `{ptr, len}` pair, the
+    // same two words a `str` is and the same two words every zero-copy
+    // subslice already was (`trim`, `get`, `strip_*`, the `split`
+    // elements — the c08 design note promised one representation, and
+    // this is it). No allocation, no header, no runtime call: element
+    // `i` is `ptr.off` at stride 1 plus a `load.i8`, which is s75's
+    // gep+load with the stride the bytes actually have. What it cost
+    // before was eight heap bytes per input byte and a materializing
+    // call (`__wolf_rt_str_bytes`), and s44/s75 measured family D at
+    // 0.015x with that allocation inside every kernel.
+    //
+    // What the view CANNOT do, and how that is enforced:
+    //
+    // - It cannot be written, and three things say so independently.
+    //   (1) There is no store path at all: the byte LOAD is the only
+    //   access this block emits. (2) The surface already refuses to
+    //   name a view as a mutable place — `s.bytes().push(1)` is E0804
+    //   (`push` takes its receiver `mut`), `(mut s.bytes()).push(1)` is
+    //   E1009 (a `mut` argument must name a place, and this is a
+    //   temporary). (3) The guards below refuse the mutators anyway, so
+    //   a future surface that DID admit those spellings cannot acquire
+    //   a write path by default. A str's bytes are immutable at every
+    //   tier — a literal's live in rodata — so a writable view would be
+    //   both a soundness hole and a segfault.
+    // - It cannot become a `str`. The view is bit-identical to a str
+    //   pair, but nothing lowers a byte sequence BACK to a `str`: the
+    //   only str-producing operations take a `str` receiver and go
+    //   through `[mem.str.get]`'s boundary domain
+    //   ([`Self::str_slice_domain`]). A `List[int] -> str` conversion
+    //   would have to VALIDATE (wolf-std's `bytes.to_str`, still
+    //   blocked, and this is why: it wants a checked primitive, not a
+    //   cast).
+    // - It cannot outlive its bytes any more than a subslice can: the
+    //   view borrows exactly the storage `trim`/`split` elements
+    //   already borrow, so there is one lifetime story here, not two.
+    //
+    // The view is never a first-class WIR value: lowering recognizes
+    // `.bytes()` in the positions it consumes on the spot (iteration,
+    // indexing, `len`/`count`/`is_empty`/`get`/`first`/`last`) and
+    // reads the pair there. Every OTHER position — a `let` binding, an
+    // argument, a return — still materializes through
+    // `__wolf_rt_str_bytes`, bit-for-bit today's behavior, so no value
+    // that a later consumer could mistake for a `str` (or for a `List`
+    // header) ever escapes into the IR.
+
+    /// The `str` receiver of a `<str>.bytes()` call — the syntactic
+    /// recognition that decides a view, with no lowering side effects
+    /// (the caller lowers the receiver only if it takes the view).
+    fn bytes_view_recv(&self, e: &'t GreenNode) -> Option<&'t GreenNode> {
+        if e.kind != SyntaxKind::CallExpr {
+            return None;
+        }
+        let d = CallExpr::cast(e)?;
+        let callee = d.callee()?;
+        let m = wolf_ast::MemberExpr::cast(callee)?;
+        if m.member().map(|t| self.text(t.span)).as_deref() != Some("bytes") {
+            return None;
+        }
+        let base = m.base()?;
+        let recv = if base.kind == SyntaxKind::ParenExpr {
+            ParenExpr::cast(base).and_then(|p| p.expr()).unwrap_or(base)
+        } else {
+            base
+        };
+        let recv_sema = self.expr_sema_ty(recv.span)?;
+        if !matches!(
+            self.table.kind(self.strip_sema(recv_sema)),
+            TyKind::Prim(Prim::Str)
+        ) {
+            return None;
+        }
+        Some(recv)
+    }
+
+    /// Lower the receiver of a recognized `.bytes()` call to its
+    /// `{ptr, len}` halves — the view itself. `None` means the receiver
+    /// DIVERGED (the caller's path is dead), never "not a view":
+    /// [`Self::bytes_view_recv`] already decided that.
+    fn lower_bytes_view(&mut self, recv: &'t GreenNode) -> R<Option<(Value, Value)>> {
+        let sv = match self.lower_expr(recv)? {
+            Flow::Val(Some(v)) => v,
+            Flow::Val(None) => return Err(refuse("a valueless str receiver", recv.span)),
+            Flow::Diverged => return Ok(None),
+        };
+        Ok(Some(self.str_parts(sv)))
+    }
+
+    /// Element `idx` of a byte view: `ptr.off` at stride 1, `load.i8`,
+    /// widened to the `int` the checked lane's `Value::Int(b)` is. The
+    /// zero-extension is what makes the byte unsigned — LLVM reads
+    /// 0..=255 straight off the `zext`, so no range fact is needed to
+    /// say what the op already says.
+    ///
+    /// The load rides the foreign BUFFER region, the same root s75's
+    /// `List` element loads use. Not a third region on purpose: a str's
+    /// bytes and a container's buffer are always distinct allocations
+    /// at this tier, but "always distinct today" is not the theorem a
+    /// separate region would claim (`region.foreign`'s own doc says
+    /// two roots are a `!noalias` claim), and G7 is where earned
+    /// disjointness lands.
+    fn bytes_load_at(&mut self, base: Value, idx: Value) -> Value {
+        let r = self.foreign_buf_region();
+        let p = self.b.ins_ptr_off(base, idx, 1);
+        let byte = self.b.ins_load(types::I8, p, r);
+        self.b
+            .ins(Opcode::Zext, &[byte], &[types::I64], Aux::None)
+            .one()
+    }
+
+    /// `for b in <str>.bytes()` — a counted loop over the receiver's
+    /// own bytes: `len` once into the trip count, then one `load.i8`
+    /// per iteration. No iterator protocol, no allocation, no call, and
+    /// no bounds check (the header test `i < n` IS the proof) — the
+    /// `lower_for_list` shape at stride 1.
+    fn lower_for_bytes(&mut self, d: ForExpr<'t>, base: Value, n: Value) -> R<Flow> {
+        let bind_name = match d.pattern() {
+            None => None,
+            Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(p.span)),
+            Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+            Some(p) => {
+                return Err(refuse(
+                    "destructuring `for` patterns (tuple yields, c06/std)",
+                    p.span,
+                ));
+            }
+        };
+        let header = self.b.create_block();
+        let iparam = self.b.add_block_param(header, types::I64);
+        let zero = self.b.iconst(types::I64, 0);
+        self.b.ins_jmp(header, &[zero]);
+        self.b.switch_to_block(header);
+        self.b.gvn_push_scope();
+        let cond = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[iparam, n],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let body_bb = self.b.create_block();
+        let exit = self.b.create_block();
+        self.b.ins_br(cond, body_bb, &[], exit, &[]);
+        self.b.seal_block(body_bb);
+        self.b.switch_to_block(body_bb);
+        let elem = self.bytes_load_at(base, iparam);
+        let frame = self.run_for_body(d, elem, types::I64, false, bind_name, Some(exit));
+        let frame = match frame {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            self.b.gvn_push_scope();
+            let one = self.b.iconst(types::I64, 1);
+            match self
+                .b
+                .ins(Opcode::IaddChk, &[iparam, one], &[types::I64], Aux::None)
+            {
+                InsOut::Vals(v) => self.b.ins_jmp(header, &[v[0]]),
+                InsOut::Trapped => {}
+            }
+            self.b.gvn_pop_scope();
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(header);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        Ok(Flow::Val(None))
+    }
+
+    /// The byte-view spelling of the `List` methods lowering hands a
+    /// view receiver: `len`/`count` is the pair's length half,
+    /// `is_empty` one compare, `get`/`first`/`last` the s75 unsigned
+    /// in-bounds test plus a byte load. The mutators get a refusal
+    /// rather than an implementation: a view has no write path.
+    fn lower_bytes_view_method(
+        &mut self,
+        d: CallExpr<'t>,
+        base: Value,
+        n: Value,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        match mname {
+            "count" => Ok(Flow::Val(Some(n))),
+            "is_empty" => {
+                let z = self.b.iconst(types::I64, 0);
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Icmp, &[n, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                        .one(),
+                )))
+            }
+            "get" | "first" | "last" => {
+                let given = match mname {
+                    "get" => {
+                        let ix = d
+                            .args()
+                            .into_iter()
+                            .flat_map(|l| l.args())
+                            .filter_map(Arg::value)
+                            .next()
+                            .ok_or_else(|| refuse("`get` without an index", e.span))?;
+                        match self.lower_expr(ix)? {
+                            Flow::Val(Some(v)) => Some(v),
+                            _ => return Err(refuse("a valueless List index", ix.span)),
+                        }
+                    }
+                    "first" => Some(self.b.iconst(types::I64, 0)),
+                    _ => None,
+                };
+                let idx = match given {
+                    Some(v) => v,
+                    None => {
+                        let one = self.b.iconst(types::I64, 1);
+                        self.b
+                            .ins(Opcode::IsubWrap, &[n, one], &[types::I64], Aux::None)
+                            .one()
+                    }
+                };
+                let hit = self.list_in_bounds(idx, n);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.bytes_load_at(base, idx))),
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // A view is READ-ONLY, and this is where that is enforced:
+            // a mutator would write a str's bytes (rodata, for a
+            // literal) and could forge an invalid `str` out of a valid
+            // one. Refusing is the honest answer — the alternative is
+            // materializing silently, which would make `push` write a
+            // copy nobody can read.
+            "push" | "pop" | "clear" => Err(refuse(
+                "mutation through a `bytes()` view (a byte view is read-only, s77)",
+                e.span,
+            )),
+            _ => Err(refuse("this List method (s05 std surface)", e.span)),
+        }
     }
 
     /// Build the `{ptr, len}` value of a byte-literal string: intern
@@ -7578,6 +8032,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 TyKind::List(elem) => {
                     let elem = *elem;
+                    // s77: `<str>.bytes().m(…)` answers from the view.
+                    if let Some(view_recv) = self.bytes_view_recv(recv_place) {
+                        let Some((base, n)) = self.lower_bytes_view(view_recv)? else {
+                            return Ok(Flow::Diverged);
+                        };
+                        return self.lower_bytes_view_method(d, base, n, &mname, e);
+                    }
                     return self.lower_list_method(d, recv_place, elem, &mname, e);
                 }
                 // s73: the conc receivers dispatch to the runtime
@@ -8792,9 +9253,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         if iter.kind != SyntaxKind::RangeExpr {
+            // s77: `for b in <str>.bytes()` is a counted loop over the
+            // receiver's own bytes — the view, never a materialized
+            // list.
+            if let Some(view_recv) = self.bytes_view_recv(iter) {
+                let Some((base, n)) = self.lower_bytes_view(view_recv)? else {
+                    return Ok(Flow::Diverged);
+                };
+                return self.lower_for_bytes(d, base, n);
+            }
             // s40: `for` over a List value (including the materialized
-            // str views — `words()`, `lines()`, `split()`, `bytes()`)
-            // drives by index through the runtime.
+            // str views — `words()`, `lines()`, `split()`) drives by
+            // index through the runtime.
             if let Some(it) = self.expr_sema_ty(iter.span)
                 && let TyKind::List(elem) = self.table.kind(self.strip_sema(it))
             {

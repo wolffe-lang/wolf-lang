@@ -1,0 +1,34 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: str.views, mem.str.get
+//!
+//! s77 — `bytes()` is a VIEW over the receiver's own storage, not a
+//! copy (wolf-lang#80). Natively the walk below compiles to `ptr.off`
+//! at stride 1 plus `load.i8`: no allocation, no per-element call (the
+//! IR shape is pinned in `wolf_wir`'s `lower_shapes` suite; what this
+//! file pins is that every lane still answers the same). The bytes are
+//! UNSIGNED 0..=255 — the two continuation bytes of `é` are 195 and
+//! 169, never negative — and the view's length is the byte length.
+
+fn sum_bytes(text: str) -> int {
+    var n = 0
+    for b in text.bytes() {
+        n = n + b
+    }
+    n
+}
+
+fn main() -> !int {
+    let s = "wolf é"
+    let total = sum_bytes(s)
+    let empty = sum_bytes("")
+    let bs = s.bytes()
+    let lead = bs[5]
+    let cont = bs[6]
+    print("{total} {empty} {lead} {cont} {bs.len} {s.len}")
+    if total == 836 && empty == 0 && lead == 195 && cont == 169 && bs.len == 7 {
+        0
+    } else {
+        1
+    }
+}

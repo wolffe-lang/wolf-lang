@@ -204,6 +204,7 @@ rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
 strings/builtin_methods.lu: lowers
+strings/byte_view.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/empty_needle.lu: lowers
 strings/float_format.lu: lowers
@@ -213,6 +214,7 @@ strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
 strings/interp_value_position.lu: lowers
 strings/match_str_dispatch.lu: lowers
+strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
