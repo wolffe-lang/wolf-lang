@@ -1,8 +1,9 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
+decl @__wolf_rt_region_ambient_enter(ptr) -> ptr
+decl @__wolf_rt_region_ambient_leave(ptr)
 decl @bump(mut ptr, mem.r0)
 decl @classify(i64, bool) -> i64
 decl @depth() -> i64
@@ -80,15 +81,18 @@ b4:
 fn @probe(bool) -> i64 {
 b0(%0: bool):
   %1: ptr, %2: mem.r0 = region.new
+  %3 = call @__wolf_rt_region_ambient_enter(%1)
   br %0, b1, b2
 b1:
-  %3 = iconst.i64 7
-  region.free %1, %2
-  ret %3
-b2:
-  %4 = iconst.i64 3
+  %4 = iconst.i64 7
+  call @__wolf_rt_region_ambient_leave(%3)
   region.free %1, %2
   ret %4
+b2:
+  %5 = iconst.i64 3
+  call @__wolf_rt_region_ambient_leave(%3)
+  region.free %1, %2
+  ret %5
 }
 
 fn @depth() -> i64 {

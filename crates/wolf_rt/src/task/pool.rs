@@ -483,49 +483,56 @@ fn run_task(task: Box<Task>) {
     if super::det::is_tracked(&scope) {
         blocking(|| super::det::ctx_enter(id, &scope));
     }
-    let reason = with_scope(&scope, || match body {
-        Body::Rust(f) => {
-            let ctx = TaskCtx {
-                scope: scope.clone(),
-            };
-            // Unwind-safe flag guard: kill teardown may only unwind
-            // Rust task frames, and the flag must reset even when the
-            // body unwinds (workers are pooled — TLS outlives tasks).
-            struct RustTaskFlag;
-            impl Drop for RustTaskFlag {
-                fn drop(&mut self) {
-                    IN_RUST_TASK.with(|c| c.set(false));
+    // s76: workers are REUSED, so a body that left the thread's ambient
+    // region set would hand the next task a handle that is no longer
+    // live. A task starts at the process root either way — a task's
+    // allocations are not its spawner's region's (the region-transfer
+    // seam is how a region crosses a spawn).
+    let reason = crate::native::with_root_ambient(|| {
+        with_scope(&scope, || match body {
+            Body::Rust(f) => {
+                let ctx = TaskCtx {
+                    scope: scope.clone(),
+                };
+                // Unwind-safe flag guard: kill teardown may only unwind
+                // Rust task frames, and the flag must reset even when the
+                // body unwinds (workers are pooled — TLS outlives tasks).
+                struct RustTaskFlag;
+                impl Drop for RustTaskFlag {
+                    fn drop(&mut self) {
+                        IN_RUST_TASK.with(|c| c.set(false));
+                    }
+                }
+                // D30: a panic becomes an exit reason, never an unwind
+                // across the scheduler. The kill-teardown token is the
+                // one distinguished payload (`[conc.proc.kill]` step 1).
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    IN_RUST_TASK.with(|c| c.set(true));
+                    let _guard = RustTaskFlag;
+                    f(&ctx)
+                })) {
+                    Ok(reason) => reason,
+                    Err(payload) if payload.is::<KilledToken>() => ExitReason::Killed,
+                    Err(_) => ExitReason::Panicked,
                 }
             }
-            // D30: a panic becomes an exit reason, never an unwind
-            // across the scheduler. The kill-teardown token is the
-            // one distinguished payload (`[conc.proc.kill]` step 1).
-            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                IN_RUST_TASK.with(|c| c.set(true));
-                let _guard = RustTaskFlag;
-                f(&ctx)
-            })) {
-                Ok(reason) => reason,
-                Err(payload) if payload.is::<KilledToken>() => ExitReason::Killed,
-                Err(_) => ExitReason::Panicked,
+            Body::C { entry, env } => {
+                // SAFETY: codegen's contract — `entry` is the lowered
+                // task body, `env` its moved environment.
+                let tag = unsafe { entry(env.0) };
+                if tag == 0 {
+                    ExitReason::Normal
+                } else if tag == super::conc_abi::CANCEL_TAG {
+                    // The s73 protocol extension (reviewed): the reserved
+                    // cancel sentinel is the compiled body saying
+                    // "structured cancellation stopped me" — a
+                    // consequence, never a scope failure (conc_abi.rs).
+                    ExitReason::Cancelled
+                } else {
+                    ExitReason::Error { tag }
+                }
             }
-        }
-        Body::C { entry, env } => {
-            // SAFETY: codegen's contract — `entry` is the lowered
-            // task body, `env` its moved environment.
-            let tag = unsafe { entry(env.0) };
-            if tag == 0 {
-                ExitReason::Normal
-            } else if tag == super::conc_abi::CANCEL_TAG {
-                // The s73 protocol extension (reviewed): the reserved
-                // cancel sentinel is the compiled body saying
-                // "structured cancellation stopped me" — a
-                // consequence, never a scope failure (conc_abi.rs).
-                ExitReason::Cancelled
-            } else {
-                ExitReason::Error { tag }
-            }
-        }
+        })
     });
     #[cfg(unix)]
     super::stack::set_fault_label("");

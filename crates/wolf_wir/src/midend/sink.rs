@@ -36,7 +36,7 @@
 //! allocation (`: op %slab`); the old region's facts are invalidated
 //! as region-retired (`RegionFreed` — the region ceased to exist).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::entity::EntityRef;
 use crate::facts::{FactData, FactKind, Just};
@@ -48,8 +48,9 @@ use crate::verify::{Invalidation, PassCtx, VerifyError};
 use super::analysis;
 use super::{OptStats, Thresholds, run_managed};
 
-/// (region.new inst, its block, the free, laid-out allocs, total, region).
-type Proto = (Inst, Block, Inst, Vec<(Inst, u64)>, u64, u32);
+/// (region.new inst, its block, the free, laid-out allocs, total,
+/// region, the s76 ambient enter/leave calls to retire with it).
+type Proto = (Inst, Block, Inst, Vec<(Inst, u64)>, u64, u32, Vec<Inst>);
 
 /// One promotable region, fully analyzed.
 struct Candidate {
@@ -61,10 +62,23 @@ struct Candidate {
     total: u64,
     /// The retired region.
     old_region: u32,
+    /// s76: the `__wolf_rt_region_ambient_enter`/`leave` calls that
+    /// opened this region for container placement. They retire with the
+    /// region — which `analyze_region` only permits after proving the
+    /// region's extent CANNOT have allocated through the ambient slot
+    /// (see its `no_ambient_allocation` gate). A promoted region's
+    /// handle is a frame pointer, not a `Region *`, so leaving an enter
+    /// behind would hand `wolf_rt` a stack address to bump-allocate in.
+    ambient: Vec<Inst>,
     /// Pre-interned `mem.rFRESH` for the slab's token chain.
     new_mem_ty: TypeId,
     new_region: RegionId,
 }
+
+/// The s76 ambient-region seam's symbol names (see
+/// `wolf_rt::native`'s ambient-region note).
+const AMBIENT_ENTER: &str = "__wolf_rt_region_ambient_enter";
+const AMBIENT_LEAVE: &str = "__wolf_rt_region_ambient_leave";
 
 pub(crate) fn run(
     m: &mut Module,
@@ -131,7 +145,7 @@ pub(crate) fn run(
     }
     // ---- prepare types (needs &mut m.types) --------------------------------
     let mut cands: Vec<Candidate> = Vec::new();
-    for (new_inst, new_block, free_inst, allocs, total, old_region) in proto {
+    for (new_inst, new_block, free_inst, allocs, total, old_region, ambient) in proto {
         let new_region = RegionId::new(next_region);
         next_region += 1;
         let new_mem_ty = m.types.mem(new_region);
@@ -142,6 +156,7 @@ pub(crate) fn run(
             allocs,
             total,
             old_region,
+            ambient,
             new_mem_ty,
             new_region,
         });
@@ -161,6 +176,107 @@ pub(crate) fn run(
     Ok(changed)
 }
 
+/// The s76 ambient bracket around `handle`: the
+/// `__wolf_rt_region_ambient_enter(%handle)` calls plus every
+/// `__wolf_rt_region_ambient_leave(%saved)` that consumes one of their
+/// results. Two passes, so RPO order never decides whether a leave is
+/// recognized.
+fn ambient_bracket(f: &Function, cfg: &analysis::Cfg, handle: Value) -> Vec<Inst> {
+    let named = |inst: Inst, want: &str| -> bool {
+        matches!(f.insts[inst].aux, Aux::Callee(ef) if f.ext_funcs[ef].name == want)
+    };
+    let mut out: Vec<Inst> = Vec::new();
+    let mut saved: Vec<Value> = Vec::new();
+    for &b in &cfg.rpo {
+        for &inst in &f.blocks[b].insts {
+            if named(inst, AMBIENT_ENTER) && f.vpool.get(f.insts[inst].args).contains(&handle) {
+                out.push(inst);
+                saved.extend(f.vpool.get(f.insts[inst].results).iter().copied());
+            }
+        }
+    }
+    if out.is_empty() {
+        return out;
+    }
+    for &b in &cfg.rpo {
+        for &inst in &f.blocks[b].insts {
+            if named(inst, AMBIENT_LEAVE)
+                && f.vpool
+                    .get(f.insts[inst].args)
+                    .iter()
+                    .any(|a| saved.contains(a))
+            {
+                out.push(inst);
+            }
+        }
+    }
+    out
+}
+
+/// Can anything in the region's EXTENT have allocated through the
+/// ambient slot? (s76 — only asked when the region carries an ambient
+/// bracket.)
+///
+/// The extent is bounded by the enter and the leave, so every
+/// instruction that can run inside it lies in a block reachable from
+/// `new_block` that also reaches `free_block` (the leave sits just
+/// inside the free, on the X4 cleanup chain). Within that set, an
+/// opaque `call` is exactly the thing that might have asked
+/// `wolf_rt` for container storage — the shims read the ambient slot,
+/// and no summary tells this pass otherwise. So: no calls in the
+/// extent besides the bracket itself.
+///
+/// Deliberately conservative, and deliberately on the OPTIMIZER's side
+/// of the line: lowering emits the honest bracket, and a region is
+/// promoted or elided only when the bracket is provably unobservable.
+/// The cost of being wrong here is a dangling container; the cost of
+/// being coarse is a `region.new`/`free` pair the mid-end could have
+/// removed. Sharpening this with per-callee "allocates?" summaries is
+/// the obvious follow-up.
+fn no_ambient_allocation(
+    f: &Function,
+    cfg: &analysis::Cfg,
+    new_block: Block,
+    free_block: Block,
+    ambient: &[Inst],
+) -> bool {
+    // Forward reachability from the region's root.
+    let mut from_new: HashSet<Block> = HashSet::new();
+    let mut work = vec![new_block];
+    while let Some(b) = work.pop() {
+        if !from_new.insert(b) {
+            continue;
+        }
+        for s in crate::print::successors(f, b) {
+            if cfg.reachable.contains(&s) {
+                work.push(s);
+            }
+        }
+    }
+    // Backward reachability to the free.
+    let mut to_free: HashSet<Block> = HashSet::new();
+    let mut work = vec![free_block];
+    while let Some(b) = work.pop() {
+        if !to_free.insert(b) {
+            continue;
+        }
+        for &p in cfg.preds.get(&b).into_iter().flatten() {
+            work.push(p);
+        }
+    }
+    for &b in &cfg.rpo {
+        if !from_new.contains(&b) || !to_free.contains(&b) {
+            continue;
+        }
+        for &inst in &f.blocks[b].insts {
+            if f.insts[inst].op == Opcode::Call && !ambient.contains(&inst) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 /// Full applicability analysis for one `region.new`.
 #[allow(clippy::too_many_arguments)]
 fn analyze_region(
@@ -177,10 +293,21 @@ fn analyze_region(
 ) -> Option<Proto> {
     // Handle uses: allocs + exactly one free, nothing else. Token
     // consumers on the chain: only those same ops, plus loads/stores.
+    //
+    // s76 adds one more permitted handle use: the ambient enter/leave
+    // pair. It is not an escape (the runtime stores the handle in a
+    // thread slot for the extent and drops it at the leave), but it DOES
+    // make the region reachable to `wolf_rt`'s container allocator, so
+    // `no_ambient_allocation` below has to clear the extent before this
+    // region may be promoted or elided.
     let mut allocs: Vec<(Inst, Block)> = Vec::new();
     let mut frees: Vec<Inst> = Vec::new();
+    let ambient = ambient_bracket(f, cfg, handle);
     for &b in &cfg.rpo {
         for &inst in &f.blocks[b].insts {
+            if ambient.contains(&inst) {
+                continue;
+            }
             let op = f.insts[inst].op;
             let args = f.vpool.get(f.insts[inst].args);
             let touches_handle = args.contains(&handle);
@@ -222,13 +349,25 @@ fn analyze_region(
     if frees.len() != 1 {
         return None;
     }
+    let free_block = f
+        .layout
+        .iter()
+        .copied()
+        .find(|&b| f.blocks[b].insts.contains(&frees[0]))?;
+    // s76: an ambient bracket means `wolf_rt` could have bump-allocated
+    // container storage in this region behind the pass's back. Retiring
+    // the region — as a stack slab or as nothing at all — is only sound
+    // once the extent is cleared of every opaque call.
+    if !ambient.is_empty() && !no_ambient_allocation(f, cfg, new_block, free_block, &ambient) {
+        return None;
+    }
     // The EMPTY region (scalarized scratch: `region r { ... }` whose
     // contents promoted to SSA) elides entirely — no slab, no ops.
     // Chain hygiene: nothing but the free may even READ the chain.
     if allocs.is_empty() {
         for &b in &cfg.rpo {
             for &inst in &f.blocks[b].insts {
-                if inst == new_inst || inst == frees[0] {
+                if inst == new_inst || inst == frees[0] || ambient.contains(&inst) {
                     continue;
                 }
                 let touches = f.vpool.get(f.insts[inst].args).iter().any(|&a| {
@@ -239,7 +378,15 @@ fn analyze_region(
                 }
             }
         }
-        return Some((new_inst, new_block, frees[0], Vec::new(), 0, region));
+        return Some((
+            new_inst,
+            new_block,
+            frees[0],
+            Vec::new(),
+            0,
+            region,
+            ambient,
+        ));
     }
     // Pointer escape (covers tokenless read seams and spawn edges).
     if analysis::region_pointers(f, view.types, region).escapes {
@@ -268,19 +415,25 @@ fn analyze_region(
     }
     // The free must be dominated by the region.new (a lifetime, not a
     // maybe): structural given tokens, but hold it explicitly.
-    let free_block = f
-        .layout
-        .iter()
-        .copied()
-        .find(|&b| f.blocks[b].insts.contains(&frees[0]))?;
     if !doms.dominates(new_block, free_block) {
         return None;
     }
-    Some((new_inst, new_block, frees[0], laid, total, region))
+    Some((new_inst, new_block, frees[0], laid, total, region, ambient))
 }
 
 /// Apply one promotion.
 fn promote(f: &mut Function, view: &super::ModView, ctx: &mut PassCtx, c: &Candidate) {
+    // s76: the ambient bracket retires with the region in BOTH shapes —
+    // elision (the region ceases to exist) and promotion (the handle
+    // becomes a frame pointer, which `wolf_rt` must never be handed as
+    // a region). `analyze_region` proved the extent allocates nothing
+    // through the slot, so dropping the bracket is observationally
+    // nothing.
+    if !c.ambient.is_empty() {
+        for &b in &f.layout.clone() {
+            f.blocks[b].insts.retain(|i| !c.ambient.contains(i));
+        }
+    }
     if c.allocs.is_empty() {
         // Empty-region elision: the region never held anything — the
         // `region.new`/`region.free` pair disappears outright.

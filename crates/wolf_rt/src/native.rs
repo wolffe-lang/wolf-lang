@@ -24,6 +24,29 @@
 //! memory. `sync.freeze` is a no-op at runtime in v0 (freezing is a
 //! verifier-enforced capability change, not yet a page-protection
 //! one); `rc.dup`/`rc.drop` will land with the shared tier (s42).
+//!
+//! # The ambient region (s76, wolf-lang#81)
+//!
+//! `[mem.region.create.3]`: an allocation lands in the AMBIENT region
+//! at its site, and D12 says a callee allocates into its CALLER's
+//! region by default — so "ambient" is a DYNAMIC property of the call
+//! stack, not a lexical one, exactly as `wolf_mem`'s checker models it
+//! (its own `ambient` stack). The native tier realizes it as one
+//! thread-local slot: lowering brackets every construct that opens a
+//! region ([`__wolf_rt_region_ambient_enter`] after `region.new`,
+//! [`__wolf_rt_region_ambient_leave`] on the X4 cleanup chain, so every
+//! exit edge restores it), and the container runtime asks
+//! [`ambient_region`] where to allocate. A null slot means the process
+//! root (`crate::str`'s c08 arena) — `main`'s enclosing region is the
+//! process, so a program with no `region` block is unchanged.
+//!
+//! Enter/leave SAVE AND RESTORE rather than push/pop a stack: an
+//! unbalanced leave can then only restore an older handle, never
+//! corrupt a depth. The slot is per-thread, so a spawned task starts at
+//! the process root (a task's allocations are not the spawner's
+//! region's — the region-transfer seam is how a region crosses a spawn),
+//! and `crate::task::pool` clears it around every task body so a
+//! REUSED pool worker can never inherit a dead handle.
 
 use std::io::Write as _;
 
@@ -167,8 +190,35 @@ pub extern "C" fn __wolf_rt_print_bool(v: i8) {
 
 // ---- the v0 bump-region allocator ----------------------------------------
 
-const CHUNK_MIN: usize = 16 * 1024;
+/// First-chunk size, and the base of the geometric chunk ladder below.
+///
+/// s76 shrank this from 16 KiB. A region's chunks are zero-initialized
+/// (`vec![0u8; cap]` — determinism over speed: a latent
+/// read-before-write in region storage reads a stable 0, not garbage),
+/// so the FIRST chunk is a fixed cost every region pays on its first
+/// allocation. At 16 KiB that cost dominated the whole point of the
+/// thing: once s76 made a scratch region actually hold its container,
+/// `b3_churn` — one region per request, ~430 bytes of it used — paid a
+/// 16 KiB calloc per request and ran 3x SLOWER than the leaking version
+/// it replaced. The ladder is the standard arena answer: start at a
+/// page-ish chunk, double per chunk, cap out, so a small scratch region
+/// is cheap and a large one still allocates O(log n) times.
+const CHUNK_MIN: usize = 1024;
+/// Ceiling of the geometric ladder — past this, chunks stay this size
+/// (an allocation larger than the ceiling still gets its own exact
+/// chunk).
+const CHUNK_MAX: usize = 1024 * 1024;
 const ALIGN: usize = 16;
+
+/// The size of a region's `n`-th chunk when it needs at least `size`
+/// bytes: `CHUNK_MIN << n`, capped at [`CHUNK_MAX`], never below `size`.
+fn chunk_size(nth: usize, size: usize) -> usize {
+    // Both bounds are powers of two (asserted in the ladder test), so
+    // the ladder has exactly this many doublings — clamping `nth` to it
+    // keeps the shift in range without an overflow dance.
+    let steps = (CHUNK_MAX.trailing_zeros() - CHUNK_MIN.trailing_zeros()) as usize;
+    size.max(CHUNK_MIN << nth.min(steps))
+}
 
 /// The proc-ledger seam (s34, sprint Target 2): when procs exist, the
 /// proc layer accounts every region create/free against its owning
@@ -205,15 +255,94 @@ fn ledger_hooks() -> Option<&'static RegionLedgerHooks> {
 }
 
 /// A region's current ledger weight in bytes (the proc layer reads it
-/// at ownership-transfer seams — `region_transfer`/`region_adopt`).
+/// at ownership-transfer seams — `region_transfer`/`region_adopt`; the
+/// s76 region litmus reads it to attribute a container's storage to the
+/// region that was ambient at its allocation site).
 ///
 /// # Safety
 ///
 /// `handle` must be a live pointer from [`__wolf_rt_region_new`].
-pub(crate) unsafe fn region_bytes(handle: *mut core::ffi::c_void) -> usize {
+pub unsafe fn region_bytes(handle: *mut core::ffi::c_void) -> usize {
     // SAFETY: caller contract — live region handle.
     let r: &Region = unsafe { &*handle.cast() };
     r.bytes
+}
+
+/// Chunk capacity currently owned by LIVE regions, process-wide — the
+/// runtime's own reclamation accounting (s76 target 3). Maintained at
+/// CHUNK granularity, so the per-allocation bump path pays nothing: a
+/// counter bump happens only when a region takes a new chunk from the
+/// system allocator and when a region hands its chunks back.
+///
+/// This is the number the region litmus asserts on. RSS would answer
+/// the same question less deterministically (the system allocator may
+/// keep freed pages, and the reading is noisy); this counter moves for
+/// exactly one reason.
+static LIVE_REGION_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Read [`LIVE_REGION_BYTES`].
+pub fn live_region_bytes() -> usize {
+    LIVE_REGION_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+// ---- the ambient region slot (s76) ---------------------------------------
+
+thread_local! {
+    /// The region an allocation with no explicit target lands in
+    /// (`[mem.region.create.3]`). Null = the process root.
+    static AMBIENT_REGION: core::cell::Cell<*mut core::ffi::c_void> =
+        const { core::cell::Cell::new(core::ptr::null_mut()) };
+}
+
+/// The ambient region on this thread, or null for the process root.
+/// Container allocation (`crate::list`) reads this to decide placement.
+pub(crate) fn ambient_region() -> *mut core::ffi::c_void {
+    AMBIENT_REGION.with(core::cell::Cell::get)
+}
+
+/// Run `f` with the ambient region reset to the process root, restoring
+/// it afterwards. The pool wraps every task body in this: workers are
+/// REUSED, and a body that left the slot set would hand the next task a
+/// handle that is no longer live.
+pub(crate) fn with_root_ambient<R>(f: impl FnOnce() -> R) -> R {
+    struct Restore(*mut core::ffi::c_void);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            AMBIENT_REGION.with(|c| c.set(self.0));
+        }
+    }
+    let _g = Restore(AMBIENT_REGION.with(|c| c.replace(core::ptr::null_mut())));
+    f()
+}
+
+/// Open `handle` as the ambient region for the enclosing construct
+/// (`region name { }`, `in r { }`, `freeze region { }`); returns the
+/// PREVIOUS ambient handle, which the caller hands back to
+/// [`__wolf_rt_region_ambient_leave`] on every exit edge.
+///
+/// # Safety
+///
+/// `handle` must be a live pointer from [`__wolf_rt_region_new`], live
+/// for as long as it stays ambient.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_region_ambient_enter(
+    handle: *mut core::ffi::c_void,
+) -> *mut core::ffi::c_void {
+    AMBIENT_REGION.with(|c| c.replace(handle))
+}
+
+/// Restore the ambient region saved by
+/// [`__wolf_rt_region_ambient_enter`]. Emitted on the X4 cleanup chain,
+/// so it runs on every exit edge (fall-through, `return`, `?`-err,
+/// `break`/`continue` crossing the boundary), ahead of `region.free`.
+///
+/// # Safety
+///
+/// `prev` must be the value a matching enter returned, and must still
+/// name a live region (or be null).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_region_ambient_leave(prev: *mut core::ffi::c_void) {
+    AMBIENT_REGION.with(|c| c.set(prev));
 }
 
 struct Region {
@@ -263,9 +392,10 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
         None => true,
     };
     if need_new_chunk {
-        let cap = size.max(CHUNK_MIN);
+        let cap = chunk_size(r.chunks.len(), size);
         r.chunks.push(vec![0u8; cap].into_boxed_slice());
         r.used = 0;
+        LIVE_REGION_BYTES.fetch_add(cap, std::sync::atomic::Ordering::Relaxed);
     }
     let chunk = r.chunks.last_mut().expect("chunk exists");
     let p = unsafe { chunk.as_mut_ptr().add(r.used) };
@@ -289,6 +419,8 @@ pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
     if let Some(h) = ledger_hooks() {
         (h.on_free)(handle as usize, r.bytes);
     }
+    let owned: usize = r.chunks.iter().map(|c| c.len()).sum();
+    LIVE_REGION_BYTES.fetch_sub(owned, std::sync::atomic::Ordering::Relaxed);
     drop(r);
 }
 
@@ -321,6 +453,32 @@ mod tests {
             __wolf_rt_region_free(h);
         }
     }
+
+    /// s76: the geometric chunk ladder. A small scratch region pays one
+    /// small zeroed chunk (the whole reason `b3_churn` is 1.7x faster
+    /// after s76 than the leaking version before it); a big region still
+    /// reaches its size in O(log n) chunks; an oversized ask gets an
+    /// exact chunk of its own.
+    #[test]
+    fn chunk_ladder_starts_small_and_caps_out() {
+        // `chunk_size`'s shift-clamp is derived from `trailing_zeros`,
+        // which only means "the ladder's depth" for powers of two.
+        const { assert!(CHUNK_MIN.is_power_of_two() && CHUNK_MAX.is_power_of_two()) };
+        const { assert!(CHUNK_MIN <= CHUNK_MAX) };
+        assert_eq!(chunk_size(0, 1), CHUNK_MIN);
+        assert_eq!(chunk_size(1, 1), CHUNK_MIN * 2);
+        assert_eq!(chunk_size(4, 1), CHUNK_MIN * 16);
+        // Capped, and never below the ask.
+        assert_eq!(chunk_size(64, 1), CHUNK_MAX);
+        assert_eq!(chunk_size(1000, 1), CHUNK_MAX);
+        assert_eq!(chunk_size(0, CHUNK_MAX * 3), CHUNK_MAX * 3);
+        assert_eq!(chunk_size(90, CHUNK_MAX * 3), CHUNK_MAX * 3);
+    }
+
+    // The `live_region_bytes` ledger is process-wide, and this binary
+    // runs its tests on parallel threads — so no assertion on it belongs
+    // here. Its litmus is `tests/region_containers.rs`, one test alone
+    // in its own process, where `before == after` is exact.
 
     #[test]
     fn trap_names_cover_the_vocabulary() {

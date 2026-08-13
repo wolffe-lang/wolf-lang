@@ -1,8 +1,9 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
+decl @__wolf_rt_region_ambient_enter(ptr) -> ptr
+decl @__wolf_rt_region_ambient_leave(ptr)
 decl @build(i64) -> {i64, i64}
 decl @score({i64, i64}) -> i64
 
@@ -26,29 +27,31 @@ fn @main() -> i64 {
 b0:
   %0 = iconst.i64 0
   %1: ptr, %2: mem.r0 = region.new
-  %3 = iconst.i64 1
-  %4 = iconst.i64 4
-  jmp b1(%3, %0)
-b1(%5: i64, %6: i64):
-  %7 = icmp.slt %5, %4
-  br %7, b2, b4
+  %3 = call @__wolf_rt_region_ambient_enter(%1)
+  %4 = iconst.i64 1
+  %5 = iconst.i64 4
+  jmp b1(%4, %0)
+b1(%6: i64, %7: i64):
+  %8 = icmp.slt %6, %5
+  br %8, b2, b4
 b2:
-  %8 = call @build(%5)
-  %9 = call @score(%8)
-  %10 = iadd.chk %6, %9
+  %9 = call @build(%6)
+  %10 = call @score(%9)
+  %11 = iadd.chk %7, %10
   jmp b3
 b3:
-  %11 = iadd.chk %5, %3
-  jmp b1(%11, %10)
+  %12 = iadd.chk %6, %4
+  jmp b1(%12, %11)
 b4:
+  call @__wolf_rt_region_ambient_leave(%3)
   region.free %1, %2
-  %12 = iconst.i64 20
-  %13 = icmp.eq %6, %12
-  br %13, b5, b6
+  %13 = iconst.i64 20
+  %14 = icmp.eq %7, %13
+  br %14, b5, b6
 b5:
   jmp b7(%0)
 b6:
-  jmp b7(%3)
-b7(%14: i64):
-  ret %14
+  jmp b7(%4)
+b7(%15: i64):
+  ret %15
 }

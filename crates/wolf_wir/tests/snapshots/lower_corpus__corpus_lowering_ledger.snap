@@ -136,6 +136,9 @@ memory/prov_two_phase.lu: lowers
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
 memory/region_conflict_params.lu: not mem-clean (pre-wir rungs own it)
+memory/region_container_freeze_ok.lu: lowers
+memory/region_container_reclaim.lu: lowers
+memory/region_escape_container.lu: not mem-clean (pre-wir rungs own it)
 memory/region_escape_local.lu: not mem-clean (pre-wir rungs own it)
 memory/region_freeze_ok.lu: lowers
 memory/region_freeze_open.lu: not mem-clean (pre-wir rungs own it)

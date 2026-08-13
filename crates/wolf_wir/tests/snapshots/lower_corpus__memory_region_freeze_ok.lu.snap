@@ -1,8 +1,9 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
+decl @__wolf_rt_region_ambient_enter(ptr) -> ptr
+decl @__wolf_rt_region_ambient_leave(ptr)
 decl @build_config() -> {i64}
 
 fn @build_config() -> {i64} {
@@ -13,21 +14,23 @@ b0:
 }
 
 fn @main() -> i64 {
-  fact frozen %0 : op %3
+  fact frozen %0 : op %4
 b0:
   %0: ptr, %1: mem.r0 = region.new
-  %2 = call @build_config()
-  %3: mem.r0 = sync.freeze %0, %1
-  %4 = agg.get %2, 0
-  %5 = iconst.i64 42
-  %6 = icmp.eq %4, %5
-  br %6, b1, b2
+  %2 = call @__wolf_rt_region_ambient_enter(%0)
+  %3 = call @build_config()
+  call @__wolf_rt_region_ambient_leave(%2)
+  %4: mem.r0 = sync.freeze %0, %1
+  %5 = agg.get %3, 0
+  %6 = iconst.i64 42
+  %7 = icmp.eq %5, %6
+  br %7, b1, b2
 b1:
-  %7 = iconst.i64 0
-  jmp b3(%7)
-b2:
-  %8 = iconst.i64 1
+  %8 = iconst.i64 0
   jmp b3(%8)
-b3(%9: i64):
-  ret %9
+b2:
+  %9 = iconst.i64 1
+  jmp b3(%9)
+b3(%10: i64):
+  ret %10
 }
