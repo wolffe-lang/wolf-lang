@@ -1,0 +1,69 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: out
+---
+decl @swap(mut ptr, mem.r0, mut ptr, mem.r1)
+data @str.0 = "one"
+data @str.1 = "two"
+
+fn @swap(mut ptr, mem.r0, mut ptr, mem.r1) {
+  fact deref %0 16 : excl.mut
+  fact deref %2 16 : excl.mut
+  fact noalias %0 %2 : excl.mut
+b0(%0: ptr, %1: mem.r0, %2: ptr, %3: mem.r1):
+  %4 = load.ptr %0, %1
+  %5 = iconst.i64 8
+  %6 = ptr.off %0, %5, 1
+  %7 = load.i64 %6, %1
+  %8 = agg.make %4, %7
+  %9 = load.ptr %2, %3
+  %10 = ptr.off %2, %5, 1
+  %11 = load.i64 %10, %3
+  %12 = agg.make %9, %11
+  %13 = agg.get %12, 0
+  %14 = store.ptr %13, %0, %1
+  %15 = agg.get %12, 1
+  %16 = store.i64 %15, %6, %14
+  %17 = agg.get %8, 0
+  %18 = store.ptr %17, %2, %3
+  %19 = agg.get %8, 1
+  %20 = store.i64 %19, %10, %18
+  ret
+}
+
+fn @main() -> i64 {
+  fact deref %14 16 : op
+  fact deref %6 16 : op
+  fact noalias %6 %14 : excl.field
+  fact region %14 r1 : op
+  fact region %6 r0 : op
+b0:
+  %0 = data.addr @str.0
+  %1 = iconst.i64 3
+  %2 = agg.make %0, %1
+  %3 = data.addr @str.1
+  %4 = agg.make %3, %1
+  %5 = iconst.i64 16
+  %6: ptr, %7: mem.r0 = stack.alloc %5
+  %8 = agg.get %2, 0
+  %9 = store.ptr %8, %6, %7
+  %10 = agg.get %2, 1
+  %11 = iconst.i64 8
+  %12 = ptr.off %6, %11, 1
+  %13 = store.i64 %10, %12, %9
+  %14: ptr, %15: mem.r1 = stack.alloc %5
+  %16 = agg.get %4, 0
+  %17 = store.ptr %16, %14, %15
+  %18 = agg.get %4, 1
+  %19 = ptr.off %14, %11, 1
+  %20 = store.i64 %18, %19, %17
+  %21, %22 = call @swap(%6, %13, %14, %20)
+  %23 = load.ptr %6, %21
+  %24 = load.i64 %12, %21
+  %25 = agg.make %23, %24
+  %26 = load.ptr %14, %22
+  %27 = load.i64 %19, %22
+  %28 = agg.make %26, %27
+  %29 = iconst.i64 0
+  ret %29
+}

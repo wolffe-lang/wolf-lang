@@ -1068,7 +1068,19 @@ impl<'a> Verifier<'a> {
                 }
                 for v in uses {
                     let ok = match self.f.values[v].def {
-                        ValueDef::Param(db, _) => dominates(db, b),
+                        // A value's `def` records where it was BORN, and
+                        // for a block parameter that record survives the
+                        // parameter's removal — the Braun trivial-φ test
+                        // drops params, and a use the rewrite missed
+                        // would otherwise pass a dominance test against
+                        // a slot nothing occupies any more (s74, #66:
+                        // exactly that reached the printer, which named
+                        // the value and could not define it). So require
+                        // the parameter to still BE the block's
+                        // parameter at that index.
+                        ValueDef::Param(db, di) => {
+                            self.f.block_params(db).get(di as usize) == Some(&v) && dominates(db, b)
+                        }
                         ValueDef::Result(di, _) => match self.place.get(&di) {
                             Some(&(db, dk)) => {
                                 if db == b {

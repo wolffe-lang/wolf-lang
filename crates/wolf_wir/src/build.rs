@@ -154,6 +154,13 @@ pub struct FuncBuilder<'m> {
     /// cascade may remove (caller-created merge params keep their
     /// handles valid).
     braun_params: HashSet<Value>,
+    /// Every value the trivial-φ test has replaced, old → new (s74,
+    /// #66). `replace_value` rewrites the *stored* uses, but a removal's
+    /// cascade can remove the very value an outer removal just chose as
+    /// its replacement, leaving that outer frame holding a handle to a
+    /// parameter that no longer exists. This is the forwarding chain
+    /// that turns such a handle back into a live value.
+    replaced: HashMap<Value, Value>,
     /// Scoped GVN: value table + the key list per scope.
     gvn: HashMap<GvnKey, Value>,
     gvn_scopes: Vec<Vec<GvnKey>>,
@@ -194,6 +201,7 @@ impl<'m> FuncBuilder<'m> {
             single_block: Vec::new(),
             local_slot: HashMap::new(),
             braun_params: HashSet::new(),
+            replaced: HashMap::new(),
             gvn: HashMap::new(),
             gvn_scopes: vec![Vec::new()],
             mem_tokens: HashMap::new(),
@@ -397,7 +405,9 @@ impl<'m> FuncBuilder<'m> {
     /// by that value; removal cascades to dependent Braun params.
     fn try_remove_trivial(&mut self, block: Block, param: Value) -> Value {
         let Some(index) = self.param_index(block, param) else {
-            return param; // already removed by a cascade
+            // Already removed by a cascade: hand back what it became,
+            // never the dead handle (s74, #66).
+            return self.forwarded(param);
         };
         let mut same: Option<Value> = None;
         for inst in self.blocks[block.index()].preds.clone() {
@@ -441,7 +451,37 @@ impl<'m> FuncBuilder<'m> {
                 }
             }
         }
-        rep
+        // The cascade above can remove `rep` itself — a sibling
+        // parameter that only became trivial because THIS one went away
+        // (s74, #66). Returning the pre-cascade handle hands the caller
+        // a parameter that no longer exists, and `use_var_in` caches it,
+        // so the next instruction built takes a phantom operand: the
+        // shape that reached the printer as a value it could name and
+        // not define. Follow the chain instead.
+        self.forwarded(rep)
+    }
+
+    /// Chase a value through the trivial-φ replacements applied since it
+    /// was chosen. Terminates: each link maps a removed parameter to a
+    /// value chosen strictly earlier in the removal order.
+    fn forwarded(&self, v: Value) -> Value {
+        let mut cur = v;
+        let mut guard = 0usize;
+        while let Some(&next) = self.replaced.get(&cur) {
+            if next == cur {
+                break;
+            }
+            cur = next;
+            guard += 1;
+            debug_assert!(
+                guard <= self.func.values.len(),
+                "trivial-phi forwarding chain does not terminate"
+            );
+            if guard > self.func.values.len() {
+                break;
+            }
+        }
+        cur
     }
 
     /// Append a fresh parameter value to a block.
@@ -493,6 +533,11 @@ impl<'m> FuncBuilder<'m> {
     /// Rewrite every use of `old` to `new`: instruction operands,
     /// branch-edge args, Braun maps, token slots, and GVN entries.
     fn replace_value(&mut self, old: Value, new: Value) {
+        // The forwarding chain (s74, #66): rewriting stored uses is not
+        // enough, because a handle can be live on the Rust call stack of
+        // a nested removal. Record the edge so [`Self::forwarded`] can
+        // repair such a handle.
+        self.replaced.insert(old, new);
         let insts: Vec<Inst> = self.func.insts.keys().collect();
         for inst in insts {
             let args = self.func.vpool.get(self.func.insts[inst].args);
@@ -696,6 +741,18 @@ impl<'m> FuncBuilder<'m> {
         debug_assert!(
             !op.is_terminator(),
             "terminators go through ins_jmp/ins_br/ins_ret/ins_trap"
+        );
+        // Operands must be LIVE definitions: a parameter handle that a
+        // trivial-φ cascade retired is a phantom, and building with it
+        // produces WIR that names a value nothing defines (s74, #66).
+        // The forwarding chain makes that unreachable; this is the
+        // assertion that keeps it so.
+        debug_assert!(
+            args.iter().all(|&a| match self.func.values[a].def {
+                ValueDef::Param(db, di) => self.func.block_params(db).get(di as usize) == Some(&a),
+                ValueDef::Result(..) => true,
+            }),
+            "an operand names a block parameter that was removed"
         );
         // 1. Speculative build at the mark (operands already exist —
         //    Braun guarantees inputs).

@@ -495,9 +495,16 @@ impl<'a, 'b> Tx<'a, 'b> {
         let Some(entry) = self.f.entry() else {
             return Err(ice("function has no entry block"));
         };
+        // The WALK order (s74, #72): reverse postorder, not `layout`.
+        // `layout` is a printing order and lowering may append a block
+        // that USES a value before the block that defines it (a
+        // `select` arm inside a loop does exactly that — the latch is
+        // created before the arm body). This translator is one forward
+        // pass, so it needs defs first, which RPO guarantees.
+        let order = wolf_wir::block_order(self.f);
         // 1. Create every CLIF block; give non-entry blocks their
         // scalar params (aggregate params own slots instead).
-        for &wb in &self.f.layout {
+        for &wb in &order {
             let cb = self.b.create_block();
             self.blocks.insert(wb, cb);
         }
@@ -559,7 +566,7 @@ impl<'a, 'b> Tx<'a, 'b> {
         }
         // Non-entry blocks: scalar params become CLIF block params;
         // aggregate params own a stack slot filled by entering edges.
-        for &wb in &self.f.layout {
+        for &wb in &order {
             if wb == entry {
                 continue;
             }
@@ -579,13 +586,12 @@ impl<'a, 'b> Tx<'a, 'b> {
                 }
             }
         }
-        // 2. Translate every block. The entry is first in layout and
-        // the builder is ALREADY positioned there (step 1 may have
+        // 2. Translate every block. The entry is first in the walk order
+        // and the builder is ALREADY positioned there (step 1 may have
         // emitted param-materialization stores into it — switching,
         // even to the same block, would trip the fill-before-switch
         // rule).
-        for bi in 0..self.f.layout.len() {
-            let wb = self.f.layout[bi];
+        for &wb in &order {
             let cb = self.blocks[&wb];
             if wb != entry {
                 self.b.switch_to_block(cb);
@@ -641,14 +647,25 @@ impl<'a, 'b> Tx<'a, 'b> {
     fn scalar(&self, v: wolf_wir::ir::Value) -> Result<CValue, BackendError> {
         match self.vals.get(&v) {
             Some(Repr::Scalar(c)) => Ok(*c),
-            other => Err(ice(format!("expected scalar repr, found {other:?}"))),
+            // Name the function and the value's def site: `None` means
+            // the def was never translated, which is a walk-order fault,
+            // and the def site is the only way to find which one from a
+            // bug report (s74). The id is the internal entity index, not
+            // the dump's canonical number.
+            other => Err(ice(format!(
+                "expected scalar repr in @{}, found {other:?} for the value defined at {:?}",
+                self.f.name, self.f.values[v].def,
+            ))),
         }
     }
 
     fn addr(&self, v: wolf_wir::ir::Value) -> Result<CValue, BackendError> {
         match self.vals.get(&v) {
             Some(Repr::Addr(c)) => Ok(*c),
-            other => Err(ice(format!("expected aggregate repr, found {other:?}"))),
+            other => Err(ice(format!(
+                "expected aggregate repr in @{}, found {other:?} for the value defined at {:?}",
+                self.f.name, self.f.values[v].def,
+            ))),
         }
     }
 
