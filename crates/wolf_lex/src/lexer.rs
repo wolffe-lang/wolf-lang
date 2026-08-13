@@ -275,6 +275,17 @@ impl Lexer<'_> {
                     // newline, and the newline may become a Term token.
                     self.push_trivia(TriviaKind::Whitespace, start, self.pos);
                 }
+                // `#!` at byte 0: the script interpreter line (s53).
+                // Trivia, so `wolf run script.lu` lexes an executable
+                // file unchanged and the formatter round-trips it. One
+                // offset only — a `#!` on line 2 stays E0107.
+                Some(b'#') if self.pos == 0 && self.peek(1) == Some(b'!') => {
+                    let start = self.pos;
+                    while self.peek(0).is_some_and(|b| b != b'\n') {
+                        self.pos += 1;
+                    }
+                    self.push_trivia(TriviaKind::Shebang, start, self.pos);
+                }
                 Some(b'/') if self.peek(1) == Some(b'/') => {
                     let start = self.pos;
                     while self.peek(0).is_some_and(|b| b != b'\n') {

@@ -1,0 +1,17 @@
+[package]
+name = "wolf_doc"
+description = "the documentation generator behind `wolf doc` (s53): static HTML + a stable JSON index, from the compiler's own signatures"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+wolf_span = { workspace = true }
+wolf_diag = { workspace = true }
+wolf_sema = { workspace = true }
+wolf_query = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

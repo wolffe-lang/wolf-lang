@@ -418,7 +418,7 @@ of making you eyeball two long renderings. Note that wolf never
 converts numbers implicitly — `int` and `i64` are simply different
 types, and the fix is an explicit `as` conversion.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
@@ -432,7 +432,7 @@ was meant for a different call; passing too few often means a value
 was dropped while refactoring. Check the order too: a swapped argument
 pair usually surfaces as a type mismatch on the *next* argument.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
 
 ## E0403 — no such field
 
@@ -1519,7 +1519,7 @@ dependency (the hosted registry service arrives later; the entry form
 is stable now, X7). Versions are dotted numerics (`"1.4.0"`).
 The message names the offending key and the accepted alternatives.
 
-Fixtures: crates/wolf_pkg/tests/snapshots/manifest_diags__e1502_unknown_key.snap
+Fixtures: crates/wolf_pkg/tests/snapshots/manifest_diags__e1502_unknown_key.snap, crates/wolf_pkg/tests/snapshots/script_frontmatter__e1502_in_script_frontmatter.snap
 
 ## E1503 — the manifest declares a build-time script hook — wolf has none, ever
 
@@ -1579,6 +1579,48 @@ change is intentional (you deliberately updated the dependency), run
 the supply-chain alarm it is.
 
 Fixtures: crates/wolf_pkg/tests/snapshots/project_diags__e1506_tampered_store.snap
+
+## E1507 — the script's frontmatter is not a manifest a single file may carry
+
+A script carries its manifest inside its leading `//!` block, as a
+`pkg { }` literal — the same schema and the same parser as `wolf.pkg`,
+so the two can never drift. A script's manifest is a SUBSET, though:
+`edition`, `wolf`, `deps`, `features`, and `capabilities`, and nothing
+else. There are no target-scoped dependency sections and no C build
+recipes, because a program that needs those has outgrown a single file:
+`wolf init --from-script <file>` turns the script into a real package
+with a real manifest, keeping the dependency entries verbatim. A
+script's identity is its path, so `name`, `version` and `fingerprint`
+have nothing to identify and are refused rather than ignored.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/script_frontmatter__e1507_script_subset.snap
+
+## E1508 — the script's frontmatter no longer matches its pinned resolution
+
+A script is one file, and it is still reproducible: the first run pins
+its resolved dependency versions in the cache, keyed by the script's
+path and the bytes of its frontmatter, and every later run replays that
+pin. `--locked` asserts the pin is still the answer — it is the CI
+posture, the same promise a checked-in lockfile makes for a project —
+and this error says the frontmatter changed since the pin was taken.
+Run without `--locked` (or with `--update`) to re-resolve and re-pin.
+Nothing was mutated: a resolution in the cache is never edited in
+place, so the old pin is still exactly what it was.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/project_diags__e1508_frontmatter_drift.snap
+
+## E1509 — a dependency is not in the cache and fetching is off
+
+Resolution is the only phase that may reach the network; a build never
+does (D33). This run needed a dependency the content store does not
+hold, while `--offline` (or a build's own no-fetch posture) forbade
+fetching it. The message names the package and the command that would
+fetch it. Nothing is silently skipped, and in particular a package that
+has never been verified cannot be used unverified: the failure is
+closed, not degraded. Once a dependency is in the store, every script
+and project that names it runs fully offline.
+
+Fixtures: crates/wolf_pkg/tests/snapshots/project_diags__e1509_offline_missing_dep.snap
 
 ## W0301 — file only partially formatted: syntax errors present
 
@@ -1969,3 +2011,17 @@ the assumption after the last assignment of its operands, or bind the
 asserted pointers to names that never change.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__assume_reassigned.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1302_assume_reassigned.snap
+
+## W1501 — this doc comment links to a name that does not resolve
+
+A bracketed dotted path in a doc comment — `[List.push]`, `[connect]` —
+is an intra-doc link, and it resolves through the compiler's own name
+resolution rather than through string matching. That is the whole point:
+when the item it names is renamed or removed, the link breaks HERE,
+loudly, instead of silently becoming a dead reference on a published
+page. Write the path the code writes, or, if the brackets were meant as
+ordinary prose, drop them. Cross-package `std.` paths are not checked
+against this package's names and never warn. Documentation carries the
+same covenant as tests: it is verified, or it is not trusted.
+
+Fixtures: crates/wolf_doc/tests/snapshots/generator__w1501_broken_intra_doc_link.snap

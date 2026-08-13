@@ -1,0 +1,13 @@
+---
+source: crates/wolf_doc/tests/generator.rs
+expression: reporter.take_output()
+---
+warning[W1501]: the doc comment on `one` links to `nosuchthing`, which does not resolve
+ --> demo.lu:2:8
+  |
+2 | pub fn one() -> int { 1 }
+  |        ^^^
+  |
+  = note: an intra-doc link resolves through name resolution, so a rename breaks it here instead
+    of rotting into a dead reference. Write the path the code writes, or drop the brackets
+    to make it prose.

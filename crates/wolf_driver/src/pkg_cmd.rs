@@ -138,6 +138,164 @@ fn report_cap_deltas(project: &Project, lock: &Lock) -> bool {
     acquired
 }
 
+// --------------------------------------------------------------- init ----
+
+/// `wolf init --from-script <file.lu> [--dir DIR]` — promote a script
+/// to a package (s53).
+///
+/// This is the verb E1507's fix-it names, so it has to exist and it has
+/// to do exactly what the message promises: the frontmatter's dependency
+/// entries, capabilities and edition move into a real `wolf.pkg`
+/// **verbatim**, and the script's code moves into `main.lu` with its
+/// frontmatter block removed and its prose kept. The original file is
+/// never deleted — a promotion that destroys the input is a promotion
+/// nobody tries twice.
+pub fn init(args: &[String]) {
+    let (args, dir) = take_dir(args, "init");
+    let usage = || -> ! {
+        eprintln!("usage: wolf init --from-script <file.lu> [--dir DIR]");
+        std::process::exit(2);
+    };
+    let mut from: Option<PathBuf> = None;
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--from-script" {
+            i += 1;
+            match args.get(i) {
+                Some(v) => from = Some(PathBuf::from(v)),
+                None => {
+                    eprintln!("wolf init: --from-script needs a file");
+                    std::process::exit(2);
+                }
+            }
+        } else if let Some(v) = a.strip_prefix("--from-script=") {
+            from = Some(PathBuf::from(v));
+        } else {
+            usage();
+        }
+        i += 1;
+    }
+    let Some(from) = from else { usage() };
+    let text = match std::fs::read_to_string(&from) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("wolf init: cannot read {}: {e}", from.display());
+            std::process::exit(2);
+        }
+    };
+    let mut sm = wolf_span::SourceMap::new();
+    let file = sm.intern(&from);
+    let read = wolf_pkg::script::read(file, &text);
+    let stem = from
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "app".to_string());
+    // The manifest: the frontmatter's own entries, plus the identity a
+    // package needs and a script does not have.
+    let mut manifest = format!(
+        "pkg {{\n    name:    \"local/{stem}\",\n    version: \"0.1.0\",\n    edition: \"{}\",\n",
+        read.manifest
+            .as_ref()
+            .map(|m| m.edition.as_str())
+            .unwrap_or("1")
+    );
+    if let Some(m) = &read.manifest {
+        if let Some(w) = &m.wolf_min {
+            manifest.push_str(&format!("    wolf:    \"{w}\",\n"));
+        }
+        if !m.deps.is_empty() {
+            manifest.push_str("\n    deps: {\n");
+            for d in &m.deps {
+                manifest.push_str(&format!(
+                    "        {},\n",
+                    manifest::render_dep(&d.alias, &d.source)
+                ));
+            }
+            manifest.push_str("    },\n");
+        }
+        if !m.caps.is_empty() {
+            manifest.push_str(&format!(
+                "\n    capabilities: [{}],\n",
+                m.caps
+                    .iter()
+                    .map(|c| c.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+    manifest.push_str("}\n");
+    // The code: everything after the frontmatter's `//!` block, with the
+    // shebang dropped (a package's module is not executable by itself)
+    // and any surrounding prose kept as the module's doc comment.
+    let code = strip_frontmatter(&text, read.frontmatter.as_ref());
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("wolf init: create {}: {e}", dir.display());
+        std::process::exit(2);
+    }
+    for (name, body) in [("wolf.pkg", &manifest), ("main.lu", &code)] {
+        let at = dir.join(name);
+        if at.exists() {
+            eprintln!(
+                "wolf init: {} already exists — refusing to overwrite",
+                at.display()
+            );
+            std::process::exit(1);
+        }
+        if let Err(e) = std::fs::write(&at, body) {
+            eprintln!("wolf init: write {}: {e}", at.display());
+            std::process::exit(2);
+        }
+    }
+    println!(
+        "wolf init: wrote {} and {} from {} (the script is untouched)",
+        dir.join("wolf.pkg").display(),
+        dir.join("main.lu").display(),
+        from.display()
+    );
+}
+
+/// The script's code with its shebang and its frontmatter LINES removed,
+/// leaving the surrounding `//!` prose in place — the prose documents
+/// the module, which is what it did before.
+fn strip_frontmatter(text: &str, fm: Option<&wolf_pkg::Frontmatter>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0usize;
+    for line in text.split_inclusive('\n') {
+        let lo = at;
+        let hi = at + line.trim_end_matches(['\n', '\r']).len();
+        at += line.len();
+        if lo == 0 && line.starts_with("#!") {
+            continue;
+        }
+        if let Some(f) = fm
+            && lo < f.hi as usize
+            && hi > f.lo as usize
+        {
+            continue;
+        }
+        out.push_str(line);
+    }
+    // Collapse the blank `//!` lines the removal orphaned, at both ends
+    // of the header block.
+    while out.starts_with("//!\n") {
+        out = out["//!\n".len()..].to_string();
+    }
+    let mut lines: Vec<&str> = out.lines().collect();
+    let mut end = 0usize;
+    while end < lines.len() && lines[end].trim_start().starts_with("//!") {
+        end += 1;
+    }
+    while end > 0 && lines[end - 1].trim() == "//!" {
+        lines.remove(end - 1);
+        end -= 1;
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out.trim_start_matches('\n').to_string()
+}
+
 // ---------------------------------------------------------------- add ----
 
 /// `wolf add <alias> (--path DIR | --git URL --tag TAG) [--dir DIR]`.
@@ -258,6 +416,7 @@ pub fn add(args: &[String]) {
         fetch_unpinned: true,
         refresh: false,
         store: None,
+        offline: false,
     };
     let mut sm2 = wolf_span::SourceMap::new();
     let project = wolf_pkg::resolve_project(&dir, &mut sm2, &opts);
@@ -329,6 +488,7 @@ pub fn rm(args: &[String]) {
         fetch_unpinned: false,
         refresh: false,
         store: None,
+        offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "rm");
     write_lock(&dir, &project, "rm");
@@ -352,6 +512,7 @@ pub fn update(args: &[String]) {
         fetch_unpinned: true,
         refresh: true,
         store: None,
+        offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "update");
     report_cap_deltas(&project, &old_lock);
@@ -406,6 +567,7 @@ pub fn audit(args: &[String]) {
         fetch_unpinned: false,
         refresh: false,
         store: None,
+        offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "audit");
     print!("{}", wolf_pkg::audit::render_tree(&project));
@@ -439,6 +601,7 @@ pub fn tree(args: &[String]) {
         fetch_unpinned: false,
         refresh: false,
         store: None,
+        offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "tree");
     print!("{}", wolf_pkg::audit::render_tree(&project));
@@ -458,6 +621,7 @@ pub fn why(args: &[String]) {
         fetch_unpinned: false,
         refresh: false,
         store: None,
+        offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "why");
     let Some(target) = project.pkgs.iter().position(|p| p.alias == *alias) else {
@@ -522,6 +686,7 @@ pub fn project_for_build(root: &Path, sm: &mut wolf_span::SourceMap) -> Option<P
             fetch_unpinned: false,
             refresh: false,
             store: None,
+            offline: false,
         },
     ))
 }

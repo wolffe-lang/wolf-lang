@@ -1,0 +1,17 @@
+#!/usr/bin/env -S wolf run
+//! check: run(exit=0, stdout="script")
+//! phase: run
+//! conforms: gram.lex.shebang
+//!
+//! The `#!` interpreter line is TRIVIA at byte zero, and only there
+//! (s53). An executable script is an ordinary wolf file: the kernel
+//! reads the first line, the lexer skips it, and the module header
+//! below it means exactly what it means in any other file.
+//!
+//! A `#!` anywhere else in a file is still the stray-byte error it
+//! always was, which is why this file has exactly one.
+
+fn main() -> !int {
+    print("script")
+    0
+}

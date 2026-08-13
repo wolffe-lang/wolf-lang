@@ -1,0 +1,9 @@
+---
+source: crates/wolf_doc/tests/generator.rs
+expression: json
+---
+{"schema":"wolf-doc/0","package":"demo","title":"demo","private":false,"deps":[{"alias":"util","name":"demo/util","version":"1.2.0"}],"coverage":{"total":3,"documented":3,"with_doctest":2},"modules":[
+    {"path":"","page":"module.html","doc":"The module's own prose. This is its summary sentence.\n\n```wolf\ndemo.one() == 1\n```","summary":"The module's own prose.","links":[],"doctests":[{"index":0,"lang":"wolf","directives":[],"code":"demo.one() == 1\n"}],"items":[
+      {"name":"one","kind":"fn","vis":"pub","sig":"fn one() -> int","page":"module.html","anchor":"item.one","doc":"One. The rest of the body says more, and links to [two].\n\n- a bullet\n  with a continuation\n- another\n\n```wolf,no_run\nlet x = one()\n```","summary":"One.","links":["two"],"doctests":[{"index":0,"lang":"wolf","directives":["no_run"],"code":"let x = one()\n"}]},
+      {"name":"three","kind":"fn","vis":"pub(pkg)","sig":"fn three() -> int","page":"module.html","anchor":"item.three","doc":"Undocumentable prose in a fence.\n\n```text\n<n>: <label>\n```","summary":"Undocumentable prose in a fence.","links":[],"doctests":[]},
+      {"name":"two","kind":"fn","vis":"pub","sig":"fn two(n: int) -> int","page":"module.html","anchor":"item.two","doc":"Two, whose fence must be refused.\n\n```wolf,should_fail(E0401, E0402)\ntwo(\"nope\")\n```","summary":"Two, whose fence must be refused.","links":[],"doctests":[{"index":0,"lang":"wolf","directives":["should_fail(E0401, E0402)"],"code":"two(\"nope\")\n"}]}]}]}

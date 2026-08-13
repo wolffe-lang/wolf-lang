@@ -37,6 +37,7 @@ fn opts(lock: Option<Lock>) -> ResolveOpts {
         fetch_unpinned: false,
         refresh: false,
         store: None,
+        offline: false,
     }
 }
 
@@ -108,4 +109,41 @@ fn tampered_store_tree_e1506() {
     let project = resolve_project(&app, &mut sm, &o);
     assert!(project.has_errors());
     insta::assert_snapshot!("e1506_tampered_store", render(&project));
+}
+
+// ----------------------------------------------------------- s53 codes ----
+
+#[test]
+fn offline_missing_dependency_is_e1509() {
+    // s53 §5: one actionable error naming the package, the version, and
+    // the command that would fetch it. Fails CLOSED — a package that was
+    // never verified cannot be used unverified.
+    let dir = tmpdir("e1509_offline");
+    std::fs::write(
+        dir.join("wolf.pkg"),
+        "pkg {\n    name:    \"demo/app\",\n    version: \"0.1.0\",\n\n    deps: {\n        g: { git: \"https://example.org/g.git\", tag: \"v1.0.0\" },\n    },\n}\n",
+    )
+    .unwrap();
+    let mut o = opts(None);
+    o.offline = true;
+    let mut sm = wolf_span::SourceMap::new();
+    let project = resolve_project(&dir, &mut sm, &o);
+    assert!(project.has_errors());
+    insta::assert_snapshot!("e1509_offline_missing_dep", render(&project));
+}
+
+#[test]
+fn frontmatter_drift_under_locked_is_e1508() {
+    // s53 §4: `--locked` asserts the pin still answers the frontmatter.
+    // The span is the frontmatter block — the thing that moved.
+    let text = "#!/usr/bin/env -S wolf run\n//! pkg {\n//!     edition: \"1\",\n//! }\n\nfn main() -> !int { 0 }\n";
+    let mut sm = wolf_span::SourceMap::new();
+    let file = sm.intern(Path::new("drift.lu"));
+    let mut sources = Sources::new();
+    sources.add(file, "drift.lu".to_string(), text.as_bytes());
+    let fm = wolf_pkg::script::find(text).expect("frontmatter");
+    let d = wolf_pkg::script::drift_diagnostic(wolf_span::Span::new(file, fm.lo, fm.hi));
+    let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+    reporter.report(&d);
+    insta::assert_snapshot!("e1508_frontmatter_drift", reporter.take_output());
 }

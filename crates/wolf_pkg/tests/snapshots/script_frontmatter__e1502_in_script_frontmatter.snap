@@ -1,0 +1,14 @@
+---
+source: crates/wolf_pkg/tests/script_frontmatter.rs
+expression: rendered
+---
+error[E1502]: `teleport` is not a capability (net, fs, exec, env, ffi, unsafe, comptime)
+  --> count.lu:10:24
+   |
+10 | //!     capabilities: [teleport],
+   |                        ^^^^^^^^
+   |
+   = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
+     `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
+     `trusted`. Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
+     "owner/name", major: N, min: "X.Y.Z" }`.

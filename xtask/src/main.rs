@@ -62,11 +62,12 @@ fn main() -> ExitCode {
         Some("differ") => differ_cmd(&args[1..]),
         Some("print-gate") => print_gate(),
         Some("diag-catalog") => diag_catalog(args.iter().any(|a| a == "--check")),
+        Some("doc-catalog") => doc_catalog(args.iter().any(|a| a == "--check")),
         Some("fmt-lu") => fmt_lu(),
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
             );
             eprintln!(
                 "       cargo xtask bench --track=<runtime|compile|t1|irvolume> [--runs=N] [--out=FILE]"
@@ -115,6 +116,7 @@ fn ci() -> ExitCode {
         ("conformance", &["xtask", "conformance"]),
         ("print-gate", &["xtask", "print-gate"]),
         ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
+        ("doc-catalog", &["xtask", "doc-catalog", "--check"]),
         ("fmt-lu", &["xtask", "fmt-lu"]),
         ("fmt-fuzz", &["xtask", "fmt-fuzz", "--ci"]),
         ("audit-surface", &["xtask", "audit-surface"]),
@@ -1431,6 +1433,68 @@ fn spec_extract(check: bool) -> ExitCode {
     }
 }
 
+// ----------------------------------------------------------- doc-catalog --
+
+/// The documentation generator's own catalog gate — `diag-catalog`'s
+/// sibling (s53). `docs/api/` is the generated documentation of the s53
+/// doc fixture, and it is a REVIEWED artifact: the format of a published
+/// page, in the repository, diffable in a pull request. CI regenerates
+/// it into memory and compares byte-for-byte, so a change to the
+/// renderer that nobody reviewed cannot land.
+///
+/// `cargo xtask doc-catalog` rewrites it; `--check` verifies it.
+fn doc_catalog(check: bool) -> ExitCode {
+    let fixture = "crates/wolf_doc/fixtures/pkg";
+    let out = "docs/api";
+    if !Path::new(fixture).is_dir() {
+        eprintln!("doc-catalog: the doc fixture is missing at {fixture}");
+        return ExitCode::FAILURE;
+    }
+    let mut args = vec![
+        "run",
+        "-q",
+        "-p",
+        "wolf_driver",
+        "--",
+        "doc",
+        fixture,
+        "--out",
+        out,
+    ];
+    if check {
+        args.push("--check");
+    }
+    // The doc fixture's own coverage is deliberately incomplete (an
+    // undocumented item and a doctest-less one), so the burn-down list
+    // has something to print; `--require-docs` is therefore NOT passed
+    // here. The gate this step enforces is byte-stability of the output.
+    let status = Command::new("cargo").args(&args).status();
+    match status {
+        Ok(s) if s.success() => {
+            eprintln!(
+                "doc-catalog: docs/api is the generated documentation of {fixture}{}",
+                if check {
+                    " and is in sync"
+                } else {
+                    " (rewritten)"
+                }
+            );
+            ExitCode::SUCCESS
+        }
+        Ok(_) => {
+            eprintln!(
+                "doc-catalog: docs/api OUT OF SYNC — run `cargo xtask doc-catalog` and \
+                 review the diff (generated documentation is a reviewed artifact)"
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("doc-catalog: cannot run the driver: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 // ---------------------------------------------------------- diag-catalog --
 
 /// Generate docs/diagnostics.md from wolf_diag's registry and verify the
@@ -2607,6 +2671,15 @@ fn deps_check() -> ExitCode {
         (
             "wolf_lsp",
             Some(&["wolf_span", "wolf_diag", "wolf_query"][..]),
+        ),
+        // The documentation generator (s53): a CLIENT of the query
+        // contract, exactly like the LSP shim. It renders and never
+        // analyzes — it reaches sema only for the item-signature
+        // pretty-printer and the visibility enum, so a doc page cannot
+        // describe a type the compiler did not resolve.
+        (
+            "wolf_doc",
+            Some(&["wolf_span", "wolf_diag", "wolf_sema", "wolf_query"][..]),
         ),
         // The package manager (s51): formats + resolution only — it
         // lexes manifests with the compiler's own lexer (one grammar,

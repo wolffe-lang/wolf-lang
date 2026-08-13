@@ -75,6 +75,7 @@ grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
+grammar/shebang.lu: lowers
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)

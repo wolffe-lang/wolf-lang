@@ -277,6 +277,12 @@ pub enum TriviaKind {
     DocComment,
     /// `//! …` inner doc comment.
     InnerDocComment,
+    /// `#!…` on the FIRST line of a file only — the interpreter
+    /// directive of an executable script (s53). Trivia, not a comment:
+    /// it is not `//`-shaped, it carries no prose, and it is legal at
+    /// exactly one byte offset in a translation unit (`#!` anywhere
+    /// else is still the stray-byte error it always was).
+    Shebang,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

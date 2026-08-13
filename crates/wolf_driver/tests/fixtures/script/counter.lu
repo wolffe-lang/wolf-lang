@@ -1,0 +1,22 @@
+#!/usr/bin/env -S wolf run
+//! Twist a number, from a single file (s53).
+//!
+//! The `pkg { … }` literal below is this script's manifest — the same
+//! schema and the same parser as `wolf.pkg`, so the two can never
+//! drift. Everything around it is ordinary documentation.
+//!
+//! pkg {
+//!     edition: "1",
+//!     wolf:    "0.9",
+//!     deps: {
+//!         util: { path: "./util" },
+//!     },
+//! }
+
+use util
+
+fn main() -> !int {
+    let t = util.twist(20)
+    print("twist(20) = {t}")
+    0
+}

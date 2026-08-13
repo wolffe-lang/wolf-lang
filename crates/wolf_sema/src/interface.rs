@@ -671,6 +671,16 @@ impl SigCtx<'_> {
     }
 }
 
+/// The elaborated signature of one module item — the SAME renderer the
+/// `wolfi` interface and its hashes are built from, exposed so that
+/// documentation quotes the compiler's own answer rather than
+/// re-parsing source (s53: docs cannot lie about types). Private items
+/// render too, which interfaces deliberately do not carry: `wolf doc
+/// --private` documents them, and nothing about that reaches a hash.
+pub fn item_signature(pkg: &Package, module: usize, item: &crate::graph::Item) -> String {
+    render_item_sig(pkg, module, item)
+}
+
 /// Render the elaborated signature of a module item.
 fn render_item_sig(pkg: &Package, module: usize, item: &crate::graph::Item) -> String {
     let file = item.file;

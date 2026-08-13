@@ -399,3 +399,15 @@ the two names alias while the license to assume otherwise still
 stands, which is undefined behavior waiting for an optimizer. State
 the assumption after the last assignment of its operands, or bind the
 asserted pointers to names that never change.
+
+## W1501 — this doc comment links to a name that does not resolve
+
+A bracketed dotted path in a doc comment — `[List.push]`, `[connect]` —
+is an intra-doc link, and it resolves through the compiler's own name
+resolution rather than through string matching. That is the whole point:
+when the item it names is renamed or removed, the link breaks HERE,
+loudly, instead of silently becoming a dead reference on a published
+page. Write the path the code writes, or, if the brackets were meant as
+ordinary prose, drop them. Cross-package `std.` paths are not checked
+against this package's names and never warn. Documentation carries the
+same covenant as tests: it is verified, or it is not trusted.

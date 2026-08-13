@@ -274,6 +274,21 @@ impl Snapshot {
         })
     }
 
+    /// The documentation surface of the package around `entry` — the
+    /// same model `wolf doc` renders and hover reads (s53). `Ok(None)`
+    /// when the entry never reached resolution.
+    pub fn docs(
+        &self,
+        entry: &Path,
+        private: bool,
+    ) -> Result<Option<crate::docs::DocPackage>, Cancelled> {
+        self.guard(|| {
+            let a = self.analysis(entry)?;
+            let res = a.resolution.as_ref()?;
+            Some(crate::docs::doc_package(res, private))
+        })
+    }
+
     /// Whole-document formatting via the one formatter (`wolf_fmt`).
     /// `Ok(None)` when the file is unreadable or the formatter fell
     /// back (self-check failure — never corrupt, so never edit).
@@ -448,21 +463,6 @@ fn decl_at(root: &GreenNode, offset: u32) -> Option<(usize, Option<usize>)> {
     Some((decl, None))
 }
 
-/// Depth-first first token of a node (where its doc trivia lives).
-fn first_token(node: &GreenNode) -> Option<&GreenToken> {
-    for child in &node.children {
-        match child {
-            Child::Token(t) => return Some(t),
-            Child::Node(n) => {
-                if let Some(t) = first_token(n) {
-                    return Some(t);
-                }
-            }
-        }
-    }
-    None
-}
-
 /// Depth-first identifier token containing `offset`.
 fn ident_at(node: &GreenNode, offset: u32) -> Option<&GreenToken> {
     for child in &node.children {
@@ -485,27 +485,6 @@ fn ident_at(node: &GreenNode, offset: u32) -> Option<&GreenToken> {
     None
 }
 
-/// `///` doc lines from a token's leading trivia, stripped and joined.
-fn doc_text(token: &GreenToken, src: &[u8]) -> Option<String> {
-    let mut lines: Vec<String> = Vec::new();
-    for span in &token.leading {
-        let text = String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]);
-        for line in text.lines() {
-            let t = line.trim_start();
-            if let Some(rest) = t.strip_prefix("///") {
-                lines.push(rest.strip_prefix(' ').unwrap_or(rest).to_string());
-            } else if !t.is_empty() {
-                lines.clear(); // a non-doc comment breaks the run
-            }
-        }
-    }
-    if lines.is_empty() {
-        None
-    } else {
-        Some(lines.join("\n"))
-    }
-}
-
 /// Hover on a top-level item's *name token*: header text + doc comment.
 fn item_header_at(root: &GreenNode, src: &[u8], offset: u32) -> Option<HoverResult> {
     let item = root
@@ -516,7 +495,10 @@ fn item_header_at(root: &GreenNode, src: &[u8], offset: u32) -> Option<HoverResu
     if !(name_tok.span.lo <= offset && offset < name_tok.span.hi) {
         return None;
     }
-    let doc = first_token(item).and_then(|t| doc_text(t, src));
+    // ONE doc-comment model (s53): hover reads what `wolf doc` reads.
+    let doc = crate::docs::first_token(item)
+        .and_then(|t| crate::docs::outer_doc(t, src))
+        .map(|d| d.text);
     let name_text = String::from_utf8_lossy(name_tok.text(src));
     Some(HoverResult {
         text: format!("{keyword} {name_text}"),

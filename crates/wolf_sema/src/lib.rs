@@ -232,7 +232,7 @@ pub use graph::{
     AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, MemoryLoader, ModuleData,
     ModuleLoader, Package, RawFile, SourceUnit, Vis, load_package,
 };
-pub use interface::{Interface, build_interfaces, decode, encode, pretty};
+pub use interface::{Interface, build_interfaces, decode, encode, item_signature, pretty};
 pub use lints::{AllowScan, scan_allows};
 pub use resolve::{Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_package_with};
 pub use sig::{BoundRef, GenericSig, ItemSig, SigTables, build_sigs};

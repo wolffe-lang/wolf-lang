@@ -30,6 +30,12 @@ and slicing are byte offsets (D25).
 directives live here). `/// …` outer doc comment (documents the next item).
 No block comments (nesting arguments lose to simplicity + lexer speed).
 
+**Shebang** `[gram.lex.shebang]`: a line beginning `#!` at byte offset 0 —
+and at no other offset — is trivia, consumed to the end of the line. It
+carries no meaning to the language; it exists so an executable script is
+an ordinary translation unit. Elsewhere `#` opens an attribute or is a
+stray byte.
+
 ### 1.3 Identifiers `[gram.lex.ident]`
 
 ```ebnf

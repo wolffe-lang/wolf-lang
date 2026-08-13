@@ -109,10 +109,35 @@ pub struct ResolveOpts {
     /// Content-store override (tests, hermetic tooling); `None` uses
     /// [`source::store_dir`] (WOLF_STORE / the user cache).
     pub store: Option<PathBuf>,
+    /// The posture was asked for EXPLICITLY (`--offline`, s53): a
+    /// dependency the store does not hold fails closed with E1509,
+    /// naming the package and the command that would fetch it, rather
+    /// than the generic resolution error. A build's own no-fetch stance
+    /// is `fetch_unpinned: false` and keeps E1505.
+    pub offline: bool,
 }
 
 fn e1505(span: Span, msg: impl Into<String>) -> Diagnostic {
     Diagnostic::error(codes::E1505, span, msg)
+}
+
+/// The `--offline` refusal (s53 §5): one actionable error naming the
+/// package, the version, and the command that would fetch it. Fetching
+/// happens only at resolution time and never during a build (D33), and
+/// a package that was never verified cannot be used unverified — so the
+/// failure is closed, not degraded.
+pub fn offline_diagnostic(span: Span, alias: &str, url: &str, tag: &str) -> Diagnostic {
+    Diagnostic::error(
+        codes::E1509,
+        span,
+        format!("`{alias}` ({url} at {tag}) is not in the content store, and this run is offline"),
+    )
+    .with_label("no cached copy, and fetching is off")
+    .with_note(format!(
+        "run `wolf add {alias} --git {url} --tag {tag}` (or `wolf update`) once with the \
+         network to fetch and record it; every later run of every project and script \
+         that names it is then fully offline."
+    ))
 }
 
 /// Resolve the project rooted at `root_dir` (which must hold an s51
@@ -125,6 +150,32 @@ pub fn resolve_project(root_dir: &Path, sm: &mut SourceMap, opts: &ResolveOpts) 
     else {
         return project;
     };
+    let _ = root_file;
+    resolve_with_root(root_dir, root_manifest, sm, opts, project)
+}
+
+/// Resolve a dependency graph whose ROOT manifest is already parsed and
+/// does not come from a `wolf.pkg` on disk — script mode (s53), where
+/// the manifest rides in the script's `//!` block and `path:` deps
+/// resolve relative to the script's own directory. Identical machinery
+/// from the first dependency edge onward: one resolver, one store, one
+/// ledger format, whether the manifest was a file or a doc comment.
+pub fn resolve_manifest(
+    root_dir: &Path,
+    root_manifest: Manifest,
+    sm: &mut SourceMap,
+    opts: &ResolveOpts,
+) -> Project {
+    resolve_with_root(root_dir, root_manifest, sm, opts, Project::default())
+}
+
+fn resolve_with_root(
+    root_dir: &Path,
+    root_manifest: Manifest,
+    sm: &mut SourceMap,
+    opts: &ResolveOpts,
+    mut project: Project,
+) -> Project {
     let root_span = root_manifest.span;
     project.pkgs.push(ResolvedPkg {
         alias: String::new(),
@@ -137,7 +188,6 @@ pub fn resolve_project(root_dir: &Path, sm: &mut SourceMap, opts: &ResolveOpts) 
         hash: None,
         is_std: false,
     });
-    let _ = root_file;
 
     // BFS over dependency declarations. Each work item: (consumer
     // package index, its manifest) — path deps resolve relative to the
@@ -219,14 +269,18 @@ fn resolve_dep(
                 .and_then(|l| l.entries.get(&dep.alias))
                 .and_then(|e| e.hash.clone());
             if pinned.is_none() && !opts.fetch_unpinned {
-                project.diagnostics.push(e1505(
-                    dep.span,
-                    format!(
-                        "git dependency `{}` has no wolf.sum pin — run `wolf add`/`wolf update` \
-                         to fetch and record it before building",
-                        dep.alias
-                    ),
-                ));
+                project.diagnostics.push(if opts.offline {
+                    offline_diagnostic(dep.span, &dep.alias, url, tag)
+                } else {
+                    e1505(
+                        dep.span,
+                        format!(
+                            "git dependency `{}` has no wolf.sum pin — run `wolf add`/`wolf update` \
+                             to fetch and record it before building",
+                            dep.alias
+                        ),
+                    )
+                });
                 return None;
             }
             let store = match opts.store.clone().map(Ok).unwrap_or_else(source::store_dir) {

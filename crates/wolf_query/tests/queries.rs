@@ -221,8 +221,49 @@ fn format_is_idempotent() {
     assert_eq!(twice.text, once.text, "canonical text is a fixed point");
 }
 
-/// The contract version is the s57 handshake surface.
+/// The contract version is the s57 handshake surface. It moved to 2
+/// when the doc-comment model joined the surface (s53): `wolf doc` and
+/// hover read doc comments through one module, so the daemon that
+/// implements this contract implements that too.
 #[test]
-fn contract_version_is_one() {
-    assert_eq!(wolf_query::CONTRACT_VERSION, 1);
+fn contract_version_is_two() {
+    assert_eq!(wolf_query::CONTRACT_VERSION, 2);
+}
+
+/// The one doc-comment model, from the query side: the same `///` block
+/// hover renders is the block `wolf doc` publishes, fences and all.
+#[test]
+fn docs_query_is_the_model_hover_reads() {
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("docs_query");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let path = dir.join("m.lu");
+    std::fs::write(
+        &path,
+        "/// Counts. The body is longer than the summary.\n///\n/// ```wolf\n/// count() == 0\n/// ```\npub fn count() -> int { 0 }\n",
+    )
+    .expect("write");
+    let host = QueryHost::new();
+    let snapshot = host.snapshot();
+    let docs = snapshot
+        .docs(&path, false)
+        .expect("not cancelled")
+        .expect("resolves");
+    let item = &docs.modules[0].items[0];
+    assert_eq!(item.name, "count");
+    assert_eq!(item.sig, "fn count() -> int");
+    let doc = item.doc.as_ref().expect("documented");
+    assert_eq!(doc.summary, "Counts.");
+    assert_eq!(doc.fences.len(), 1);
+    assert!(doc.fences[0].is_doctest());
+    // Hover reads the same text, through the same extractor.
+    let offset = std::fs::read_to_string(&path)
+        .expect("read")
+        .find("count() -> int")
+        .expect("the name token") as u32;
+    let hover = snapshot
+        .type_at(&path, offset)
+        .expect("not cancelled")
+        .expect("hovers");
+    assert_eq!(hover.doc.as_deref(), Some(doc.text.as_str()));
 }
