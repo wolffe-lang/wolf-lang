@@ -16,7 +16,7 @@
 use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, BlockCall, FuncId, Function, Inst, Module, Value, ValueDef};
-use crate::ops::Opcode;
+use crate::ops::{ForeignRole, Opcode};
 use crate::print::{Canon, canonicalize, print_function, render_fact, render_inst, successors};
 use crate::types::TypeData;
 use std::collections::HashMap;
@@ -867,6 +867,21 @@ impl<'a> Verifier<'a> {
                     return Err(self.type_err(
                         inst,
                         "region.foreign's only result is the foreign region's mem token",
+                    ));
+                }
+                // The role immediate is a CLOSED set (s80): it is the
+                // only thing that decides whether two foreign roots may
+                // alias, so an unknown one has no answer to give.
+                let Aux::Int(code) = self.f.insts[inst].aux else {
+                    return Err(self.type_err(
+                        inst,
+                        "region.foreign carries a role immediate (0 = header, 1 = buffer)",
+                    ));
+                };
+                if ForeignRole::from_code(code).is_none() {
+                    return Err(self.type_err(
+                        inst,
+                        "region.foreign's role must be 0 (header) or 1 (buffer)",
                     ));
                 }
             }

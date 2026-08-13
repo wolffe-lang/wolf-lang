@@ -18,7 +18,7 @@
 use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactData, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, Function, Mode, Module, Param, SigId, Value};
-use crate::ops::{FloatCc, IntCc, Opcode, TrapKind};
+use crate::ops::{FloatCc, ForeignRole, IntCc, Opcode, TrapKind};
 use crate::types::{self, RegionId, TypeData, TypeId};
 use std::collections::HashMap;
 
@@ -1330,6 +1330,33 @@ fn parse_inst(
                 return line.fail(format!("aggregate has no field {k}"));
             };
             vec![fty]
+        }
+        // `%m: mem.rN = region.foreign ROLE` (s80): no operands, one
+        // closed-set immediate. The role is REQUIRED — a foreign root
+        // without one would be a region whose disjointness nothing can
+        // decide.
+        Opcode::RegionForeign => {
+            let lex = line.num()?;
+            let code = parse_i64(line, &lex)?;
+            if ForeignRole::from_code(code).is_none() {
+                return line.fail(format!(
+                    "`region.foreign` role must be 0 (header) or 1 (buffer), found {code}"
+                ));
+            }
+            aux = Aux::Int(code);
+            let mut tys = Vec::with_capacity(result_annots.len());
+            for annot in &result_annots {
+                match annot {
+                    Some(t) => tys.push(*t),
+                    None => {
+                        return line.fail(
+                            "`region.foreign` results need explicit types, e.g. \
+                             `%m: mem.r0 = region.foreign 0`",
+                        );
+                    }
+                }
+            }
+            tys
         }
         Opcode::DataAddr => {
             let name = match line.peek() {

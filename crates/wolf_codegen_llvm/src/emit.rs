@@ -6,11 +6,14 @@
 //! sprint — the fact encoding:
 //!
 //! - **Region identity → scoped-noalias domains**: one metadata domain
-//!   per function, one `!alias.scope` node per region; every WIR
-//!   load/store carries its own region's scope and every OTHER
-//!   region's scope in `!noalias`. Region disjointness is a c04
-//!   theorem (D3): interprocedural-strength aliasing C and Rust cannot
-//!   express.
+//!   per function, one `!alias.scope` node per region CLASS; every WIR
+//!   load/store carries its own class's scope and every OTHER class's
+//!   scope in `!noalias`. Region disjointness is a c04 theorem (D3):
+//!   interprocedural-strength aliasing C and Rust cannot express. The
+//!   class, not the region id, is the unit — every `region.foreign`
+//!   region of one role shares a scope, because a foreign root is
+//!   per-function over storage it does not own and two of them can name
+//!   the same bytes (s80; the region-keyed version miscompiled).
 //! - **`mut`/`read` params → `noalias`/`readonly` + `noundef`**
 //!   argument attributes; `deref` facts add `dereferenceable(n)` at
 //!   the definition site.
@@ -71,9 +74,27 @@
 //!   `region.foreign` roots are minted per function over storage the
 //!   RUNTIME owns, so a callee can touch a caller's foreign region
 //!   without receiving its token, and "no token ⇒ no effect" is not a
-//!   theorem across the call boundary. (The mid-end's own token
-//!   reasoning rests on the same claim — recorded as a hazard, not
-//!   spent here.)
+//!   theorem across the call boundary. **s80 audited this and the
+//!   hazard is real, so the decline STANDS** — but it is now enforced
+//!   rather than merely feared: `memopt` drops every foreign-region
+//!   availability entry at a call and `licm` refuses to hoist a
+//!   foreign-token load out of a loop that contains one, so no pass
+//!   makes the claim this fact would have handed to LLVM. Emitting it
+//!   would need the tokens PROPAGATED THROUGH SIGNATURES, which is a
+//!   lowering-wide change s80 costed and did not take (see
+//!   `docs/backlog.md`). The claim is sound for local regions and
+//!   false only for foreign ones; a per-region call-site list that
+//!   omitted the foreign roots would be emittable — it is left unspent
+//!   because the mid-end already cashes the motion (the s78 sentinel
+//!   reading) and an unenforced asymmetry in this file is how the
+//!   miscompile below happened.
+//!
+//! What s80 found while auditing that decline was NOT a declined fact
+//! but an ASSERTED one that was false: one `!alias.scope` per region
+//! id. See [`FnCx::build_scopes`] — after inlining, two foreign roots
+//! over the same buffers were told they could not alias, and LLVM
+//! forwarded a stale load across a store on the strength of it. Scopes
+//! are keyed by region CLASS now.
 //!
 //! Every fact channel is disabled by [`EmitOptions::strip_facts`] —
 //! the metadata-stripped control lane of the s41 differential fuzz rig
@@ -96,8 +117,18 @@ use wolf_wir::ir::{
     Aux, Block as WBlock, Function as WFunction, Mode, Module as WModule, SigId, Value as WValue,
     ValueDef,
 };
-use wolf_wir::ops::{FloatCc, IntCc, Opcode, TrapKind};
+use wolf_wir::ops::{FloatCc, ForeignRole, IntCc, Opcode, TrapKind};
 use wolf_wir::types::{TypeData, TypeId};
+
+/// What one `!alias.scope` node stands for (s80). Regions are NOT the
+/// unit: every foreign region of one [`ForeignRole`] names the same
+/// class of runtime-owned storage and shares a scope, while every local
+/// region keeps its own. See [`FnCx::build_scopes`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+enum ScopeClass {
+    Local(u32),
+    Foreign(ForeignRole),
+}
 
 /// How the emitter treats the proven-fact channels.
 #[derive(Clone, Copy, Debug, Default)]
@@ -553,14 +584,38 @@ impl<'a> Fx<'a> {
     }
 
     /// One scoped-noalias domain per function, one scope per region
-    /// that this function's memory ops touch. Naming is deterministic
-    /// (`fname.rN`) and survives clustering because the domain node is
-    /// `distinct` — merges rename nothing (report 10: the class of
-    /// historical bugs is scope CLONING, which the fuzz rig watches).
+    /// CLASS that this function's memory ops touch. Naming is
+    /// deterministic (`fname.rN`, `fname.foreign.ROLE`) and survives
+    /// clustering because the domain node is `distinct` — merges rename
+    /// nothing (report 10: the class of historical bugs is scope
+    /// CLONING, which the fuzz rig watches).
+    ///
+    /// # Why CLASS and not region (s80, wolf-lang#83)
+    ///
+    /// One scope per region id was a miscompile. A `region.foreign`
+    /// root is minted per FUNCTION over storage the runtime owns, so
+    /// inlining a container-touching callee leaves the caller holding
+    /// two roots — its own and the callee's, freshened by the inliner
+    /// — over the SAME element buffers. Under one-scope-per-region that
+    /// pair became a `!noalias` claim, and LLVM cashed it: a store
+    /// through the caller's root was declared not to alias a load
+    /// through the inlined root, so the load forwarded a stale value
+    /// across it (the s80 witness, `fuzzgen::shape_foreign_inline_unify`).
+    ///
+    /// The class is therefore: a local region (`region.new`,
+    /// `stack.alloc`, a token parameter) is its own class — a bump
+    /// arena's allocations really are disjoint from another's; every
+    /// foreign region with the SAME [`ForeignRole`] shares ONE class,
+    /// because they name one class of runtime storage and nothing
+    /// separates them. The header/buffer separation survives intact
+    /// (D46: the runtime always allocates them apart), which is the
+    /// whole disjointness s75 was after.
     fn build_scopes(&mut self) {
         if self.cx.opts.strip_facts {
             return;
         }
+        // Region id -> role, for every foreign root in this function.
+        let mut foreign: BTreeMap<u32, ForeignRole> = BTreeMap::new();
         let mut regions: BTreeSet<u32> = BTreeSet::new();
         for &b in &self.f.layout {
             if !self.reachable.contains(&b) {
@@ -568,6 +623,14 @@ impl<'a> Fx<'a> {
             }
             for &i in &self.f.blocks[b].insts {
                 let data = self.f.insts[i];
+                if data.op == Opcode::RegionForeign
+                    && let Some(&tok) = self.f.vpool.get(data.results).first()
+                    && let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(tok))
+                    && let Aux::Int(code) = data.aux
+                    && let Some(role) = ForeignRole::from_code(code)
+                {
+                    foreign.insert(r.index() as u32, role);
+                }
                 let tok = match data.op {
                     Opcode::Load => self.f.vpool.get(data.args).get(1).copied(),
                     Opcode::Store => self.f.vpool.get(data.args).get(2).copied(),
@@ -589,20 +652,39 @@ impl<'a> Fx<'a> {
         let domain = self
             .cx
             .meta_node(format!("distinct !{{!\"wolf.region.domain.{fname}\"}}"));
+        // One scope per CLASS, in deterministic class order.
+        let class_of = |r: u32| -> ScopeClass {
+            match foreign.get(&r) {
+                Some(&role) => ScopeClass::Foreign(role),
+                None => ScopeClass::Local(r),
+            }
+        };
+        let mut class_scope: BTreeMap<ScopeClass, usize> = BTreeMap::new();
         for &r in &regions {
+            let c = class_of(r);
+            if class_scope.contains_key(&c) {
+                continue;
+            }
             // LangRef: a scope's first operand is self-referential or a
             // string — the deterministic name IS the first operand.
+            let name = match c {
+                ScopeClass::Local(r) => format!("{fname}.r{r}"),
+                ScopeClass::Foreign(role) => format!("{fname}.foreign.{}", role.name()),
+            };
             let id = self
                 .cx
-                .meta_node(format!("distinct !{{!\"{fname}.r{r}\", !{domain}}}"));
-            self.region_scope.insert(r, id);
+                .meta_node(format!("distinct !{{!\"{name}\", !{domain}}}"));
+            class_scope.insert(c, id);
         }
-        let all: Vec<(u32, usize)> = self.region_scope.iter().map(|(&r, &s)| (r, s)).collect();
-        for &(r, s) in &all {
+        for &r in &regions {
+            self.region_scope.insert(r, class_scope[&class_of(r)]);
+        }
+        let all: Vec<(ScopeClass, usize)> = class_scope.iter().map(|(&c, &s)| (c, s)).collect();
+        for &(c, s) in &all {
             let own = self.cx.meta_node(format!("!{{!{s}}}"));
             let others: Vec<String> = all
                 .iter()
-                .filter(|&&(o, _)| o != r)
+                .filter(|&&(o, _)| o != c)
                 .map(|&(_, os)| format!("!{os}"))
                 .collect();
             let noalias = if others.is_empty() {
@@ -610,7 +692,11 @@ impl<'a> Fx<'a> {
             } else {
                 Some(self.cx.meta_node(format!("!{{{}}}", others.join(", "))))
             };
-            self.scope_lists.insert(r, (own, noalias));
+            for &r in &regions {
+                if class_of(r) == c {
+                    self.scope_lists.insert(r, (own, noalias));
+                }
+            }
         }
     }
 

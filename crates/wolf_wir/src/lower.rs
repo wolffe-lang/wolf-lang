@@ -60,7 +60,7 @@ use crate::build::{FuncBuilder, InsOut, Stats, Var};
 use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactData, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, ExtFunc, Mode, Module, Param, SigId};
-use crate::ops::{FloatCc, IntCc, Opcode, TrapKind};
+use crate::ops::{FloatCc, ForeignRole, IntCc, Opcode, TrapKind};
 use crate::types::{self, RegionId, TypeId};
 
 type R<T> = Result<T, NotYet>;
@@ -6197,8 +6197,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         match self.foreign {
             Some(rs) => rs,
             None => {
-                let hdrs = self.b.ins_region_foreign();
-                let bufs = self.b.ins_region_foreign();
+                let hdrs = self.b.ins_region_foreign(ForeignRole::Header);
+                let bufs = self.b.ins_region_foreign(ForeignRole::Buffer);
                 self.foreign = Some((hdrs, bufs));
                 (hdrs, bufs)
             }

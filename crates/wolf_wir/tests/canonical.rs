@@ -67,12 +67,13 @@ fn build(order_flipped: bool) -> (Module, String) {
 /// s75: `region.foreign` is a token root like `region.new`, with no
 /// handle and no free — the frame never owns runtime-owned container
 /// storage, so it can never free it. It round-trips, it verifies, and
-/// loads through its chain are ordinary loads.
+/// loads through its chain are ordinary loads. s80 gave it a ROLE
+/// immediate, which round-trips with it.
 #[test]
 fn region_foreign_roots_a_chain_and_round_trips() {
     let src = "fn @read(ptr) -> i64 {\n\
                b0(%0: ptr):\n\
-               \x20\x20%1: mem.r0 = region.foreign\n\
+               \x20\x20%1: mem.r0 = region.foreign 1\n\
                \x20\x20%2 = iconst.i64 8\n\
                \x20\x20%3 = ptr.off %0, %2, 1\n\
                \x20\x20%4 = load.i64 %3, %1\n\
@@ -83,14 +84,51 @@ fn region_foreign_roots_a_chain_and_round_trips() {
     assert_eq!(wolf_wir::print_module(&m), src, "byte-identical round trip");
 }
 
+/// s80: the role is a CLOSED set — it is the only thing that decides
+/// whether two foreign roots may alias, so an unknown one has no answer
+/// to give and the parser refuses it.
+#[test]
+fn region_foreign_rejects_a_role_outside_the_closed_set() {
+    let src = "fn @bad() -> i64 {\n\
+               b0:\n\
+               \x20\x20%0: mem.r0 = region.foreign 7\n\
+               \x20\x20%1 = iconst.i64 0\n\
+               \x20\x20ret %1\n\
+               }\n";
+    let err = wolf_wir::parse_module(src).expect_err("role 7 is not a role");
+    assert!(
+        format!("{err}").contains("role must be 0 (header) or 1 (buffer)"),
+        "unexpected error: {err}"
+    );
+}
+
+/// s80: two roots with the same role in one function are LEGAL — that
+/// is exactly what inlining a container-touching callee produces, and
+/// pretending otherwise is what the miscompile rested on. They must
+/// verify; what they must not do is claim disjointness, which is the
+/// emitter's and the mid-end's business (`ForeignRole`).
+#[test]
+fn two_foreign_roots_of_one_role_are_legal_in_one_function() {
+    let src = "fn @inlined() -> i64 {\n\
+               b0:\n\
+               \x20\x20%0: mem.r0 = region.foreign 1\n\
+               \x20\x20%1: mem.r1 = region.foreign 1\n\
+               \x20\x20%2 = iconst.i64 0\n\
+               \x20\x20ret %2\n\
+               }\n";
+    let m = wolf_wir::parse_module(src).expect("module parses");
+    verify_module(&m).expect("same-role roots for DIFFERENT regions verify");
+    assert_eq!(wolf_wir::print_module(&m), src, "byte-identical round trip");
+}
+
 /// Two roots for ONE region is still a rejection — `region.foreign`
 /// joins the root set, it does not weaken it.
 #[test]
 fn region_foreign_cannot_double_root_a_region() {
     let src = "fn @twice() -> i64 {\n\
                b0:\n\
-               \x20\x20%0: mem.r0 = region.foreign\n\
-               \x20\x20%1: mem.r0 = region.foreign\n\
+               \x20\x20%0: mem.r0 = region.foreign 0\n\
+               \x20\x20%1: mem.r0 = region.foreign 0\n\
                \x20\x20%2 = iconst.i64 0\n\
                \x20\x20ret %2\n\
                }\n";

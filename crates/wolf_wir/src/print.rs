@@ -256,7 +256,9 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
     }
     // Operands.
     match data.aux {
-        Aux::Int(n) if data.op == Opcode::Iconst => {
+        // `iconst N`, and `region.foreign ROLE` (s80): a bare immediate
+        // with no operands to render beside it.
+        Aux::Int(n) if matches!(data.op, Opcode::Iconst | Opcode::RegionForeign) => {
             write!(s, " {n}").unwrap();
         }
         Aux::FloatBits(bits) => {

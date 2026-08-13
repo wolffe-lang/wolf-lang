@@ -29,6 +29,19 @@
 //!    pointer is READ OUT OF another region's memory — the container
 //!    shape, where a wrong scope is a wrong answer about the very
 //!    pointer #82 is about.
+//! 6. **Duplicated foreign roots** (s80, wolf-lang#83): two
+//!    `region.foreign` roots of one role over one piece of storage —
+//!    what inlining a container-touching callee produces. This one is
+//!    not a historical LLVM bug but OUR OWN, found by s80 and fixed in
+//!    the same commit: it miscompiled.
+//! 7. **Foreign storage across a non-inlining call** (s80): an opaque
+//!    callee writes the caller's foreign memory holding none of its
+//!    tokens. Deliberately too large to inline — the shapes that hid
+//!    this hazard hid it by inlining first.
+//!
+//! Shapes 6 and 7 are mid-end findings, so the rig runs them through
+//! [`wolf_wir::midend`] as well as straight to the emitter: a lane that
+//! never optimizes cannot witness an optimizer bug.
 //!
 //! [`random_program`] extends the corpus with seeded multi-region
 //! load/store/checked-arith loops (deterministic xorshift; same seed,
@@ -36,7 +49,7 @@
 
 use wolf_wir::entity::EntityRef;
 use wolf_wir::ir::{Aux, Block, Function, Module, Param, Value};
-use wolf_wir::ops::{IntCc, Opcode};
+use wolf_wir::ops::{ForeignRole, IntCc, Opcode};
 use wolf_wir::types::{self, RegionId, TypeId};
 
 /// A tiny raw-arena builder (the s25 Braun builder is for lowering;
@@ -123,6 +136,13 @@ impl Fb {
     /// `ptr.off p, i, scale`.
     fn ptr_off(&mut self, p: Value, i: Value, scale: u64) -> Value {
         self.ins(Opcode::PtrOff, &[p, i], &[types::PTR], Aux::Scale(scale))[0]
+    }
+
+    /// `%m: mem.rN = region.foreign ROLE` — a root over runtime-owned
+    /// storage (s75), carrying its role (s80).
+    fn region_foreign(&mut self, m: &mut Module, r: u32, role: ForeignRole) -> Value {
+        let tok = m.types.mem(RegionId::new(r));
+        self.ins(Opcode::RegionForeign, &[], &[tok], Aux::Int(role.code()))[0]
     }
 
     fn freeze(&mut self, m: &mut Module, r: u32, h: Value, tok: Value) -> Value {
@@ -500,7 +520,231 @@ pub fn shape_loaded_pointer_scopes() -> Module {
     m
 }
 
-/// The five permanent regression shapes, named.
+/// Shape 6 — TWO foreign roots of one role over ONE piece of storage
+/// (s80, wolf-lang#83). This is the state the inliner produces the
+/// moment a container-touching callee is spliced in: the caller has its
+/// own `region.foreign` root and the callee's freshened one, and both
+/// name the runtime's element buffers.
+///
+/// It was a MISCOMPILE, not a hazard. One `!alias.scope` per region id
+/// declared the two roots `!noalias`, and LLVM cashed it — the load
+/// through root B forwarded across the store through root A, printing a
+/// stale value. The mid-end had the same hole one level down: `memopt`
+/// keys availability on the token version, and a store on A's chain
+/// versions nothing on B's.
+///
+/// The third root here is a HEADER-role root, and it is load-bearing in
+/// the other direction: the fix must NOT collapse every foreign region
+/// into one scope, because header/buffer separation is a theorem (D46)
+/// and s75's whole win rests on it. This shape passes only if same-role
+/// roots alias and different-role roots do not.
+///
+/// Storage comes from a `region.new` arena and is then touched ONLY
+/// through foreign tokens, so the program makes no claim it cannot back
+/// — the arena's own scope never appears on an access.
+pub fn shape_foreign_dup_roots() -> Module {
+    let mut m = Module::new();
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+    let mut f = Fb::new("main", main_sig, &[]);
+    // r0 headers, r1 + r2 buffers: r1 is "the caller's" root, r2 is the
+    // one an inline would have minted. Same bytes, both of them.
+    let fh = f.region_foreign(&mut m, 0, ForeignRole::Header);
+    let fb_a = f.region_foreign(&mut m, 1, ForeignRole::Buffer);
+    let fb_b = f.region_foreign(&mut m, 2, ForeignRole::Buffer);
+    let size = f.iconst(8);
+    let (h, t) = f.region_new(&mut m, 3);
+    let (hdr, t) = f.alloc(&mut m, 3, h, size, t);
+    let (buf, _t) = f.alloc(&mut m, 3, h, size, t);
+    let three = f.iconst(3);
+    let five = f.iconst(5);
+    let nine = f.iconst(9);
+    let fh1 = f.store(&mut m, 0, three, hdr, fh);
+    let fb_a1 = f.store(&mut m, 1, five, buf, fb_a);
+    // Through the OTHER buffer root: must see 5.
+    let x = f.load(buf, fb_b);
+    let _fb_a2 = f.store(&mut m, 1, nine, buf, fb_a1);
+    // Same address, same token as `x` — and yet it must RELOAD, because
+    // the store in between wrote this very memory through a root whose
+    // chain this token is not on.
+    let y = f.load(buf, fb_b);
+    // The header read is the control: nothing wrote it, and the
+    // header/buffer disjointness is still claimed.
+    let hv = f.load(hdr, fh1);
+    let s1 = f.add_wrap(x, y);
+    let s2 = f.add_wrap(s1, hv);
+    finish_main(&mut f, s2); // 5 + 9 + 3 = 17
+    m.add_func(f.f);
+    m
+}
+
+/// Shape 6b — [`shape_foreign_dup_roots`] with the two accesses reached
+/// through addresses LLVM cannot prove equal (s80). This is the half
+/// that indicts the METADATA: with one SSA address, basic AA answers
+/// MustAlias and never consults `!alias.scope` at all, which is exactly
+/// why the original source witness had to index by two opaque-but-equal
+/// values before the miscompile showed itself.
+///
+/// `__wolf_rt_test_opaque` is the identity, in the RT stub's own
+/// translation unit. Both indices are 0, so both addresses are element
+/// 0 of the same buffer; nothing in the IR says so.
+pub fn shape_foreign_dup_roots_opaque_index() -> Module {
+    let mut m = Module::new();
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+    let opaque_sig = m.make_sig(vec![Param::val(types::I64)], vec![types::I64]);
+    let mut f = Fb::new("main", main_sig, &[]);
+    let fb_a = f.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    let fb_b = f.region_foreign(&mut m, 1, ForeignRole::Buffer);
+    let size = f.iconst(32);
+    let (h, t) = f.region_new(&mut m, 2);
+    let (buf, _t) = f.alloc(&mut m, 2, h, size, t);
+    let zero = f.iconst(0);
+    let opaque = f.f.import_func("__wolf_rt_test_opaque", opaque_sig);
+    let i = f.ins(Opcode::Call, &[zero], &[types::I64], Aux::Callee(opaque))[0];
+    let j = f.ins(Opcode::Call, &[zero], &[types::I64], Aux::Callee(opaque))[0];
+    let pa = f.ptr_off(buf, i, 8);
+    let pb = f.ptr_off(buf, j, 8);
+    let five = f.iconst(5);
+    let nine = f.iconst(9);
+    let fa1 = f.store(&mut m, 0, five, pa, fb_a);
+    let x = f.load(pb, fb_b); // 5
+    let _fa2 = f.store(&mut m, 0, nine, pa, fa1);
+    let y = f.load(pb, fb_b); // 9 — the load the false !noalias killed
+    let s = f.add_wrap(x, y);
+    finish_main(&mut f, s); // 14
+    m.add_func(f.f);
+    m
+}
+
+/// Shape 7 — a NON-INLINING callee that writes the caller's foreign
+/// storage while holding none of the caller's tokens (s80,
+/// wolf-lang#83). This is `@stencil` in the kernel suite, stripped to
+/// its bones and made large enough that the inliner declines it: the
+/// shapes that hid this hazard hid it by inlining first, so the witness
+/// exists precisely to stop them.
+///
+/// The callee mints its OWN buffer-role root and stores through it. The
+/// caller's foreign token is not an argument, is not consumed, and is
+/// not re-minted — so on the mid-end's headline claim ("a call that
+/// does not consume a region's token cannot touch that region") the
+/// caller's load may forward across the call. It may not: the claim is
+/// a theorem for `region.new`/`stack.alloc`/parameter regions and false
+/// for this one.
+pub fn shape_foreign_cross_call() -> Module {
+    let mut m = Module::new();
+    let writer_sig = m.make_sig(vec![Param::val(types::PTR)], vec![types::I64]);
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+
+    // writer(p): store 9 through its own foreign root, then pad well
+    // past `inline_single_use` (96) plus every bonus, so the decision
+    // is "too big" rather than "we got lucky".
+    let mut w = Fb::new("writer", writer_sig, &[types::PTR]);
+    let p = w.params(w.cur)[0];
+    let wfb = w.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    // Padding that SURVIVES the callee's own optimization — the inliner
+    // sizes a callee AFTER simplify folds and DCE, so a constant chain
+    // would vanish and the shape would inline after all. Seed on a load
+    // with nothing to forward from, chain on it, and return the result
+    // so nothing is dead.
+    let mut acc = w.load(p, wfb);
+    for k in 1..120i64 {
+        let c = w.iconst(k);
+        acc = w.ins(Opcode::Bxor, &[acc, c], &[types::I64], Aux::None)[0];
+        acc = w.add_wrap(acc, c);
+    }
+    let nine = w.iconst(9);
+    let _t = w.store(&mut m, 0, nine, p, wfb);
+    w.ret(acc);
+    m.add_func(w.f);
+
+    let mut f = Fb::new("main", main_sig, &[]);
+    let fb = f.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    let size = f.iconst(8);
+    let (h, t) = f.region_new(&mut m, 1);
+    let (buf, _t) = f.alloc(&mut m, 1, h, size, t);
+    let five = f.iconst(5);
+    let fb1 = f.store(&mut m, 0, five, buf, fb);
+    let a = f.load(buf, fb1);
+    let callee = f.f.import_func("writer", writer_sig);
+    f.ins(Opcode::Call, &[buf], &[types::I64], Aux::Callee(callee));
+    // Same address, same token, and the call consumed nothing — the
+    // load must still reload. It reads 9.
+    let b = f.load(buf, fb1);
+    let eight = f.iconst(8);
+    let sa = f.ins(Opcode::ImulWrap, &[a, eight], &[types::I64], Aux::None)[0];
+    let s = f.add_wrap(sa, b);
+    finish_main(&mut f, s); // 5*8 + 9 = 49
+    m.add_func(f.f);
+    m
+}
+
+/// Shape 7b — [`shape_foreign_cross_call`] with the call inside a LOOP
+/// (s80). This is `licm`'s half of the same claim: the loop's foreign
+/// token is defined outside it and never consumed inside, so on the
+/// pass's own test the load is loop-invariant and hoists to the
+/// preheader — over a call that writes the very bytes it reads. The
+/// token being loop-invariant is not the same as the memory being
+/// loop-invariant, and for a foreign root the two come apart.
+///
+/// The buffer holds a counter the callee bumps; the loop reads it each
+/// iteration and sums. A hoisted load sums the same value four times.
+pub fn shape_foreign_licm_call() -> Module {
+    let mut m = Module::new();
+    let bump_sig = m.make_sig(vec![Param::val(types::PTR)], vec![types::I64]);
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+
+    // bump(p): *p += 1 through its own foreign root, padded past every
+    // inline budget so the call survives into the loop.
+    let mut w = Fb::new("bump", bump_sig, &[types::PTR]);
+    let p = w.params(w.cur)[0];
+    let wfb = w.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    let cur = w.load(p, wfb);
+    let one = w.iconst(1);
+    let next = w.add_wrap(cur, one);
+    let t = w.store(&mut m, 0, next, p, wfb);
+    let mut acc = w.load(p, t);
+    for k in 1..120i64 {
+        let c = w.iconst(k);
+        acc = w.ins(Opcode::Bxor, &[acc, c], &[types::I64], Aux::None)[0];
+        acc = w.add_wrap(acc, c);
+    }
+    w.ret(acc);
+    m.add_func(w.f);
+
+    let mut f = Fb::new("main", main_sig, &[]);
+    let fb = f.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    let size = f.iconst(8);
+    let (h, t) = f.region_new(&mut m, 1);
+    let (buf, _t) = f.alloc(&mut m, 1, h, size, t);
+    let zero = f.iconst(0);
+    let fb1 = f.store(&mut m, 0, zero, buf, fb);
+    let header = f.block(&[types::I64, types::I64]); // (i, acc)
+    let body = f.block(&[]);
+    let exit = f.block(&[]);
+    f.jmp(header, &[zero, zero]);
+    f.switch(header);
+    let [i, acc] = f.params(header)[..] else {
+        unreachable!()
+    };
+    let four = f.iconst(4);
+    let c = f.icmp(IntCc::Slt, i, four);
+    f.br(c, body, &[], exit, &[]);
+    f.switch(body);
+    // Address and token both defined outside the loop — and the value
+    // still changes every iteration, because the call writes it.
+    let v = f.load(buf, fb1);
+    let acc2 = f.add_wrap(acc, v);
+    let callee = f.f.import_func("bump", bump_sig);
+    f.ins(Opcode::Call, &[buf], &[types::I64], Aux::Callee(callee));
+    let one = f.iconst(1);
+    let i2 = f.add_chk(i, one);
+    f.jmp(header, &[i2, acc2]);
+    f.switch(exit);
+    finish_main(&mut f, acc); // 0 + 1 + 2 + 3 = 6, not 0
+    m.add_func(f.f);
+    m
+}
+
+/// The seven permanent regression shapes, named.
 pub fn historical_shapes() -> Vec<(&'static str, Module)> {
     vec![
         ("inline_noalias", shape_inline_noalias()),
@@ -508,6 +752,13 @@ pub fn historical_shapes() -> Vec<(&'static str, Module)> {
         ("unroll_scopes", shape_unroll_scopes()),
         ("cfg_duplication", shape_cfg_duplication()),
         ("loaded_pointer", shape_loaded_pointer_scopes()),
+        ("foreign_dup_roots", shape_foreign_dup_roots()),
+        (
+            "foreign_dup_roots_opaque",
+            shape_foreign_dup_roots_opaque_index(),
+        ),
+        ("foreign_cross_call", shape_foreign_cross_call()),
+        ("foreign_licm_call", shape_foreign_licm_call()),
     ]
 }
 

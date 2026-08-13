@@ -121,6 +121,7 @@ memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
+memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 memory/list_elem_assign.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
