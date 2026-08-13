@@ -3,6 +3,15 @@
 // buffer (D25), so the count is a byte scan with no per-word allocation;
 // naive C writes the two-state byte scan by hand (ref.c).
 //
+// s84 is what made that sentence true. Until then `words()` built a
+// `List[str]` — 72 000 pushes per call — and this kernel measured the
+// allocation at 0.192x of naive C; `[mem.str.view]` makes the `for`
+// head a walk over the receiver's own bytes and it now measures 0.935x.
+// The `!w.is_empty()` filter below is kept deliberately: it is what a
+// reader writes, and under `[mem.str.words]` (a word is never empty) it
+// is provably dead, so it is also a small check that the clause and the
+// lowering agree.
+//
 // Protocol: argv[1]=ops, prints {"ns":..,"ops":..,"sink":..}.
 
 fn ops_arg(fallback: int) -> int {

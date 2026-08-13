@@ -1140,6 +1140,25 @@ enum ContinueTo {
     ForLatch(Option<Block>),
 }
 
+/// A `for` head that walks a `str` LAZILY (s84, `[mem.str.view]`):
+/// `words()`, `lines()` and `split(sep)` yield subslices of the
+/// receiver's own storage, so the loop allocates nothing. The
+/// `List[str]` these methods are typed as is built only where a
+/// first-class list value is actually needed.
+#[derive(Clone, Copy)]
+enum StrIter<'t> {
+    Words {
+        recv: &'t GreenNode,
+    },
+    Lines {
+        recv: &'t GreenNode,
+    },
+    Split {
+        recv: &'t GreenNode,
+        sep: &'t GreenNode,
+    },
+}
+
 /// What a `match` scrutinee's discriminant ranges over (s27).
 enum MatchDomain {
     /// An enum: variant name → (declaration index, payload arity).
@@ -4367,10 +4386,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     )));
                 }
                 // s40: str comparison — byte equality and the
-                // byte-lexicographic order ([mem.str.order]). s81
-                // inlines EQUALITY ([`Self::str_eq_inline`]); order
-                // still goes through the runtime, where the checked
-                // executor's `Ord` on bytes is the reference.
+                // byte-lexicographic order ([mem.str.order]). Both are
+                // INLINE: s81 did equality ([`Self::str_eq_inline`]),
+                // s84 the relational family ([`Self::str_cmp_inline`],
+                // wolf-lang#94). `__wolf_rt_str_cmp` survives as the
+                // long-operand escape and the FFI entry, and the
+                // checked executor's `Ord` on bytes stays the reference
+                // both spellings answer to.
                 let lhs_is_str = d
                     .lhs()
                     .and_then(|l| self.expr_sema_ty(l.span))
@@ -4383,21 +4405,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let want_eq = op == SyntaxKind::EqEq;
                         return Ok(Flow::Val(Some(self.str_eq_inline(ap, al, bp, bl, want_eq))));
                     }
-                    let z = self.b.iconst(types::I64, 0);
                     let cc = match op {
                         SyntaxKind::Lt => IntCc::Slt,
                         SyntaxKind::Gt => IntCc::Sgt,
                         SyntaxKind::LtEq => IntCc::Sle,
                         _ => IntCc::Sge,
                     };
-                    let rc = self
-                        .rt_call("__wolf_rt_str_cmp", &[ap, al, bp, bl], Some(types::I64))
-                        .expect("rc");
-                    return Ok(Flow::Val(Some(
-                        self.b
-                            .ins(Opcode::Icmp, &[rc, z], &[types::BOOL], Aux::IntCc(cc))
-                            .one(),
-                    )));
+                    return Ok(Flow::Val(Some(self.str_cmp_inline(ap, al, bp, bl, cc))));
                 }
                 if !types_is_int(ty) {
                     return Err(refuse(
@@ -7468,6 +7482,171 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         out
     }
 
+    /// `< <= > >=` on `str`, INLINE (s84, wolf-lang#94) —
+    /// `[mem.str.order]`'s byte-lexicographic order without a call.
+    /// s81 named equality only and left the relational family on
+    /// `__wolf_rt_str_cmp`; this is the same machinery one step
+    /// further, and the rest of that function's reasoning (why the byte
+    /// loop and not a word-at-a-time compare, why the call above
+    /// [`STR_EQ_INLINE_MAX`]) applies here unchanged.
+    ///
+    /// The shape is two verdicts and no three-way value, because WIR
+    /// has no select and a `-1/0/1` intermediate would only be
+    /// re-branched on:
+    ///
+    /// - the first position where the two strings DIFFER decides, by
+    ///   an unsigned byte compare — and there the strict and non-strict
+    ///   forms agree, so `<=` costs exactly what `<` costs;
+    /// - a shared prefix all the way to `min(len)` leaves the LENGTHS
+    ///   to decide, under the operator's own condition. "Shorter first
+    ///   on a shared prefix" is not a special case here: it is what
+    ///   `al < bl` says.
+    ///
+    /// Bytes reach the compare through `zext`, so they are 0..=255 and
+    /// signed and unsigned compares agree on them — which is why the
+    /// unsigned order `[mem.str.order]` demands needs no `u*`
+    /// condition to express.
+    ///
+    /// Two build-time decisions cost nothing at run time: comparing a
+    /// value with ITSELF (`ap == bp`) makes the shared prefix equal by
+    /// construction, so the answer is the length compare with no bytes
+    /// read; and two constant lengths settle `min` without emitting the
+    /// diamond.
+    fn str_cmp_inline(&mut self, ap: Value, al: Value, bp: Value, bl: Value, cc: IntCc) -> Value {
+        let icmp = |z: &mut Self, cc: IntCc, a: Value, b: Value| {
+            z.b.ins(Opcode::Icmp, &[a, b], &[types::BOOL], Aux::IntCc(cc))
+                .one()
+        };
+        // Same storage, same shared prefix: only the lengths are left.
+        if ap == bp {
+            self.b.stats.fold += 1;
+            return icmp(self, cc, al, bl);
+        }
+        // At a differing byte the strict form is the whole answer.
+        let byte_cc = match cc {
+            IntCc::Slt | IntCc::Sle => IntCc::Slt,
+            _ => IntCc::Sgt,
+        };
+        // `min(al, bl)`: the length of the shared prefix to scan. Two
+        // constant lengths — or one length VALUE used twice, which is
+        // every `s.len`-derived compare — settle it without a diamond,
+        // and the second case has to: a merge whose two edges carry one
+        // value is the trivial phi the builder rejects.
+        let m = match (self.b.as_int_const(al), self.b.as_int_const(bl)) {
+            _ if al == bl => {
+                self.b.stats.fold += 1;
+                al
+            }
+            (Some(x), Some(y)) => {
+                self.b.stats.fold += 1;
+                self.b.iconst(types::I64, x.min(y))
+            }
+            _ => {
+                let shorter = self.b.create_block();
+                let mp = self.b.add_block_param(shorter, types::I64);
+                let lt = icmp(self, IntCc::Slt, al, bl);
+                // Both arms land in the same block, so a decided
+                // condition still leaves it with a predecessor.
+                self.b.ins_br(lt, shorter, &[al], shorter, &[bl]);
+                self.b.seal_block(shorter);
+                self.b.switch_to_block(shorter);
+                mp
+            }
+        };
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, types::BOOL);
+        self.b.gvn_push_scope();
+        // Past [`STR_EQ_INLINE_MAX`] the runtime's `memcmp`-backed
+        // compare wins by the margin s81 measured for equality, and the
+        // honest lowering takes it.
+        let long = match self.b.as_int_const(m) {
+            Some(n) => self.b.bconst(n > STR_EQ_INLINE_MAX),
+            None => {
+                let k = self.b.iconst(types::I64, STR_EQ_INLINE_MAX);
+                icmp(self, IntCc::Sgt, m, k)
+            }
+        };
+        let call_cmp = |z: &mut Self| {
+            let rc = z
+                .rt_call("__wolf_rt_str_cmp", &[ap, al, bp, bl], Some(types::I64))
+                .expect("rc");
+            let zero = z.b.iconst(types::I64, 0);
+            let r = icmp(z, cc, rc, zero);
+            z.b.ins_jmp(merge, &[r]);
+        };
+        match self.b.as_bool_const(long) {
+            // Provably short: no call, no branch, straight to the scan.
+            Some(false) => {}
+            // Provably long: the scan is dead, so it is not built.
+            Some(true) => {
+                call_cmp(self);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(merge);
+                self.b.switch_to_block(merge);
+                return out;
+            }
+            None => {
+                let wide = self.b.create_block();
+                let narrow = self.b.create_block();
+                self.b.ins_br(long, wide, &[], narrow, &[]);
+                self.b.seal_block(wide);
+                self.b.switch_to_block(wide);
+                self.b.gvn_push_scope();
+                call_cmp(self);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(narrow);
+                self.b.switch_to_block(narrow);
+            }
+        }
+        let zero = self.b.iconst(types::I64, 0);
+        let one = self.b.iconst(types::I64, 1);
+        let header = self.b.create_block();
+        let i = self.b.add_block_param(header, types::I64);
+        self.b.ins_jmp(header, &[zero]);
+        self.b.switch_to_block(header);
+        let more = icmp(self, IntCc::Slt, i, m);
+        let body = self.b.create_block();
+        let tail = self.b.create_block();
+        self.b.ins_br(more, body, &[], tail, &[]);
+        // The prefix ran out: the lengths decide, under the operator's
+        // own condition.
+        self.b.gvn_push_scope();
+        self.b.seal_block(tail);
+        self.b.switch_to_block(tail);
+        let by_len = icmp(self, cc, al, bl);
+        self.b.ins_jmp(merge, &[by_len]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(body);
+        self.b.switch_to_block(body);
+        let x = self.bytes_load_at(ap, i);
+        let y = self.bytes_load_at(bp, i);
+        let same = icmp(self, IntCc::Eq, x, y);
+        let latch = self.b.create_block();
+        let diff = self.b.create_block();
+        self.b.ins_br(same, latch, &[], diff, &[]);
+        self.b.gvn_push_scope();
+        self.b.seal_block(diff);
+        self.b.switch_to_block(diff);
+        let by_byte = icmp(self, byte_cc, x, y);
+        self.b.ins_jmp(merge, &[by_byte]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(latch);
+        self.b.switch_to_block(latch);
+        // `.wrap`: the index is bounded by a str's byte length, an
+        // `i64` the allocator already handed out (the `str_eq_inline`
+        // argument, verbatim).
+        let next = self
+            .b
+            .ins(Opcode::IaddWrap, &[i, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(header, &[next]);
+        self.b.seal_block(header);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        out
+    }
+
     /// `for b in <str>.bytes()` — a counted loop over the receiver's
     /// own bytes: `len` once into the trip count, then one `load.i8`
     /// per iteration. No iterator protocol, no allocation, no call, and
@@ -7606,6 +7785,703 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             )),
             _ => Err(refuse("this List method (s05 std surface)", e.span)),
+        }
+    }
+
+    // ------------------------- lazy str iteration (s84, #95) --------
+    //
+    // `words()`, `lines()` and `split()` are typed `List[str]`, and in
+    // any position that needs a first-class list they still build one.
+    // In a `for` head they build NOTHING: the loop walks the receiver's
+    // own bytes and yields `{ptr, len}` pairs into it, exactly the s77
+    // byte view one level up (`[mem.str.view]`). What that removes from
+    // `word_count` is a `List[str]` header, a growable buffer, and one
+    // 16-byte push per word — for a 1 MiB text, ~180k pushes.
+    //
+    // The three walks are the `wolf_rt::str` reference functions
+    // (`words_of`, `lines_of`, and `find`-driven splitting) transcribed
+    // into WIR, block for block, so the clause has one meaning and two
+    // spellings rather than two behaviours.
+
+    /// Which of the three lazy walks a `for` head named.
+    ///
+    /// `split` carries its separator expression; `words`/`lines` take
+    /// no argument. Anything else — a wrong arity, a non-`str`
+    /// receiver — is not recognized and falls through to the
+    /// materializing `List` path, which is always correct.
+    fn str_iter_recv(&self, e: &'t GreenNode) -> Option<StrIter<'t>> {
+        if e.kind != SyntaxKind::CallExpr {
+            return None;
+        }
+        let d = CallExpr::cast(e)?;
+        let callee = d.callee()?;
+        let m = wolf_ast::MemberExpr::cast(callee)?;
+        let name = m.member().map(|t| self.text(t.span))?;
+        let base = m.base()?;
+        let recv = if base.kind == SyntaxKind::ParenExpr {
+            ParenExpr::cast(base).and_then(|p| p.expr()).unwrap_or(base)
+        } else {
+            base
+        };
+        let recv_sema = self.expr_sema_ty(recv.span)?;
+        if !matches!(
+            self.table.kind(self.strip_sema(recv_sema)),
+            TyKind::Prim(Prim::Str)
+        ) {
+            return None;
+        }
+        let args: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .collect();
+        match (name.as_str(), args.len()) {
+            ("words", 0) => Some(StrIter::Words { recv }),
+            ("lines", 0) => Some(StrIter::Lines { recv }),
+            ("split", 1) => Some(StrIter::Split { recv, sep: args[0] }),
+            _ => None,
+        }
+    }
+
+    /// `[mem.str.ws]`, inline: is a `White_Space` scalar encoded at
+    /// `base + i`, and how wide is it? Answers `(bool, i64)` through a
+    /// merge block, and leaves the builder in that merge.
+    ///
+    /// The shape is `wolf_rt::str::ws_at`'s, and the two are pinned
+    /// equal over every scalar by that module's
+    /// `ws_at_is_the_twenty_five_scalars`.
+    ///
+    /// **The hot path is the first three blocks.** A byte below 0x80 is
+    /// a separator iff it is `0x20` or in `0x09..=0x0D`, which is two
+    /// integer compares — `b == 0x20`, and `b - 9` unsigned-below-5 —
+    /// and no memory access at all. That is the choice this sprint
+    /// measured rather than assumed: over the `word_count` buffer the
+    /// two compares ran at 0.491 ns/byte, a 256-byte lookup table at
+    /// 1.003, and a 64-bit shift-mask at 0.513. The table loses because
+    /// it turns a pure-ALU predicate into a dependent load per byte and
+    /// stops the scan vectorizing, so the twenty-five scalars are
+    /// spelled as tests, not indexed as data.
+    ///
+    /// Everything past `hi` is cold and never executes on ASCII text.
+    /// Only four lead bytes can begin a separator (`C2`, `E1`, `E2`,
+    /// `E3`), so two compares dismiss every other byte — including
+    /// every continuation byte, which is what keeps the walks on
+    /// code-point boundaries. Behind `E1/E2/E3` the three bytes are
+    /// decoded to the actual scalar and tested as ONE 48-bit mask plus
+    /// three equalities; a UTF-8 decode is cheaper here than nine
+    /// byte-pattern branches, and it is what `[mem.str.ws]` is written
+    /// in terms of.
+    ///
+    /// Reading `base[i+1]` and `base[i+2]` is in bounds because the
+    /// lead byte says so: a `str` is valid UTF-8 by construction, so a
+    /// `C2` has one continuation byte after it and an `E1/E2/E3` has
+    /// two. The `b >= 0x80` test alone would NOT license the read — a
+    /// str can end on a continuation byte — which is why the lead-byte
+    /// tests come before the loads and not after.
+    fn ws_at_inline(&mut self, base: Value, i: Value) -> (Value, Value) {
+        // The scalars behind `E2`, as one mask over `cp - 0x2000`:
+        // U+2000..U+200A (bits 0..10), U+2028, U+2029 (bits 40, 41) and
+        // U+202F (bit 47). U+205F and the two singletons are equalities.
+        const E2_MASK: i64 = (1 << 47) | (1 << 41) | (1 << 40) | 0x7FF;
+
+        let merge = self.b.create_block();
+        let ws = self.b.add_block_param(merge, types::BOOL);
+        let width = self.b.add_block_param(merge, types::I64);
+        let yes = self.b.bconst(true);
+        let no = self.b.bconst(false);
+        let one = self.b.iconst(types::I64, 1);
+        let two = self.b.iconst(types::I64, 2);
+        let three = self.b.iconst(types::I64, 3);
+        let icmp = |z: &mut Self, cc: IntCc, a: Value, b: Value| {
+            z.b.ins(Opcode::Icmp, &[a, b], &[types::BOOL], Aux::IntCc(cc))
+                .one()
+        };
+
+        let b0 = self.bytes_load_at(base, i);
+        let k80 = self.b.iconst(types::I64, 0x80);
+        let hi = icmp(self, IntCc::Sge, b0, k80);
+        let ascii = self.b.create_block();
+        let multi = self.b.create_block();
+        self.b.ins_br(hi, multi, &[], ascii, &[]);
+
+        // Each arm below gets its OWN GVN scope, and that is load
+        // bearing rather than tidy: the arms compute the same shapes at
+        // different offsets (`i + 1` appears in the two-byte arm, the
+        // three-byte arm and the callers' latches), and a value hashed
+        // in one arm is not dominated by anything in a sibling — GVN
+        // would hand it over and the verifier would reject the result.
+        // Popping at each arm's end also keeps the merge continuation
+        // clean, which is what lets a caller emit `i + 1` afterwards.
+
+        // ---- ASCII: two compares, and this is where the time goes.
+        self.b.gvn_push_scope();
+        self.b.seal_block(ascii);
+        self.b.switch_to_block(ascii);
+        let k20 = self.b.iconst(types::I64, 0x20);
+        let is_sp = icmp(self, IntCc::Eq, b0, k20);
+        let ctl = self.b.create_block();
+        self.b.ins_br(is_sp, merge, &[yes, one], ctl, &[]);
+        self.b.seal_block(ctl);
+        self.b.switch_to_block(ctl);
+        let k9 = self.b.iconst(types::I64, 9);
+        let d = self
+            .b
+            .ins(Opcode::IsubWrap, &[b0, k9], &[types::I64], Aux::None)
+            .one();
+        let k4 = self.b.iconst(types::I64, 4);
+        let is_ctl = icmp(self, IntCc::Ule, d, k4);
+        self.b.ins_jmp(merge, &[is_ctl, one]);
+        self.b.gvn_pop_scope();
+
+        // ---- non-ASCII: four lead bytes, everything else dismissed.
+        self.b.gvn_push_scope();
+        self.b.seal_block(multi);
+        self.b.switch_to_block(multi);
+        let kc2 = self.b.iconst(types::I64, 0xC2);
+        let is_c2 = icmp(self, IntCc::Eq, b0, kc2);
+        let two_bb = self.b.create_block();
+        let e_bb = self.b.create_block();
+        self.b.ins_br(is_c2, two_bb, &[], e_bb, &[]);
+
+        // C2: U+0085 NEL and U+00A0 NO-BREAK SPACE.
+        self.b.gvn_push_scope();
+        self.b.seal_block(two_bb);
+        self.b.switch_to_block(two_bb);
+        let i1 = self
+            .b
+            .ins(Opcode::IaddWrap, &[i, one], &[types::I64], Aux::None)
+            .one();
+        let b1 = self.bytes_load_at(base, i1);
+        let k85 = self.b.iconst(types::I64, 0x85);
+        let is_nel = icmp(self, IntCc::Eq, b1, k85);
+        let nbsp_bb = self.b.create_block();
+        self.b.ins_br(is_nel, merge, &[yes, two], nbsp_bb, &[]);
+        self.b.seal_block(nbsp_bb);
+        self.b.switch_to_block(nbsp_bb);
+        let ka0 = self.b.iconst(types::I64, 0xA0);
+        let is_nbsp = icmp(self, IntCc::Eq, b1, ka0);
+        self.b.ins_jmp(merge, &[is_nbsp, two]);
+        self.b.gvn_pop_scope();
+
+        // E1/E2/E3, or nothing at all.
+        self.b.seal_block(e_bb);
+        self.b.switch_to_block(e_bb);
+        let ke1 = self.b.iconst(types::I64, 0xE1);
+        let de = self
+            .b
+            .ins(Opcode::IsubWrap, &[b0, ke1], &[types::I64], Aux::None)
+            .one();
+        let k2 = self.b.iconst(types::I64, 2);
+        let is_e = icmp(self, IntCc::Ule, de, k2);
+        let three_bb = self.b.create_block();
+        let none_bb = self.b.create_block();
+        self.b.ins_br(is_e, three_bb, &[], none_bb, &[]);
+        self.b.seal_block(none_bb);
+        self.b.switch_to_block(none_bb);
+        self.b.ins_jmp(merge, &[no, one]);
+
+        // The three-byte forms, decoded to their scalar.
+        self.b.gvn_push_scope();
+        self.b.seal_block(three_bb);
+        self.b.switch_to_block(three_bb);
+        let i1b = self
+            .b
+            .ins(Opcode::IaddWrap, &[i, one], &[types::I64], Aux::None)
+            .one();
+        let i2v = self
+            .b
+            .ins(Opcode::IaddWrap, &[i, two], &[types::I64], Aux::None)
+            .one();
+        let c1 = self.bytes_load_at(base, i1b);
+        let c2 = self.bytes_load_at(base, i2v);
+        let k0f = self.b.iconst(types::I64, 0x0F);
+        let k3f = self.b.iconst(types::I64, 0x3F);
+        let k12 = self.b.iconst(types::I64, 12);
+        let k6 = self.b.iconst(types::I64, 6);
+        let hi4 = self
+            .b
+            .ins(Opcode::Band, &[b0, k0f], &[types::I64], Aux::None)
+            .one();
+        let hi4 = self
+            .b
+            .ins(Opcode::Shl, &[hi4, k12], &[types::I64], Aux::None)
+            .one();
+        let mid6 = self
+            .b
+            .ins(Opcode::Band, &[c1, k3f], &[types::I64], Aux::None)
+            .one();
+        let mid6 = self
+            .b
+            .ins(Opcode::Shl, &[mid6, k6], &[types::I64], Aux::None)
+            .one();
+        let lo6 = self
+            .b
+            .ins(Opcode::Band, &[c2, k3f], &[types::I64], Aux::None)
+            .one();
+        let cp = self
+            .b
+            .ins(Opcode::Bor, &[hi4, mid6], &[types::I64], Aux::None)
+            .one();
+        let cp = self
+            .b
+            .ins(Opcode::Bor, &[cp, lo6], &[types::I64], Aux::None)
+            .one();
+        let k2000 = self.b.iconst(types::I64, 0x2000);
+        let off = self
+            .b
+            .ins(Opcode::IsubWrap, &[cp, k2000], &[types::I64], Aux::None)
+            .one();
+        let k2f = self.b.iconst(types::I64, 0x2F);
+        // `off <=u 0x2F` also rejects every scalar BELOW U+2000: the
+        // wrapping subtract makes those very large unsigned values.
+        let in_win = icmp(self, IntCc::Ule, off, k2f);
+        let mask_bb = self.b.create_block();
+        let oth_bb = self.b.create_block();
+        self.b.ins_br(in_win, mask_bb, &[], oth_bb, &[]);
+        self.b.seal_block(mask_bb);
+        self.b.switch_to_block(mask_bb);
+        let mask = self.b.iconst(types::I64, E2_MASK);
+        let sh = self
+            .b
+            .ins(Opcode::Lshr, &[mask, off], &[types::I64], Aux::None)
+            .one();
+        let bit = self
+            .b
+            .ins(Opcode::Band, &[sh, one], &[types::I64], Aux::None)
+            .one();
+        let in_set = self.nonzero(bit);
+        self.b.ins_jmp(merge, &[in_set, three]);
+        // U+1680, U+3000, U+205F — the three outside the window.
+        self.b.seal_block(oth_bb);
+        self.b.switch_to_block(oth_bb);
+        let k1680 = self.b.iconst(types::I64, 0x1680);
+        let is_ogham = icmp(self, IntCc::Eq, cp, k1680);
+        let oth2 = self.b.create_block();
+        self.b.ins_br(is_ogham, merge, &[yes, three], oth2, &[]);
+        self.b.seal_block(oth2);
+        self.b.switch_to_block(oth2);
+        let k3000 = self.b.iconst(types::I64, 0x3000);
+        let is_ideo = icmp(self, IntCc::Eq, cp, k3000);
+        let oth3 = self.b.create_block();
+        self.b.ins_br(is_ideo, merge, &[yes, three], oth3, &[]);
+        self.b.seal_block(oth3);
+        self.b.switch_to_block(oth3);
+        let k205f = self.b.iconst(types::I64, 0x205F);
+        let is_mmsp = icmp(self, IntCc::Eq, cp, k205f);
+        self.b.ins_jmp(merge, &[is_mmsp, three]);
+        self.b.gvn_pop_scope();
+        self.b.gvn_pop_scope();
+
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        (ws, width)
+    }
+
+    /// `for w in <str>.words()` — `[mem.str.words]` as two counted
+    /// walks over the receiver's own bytes, and no allocation anywhere.
+    ///
+    /// ```text
+    /// skip(i):   i < n ? [ws_at(i) ? skip(i + width) : scan(i)] : exit
+    /// scan(j):   j < n ? [ws_at(j) ? emit(j) : scan(j + 1)] : emit(n)
+    /// emit(e):   w = {base + i, e - i};  body;  skip(e)
+    /// ```
+    ///
+    /// The two walks step DIFFERENTLY, and that is the whole safety
+    /// argument. The skip walk steps by the separator's WIDTH, because
+    /// stepping one byte would land inside a multi-byte space and open
+    /// a word at a continuation byte — a `str` that splits a code
+    /// point, which `[mem.str.get]` refuses to produce. The scan walk
+    /// steps one byte, which is safe precisely because `ws_at` answers
+    /// "no" for every continuation byte, so it can only ever stop on a
+    /// boundary.
+    ///
+    /// A yielded word is never empty (`skip` has already run to a
+    /// non-separator when `scan` starts), which is `[mem.str.words]`'s
+    /// substance rather than an accident of the loop shape.
+    fn lower_for_words(&mut self, d: ForExpr<'t>, base: Value, n: Value) -> R<Flow> {
+        let bind_name = self.for_bind_name(d)?;
+        let sty = str_ty(self.b.types());
+        let exit = self.b.create_block();
+        let zero = self.b.iconst(types::I64, 0);
+        let one = self.b.iconst(types::I64, 1);
+
+        let skip = self.b.create_block();
+        let si = self.b.add_block_param(skip, types::I64);
+        self.b.ins_jmp(skip, &[zero]);
+        self.b.switch_to_block(skip);
+        self.b.gvn_push_scope();
+        let more = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[si, n],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let probe = self.b.create_block();
+        self.b.ins_br(more, probe, &[], exit, &[]);
+        self.b.seal_block(probe);
+        self.b.switch_to_block(probe);
+        let (is_ws, width) = self.ws_at_inline(base, si);
+        let adv = self.b.create_block();
+        let word = self.b.create_block();
+        self.b.ins_br(is_ws, adv, &[], word, &[]);
+        // The advance block is a back edge: its own GVN scope, because
+        // nothing downstream of `word` is dominated by it.
+        self.b.gvn_push_scope();
+        self.b.seal_block(adv);
+        self.b.switch_to_block(adv);
+        let next = self
+            .b
+            .ins(Opcode::IaddWrap, &[si, width], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(skip, &[next]);
+        self.b.gvn_pop_scope();
+
+        // The word runs from `si` to the next separator (or the end).
+        self.b.seal_block(word);
+        self.b.switch_to_block(word);
+        let scan = self.b.create_block();
+        let ji = self.b.add_block_param(scan, types::I64);
+        // `stop` takes NO parameter: both edges into it carry `ji`, the
+        // scan header's own parameter, and a block param whose incoming
+        // values are all one value is the trivial phi the builder's
+        // postcondition rejects. `scan` dominates `stop`, so the value
+        // is simply in scope.
+        let stop = self.b.create_block();
+        // The scan starts one byte PAST the word's first: `skip` has
+        // already proved `si` in bounds and not a separator, so asking
+        // again would be a whole predicate evaluation per word for an
+        // answer we hold. Stepping into a multi-byte scalar's tail is
+        // fine — continuation bytes are not separators, so the scan
+        // runs through them exactly as it runs through any word byte.
+        let first = self
+            .b
+            .ins(Opcode::IaddWrap, &[si, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(scan, &[first]);
+        self.b.switch_to_block(scan);
+        self.b.gvn_push_scope();
+        let inb = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[ji, n],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let probe2 = self.b.create_block();
+        self.b.ins_br(inb, probe2, &[], stop, &[]);
+        self.b.seal_block(probe2);
+        self.b.switch_to_block(probe2);
+        let (is_ws2, _) = self.ws_at_inline(base, ji);
+        let step = self.b.create_block();
+        self.b.ins_br(is_ws2, stop, &[], step, &[]);
+        self.b.gvn_push_scope();
+        self.b.seal_block(step);
+        self.b.switch_to_block(step);
+        let nj = self
+            .b
+            .ins(Opcode::IaddWrap, &[ji, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(scan, &[nj]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(scan);
+        self.b.gvn_pop_scope();
+
+        self.b.seal_block(stop);
+        self.b.switch_to_block(stop);
+        let elem = self.str_subslice(base, si, ji);
+        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit)) {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            self.b.ins_jmp(skip, &[ji]);
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(skip);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        Ok(Flow::Val(None))
+    }
+
+    /// `for l in <str>.lines()` — `[mem.str.lines]`: scan to the next
+    /// LF, hand back everything before it, and absorb one CR that
+    /// immediately preceded that LF.
+    ///
+    /// ```text
+    /// head(i):  i < n ? find(i) : exit
+    /// find(j):  j < n ? [b[j] == LF ? at(j) : find(j + 1)] : at(n)
+    /// at(j):    e = (j < n && j > i && b[j-1] == CR) ? j - 1 : j
+    /// emit(e):  l = {base + i, e - i};  body;  head(j + 1)
+    /// ```
+    ///
+    /// `j < n` is exactly the "an LF terminated this line" test, and it
+    /// is why `"a\r"` yields `"a\r"` while `"a\r\n"` yields `"a"`: a CR
+    /// is part of the terminator only when a terminator followed it.
+    /// The resume offset `j + 1` steps past the LF, and when `j == n`
+    /// it steps past the end — which is how a trailing LF opens no
+    /// final empty line and an empty receiver yields nothing at all.
+    fn lower_for_lines(&mut self, d: ForExpr<'t>, base: Value, n: Value) -> R<Flow> {
+        let bind_name = self.for_bind_name(d)?;
+        let sty = str_ty(self.b.types());
+        let exit = self.b.create_block();
+        let zero = self.b.iconst(types::I64, 0);
+        let one = self.b.iconst(types::I64, 1);
+        let lf = self.b.iconst(types::I64, 0x0A);
+        let cr = self.b.iconst(types::I64, 0x0D);
+        let icmp = |z: &mut Self, cc: IntCc, a: Value, b: Value| {
+            z.b.ins(Opcode::Icmp, &[a, b], &[types::BOOL], Aux::IntCc(cc))
+                .one()
+        };
+
+        let head = self.b.create_block();
+        let ip = self.b.add_block_param(head, types::I64);
+        self.b.ins_jmp(head, &[zero]);
+        self.b.switch_to_block(head);
+        self.b.gvn_push_scope();
+        let more = icmp(self, IntCc::Slt, ip, n);
+        let find = self.b.create_block();
+        let jp = self.b.add_block_param(find, types::I64);
+        self.b.ins_br(more, find, &[ip], exit, &[]);
+        self.b.switch_to_block(find);
+        self.b.gvn_push_scope();
+        let inb = icmp(self, IntCc::Slt, jp, n);
+        let probe = self.b.create_block();
+        // `at` takes no parameter: both edges carry `jp`, the find
+        // header's own, and `find` dominates `at` — a param here would
+        // be the trivial phi the builder's postcondition rejects.
+        let at = self.b.create_block();
+        let fp = jp;
+        self.b.ins_br(inb, probe, &[], at, &[]);
+        self.b.gvn_push_scope();
+        self.b.seal_block(probe);
+        self.b.switch_to_block(probe);
+        let byte = self.bytes_load_at(base, jp);
+        let is_lf = icmp(self, IntCc::Eq, byte, lf);
+        let fstep = self.b.create_block();
+        self.b.ins_br(is_lf, at, &[], fstep, &[]);
+        self.b.seal_block(fstep);
+        self.b.switch_to_block(fstep);
+        let nj = self
+            .b
+            .ins(Opcode::IaddWrap, &[jp, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(find, &[nj]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(find);
+        self.b.gvn_pop_scope();
+
+        // The end offset: `fp`, or one back when a CR sits under the LF.
+        self.b.seal_block(at);
+        self.b.switch_to_block(at);
+        let emit = self.b.create_block();
+        let eparam = self.b.add_block_param(emit, types::I64);
+        let had_lf = icmp(self, IntCc::Slt, fp, n);
+        let crchk = self.b.create_block();
+        self.b.ins_br(had_lf, crchk, &[], emit, &[fp]);
+        // The CR probe is a side arm: it does not dominate `emit`, and
+        // it computes `fp - 1`, so it keeps its own GVN scope.
+        self.b.gvn_push_scope();
+        self.b.seal_block(crchk);
+        self.b.switch_to_block(crchk);
+        let nonempty = icmp(self, IntCc::Sgt, fp, ip);
+        let crprobe = self.b.create_block();
+        self.b.ins_br(nonempty, crprobe, &[], emit, &[fp]);
+        self.b.seal_block(crprobe);
+        self.b.switch_to_block(crprobe);
+        let back = self
+            .b
+            .ins(Opcode::IsubWrap, &[fp, one], &[types::I64], Aux::None)
+            .one();
+        let prev = self.bytes_load_at(base, back);
+        let is_cr = icmp(self, IntCc::Eq, prev, cr);
+        self.b.ins_br(is_cr, emit, &[back], emit, &[fp]);
+        self.b.gvn_pop_scope();
+
+        self.b.seal_block(emit);
+        self.b.switch_to_block(emit);
+        let elem = self.str_subslice(base, ip, eparam);
+        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit)) {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            let resume = self
+                .b
+                .ins(Opcode::IaddWrap, &[fp, one], &[types::I64], Aux::None)
+                .one();
+            self.b.ins_jmp(head, &[resume]);
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(head);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        Ok(Flow::Val(None))
+    }
+
+    /// `for f in <str>.split(sep)` — `[mem.str.split]`: every field,
+    /// empty ones included, driven by `__wolf_rt_str_find` over the
+    /// unconsumed rest.
+    ///
+    /// ```text
+    /// head(i):  sep empty ? emit(n, _, stop)
+    ///                     : find(base + i, n - i, sep)
+    ///                       hit < 0 ? emit(n, _, stop)
+    ///                               : emit(i + hit, i + hit + |sep|, go)
+    /// emit(e, k, c):  f = {base + i, e - i};  body;  c ? head(k) : exit
+    /// ```
+    ///
+    /// The call stays, and stays deliberately: it is one call per
+    /// FIELD, not per byte, and `wolf_rt`'s `find` is a real substring
+    /// searcher — an inlined naive scan would be quadratic on the
+    /// inputs a parser actually hands it. What the lazy shape removes
+    /// is the `List[str]` the fields used to be pushed into, which is
+    /// where the allocation was.
+    ///
+    /// A constant empty separator is answered without a loop at all:
+    /// `[mem.str.empty]` makes it one field, the whole string, and
+    /// emitting the loop would leave the search blocks with no
+    /// predecessor once the guard folded.
+    fn lower_for_split(
+        &mut self,
+        d: ForExpr<'t>,
+        base: Value,
+        n: Value,
+        np: Value,
+        nl: Value,
+    ) -> R<Flow> {
+        let bind_name = self.for_bind_name(d)?;
+        let sty = str_ty(self.b.types());
+        let exit = self.b.create_block();
+        let zero = self.b.iconst(types::I64, 0);
+
+        // `s.split("")` — one field, the whole string, no loop.
+        if self.b.as_int_const(nl) == Some(0) {
+            self.b.stats.fold += 1;
+            let elem = self.str_subslice(base, zero, n);
+            let frame = self.run_for_body(d, elem, sty, false, bind_name, Some(exit))?;
+            if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+                self.b.seal_block(latch);
+                self.b.switch_to_block(latch);
+                self.b.ins_jmp(exit, &[]);
+            }
+            self.b.seal_block(exit);
+            self.b.switch_to_block(exit);
+            return Ok(Flow::Val(None));
+        }
+
+        let go = self.b.bconst(true);
+        let stop = self.b.bconst(false);
+        let head = self.b.create_block();
+        let ip = self.b.add_block_param(head, types::I64);
+        self.b.ins_jmp(head, &[zero]);
+        self.b.switch_to_block(head);
+        self.b.gvn_push_scope();
+        let emit = self.b.create_block();
+        let eparam = self.b.add_block_param(emit, types::I64);
+        let kparam = self.b.add_block_param(emit, types::I64);
+        let cparam = self.b.add_block_param(emit, types::BOOL);
+        let empty_sep = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[nl, zero],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let search = self.b.create_block();
+        self.b
+            .ins_br(empty_sep, emit, &[n, zero, stop], search, &[]);
+        // The search arm does not dominate `emit`: its own GVN scope.
+        self.b.gvn_push_scope();
+        self.b.seal_block(search);
+        self.b.switch_to_block(search);
+        let rest_p = self.b.ins_ptr_off(base, ip, 1);
+        let rest_n = self
+            .b
+            .ins(Opcode::IsubWrap, &[n, ip], &[types::I64], Aux::None)
+            .one();
+        let fwd = self.b.iconst(types::I64, 0);
+        let hit = self
+            .rt_call(
+                "__wolf_rt_str_find",
+                &[rest_p, rest_n, np, nl, fwd],
+                Some(types::I64),
+            )
+            .expect("rc");
+        let miss = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[hit, zero],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let mid = self.b.create_block();
+        self.b.ins_br(miss, emit, &[n, zero, stop], mid, &[]);
+        self.b.seal_block(mid);
+        self.b.switch_to_block(mid);
+        let end = self
+            .b
+            .ins(Opcode::IaddWrap, &[ip, hit], &[types::I64], Aux::None)
+            .one();
+        let resume = self
+            .b
+            .ins(Opcode::IaddWrap, &[end, nl], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(emit, &[end, resume, go]);
+        self.b.gvn_pop_scope();
+
+        self.b.seal_block(emit);
+        self.b.switch_to_block(emit);
+        let elem = self.str_subslice(base, ip, eparam);
+        let frame = match self.run_for_body(d, elem, sty, false, bind_name, Some(exit)) {
+            Ok(f) => f,
+            Err(x) => {
+                self.b.gvn_pop_scope();
+                return Err(x);
+            }
+        };
+        if let ContinueTo::ForLatch(Some(latch)) = frame.continue_to {
+            self.b.seal_block(latch);
+            self.b.switch_to_block(latch);
+            self.b.ins_br(cparam, head, &[kparam], exit, &[]);
+        }
+        self.b.gvn_pop_scope();
+        self.b.seal_block(head);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        Ok(Flow::Val(None))
+    }
+
+    /// The `for` binding name, with the shared refusal for patterns the
+    /// counted-loop shapes cannot destructure.
+    fn for_bind_name(&self, d: ForExpr<'t>) -> R<Option<String>> {
+        match d.pattern() {
+            None => Ok(None),
+            Some(p) if p.kind == SyntaxKind::IdentPat => Ok(Some(self.text(p.span))),
+            Some(p) if p.kind == SyntaxKind::WildcardPat => Ok(None),
+            Some(p) => Err(refuse(
+                "destructuring `for` patterns (tuple yields, c06/std)",
+                p.span,
+            )),
         }
     }
 
@@ -9552,9 +10428,42 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 return self.lower_for_bytes(d, base, n);
             }
-            // s40: `for` over a List value (including the materialized
-            // str views — `words()`, `lines()`, `split()`) drives by
-            // index through the runtime.
+            // s84: `for w in <str>.words()` — and the `lines`/`split`
+            // spellings — walk the receiver's own bytes and yield
+            // subslices of it ([mem.str.view]). No `List[str]`, no
+            // push per element, no allocation at all.
+            if let Some(kind) = self.str_iter_recv(iter) {
+                let recv = match kind {
+                    StrIter::Words { recv } | StrIter::Lines { recv } => recv,
+                    StrIter::Split { recv, .. } => recv,
+                };
+                let sv = match self.lower_expr(recv)? {
+                    Flow::Val(Some(v)) => v,
+                    Flow::Val(None) => {
+                        return Err(refuse("a valueless str receiver", recv.span));
+                    }
+                    Flow::Diverged => return Ok(Flow::Diverged),
+                };
+                let (base, n) = self.str_parts(sv);
+                return match kind {
+                    StrIter::Words { .. } => self.lower_for_words(d, base, n),
+                    StrIter::Lines { .. } => self.lower_for_lines(d, base, n),
+                    StrIter::Split { sep, .. } => {
+                        let sepv = match self.lower_expr(sep)? {
+                            Flow::Val(Some(v)) => v,
+                            Flow::Val(None) => {
+                                return Err(refuse("a valueless str separator", sep.span));
+                            }
+                            Flow::Diverged => return Ok(Flow::Diverged),
+                        };
+                        let (np, nl) = self.str_parts(sepv);
+                        self.lower_for_split(d, base, n, np, nl)
+                    }
+                };
+            }
+            // s40: `for` over a List value (a `words()`/`lines()`/
+            // `split()` result that had to MATERIALIZE, or any other
+            // list) drives by index through the runtime.
             if let Some(it) = self.expr_sema_ty(iter.span)
                 && let TyKind::List(elem) = self.table.kind(self.strip_sema(it))
             {

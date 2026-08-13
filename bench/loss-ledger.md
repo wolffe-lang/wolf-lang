@@ -387,6 +387,52 @@ second run's floor is host noise, and the honest summary is that `d1`
 wins by somewhere between "clearly" and "not measurably" on a loaded
 machine.
 
+### s84 — G2 CLOSED: `words()` stops materializing, and family D reaches 1.000x
+
+s81 inlined `==` and s84 made `words()`/`lines()`/`split()` lazy
+(`[mem.str.view]`): in a `for` head they walk the receiver's own bytes
+and yield subslices of it, so there is no `List[str]`, no push per
+element, and — with the `White_Space` predicate inline — no call in the
+loop at all. Same host and command as the s77/s79 runs
+(`--track=t1 --kernels=d1_utf8_validate,d2_substr_search,word_count
+--runs=7`, release runtime; `perf` and `llvm-profdata` still
+unavailable), single run:
+
+| kernel | s77 | s79 | **s84** | ns/byte wolf vs naive C |
+|---|---|---|---|---|
+| `d1_utf8_validate` | 1.125x | 1.487 / 1.136 | **1.227x WIN** | 0.674 vs 0.827 |
+| `d2_substr_search` | 0.014x | 0.111 / 0.130 | **0.871x LOSS** | 0.804 vs 0.700 |
+| `word_count` | 0.016x | 0.192 / 0.187 | **0.935x LOSS** | 1.162 vs 1.087 |
+| **family D** | **0.062x** | **0.316 / 0.302** | **1.000x** | |
+
+**`word_count` is the number this sprint existed for: 0.192x → 0.935x**,
+5.47 ns/byte → 1.162, an A/B on the same host in the same session (the
+lazy lowering switched off and back on, everything else fixed). It now
+beats `rustc -O`'s `split_whitespace()` lane by **1.50x** and sits
+inside 7% of a hand-written two-state byte scan, against a 6.45% layout
+floor — which is to say the remaining gap is at the edge of what this
+rig can resolve. What it does NOT beat is `clang -O3 -march=native`
+(0.649x): the C scan vectorizes and the wolf loop does not, which is
+the next question rather than this one.
+
+`d2_substr_search`'s move (0.111 → 0.871) is s81's equality inlining
+finally showing up in a family-D measurement; the ledger had not been
+re-run since. G2's two named residuals — "the compare is a call" and
+"`words()` materializes" — are both gone, and family D is the first
+family to reach the M2 primary bar exactly.
+
+The D rows in the full table above are the s79 run and are now stale;
+they are left as-is rather than half-updated, because a three-kernel
+Run A cannot be spliced into a thirteen-kernel A/B without lying about
+which run each number came from. The next full-suite sweep supersedes
+them.
+
+The IR-volume ratchets both moved the right way despite the inline
+predicate being more instructions than a call: **kernel suite 87.7% of
+naive (ratchet 90.0%), corpus 57.8% (ratchet 60.0%)** — the
+materializing path carried a runtime call, a header, a growable buffer
+and a push per element, and that is more IR than a decision tree.
+
 ## G5 — `List` allocates outside the region it lives in (family B)
 
 **Classification (b), new diagnosis at s75.** Family B is 0.049x, and

@@ -219,6 +219,7 @@ strings/interp_value_position.lu: lowers
 strings/match_str_dispatch.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers
+strings/split_clause.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 test/conc_schedules_test.lu: lowers
