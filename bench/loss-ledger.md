@@ -138,24 +138,70 @@ is nothing for `noalias` to license". The body is no longer a call, and the
 reading has not improved, which points at G7 rather than at G1: the channel
 still has nothing to license on the pointers that matter.
 
-## G2 — string and byte views still go through the runtime (family D)
+## G2 — HALF-CLOSED at s77: the byte view lands, the compare does not
 
-**Classification (b), unchanged from s44, and now the largest single
-remaining gap.** Family D is 0.015x; a byte costs 34–74 ns against C's
-0.61–0.93.
+**Was classification (b). The view half is closed; what remains is a
+different call, and it is now measured rather than inferred.**
 
-`bytes()` does not return a view. It calls `__wolf_rt_str_bytes`, which
-**materializes a whole `List[int]` — eight bytes of heap per input byte** —
-and `d2_substr_search`'s range slicing is a `__wolf_rt_str_get` shim call
-per comparison. So D's thesis (zero-copy views beat copying) is measured by
-a kernel that copies, eightfold.
+At s75 `bytes()` did not return a view: it called `__wolf_rt_str_bytes`,
+which **materialized a whole `List[int]` — eight bytes of heap per input
+byte** — and `d2_substr_search`'s range slicing was a `__wolf_rt_str_get`
+shim call per comparison. Family D was 0.015x and a byte cost 34–74 ns
+against C's 0.61–0.93.
 
-The fix now has all its machinery: s75's `region.foreign` + `ptr.off` +
-`load` is exactly what an inlinable byte cursor needs. `s.bytes()` should
-iterate the `str`'s own `{ptr, len}` pair with a bounds check the caller
-owns, the way `for x in xs` iterates a `List`, and index/slice should be
-address arithmetic. That is a sprint of the same shape as this one, and it
-is the top-priority M2 blocker now that G1 is closed.
+s77 makes `bytes()` a view over the receiver's own `{ptr, len}` pair (the
+same two words every zero-copy subslice already was), with `ptr.off` at
+stride 1 + `load.i8` + `zext` element access and the bounds check in the
+caller — s75's machinery at the stride bytes actually have. `s[a..b]` and
+`s.get(a..b)` stop calling the runtime too: `[mem.str.get]`'s domain is two
+unsigned compares plus one guarded byte probe per endpoint, and the result
+is address arithmetic.
+
+Re-measured 2026-08-13, same host and command as the s75 run
+(`--track=t1 --kernels=d1_utf8_validate,d2_substr_search,word_count
+--runs=7`; `perf` and `llvm-profdata` still unavailable on this host):
+
+| kernel | s75 | s77 | ns/byte (wolf vs naive C) | reading |
+|---|---|---|---|---|
+| `d1_utf8_validate` | in the 34–74 ns band | **1.125x WIN** | 0.615 vs 0.751 | the byte walk is now a compiled loop |
+| `d2_substr_search` | 0.014x | **0.014x** | 45.8 vs 0.64 | the slice is free; `==` is the whole cost |
+| `word_count` | 0.016x | **0.016x** | 57.1 vs 0.90 | `words()` still materializes |
+| **family D** | **0.015x** | **0.062x** | | one kernel wins its thesis |
+
+**d1 wins its thesis.** A structural UTF-8 scan over a byte view beats
+naive `clang -O3`, and the same run has it beating `clang -O3
+-march=native` (0.719) and `rustc -O` (0.620) too. That is the first
+family-D win the suite has produced, and it comes from the same lowering
+change family A got at s75. Two independent 7-run measurements put it at
+1.125x and 1.179x against per-kernel floors of 8.3% and 1.0% — the effect
+is real, its second digit is not.
+
+The IR-volume ratchet moved the RIGHT way this time, which is worth a line
+because s75's did not: the corpus figure is **57.8% of the naive lowering
+(n=105), against 58.4% at s75**, and the kernel figure is unchanged at
+87.2%. An inline domain test is more instructions than a call, but a call
+also carried a stack slot, an out-parameter store and a reload, and the
+slot is what dominated.
+
+**d2's residual is `__wolf_rt_str_eq`, and the A/B says so.** With the
+slice inlined, the loop body holds exactly one call left — the equality.
+Replacing `hay[i..i+5] == needle` with a byte-view compare (same kernel,
+same sizes, LLVM tier) drops the cost from **45.8 ns/byte to 0.91** — 50x,
+i.e. ~0.70x against naive C. So the slice is not what costs; a cross-crate
+call for a five-byte compare is. Classification **(b)**: the fix is to stop
+handing five bytes to an opaque shim — a length guard plus an inline byte
+compare for short operands, or a route to `memcmp` so LLVM can see and
+specialize it. `d2_substr_search` is its regression test. Filed, not fixed
+here: s77's contract is views, and `==` is not a view.
+
+**word_count is unchanged, and the cause is now located.** `words()` still
+builds a `List[str]` — one materialization pass over 72 000 word views per
+call — so the kernel measures an allocation, exactly as `bytes()` did. A
+lazy `words()` cannot be inlined the way `bytes()` was: `split_whitespace`
+is Unicode `White_Space`, so the scan needs a real character predicate, not
+a byte test. It wants the D28 iterator protocol plus a runtime classifier
+entry, which is a sprint, not a patch. Until then family D's geomean is
+carried by one kernel and the ledger says so.
 
 ## G5 — `List` allocates outside the region it lives in (family B)
 

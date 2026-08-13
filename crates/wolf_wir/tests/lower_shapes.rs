@@ -334,6 +334,110 @@ fn inclusive_for_then_later_read_keeps_live_definitions() {
     insta::assert_snapshot!(out);
 }
 
+/// s77 acceptance (wolf-lang#80): a byte walk emits **no per-element
+/// call and no allocation**. `bytes()` is the receiver's own
+/// `{ptr, len}` pair, so the loop body is `ptr.off` at stride 1 plus
+/// `load.i8` plus `zext` — the s75 gep+load shape at the stride bytes
+/// actually have. Before s77 this body was
+/// `call @__wolf_rt_str_bytes` outside the loop (eight heap bytes per
+/// input byte) and a `load.i64` inside.
+#[test]
+fn byte_walk_has_no_call_and_no_allocation() {
+    let out = dump(
+        "fn walk(text: str) -> int {\n\
+         \x20   var n = 0\n\
+         \x20   for b in text.bytes() {\n\
+         \x20       n = n + b\n\
+         \x20   }\n\
+         \x20   n\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   walk(\"wolf\") - 440\n\
+         }\n",
+    );
+    let walk = out
+        .split("fn @walk")
+        .nth(1)
+        .expect("walk lowered")
+        .split("\nfn ")
+        .next()
+        .expect("body");
+    assert!(
+        !walk.contains("call "),
+        "a byte walk must emit no call: {walk}"
+    );
+    for alloc in ["region.alloc", "stack.alloc", "region.new"] {
+        assert!(
+            !walk.contains(alloc),
+            "a byte walk must allocate nothing ({alloc}): {walk}"
+        );
+    }
+    assert!(walk.contains("ptr.off"), "element address: {walk}");
+    assert!(walk.contains("load.i8"), "one byte per element: {walk}");
+    assert!(walk.contains("zext.i64"), "bytes widen UNSIGNED: {walk}");
+    insta::assert_snapshot!(out);
+}
+
+/// s77: `<str>.bytes()[i]` is the same access with the s75 caller-side
+/// bounds check (one unsigned compare, `trap.bounds` on the miss) — and
+/// `s[a..b]` stops being a `__wolf_rt_str_get` call: the domain is two
+/// unsigned compares plus one guarded byte probe per endpoint
+/// (`[mem.str.get]`, inline), and the result is address arithmetic.
+#[test]
+fn byte_index_and_str_slice_emit_no_runtime_call() {
+    let out = dump(
+        "fn at(text: str, i: int) -> int {\n\
+         \x20   text.bytes()[i]\n\
+         }\n\
+         fn cut(text: str, i: int) -> str {\n\
+         \x20   text[i..i + 2]\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   at(\"wolf\", 0) - 119 + cut(\"wolf\", 0).len - 2\n\
+         }\n",
+    );
+    for f in ["fn @at", "fn @cut"] {
+        let body = out
+            .split(f)
+            .nth(1)
+            .expect("lowered")
+            .split("\nfn ")
+            .next()
+            .expect("body");
+        assert!(!body.contains("call "), "{f} must emit no call: {body}");
+        assert!(body.contains("trap.bounds"), "{f} still traps: {body}");
+    }
+    assert!(
+        !out.contains("__wolf_rt_str_get") && !out.contains("__wolf_rt_str_bytes"),
+        "neither shim is reachable from these shapes: {out}"
+    );
+    insta::assert_snapshot!(out);
+}
+
+/// s77: a `bytes()` result that must be a first-class `List[int]`
+/// value — bound, passed, returned — still MATERIALIZES through
+/// `__wolf_rt_str_bytes`, bit-for-bit as before. The view is not a
+/// value: it never escapes into the IR, so nothing downstream can
+/// mistake it for a `str` pair or for a `List` header.
+#[test]
+fn a_named_bytes_result_still_materializes() {
+    let out = dump(
+        "fn total(l: List[int]) -> int {\n\
+         \x20   var n = 0\n\
+         \x20   for x in l { n = n + x }\n\
+         \x20   n\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   let bs = \"wolf\".bytes()\n\
+         \x20   total(bs) - 440\n\
+         }\n",
+    );
+    assert!(
+        out.contains("call @__wolf_rt_str_bytes"),
+        "the escaping position materializes: {out}"
+    );
+}
+
 /// #72 (s74): `block_order` is the walk order a single-pass backend
 /// needs — every reachable definition before every use of it. The
 /// `select`-in-a-loop shape is the one that broke the assumption that

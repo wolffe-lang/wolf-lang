@@ -1,0 +1,39 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: str.slice, mem.str.get
+//!
+//! s77 — `[mem.str.get]`'s domain, swept. `s[a..b]` and `s.get(a..b)`
+//! stopped being a runtime call and became an inline test (two
+//! unsigned compares plus one byte probe per endpoint), so this file
+//! sweeps EVERY endpoint pair of a mixed-width string and counts the
+//! defined ones: `é€` is 5 bytes with boundaries at 0, 2 and 5, so
+//! exactly six ordered pairs are defined and every other pair — out of
+//! range, inverted, or splitting a code point — is the same honest
+//! miss. The count is the witness that the inlined domain did not
+//! widen or narrow by one byte.
+
+fn main() -> !int {
+    let s = "é€"
+    var hits = 0
+    var splits = 0
+    for a in 0..7 {
+        for b in 0..7 {
+            let got = s.get(a..b) else "miss"
+            if got == "miss" {
+                if a <= b && b <= s.len { splits = splits + 1 }
+            } else {
+                hits = hits + 1
+            }
+        }
+    }
+    // The whole string is one slice; a split endpoint is a miss, not a
+    // trap, and the trapping twin is `slice_oob_trap.lu`.
+    let whole = s[0..5]
+    let head = s.get(0..2) else "?"
+    print("{hits} {splits} {whole.len} {head.len}")
+    if hits == 6 && splits == 15 && whole.len == 5 && head.len == 2 {
+        0
+    } else {
+        1
+    }
+}
