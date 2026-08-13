@@ -245,6 +245,7 @@ fn lower_body(
         straight_line: false,
         task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
         pending_tasks: &mut pending,
+        foreign: None,
         b: &mut b,
     };
     lowerer.lower_fn(fsig, block)?;
@@ -321,6 +322,7 @@ fn lower_task_body<'t>(
         straight_line: false,
         task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
         pending_tasks: pending,
+        foreign: None,
         b: &mut b,
     };
     // The fallible shape: the body's result is an eu when the closure
@@ -547,6 +549,15 @@ fn module_types_get(b: &FuncBuilder<'_>, t: TypeId) -> types::TypeData {
 fn refuse(construct: &'static str, span: Span) -> NotYet {
     NotYet { construct, span }
 }
+
+/// The two `wolf_rt::list::ListHdr` field offsets compiled code
+/// addresses directly (s75). The header is `#[repr(C)] { data: *mut
+/// u8, len: i64, cap: i64, elem: i64 }`, and these offsets are part
+/// of the runtime ABI the moment element access stops going through
+/// a shim: `wolf_rt::list`'s `header_offsets_are_the_lowering_abi`
+/// test pins them against this pair by name.
+const LIST_DATA_OFF: u64 = 0;
+const LIST_LEN_OFF: u64 = 8;
 
 /// The WIR shape of `str` (s31): a `{ptr, i64}` fat pair — bytes
 /// pointer + byte length, exactly the s30 type-DIE mapping.
@@ -863,6 +874,23 @@ fn flat_size(it: &types::TypeInterner, t: TypeId) -> Option<u64> {
             Some(sum)
         }
         _ => None,
+    }
+}
+
+/// The strictest natural alignment any scalar inside a flat type
+/// needs (s75: what an element stride has to tile at).
+fn flat_align(it: &types::TypeInterner, t: TypeId) -> u64 {
+    if let Some(s) = scalar_size(t) {
+        return s;
+    }
+    match it.get(t) {
+        types::TypeData::Agg(fields) => fields
+            .clone()
+            .into_iter()
+            .map(|f| flat_align(it, f))
+            .max()
+            .unwrap_or(1),
+        _ => 0,
     }
 }
 
@@ -1205,6 +1233,17 @@ struct Lowerer<'t, 'b, 'm> {
     /// finishes (a `FuncBuilder` borrows the module exclusively, so
     /// nested functions build in a post-pass worklist).
     pending_tasks: &'b mut Vec<PendingTask<'t>>,
+    /// s75: the function's runtime-storage regions, minted on the
+    /// first container touch — `(headers, element buffers)`. TWO, not
+    /// one, and the split is a theorem rather than a convenience: a
+    /// `wolf_rt` list header and a list element buffer are always
+    /// separate allocations (`new_list` mints the header, `push_raw`
+    /// mints and regrows the buffer, and `data` never points into the
+    /// header), so no store through one can be a store through the
+    /// other. That is what lets a `len` load leave a loop whose body
+    /// writes elements. WITHIN each region nothing is claimed: two
+    /// lists may share a buffer.
+    foreign: Option<(RegionId, RegionId)>,
     b: &'b mut FuncBuilder<'m>,
 }
 
@@ -2595,10 +2634,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let Some(hdr) = flow_val!(self.lower_expr(base)) else {
                         return Err(refuse("a valueless List receiver", base.span));
                     };
-                    let n = self
-                        .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
-                        .expect("len");
-                    return Ok(Flow::Val(Some(n)));
+                    return Ok(Flow::Val(Some(self.list_len_of(hdr))));
                 }
                 _ => {}
             }
@@ -5288,6 +5324,54 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .copied()
     }
 
+    /// [`Self::rt_call_slot`] for a shim that also mutates FOREIGN
+    /// storage (s75: `list_new` mints a header, `list_push` writes the
+    /// header AND may reallocate the buffer). Trailing formal tokens
+    /// bind both foreign regions, so no `data`/`len` the caller
+    /// already loaded survives the call — at WIR by the token chain,
+    /// at LLVM by the call being opaque.
+    fn rt_call_foreign(
+        &mut self,
+        name: &'static str,
+        args: &[Value],
+        slot: Option<(Value, RegionId)>,
+        result: Option<TypeId>,
+    ) -> Option<Value> {
+        let (hdrs, bufs) = self.foreign_regions();
+        let mut params: Vec<Param> = args
+            .iter()
+            .map(|&a| Param::val(self.b.func.value_ty(a)))
+            .collect();
+        let mut call_args = args.to_vec();
+        let mut formal_regions = HashMap::new();
+        let mut next_formal = 0u32;
+        if let Some((slot_ptr, slot_region)) = slot {
+            params.push(Param::val(types::PTR));
+            call_args.push(slot_ptr);
+            let tok = self.b.module.types.mem(RegionId::new(next_formal));
+            params.push(Param {
+                ty: tok,
+                mode: Mode::Val,
+            });
+            formal_regions.insert(next_formal, slot_region);
+            next_formal += 1;
+        }
+        for actual in [hdrs, bufs] {
+            let tok = self.b.module.types.mem(RegionId::new(next_formal));
+            params.push(Param {
+                ty: tok,
+                mode: Mode::Val,
+            });
+            formal_regions.insert(next_formal, actual);
+            next_formal += 1;
+        }
+        let ext = self.rt_import(name, params, result.into_iter().collect());
+        self.b
+            .ins_call_regions(ext, &call_args, &formal_regions)
+            .first()
+            .copied()
+    }
+
     /// The `{ptr, len}` halves of a str value.
     fn str_parts(&mut self, v: Value) -> (Value, Value) {
         let p = self
@@ -5379,6 +5463,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         mk_ok: impl FnOnce(&mut Self) -> R<Option<Value>>,
         mk_err: impl FnOnce(&mut Self) -> R<Value>,
     ) -> R<Value> {
+        // A DECIDED test needs no join. Building the losing arm anyway
+        // would fill a block nothing branches to, and Braun would then
+        // be asked for a definition on a path that does not exist —
+        // the same latent shape `trap_unless` already folds. It stayed
+        // latent while every `hit` came out of a runtime call; s75's
+        // in-place `clear` + `pop` makes store→load forwarding decide
+        // one, so it stops being latent here.
+        match self.b.as_bool_const(hit) {
+            Some(true) => {
+                self.b.stats.fold += 1;
+                let okv = mk_ok(self)?;
+                return Ok(self.b.ins_eu_make_ok(eu_ty, okv));
+            }
+            Some(false) => {
+                self.b.stats.fold += 1;
+                let tag = mk_err(self)?;
+                return Ok(self.b.ins_eu_make_err(eu_ty, tag, &[]));
+            }
+            None => {}
+        }
         let hit_bb = self.b.create_block();
         let miss_bb = self.b.create_block();
         let merge = self.b.create_block();
@@ -5673,9 +5777,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // These two MINT a `List` (`wolf_rt::str` builds one out of
+            // `list::new_list`/`push_raw`), so like `List[T]()` they
+            // thread the foreign chain: compiled code loads from that
+            // storage directly now (s75).
             "bytes" => {
                 let r = self
-                    .rt_call("__wolf_rt_str_bytes", &[sp, sl], Some(types::PTR))
+                    .rt_call_foreign("__wolf_rt_str_bytes", &[sp, sl], None, Some(types::PTR))
                     .expect("list");
                 Ok(Flow::Val(Some(r)))
             }
@@ -5739,9 +5847,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let m = self.b.iconst(types::I64, mode);
                 let r = self
-                    .rt_call(
+                    .rt_call_foreign(
                         "__wolf_rt_str_split",
                         &[sp, sl, np, nl, m],
+                        None,
                         Some(types::PTR),
                     )
                     .expect("list");
@@ -5831,10 +5940,139 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
-    /// The `List` method depth, natively (s40): the header pointer IS
-    /// the value; element traffic goes through caller stack slots and
-    /// `wolf_rt::list`. Recoverable reads (`pop`/`get`/`first`/`last`)
-    /// are `{none}` rows; `push` grows region-backed storage.
+    // -------------------------- List element access (s75, #77) ----
+    //
+    // Element traffic is `ptr.off` + `load`/`store` through the
+    // function's one foreign region, NOT a runtime call: an opaque
+    // call is a wall the vectorizer cannot see past, and s44 measured
+    // the wall at 44-92 ns per element against C's 0.2-1.0. What
+    // stays in `wolf_rt` is what genuinely needs it — allocating a
+    // header (`list_new`) and growing a buffer (`list_push`). Both
+    // thread the foreign region's token, so no cached `data`/`len`
+    // survives a growth.
+    //
+    // The bounds check moves INTO the caller, where the range
+    // analysis can see it (X3's sibling: eliminating a check because
+    // it is provable is optimization, eliminating it because it is
+    // inconvenient is not). One unsigned compare covers both ends —
+    // a negative index is a very large unsigned one.
+
+    /// The function's runtime-storage regions, minted on first touch
+    /// and rooted at the entry block: `(headers, element buffers)`.
+    fn foreign_regions(&mut self) -> (RegionId, RegionId) {
+        match self.foreign {
+            Some(rs) => rs,
+            None => {
+                let hdrs = self.b.ins_region_foreign();
+                let bufs = self.b.ins_region_foreign();
+                self.foreign = Some((hdrs, bufs));
+                (hdrs, bufs)
+            }
+        }
+    }
+
+    fn foreign_hdr_region(&mut self) -> RegionId {
+        self.foreign_regions().0
+    }
+
+    fn foreign_buf_region(&mut self) -> RegionId {
+        self.foreign_regions().1
+    }
+
+    /// `%d = load.ptr %hdr` — a `List`'s element buffer.
+    fn list_data(&mut self, hdr: Value) -> Value {
+        let r = self.foreign_hdr_region();
+        let addr = self.field_addr(hdr, LIST_DATA_OFF);
+        self.b.ins_load(types::PTR, addr, r)
+    }
+
+    /// `%n = load.i64 %hdr+8` — a `List`'s live element count.
+    fn list_len_of(&mut self, hdr: Value) -> Value {
+        let r = self.foreign_hdr_region();
+        let addr = self.field_addr(hdr, LIST_LEN_OFF);
+        self.b.ins_load(types::I64, addr, r)
+    }
+
+    /// `store.i64 %n, %hdr+8` — publish a new element count.
+    fn list_set_len(&mut self, hdr: Value, n: Value) {
+        let r = self.foreign_hdr_region();
+        let addr = self.field_addr(hdr, LIST_LEN_OFF);
+        self.b.ins_store(n, addr, r);
+    }
+
+    /// `%p = ptr.off %data, %idx, esize` — element `idx`'s address.
+    fn list_elem_addr(&mut self, data: Value, idx: Value, esize: u64) -> Value {
+        self.b.ins_ptr_off(data, idx, esize)
+    }
+
+    /// The element stride, checked to TILE at the element's alignment.
+    ///
+    /// A shim copied elements byte-wise, so a packed layout that does
+    /// not tile (`{i32, i64}` — 12 bytes, so every other element lands
+    /// 4 bytes off) cost nothing but a memcpy. Compiled loads claim
+    /// natural alignment, so the same layout would be a misaligned
+    /// access. Rather than quietly emit one, refuse: the conservatism
+    /// ledger is the honest home for a shape the packed v0 layout
+    /// cannot address directly. (Every scalar element tiles, because
+    /// its stride IS its alignment; so do the aggregates the corpus
+    /// holds.)
+    fn list_stride(&mut self, ewty: TypeId, span: Span) -> R<u64> {
+        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+            return Err(refuse("List elements without a flat layout", span));
+        };
+        let align = flat_align(&self.b.module.types, ewty);
+        if align == 0 || esize % align != 0 {
+            return Err(refuse(
+                "List elements whose packed layout does not tile at their alignment",
+                span,
+            ));
+        }
+        Ok(esize)
+    }
+
+    /// `%b = icmp.ult %idx, %len` — the in-bounds test.
+    fn list_in_bounds(&mut self, idx: Value, len: Value) -> Value {
+        self.b
+            .ins(
+                Opcode::Icmp,
+                &[idx, len],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Ult),
+            )
+            .one()
+    }
+
+    /// The trapping spelling of the same test (`l[i]`, `l[i] = v`).
+    /// Returns `true` when the trap is PROVEN — the caller diverged.
+    fn list_bounds_trap(&mut self, idx: Value, len: Value) -> bool {
+        let ok = self.list_in_bounds(idx, len);
+        self.trap_unless(ok, TrapKind::Bounds)
+    }
+
+    /// Load element `idx` (bounds already established by the caller).
+    fn list_load_at(&mut self, hdr: Value, idx: Value, ewty: TypeId, span: Span) -> R<Value> {
+        let esize = self.list_stride(ewty, span)?;
+        let data = self.list_data(hdr);
+        let p = self.list_elem_addr(data, idx, esize);
+        let r = self.foreign_buf_region();
+        self.load_flat(ewty, p, r, span)
+    }
+
+    /// Store `v` at element `idx` (bounds already established).
+    fn list_store_at(&mut self, hdr: Value, idx: Value, v: Value, span: Span) -> R<()> {
+        let vty = self.b.func.value_ty(v);
+        let esize = self.list_stride(vty, span)?;
+        let data = self.list_data(hdr);
+        let p = self.list_elem_addr(data, idx, esize);
+        let r = self.foreign_buf_region();
+        self.store_flat(v, p, r, span)
+    }
+
+    /// The `List` method depth, natively (s40, rebuilt s75): the
+    /// header pointer IS the value; element traffic is direct memory
+    /// through the foreign region, and only allocation and growth
+    /// remain `wolf_rt::list` calls. Recoverable reads
+    /// (`pop`/`get`/`first`/`last`) are `{none}` rows.
     fn lower_list_method(
         &mut self,
         d: CallExpr<'t>,
@@ -5866,6 +6104,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .filter_map(Arg::value)
             .collect();
         match mname {
+            // Growth is the one thing the runtime still owns: a push
+            // may reallocate, and the arena discipline lives there.
             "push" => {
                 let Some(vx) = arg_exprs.first() else {
                     return Err(refuse("`push` without a value", e.span));
@@ -5877,70 +6117,82 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let (region, slot) = self.rt_slot(esize);
                 self.store_flat(v, slot, region, vx.span)?;
-                self.rt_call_slot("__wolf_rt_list_push", &[hdr], slot, region, None);
+                self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
                 Ok(Flow::Val(None))
             }
+            // `pop` shrinks in place: publish `len - 1`, then read the
+            // element that just left the live prefix. Same order the
+            // shim used, so the observable result is unchanged.
             "pop" => {
-                let (region, slot) = self.rt_slot(esize);
-                let rc = self
-                    .rt_call_slot("__wolf_rt_list_pop", &[hdr], slot, region, Some(types::I64))
-                    .expect("rc");
-                let hit = self.nonzero(rc);
+                let n = self.list_len_of(hdr);
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[n, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sgt),
+                    )
+                    .one();
                 let eu = self.eu_ty_of(e.span)?;
                 let out = self.eu_join(
                     eu,
                     hit,
-                    |z| Ok(Some(z.load_flat(ewty, slot, region, e.span)?)),
+                    |z| {
+                        let one = z.b.iconst(types::I64, 1);
+                        let last =
+                            z.b.ins(Opcode::IsubWrap, &[n, one], &[types::I64], Aux::None)
+                                .one();
+                        z.list_set_len(hdr, last);
+                        Ok(Some(z.list_load_at(hdr, last, ewty, e.span)?))
+                    },
                     |z| Ok(z.none_tag()),
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
             "get" | "first" | "last" => {
-                let idx = match mname {
+                // The index expression runs BEFORE the length is read:
+                // it may call something that pushes, and a length read
+                // ahead of it would be stale.
+                let given = match mname {
                     "get" => {
                         let Some(ix) = arg_exprs.first() else {
                             return Err(refuse("`get` without an index", e.span));
                         };
                         match self.lower_expr(ix)? {
-                            Flow::Val(Some(v)) => v,
+                            Flow::Val(Some(v)) => Some(v),
                             _ => return Err(refuse("a valueless List index", ix.span)),
                         }
                     }
-                    "first" => self.b.iconst(types::I64, 0),
-                    _ => {
-                        let n = self
-                            .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
-                            .expect("len");
+                    "first" => Some(self.b.iconst(types::I64, 0)),
+                    _ => None,
+                };
+                let n = self.list_len_of(hdr);
+                let idx = match given {
+                    Some(v) => v,
+                    // `last`: an empty list yields -1, which the
+                    // unsigned in-bounds test rejects — the shim's
+                    // `idx < 0` arm, spelled in one compare.
+                    None => {
                         let one = self.b.iconst(types::I64, 1);
                         self.b
                             .ins(Opcode::IsubWrap, &[n, one], &[types::I64], Aux::None)
                             .one()
                     }
                 };
-                let (region, slot) = self.rt_slot(esize);
-                let rc = self
-                    .rt_call_slot(
-                        "__wolf_rt_list_read",
-                        &[hdr, idx],
-                        slot,
-                        region,
-                        Some(types::I64),
-                    )
-                    .expect("rc");
-                let hit = self.nonzero(rc);
+                let hit = self.list_in_bounds(idx, n);
                 let eu = self.eu_ty_of(e.span)?;
                 let out = self.eu_join(
                     eu,
                     hit,
-                    |z| Ok(Some(z.load_flat(ewty, slot, region, e.span)?)),
+                    |z| Ok(Some(z.list_load_at(hdr, idx, ewty, e.span)?)),
                     |z| Ok(z.none_tag()),
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
             "is_empty" => {
-                let n = self
-                    .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
-                    .expect("len");
+                let n = self.list_len_of(hdr);
                 let z = self.b.iconst(types::I64, 0);
                 let r = self
                     .b
@@ -5948,14 +6200,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .one();
                 Ok(Flow::Val(Some(r)))
             }
-            "count" => {
-                let n = self
-                    .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
-                    .expect("len");
-                Ok(Flow::Val(Some(n)))
-            }
+            "count" => Ok(Flow::Val(Some(self.list_len_of(hdr)))),
             "clear" => {
-                self.rt_call("__wolf_rt_list_clear", &[hdr], None);
+                let z = self.b.iconst(types::I64, 0);
+                self.list_set_len(hdr, z);
                 Ok(Flow::Val(None))
             }
             _ => Err(refuse("this List method (s05 std surface)", e.span)),
@@ -6361,9 +6609,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 else {
                     return Err(refuse("unit-typed List elements", e.span));
                 };
-                let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+                if flat_size(&self.b.module.types, ewty).is_none() {
                     return Err(refuse("List elements without a flat layout", e.span));
-                };
+                }
                 let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
                     return Err(refuse("a valueless List receiver", recv.span));
                 };
@@ -6377,21 +6625,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {
                     return Err(refuse("a valueless List index", ix.span));
                 };
-                let (region, slot) = self.rt_slot(esize);
-                let rc = self
-                    .rt_call_slot(
-                        "__wolf_rt_list_read",
-                        &[hdr, idx],
-                        slot,
-                        region,
-                        Some(types::I64),
-                    )
-                    .expect("rc");
-                let hit = self.nonzero(rc);
-                if self.trap_unless(hit, TrapKind::Bounds) {
+                // s75: the check the caller owns, then a plain load.
+                let n = self.list_len_of(hdr);
+                if self.list_bounds_trap(idx, n) {
                     return Ok(Flow::Diverged);
                 }
-                Ok(Flow::Val(Some(self.load_flat(ewty, slot, region, e.span)?)))
+                Ok(Flow::Val(Some(self.list_load_at(hdr, idx, ewty, e.span)?)))
             }
             _ => Err(refuse(
                 "indexing outside str/List (Pool/Map runtime shapes, c06/std)",
@@ -6425,9 +6664,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         else {
             return Err(refuse("unit-typed List elements", span));
         };
-        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+        if flat_size(&self.b.module.types, ewty).is_none() {
             return Err(refuse("List elements without a flat layout", span));
-        };
+        }
         let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
         let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
             return Err(refuse("a valueless List receiver", recv.span));
@@ -6448,29 +6687,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(rhs) = flow_val!(self.lower_expr(vx)) else {
             return Err(refuse("assignment of a valueless expression", vx.span));
         };
-        // `l[i] op= v` (#55): read-modify-write through the same
-        // runtime entries, X3-checked at the element's sema type.
+        // One bounds check for the whole statement: `l[i] op= v` reads
+        // and writes the SAME element, so the read's check dominates
+        // the write and a second one is provably redundant (GVN dedups
+        // the compare; the branch folds). `l[i] = v` checks once by
+        // construction.
+        let n = self.list_len_of(hdr);
+        if self.list_bounds_trap(idx, n) {
+            return Ok(Flow::Diverged);
+        }
+        // `l[i] op= v` (#55): read-modify-write in place, X3-checked
+        // at the element's sema type.
         let v = if op == SyntaxKind::Eq {
             rhs
         } else {
             let Some(bin) = Self::compound_bin(op) else {
                 return Err(refuse("this compound assignment operator", span));
             };
-            let (rregion, rslot) = self.rt_slot(esize);
-            let rrc = self
-                .rt_call_slot(
-                    "__wolf_rt_list_read",
-                    &[hdr, idx],
-                    rslot,
-                    rregion,
-                    Some(types::I64),
-                )
-                .expect("rc");
-            let rhit = self.nonzero(rrc);
-            if self.trap_unless(rhit, TrapKind::Bounds) {
-                return Ok(Flow::Diverged);
-            }
-            let cur = self.load_flat(ewty, rslot, rregion, span)?;
+            let cur = self.list_load_at(hdr, idx, ewty, span)?;
             let wrapping = matches!(self.table.kind(elem), TyKind::Wrapping(_));
             let unsigned = sema_unsigned(self.table, elem);
             match self.arith(bin, cur, rhs, wrapping, unsigned, ewty, span)? {
@@ -6478,27 +6712,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 None => return Ok(Flow::Diverged),
             }
         };
-        let (region, slot) = self.rt_slot(esize);
-        self.store_flat(v, slot, region, vx.span)?;
-        let rc = self
-            .rt_call_slot(
-                "__wolf_rt_list_write",
-                &[hdr, idx],
-                slot,
-                region,
-                Some(types::I64),
-            )
-            .expect("rc");
-        let hit = self.nonzero(rc);
-        if self.trap_unless(hit, TrapKind::Bounds) {
-            return Ok(Flow::Diverged);
-        }
+        self.list_store_at(hdr, idx, v, vx.span)?;
         Ok(Flow::Val(None))
     }
 
-    /// `for pat in <List>` (s40): the index-driven drive loop —
-    /// `len` once, ascending reads through the runtime, each element
-    /// bound by value per iteration.
+    /// `for pat in <List>` (s40, s75): a COUNTED loop over the backing
+    /// storage — `len` once into the trip count, then `ptr.off` +
+    /// `load` per iteration, each element bound by value. No iterator
+    /// protocol, no call in the body, and no bounds check: the header
+    /// test `i < n` IS the proof, so emitting one would be a check the
+    /// lowering itself can discharge.
     fn lower_for_list(
         &mut self,
         d: ForExpr<'t>,
@@ -6516,9 +6739,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         else {
             return Err(refuse("unit-typed List elements", span));
         };
-        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
+        if flat_size(&self.b.module.types, ewty).is_none() {
             return Err(refuse("List elements without a flat layout", span));
-        };
+        }
         let Some(hdr) = flow_val!(self.lower_expr(iter)) else {
             return Err(refuse("a valueless List iterable", iter.span));
         };
@@ -6533,9 +6756,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ));
             }
         };
-        let n = self
-            .rt_call("__wolf_rt_list_len", &[hdr], Some(types::I64))
-            .expect("len");
+        let n = self.list_len_of(hdr);
         let header = self.b.create_block();
         let iparam = self.b.add_block_param(header, types::I64);
         let zero = self.b.iconst(types::I64, 0);
@@ -6556,18 +6777,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_br(cond, body_bb, &[], exit, &[]);
         self.b.seal_block(body_bb);
         self.b.switch_to_block(body_bb);
-        // The element: in-bounds by the header test — the read cannot
-        // miss (the list length is loop-invariant: the binding is by
-        // value, and `mut` aliasing into the iterable is mem-rejected).
-        let (region, slot) = self.rt_slot(esize);
-        self.rt_call_slot(
-            "__wolf_rt_list_read",
-            &[hdr, iparam],
-            slot,
-            region,
-            Some(types::I64),
-        );
-        let elem = self.load_flat(ewty, slot, region, span)?;
+        // The element: in-bounds by the header test, so no check. The
+        // buffer pointer is re-read inside the body rather than
+        // hoisted by hand — a body that cannot touch the list leaves
+        // the load loop-invariant and LICM lifts it, and a body that
+        // CAN would have invalidated a hoisted copy.
+        let elem = self.list_load_at(hdr, iparam, ewty, span)?;
         let frame = self.run_for_body(d, elem, ewty, false, bind_name, Some(exit));
         let frame = match frame {
             Ok(f) => f,
@@ -6855,6 +7070,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if newline {
             outs.push(PrintSeg::Lit(b"\n".to_vec()));
         }
+        // D43: the statement's segments are ONE line. Every hole has
+        // been evaluated by now, so nothing between the bracket calls
+        // can trap and strand a half-written line — and the runtime
+        // takes the stream lock once instead of once per segment.
+        self.rt_print_call("__wolf_rt_print_begin", &[], &[]);
         for out in outs {
             match out {
                 PrintSeg::Lit(bytes) => {
@@ -6954,6 +7174,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
         }
+        let st = self.b.iconst(types::I64, stream);
+        self.rt_print_call("__wolf_rt_print_end", &[types::I64], &[st]);
         Ok(Flow::Val(None))
     }
 
@@ -7158,8 +7380,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 return Err(refuse("List elements without a flat layout", e.span));
             };
             let sz = self.b.iconst(types::I64, esize as i64);
+            // Threads the foreign token: the fresh header is storage
+            // compiled code will load from, so the chain must know.
             let hdr = self
-                .rt_call("__wolf_rt_list_new", &[sz], Some(types::PTR))
+                .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
                 .expect("hdr");
             return Ok(Flow::Val(Some(hdr)));
         }

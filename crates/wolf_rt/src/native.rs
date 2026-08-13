@@ -139,9 +139,7 @@ pub unsafe extern "C" fn __wolf_rt_print_str(ptr: *const u8, len: i64) {
         return;
     }
     let bytes = unsafe { core::slice::from_raw_parts(ptr, len as usize) };
-    let mut out = std::io::stdout().lock();
-    let _ = out.write_all(bytes);
-    let _ = out.flush();
+    crate::io::write_stream(crate::io::STREAM_STDOUT, bytes);
 }
 
 /// Write a signed 64-bit integer in decimal to stdout, flushed.
@@ -151,9 +149,7 @@ pub unsafe extern "C" fn __wolf_rt_print_str(ptr: *const u8, len: i64) {
 /// Callable from any thread at any time; takes no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_print_i64(v: i64) {
-    let mut out = std::io::stdout().lock();
-    let _ = write!(out, "{v}");
-    let _ = out.flush();
+    crate::io::write_stream(crate::io::STREAM_STDOUT, v.to_string().as_bytes());
 }
 
 /// Write `true`/`false` to stdout, flushed. The parameter is `i8` —
@@ -165,9 +161,8 @@ pub extern "C" fn __wolf_rt_print_i64(v: i64) {
 /// Callable from any thread at any time; takes no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_print_bool(v: i8) {
-    let mut out = std::io::stdout().lock();
-    let _ = write!(out, "{}", v != 0);
-    let _ = out.flush();
+    let text = if v != 0 { "true" } else { "false" };
+    crate::io::write_stream(crate::io::STREAM_STDOUT, text.as_bytes());
 }
 
 // ---- the v0 bump-region allocator ----------------------------------------

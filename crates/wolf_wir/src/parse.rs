@@ -980,6 +980,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("rc.drop", Opcode::RcDrop),
         ("sync.freeze", Opcode::SyncFreeze),
         ("stack.alloc", Opcode::StackAlloc),
+        ("region.foreign", Opcode::RegionForeign),
         ("sync.transfer", Opcode::SyncTransfer),
         ("eu.make.ok", Opcode::EuMakeOk),
         ("eu.make.err", Opcode::EuMakeErr),

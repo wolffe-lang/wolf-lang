@@ -1028,6 +1028,33 @@ impl<'m> FuncBuilder<'m> {
         (r, vals[0])
     }
 
+    /// `%m: mem.rN = region.foreign` (s75) — root a region over
+    /// runtime-owned storage (container buffers). The root is
+    /// PREPENDED to the entry block, so it dominates every access
+    /// wherever the first container touch happens to sit, and the
+    /// token is seeded there for Braun to merge like any other.
+    ///
+    /// Callers hold one per function ([`crate::lower`]'s
+    /// `foreign_region`): the op emits nothing at either backend, but
+    /// two roots would be two regions, and two regions are a
+    /// `!noalias` claim about memory nothing proved disjoint.
+    pub fn ins_region_foreign(&mut self) -> RegionId {
+        let r = self.fresh_region();
+        let tok_ty = self.module.types.mem(r);
+        let entry = self.func.entry().expect("a builder always has an entry");
+        let (_, vals) =
+            self.func
+                .append_inst(entry, Opcode::RegionForeign, &[], &[tok_ty], Aux::None);
+        // `append_inst` pushed at the end — a filled entry block ends
+        // in its terminator, so move the root to the front.
+        let insts = &mut self.func.blocks[entry].insts;
+        let placed = insts.pop().expect("just appended");
+        insts.insert(0, placed);
+        let var = self.mem_var(r);
+        self.defs.insert((var.0, entry.as_u32()), vals[0]);
+        r
+    }
+
     // ------------------------------------------- error unions (s27) ----
 
     /// `%e = eu.make.ok %v?` — wrap the ok payload (or nothing, for a

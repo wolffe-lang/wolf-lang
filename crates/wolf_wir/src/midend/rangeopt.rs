@@ -26,6 +26,17 @@
 //! - **Branch folding by ranges**: a `br` whose comparison is decided
 //!   by refined ranges becomes a `jmp` — a bounds check dominated by
 //!   a proving comparison dies here, trap arm and all.
+//! - **Branch folding by RELATION** (s75): intervals cannot prove
+//!   `i <u n` from `i <s n`, because the fact is relational and an
+//!   interval domain forgets relations the moment it abstracts. So the
+//!   π seeding keeps the comparison itself alongside the ranges it
+//!   implies: the condition that held on the edge into a single-entry
+//!   block, over the same operand PAIR, decides a later comparison
+//!   over that pair whenever the two orderings agree (same domain, or
+//!   both operands provably non-negative — and the interval channel
+//!   supplies exactly that non-negativity). This is what discharges
+//!   `l[i]`'s bounds check inside `while i < l.len`, which is the
+//!   shape the container work of s75 made common.
 //! - **Loop-level check versioning** (amendment 3, demand-driven —
 //!   the ≥80% backstop): an innermost, call-free loop with remaining
 //!   eliminable-class checks gets a guarded fast copy; the guard
@@ -93,6 +104,12 @@ struct RangeCx<'a> {
     doms: &'a Doms,
     /// Refinements per single-entry branch target: (block, value) → range.
     pi: HashMap<(Block, Value), Range>,
+    /// The RELATION that held on the edge into a single-entry target,
+    /// as `(cc, a, b)` already oriented to the taken edge (s75). The
+    /// interval channel above is a projection of this; keeping the
+    /// pair is what lets a later comparison over the same two values
+    /// be decided outright.
+    rel: HashMap<Block, Vec<(IntCc, Value, Value)>>,
     /// Range per value at its DEF site (memoized; π information from
     /// the def block's dominator chain propagates through arithmetic).
     base: HashMap<Value, Range>,
@@ -134,6 +151,7 @@ impl<'a> RangeCx<'a> {
             view,
             doms,
             pi: HashMap::new(),
+            rel: HashMap::new(),
             base: HashMap::new(),
             hypo,
             visiting: HashSet::new(),
@@ -221,6 +239,10 @@ impl<'a> RangeCx<'a> {
                 IntCc::Uge => IntCc::Ult,
             }
         };
+        // The relation itself, kept whole: the interval projection
+        // below loses it, and it is the only thing that can prove a
+        // later comparison over the same pair.
+        self.rel.entry(target).or_default().push((cc, a, b));
         // Operand ranges AS OBSERVED AT THE BRANCH (dominating π
         // entries are already seeded — RPO order): a guard like
         // `n <= K` upstream tightens what `i < n` proves here.
@@ -533,6 +555,115 @@ impl<'a> RangeCx<'a> {
         }
         Some(r)
     }
+
+    /// Is `icmp.cc a, b` decided by a comparison over the SAME pair
+    /// that held on the way into `block` (s75)? Walks the dominator
+    /// chain, newest first, and stops at the first relation that
+    /// decides — a relation that does not decide is no reason to stop
+    /// looking at the ones above it.
+    fn decide_rel(&mut self, cc: IntCc, a: Value, b: Value, block: Block) -> Option<bool> {
+        // Crossing between the signed and unsigned orderings is sound
+        // exactly when both operands sit in the non-negative half,
+        // where the two agree. The interval channel answers that, and
+        // in the shape this exists for it answers YES: `i` is an
+        // induction variable from 0, and the very edge that carries
+        // `i < n` refines `n` to at least `i`'s floor plus one.
+        let mut nonneg: Option<bool> = None;
+        let mut cur = Some(block);
+        while let Some(bb) = cur {
+            if let Some(known) = self.rel.get(&bb).cloned() {
+                for (kcc, ka, kb) in known {
+                    let oriented = if (ka, kb) == (a, b) {
+                        kcc
+                    } else if (ka, kb) == (b, a) {
+                        swap_cc(kcc)
+                    } else {
+                        continue;
+                    };
+                    let (kmask, kdom) = cc_mask(oriented);
+                    let (qmask, qdom) = cc_mask(cc);
+                    let same_domain = match (kdom, qdom) {
+                        (None, _) | (_, None) => true,
+                        (Some(x), Some(y)) => x == y,
+                    };
+                    if !same_domain {
+                        let both_nonneg = *nonneg.get_or_insert_with(|| {
+                            let ra = self.range_at(a, block);
+                            let rb = self.range_at(b, block);
+                            matches!((ra, rb), (Some(ra), Some(rb)) if ra.0 >= 0 && rb.0 >= 0)
+                        });
+                        if !both_nonneg {
+                            continue;
+                        }
+                    }
+                    if kmask & !qmask == 0 {
+                        return Some(true);
+                    }
+                    if kmask & qmask == 0 {
+                        return Some(false);
+                    }
+                }
+            }
+            cur = self.doms.idom(bb);
+        }
+        None
+    }
+}
+
+// ---------------------------------------------- the ordering algebra ----
+
+const ORD_LT: u8 = 1;
+const ORD_EQ: u8 = 2;
+const ORD_GT: u8 = 4;
+
+/// The outcomes a condition admits, and the ordering it reads them
+/// in (`None` for equality, which both orderings agree on).
+fn cc_mask(cc: IntCc) -> (u8, Option<bool>) {
+    match cc {
+        IntCc::Eq => (ORD_EQ, None),
+        IntCc::Ne => (ORD_LT | ORD_GT, None),
+        IntCc::Slt => (ORD_LT, Some(true)),
+        IntCc::Sle => (ORD_LT | ORD_EQ, Some(true)),
+        IntCc::Sgt => (ORD_GT, Some(true)),
+        IntCc::Sge => (ORD_GT | ORD_EQ, Some(true)),
+        IntCc::Ult => (ORD_LT, Some(false)),
+        IntCc::Ule => (ORD_LT | ORD_EQ, Some(false)),
+        IntCc::Ugt => (ORD_GT, Some(false)),
+        IntCc::Uge => (ORD_GT | ORD_EQ, Some(false)),
+    }
+}
+
+/// The same condition read with its operands exchanged.
+fn swap_cc(cc: IntCc) -> IntCc {
+    match cc {
+        IntCc::Eq => IntCc::Eq,
+        IntCc::Ne => IntCc::Ne,
+        IntCc::Slt => IntCc::Sgt,
+        IntCc::Sle => IntCc::Sge,
+        IntCc::Sgt => IntCc::Slt,
+        IntCc::Sge => IntCc::Sle,
+        IntCc::Ult => IntCc::Ugt,
+        IntCc::Ule => IntCc::Uge,
+        IntCc::Ugt => IntCc::Ult,
+        IntCc::Uge => IntCc::Ule,
+    }
+}
+
+/// Is this `br` the guard of a bounds check — the false arm being a
+/// block that does nothing but `trap.bounds`? Structural, so it stays
+/// true however the check was spelled.
+fn bounds_guard(f: &Function, inst: Inst) -> bool {
+    let Aux::Br(_, e) = f.insts[inst].aux else {
+        return false;
+    };
+    let insts = &f.blocks[e.block].insts;
+    match insts.first() {
+        Some(&i) => matches!(
+            (f.insts[i].op, f.insts[i].aux),
+            (Opcode::Trap, Aux::Trap(crate::ops::TrapKind::Bounds))
+        ),
+        None => false,
+    }
 }
 
 // ----------------------------------------------------- elimination ----
@@ -627,17 +758,30 @@ fn eliminate_round(
             } else if op == Opcode::Br {
                 // Range-decided branches: the dominating comparison
                 // proves this one.
+                let is_bounds = bounds_guard(f, inst);
+                if count_metrics && is_bounds {
+                    stats.bounds_checks_seen += 1;
+                }
                 let cond = f.vpool.get(f.insts[inst].args)[0];
                 if let Some(ci) = analysis::def_inst(f, cond)
                     && f.insts[ci].op == Opcode::Icmp
                     && let Aux::IntCc(cc) = f.insts[ci].aux
                 {
                     let cargs = f.vpool.get(f.insts[ci].args);
-                    if let (Some(ra), Some(rb)) =
-                        (cx.range_at(cargs[0], b), cx.range_at(cargs[1], b))
-                        && let Some(decided) = decide_cc(cc, ra, rb)
-                    {
+                    let (x, y) = (cargs[0], cargs[1]);
+                    let by_range = match (cx.range_at(x, b), cx.range_at(y, b)) {
+                        (Some(ra), Some(rb)) => decide_cc(cc, ra, rb),
+                        _ => None,
+                    };
+                    // Intervals first (cheap, and they subsume the
+                    // relational answer when they can give one), then
+                    // the relation over the same pair.
+                    let decided = by_range.or_else(|| cx.decide_rel(cc, x, y, b));
+                    if let Some(decided) = decided {
                         branch_jmps.push((inst, decided));
+                        if count_metrics && is_bounds && decided {
+                            stats.bounds_checks_eliminated += 1;
+                        }
                     }
                 }
             }

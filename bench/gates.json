@@ -10,9 +10,9 @@
   },
 
   "vectorization_witnesses": {
-    "note": "report 10 delta 2. Deterministic, so it gates: a loop that stops vectorizing fails here before wall time moves on the current machine. `wolf` counts remarks from `clang -x ir -O2` on the module the backend actually emits; `c_naive` from `clang -O3` on ref.c. A wolf count of 0 across the board is the s44 finding, not the s44 target — the floors are recorded so the first kernel that starts vectorizing is visible, and so one that stops again is a red gate.",
+    "note": "report 10 delta 2. Deterministic, so it gates: a loop that stops vectorizing fails here before wall time moves on the current machine. `wolf` counts remarks from `clang -x ir -O2` on the module the backend actually emits; `c_naive` from `clang -O3` on ref.c. A wolf count of 0 across the board was the s44 finding, not the s44 target — the floors were recorded so the first kernel that started vectorizing would be visible. s75 is that moment: `alias_daxpy` vectorizes now that element access is `ptr.off` + `load` instead of a runtime call, and its floor ratchets to 1. The rest stay at 0 with a reason each, in bench/loss-ledger.md: `aos_dot` and `e1_sum_reduce` are float/checked reductions LLVM will not reassociate, `a2_stencil1d` still carries bounds guards the relational analysis cannot discharge (the bound is `len - 1`, an affine offset away from the indices), `a5_hoist_call` has a call in the loop by construction.",
     "kernels": {
-      "alias_daxpy":      { "wolf_min": 0, "c_naive_min": 1 },
+      "alias_daxpy":      { "wolf_min": 1, "c_naive_min": 1 },
       "a2_stencil1d":     { "wolf_min": 0, "c_naive_min": 2 },
       "a5_hoist_call":    { "wolf_min": 0, "c_naive_min": 1 },
       "aos_dot":          { "wolf_min": 0, "c_naive_min": 0 },

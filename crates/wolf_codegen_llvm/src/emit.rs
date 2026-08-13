@@ -1539,6 +1539,14 @@ impl<'a> Fx<'a> {
                 self.vals.insert(results[0], Repr::Scalar(slot));
                 self.vals.insert(results[1], Repr::Token);
             }
+            // s75: a token root over runtime-owned storage. Tokens are
+            // an ordering discipline, not a machine value — there is
+            // nothing to emit, and that is the whole point: container
+            // element traffic becomes plain `load`/`store` the
+            // optimizer can see.
+            Opcode::RegionForeign => {
+                self.vals.insert(results[0], Repr::Token);
+            }
             Opcode::RcDup | Opcode::RcDrop => {
                 return Err(nyi(
                     "shared-tier rc ops (runtime shape lands with the shared cells, s42)",
