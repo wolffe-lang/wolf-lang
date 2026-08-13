@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 82] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 83] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -110,6 +110,11 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 82] = [
     ("__wolf_rt_str_replace", 7, false),
     ("__wolf_rt_str_split", 5, true),
     ("__wolf_rt_str_bytes", 2, true),
+    // s81 (#58): the validating byte source. `(hdr, out) -> code` —
+    // the one entry that builds a `str` from arbitrary numbers, and a
+    // rejection comes back as a code lowering turns into the `utf8`
+    // row.
+    ("__wolf_rt_str_from_utf8", 2, true),
     ("__wolf_rt_list_new", 1, true),
     ("__wolf_rt_list_push", 2, false),
     ("__wolf_rt_list_pop", 2, true),

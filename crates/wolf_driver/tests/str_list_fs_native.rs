@@ -283,6 +283,86 @@ fn main() -> !int {
     );
 }
 
+// ------------------------- s81 / #58: the validating byte source --
+
+#[test]
+fn str_from_utf8_validates_identically_on_both_lanes() {
+    // The border post (#58). The two lanes run different code — the
+    // checked machine's `String::from_utf8`, the native tier's
+    // `wolf_rt::str::__wolf_rt_str_from_utf8` — so the parity here is
+    // the claim that "it validates" means the SAME set on both. Every
+    // refused column is one named UTF-8 failure mode, plus the two
+    // elements that are not bytes at all.
+    parity(
+        "s81_from_utf8",
+        r#"
+fn decode(bs: List[int]) -> str {
+    str_from_utf8(bs) else "X"
+}
+
+fn seq(a: int, b: int, c: int, dd: int, n: int) -> List[int] {
+    var l = List[int]()
+    if n > 0 { (mut l).push(a) }
+    if n > 1 { (mut l).push(b) }
+    if n > 2 { (mut l).push(c) }
+    if n > 3 { (mut l).push(dd) }
+    l
+}
+
+fn main() -> !int {
+    let ok = decode(seq(119, 111, 108, 102, 4))
+    let astral = decode(seq(240, 159, 144, 186, 4))
+    let nul = decode(seq(119, 0, 102, 0, 3))
+    let round = decode("wolf é".bytes())
+    print("{ok} {astral} {nul.len} {round} {round.len}")
+    let lone = decode(seq(128, 0, 0, 0, 1))
+    let trunc = decode(seq(226, 130, 0, 0, 2))
+    let overlong = decode(seq(192, 175, 0, 0, 2))
+    let surrogate = decode(seq(237, 160, 128, 0, 3))
+    let too_big = decode(seq(245, 128, 128, 128, 4))
+    let not_a_byte = decode(seq(256, 0, 0, 0, 1))
+    let negative = decode(seq(0 - 1, 0, 0, 0, 1))
+    print("{lone}{trunc}{overlong}{surrogate}{too_big}{not_a_byte}{negative}")
+    0
+}
+"#,
+        "exit(0)",
+        "wolf 🐺 3 wolf é 7\nXXXXXXX\n",
+    );
+}
+
+#[test]
+fn str_equality_agrees_across_the_inline_threshold() {
+    // s81 target 1: `==` is a length guard plus an inline byte compare
+    // below 64 bytes and the runtime's `memcmp` above it. Two code
+    // paths, one answer — and the checked lane, which has neither,
+    // is the referee.
+    parity(
+        "s81_str_eq",
+        r#"
+fn eq(a: str, b: str) -> int {
+    if a == b { 1 } else { 0 }
+}
+
+fn main() -> !int {
+    let short_hit = eq("wolf", "wolf")
+    let short_miss = eq("wolfa", "wolfb")
+    let len_miss = eq("wolf", "wolves")
+    let empty = eq("", "")
+    let long_a = "wolf".repeat(40)
+    let long_hit = eq(long_a, "wolf".repeat(40))
+    let long_miss = eq(long_a, "{"wolf".repeat(39)}wolg")
+    let long_len = eq(long_a, "wolf".repeat(39))
+    let ne = if "é" != "e" { 1 } else { 0 }
+    print("{short_hit}{short_miss}{len_miss}{empty}{long_hit}{long_miss}{long_len}{ne}")
+    0
+}
+"#,
+        "exit(0)",
+        "10011001\n",
+    );
+}
+
 #[test]
 fn the_runtime_symbol_table_covers_the_s40_families() {
     // Every shim lowering can emit must be declared in the codegen's
@@ -299,10 +379,11 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         assert!(n > 0, "no {family} symbols in RT_SYMBOLS");
     }
     // 78 at s40/s73; s75 adds the D43 line brackets; s76 the
-    // ambient-region enter/leave pair.
+    // ambient-region enter/leave pair; s81 the validating byte source
+    // (`str_from_utf8`, wolf-lang#58).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        82,
+        83,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

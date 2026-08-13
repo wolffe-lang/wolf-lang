@@ -5715,6 +5715,19 @@ impl<'a> Checker<'a> {
                 vec![str_, str_],
                 rowed(self, int_, &["parse", "missing", "kind"]),
             ),
+            // The s81 str-construction border (#58): `List[int] -> str
+            // ! {utf8}`, pure like the json family. The row is the
+            // whole point — s77 refused an unchecked bytes-to-str path
+            // because that is the forging hole, and this closes the gap
+            // the honest way: the primitive VALIDATES (stray
+            // continuations, truncations, overlong forms, surrogates,
+            // scalars past U+10FFFF, and any element outside 0..=255),
+            // and a rejection is a recoverable `utf8` VALUE, not a
+            // trap. wolf-std's `bytes.to_str` is this call plus a name.
+            "str_from_utf8" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (vec![list_int], rowed(self, str_, &["utf8"]))
+            }
             _ => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)

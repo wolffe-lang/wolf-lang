@@ -343,6 +343,102 @@ fn str_ordering_is_byte_lexicographic() {
     );
 }
 
+// ------------------------- s81 / #58: the validating byte source --
+
+/// The helper every test below shares: a `List[int]` built from up to
+/// four elements, decoded through the border post, with the refusal
+/// spelled as an ordinary `else`.
+const DECODER: &str = "fn decode(bs: List[int]) -> str {\n\
+     str_from_utf8(bs) else \"X\"\n\
+     }\n\
+     fn seq(a: int, b: int, c: int, dd: int, n: int) -> List[int] {\n\
+     var l = List[int]()\n\
+     if n > 0 { (mut l).push(a) }\n\
+     if n > 1 { (mut l).push(b) }\n\
+     if n > 2 { (mut l).push(c) }\n\
+     if n > 3 { (mut l).push(dd) }\n\
+     l\n\
+     }\n";
+
+#[test]
+fn from_utf8_accepts_text_including_an_interior_nul() {
+    // `str_from_utf8` is the one operation that builds a `str` out of
+    // numbers (s77 left the byte tier one-way on purpose). Accepted:
+    // ASCII, two-byte, three-byte, four-byte, empty — and a NUL, which
+    // is VALID text: a wolf `str` carries its length, so nothing
+    // terminates.
+    assert_stdout(
+        &format!(
+            "{DECODER}\
+             fn main() -> !int {{\n\
+             let ascii = decode(seq(119, 111, 108, 102, 4))\n\
+             let two = decode(seq(195, 169, 0, 0, 2))\n\
+             let three = decode(seq(226, 130, 172, 0, 3))\n\
+             let four = decode(seq(240, 159, 144, 186, 4))\n\
+             let empty = decode(List[int]())\n\
+             let nul = decode(seq(119, 0, 102, 0, 3))\n\
+             print(\"{{ascii}} {{two}} {{three}} {{four}} {{empty.len}} {{nul.len}}\")\n\
+             0\n\
+             }}\n"
+        ),
+        "wolf é € 🐺 0 3\n",
+    );
+}
+
+#[test]
+fn from_utf8_refuses_the_ugly_inputs_as_a_row_not_a_trap() {
+    // One named failure mode per column, and every one of them is a
+    // VALUE the `else` catches — refusing bytes is an outcome, and a
+    // trap here would make `bytes.to_str` unwritable in wolf-std.
+    // The last two are not bytes at all: `List[int]` holds `int`s.
+    assert_stdout(
+        &format!(
+            "{DECODER}\
+             fn main() -> !int {{\n\
+             let lone = decode(seq(128, 0, 0, 0, 1))\n\
+             let cont = decode(seq(191, 191, 0, 0, 2))\n\
+             let trunc = decode(seq(226, 130, 0, 0, 2))\n\
+             let trunc4 = decode(seq(240, 159, 144, 0, 3))\n\
+             let overlong = decode(seq(192, 175, 0, 0, 2))\n\
+             let overlong3 = decode(seq(224, 128, 175, 0, 3))\n\
+             let surrogate = decode(seq(237, 160, 128, 0, 3))\n\
+             let too_big = decode(seq(245, 128, 128, 128, 4))\n\
+             let never = decode(seq(254, 0, 0, 0, 1))\n\
+             let big = decode(seq(256, 0, 0, 0, 1))\n\
+             let neg = decode(seq(0 - 1, 0, 0, 0, 1))\n\
+             let poison = decode(seq(119, 111, 108, 300, 4))\n\
+             print(\"{{lone}}{{cont}}{{trunc}}{{trunc4}}{{overlong}}{{overlong3}}\")\n\
+             print(\"{{surrogate}}{{too_big}}{{never}}{{big}}{{neg}}{{poison}}\")\n\
+             0\n\
+             }}\n"
+        ),
+        "XXXXXX\nXXXXXX\n",
+    );
+}
+
+#[test]
+fn from_utf8_round_trips_the_byte_view() {
+    // The witness that the s77 view and the s81 source agree: bytes out,
+    // bytes back, same string — and the `?` propagation wolf-std's
+    // `bytes.to_str` needs, over a caller that declares its own `utf8`.
+    assert_exit(
+        "fn to_str(b: List[int]) -> str ! {utf8} {\n\
+         str_from_utf8(b)\n\
+         }\n\
+         fn shout(b: List[int]) -> str ! {utf8} {\n\
+         let s = to_str(b)?\n\
+         s.upper()\n\
+         }\n\
+         fn main() -> !int {\n\
+         let src = \"wolf é\"\n\
+         let back = to_str(src.bytes()) else \"X\"\n\
+         let loud = shout(src.bytes()) else \"X\"\n\
+         if back == src && back.len == 7 && loud == \"WOLF É\" { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
 // ------------------------------------------- interpolation + specs --
 
 #[test]

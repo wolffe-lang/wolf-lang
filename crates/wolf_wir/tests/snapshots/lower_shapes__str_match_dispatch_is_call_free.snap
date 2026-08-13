@@ -1,0 +1,118 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: out
+---
+decl @kind({ptr, i64}) -> i64
+data @str.0 = "+"
+data @str.1 = "-"
+data @str.2 = "*"
+data @str.3 = "7"
+
+fn @kind({ptr, i64}) -> i64 {
+b0(%0: {ptr, i64}):
+  %1: mem.r1 = region.foreign
+  %2: mem.r0 = region.foreign
+  %3 = agg.get %0, 0
+  %4 = agg.get %0, 1
+  %5 = data.addr @str.0
+  %6 = iconst.i64 1
+  %7 = icmp.eq %4, %6
+  %8 = bconst true
+  %9 = bconst false
+  br %7, b1, b5(%9)
+b1:
+  %10 = iconst.i64 0
+  jmp b2(%10)
+b2(%11: i64):
+  %12 = icmp.slt %11, %6
+  br %12, b3, b5(%8)
+b3:
+  %13 = ptr.off %3, %11, 1
+  %14 = load.i8 %13, %1
+  %15 = zext.i64 %14
+  %16 = ptr.off %5, %11, 1
+  %17 = load.i8 %16, %1
+  %18 = zext.i64 %17
+  %19 = icmp.eq %15, %18
+  br %19, b4, b5(%9)
+b4:
+  %20 = iadd.wrap %11, %6
+  jmp b2(%20)
+b5(%21: bool):
+  br %21, b6, b7
+b6:
+  jmp b21(%6)
+b7:
+  %22 = data.addr @str.1
+  br %7, b8, b12(%9)
+b8:
+  %23 = iconst.i64 0
+  jmp b9(%23)
+b9(%24: i64):
+  %25 = icmp.slt %24, %6
+  br %25, b10, b12(%8)
+b10:
+  %26 = ptr.off %3, %24, 1
+  %27 = load.i8 %26, %1
+  %28 = zext.i64 %27
+  %29 = ptr.off %22, %24, 1
+  %30 = load.i8 %29, %1
+  %31 = zext.i64 %30
+  %32 = icmp.eq %28, %31
+  br %32, b11, b12(%9)
+b11:
+  %33 = iadd.wrap %24, %6
+  jmp b9(%33)
+b12(%34: bool):
+  br %34, b19, b13
+b13:
+  %35 = data.addr @str.2
+  br %7, b14, b18(%9)
+b14:
+  %36 = iconst.i64 0
+  jmp b15(%36)
+b15(%37: i64):
+  %38 = icmp.slt %37, %6
+  br %38, b16, b18(%8)
+b16:
+  %39 = ptr.off %3, %37, 1
+  %40 = load.i8 %39, %1
+  %41 = zext.i64 %40
+  %42 = ptr.off %35, %37, 1
+  %43 = load.i8 %42, %1
+  %44 = zext.i64 %43
+  %45 = icmp.eq %41, %44
+  br %45, b17, b18(%9)
+b17:
+  %46 = iadd.wrap %37, %6
+  jmp b15(%46)
+b18(%47: bool):
+  br %47, b19, b20
+b19:
+  %48 = iconst.i64 2
+  jmp b21(%48)
+b20:
+  %49 = iconst.i64 3
+  jmp b21(%49)
+b21(%50: i64):
+  ret %50
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = data.addr @str.0
+  %1 = iconst.i64 1
+  %2 = agg.make %0, %1
+  %3 = call @kind(%2)
+  %4 = data.addr @str.2
+  %5 = agg.make %4, %1
+  %6 = call @kind(%5)
+  %7 = iadd.chk %3, %6
+  %8 = data.addr @str.3
+  %9 = agg.make %8, %1
+  %10 = call @kind(%9)
+  %11 = iadd.chk %7, %10
+  %12 = iconst.i64 6
+  %13 = isub.chk %11, %12
+  ret %13
+}

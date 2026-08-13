@@ -87,15 +87,22 @@
 //! store path for it, the surface already refuses to name a temporary as
 //! a mutable place (E0804/E1009 for `s.bytes().push(1)` and
 //! `(mut s.bytes()).push(1)`), and lowering refuses the mutators on top
-//! of that. It cannot become a `str`: nothing turns
-//! bytes back into a `str`, because doing so honestly requires
-//! VALIDATION — a `List[int] -> str ! {utf8}` primitive that does not
-//! exist yet (wolf-std's `bytes.to_str` is blocked on exactly that, and
-//! a cast would be the soundness hole, not the fix). Both str-producing
-//! entries below (`str_get`, and the `s[a..b]` lowering that mirrors
-//! it) only ever narrow an ALREADY-valid `str` on code-point
-//! boundaries, so no operation in the language can build an invalid
-//! one.
+//! of that. It cannot become a `str` by CASTING: the two str-producing
+//! entries here (`str_get`, and the `s[a..b]` lowering that mirrors it)
+//! only ever narrow an ALREADY-valid `str` on code-point boundaries.
+//!
+//! # The byte source (s81, wolf-lang#58)
+//!
+//! s77 left the byte tier one-way on purpose — a view and no source —
+//! and named the missing half: a `List[int] -> str ! {utf8}` primitive
+//! that VALIDATES, because an unchecked one is the forging hole rather
+//! than the fix. [`__wolf_rt_str_from_utf8`] is that half, and it is
+//! the only operation in the language that builds a `str` out of
+//! arbitrary numbers. Its failure is a ROW (`utf8`), not a trap and not
+//! undefined behaviour: refusing bytes is an outcome a caller handles,
+//! which is what lets wolf-std finally write `bytes.to_str`. So "every
+//! `str` in a wolf program is valid UTF-8" stays a theorem: narrowing
+//! preserves it, and construction checks it.
 //!
 //! Two entries here are kept deliberately even though the compiler no
 //! longer calls them on the hot path:
@@ -540,6 +547,64 @@ pub unsafe extern "C" fn __wolf_rt_str_bytes(sp: i64, sl: i64) -> i64 {
     hdr as i64
 }
 
+/// `str_from_utf8(b: List[int]) -> str ! {utf8}` — the s81 border post
+/// (wolf-lang#58), and the ONLY operation in the language that builds a
+/// `str` out of arbitrary numbers.
+///
+/// 0 = accepted, with the materialized pair through `out`; 1 = the
+/// `utf8` row. It VALIDATES, and that is the whole reason it exists:
+/// s77 declined to add an unchecked bytes-to-str path because an
+/// unchecked one is the forging hole — every other str-producing entry
+/// here only ever narrows an ALREADY-valid `str` on code-point
+/// boundaries, and a cast would have made "every `str` is valid UTF-8"
+/// a hope instead of an invariant.
+///
+/// What "validates" means, precisely. Elements outside `0..=255` are
+/// not bytes at all and are rejected before anything else. The byte
+/// sequence then goes through `core::str::from_utf8`, which is the
+/// same Rust `std::str` reference the whole module uses, so the
+/// rejected set is exactly UTF-8's: a lone continuation byte, a
+/// truncated multi-byte sequence, an overlong encoding, a surrogate
+/// (U+D800..U+DFFF), and a scalar past U+10FFFF. A NUL byte is VALID
+/// text and is accepted — wolf `str`s carry their length, so there is
+/// no terminator to confuse.
+///
+/// Accepted bytes are copied into the ambient region, exactly like any
+/// other materialization (see this module's design note): the result is
+/// an ordinary owned `str`, borrowing nothing from the caller's list.
+///
+/// # Safety
+///
+/// `hdr` must be a live `List[int]` header from
+/// [`crate::list::__wolf_rt_list_new`]; `out` must address 16 writable
+/// bytes. A header of the wrong ELEMENT WIDTH is refused rather than
+/// misread — compiled code cannot produce one (sema types the argument
+/// `List[int]`), and a direct FFI caller deserves an answer instead of
+/// undefined behaviour.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_str_from_utf8(hdr: i64, out: i64) -> i64 {
+    let Some(elems) = (unsafe { crate::list::i64_elems(hdr) }) else {
+        return 1;
+    };
+    let mut bytes: Vec<u8> = Vec::with_capacity(elems.len());
+    for &v in elems {
+        // A byte is 0..=255. Anything else is not a byte, so it cannot
+        // be part of any UTF-8 encoding — the same `utf8` answer, made
+        // before the decoder ever sees it.
+        let Ok(b) = u8::try_from(v) else {
+            return 1;
+        };
+        bytes.push(b);
+    }
+    match core::str::from_utf8(&bytes) {
+        Ok(s) => {
+            unsafe { write_owned(out, s) };
+            0
+        }
+        Err(_) => 1,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -724,5 +789,106 @@ mod tests {
             assert_eq!(__wolf_rt_str_cmp(zp, zl, ep, el), -1); // "z" < "é"
             assert_eq!(__wolf_rt_str_eq(ap, al, ap, al), 1);
         }
+    }
+
+    /// Build a `List[int]` of the given element values (they are `int`s,
+    /// not bytes — the out-of-range ones are the point).
+    fn int_list(values: &[i64]) -> i64 {
+        let hdr = crate::list::new_list(8);
+        for &v in values {
+            let cell = [v];
+            crate::list::push_raw(hdr, cell.as_ptr().cast());
+        }
+        hdr as i64
+    }
+
+    fn from_utf8(values: &[i64]) -> Result<String, ()> {
+        let hdr = int_list(values);
+        let mut out = [0i64; 2];
+        let rc = unsafe { __wolf_rt_str_from_utf8(hdr, out.as_mut_ptr() as i64) };
+        if rc == 0 {
+            Ok(read_pair(&out))
+        } else {
+            Err(())
+        }
+    }
+
+    /// s81 target 2 (#58): the border post ACCEPTS text and REFUSES
+    /// everything UTF-8 refuses — and refuses it as a return code the
+    /// caller turns into the `utf8` row, never as a trap. These are the
+    /// ugly inputs by name, because "it validates" is a claim and this
+    /// is the evidence.
+    #[test]
+    fn from_utf8_accepts_text_and_refuses_the_ugly_inputs() {
+        // Accepted: ASCII, multi-byte, astral, empty, and — deliberately
+        // — a string carrying an interior NUL. A wolf `str` is
+        // {ptr, len}: there is no terminator for a NUL to end.
+        assert_eq!(from_utf8(&[]), Ok(String::new()));
+        assert_eq!(from_utf8(&[119, 111, 108, 102]), Ok("wolf".to_string()));
+        assert_eq!(from_utf8(&[0xC3, 0xA9]), Ok("é".to_string())); // U+00E9
+        assert_eq!(from_utf8(&[0xE2, 0x82, 0xAC]), Ok("€".to_string())); // U+20AC
+        assert_eq!(
+            from_utf8(&[0xF0, 0x9F, 0x90, 0xBA]),
+            Ok("🐺".to_string()) // U+1F43A, four bytes
+        );
+        let nul = from_utf8(&[119, 0, 102]).expect("a NUL is valid text");
+        assert_eq!(nul.len(), 3);
+        assert_eq!(nul.as_bytes()[1], 0);
+
+        // Refused, one named failure mode at a time.
+        assert!(from_utf8(&[0x80]).is_err(), "a lone continuation byte");
+        assert!(from_utf8(&[0xBF, 0xBF]).is_err(), "continuations only");
+        assert!(from_utf8(&[0xE2, 0x82]).is_err(), "a truncated sequence");
+        assert!(
+            from_utf8(&[0xF0, 0x9F, 0x90]).is_err(),
+            "a truncated 4-byte sequence"
+        );
+        assert!(
+            from_utf8(&[0xC0, 0xAF]).is_err(),
+            "an overlong encoding of '/'"
+        );
+        assert!(
+            from_utf8(&[0xE0, 0x80, 0xAF]).is_err(),
+            "a 3-byte overlong form"
+        );
+        assert!(
+            from_utf8(&[0xED, 0xA0, 0x80]).is_err(),
+            "a surrogate (U+D800)"
+        );
+        assert!(
+            from_utf8(&[0xF4, 0x90, 0x80, 0x80]).is_err(),
+            "a scalar past U+10FFFF"
+        );
+        assert!(from_utf8(&[0xFE]).is_err(), "a byte UTF-8 never uses");
+
+        // And the elements that are not bytes at all. `List[int]` holds
+        // `int`s, so a caller can hand over 256 or -1; neither is a
+        // byte, so neither can be part of any encoding.
+        assert!(from_utf8(&[256]).is_err(), "an element above 255");
+        assert!(from_utf8(&[-1]).is_err(), "a negative element");
+        assert!(
+            from_utf8(&[119, 111, 108, 300]).is_err(),
+            "one bad element poisons the whole sequence"
+        );
+    }
+
+    /// The accepted bytes are OWNED: they land in the ambient region,
+    /// not in the caller's list buffer. A `str` that borrowed a mutable
+    /// `List` would be exactly the forging hole this primitive exists to
+    /// close — the list could be written after the check.
+    #[test]
+    fn from_utf8_materializes_into_the_ambient_region() {
+        let hdr = int_list(&[119, 111, 108, 102]);
+        let mut out = [0i64; 2];
+        let rc = unsafe { __wolf_rt_str_from_utf8(hdr, out.as_mut_ptr() as i64) };
+        assert_eq!(rc, 0);
+        assert_eq!(read_pair(&out), "wolf");
+        // Overwrite the source list; the str must not move with it.
+        let poison = [0x80i64];
+        assert_eq!(
+            unsafe { crate::list::__wolf_rt_list_write(hdr, 0, poison.as_ptr() as i64) },
+            1
+        );
+        assert_eq!(read_pair(&out), "wolf", "the str owns its bytes");
     }
 }

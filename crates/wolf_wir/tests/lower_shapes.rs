@@ -414,6 +414,129 @@ fn byte_index_and_str_slice_emit_no_runtime_call() {
     insta::assert_snapshot!(out);
 }
 
+/// s81 acceptance (the c09 contract): `==` and `!=` on `str` stop being
+/// a call. `__wolf_rt_str_eq` was the one call left inside
+/// `d2_substr_search`'s loop after s77 inlined the slice, and s77's A/B
+/// priced it at 50x. What replaces it is the length guard plus the s77
+/// byte view read from two bases: `ptr.off` at stride 1, `load.i8`,
+/// `zext`, one `icmp` per byte — and no call on that path.
+///
+/// The shape here is the one the bench measures — a `str` parameter
+/// against a `str` parameter, so neither length is a build-time
+/// constant. That is also the ONLY shape that still names the shim: the
+/// contract's long-operand route (`STR_EQ_INLINE_MAX`) is a guarded
+/// branch to `__wolf_rt_str_eq`, and a dynamic length cannot fold it
+/// away. So the assertion is exact rather than blanket — the compare
+/// emits ONE call site, it is the memcmp route, and it is not on the
+/// scan path. Constant-length operands emit none at all
+/// (`str_match_dispatch_is_call_free`).
+///
+/// `!=` is the same shape with the two answers swapped, which is why it
+/// costs exactly what `==` costs.
+#[test]
+fn str_equality_emits_no_call_on_the_byte_path() {
+    let out = dump(
+        "fn same(a: str, b: str) -> int {\n\
+         \x20   if a == b { 1 } else { 0 }\n\
+         }\n\
+         fn differ(a: str, b: str) -> int {\n\
+         \x20   if a != b { 1 } else { 0 }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   same(\"wolf\", \"wolf\") - 1 + differ(\"wolf\", \"wolves\") - 1\n\
+         }\n",
+    );
+    for f in ["fn @same", "fn @differ"] {
+        let body = out
+            .split(f)
+            .nth(1)
+            .expect("lowered")
+            .split("\nfn ")
+            .next()
+            .expect("body");
+        assert_eq!(
+            body.matches("call ").count(),
+            1,
+            "{f} keeps only the guarded long-operand route: {body}"
+        );
+        assert!(
+            body.contains("call @__wolf_rt_str_eq"),
+            "{f}'s one call is the memcmp route: {body}"
+        );
+        assert!(body.contains("ptr.off"), "{f} addresses bytes: {body}");
+        assert!(body.contains("load.i8"), "{f} reads one byte: {body}");
+        assert!(body.contains("zext.i64"), "{f} widens UNSIGNED: {body}");
+    }
+    insta::assert_snapshot!(out);
+}
+
+/// s81: an operand whose length is a build-time constant — every
+/// `match` arm, and every compare against a literal — folds the
+/// long-operand threshold away, so the `__wolf_rt_str_eq` route is not
+/// even present as dead code. A `match` over str literals is the
+/// dispatch shape #54 introduced, and it is now call-free end to end.
+#[test]
+fn str_match_dispatch_is_call_free() {
+    let out = dump(
+        "fn kind(tok: str) -> int {\n\
+         \x20   match tok {\n\
+         \x20       \"+\" => 1,\n\
+         \x20       \"-\" | \"*\" => 2,\n\
+         \x20       _ => 3,\n\
+         \x20   }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   kind(\"+\") + kind(\"*\") + kind(\"7\") - 6\n\
+         }\n",
+    );
+    let body = out
+        .split("fn @kind")
+        .nth(1)
+        .expect("lowered")
+        .split("\nfn ")
+        .next()
+        .expect("body");
+    assert!(!body.contains("call "), "dispatch emits no call: {body}");
+    assert!(
+        !out.contains("__wolf_rt_str_eq"),
+        "the shim is unreachable from a literal dispatch: {out}"
+    );
+    insta::assert_snapshot!(out);
+}
+
+/// s81: past the inline threshold the compare routes to
+/// `__wolf_rt_str_eq`, whose body is a `memcmp` — 1.45 ns/byte inline
+/// against 0.024 through the call, measured on 4 KiB operands. The
+/// route is guarded, so the short path still reaches the byte loop with
+/// no call executed; this pins that BOTH arms exist for a
+/// dynamic-length operand.
+#[test]
+fn long_operands_route_to_the_memcmp_shim() {
+    let out = dump(
+        "fn same(a: str, b: str) -> int {\n\
+         \x20   if a == b { 1 } else { 0 }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   same(\"wolf\", \"wolf\") - 1\n\
+         }\n",
+    );
+    let body = out
+        .split("fn @same")
+        .nth(1)
+        .expect("lowered")
+        .split("\nfn ")
+        .next()
+        .expect("body");
+    assert!(
+        body.contains("iconst.i64 64"),
+        "the threshold is a constant in the IR: {body}"
+    );
+    assert!(
+        body.contains("load.i8"),
+        "the short path is still the byte loop: {body}"
+    );
+}
+
 /// s77: a `bytes()` result that must be a first-class `List[int]`
 /// value — bound, passed, returned — still MATERIALIZES through
 /// `__wolf_rt_str_bytes`, bit-for-bit as before. The view is not a

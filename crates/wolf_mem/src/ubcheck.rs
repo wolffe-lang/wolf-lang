@@ -3514,6 +3514,55 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// `str_from_utf8(b: List[int]) -> str ! {utf8}` (s81, wolf-lang#58)
+    /// — the checked lane's half of the border post, and the ONLY way a
+    /// wolf program can build a `str` out of numbers on any lane.
+    ///
+    /// It VALIDATES, which is the whole point: s77 refused an unchecked
+    /// bytes-to-str path because that is the forging hole, and the
+    /// language's "every `str` is valid UTF-8" invariant has to survive
+    /// construction, not just narrowing. Elements outside `0..=255` are
+    /// not bytes and are refused before decoding; the sequence then goes
+    /// through `std::str::from_utf8`, so the refused set is exactly
+    /// UTF-8's — lone continuations, truncations, overlong forms,
+    /// surrogates, scalars past U+10FFFF. An interior NUL is valid text
+    /// and is accepted (a wolf `str` carries its length; nothing
+    /// terminates).
+    ///
+    /// The refusal is the `utf8` ROW, never a trap: bytes from a file or
+    /// a socket are data, and mis-encoded data is an outcome a caller
+    /// handles. `wolf_rt::str::__wolf_rt_str_from_utf8` is the same
+    /// algorithm for the native lane, byte for byte.
+    fn str_from_utf8(&mut self, argv: Vec<Value>, span: Span) -> E<Flow> {
+        let utf8 = || {
+            Ok(Flow::Err(Value::ErrTag {
+                tag: "utf8".to_string(),
+                payload: Vec::new(),
+            }))
+        };
+        let Some(Value::List(id)) = argv.first() else {
+            return self.refuse("this `str_from_utf8` call shape", span);
+        };
+        let elems = self.lists[*id].clone();
+        let mut bytes: Vec<u8> = Vec::with_capacity(elems.len());
+        for v in elems {
+            let Value::Int(n) = v else {
+                return self.refuse("a `str_from_utf8` list of non-integers", span);
+            };
+            match u8::try_from(n) {
+                Ok(b) => bytes.push(b),
+                Err(_) => return utf8(),
+            }
+        }
+        match String::from_utf8(bytes) {
+            Ok(s) => {
+                self.charge_mem(s.len() as u64)?;
+                Ok(Flow::Val(Value::Str(s)))
+            }
+            Err(_) => utf8(),
+        }
+    }
+
     /// Is this expression an injected raise of a declared row tag?
     /// True when the checker recorded the `!T` union as the node's
     /// type and the node's own text names one of the row's tags —
@@ -4065,7 +4114,7 @@ impl<'t> Machine<'t> {
             // one refusal site.
             "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exit" | "os_spawn"
             | "os_wait" | "os_kill" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms"
-            | "json_valid" | "json_get" | "json_type" | "json_len" => {
+            | "json_valid" | "json_get" | "json_type" | "json_len" | "str_from_utf8" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -4078,6 +4127,7 @@ impl<'t> Machine<'t> {
                     }
                 }
                 return match callee_name.as_str() {
+                    "str_from_utf8" => self.str_from_utf8(argv, e.span),
                     n if n.starts_with("json_") => self.json_builtin(n, argv, e.span),
                     n if n.starts_with("time_") => self.time_builtin(n, argv, e.span),
                     n => self.os_builtin(n, argv, e.span),

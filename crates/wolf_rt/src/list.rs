@@ -219,6 +219,34 @@ pub unsafe extern "C" fn __wolf_rt_list_clear(hdr: i64) {
     unsafe { (*(hdr as *mut ListHdr)).len = 0 };
 }
 
+/// The elements of a `List[int]` as a plain slice, or `None` when the
+/// header is not an 8-byte-element list (s81).
+///
+/// A shim that consumes a whole list at once — [`crate::str`]'s byte
+/// source is the first — should not pay a `copy_nonoverlapping` per
+/// element through [`__wolf_rt_list_read`]'s caller slot. The width
+/// CHECK is the point of the `Option`: compiled code cannot reach this
+/// with the wrong list (sema types the argument `List[int]`), but a
+/// direct FFI caller could hand over a `List[str]` whose 16-byte
+/// elements would overrun an 8-byte read slot, and refusing is the only
+/// answer that is not undefined behaviour.
+///
+/// # Safety
+///
+/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// returned slice borrows its buffer — it must not outlive a `push`
+/// that reallocates.
+pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
+    let h = unsafe { &*(hdr as *const ListHdr) };
+    if h.elem != 8 || h.len < 0 {
+        return None;
+    }
+    if h.len == 0 || h.data.is_null() {
+        return Some(&[]);
+    }
+    Some(unsafe { core::slice::from_raw_parts(h.data.cast::<i64>(), h.len as usize) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
