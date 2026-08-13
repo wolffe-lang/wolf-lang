@@ -432,6 +432,80 @@ fn rangeopt_versioning_backstop() {
     insta::assert_snapshot!("rangeopt_versioned_loop", out);
 }
 
+/// s75, the relational channel: intervals cannot prove `i <u n` from
+/// `i <s n` — the fact is a RELATION, and an interval domain forgets
+/// relations by construction. The π seeding therefore keeps the
+/// comparison itself, and the guard over the same operand pair
+/// decides the bounds test, trap arm and all. Both operands are
+/// provably non-negative at the query block (`i` is an induction
+/// variable from 0; the guard's own refinement puts `n` above it), so
+/// crossing from the signed to the unsigned ordering is sound.
+#[test]
+fn rangeopt_relation_proves_the_unsigned_bounds_test() {
+    let src = "fn @walk(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iconst.i64 0\n  \
+               jmp b1(%1, %1)\n\
+               b1(%2: i64, %3: i64):\n  \
+               %4 = icmp.slt %2, %0\n  \
+               br %4, b2, b5\n\
+               b2:\n  \
+               %5 = icmp.ult %2, %0\n  \
+               br %5, b3, b4\n\
+               b3:\n  \
+               %6 = iconst.i64 1\n  \
+               %7 = iadd.chk %2, %6\n  \
+               jmp b1(%7, %3)\n\
+               b4:\n  \
+               trap.bounds\n\
+               b5:\n  \
+               ret %3\n\
+               }\n";
+    let (out, stats) = one_pass(src, "rangeopt");
+    assert_eq!(stats.bounds_checks_seen, 1, "{stats}");
+    assert_eq!(stats.bounds_checks_eliminated, 1, "{stats}");
+    assert!(
+        !out.contains("trap.bounds"),
+        "the proven guard takes its trap arm with it:\n{out}"
+    );
+}
+
+/// The other half of the same rule, and the one that matters more: a
+/// bounds test nothing relates to the guard STAYS. Here the loop runs
+/// to `%0` and the index is tested against a DIFFERENT bound `%1`.
+#[test]
+fn rangeopt_keeps_a_bounds_test_over_an_unrelated_bound() {
+    let src = "fn @walk(i64, i64) -> i64 {\n\
+               b0(%0: i64, %1: i64):\n  \
+               %2 = iconst.i64 0\n  \
+               jmp b1(%2, %2)\n\
+               b1(%3: i64, %4: i64):\n  \
+               %5 = icmp.slt %3, %0\n  \
+               br %5, b2, b5\n\
+               b2:\n  \
+               %6 = icmp.ult %3, %1\n  \
+               br %6, b3, b4\n\
+               b3:\n  \
+               %7 = iconst.i64 1\n  \
+               %8 = iadd.chk %3, %7\n  \
+               jmp b1(%8, %4)\n\
+               b4:\n  \
+               trap.bounds\n\
+               b5:\n  \
+               ret %4\n\
+               }\n";
+    let (out, stats) = one_pass(src, "rangeopt");
+    assert_eq!(stats.bounds_checks_seen, 1, "{stats}");
+    assert_eq!(
+        stats.bounds_checks_eliminated, 0,
+        "an unrelated bound proves nothing: {stats}"
+    );
+    assert!(
+        out.contains("trap.bounds"),
+        "the unproven guard keeps its trap:\n{out}"
+    );
+}
+
 /// A loop containing a CALL never versions (schedule points, spec/07).
 #[test]
 fn rangeopt_versioning_skips_loops_with_calls() {

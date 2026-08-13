@@ -182,6 +182,16 @@ fn dse_dying_regions(
                         regions.entry(r).or_default().local_root = true;
                     }
                 }
+                // A foreign region's storage OUTLIVES the frame (s75:
+                // the runtime owns it), so its stores are observable
+                // exactly like a caller's — an entry root, never dying.
+                Opcode::RegionForeign => {
+                    if let Some(&tok) = results.first()
+                        && let Some(r) = region_of(view, f.value_ty(tok))
+                    {
+                        regions.entry(r).or_default().entry_root = true;
+                    }
+                }
                 Opcode::Load => {
                     if let Some(r) = region_of(view, f.value_ty(args[1])) {
                         regions.entry(r).or_default().observed = true;

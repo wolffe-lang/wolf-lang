@@ -64,6 +64,44 @@ fn build(order_flipped: bool) -> (Module, String) {
     (m, text)
 }
 
+/// s75: `region.foreign` is a token root like `region.new`, with no
+/// handle and no free — the frame never owns runtime-owned container
+/// storage, so it can never free it. It round-trips, it verifies, and
+/// loads through its chain are ordinary loads.
+#[test]
+fn region_foreign_roots_a_chain_and_round_trips() {
+    let src = "fn @read(ptr) -> i64 {\n\
+               b0(%0: ptr):\n\
+               \x20\x20%1: mem.r0 = region.foreign\n\
+               \x20\x20%2 = iconst.i64 8\n\
+               \x20\x20%3 = ptr.off %0, %2, 1\n\
+               \x20\x20%4 = load.i64 %3, %1\n\
+               \x20\x20ret %4\n\
+               }\n";
+    let m = wolf_wir::parse_module(src).expect("foreign-region module parses");
+    verify_module(&m).expect("foreign-region module verifies");
+    assert_eq!(wolf_wir::print_module(&m), src, "byte-identical round trip");
+}
+
+/// Two roots for ONE region is still a rejection — `region.foreign`
+/// joins the root set, it does not weaken it.
+#[test]
+fn region_foreign_cannot_double_root_a_region() {
+    let src = "fn @twice() -> i64 {\n\
+               b0:\n\
+               \x20\x20%0: mem.r0 = region.foreign\n\
+               \x20\x20%1: mem.r0 = region.foreign\n\
+               \x20\x20%2 = iconst.i64 0\n\
+               \x20\x20ret %2\n\
+               }\n";
+    let m = wolf_wir::parse_module(src).expect("module parses");
+    let err = verify_module(&m).expect_err("two roots for one region is rejected");
+    assert!(
+        format!("{err}").contains("two token roots"),
+        "unexpected error: {err}"
+    );
+}
+
 /// Module data (s31): `data @name = "…"` declarations and `data.addr`
 /// round-trip byte-identically, escapes included, and verify clean.
 #[test]

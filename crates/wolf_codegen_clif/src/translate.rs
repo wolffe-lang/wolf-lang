@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 78] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 80] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -67,6 +67,11 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 78] = [
     ("__wolf_rt_print_str", 2, false),
     ("__wolf_rt_print_i64", 1, false),
     ("__wolf_rt_print_bool", 1, false),
+    // D43: one `print` statement is one atomic line. Lowering brackets
+    // the segment calls; the runtime buffers between them and locks
+    // the stream once.
+    ("__wolf_rt_print_begin", 0, false),
+    ("__wolf_rt_print_end", 1, false),
     // The s38 io path: stream-parameterized writes (stdout/stderr)
     // with the comptime-packed format spec as a trailing i64 immediate
     // (0 = none) — `wolf_rt::io`'s symbol contract.
@@ -1342,6 +1347,11 @@ impl<'a, 'b> Tx<'a, 'b> {
                 let p = self.b.ins().stack_addr(ctypes::I64, slot, 0);
                 self.vals.insert(results[0], Repr::Scalar(p));
                 self.vals.insert(results[1], Repr::Token);
+            }
+            // s75: a token root over runtime-owned storage — ordering
+            // discipline only, no machine value, nothing to emit.
+            Opcode::RegionForeign => {
+                self.vals.insert(results[0], Repr::Token);
             }
             Opcode::RcDup | Opcode::RcDrop => {
                 return Err(nyi(

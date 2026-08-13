@@ -861,6 +861,15 @@ impl<'a> Verifier<'a> {
                     );
                 }
             }
+            Opcode::RegionForeign => {
+                self.expect_counts(inst, 0, 1)?;
+                if !matches!(types.get(self.f.value_ty(results[0])), TypeData::Mem(_)) {
+                    return Err(self.type_err(
+                        inst,
+                        "region.foreign's only result is the foreign region's mem token",
+                    ));
+                }
+            }
             // ---- error unions (s27, D30) ---------------------------
             Opcode::EuMakeOk => {
                 if results.len() != 1 {
@@ -1328,11 +1337,17 @@ impl<'a> Verifier<'a> {
         for &b in &self.f.layout {
             for &inst in &self.f.blocks[b].insts {
                 let op = self.f.insts[inst].op;
-                if !matches!(op, Opcode::RegionNew | Opcode::StackAlloc) {
-                    continue;
-                }
+                // `region.foreign` roots with its ONLY result; the
+                // allocating roots root with their second.
+                let tok_ix = match op {
+                    Opcode::RegionNew | Opcode::StackAlloc => 1,
+                    Opcode::RegionForeign => 0,
+                    _ => continue,
+                };
                 let results = self.results(inst);
-                let Some(&tok) = results.get(1) else { continue };
+                let Some(&tok) = results.get(tok_ix) else {
+                    continue;
+                };
                 let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(tok)) else {
                     continue; // ill-typed; the type check reports it
                 };

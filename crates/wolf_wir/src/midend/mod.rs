@@ -175,6 +175,12 @@ pub struct OptStats {
     /// Of those, statically eliminated (directly or via versioning).
     pub loop_checks_eliminated: usize,
     pub loops_versioned: usize,
+    /// Container bounds guards observed (s75): a `br` whose false arm
+    /// is a bare `trap.bounds` block. Counted wherever they appear,
+    /// not only in loops — a check outside a loop is still a check.
+    pub bounds_checks_seen: usize,
+    /// Of those, proven away (the dominating comparison decided them).
+    pub bounds_checks_eliminated: usize,
     /// Whole regions promoted to the frame (amendment 1).
     pub regions_promoted: usize,
     /// `region.alloc`s replaced by frame offsets under promotion.
@@ -194,6 +200,16 @@ impl OptStats {
             return None;
         }
         Some(self.loop_checks_eliminated as f64 / self.loop_checks_seen as f64)
+    }
+
+    /// The bounds-check elimination rate (s75). Bounds checks STAY:
+    /// this measures how many the analysis could discharge, never how
+    /// many were deleted for being inconvenient.
+    pub fn bounds_elimination_rate(&self) -> Option<f64> {
+        if self.bounds_checks_seen == 0 {
+            return None;
+        }
+        Some(self.bounds_checks_eliminated as f64 / self.bounds_checks_seen as f64)
     }
 }
 
@@ -236,6 +252,16 @@ impl std::fmt::Display for OptStats {
                 None => String::new(),
             },
             self.loops_versioned
+        )?;
+        writeln!(
+            f,
+            "  bounds: {}/{} guard(s) proven away{}",
+            self.bounds_checks_eliminated,
+            self.bounds_checks_seen,
+            match self.bounds_elimination_rate() {
+                Some(r) => format!(" ({:.1}%)", r * 100.0),
+                None => String::new(),
+            }
         )?;
         writeln!(
             f,

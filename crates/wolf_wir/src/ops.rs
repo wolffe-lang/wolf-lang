@@ -346,6 +346,24 @@ pub enum Opcode {
     /// `%size` bytes (an iconst), its own one-slot region rN: stack
     /// provenance, escape-to-stack promotion's landing pad (s19).
     StackAlloc,
+    /// `%m: mem.rN = region.foreign` (s75) — root rN over storage the
+    /// RUNTIME owns and outlives this frame: the `List` element buffers
+    /// and their headers, allocated by `wolf_rt` in the ambient region.
+    /// A token root like `region.new`, but with no handle and no
+    /// `region.free` — the frame never owns this memory, so it can
+    /// never free it, and the verifier's linearity story is unchanged.
+    /// Emits NOTHING at either backend: it exists so container element
+    /// traffic is ordinary `load`/`store` under the ordinary token
+    /// discipline instead of an opaque runtime call.
+    ///
+    /// Lowering roots exactly TWO per function — container headers and
+    /// container element buffers, which the runtime always allocates
+    /// separately — and puts every container in the same pair. It does
+    /// NOT root one per container: two containers may share a buffer
+    /// (`let b = a` copies a header pointer), so splitting them would
+    /// hand the backend a `!noalias` pair nothing proved. Per-container
+    /// disjointness is a checker theorem, not a lowering convenience.
+    RegionForeign,
 
     // ---- RESERVED mnemonics (parse/print now; semantics c05) -----------
     /// RESERVED (c05): `%q = sync.transfer %p` — region transfer to a task.
@@ -395,6 +413,7 @@ impl Opcode {
                     | Opcode::RcDrop
                     | Opcode::SyncFreeze
                     | Opcode::StackAlloc
+                    | Opcode::RegionForeign
                     | Opcode::EuMakeOk
                     | Opcode::EuMakeErr
                     | Opcode::EuIsErr
@@ -462,6 +481,7 @@ impl Opcode {
             Opcode::RcDrop => "rc.drop",
             Opcode::SyncFreeze => "sync.freeze",
             Opcode::StackAlloc => "stack.alloc",
+            Opcode::RegionForeign => "region.foreign",
             Opcode::SyncTransfer => "sync.transfer",
             Opcode::EuMakeOk => "eu.make.ok",
             Opcode::EuMakeErr => "eu.make.err",
