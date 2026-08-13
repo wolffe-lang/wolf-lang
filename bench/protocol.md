@@ -67,6 +67,18 @@ yet"). s33's M2 evidence is therefore blocked, not pending.
   Internally that is WIR → s42 mid-end → s43 whole-program → LLVM IR →
   `clang -x ir -c -O2 -fPIC`. The `-O2` is the backend's own hardcoded
   level, not a benchmark choice.
+- **which `libwolf_rt.a` the wolf lane links (s79).** The driver finds the
+  runtime archive next to the `wolf` binary, and the harness runs
+  `target/debug/wolf` — so from s44 to s78 every wolf measurement linked
+  the runtime compiled `-O0`. It is not a footnote: A/B on this host at
+  the same sizes gives **12.8x on `word_count`, 5.4x on `b3_churn`, 5.0x
+  on `d2_substr_search`, 2.8x on `list_alloc`**, and every published
+  family-B and family-D number before s79 is a number about that -O0
+  archive. The harness now builds `wolf_rt` in release and points
+  `WOLF_RT_LIB` at it; which archive was linked rides in every wolf
+  record's `config` and in a suite-level `runtime_build` record. If the
+  release build fails the harness falls back, says so on stderr, and the
+  label in the report says so too.
 - naive C: `clang -O3 ref.c` (the gate).
 - expert C: `clang -O3 expert.c` (report-only).
 - Rust: `rustc -O --edition=2024 ref.rs` (report-only).
@@ -87,6 +99,24 @@ number without its toolchain is not a measurement.
   clock the language exposes). Kernels are sized so the wolf lane spends
   150–400 ms under the clock, i.e. quantisation is ≤ 0.7% — below the 2%
   practical floor. When a finer clock exists, sizes can shrink.
+  **This is a size the suite has to keep re-earning, and between s44 and
+  s78 it silently lost it** (#84, generalised by the s79 audit). s75 and
+  s77 made the wolf lane up to 100x faster and nobody re-calibrated, so
+  by s78 `alias_daxpy` and `c2_ecs_sweep` were reading **one millisecond
+  tick** — 100% quantisation — `a2_stencil1d` two and `aos_dot` three.
+  Family C's 2.086x "the only family that WINS its thesis" was a
+  one-to-three-bucket reading. Every count in the manifest was
+  recalibrated at s79 against a measured wall on the release runtime;
+  over the two 7-run measurements the wolf lanes spent **79–403 ms**
+  under the clock, one tick being **0.25–1.27%** of the reading (target
+  250 ms, and the spread around it is the shared host, not the sizing).
+  The harness now publishes
+  `clock_quantum_frac` (and `wall_ms`) per wolf lane per kernel, so the
+  next time a sprint makes wolf faster the staleness is a number in the
+  report instead of a silent widening of the bucket. A finer clock is
+  still the real fix and is still not there: `time_now_ms` is the only
+  monotonic surface the language exposes, and exposing a nanosecond one
+  is `wolf_rt` + prelude + lowering work, outside the harness.
 - **Paired, interleaved runs.** N ≥ 3 (nightly: 10) passes; within each
   pass the lane order is **rotated**, so no lane systematically owns the
   warm cache or the drift at the end of the sweep.
@@ -123,6 +153,13 @@ hypothetical: the first full run caught `e3_index_arith`'s Rust lane, where
 rustc solved the closed form of a loop over a compile-time-constant bound
 and "beat" wolf by 200000×. The Rust references now pass their loop inputs
 through `std::hint::black_box`, and the guard stays as the backstop.
+
+### The folded-workload guard covers the subject too (s79)
+
+The guard used to police only the comparison lanes. It now runs on the
+wolf lane as well: a folded subject would manufacture an unbounded win
+against every lane at once, which is the half of the check that could
+actually flatter us, and it was the half that was missing.
 
 ## 4. Layout-bias control (report-10 amendment 1, GATE-RELEVANT)
 
@@ -184,6 +221,18 @@ facts in WIR, so LLVM dropping it costs speed and never correctness.
 Pricing it per commit is how channel decay on an LLVM bump shows up as a
 number instead of as a mystery. Ungated, always published.
 
+**Read it with its resolution.** From s44 to s78 the sentinel reported
+`+1.1%` and then `+0.0%` on family A, and the `+0.0%` was not a result:
+the kernels ran 1–6 ms against a 1 ms clock, so a bucket was 17–100%
+wide and both lanes landed in the same one (#84). Every
+`metadata_bonus` record now carries `clock_quantum_frac` — one tick over
+the measured wall — and a `readable` flag that is true only when the
+delta exceeds it. s79's resize takes family A to 0.46–0.77% per tick,
+which is the first time this lane has been able to say anything at all —
+and what it says, on a shared host, is that the run-to-run spread (5–9
+points) is bigger than the bonus. The bucket is no longer the limit; the
+machine is. See `bench/loss-ledger.md`.
+
 ## 7. What gates, and what only reports (D5)
 
 s31's first `bench diff --gate` trip was `max_rss +37.8%` on an xtask-only
@@ -198,6 +247,7 @@ the wall numbers become publishable, not so they become gates.
 |---|---|
 | LLVM IR instruction ratio (mid-end vs naive), kernels and corpus | same input, same count, any machine |
 | vectorization witness counts per kernel per lane | remark counts are a function of the IR and the clang version |
+| **the naive-C baseline still makes the calls its thesis needs** (s79, `baseline_calls` in the manifest vs `nm -u`) | symbol presence is a property of the binary. Not stable across clang majors — and a clang that deletes our baseline's workload is exactly the event worth a red build |
 | correctness sinks across all lanes | equality, not timing |
 | `bench diff --gate` on `*_hits` / `*hit_rate` counters | unchanged from s31 |
 
@@ -242,13 +292,14 @@ Adopted per report-10 amendment 5. Where we are still guilty, it says so.
 | crime | status |
 |---|---|
 | **Selective benchmarking** — reporting only favourable subsets | Closed. Every kernel in the manifest is reported, per family, wins and losses alike; the M2 gate reads all of them. Kernels may be added post-M2; removing or weakening one requires the exception process. |
-| **Improper baseline** — comparing against a straw man | Closed, and one was found: the file s01 shipped as `alias_daxpy/ref.c` was the **`restrict`** version, so the "naive C" gate was silently scored against expert C. It now lives in `expert.c`, and the naive lane is genuinely naive. |
+| **Improper baseline** — comparing against a straw man | Closed. s44 found one (the file s01 shipped as `alias_daxpy/ref.c` was the **`restrict`** version, so the "naive C" gate was scored against expert C; it now lives in `expert.c`). The s79 audit found the opposite failure — baselines that are *stronger* than their label — and reports it in §11 rather than weakening them: family A's naive lanes get disjointness for free from inlining, so wolf is scored against a C lane that already has the fact. That is the conservative direction and it stays. |
+| **Improper baseline** — a baseline that does not execute its workload | **Was open and nobody had looked.** s79 audited all 19 C sources (scaling test + disassembly). `b3_churn/ref.c` mallocs a buffer that provably did not escape, so clang deleted the allocation: the "malloc/free per request" baseline contained no call to malloc and ran 2.6 ns/op of arithmetic. Fixed — the buffer escapes to a volatile sink, the allocation is back (7.2 ns/op), the sink is unchanged. `a5_hoist_call` is worse and is NOT fixed: see §11. |
 | **Improper baseline** — comparing a hand loop to a tuned library | Closed by construction: `d1`/`d2` deliberately avoid `strstr`, `str::find` and `std::str::from_utf8`, all of which are hand-vectorized library routines. Every lane runs the same hand-written loop. |
 | **Arithmetic mean of ratios** | Closed. Geomean everywhere ratios are averaged. |
 | **Missing significance / no error bars** | Closed. Median + MAD, 3×MAD + 2% practical floor, full distributions in the report JSON. |
 | **Missing layout-bias control** | Partly closed — the whole point of §4. Environment size and ASLR are perturbed; **link order is not**. Stated as a known limitation, mitigated by taking the max floor across lanes. |
 | **Throughput/latency conflation** | Closed. Every kernel reports ns per unit of work; nothing is quoted as a rate. |
-| **Unequal work between lanes** | Closed. Identical algorithm, identical inputs, identical sweep counts, and a sink comparison that fails the kernel if any lane computes something else. |
+| **Unequal work between lanes** | Partly closed, downgraded by s79. Identical sources, identical inputs, identical sweep counts, and a sink comparison that fails the kernel if any lane computes something else — but identical SOURCE is not identical WORK once two optimizers disagree about what to delete. `a5_hoist_call` is the case: both lanes fold the callee away, so the kernel measures two folded loops instead of the CSE-across-calls it names (§11). The folded-workload guard now runs on the wolf lane too, which catches the extreme form. |
 | **Downplaying the competition** | Closed by the scrutiny lane: `-march=native` and PGO'd clang are published beside the gated number, ungated, in the same report JSON. |
 | **No steady-state detection** (vm-warmup) | Partly closed. AOT wolf is far less exposed than a VM, but "assume nothing, detect stability" is not implemented: we publish the full distribution and let a reader see multimodality rather than classifying it. Open item for s64. |
 | **Unstated machine configuration** | Partly closed. Compiler versions and flags are recorded per record; frequency governor and SMT state are recorded by the runner, not by the harness — a dedicated-runner item, not a harness item. |
@@ -263,3 +314,51 @@ not exist yet, (c) LLVM dropped our metadata, (d) the win requires UB we
 renounced or a deliberate semantic. (a)–(c) are fixed in the fact pipeline
 with the kernel as the regression test — never by special-casing a
 benchmark shape. (d) becomes an entry in `bench/bench-exceptions.md`.
+
+## 11. The s79 baseline audit: what each C lane actually executes
+
+Three faults reached this rig from other sprints and none from the rig
+itself, which is the part worth sitting with: the suite had no way to
+notice that a lane stopped doing the work. The audit below is the
+instrument that was missing — a scaling test (`ns/op` must be flat in
+`ops`; work hoisted out of the timed loop shows up as `ns/op` falling)
+plus disassembly of the timed region of all 19 C sources. Run it again
+whenever a kernel is added or clang changes major version.
+
+Its cheap half is now automated and gates: a kernel declares
+`baseline_calls` in the manifest (`["malloc","free"]` for the two whose
+thesis is allocation discipline) and `cargo xtask bench-gates` checks them
+against `nm -u` on the compiled naive binary. That would have caught
+`b3_churn` on the day it broke. It does not catch the general case — a
+deleted loop leaves no missing symbol — which is why the manual procedure
+above stays written down.
+
+| kernel | lane | what the compiled baseline actually executes |
+|---|---|---|
+| `alias_daxpy` | naive | the full FLOPs, **vectorized with no runtime alias check**: `daxpy` is `static` and both buffers are file-scope arrays, so clang proves disjointness by inlining. The naive lane already has the fact the kernel says it lacks. Expert is 17% faster only on unrolling. Left alone: a stronger baseline is the conservative direction. |
+| `a2_stencil1d` | naive | same, and more so — naive and expert compile to the same shape and land 0.25% apart. |
+| `a5_hoist_call` | naive + expert | **neither the call nor the loads.** clang solves the recursion's closed form, proves the callee readnone, hoists both loads and vectorizes. So does wolf's own tier. Not fixable one-sided — see below. |
+| `list_alloc` | naive | real malloc/free per node (3 call sites, 26.5 vs expert's 3.5 ns/op). Honest. |
+| `b3_churn` | naive | **was: no allocation at all** — clang deleted a non-escaping malloc/free pair, leaving 2.6 ns/op of arithmetic. Fixed at s79 (the buffer escapes to a volatile sink); 7–9 ns/op with the allocation back, sink unchanged, and `bench-gates` now fails if the symbols go missing again. |
+| `aos_dot`, `c2_ecs_sweep` | naive + expert | real strided AoS loads, outer and inner loops both present. The 20% `ns/op` drop between `ops` and `4·ops` is first-touch cache cost on a 2.4/6.4 MB array, amortised at the s79 sizes. |
+| `word_count`, `d1`, `d2` | naive | real byte loops over a real heap input. Honest. |
+| `e1`, `e2`, `e3` | naive | real loops; flat in `ops`, so LICM did not hoist the pure inner call out of the timed loop (LLVM has no loop-invariant *loop* motion, which is the only reason these survive). |
+
+### `a5_hoist_call` cannot be fixed on one side, and was not
+
+The kernel is written around "a `read` parameter is immutable across an
+opaque call", and there is no opaque call in any lane. clang solves it;
+so does wolf's release tier (checked in the disassembly of both). Three
+same-TU repairs were tried and all failed — a run-time recursion depth,
+a `volatile` function pointer, and publishing the buffer's address to a
+global alias. Moving the callee into its own translation unit does work
+and was measured (0.219 → 1.31 ns/op, with the reload back in the loop),
+**and it was backed out**, because there is no counterpart on the wolf
+side: wolf compiles whole-program into one module, has no `noinline`,
+and Tier-R refuses `func.addr`, so there is no indirect call either.
+Fixing only the C lane would have turned a 0.17x loss into a win
+manufactured by unequal work — the exact direction of error this suite
+exists to catch, and the one nobody catches by accident because it
+flatters us. The kernel stays as it is, its number is reported as what
+it is (two folded arithmetic loops), and what it would take to measure
+the thesis is in the ledger under G7.

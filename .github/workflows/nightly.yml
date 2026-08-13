@@ -125,6 +125,14 @@ jobs:
       # extra compile+run — it prices the bonus channel per commit), and
       # the ungated SCRUTINY lane (clang -O3 -march=native and PGO'd
       # clang, published beside the gated naive-C number).
+      #
+      # s79: the t1 lane builds `wolf_rt` in RELEASE and links the wolf
+      # lanes against it (`WOLF_RT_LIB`), because until s79 every wolf
+      # measurement went through an -O0 runtime — worth up to 12.8x on a
+      # kernel whose body is runtime calls. Which archive was linked
+      # rides in the report JSON as the `runtime_build` record and in
+      # every wolf lane's `config` string; nothing here needs to set it,
+      # but a reader of bench-data should check it.
       - name: T1 micro suite (the M2 gate) + issue #70's IR-volume metrics
         run: |
           cargo xtask bench --track=t1 --runs=10 --out=bench-results/t1.jsonl

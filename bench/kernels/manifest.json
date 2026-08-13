@@ -1,13 +1,14 @@
 {
   "protocol": 1,
-  "note": "The T1 micro suite (s44). `ops`/`ops_wolf` are the sweep counts for the C/Rust and wolf lanes; the harness allows them to differ, but the suite sets them EQUAL because every kernel's correctness sink chains across sweeps and unequal counts would make the lanes compute different values. Sizes are picked so the slowest lane (always wolf today) spends 150-400 ms under the clock; every lane's MAD is published so a reader can judge the faster lanes' timing resolution. `expert`: a hand-tuned expert.c exists. `wrapping`: a wrapping.lu X3 variant exists. `witness`: vectorization remarks are collected. `sink`: `float` compares with a relative tolerance instead of exactly.",
+  "note": "The T1 micro suite (s44, RESIZED s79). `ops`/`ops_wolf` are the sweep counts for the C/Rust and wolf lanes; the harness allows them to differ, but the suite sets them EQUAL because every kernel's correctness sink chains across sweeps and unequal counts would make the lanes compute different values. Sizes are picked so the WOLF lane spends a few hundred ms under `time_now_ms` (measured 79-403 ms over s79's two 7-run measurements, i.e. one clock tick is 0.25-1.27% of the reading, all of it under the 2% practical floor); every lane's MAD is published so a reader can judge the faster lanes' timing resolution. `expert`: a hand-tuned expert.c exists. `wrapping`: a wrapping.lu X3 variant exists. `witness`: vectorization remarks are collected. `sink`: `float` compares with a relative tolerance instead of exactly. `baseline_calls`: calls the naive-C binary MUST still make after `clang -O3` for the kernel to be measuring its thesis — `cargo xtask bench-gates` checks them against `nm -u` and fails when one goes missing (s79, after clang deleted `b3_churn`'s malloc for five sprints and nothing noticed).",
+  "s79_resize": "The s44 sizes were stale and nobody had rechecked them. s75/s77 made the wolf lane up to 100x faster and s79 linked the release runtime, so at the old counts the wolf lane ran 1-6 ms against a 1 ms clock: `alias_daxpy` and `c2_ecs_sweep` were ONE TICK (100% quantisation), `a2_stencil1d` two, `aos_dot` three. Issue #84 raised this for the metadata sentinel (family A); the audit found it was true of families A and C outright, which is where the ledger's only wins were. Every count here was recalibrated against a measured wall time on the release runtime, and the harness now publishes `clock_quantum_frac` (with `wall_ms`) per wolf lane so a stale size shows up as a number instead of as a mystery. Re-calibrate whenever a sprint makes the wolf lane materially faster; the check is one line of the report.",
   "kernels": [
     {
       "name": "alias_daxpy",
       "family": "A",
       "thesis": "a1-triad: mut/read param modes prove noalias that naive C needs hand-restrict for",
-      "ops": 1000,
-      "ops_wolf": 1000,
+      "ops": 100000,
+      "ops_wolf": 100000,
       "expert": true,
       "witness": true,
       "sink": "float"
@@ -16,8 +17,8 @@
       "name": "a2_stencil1d",
       "family": "A",
       "thesis": "3-point stencil, distinct in/out params: disjointness for free vs assumed overlap",
-      "ops": 600,
-      "ops_wolf": 600,
+      "ops": 33000,
+      "ops_wolf": 33000,
       "expert": true,
       "witness": true
     },
@@ -25,8 +26,8 @@
       "name": "a5_hoist_call",
       "family": "A",
       "thesis": "read param immutable across an opaque call: the CSE-across-calls holy grail",
-      "ops": 600,
-      "ops_wolf": 600,
+      "ops": 12000,
+      "ops_wolf": 12000,
       "expert": true,
       "witness": true
     },
@@ -34,23 +35,25 @@
       "name": "list_alloc",
       "family": "B",
       "thesis": "region bump-allocate + wholesale free vs malloc/free per node",
-      "ops": 200,
-      "ops_wolf": 200,
-      "expert": true
+      "ops": 1200,
+      "ops_wolf": 1200,
+      "expert": true,
+      "baseline_calls": ["malloc", "free"]
     },
     {
       "name": "b3_churn",
       "family": "B",
       "thesis": "b3-request-churn: one scratch region per request vs malloc/free per request",
-      "ops": 100000,
-      "ops_wolf": 100000
+      "ops": 790000,
+      "ops_wolf": 790000,
+      "baseline_calls": ["malloc", "free"]
     },
     {
       "name": "aos_dot",
       "family": "C",
       "thesis": "layout-free internal ABI + SoA-as-idiom vs C's fixed AoS ABI (report 10 amendment 4)",
-      "ops": 30,
-      "ops_wolf": 30,
+      "ops": 1700,
+      "ops_wolf": 1700,
       "expert": true,
       "witness": true,
       "sink": "float"
@@ -59,8 +62,8 @@
       "name": "c2_ecs_sweep",
       "family": "C",
       "thesis": "one hot field of an 8-field record: SoA idiom vs AoS cache-line tax",
-      "ops": 30,
-      "ops_wolf": 30,
+      "ops": 1700,
+      "ops_wolf": 1700,
       "expert": true,
       "witness": true
     },
@@ -68,29 +71,29 @@
       "name": "word_count",
       "family": "D",
       "thesis": "d3-split-count: zero-copy words() views vs a hand-written two-state byte scan",
-      "ops": 20,
-      "ops_wolf": 20
+      "ops": 26,
+      "ops_wolf": 26
     },
     {
       "name": "d1_utf8_validate",
       "family": "D",
       "thesis": "structural UTF-8 scan over a zero-copy byte view",
-      "ops": 20,
-      "ops_wolf": 20
+      "ops": 140,
+      "ops_wolf": 140
     },
     {
       "name": "d2_substr_search",
       "family": "D",
       "thesis": "sliding zero-copy range-slice compare vs sliding memcmp",
-      "ops": 10,
-      "ops_wolf": 10
+      "ops": 34,
+      "ops_wolf": 34
     },
     {
       "name": "e1_sum_reduce",
       "family": "E",
       "thesis": "i64 reduction with boundable ranges: checked-arith cost on a vectorizable loop",
-      "ops": 4000,
-      "ops_wolf": 4000,
+      "ops": 3200,
+      "ops_wolf": 3200,
       "wrapping": true,
       "witness": true
     },
@@ -98,8 +101,8 @@
       "name": "e2_checksum",
       "family": "E",
       "thesis": "multiply-add-mask rolling hash: two checked ops per iteration",
-      "ops": 2000,
-      "ops_wolf": 2000,
+      "ops": 2100,
+      "ops_wolf": 2100,
       "wrapping": true,
       "witness": true
     },
@@ -107,8 +110,8 @@
       "name": "e3_index_arith",
       "family": "E",
       "thesis": "scaled index arithmetic against an opaque bound: the loop-versioning backstop",
-      "ops": 1000,
-      "ops_wolf": 1000,
+      "ops": 6900,
+      "ops_wolf": 6900,
       "wrapping": true,
       "witness": true
     }

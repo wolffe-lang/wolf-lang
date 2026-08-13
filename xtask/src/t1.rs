@@ -55,6 +55,11 @@ pub struct Kernel {
     /// The correctness sink is a float, so it compares with a relative
     /// tolerance instead of exactly.
     pub sink_float: bool,
+    /// Calls the naive-C baseline MUST still make after `clang -O3`, for
+    /// the kernel to be measuring its thesis at all (s79). Empty for most
+    /// kernels; `["malloc","free"]` for the two whose thesis is
+    /// allocation discipline. Checked by `cargo xtask bench-gates`.
+    pub baseline_calls: Vec<String>,
 }
 
 /// Parse `bench/kernels/manifest.json`. Hand-rolled against
@@ -89,6 +94,14 @@ pub fn parse_manifest(text: &str) -> Result<Vec<Kernel>, String> {
             wrapping: k["wrapping"].as_bool().unwrap_or(false),
             witness: k["witness"].as_bool().unwrap_or(false),
             sink_float: k["sink"].as_str() == Some("float"),
+            baseline_calls: k["baseline_calls"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default(),
             name,
         });
     }
@@ -266,6 +279,57 @@ pub fn count_vectorized_loops(remarks: &str) -> usize {
         .count()
 }
 
+/// One tick of wolf's millisecond clock as a fraction of a measured wall
+/// time (#84). Every wolf number in the report is read THROUGH this: a
+/// delta smaller than the quantum is one bucket, not a result.
+///
+/// s44 sized the suite so this was ≤ 0.7% and s75/s77 then made the wolf
+/// lane up to 100x faster without anybody re-checking, so by s78 two
+/// kernels were being read at ONE TICK — 100% quantisation — and a family
+/// geomean was being quoted off it. Publishing the number per lane is how
+/// that stops being invisible.
+pub fn clock_quantum_frac(wall_ns: f64) -> Option<f64> {
+    (wall_ns.is_finite() && wall_ns > 0.0).then(|| MS_IN_NS / wall_ns)
+}
+
+/// One millisecond, in nanoseconds: the resolution of `time_now_ms`, the
+/// only monotonic clock the language exposes to a program.
+pub const MS_IN_NS: f64 = 1.0e6;
+
+/// Is a measured delta big enough to be a reading rather than a bucket?
+/// Both arguments are fractions; `delta` may be signed.
+pub fn delta_is_readable(delta: f64, quantum: f64) -> bool {
+    delta.is_finite() && quantum.is_finite() && delta.abs() >= quantum
+}
+
+/// Which of the calls a kernel's baseline is REQUIRED to make are missing
+/// from the compiled binary's undefined-symbol list.
+///
+/// The s79 instrument for a fault the rig had no way to see: `b3_churn`'s
+/// `ref.c` mallocs a buffer that provably does not escape, so clang
+/// deleted the allocation and the "malloc/free per request" baseline
+/// executed no allocation at all for five sprints. Nothing noticed,
+/// because nothing was looking — a baseline that does not do its work
+/// just looks fast, and a fast baseline only ever makes wolf look worse,
+/// which is the direction nobody audits.
+///
+/// Symbol presence is a property of the binary, so this is deterministic
+/// for a given toolchain and can gate. It is not stable ACROSS clang
+/// versions — but a clang that starts deleting our baseline's workload is
+/// precisely the event worth a red build.
+pub fn missing_baseline_calls(nm_output: &str, required: &[String]) -> Vec<String> {
+    required
+        .iter()
+        .filter(|want| {
+            !nm_output.lines().any(|l| {
+                l.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    .any(|tok| tok == want.as_str())
+            })
+        })
+        .cloned()
+        .collect()
+}
+
 /// Below this many nanoseconds per unit of work, a lane did not execute
 /// the workload — it proved the answer and printed it.
 ///
@@ -396,14 +460,16 @@ mod tests {
                 {"name":"e1","family":"E","thesis":"t","ops":10,"ops_wolf":3,
                  "wrapping":true,"witness":true},
                 {"name":"a1","family":"A","thesis":"u","ops":20,"ops_wolf":1,
-                 "expert":true,"sink":"float"}]}"#,
+                 "expert":true,"sink":"float","baseline_calls":["malloc","free"]}]}"#,
         )
         .expect("parses");
         assert_eq!(ks.len(), 2);
         assert_eq!(ks[0].name, "e1");
         assert!(ks[0].wrapping && ks[0].witness && !ks[0].expert && !ks[0].sink_float);
+        assert!(ks[0].baseline_calls.is_empty());
         assert!(ks[1].expert && ks[1].sink_float);
         assert_eq!(ks[1].ops_wolf, 1);
+        assert_eq!(ks[1].baseline_calls, vec!["malloc", "free"]);
     }
 
     #[test]
@@ -575,6 +641,46 @@ mod tests {
         assert_eq!(fams, vec!["A", "E"]);
         assert!((out.by_family[0].1 - 0.25).abs() < 1e-12);
         assert!((out.by_family[1].1 - 2.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_clock_quantum_is_one_tick_over_the_wall() {
+        // 250 ms under a 1 ms clock: 0.4% per bucket.
+        let q = clock_quantum_frac(250.0e6).expect("quantum");
+        assert!((q - 0.004).abs() < 1e-12, "got {q}");
+        // The s78 state of family A: a 1 ms reading is ONE bucket.
+        assert_eq!(clock_quantum_frac(1.0e6), Some(1.0));
+        assert_eq!(clock_quantum_frac(0.0), None);
+        assert_eq!(clock_quantum_frac(f64::NAN), None);
+    }
+
+    #[test]
+    fn a_delta_inside_one_bucket_is_not_a_reading() {
+        // The sentinel's s75/s78 reading: +0.0% against a 17-50% bucket.
+        assert!(!delta_is_readable(0.0, 0.17));
+        // s79's family A: a few percent against a 0.5% bucket.
+        assert!(delta_is_readable(0.0385, 0.0077));
+        // Sign does not matter — a negative bonus is still a reading.
+        assert!(delta_is_readable(-0.0872, 0.005));
+        assert!(!delta_is_readable(f64::NAN, 0.005));
+    }
+
+    #[test]
+    fn a_baseline_that_lost_its_allocation_is_named() {
+        // What `nm -u` looks like on the fixed b3_churn baseline.
+        let good = "                 U malloc@GLIBC_2.2.5\n                 U free@GLIBC_2.2.5\n";
+        let want = vec!["malloc".to_string(), "free".to_string()];
+        assert!(missing_baseline_calls(good, &want).is_empty());
+        // And on the one clang optimized the allocation out of.
+        let elided = "                 U printf@GLIBC_2.2.5\n";
+        assert_eq!(missing_baseline_calls(elided, &want), want);
+        // A substring must not count: `mallocate` is not `malloc`.
+        assert_eq!(
+            missing_baseline_calls("  U mallocate\n", &["malloc".to_string()]),
+            vec!["malloc"]
+        );
+        // No requirement, no finding.
+        assert!(missing_baseline_calls("", &[]).is_empty());
     }
 
     #[test]

@@ -1,7 +1,46 @@
 /* a5-hoist-call (family A), NAIVE C: two loads of the same location on
- * either side of an opaque call. The callee could write through a global
- * alias, so clang must reload — the load wolf's `read` mode licenses it
- * to hoist. `expert.c` hoists by hand.
+ * either side of a call that is meant to be opaque.
+ *
+ * ==== s79 baseline audit: THIS KERNEL DOES NOT TEST ITS THESIS ====
+ *
+ * The kernel's comments used to claim "`opaque` is self-recursive so
+ * nothing inlines it away in any lane". Both halves of that are false in
+ * the compiled programs, and had been for all five measurements taken of
+ * this kernel:
+ *
+ *   - clang -O3 solves the recursion's closed form, proves the callee
+ *     touches no memory, HOISTS BOTH LOADS and vectorizes the loop. The
+ *     naive binary contains no call and no load from `src` (checked with
+ *     objdump), runs 0.177 ns/op, and matches `expert.c` — the lane that
+ *     hoists by hand — to within 3%.
+ *   - wolf's release tier does exactly the same thing: `probe` and
+ *     `opaque` are inlined, the recursion is folded, and the load is
+ *     hoisted out of the loop. The wolf binary has no call in its timed
+ *     region either.
+ *
+ * So the reported 0.172x was never "wolf reloads where C hoists". It was
+ * one folded loop against another: clang's vectorized, wolf's a scalar
+ * chain of checked adds.
+ *
+ * Three same-file fixes were tried and all three failed: a run-time
+ * recursion depth (clang solves it symbolically in `depth`), a `volatile`
+ * function pointer (the only address-taken function in the module is
+ * `readnone`, so the indirect call is still provably harmless), and
+ * publishing `src`'s address to a global alias (does not matter while the
+ * callee is provably readnone). Moving the callee to its own translation
+ * unit DOES restore the call and the reload — measured, 0.219 -> 1.31
+ * ns/op — but it cannot be done on the wolf side: wolf compiles
+ * whole-program into a single module, has no separate-compilation
+ * surface, no `noinline`, and Tier-R refuses `func.addr`, so there is no
+ * indirect call either. Fixing only the C lane would hand wolf a win
+ * manufactured by unequal work, which is the exact failure this suite
+ * exists to prevent.
+ *
+ * The file is therefore left as it was and the label is corrected
+ * instead: today this kernel measures a folded arithmetic loop in both
+ * lanes. What it would take to measure CSE-across-calls is written up in
+ * bench/loss-ledger.md under G7.
+ *
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
 #include <stdio.h>

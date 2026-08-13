@@ -16,7 +16,18 @@ the win, the measured cost, and the condition under which it is revisited.
 The gate reads this file, so each entry needs the marker line
 `- exception: <kernel-directory-name>` for the kernel to count as excepted.
 
-## Status at s44: EMPTY. No exceptions are claimed.
+## Status at s79: still EMPTY. No exceptions are claimed.
+
+The s44 reasoning below is unchanged in substance and its numbers have
+been re-measured. What moved: **seven** of thirteen kernels now lose by
+more than 10% rather than twelve, the suite geomean is 0.476x rather than
+0.030x, and `e1_sum_reduce`'s renunciation costs **+164.7%** rather than
++159.6% (same shape, measured against a clock that can now resolve it).
+Neither of the two conclusions changes — three exceptions cannot rescue a
+0.476x geomean, and X3's cost is still bimodal (+164.7% on `e1`, −2.2% on
+`e2`, −0.6% on `e3`, the last two inside their floors, i.e. free).
+
+## The s44 status, kept for the record: EMPTY. No exceptions are claimed.
 
 The ledger exists (the contract requires it to, even empty) and it is
 deliberately unused, because claiming an exception right now would be
@@ -38,7 +49,7 @@ That is a real, deliberate, well-understood trade.
 It is still not filed as an exception, for two reasons:
 
 1. **Three exceptions cannot rescue this suite.** The primary gate needs a
-   geomean ≥ 1.00 and the suite sits at 0.030x. Filing exceptions would
+   geomean ≥ 1.00 and the suite sat at 0.030x (0.476x at s79). Filing exceptions would
    change nothing about the verdict and would put three "expected loss"
    stamps on the record before the numbers they excuse have been separated
    from G1's shadow.

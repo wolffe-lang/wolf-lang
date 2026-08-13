@@ -40,6 +40,77 @@ use std::time::Instant;
 use xtask::stats;
 use xtask::t1::{self, Kernel, Scored, Verdict};
 
+/// The runtime archive the wolf lanes link, and the label that rides into
+/// the report JSON beside every wolf number (s79 target 1).
+///
+/// Until s79 this was implicit and wrong: the driver locates
+/// `libwolf_rt.a` next to the `wolf` binary, the harness runs
+/// `target/debug/wolf`, so every wolf lane linked `target/debug/
+/// libwolf_rt.a` — the runtime compiled `-O0`. s76 measured the size of
+/// that mistake on family B (310 vs 180 ns/op between the two runtimes);
+/// s79 measured it across the suite and found up to **12.8x** on
+/// `word_count`. A kernel whose body is runtime calls was reporting a
+/// number about the wrong binary.
+///
+/// So the harness builds `wolf_rt` in release and points `WOLF_RT_LIB`
+/// (the driver's override, `wolf_driver::find_rt_lib`) at it. When that
+/// build fails the harness says so and falls back to the debug archive
+/// **labelled as such** — a lane may be wrong, but it may never be wrong
+/// silently.
+struct Runtime {
+    lib: Option<PathBuf>,
+    label: &'static str,
+}
+
+impl Runtime {
+    /// Build `wolf_rt` in release and resolve the archive.
+    fn resolve() -> Runtime {
+        if !crate::run_ok("cargo", &["build", "-p", "wolf_rt", "--release", "--quiet"]) {
+            eprintln!(
+                "t1: `cargo build -p wolf_rt --release` failed — the wolf lanes fall back to the \
+                 DEBUG runtime and the report says so"
+            );
+            return Runtime {
+                lib: None,
+                label: "wolf_rt: debug (-O0) — the release build failed",
+            };
+        }
+        let p = PathBuf::from("target/release/libwolf_rt.a");
+        if !p.is_file() {
+            eprintln!(
+                "t1: target/release/libwolf_rt.a is missing after a successful build — the wolf \
+                 lanes fall back to the DEBUG runtime and the report says so"
+            );
+            return Runtime {
+                lib: None,
+                label: "wolf_rt: debug (-O0) — target/release/libwolf_rt.a missing",
+            };
+        }
+        Runtime {
+            lib: Some(p),
+            label: "wolf_rt: release (target/release/libwolf_rt.a)",
+        }
+    }
+
+    /// A `wolf` invocation with the runtime override applied.
+    fn wolf(&self) -> Command {
+        let mut c = Command::new("target/debug/wolf");
+        if let Some(lib) = &self.lib {
+            c.env("WOLF_RT_LIB", lib);
+        }
+        c
+    }
+
+    /// Run a `wolf` invocation to completion, discarding its output.
+    fn build_ok(&self, args: &[&str]) -> bool {
+        self.wolf()
+            .args(args)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+}
+
 /// One layout configuration. `pad` is the size of a junk environment
 /// variable, which moves the initial stack and everything anchored to it;
 /// `aslr` false runs under `setarch -R`.
@@ -89,6 +160,28 @@ struct Built {
     config: String,
 }
 
+/// `clang <flags> -o <bin> <source>` — one translation unit, which is
+/// what every kernel in this suite is.
+///
+/// s79 tried to give `a5_hoist_call` a second TU (the only construction
+/// in which its "opaque call" is genuinely opaque to clang) and backed it
+/// out: wolf compiles whole-program into a single module with no
+/// `noinline` and no `func.addr` at Tier-R, so the wolf lane folds the
+/// callee no matter what, and a two-TU C lane would have handed wolf a
+/// win manufactured by unequal work. The finding is recorded in
+/// `bench/kernels/a5_hoist_call/ref.c` and the ledger instead.
+fn clang_build(flags: &[&str], bin: &Path, source: &Path) -> bool {
+    let mut args: Vec<String> = flags.iter().map(|f| (*f).to_string()).collect();
+    args.push("-o".to_string());
+    args.push(bin.to_str().expect("utf8 path").to_string());
+    args.push(source.to_str().expect("utf8 path").to_string());
+    Command::new("clang")
+        .args(&args)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// `setarch -R` availability, probed once.
 fn setarch_available() -> bool {
     Command::new("setarch")
@@ -98,10 +191,21 @@ fn setarch_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Run one lane once under one layout, returning (ns per unit of work,
-/// sink text). `None` on any failure — a lane that cannot run must not
-/// silently contribute a number.
-fn sample(b: &Built, l: &Layout, setarch: bool) -> Option<(f64, String)> {
+/// One run of one lane under one layout.
+struct Reading {
+    /// Nanoseconds per unit of work — the comparison metric.
+    ns_per_op: f64,
+    /// The lane's own measured wall time for the whole timed region.
+    /// Kept because the wolf lanes read it through a MILLISECOND clock
+    /// (#84): a delta smaller than `1e6 / ns_total` is one bucket, not a
+    /// result, and that can only be checked against the total.
+    ns_total: f64,
+    sink: String,
+}
+
+/// Run one lane once under one layout. `None` on any failure — a lane
+/// that cannot run must not silently contribute a number.
+fn sample(b: &Built, l: &Layout, setarch: bool) -> Option<Reading> {
     let mut cmd = if !l.aslr && setarch {
         let mut c = Command::new("setarch");
         c.arg("-R").arg(&b.bin);
@@ -130,7 +234,11 @@ fn sample(b: &Built, l: &Layout, setarch: bool) -> Option<(f64, String)> {
         serde_json::Value::String(s) => s.clone(),
         _ => return None,
     };
-    Some((ns / ops, sink))
+    Some(Reading {
+        ns_per_op: ns / ops,
+        ns_total: ns,
+        sink,
+    })
 }
 
 /// One report-JSON record. The frozen s01 schema (`bench`, `track`,
@@ -162,8 +270,7 @@ fn rec(
 /// Build every lane of one kernel. Missing toolchains skip their lane
 /// loudly; a missing wolf or naive-C lane fails the kernel outright
 /// because the gated comparison is exactly those two.
-fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
-    let wolf = Path::new("target/debug/wolf");
+fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path, rt: &Runtime) -> Option<Vec<Built>> {
     let mut out: Vec<Built> = Vec::new();
     let bin = |suffix: &str| bin_dir.join(format!("{}_{suffix}", k.name));
     let s = |p: &Path| p.to_str().expect("utf8 path").to_string();
@@ -175,7 +282,8 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
     // the entry file, so caching would have the harness writing build
     // artefacts into the source tree it is benchmarking.
     let wbin = bin("wolf");
-    let built = Command::new(wolf)
+    let built = rt
+        .wolf()
         .args(["build", &s(&dir.join("kernel.lu")), "-o", &s(&wbin)])
         .arg("--release")
         .arg("--no-cache")
@@ -193,12 +301,16 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
         lane: "wolf",
         bin: wbin,
         ops: k.ops_wolf,
-        config: format!("wolf build --release (clang {})", clang_version()),
+        config: format!(
+            "wolf build --release (clang {}) [{}]",
+            clang_version(),
+            rt.label
+        ),
     });
 
     // --- the gated comparison: naive C -------------------------------
     let cbin = bin("c_naive");
-    if !crate::run_ok("clang", &["-O3", "-o", &s(&cbin), &s(&dir.join("ref.c"))]) {
+    if !clang_build(&["-O3"], &cbin, &dir.join("ref.c")) {
         eprintln!("t1: {}: naive C lane failed to build", k.name);
         return None;
     }
@@ -212,7 +324,7 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
     // --- secondary, report-only: expert C and Rust -------------------
     if k.expert {
         let b = bin("c_expert");
-        if crate::run_ok("clang", &["-O3", "-o", &s(&b), &s(&dir.join("expert.c"))]) {
+        if clang_build(&["-O3"], &b, &dir.join("expert.c")) {
             out.push(Built {
                 lane: "c_expert",
                 bin: b,
@@ -243,22 +355,22 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
     // --- the X3 tracker: the same wolf kernel, unchecked -------------
     if k.wrapping {
         let b = bin("wolf_wrapping");
-        if crate::run_ok(
-            "target/debug/wolf",
-            &[
-                "build",
-                &s(&dir.join("wrapping.lu")),
-                "-o",
-                &s(&b),
-                "--release",
-                "--no-cache",
-            ],
-        ) {
+        if rt.build_ok(&[
+            "build",
+            &s(&dir.join("wrapping.lu")),
+            "-o",
+            &s(&b),
+            "--release",
+            "--no-cache",
+        ]) {
             out.push(Built {
                 lane: "wolf_wrapping",
                 bin: b,
                 ops: k.ops_wolf,
-                config: "wolf build --release, wrapping[int] accumulators".to_string(),
+                config: format!(
+                    "wolf build --release, wrapping[int] accumulators [{}]",
+                    rt.label
+                ),
             });
         }
     }
@@ -271,7 +383,8 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
     // an LLVM bump is channel decay, visible as a number.
     if k.family == "A" {
         let b = bin("wolf_stripped");
-        let ok = Command::new(wolf)
+        let ok = rt
+            .wolf()
             .args(["build", &s(&dir.join("kernel.lu")), "-o", &s(&b)])
             .arg("--release")
             .arg("--no-cache")
@@ -284,7 +397,7 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
                 lane: "wolf_stripped",
                 bin: b,
                 ops: k.ops_wolf,
-                config: "wolf build --release, WOLF_STRIP_FACTS=1".to_string(),
+                config: format!("wolf build --release, WOLF_STRIP_FACTS=1 [{}]", rt.label),
             });
         }
     }
@@ -297,16 +410,7 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Vec<Built>> {
     // which is what people ship — but they are what a sceptical reader
     // will run, so we run them first.
     let nbin = bin("c_native");
-    if crate::run_ok(
-        "clang",
-        &[
-            "-O3",
-            "-march=native",
-            "-o",
-            &s(&nbin),
-            &s(&dir.join("ref.c")),
-        ],
-    ) {
+    if clang_build(&["-O3", "-march=native"], &nbin, &dir.join("ref.c")) {
         out.push(Built {
             lane: "c_native",
             bin: nbin,
@@ -328,15 +432,10 @@ fn build_pgo(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Built> {
     let use_bin = bin_dir.join(format!("{}_c_pgo", k.name));
     let raw = bin_dir.join(format!("{}.profraw", k.name));
     let prof = bin_dir.join(format!("{}.profdata", k.name));
-    if !crate::run_ok(
-        "clang",
-        &[
-            "-O3",
-            "-fprofile-instr-generate",
-            "-o",
-            &s(&instr),
-            &s(&dir.join("ref.c")),
-        ],
+    if !clang_build(
+        &["-O3", "-fprofile-instr-generate"],
+        &instr,
+        &dir.join("ref.c"),
     ) {
         return None;
     }
@@ -363,15 +462,10 @@ fn build_pgo(k: &Kernel, dir: &Path, bin_dir: &Path) -> Option<Built> {
         );
         return None;
     }
-    if !crate::run_ok(
-        "clang",
-        &[
-            "-O3",
-            &format!("-fprofile-instr-use={}", s(&prof)),
-            "-o",
-            &s(&use_bin),
-            &s(&dir.join("ref.c")),
-        ],
+    if !clang_build(
+        &["-O3", &format!("-fprofile-instr-use={}", s(&prof))],
+        &use_bin,
+        &dir.join("ref.c"),
     ) {
         return None;
     }
@@ -454,6 +548,8 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
     ) {
         return None;
     }
+    let rt = Runtime::resolve();
+    eprintln!("t1: wolf lanes link {}", rt.label);
     let bin_dir = Path::new("target/bench-t1");
     std::fs::create_dir_all(bin_dir).expect("mkdir bench-t1");
     let setarch = setarch_available();
@@ -474,7 +570,7 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
             continue;
         }
         let dir = Path::new("bench/kernels").join(&k.name);
-        let Some(lanes) = build_lanes(k, &dir, bin_dir) else {
+        let Some(lanes) = build_lanes(k, &dir, bin_dir, &rt) else {
             eprintln!("t1: {}: SKIPPED (a required lane did not build)", k.name);
             continue;
         };
@@ -487,7 +583,7 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
         let mut sinks: Vec<(&str, String)> = Vec::new();
         for b in &lanes {
             match sample(b, &LAYOUTS[0], setarch) {
-                Some((_, sink)) => sinks.push((b.lane, sink)),
+                Some(r) => sinks.push((b.lane, r.sink)),
                 None => {
                     eprintln!("t1: {}: lane {} would not run", k.name, b.lane);
                     return None;
@@ -516,6 +612,9 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
         // run so no lane systematically owns the warm cache or the drift
         // at the end of the sweep.
         let mut samples: BTreeMap<(&str, &str), Vec<f64>> = BTreeMap::new();
+        // L0 wall times, kept per lane so the clock's resolution can be
+        // reported beside the numbers it limits (#84).
+        let mut walls: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
         for r in 0..runs {
             for li in 0..lanes.len() {
                 let b = &lanes[(li + r as usize) % lanes.len()];
@@ -523,8 +622,14 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
                     if l.name != "L0" && !FLOOR_LANES.contains(&b.lane) {
                         continue;
                     }
-                    if let Some((ns_per_op, _)) = sample(b, l, setarch) {
-                        samples.entry((b.lane, l.name)).or_default().push(ns_per_op);
+                    if let Some(s) = sample(b, l, setarch) {
+                        samples
+                            .entry((b.lane, l.name))
+                            .or_default()
+                            .push(s.ns_per_op);
+                        if l.name == "L0" {
+                            walls.entry(b.lane).or_default().push(s.ns_total);
+                        }
                     }
                 }
             }
@@ -603,6 +708,57 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
             eprintln!("t1: {}: no wolf samples", k.name);
             continue;
         };
+        // The folded-workload guard applies to the SUBJECT too (s79). It
+        // used to police only the comparison lanes, which is the half of
+        // the check that cannot flatter us: a folded wolf lane would
+        // manufacture an unbounded win against every other lane at once.
+        if !t1::lane_ran_the_work(wolf_med) {
+            eprintln!(
+                "t1: {}: the WOLF lane folded the workload ({wolf_med:.3e} ns/op) — no comparison \
+                 is reported for this kernel",
+                k.name
+            );
+            records.push(rec(
+                k,
+                "wolf",
+                "folded_workload",
+                wolf_med,
+                "ns/op",
+                commit,
+                "below the plausibility floor: the loop was constant-folded",
+                &[],
+            ));
+            continue;
+        }
+        // What one tick of wolf's millisecond clock is worth on this
+        // kernel, as a fraction of the whole measurement (#84). The
+        // sentinel and every family-A/C delta are read THROUGH this
+        // number: a reading smaller than the quantum is one bucket, not a
+        // result. Published per lane so nobody has to re-derive it.
+        let quantum = |lane: &str| -> Option<f64> {
+            t1::clock_quantum_frac(stats::median(walls.get(lane)?)?)
+        };
+        for b in &lanes {
+            if !b.lane.starts_with("wolf") {
+                continue;
+            }
+            let (Some(q), Some(wall)) = (
+                quantum(b.lane),
+                walls.get(b.lane).and_then(|xs| stats::median(xs)),
+            ) else {
+                continue;
+            };
+            records.push(rec(
+                k,
+                b.lane,
+                "clock_quantum_frac",
+                q,
+                "ratio",
+                commit,
+                "one tick of time_now_ms over the measured wall: the resolution floor",
+                &[("wall_ms", serde_json::json!(wall / 1.0e6))],
+            ));
+        }
         for b in &lanes {
             if let (Some(mine), Some(mad)) = (
                 med(b.lane),
@@ -700,17 +856,41 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
             ));
         }
         // The sentinel: what the bonus channel is worth on this kernel.
+        // Reported WITH its resolution (#84): the delta is only a result
+        // when it is bigger than one tick of the millisecond clock, and
+        // s79 sizes family A so that it is.
         if let (Some(w), Some(st)) = (med("wolf"), med("wolf_stripped")) {
+            // The sentinel's two lanes are timed by the same clock, so the
+            // resolution that limits their RATIO is the coarser of the two
+            // readings.
+            let q = quantum("wolf")
+                .into_iter()
+                .chain(quantum("wolf_stripped"))
+                .fold(f64::NAN, f64::max);
+            let bonus = st / w - 1.0;
             records.push(rec(
                 k,
                 "wolf",
                 "metadata_bonus",
-                st / w - 1.0,
+                bonus,
                 "ratio",
                 commit,
                 "stripped / annotated - 1",
-                &[],
+                &[
+                    ("clock_quantum_frac", serde_json::json!(q)),
+                    (
+                        "readable",
+                        serde_json::json!(t1::delta_is_readable(bonus, q)),
+                    ),
+                ],
             ));
+            eprintln!(
+                "  sentinel {:<18} metadata_bonus {:+.2}%  (one clock tick is {:.2}% of this \
+                 measurement)",
+                k.name,
+                bonus * 100.0,
+                q * 100.0
+            );
         }
 
         // ---- instruction counts (stability, not honesty) ------------
@@ -757,19 +937,15 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
             // wolf, on the IR the backend actually hands clang, at the
             // -O2 the backend actually uses.
             let ll = bin_dir.join(format!("{}.ll", k.name));
-            let ok = Command::new("target/debug/wolf")
-                .args([
-                    "build",
-                    &dir_s("kernel.lu"),
-                    "-o",
-                    ll.to_str().expect("utf8 path"),
-                    "--release",
-                    "--emit=llvm-ir",
-                    "--no-cache",
-                ])
-                .status()
-                .map(|s| s.success())
-                .unwrap_or(false);
+            let ok = rt.build_ok(&[
+                "build",
+                &dir_s("kernel.lu"),
+                "-o",
+                ll.to_str().expect("utf8 path"),
+                "--release",
+                "--emit=llvm-ir",
+                "--no-cache",
+            ]);
             if ok
                 && let Some(r) = vector_witness(&[
                     "-x",
@@ -840,6 +1016,15 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
         "exceptions_declared": outcome.exceptions_declared,
     });
     records.push(suite);
+    // Which runtime the wolf lanes linked, stated as data (s79 target 1).
+    // A suite whose subject is half runtime calls must say which build of
+    // the runtime it measured, or its absolute numbers mean nothing.
+    records.push(serde_json::json!({
+        "bench": "suite", "track": "t1", "lang": "wolf",
+        "metric": "runtime_build", "value": f64::from(u8::from(rt.lib.is_some())),
+        "unit": "bool", "commit": commit, "config": rt.label,
+        "style": crate::style_version(),
+    }));
     for (fam, g) in &outcome.by_family {
         records.push(serde_json::json!({
             "bench": "suite", "track": "t1", "lang": "wolf",
@@ -878,13 +1063,17 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
     }
     let dir = Path::new("target/bench-ir");
     std::fs::create_dir_all(dir).expect("mkdir bench-ir");
-    let wolf = Path::new("target/debug/wolf");
+    // #70 metric 2 times a real `--release` build, and a release build
+    // LINKS the runtime — so this lane gets the same s79 treatment as the
+    // t1 lane, or it would be timing a link against an -O0 archive.
+    let rt = Runtime::resolve();
+    eprintln!("irvolume: wolf builds link {}", rt.label);
     let mut records = Vec::new();
     let mut ratios: Vec<f64> = Vec::new();
     let mut shares: Vec<f64> = Vec::new();
 
     let emit = |src: &Path, out: &Path, midend: bool| -> Option<String> {
-        let mut cmd = Command::new(wolf);
+        let mut cmd = rt.wolf();
         cmd.args([
             "build",
             src.to_str().expect("utf8 path"),
@@ -940,18 +1129,14 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
         // LLVM's share of Tier-R build wall time.
         let prog = dir.join(format!("{}-prog", k.name));
         let t0 = Instant::now();
-        let ok = Command::new(wolf)
-            .args([
-                "build",
-                src.to_str().expect("utf8 path"),
-                "-o",
-                prog.to_str().expect("utf8 path"),
-            ])
-            .arg("--release")
-            .arg("--no-cache")
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+        let ok = rt.build_ok(&[
+            "build",
+            src.to_str().expect("utf8 path"),
+            "-o",
+            prog.to_str().expect("utf8 path"),
+            "--release",
+            "--no-cache",
+        ]);
         let total = t0.elapsed().as_secs_f64();
         if !ok {
             continue;
@@ -992,7 +1177,9 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
                 "llvm_wall_share",
                 share,
                 "ratio",
-                "#70 metric 2, budget <= 0.50 (report-only: wall-derived)",
+                "#70 metric 2, budget <= 0.50 (report-only: wall-derived). t_total is a \
+                 DEBUG-built driver: the front end is slower than shipped, so this share is a \
+                 LOWER BOUND — see the s79 A/B in bench/loss-ledger.md",
             ));
         }
     }
@@ -1056,7 +1243,9 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
     }
     match geo_share {
         Some(g) => eprintln!(
-            "  LLVM's share of Tier-R build wall: {:.1}% (geomean, n={}) — budget <= 50.0%: {}",
+            "  LLVM's share of Tier-R build wall: {:.1}% (geomean, n={}) — budget <= 50.0%: {} \
+             (LOWER BOUND: t_total is a debug-built driver; s79 measured ~36% with a release \
+             driver on 5 kernels, one of them over budget)",
             g * 100.0,
             shares.len(),
             if g <= 0.50 { "MET" } else { "NOT MET" }
@@ -1098,12 +1287,18 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
 ///    0.50 target is NOT met today (57.7% corpus / 87.5% kernels), so the
 ///    gate holds the measured value instead of the aspiration and says so
 ///    out loud — a gate that is red from birth teaches nobody anything.
-/// 2. **Vectorization witnesses** (report 10 delta 2): per-kernel counts of
+/// 2. **The baselines execute their workload** (s79): a kernel that
+///    declares `baseline_calls` must still reference them in its compiled
+///    naive-C binary. `b3_churn`'s malloc was deleted by clang for five
+///    sprints and no gate could see it, because a baseline that stops
+///    doing its work just looks fast.
+/// 3. **Vectorization witnesses** (report 10 delta 2): per-kernel counts of
 ///    LLVM's `loop-vectorize` remarks, floored per lane. A loop that stops
 ///    vectorizing fails here before any wall clock moves.
 ///
 /// Skips loudly (exit 0) where the release toolchain is unavailable: a
-/// missing clang must not turn into a false red.
+/// missing clang must not turn into a false red. Same for `nm(1)` on gate
+/// 2, per-kernel.
 pub fn bench_gates() -> ExitCode {
     let Ok(gates_text) = std::fs::read_to_string("bench/gates.json") else {
         eprintln!("bench-gates: bench/gates.json is missing");
@@ -1228,7 +1423,55 @@ pub fn bench_gates() -> ExitCode {
         }
     }
 
-    // ---- gate 2: vectorization witnesses ----------------------------
+    // ---- gate 2: the baselines still execute their workload ---------
+    //
+    // s79's instrument for the fault the rig had no way to see. A kernel
+    // whose thesis is allocation discipline declares `baseline_calls` in
+    // the manifest, and its compiled naive-C binary must still reference
+    // them: `b3_churn`'s malloc was elided for five sprints and the only
+    // thing that noticed was a human reading a disassembly.
+    for k in kernels.iter().filter(|k| !k.baseline_calls.is_empty()) {
+        let src = Path::new("bench/kernels").join(&k.name).join("ref.c");
+        let bin = dir.join(format!("{}-baseline", k.name));
+        if !clang_build(&["-O3"], &bin, &src) {
+            failures.push(format!("{}: naive C lane would not build", k.name));
+            continue;
+        }
+        let Ok(out) = Command::new("nm").arg("-u").arg(&bin).output() else {
+            eprintln!(
+                "bench-gates: nm(1) unavailable — the baseline-executes check is skipped for {}",
+                k.name
+            );
+            continue;
+        };
+        if !out.status.success() {
+            eprintln!(
+                "bench-gates: nm(1) refused {} — the baseline-executes check is skipped",
+                bin.display()
+            );
+            continue;
+        }
+        let text = String::from_utf8_lossy(&out.stdout);
+        let missing = t1::missing_baseline_calls(&text, &k.baseline_calls);
+        if missing.is_empty() {
+            eprintln!(
+                "bench-gates: baseline {:<18} executes {}",
+                k.name,
+                k.baseline_calls.join(", ")
+            );
+        } else {
+            failures.push(format!(
+                "{}: the naive C baseline no longer calls {} — clang optimized the workload the \
+                 kernel exists to compare AWAY, and a baseline that does not do its work only \
+                 ever makes wolf look better than it is. Make it escape (see \
+                 bench/kernels/b3_churn/ref.c)",
+                k.name,
+                missing.join(", ")
+            ));
+        }
+    }
+
+    // ---- gate 3: vectorization witnesses ----------------------------
     let witnesses = &gates["vectorization_witnesses"]["kernels"];
     for k in kernels.iter().filter(|k| k.witness) {
         let kdir = Path::new("bench/kernels").join(&k.name);
