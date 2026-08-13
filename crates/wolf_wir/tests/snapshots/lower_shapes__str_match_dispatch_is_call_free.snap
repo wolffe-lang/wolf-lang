@@ -10,8 +10,8 @@ data @str.3 = "7"
 
 fn @kind({ptr, i64}) -> i64 {
 b0(%0: {ptr, i64}):
-  %1: mem.r1 = region.foreign
-  %2: mem.r0 = region.foreign
+  %1: mem.r1 = region.foreign 1
+  %2: mem.r0 = region.foreign 0
   %3 = agg.get %0, 0
   %4 = agg.get %0, 1
   %5 = data.addr @str.0
