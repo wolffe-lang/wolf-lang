@@ -345,6 +345,9 @@ mod tests {
     /// why a header's remembered region survives the move — assert it
     /// rather than argue it.
     #[test]
+    // The transfer/adopt pair lives in the task layer, which carries the
+    // s28 linux-only campaign posture; the rest of this file is portable.
+    #[cfg(target_os = "linux")]
     fn a_moved_region_keeps_its_container() {
         let a = crate::native::__wolf_rt_region_new();
         unsafe {
