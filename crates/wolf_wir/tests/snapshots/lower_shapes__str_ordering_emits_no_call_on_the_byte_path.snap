@@ -1,0 +1,134 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: out
+---
+decl @__wolf_rt_str_cmp(ptr, i64, ptr, i64) -> i64
+decl @before({ptr, i64}, {ptr, i64}) -> i64
+decl @not_after({ptr, i64}, {ptr, i64}) -> i64
+data @str.0 = "a"
+data @str.1 = "b"
+
+fn @before({ptr, i64}, {ptr, i64}) -> i64 {
+b0(%0: {ptr, i64}, %1: {ptr, i64}):
+  %2: mem.r1 = region.foreign 1
+  %3: mem.r0 = region.foreign 0
+  %4 = agg.get %0, 0
+  %5 = agg.get %0, 1
+  %6 = agg.get %1, 0
+  %7 = agg.get %1, 1
+  %8 = icmp.slt %5, %7
+  br %8, b1(%5), b1(%7)
+b1(%9: i64):
+  %10 = iconst.i64 64
+  %11 = icmp.sgt %9, %10
+  br %11, b2, b3
+b2:
+  %12 = call @__wolf_rt_str_cmp(%4, %5, %6, %7)
+  %13 = iconst.i64 0
+  %14 = icmp.slt %12, %13
+  jmp b9(%14)
+b3:
+  %15 = iconst.i64 0
+  %16 = iconst.i64 1
+  jmp b4(%15)
+b4(%17: i64):
+  %18 = icmp.slt %17, %9
+  br %18, b5, b8
+b5:
+  %19 = ptr.off %4, %17, 1
+  %20 = load.i8 %19, %2
+  %21 = zext.i64 %20
+  %22 = ptr.off %6, %17, 1
+  %23 = load.i8 %22, %2
+  %24 = zext.i64 %23
+  %25 = icmp.eq %21, %24
+  br %25, b6, b7
+b6:
+  %26 = iadd.wrap %17, %16
+  jmp b4(%26)
+b7:
+  %27 = icmp.slt %21, %24
+  jmp b9(%27)
+b8:
+  jmp b9(%8)
+b9(%28: bool):
+  br %28, b10, b11
+b10:
+  %29 = iconst.i64 1
+  jmp b12(%29)
+b11:
+  %30 = iconst.i64 0
+  jmp b12(%30)
+b12(%31: i64):
+  ret %31
+}
+
+fn @not_after({ptr, i64}, {ptr, i64}) -> i64 {
+b0(%0: {ptr, i64}, %1: {ptr, i64}):
+  %2: mem.r1 = region.foreign 1
+  %3: mem.r0 = region.foreign 0
+  %4 = agg.get %0, 0
+  %5 = agg.get %0, 1
+  %6 = agg.get %1, 0
+  %7 = agg.get %1, 1
+  %8 = icmp.slt %5, %7
+  br %8, b1(%5), b1(%7)
+b1(%9: i64):
+  %10 = iconst.i64 64
+  %11 = icmp.sgt %9, %10
+  br %11, b2, b3
+b2:
+  %12 = call @__wolf_rt_str_cmp(%4, %5, %6, %7)
+  %13 = iconst.i64 0
+  %14 = icmp.sle %12, %13
+  jmp b9(%14)
+b3:
+  %15 = iconst.i64 0
+  %16 = iconst.i64 1
+  jmp b4(%15)
+b4(%17: i64):
+  %18 = icmp.slt %17, %9
+  br %18, b5, b8
+b5:
+  %19 = ptr.off %4, %17, 1
+  %20 = load.i8 %19, %2
+  %21 = zext.i64 %20
+  %22 = ptr.off %6, %17, 1
+  %23 = load.i8 %22, %2
+  %24 = zext.i64 %23
+  %25 = icmp.eq %21, %24
+  br %25, b6, b7
+b6:
+  %26 = iadd.wrap %17, %16
+  jmp b4(%26)
+b7:
+  %27 = icmp.slt %21, %24
+  jmp b9(%27)
+b8:
+  %28 = icmp.sle %5, %7
+  jmp b9(%28)
+b9(%29: bool):
+  br %29, b10, b11
+b10:
+  %30 = iconst.i64 1
+  jmp b12(%30)
+b11:
+  %31 = iconst.i64 0
+  jmp b12(%31)
+b12(%32: i64):
+  ret %32
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = data.addr @str.0
+  %1 = iconst.i64 1
+  %2 = agg.make %0, %1
+  %3 = data.addr @str.1
+  %4 = agg.make %3, %1
+  %5 = call @before(%2, %4)
+  %6 = call @not_after(%4, %2)
+  %7 = iadd.chk %5, %6
+  %8 = isub.chk %7, %1
+  ret %8
+}

@@ -879,3 +879,210 @@ fn two_live_lists_cannot_share_a_buffer() {
          issue before touching this."
     );
 }
+
+/// s84 acceptance (wolf-lang#95): a WORD walk emits **no call and no
+/// allocation**. `words()` is typed `List[str]`, but in a `for` head
+/// nothing is built: the loop walks the receiver's own bytes and each
+/// yield is a `{ptr, len}` subslice of it (`[mem.str.view]`) — the s77
+/// byte view one level up. Before s84 this body was
+/// `call @__wolf_rt_str_split`, which meant a list header, a growable
+/// buffer and a 16-byte push per word; `word_count` measured 0.193x of
+/// naive C with it and 0.935x without.
+///
+/// The `White_Space` predicate is inline too, and the shape below says
+/// what that means: `load.i8` + `zext` + integer compares, with no
+/// `data.addr` anywhere. Its 25 scalars are tests, not an index.
+#[test]
+fn word_walk_has_no_call_and_no_allocation() {
+    let out = dump(
+        "fn count(text: str) -> int {\n\
+         \x20   var n = 0\n\
+         \x20   for w in text.words() {\n\
+         \x20       n = n + w.len\n\
+         \x20   }\n\
+         \x20   n\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   count(\"the quick brown fox\") - 16\n\
+         }\n",
+    );
+    let body = out
+        .split("fn @count")
+        .nth(1)
+        .expect("count lowered")
+        .split("\nfn ")
+        .next()
+        .expect("body");
+    assert!(
+        !body.contains("call "),
+        "a word walk must emit no call: {body}"
+    );
+    for alloc in ["region.alloc", "stack.alloc", "region.new"] {
+        assert!(
+            !body.contains(alloc),
+            "a word walk must allocate nothing ({alloc}): {body}"
+        );
+    }
+    assert!(
+        !body.contains("data.addr"),
+        "the predicate is compares, not a table: {body}"
+    );
+    assert!(body.contains("load.i8"), "one byte per step: {body}");
+    assert!(body.contains("zext.i64"), "bytes widen UNSIGNED: {body}");
+    // The ASCII half, which is where the time goes: `b == 0x20`, and
+    // `b - 9` unsigned-below-5 for the five control separators.
+    assert!(body.contains("iconst.i64 32"), "the SPACE compare: {body}");
+    assert!(body.contains("icmp.ule"), "the control range: {body}");
+    insta::assert_snapshot!(out);
+}
+
+/// The same for `lines()` and `split()`. `lines` is pure byte scanning
+/// and calls nothing at all; `split` keeps ONE call — and it is
+/// `__wolf_rt_str_find`, a real substring searcher, run once per FIELD
+/// rather than once per byte. What both lose is the `List[str]`.
+#[test]
+fn line_and_field_walks_build_no_list() {
+    let out = dump(
+        "fn lines_len(text: str) -> int {\n\
+         \x20   var n = 0\n\
+         \x20   for l in text.lines() {\n\
+         \x20       n = n + l.len\n\
+         \x20   }\n\
+         \x20   n\n\
+         }\n\
+         fn fields(text: str) -> int {\n\
+         \x20   var n = 0\n\
+         \x20   for f in text.split(\",\") {\n\
+         \x20       n = n + f.len\n\
+         \x20   }\n\
+         \x20   n\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   lines_len(\"a\\nb\") + fields(\"a,b\") - 5\n\
+         }\n",
+    );
+    let cut = |name: &str| -> String {
+        out.split(name)
+            .nth(1)
+            .expect("lowered")
+            .split("\nfn ")
+            .next()
+            .expect("body")
+            .to_string()
+    };
+    let lines = cut("fn @lines_len");
+    assert!(
+        !lines.contains("call "),
+        "a line walk calls nothing: {lines}"
+    );
+    let fields = cut("fn @fields");
+    assert!(
+        fields.contains("call @__wolf_rt_str_find"),
+        "split drives on `find`: {fields}"
+    );
+    for body in [&lines, &fields] {
+        assert!(
+            !body.contains("__wolf_rt_str_split"),
+            "no `List[str]` is materialized: {body}"
+        );
+        assert!(
+            !body.contains("__wolf_rt_list_"),
+            "no list traffic at all: {body}"
+        );
+    }
+    insta::assert_snapshot!(out);
+}
+
+/// `words()` in a position that needs a first-class `List[str]` value
+/// still MATERIALIZES, bit-for-bit as before — the s77 byte-view
+/// precedent. The lazy walk is a `for`-head recognition, not a change
+/// to what the method means.
+#[test]
+fn a_bound_word_list_still_materializes() {
+    let out = dump(
+        "fn main() -> !int {\n\
+         \x20   let ws = \"a b\".words()\n\
+         \x20   ws.len - 2\n\
+         }\n",
+    );
+    assert!(
+        out.contains("call @__wolf_rt_str_split"),
+        "a bound List[str] materializes: {out}"
+    );
+}
+
+/// s84 (wolf-lang#94): the relational family `< <= > >=` on `str`
+/// compares BYTES, with no call on that path. s81's contract named
+/// equality only and delivered it; ordering kept calling
+/// `__wolf_rt_str_cmp` on every compare, which is what wolf-std's
+/// ordering-dependent functions were paying for.
+///
+/// The assertion is the exact one `str_equality_emits_no_call_on_the_byte_path`
+/// makes, and for the same reason: with two `str` PARAMETERS neither
+/// length is a build-time constant, so the long-operand route
+/// (`STR_EQ_INLINE_MAX`) cannot fold away and survives as one guarded
+/// arm. That is the only call site left, it is the `memcmp`-backed
+/// shim, and it is not on the scan path.
+///
+/// `<=` emits the same shape as `<` — at a differing byte the strict
+/// and non-strict forms agree, so only the length compare at the end
+/// changes condition.
+#[test]
+fn str_ordering_emits_no_call_on_the_byte_path() {
+    let out = dump(
+        "fn before(a: str, b: str) -> int {\n\
+         \x20   if a < b { 1 } else { 0 }\n\
+         }\n\
+         fn not_after(a: str, b: str) -> int {\n\
+         \x20   if a <= b { 1 } else { 0 }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   before(\"a\", \"b\") + not_after(\"b\", \"a\") - 1\n\
+         }\n",
+    );
+    for f in ["fn @before", "fn @not_after"] {
+        let body = out
+            .split(f)
+            .nth(1)
+            .expect("lowered")
+            .split("\nfn ")
+            .next()
+            .expect("body");
+        assert_eq!(
+            body.matches("call ").count(),
+            1,
+            "{f} keeps only the guarded long-operand route: {body}"
+        );
+        assert!(
+            body.contains("call @__wolf_rt_str_cmp"),
+            "{f}'s one call is the memcmp route: {body}"
+        );
+        assert!(body.contains("load.i8"), "{f} reads one byte: {body}");
+        assert!(body.contains("zext.i64"), "{f} widens UNSIGNED: {body}");
+    }
+    insta::assert_snapshot!(out);
+}
+
+/// A `str` compared with ITSELF needs no bytes at all: the shared
+/// prefix is equal by construction, so the order is the length
+/// compare — one `icmp`, no loop, no call.
+#[test]
+fn str_ordering_against_itself_is_the_length_compare() {
+    let out = dump(
+        "fn f(a: str) -> int {\n\
+         \x20   if a < a { 1 } else { 0 }\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   f(\"wolf\")\n\
+         }\n",
+    );
+    let body = out
+        .split("fn @f")
+        .nth(1)
+        .expect("lowered")
+        .split("\nfn ")
+        .next()
+        .expect("body");
+    assert!(!body.contains("call "), "no call: {body}");
+    assert!(!body.contains("load.i8"), "and no byte is read: {body}");
+}

@@ -115,6 +115,26 @@
 //!   the compiled test are pinned equal by
 //!   `inline_domain_matches_the_shim` below — the `[mem.str.get]`
 //!   "same domain" law, checked rather than asserted.
+//!
+//! # The separator set (s84, wolf-lang#95)
+//!
+//! `words`/`lines`/`split` used to be spelled as whatever Rust's
+//! `std::str` did — `split_whitespace`, `lines`, `split` — which meant
+//! the *definition* of a wolf program's word boundaries lived in this
+//! crate's host library. `[mem.str.ws]` ends that: the separator set is
+//! Unicode `White_Space`, twenty-five scalars, written down and FROZEN
+//! at v1. [`ws_at`] is that clause as code, and it is the only place in
+//! the runtime that decides what a separator is — `words` and the
+//! `trim` family both go through it, and [`words_of`]/[`lines_of`] are
+//! the `[mem.str.words]`/`[mem.str.lines]` walks spelled out rather
+//! than delegated.
+//!
+//! The compiler does not CALL any of it on the hot path: `for w in
+//! s.words()` lowers to the same decision tree inline (`wolf_wir`'s
+//! `ws_at_inline`), and `ws_inline_matches_the_shim` below pins the two
+//! equal over every scalar — the `inline_domain_matches_the_shim`
+//! precedent, one clause with two spellings that are checked against
+//! each other instead of trusted to match.
 
 use std::sync::Mutex;
 
@@ -292,6 +312,120 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_finish(handle: i64, out: i64) {
     unsafe { write_owned(out, &s) };
 }
 
+// ------------------------------------------ the separator set (s84) --
+
+/// `[mem.str.ws]` — is a `White_Space` scalar encoded at the front of
+/// `b`, and how many bytes wide is it?
+///
+/// `Some(width)` when the scalar starting at `b[0]` is one of the
+/// twenty-five, `None` otherwise. `None` covers continuation bytes by
+/// construction (no continuation byte is a lead byte of anything), which
+/// is what lets a caller step one byte at a time through a NON-separator
+/// run without ever mistaking the tail of a code point for a boundary.
+///
+/// Shape, and why it is a decision tree rather than a table. The set is
+/// six ASCII scalars plus nineteen that all live behind four lead bytes
+/// (`C2`, `E1`, `E2`, `E3`), so the ASCII half is two integer compares —
+/// `b == 0x20`, or `b - 9` unsigned-below-5 — and the rest is a branch
+/// that ordinary text never takes. An A/B over the `word_count` buffer
+/// measured the two compares at 0.491 ns/byte against 1.003 for a
+/// 256-byte lookup table and 0.513 for a 64-bit shift-mask: the table
+/// loses because it turns a pure-ALU predicate into a load per byte,
+/// which also stops the scan vectorizing. Data beat the table, so data
+/// it is.
+pub(crate) fn ws_at(b: &[u8]) -> Option<usize> {
+    let b0 = *b.first()?;
+    if b0 < 0x80 {
+        // U+0020, and U+0009..U+000D as one unsigned range.
+        return (b0 == 0x20 || b0.wrapping_sub(0x09) <= 4).then_some(1);
+    }
+    let b1 = *b.get(1)?;
+    match b0 {
+        // U+0085 NEL, U+00A0 NO-BREAK SPACE.
+        0xC2 => (b1 == 0x85 || b1 == 0xA0).then_some(2),
+        0xE1..=0xE3 => {
+            let b2 = *b.get(2)?;
+            let hit = match b0 {
+                // U+1680 OGHAM SPACE MARK.
+                0xE1 => b1 == 0x9A && b2 == 0x80,
+                0xE2 => {
+                    // U+2000..U+200A, then U+2028/U+2029/U+202F, then
+                    // U+205F behind the other continuation byte.
+                    (b1 == 0x80
+                        && (b2.wrapping_sub(0x80) <= 0x0A
+                            || b2 == 0xA8
+                            || b2 == 0xA9
+                            || b2 == 0xAF))
+                        || (b1 == 0x81 && b2 == 0x9F)
+                }
+                // U+3000 IDEOGRAPHIC SPACE.
+                _ => b1 == 0x80 && b2 == 0x80,
+            };
+            hit.then_some(3)
+        }
+        _ => None,
+    }
+}
+
+/// `[mem.str.words]` — the maximal non-empty runs of non-separator
+/// scalars, as zero-copy subslices. Never yields an empty piece; a run
+/// of separators is one boundary; leading and trailing separators yield
+/// nothing. This is the exact walk `wolf_wir` emits inline.
+pub(crate) fn words_of(s: &str) -> Vec<&str> {
+    let b = s.as_bytes();
+    let n = b.len();
+    let mut out = Vec::new();
+    let mut i = 0;
+    loop {
+        // Skip separators by the SCALAR's width — stepping by one here
+        // would land inside a multi-byte space and open a "word" at a
+        // continuation byte.
+        while i < n {
+            match ws_at(&b[i..]) {
+                Some(w) => i += w,
+                None => break,
+            }
+        }
+        if i >= n {
+            return out;
+        }
+        let start = i;
+        // Run to the next separator one byte at a time: `ws_at` answers
+        // `None` for every continuation byte, so this can only stop on a
+        // code-point boundary.
+        while i < n && ws_at(&b[i..]).is_none() {
+            i += 1;
+        }
+        out.push(&s[start..i]);
+    }
+}
+
+/// `[mem.str.lines]` — split on LF, absorbing one CR that immediately
+/// preceded it. A trailing LF opens no final empty line; a CR with no LF
+/// after it stays in the line.
+pub(crate) fn lines_of(s: &str) -> Vec<&str> {
+    let b = s.as_bytes();
+    let n = b.len();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < n {
+        let start = i;
+        let mut j = i;
+        while j < n && b[j] != b'\n' {
+            j += 1;
+        }
+        let mut end = j;
+        // `j < n` is the "an LF terminated this line" test: only then is
+        // a CR part of the terminator rather than part of the text.
+        if j < n && end > start && b[end - 1] == b'\r' {
+            end -= 1;
+        }
+        out.push(&s[start..end]);
+        i = j + 1;
+    }
+    out
+}
+
 // ----------------------------------------------- the s37 method set ---
 
 /// Byte equality of two str pairs (1 = equal).
@@ -386,17 +520,43 @@ pub unsafe extern "C" fn __wolf_rt_str_count(sp: i64, sl: i64, np: i64, nl: i64)
 /// `trim` (0) / `trim_start` (1) / `trim_end` (2) — zero-copy: the
 /// pair through `out` is a subslice of the receiver's bytes.
 ///
+/// The separator set is `[mem.str.ws]`'s, through [`ws_at`], and not the
+/// host library's `char::is_whitespace`: the clause froze the set at
+/// twenty-five scalars, and a delegated `str::trim` would quietly track
+/// whatever the build's Rust believes instead.
+///
 /// # Safety
 ///
 /// A valid str pair; `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_trim(sp: i64, sl: i64, mode: i64, out: i64) {
     let s = unsafe { view(sp, sl) };
-    let t = match mode {
-        0 => s.trim(),
-        1 => s.trim_start(),
-        _ => s.trim_end(),
-    };
+    let b = s.as_bytes();
+    let mut lo = 0usize;
+    if mode != 2 {
+        while let Some(w) = ws_at(&b[lo..]) {
+            lo += w;
+        }
+    }
+    let mut hi = b.len();
+    if mode != 1 {
+        // Backwards, and only over the trailing run: step off the
+        // continuation bytes to reach the last scalar's lead byte, then
+        // ask the same predicate. `str::trim_end` is O(trailing) and so
+        // is this — a forward rescan would have made trimming a long
+        // string of two spaces cost its whole length.
+        while hi > lo {
+            let mut st = hi - 1;
+            while st > lo && (b[st] & 0xC0) == 0x80 {
+                st -= 1;
+            }
+            if ws_at(&b[st..]).is_none() {
+                break;
+            }
+            hi = st;
+        }
+    }
+    let t = &s[lo..hi];
     let off = t.as_ptr() as i64 - s.as_ptr() as i64;
     let ptr = if sl == 0 { sp } else { sp + off };
     unsafe { write_pair(out, ptr, t.len() as i64) };
@@ -491,12 +651,19 @@ pub unsafe extern "C" fn __wolf_rt_str_replace(
     unsafe { write_owned(out, &t) };
 }
 
-/// The view family, materialized as `List[str]` (D25/s37 v0):
-/// `split(sep)` (mode 0), `words` (mode 1 — Unicode `White_Space`),
-/// `lines` (mode 2). Elements are zero-copy subslices of the
-/// receiver's bytes. Empty separator: the whole string as one
-/// element — an empty separator splits nowhere, ruled by
-/// [mem.str.empty] (#56); every lane answers the same.
+/// The view family, MATERIALIZED as `List[str]` — the fallback, since
+/// s84: `for w in s.words()` and its `lines`/`split` siblings walk the
+/// receiver inline and never reach here (`[mem.str.view]`). This stays
+/// for the positions that need a first-class `List[str]` value — a
+/// binding, an argument, a return — exactly as `__wolf_rt_str_bytes`
+/// stayed for the byte view.
+///
+/// `split(sep)` (mode 0, `[mem.str.split]`), `words` (mode 1,
+/// `[mem.str.words]`), `lines` (mode 2, `[mem.str.lines]`). Elements are
+/// zero-copy subslices of the receiver's bytes; the LIST is the only
+/// allocation. Empty separator: the whole string as one element — an
+/// empty separator splits nowhere, ruled by [mem.str.empty] (#56) and
+/// restated as the `count(sep) + 1` identity in [mem.str.split].
 ///
 /// # Safety
 ///
@@ -507,8 +674,8 @@ pub unsafe extern "C" fn __wolf_rt_str_split(sp: i64, sl: i64, np: i64, nl: i64,
     let parts: Vec<&str> = match mode {
         0 if n.is_empty() => vec![s],
         0 => s.split(n).collect(),
-        1 => s.split_whitespace().collect(),
-        _ => s.lines().collect(),
+        1 => words_of(s),
+        _ => lines_of(s),
     };
     let hdr = crate::list::new_list(16);
     for p in parts {
@@ -870,6 +1037,300 @@ mod tests {
             from_utf8(&[119, 111, 108, 300]).is_err(),
             "one bad element poisons the whole sequence"
         );
+    }
+
+    // ------------------------------- the separator set (s84, #95) ---
+
+    /// `[mem.str.ws]`'s twenty-five scalars, written out. This list is
+    /// the CLAUSE, not a copy of one: the spec freezes the set at v1,
+    /// so it is spelled here as data and every other spelling in the
+    /// tree is checked against it.
+    const WHITE_SPACE: [char; 25] = [
+        '\u{0009}', '\u{000A}', '\u{000B}', '\u{000C}', '\u{000D}', '\u{0020}', '\u{0085}',
+        '\u{00A0}', '\u{1680}', '\u{2000}', '\u{2001}', '\u{2002}', '\u{2003}', '\u{2004}',
+        '\u{2005}', '\u{2006}', '\u{2007}', '\u{2008}', '\u{2009}', '\u{200A}', '\u{2028}',
+        '\u{2029}', '\u{202F}', '\u{205F}', '\u{3000}',
+    ];
+
+    /// `ws_at` decides EXACTLY `[mem.str.ws]`'s set, over every scalar
+    /// there is — not a sample, because a decision tree over lead bytes
+    /// is precisely the shape whose bugs hide in one unvisited branch.
+    /// The width it reports is the scalar's UTF-8 width, which is what
+    /// keeps the skip loop landing on code-point boundaries.
+    #[test]
+    fn ws_at_is_the_twenty_five_scalars() {
+        let mut seen = Vec::new();
+        for c in 0u32..=0x10FFFF {
+            let Some(ch) = char::from_u32(c) else {
+                continue;
+            };
+            let mut buf = [0u8; 4];
+            let want = WHITE_SPACE.contains(&ch);
+            let wide = ch.encode_utf8(&mut buf).len();
+            let got = ws_at(&buf[..wide]);
+            assert_eq!(got.is_some(), want, "ws_at on U+{c:04X}");
+            if want {
+                assert_eq!(got, Some(wide), "width of U+{c:04X}");
+                seen.push(ch);
+            }
+        }
+        assert_eq!(seen, WHITE_SPACE, "the set, in order");
+    }
+
+    /// No continuation byte is ever a separator START. This is the
+    /// invariant the word walk leans on when it steps one byte at a
+    /// time through a word: if a `10xxxxxx` byte could answer "yes",
+    /// the walk would open a field in the middle of a code point and
+    /// hand back a `str` `[mem.str.get]` would have refused.
+    #[test]
+    fn no_continuation_byte_starts_a_separator() {
+        for b in 0x80u8..=0xBF {
+            assert_eq!(ws_at(&[b, 0x80, 0x80]), None, "continuation {b:#04x}");
+        }
+    }
+
+    /// The compiled spelling, transcribed. `wolf_wir::lower`'s
+    /// `ws_at_inline` emits this decision tree as WIR — every byte
+    /// through `zext` into an `i64`, so the compares below are on
+    /// `i64`s in 0..=255 and the unsigned ones are `icmp.ule` — and it
+    /// is a SECOND implementation of `[mem.str.ws]`, which means the
+    /// clause has two spellings that can disagree. The next test is
+    /// what stops them, exactly as `inline_domain_matches_the_shim`
+    /// stops `[mem.str.get]`'s two spellings.
+    fn ws_inline(b: &[u8]) -> Option<usize> {
+        // U+2000..U+200A (bits 0..10), U+2028, U+2029 (40, 41), U+202F
+        // (47), as one mask over `cp - 0x2000` — the `iconst.i64
+        // 144036023240703` in the dump.
+        const E2_MASK: i64 = (1 << 47) | (1 << 41) | (1 << 40) | 0x7FF;
+        let b0 = i64::from(*b.first()?);
+        if b0 < 0x80 {
+            // `icmp.eq b0, 32`, then `isub.wrap b0, 9` + `icmp.ule 4`.
+            let ws = b0 == 0x20 || (b0.wrapping_sub(9) as u64) <= 4;
+            return ws.then_some(1);
+        }
+        if b0 == 0xC2 {
+            let b1 = i64::from(*b.get(1)?);
+            return (b1 == 0x85 || b1 == 0xA0).then_some(2);
+        }
+        // `isub.wrap b0, 0xE1` + `icmp.ule 2` — the only other lead
+        // bytes that can begin a separator.
+        if (b0.wrapping_sub(0xE1) as u64) > 2 {
+            return None;
+        }
+        let b1 = i64::from(*b.get(1)?);
+        let b2 = i64::from(*b.get(2)?);
+        let cp = ((b0 & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F);
+        let off = cp.wrapping_sub(0x2000);
+        let hit = if (off as u64) <= 0x2F {
+            (E2_MASK >> off) & 1 != 0
+        } else {
+            cp == 0x1680 || cp == 0x3000 || cp == 0x205F
+        };
+        hit.then_some(3)
+    }
+
+    /// The COMPILED predicate and the runtime one answer the same
+    /// question, over every scalar there is. A decision tree over lead
+    /// bytes is precisely the shape whose bugs hide in one unvisited
+    /// branch, and the two trees are written differently on purpose —
+    /// the runtime matches on bytes, the compiled one decodes to the
+    /// scalar — so agreeing here is evidence rather than tautology.
+    #[test]
+    fn ws_inline_matches_the_shim() {
+        for c in 0u32..=0x10FFFF {
+            let Some(ch) = char::from_u32(c) else {
+                continue;
+            };
+            let mut buf = [0u8; 4];
+            let wide = ch.encode_utf8(&mut buf).len();
+            assert_eq!(
+                ws_inline(&buf[..wide]),
+                ws_at(&buf[..wide]),
+                "the two spellings of [mem.str.ws] at U+{c:04X}"
+            );
+        }
+        // And over EVERY first byte — including the continuation bytes
+        // and the lead bytes UTF-8 never uses — with the trailing two
+        // ranging over the continuation range. That range is the whole
+        // domain, and stating it is the point: the compiled tree reads
+        // `base[i+1]`/`base[i+2]` only after the lead byte has promised
+        // they exist, and it MASKS them with 0x3F to decode, so
+        // `E1 9A 00` (which the runtime's byte match rejects and the
+        // decode accepts as U+1680) is a real disagreement on an input
+        // no `str` can hold. Widening this loop past 0x80..=0xBF would
+        // be asserting something neither spelling promises.
+        for b0 in 0u8..=255 {
+            for b1 in 0x80u8..=0xBF {
+                for b2 in [0x80u8, 0x8A, 0x8B, 0x9F, 0xA8, 0xA9, 0xAF, 0xB0, 0xBF] {
+                    let raw = [b0, b1, b2];
+                    assert_eq!(
+                        ws_inline(&raw),
+                        ws_at(&raw),
+                        "the two spellings on {raw:02X?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The set is FROZEN at v1, and the host library is not the
+    /// authority — but a drift between them is a REVIEW EVENT, so it is
+    /// checked. If this fails, Unicode (or Rust's table) changed: decide
+    /// deliberately whether `[mem.str.ws]` moves, and change the clause
+    /// first if it does.
+    #[test]
+    fn the_frozen_set_still_matches_the_host_table() {
+        let host: Vec<char> = (0u32..=0x10FFFF)
+            .filter_map(char::from_u32)
+            .filter(|c| c.is_whitespace())
+            .collect();
+        assert_eq!(
+            host, WHITE_SPACE,
+            "the host's White_Space table drifted from [mem.str.ws]"
+        );
+    }
+
+    /// `[mem.str.words]`, `[mem.str.lines]`, `[mem.str.split]` on the
+    /// inputs that decide them. These are the ugly ones by name — the
+    /// happy path was never in doubt and never told anyone anything.
+    #[test]
+    fn the_walks_answer_the_clause_on_the_ugly_inputs() {
+        let w = |s: &str| words_of(s).join("|");
+        // Empty, and only-separators: no words at all.
+        assert_eq!(w(""), "");
+        assert_eq!(w("   "), "");
+        assert_eq!(w("\t\r\n"), "");
+        assert_eq!(w("\u{a0}\u{3000}"), "");
+        // Leading, trailing, and RUNS collapse to one boundary each.
+        assert_eq!(w(" a "), "a");
+        assert_eq!(w("a  b"), "a|b");
+        assert_eq!(w("\t\ta\r\n\r\nb\t"), "a|b");
+        // Every non-ASCII separator, and the width handling behind it.
+        assert_eq!(w("a\u{a0}b"), "a|b");
+        assert_eq!(w("a\u{85}b"), "a|b");
+        assert_eq!(w("a\u{1680}b"), "a|b");
+        assert_eq!(w("a\u{2028}b\u{2029}c"), "a|b|c");
+        assert_eq!(w("a\u{202f}b\u{205f}c"), "a|b|c");
+        assert_eq!(w("a\u{3000}b"), "a|b");
+        assert_eq!(w("  \u{2000}\u{2001}x  "), "x");
+        // A non-separator multi-byte scalar stays INSIDE its word — the
+        // one-byte step through a word must not split it.
+        assert_eq!(w(" é€🐺 "), "é€🐺");
+        assert_eq!(w("é\u{a0}🐺"), "é|🐺");
+        // A word is never empty, which is the whole point of the ruling.
+        for s in ["", "  ", " a ", "a  b", "\u{3000}a\u{3000}"] {
+            assert!(words_of(s).iter().all(|p| !p.is_empty()), "words of {s:?}");
+        }
+
+        let l = |s: &str| lines_of(s).join("|");
+        assert_eq!(l(""), "");
+        assert_eq!(
+            lines_of(""),
+            Vec::<&str>::new(),
+            "an empty str has no lines"
+        );
+        assert_eq!(l("a"), "a");
+        assert_eq!(l("a\n"), "a");
+        assert_eq!(lines_of("a\n").len(), 1, "a trailing LF opens no line");
+        assert_eq!(l("\n"), "");
+        assert_eq!(lines_of("\n").len(), 1, "one LF is one empty line");
+        assert_eq!(l("a\n\nb"), "a||b");
+        assert_eq!(l("a\r\nb\r\n"), "a|b");
+        assert_eq!(l("\r\n"), "");
+        // A CR with no LF after it is TEXT, not a terminator.
+        assert_eq!(l("a\r"), "a\r");
+        assert_eq!(l("a\rb"), "a\rb");
+        // The Unicode line separators are separators for `words` and
+        // NOT terminators here — the two clauses disagree on purpose.
+        assert_eq!(lines_of("a\u{2028}b").len(), 1);
+        assert_eq!(lines_of("a\u{85}b").len(), 1);
+    }
+
+    /// `[mem.str.split]`'s identity: `split(sep)` yields exactly
+    /// `count(sep) + 1` fields, for EVERY receiver and separator —
+    /// including the empty one, where `[mem.str.empty]`'s 0 and the one
+    /// whole-string field are the same rule rather than an exception.
+    #[test]
+    fn split_yields_count_plus_one_fields() {
+        let cases = [
+            ("", ""),
+            ("", ","),
+            (",", ","),
+            (",,", ","),
+            (",a,,b,", ","),
+            ("abab", "ab"),
+            ("aaa", "aa"),
+            ("xabax", "ab"),
+            ("wolf", ","),
+            ("a\r\nb", "\r\n"),
+            ("é€🐺", "€"),
+            ("hello", ""),
+        ];
+        for (s, sep) in cases {
+            let (sp, sl) = pair_of(s);
+            let (np, nl) = pair_of(sep);
+            unsafe {
+                let hdr = __wolf_rt_str_split(sp, sl, np, nl, 0);
+                let fields = crate::list::__wolf_rt_list_len(hdr);
+                let count = __wolf_rt_str_count(sp, sl, np, nl);
+                assert_eq!(fields, count + 1, "split({s:?}, {sep:?}) field count");
+            }
+        }
+    }
+
+    /// The materializing shim answers the same walks the clause defines
+    /// — the fallback and the hot path are one definition.
+    #[test]
+    fn the_split_shim_rides_the_clause_walks() {
+        let s = "  the\u{a0}quick\r\nbrown  ";
+        let (sp, sl) = pair_of(s);
+        let z = 0i64;
+        for (mode, want) in [(1i64, words_of(s)), (2, lines_of(s))] {
+            let hdr = unsafe { __wolf_rt_str_split(sp, sl, sp, z, mode) };
+            assert_eq!(
+                unsafe { crate::list::__wolf_rt_list_len(hdr) },
+                want.len() as i64,
+                "mode {mode} element count"
+            );
+            let mut elem = [0i64; 2];
+            for (i, w) in want.iter().enumerate() {
+                unsafe {
+                    crate::list::__wolf_rt_list_read(hdr, i as i64, elem.as_mut_ptr() as i64);
+                    assert_eq!(&view(elem[0], elem[1]), w, "mode {mode} element {i}");
+                }
+                // And it is a VIEW: inside the receiver's own storage.
+                assert!(elem[0] >= sp && elem[0] + elem[1] <= sp + sl);
+            }
+        }
+    }
+
+    /// `trim` moved off `str::trim` onto [`ws_at`] so one frozen set
+    /// serves the whole family; the answers must not have moved with it.
+    #[test]
+    fn trim_uses_the_frozen_set() {
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        for s in [
+            "",
+            "   ",
+            "  the wolf  ",
+            "\u{a0}\u{2000}x\u{3000}\u{202f}",
+            "\u{85}",
+            "é",
+            " é ",
+            "\u{a0}",
+            "no-space",
+            "\t\r\n mixed \u{205f}",
+        ] {
+            let (sp, sl) = pair_of(s);
+            for (mode, want) in [(0i64, s.trim()), (1, s.trim_start()), (2, s.trim_end())] {
+                unsafe { __wolf_rt_str_trim(sp, sl, mode, o) };
+                assert_eq!(read_pair(&out), want, "trim mode {mode} of {s:?}");
+                if !s.is_empty() {
+                    assert!(out[0] >= sp && out[0] + out[1] <= sp + sl, "a subslice");
+                }
+            }
+        }
     }
 
     /// The accepted bytes are OWNED: they land in the ambient region,

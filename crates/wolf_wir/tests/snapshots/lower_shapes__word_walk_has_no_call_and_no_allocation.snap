@@ -1,0 +1,227 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: out
+---
+decl @count({ptr, i64}) -> i64
+data @str.0 = "the quick brown fox"
+
+fn @count({ptr, i64}) -> i64 {
+b0(%0: {ptr, i64}):
+  %1: mem.r1 = region.foreign 1
+  %2: mem.r0 = region.foreign 0
+  %3 = iconst.i64 0
+  %4 = agg.get %0, 0
+  %5 = agg.get %0, 1
+  %6 = iconst.i64 1
+  jmp b1(%3, %3)
+b1(%7: i64, %8: i64):
+  %9 = icmp.slt %7, %5
+  br %9, b2, b36
+b2:
+  %10 = bconst true
+  %11 = bconst false
+  %12 = iconst.i64 2
+  %13 = iconst.i64 3
+  %14 = ptr.off %4, %7, 1
+  %15 = load.i8 %14, %1
+  %16 = zext.i64 %15
+  %17 = iconst.i64 128
+  %18 = icmp.sge %16, %17
+  br %18, b3, b13
+b3:
+  %19 = iconst.i64 194
+  %20 = icmp.eq %16, %19
+  br %20, b4, b6
+b4:
+  %21 = iadd.wrap %7, %6
+  %22 = ptr.off %4, %21, 1
+  %23 = load.i8 %22, %1
+  %24 = zext.i64 %23
+  %25 = iconst.i64 133
+  %26 = icmp.eq %24, %25
+  br %26, b15(%10, %12), b5
+b5:
+  %27 = iconst.i64 160
+  %28 = icmp.eq %24, %27
+  jmp b15(%28, %12)
+b6:
+  %29 = iconst.i64 225
+  %30 = isub.wrap %16, %29
+  %31 = icmp.ule %30, %12
+  br %31, b7, b12
+b7:
+  %32 = iadd.wrap %7, %6
+  %33 = iadd.wrap %7, %12
+  %34 = ptr.off %4, %32, 1
+  %35 = load.i8 %34, %1
+  %36 = zext.i64 %35
+  %37 = ptr.off %4, %33, 1
+  %38 = load.i8 %37, %1
+  %39 = zext.i64 %38
+  %40 = iconst.i64 15
+  %41 = iconst.i64 63
+  %42 = iconst.i64 12
+  %43 = iconst.i64 6
+  %44 = band %16, %40
+  %45 = shl %44, %42
+  %46 = band %36, %41
+  %47 = shl %46, %43
+  %48 = band %39, %41
+  %49 = bor %45, %47
+  %50 = bor %49, %48
+  %51 = iconst.i64 8192
+  %52 = isub.wrap %50, %51
+  %53 = iconst.i64 47
+  %54 = icmp.ule %52, %53
+  br %54, b8, b9
+b8:
+  %55 = iconst.i64 144036023240703
+  %56 = lshr %55, %52
+  %57 = band %56, %6
+  %58 = icmp.ne %57, %3
+  jmp b15(%58, %13)
+b9:
+  %59 = iconst.i64 5760
+  %60 = icmp.eq %50, %59
+  br %60, b15(%10, %13), b10
+b10:
+  %61 = iconst.i64 12288
+  %62 = icmp.eq %50, %61
+  br %62, b15(%10, %13), b11
+b11:
+  %63 = iconst.i64 8287
+  %64 = icmp.eq %50, %63
+  jmp b15(%64, %13)
+b12:
+  jmp b15(%11, %6)
+b13:
+  %65 = iconst.i64 32
+  %66 = icmp.eq %16, %65
+  br %66, b15(%10, %6), b14
+b14:
+  %67 = iconst.i64 9
+  %68 = isub.wrap %16, %67
+  %69 = iconst.i64 4
+  %70 = icmp.ule %68, %69
+  jmp b15(%70, %6)
+b15(%71: bool, %72: i64):
+  br %71, b16, b17
+b16:
+  %73 = iadd.wrap %7, %72
+  jmp b1(%73, %8)
+b17:
+  %74 = iadd.wrap %7, %6
+  jmp b18(%74)
+b18(%75: i64):
+  %76 = icmp.slt %75, %5
+  br %76, b19, b34
+b19:
+  %77 = ptr.off %4, %75, 1
+  %78 = load.i8 %77, %1
+  %79 = zext.i64 %78
+  %80 = icmp.sge %79, %17
+  br %80, b20, b30
+b20:
+  %81 = iconst.i64 194
+  %82 = icmp.eq %79, %81
+  br %82, b21, b23
+b21:
+  %83 = iadd.wrap %75, %6
+  %84 = ptr.off %4, %83, 1
+  %85 = load.i8 %84, %1
+  %86 = zext.i64 %85
+  %87 = iconst.i64 133
+  %88 = icmp.eq %86, %87
+  br %88, b32(%10, %12), b22
+b22:
+  %89 = iconst.i64 160
+  %90 = icmp.eq %86, %89
+  jmp b32(%90, %12)
+b23:
+  %91 = iconst.i64 225
+  %92 = isub.wrap %79, %91
+  %93 = icmp.ule %92, %12
+  br %93, b24, b29
+b24:
+  %94 = iadd.wrap %75, %6
+  %95 = iadd.wrap %75, %12
+  %96 = ptr.off %4, %94, 1
+  %97 = load.i8 %96, %1
+  %98 = zext.i64 %97
+  %99 = ptr.off %4, %95, 1
+  %100 = load.i8 %99, %1
+  %101 = zext.i64 %100
+  %102 = iconst.i64 15
+  %103 = iconst.i64 63
+  %104 = iconst.i64 12
+  %105 = iconst.i64 6
+  %106 = band %79, %102
+  %107 = shl %106, %104
+  %108 = band %98, %103
+  %109 = shl %108, %105
+  %110 = band %101, %103
+  %111 = bor %107, %109
+  %112 = bor %111, %110
+  %113 = iconst.i64 8192
+  %114 = isub.wrap %112, %113
+  %115 = iconst.i64 47
+  %116 = icmp.ule %114, %115
+  br %116, b25, b26
+b25:
+  %117 = iconst.i64 144036023240703
+  %118 = lshr %117, %114
+  %119 = band %118, %6
+  %120 = icmp.ne %119, %3
+  jmp b32(%120, %13)
+b26:
+  %121 = iconst.i64 5760
+  %122 = icmp.eq %112, %121
+  br %122, b32(%10, %13), b27
+b27:
+  %123 = iconst.i64 12288
+  %124 = icmp.eq %112, %123
+  br %124, b32(%10, %13), b28
+b28:
+  %125 = iconst.i64 8287
+  %126 = icmp.eq %112, %125
+  jmp b32(%126, %13)
+b29:
+  jmp b32(%11, %6)
+b30:
+  %127 = iconst.i64 32
+  %128 = icmp.eq %79, %127
+  br %128, b32(%10, %6), b31
+b31:
+  %129 = iconst.i64 9
+  %130 = isub.wrap %79, %129
+  %131 = iconst.i64 4
+  %132 = icmp.ule %130, %131
+  jmp b32(%132, %6)
+b32(%133: bool, %134: i64):
+  br %133, b34, b33
+b33:
+  %135 = iadd.wrap %75, %6
+  jmp b18(%135)
+b34:
+  %136 = isub.wrap %75, %7
+  %137 = agg.make %14, %136
+  %138 = agg.get %137, 0
+  %139 = agg.get %137, 1
+  %140 = iadd.chk %8, %139
+  jmp b35
+b35:
+  jmp b1(%75, %140)
+b36:
+  ret %8
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = data.addr @str.0
+  %1 = iconst.i64 19
+  %2 = agg.make %0, %1
+  %3 = call @count(%2)
+  %4 = iconst.i64 16
+  %5 = isub.chk %3, %4
+  ret %5
+}

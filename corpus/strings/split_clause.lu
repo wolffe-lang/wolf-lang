@@ -1,0 +1,114 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: str.views, mem.str.ws, mem.str.words, mem.str.lines, mem.str.split, mem.str.view
+//!
+//! s84 — the inputs that DECIDE `[mem.str.words]`, `[mem.str.lines]`
+//! and `[mem.str.split]` (wolf-lang#95). The happy path never told
+//! anyone anything: what a clause is for is tabs, CR-LF, runs of
+//! separators, leading and trailing ones, an empty receiver, a
+//! receiver that is only separators, and the non-ASCII spaces
+//! (U+00A0, U+2028, U+205F, the ideographic space). Every line below
+//! is one of those, and every lane must print the same character.
+//!
+//! Natively these three loops ALLOCATE NOTHING (`[mem.str.view]`): the
+//! walk is over the receiver's own bytes and each yield is a subslice
+//! of it, so there is no `List[str]`, no per-element push and no
+//! runtime call in the `words`/`lines` loops at all — the s77 byte
+//! view one level up. The `White_Space` predicate is inline, its 25
+//! scalars spelled as compares rather than indexed out of a table.
+
+fn show_words(s: str) -> str {
+    var out = ""
+    for w in s.words() {
+        out = "{out}[{w}]"
+    }
+    out
+}
+
+fn show_lines(s: str) -> str {
+    var out = ""
+    for l in s.lines() {
+        out = "{out}[{l}]"
+    }
+    out
+}
+
+fn show_split(s: str, sep: str) -> str {
+    var out = ""
+    for f in s.split(sep) {
+        out = "{out}[{f}]"
+    }
+    out
+}
+
+fn count_words(s: str) -> int {
+    var n = 0
+    for _ in s.words() {
+        n = n + 1
+    }
+    n
+}
+
+fn main() -> !int {
+    // [mem.str.words]: maximal non-empty runs. Empty and
+    // only-separator receivers yield NOTHING; leading, trailing and
+    // runs of separators are one boundary each; a word is never empty.
+    print("w1 {show_words("")}")
+    print("w2 {show_words("   ")}")
+    print("w3 {show_words("\t\r\n")}")
+    print("w4 {show_words(" a ")}")
+    print("w5 {show_words("a  b")}")
+    print("w6 {show_words("\t\ta\r\n\r\nb\t")}")
+    // The non-ASCII separators, and the widths behind them.
+    print("w7 {show_words("\u{a0}\u{3000}")}")
+    print("w8 {show_words("a\u{a0}b\u{85}c")}")
+    print("w9 {show_words("a\u{1680}b\u{2028}c\u{2029}d")}")
+    print("w10 {show_words("a\u{202f}b\u{205f}c")}")
+    print("w11 {show_words("  \u{2000}\u{2001}x  ")}")
+    // A multi-byte NON-separator stays inside its word: stepping one
+    // byte through a word must never split a code point.
+    print("w12 {show_words(" \u{e9}\u{20ac}\u{1f43a} ")}")
+    print("w13 {show_words("\u{e9}\u{a0}\u{1f43a}")}")
+
+    // [mem.str.lines]: LF only, one CR absorbed under an LF. A
+    // trailing LF opens no final line; an empty receiver has no lines;
+    // a CR with nothing after it is TEXT.
+    print("l1 {show_lines("")}")
+    print("l2 {show_lines("a")}")
+    print("l3 {show_lines("a\n")}")
+    print("l4 {show_lines("\n")}")
+    print("l5 {show_lines("a\n\nb")}")
+    print("l6 {show_lines("a\r\nb\r\n")}")
+    print("l7 {show_lines("\r\n")}")
+    print("l8 {show_lines("a\r")}")
+    // The Unicode line separators split WORDS and not LINES: the two
+    // clauses disagree on purpose.
+    print("l9 {show_lines("a\u{2028}b\u{85}c")}")
+
+    // [mem.str.split]: every field, empty ones included. Leading,
+    // trailing and adjacent separators all produce them, and an empty
+    // receiver produces exactly one.
+    print("s1 {show_split("", ",")}")
+    print("s2 {show_split(",", ",")}")
+    print("s3 {show_split(",,", ",")}")
+    print("s4 {show_split(",a,,b,", ",")}")
+    print("s5 {show_split("abab", "ab")}")
+    print("s6 {show_split("aaa", "aa")}")
+    print("s7 {show_split("xabax", "ab")}")
+    print("s8 {show_split("a\r\nb", "\r\n")}")
+    // [mem.str.empty]: an empty separator splits nowhere.
+    print("s9 {show_split("abc", "")}")
+
+    // The count identity: split yields count + 1 fields, always.
+    let hay = ",a,,b,"
+    var fields = 0
+    for _ in hay.split(",") {
+        fields = fields + 1
+    }
+    print("id {fields} {hay.count(",") + 1}")
+
+    // And the anchor: a word counter needs no non-empty filter,
+    // because [mem.str.words] never yields an empty word.
+    print("wc {count_words("the quick  brown\tfox\n")} {count_words("")}")
+    0
+}
