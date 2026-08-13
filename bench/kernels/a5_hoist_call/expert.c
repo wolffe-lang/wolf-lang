@@ -1,5 +1,12 @@
 /* a5-hoist-call (family A), EXPERT C: the load hoisted out of the loop by
  * hand — the transform wolf's `read` mode makes legal for the compiler.
+ *
+ * s79: clang performs this transform on `ref.c` too (it solves the
+ * callee and hoists both loads), so the two lanes compile to the same
+ * shape and measure within 3% of each other. This file is kept as the
+ * statement of intent; see `ref.c`'s header for the audit and
+ * bench/loss-ledger.md G7 for what testing the thesis would require.
+ *
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
 #include <stdio.h>
