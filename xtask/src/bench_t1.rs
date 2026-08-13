@@ -1252,11 +1252,17 @@ pub fn bench_gates() -> ExitCode {
             let got = t1::count_vectorized_loops(&r);
             let min = expect["c_naive_min"].as_u64().unwrap_or(0) as usize;
             if got < min {
-                failures.push(format!(
-                    "{}: naive C vectorized {got} loop(s), floor is {min} — the comparison lane \
-                     changed under us (a clang bump?), so the recorded floors are stale",
+                // Report, do not gate: how many loops the COMPARISON lane
+                // vectorizes depends on the host's clang, so this number is
+                // not deterministic across machines and D5 keeps it out of
+                // the merge gate. Our own witness floors above are
+                // deterministic for a given wolf build and do gate.
+                eprintln!(
+                    "bench-gates: note: {}: naive C vectorized {got} loop(s), recorded floor \
+                     is {min} — this host's clang differs from the one that recorded it; the \
+                     floor is report-only",
                     k.name
-                ));
+                );
             }
         }
         let ll = dir.join(format!("{}.ll", k.name));
