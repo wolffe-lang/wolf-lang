@@ -33,6 +33,48 @@
 //!   `nounwind`; `invoke`/`landingpad` are unrepresentable in this
 //!   emitter (a CI check asserts they never appear).
 //!
+//! The region scope channel reaches EVERY load and store through a
+//! region-tagged pointer, including the ones whose pointer was itself
+//! loaded out of region memory — a container element access, whose
+//! address comes from the header's `data` field, is scoped by the
+//! region its token names, exactly like an access through an
+//! allocation result (s78 acceptance, machine-checked by
+//! `every_region_access_carries_scopes`; fuzzed by the
+//! `loaded_pointer` shape).
+//!
+//! ## What is NOT claimed (s78, wolf-lang#82)
+//!
+//! Facts declined for want of a theorem — the asymmetry that makes
+//! this list mandatory is that a dropped fact costs speed while a
+//! wrong one costs correctness (D2):
+//!
+//! - **Per-container buffer disjointness.** Two containers' element
+//!   buffers get the SAME scope, so no `!noalias` separates them. `let
+//!   b = a` copies a header pointer, so two `List` values may share one
+//!   buffer; c04's exclusivity theorem is a syntactic path claim about
+//!   the argument PLACES (`[mem.model.path.disjoint]`), and
+//!   `wolf_mem`'s place language has no dereference projection at all.
+//!   Splitting the buffers would hand LLVM a `!noalias` pair nothing
+//!   proved. It needs a c04 payload-disjointness theorem first; the
+//!   lowering makes the same call for the same reason (`ops.rs`, the
+//!   `region.foreign` roots).
+//! - **`read`-parameter payload immutability.** `!invariant.load` is
+//!   NOT propagated through a load: `frozen` is claimed only where a
+//!   `sync.freeze` minted the token (`[mem.region.freeze.1]`: deep, in
+//!   place, forever). The `read` mode's "immutable for the whole call"
+//!   is enforced as a per-binding syntactic rule inside the callee, so
+//!   a second path to the same payload — including the `copy` the
+//!   E1014 diagnostic recommends — is invisible to it. A deep claim
+//!   here would be a miscompile, not a missed hoist.
+//! - **Call-site region effects.** A call carries no `!noalias` list,
+//!   even though its WIR signature names every region token it takes.
+//!   `region.foreign` roots are minted per function over storage the
+//!   RUNTIME owns, so a callee can touch a caller's foreign region
+//!   without receiving its token, and "no token ⇒ no effect" is not a
+//!   theorem across the call boundary. (The mid-end's own token
+//!   reasoning rests on the same claim — recorded as a hazard, not
+//!   spent here.)
+//!
 //! Every fact channel is disabled by [`EmitOptions::strip_facts`] —
 //! the metadata-stripped control lane of the s41 differential fuzz rig
 //! (and the s44 sentinel's substrate). Dropping facts is always sound

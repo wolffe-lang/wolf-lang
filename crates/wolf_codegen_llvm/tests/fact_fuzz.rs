@@ -77,6 +77,15 @@ fn cfg_duplication_stressor() {
     differential("cfg_duplication", fuzzgen::shape_cfg_duplication());
 }
 
+/// s78 (wolf-lang#82): the accessed pointer is READ OUT of another
+/// region's memory — the container shape. The scopes on these loads and
+/// stores are the new reach, so they get the same differential the
+/// allocation-rooted ones have had since s41.
+#[test]
+fn loaded_pointer_scopes() {
+    differential("loaded_pointer", fuzzgen::shape_loaded_pointer_scopes());
+}
+
 /// The seeded random lane. PR CI runs a small budget; raise
 /// `WOLF_FACT_FUZZ_N` for the nightly/bump-policy long run.
 #[test]

@@ -25,6 +25,10 @@
 //! 4. **CFG-duplication stressor**: unroll + jump-thread + inline
 //!    compositions — the general class is "any pass that clones
 //!    annotated instructions".
+//! 5. **Loaded-pointer scopes** (s78, wolf-lang#82): the accessed
+//!    pointer is READ OUT OF another region's memory — the container
+//!    shape, where a wrong scope is a wrong answer about the very
+//!    pointer #82 is about.
 //!
 //! [`random_program`] extends the corpus with seeded multi-region
 //! load/store/checked-arith loops (deterministic xorshift; same seed,
@@ -107,6 +111,18 @@ impl Fb {
 
     fn load(&mut self, p: Value, tok: Value) -> Value {
         self.ins(Opcode::Load, &[p, tok], &[types::I64], Aux::None)[0]
+    }
+
+    /// `load.ptr`: a POINTER read out of region memory (s78 — the
+    /// container-header shape, where the accessed pointer is a loaded
+    /// value and not an allocation result).
+    fn load_ptr(&mut self, p: Value, tok: Value) -> Value {
+        self.ins(Opcode::Load, &[p, tok], &[types::PTR], Aux::None)[0]
+    }
+
+    /// `ptr.off p, i, scale`.
+    fn ptr_off(&mut self, p: Value, i: Value, scale: u64) -> Value {
+        self.ins(Opcode::PtrOff, &[p, i], &[types::PTR], Aux::Scale(scale))[0]
     }
 
     fn freeze(&mut self, m: &mut Module, r: u32, h: Value, tok: Value) -> Value {
@@ -403,13 +419,95 @@ pub fn shape_cfg_duplication() -> Module {
     m
 }
 
-/// The four permanent regression shapes, named.
+/// Shape 5 — the LOADED-POINTER shape (s78, wolf-lang#82): the
+/// accessed pointer is not an allocation result but a value read out of
+/// another region's memory, which is how every container access looks
+/// after s75 (`data` field in the header region, elements in the buffer
+/// region). The two regions really are disjoint bump arenas, so the
+/// scope pair is a theorem; what it licenses is exactly the motion the
+/// container shape wants — an element store cannot clobber the header,
+/// so the header load hoists over it, while the header's OWN store (in
+/// the same region, same scope) still blocks it.
+///
+/// This is the shape #82 is about, and it is here because target 2 of
+/// s78 says every fact the emitter attaches gets fuzzed like the old
+/// ones: the scopes on these loads and stores are the ones a wrong
+/// answer would miscompile.
+pub fn shape_loaded_pointer_scopes() -> Module {
+    let mut m = Module::new();
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+    let mut f = Fb::new("main", main_sig, &[]);
+    let hdr_size = f.iconst(16);
+    let buf_size = f.iconst(32);
+    let eight = f.iconst(8);
+    let zero = f.iconst(0);
+    let one = f.iconst(1);
+    // r0: the "header" region, holding a pointer and a counter.
+    let (h0, t0) = f.region_new(&mut m, 0);
+    let (hdr, t0) = f.alloc(&mut m, 0, h0, hdr_size, t0);
+    // r1: the "buffer" region, holding four elements.
+    let (h1, t1) = f.region_new(&mut m, 1);
+    let (buf, t1) = f.alloc(&mut m, 1, h1, buf_size, t1);
+    // header.data = buf (a pointer INTO r1 living in r0), counter = 0.
+    let t0 = f.store(&mut m, 0, buf, hdr, t0);
+    let cnt = f.ptr_off(hdr, one, 8);
+    let t0 = f.store(&mut m, 0, zero, cnt, t0);
+    let seven = f.iconst(7);
+    let t1 = f.store(&mut m, 1, seven, buf, t1);
+
+    // loop i in 0..4: read the pointer out of r0, touch element i of
+    // r1 through it, then bump the r0 counter.
+    let header = f.block(&[
+        types::I64,
+        m.types.mem(RegionId::new(0)),
+        m.types.mem(RegionId::new(1)),
+    ]);
+    let body = f.block(&[]);
+    let exit = f.block(&[]);
+    f.jmp(header, &[zero, t0, t1]);
+    f.switch(header);
+    let [i, t0h, t1h] = f.params(header)[..] else {
+        unreachable!()
+    };
+    let four = f.iconst(4);
+    let c = f.icmp(IntCc::Slt, i, four);
+    f.br(c, body, &[], exit, &[]);
+    f.switch(body);
+    let data = f.load_ptr(hdr, t0h); // the container-header load
+    let elem = f.ptr_off(data, i, 8);
+    let ev = f.load(elem, t1h);
+    let ev2 = f.add_wrap(ev, i);
+    let t1b = f.store(&mut m, 1, ev2, elem, t1h);
+    let cv = f.load(cnt, t0h);
+    let cv2 = f.add_wrap(cv, one);
+    let t0b = f.store(&mut m, 0, cv2, cnt, t0h);
+    let i2 = f.add_chk(i, one);
+    f.jmp(header, &[i2, t0b, t1b]);
+    f.switch(exit);
+    // Fold the counter and every element (through the loaded pointer
+    // again — the exit's tokens are the header params').
+    let mut fin = f.load(cnt, t0h);
+    let data = f.load_ptr(hdr, t0h);
+    for k in 0..4i64 {
+        let ki = f.iconst(k);
+        let e = f.ptr_off(data, ki, 8);
+        let v = f.load(e, t1h);
+        fin = f.add_wrap(fin, v);
+    }
+    let _ = eight;
+    finish_main(&mut f, fin);
+    m.add_func(f.f);
+    m
+}
+
+/// The five permanent regression shapes, named.
 pub fn historical_shapes() -> Vec<(&'static str, Module)> {
     vec![
         ("inline_noalias", shape_inline_noalias()),
         ("licm_scopes", shape_licm_scopes()),
         ("unroll_scopes", shape_unroll_scopes()),
         ("cfg_duplication", shape_cfg_duplication()),
+        ("loaded_pointer", shape_loaded_pointer_scopes()),
     ]
 }
 
@@ -438,6 +536,14 @@ impl Rng {
 /// A seeded random program: 2–3 disjoint regions with a few slots
 /// each, optional freeze of one region, and a constant-trip loop of
 /// cross-region loads/stores/checked adds; result folds every slot.
+///
+/// Some accesses go INDIRECT (s78): region `r`'s slot 0 has its address
+/// parked in a handle slot living in the NEXT region, and an access may
+/// read the address back out of that handle before using it. The
+/// address is the same either way, so the program's value is unchanged
+/// — what changes is that the accessed pointer is a loaded value whose
+/// scope came from the emitter's token reasoning rather than from an
+/// allocation site.
 pub fn random_program(seed: u64) -> Module {
     let mut rng = Rng::new(seed);
     let mut m = Module::new();
@@ -464,6 +570,17 @@ pub fn random_program(seed: u64) -> Module {
         handles.push(h);
         toks.push(t);
         slots.push(ps);
+    }
+    // Address slots (s78): region r's slot 0 has its ADDRESS parked in
+    // the next region's memory, so a later access can read the pointer
+    // back out instead of naming the allocation. Set up before any
+    // freeze — a frozen region takes no further stores.
+    let mut addr_slot: Vec<Value> = Vec::new();
+    for (r, ps) in slots.iter().enumerate() {
+        let hr = (r + 1) % nregions as usize;
+        let (ap, t2) = f.alloc(&mut m, hr as u32, handles[hr], size, toks[hr]);
+        toks[hr] = f.store(&mut m, hr as u32, ps[0], ap, t2);
+        addr_slot.push(ap);
     }
     // Maybe freeze region 0 (its loads become invariant; it takes no
     // further stores).
@@ -508,7 +625,15 @@ pub fn random_program(seed: u64) -> Module {
     for _ in 0..nops {
         let r = rng.below(nregions as u64) as usize;
         let s = rng.below(slots_per as u64) as usize;
-        let p = slots[r][s];
+        // Slot 0 is reachable two ways: by name, or by reading its
+        // address out of the next region's memory. Same address, same
+        // program value — a different provenance for the emitter.
+        let p = if s == 0 && rng.below(2) == 0 {
+            let hr = (r + 1) % nregions as usize;
+            f.load_ptr(addr_slot[r], cur_toks[hr])
+        } else {
+            slots[r][s]
+        };
         let writable = !(frozen0 && r == 0);
         if writable && rng.below(2) == 0 {
             // store: slot <- load(slot') + i  (slot' from any region)
