@@ -1,0 +1,33 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.region.create.3, mem.region.freeze.1, mem.region.freeze.2
+//!
+//! s76 target 4: `freeze` of a region that HOLDS a container keeps
+//! working. `in r { }` opens `r` for ambient placement, so the list
+//! `build` returns lands in `r` (D12 — the callee allocates into its
+//! caller's region); `freeze r` consumes the affine region value and
+//! promotes the arena to deeply immutable, which is exactly why the
+//! list may outlive the block that built it ([mem.region.freeze.1]:
+//! frozen data outlives everything, so it is not the E1010 shape
+//! `region_escape_container.lu` rejects).
+//!
+//! The `region_freeze_ok.lu` sibling says this about a flat struct,
+//! which is register-resident and never reaches the allocator; a `List`
+//! is the case where the arena is genuinely load-bearing.
+
+fn build(n: int) -> List[int] {
+    var xs = List[int]()
+    var i = 0
+    while i < n {
+        (mut xs).push(i * i)
+        i = i + 1
+    }
+    xs
+}
+
+fn main() -> !int {
+    let r = region(rc)
+    let squares = in r { build(8) }
+    let frozen = freeze r          // deep imm, no copy; r consumed
+    if squares.len == 8 && squares[3] == 9 && squares[7] == 49 { 0 } else { 1 }
+}

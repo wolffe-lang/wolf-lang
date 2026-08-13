@@ -184,6 +184,55 @@ scored on its own thesis, and no amount of element-access work will move it
 (s75 moved it 0.031x → 0.049x, which is the container-read half and nothing
 else).
 
+### s76 update — the placement is fixed; the SCORE barely moves, and here is why
+
+Containers now allocate in the ambient region at their site, header and
+buffer both, and a `region` block reclaims every byte they used (the
+deterministic witness is `crates/wolf_rt/tests/region_containers.rs`, on
+the runtime's own live-region-bytes ledger). Family B's thesis is finally
+the thing being measured. The number, though:
+
+| | family B geomean | `b3_churn` vs naive C |
+|---|---|---|
+| s75 (leaking) | 0.049x | 0.004x |
+| s76 (placed) | 0.054x | 0.003x |
+
+Two measurement facts have to be on the table before that table means
+anything.
+
+1. **The rig links an UNOPTIMIZED runtime.** `cargo xtask bench` builds the
+   wolf lane with `target/debug/wolf`, which links `target/debug/
+   libwolf_rt.a` — `wolf_rt` compiled `-O0`. For a kernel whose whole body
+   is runtime calls, that is most of the absolute number. A/B under the rig:
+   965 → 850 ns/op, **12% faster**. The same A/B against a release
+   `libwolf_rt.a`: **310 → 180 ns/op, 1.7x faster**. Placement is a win in
+   both, and the ratio the suite prints understates it. Fixing the rig to
+   link the release runtime is its own (small) job, and until it does,
+   family B's absolute ns/op are not the language's numbers.
+2. **`c_naive` is 2.9 ns/op because clang deleted the allocation.** `ref.c`
+   mallocs a 16-entry buffer that provably does not escape `handle()`, so
+   LLVM elides the malloc/free pair outright. The "naive malloc/free per
+   request" baseline this kernel was written to beat is not being executed.
+   A ratio against it is a ratio against nothing, which is why the kernel
+   reads 0.003x whether the leak is there or not. The kernel needs a sink
+   that defeats the elision (`ref.c` should escape the buffer) before family
+   B has a scoreable opponent.
+
+En route, s76 found and fixed a real cost the leak had been hiding: a
+region's first chunk was 16 KiB of `calloc`, which a scratch region using
+430 bytes paid in full, every request. Once the container actually landed in
+the region that made `b3_churn` **3x slower** than the leaking version
+(310 → 920 ns/op with a release runtime). Region chunks now follow a
+geometric ladder from 1 KiB to a 1 MiB cap, which is where the 1.7x comes
+from. `list_alloc` moved 0.893x → 0.946x across runs on a 3.7–11.5% layout
+floor, i.e. inside the noise; it needs a re-run with more samples.
+
+**Still open for family B:** the rig's `-O0` runtime, `ref.c`'s elided
+allocation, and `push` still being an opaque call per element (the
+allocation is now cheap; the CALL is what is left). G5's placement half is
+closed; its throughput half is a measurement-rig problem first and an
+inlining problem second.
+
 ## G3 — checked arithmetic blocks the vectorizer (family E)
 
 **Classification (d) — a deliberate semantic — with an (a) tail.**

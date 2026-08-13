@@ -54,12 +54,19 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 80] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 82] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
     ("__wolf_rt_region_free", 1, false),
     ("__wolf_rt_region_freeze", 1, false),
+    // s76: the ambient-region seam ([mem.region.create.3]). Lowering
+    // brackets every construct that opens a region; `enter` returns the
+    // previous handle and `leave` restores it on the X4 cleanup chain,
+    // so container allocation (`wolf_rt::list`) lands in the region at
+    // the allocation site instead of the process root.
+    ("__wolf_rt_region_ambient_enter", 1, true),
+    ("__wolf_rt_region_ambient_leave", 1, false),
     ("__wolf_rt_main_err", 6, false),
     // The s31 print path: `print` lowers to per-segment writes — bytes
     // (ptr, len), decimal i64, `true`/`false` — flushed per call so no

@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.intra.2, mem.region.create.3
+//!
+//! s76's soundness guard (wolf-lang#81). Once a `List` allocates in the
+//! ambient region at its site, a `List` that outlives that region is a
+//! DANGLING POINTER — the fast version of the old leak. Keeping it out
+//! is the region checker's job, not the allocator's, and this is the
+//! witness that it does: both the header (`List[int]()`) and the growth
+//! (`push`) are allocation sites in `tmp`, and both are reported.
+//!
+//! The sibling `region_escape_local.lu` says the same thing about a
+//! struct. This file exists because the CONTAINER is the case a reader
+//! doubts: every program reaches for it, and before s76 it opted out of
+//! the region story entirely.
+
+fn main() -> !int {
+    var keep = List[int]()
+    region tmp {
+        keep = List[int]()         // ERROR E1010: outlives tmp's free
+        (mut keep).push(7)
+    }
+    if keep.len == 1 { 0 } else { 1 }
+}

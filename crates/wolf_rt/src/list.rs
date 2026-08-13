@@ -1,7 +1,8 @@
 //! The s40 native `List` runtime — a region-backed growable buffer.
 //!
 //! The value form of a `List[T]` at the native tier is ONE pointer to
-//! a 32-byte header `{data: *mut u8, len: i64, cap: i64, elem: i64}`
+//! a 40-byte header `{data: *mut u8, len: i64, cap: i64, elem: i64,
+//! region: *mut c_void}`
 //! living in the ambient region (see [`crate::str`]'s design note for
 //! the region story: header and buffer land per `[mem.region.create.3]`,
 //! growth copies into a fresh buffer and abandons the old bytes to the
@@ -18,7 +19,32 @@
 //! stay where the trap identity lives (lowering emits `trap(bounds)`
 //! from the miss code; `pop`/`get` misses become `{none}` rows there
 //! instead — same runtime entry, two spellings, the D25 posture).
+//!
+//! # Where a `List` allocates (s76, wolf-lang#81)
+//!
+//! Both the header and the element buffer land in the AMBIENT REGION at
+//! the allocation site — the c08 strbuf rule applied to the container
+//! every program reaches for (`[mem.region.create.3]`). The ambient
+//! region is DYNAMIC (D12: a callee allocates into its CALLER's
+//! region), and [`crate::native::ambient_region`] is the thread's
+//! current answer; a null answer means the process root, which is
+//! exactly `main`'s enclosing region when no `region` block is open.
+//!
+//! The header REMEMBERS the region it was born in, so `push`'s growth
+//! reallocation lands in the same arena as the original no matter what
+//! is ambient when the push happens. Growth abandons the old bytes to
+//! the arena; the region reclaims wholesale (`[mem.region.intra.2]`) —
+//! so a `region scratch { }` around container work now frees every byte
+//! the container used, which is the bug #81 reports.
+//!
+//! Nothing here keeps a container ALIVE past its region: a `List` that
+//! outlives the region it was allocated in is a use-after-free, and
+//! rejecting it is `wolf_mem`'s escape analysis (E1010), not the
+//! allocator's — see `corpus/memory/region_escape_container.lu`.
 
+use core::ffi::c_void;
+
+use crate::native::{__wolf_rt_region_alloc, ambient_region};
 use crate::str::ambient_alloc;
 
 #[repr(C)]
@@ -27,16 +53,38 @@ pub(crate) struct ListHdr {
     len: i64,
     cap: i64,
     elem: i64,
+    /// The region this list was born in (null = the process root). Read
+    /// only by [`push_raw`]'s growth path: [mem.region.intra.2] frees
+    /// the arena as a unit, so a list's bytes must never be split
+    /// across two regions with different lifetimes.
+    region: *mut c_void,
+}
+
+/// Allocate `size` bytes in `region`, or in the process root when
+/// `region` is null.
+fn alloc_in(region: *mut c_void, size: usize) -> *mut u8 {
+    if region.is_null() {
+        ambient_alloc(size)
+    } else {
+        // SAFETY: a non-null slot is a live region handle — lowering
+        // brackets `enter`/`leave` on the X4 cleanup chain, so the
+        // ambient handle is live for as long as it is ambient, and a
+        // header's remembered handle cannot outlive the header (the
+        // header lives IN that region).
+        unsafe { __wolf_rt_region_alloc(region, size as i64) }
+    }
 }
 
 pub(crate) fn new_list(elem: usize) -> *mut ListHdr {
-    let hdr = ambient_alloc(core::mem::size_of::<ListHdr>()) as *mut ListHdr;
+    let region = ambient_region();
+    let hdr = alloc_in(region, core::mem::size_of::<ListHdr>()) as *mut ListHdr;
     unsafe {
         hdr.write(ListHdr {
             data: core::ptr::null_mut(),
             len: 0,
             cap: 0,
             elem: elem as i64,
+            region,
         });
     }
     hdr
@@ -47,7 +95,9 @@ pub(crate) fn push_raw(hdr: *mut ListHdr, elem_ptr: *const u8) {
         let h = &mut *hdr;
         if h.len == h.cap {
             let ncap = if h.cap == 0 { 8 } else { h.cap * 2 };
-            let ndata = ambient_alloc((ncap * h.elem) as usize);
+            // The list's OWN region, not whatever is ambient now: a
+            // region frees as a unit, so the buffer must not migrate.
+            let ndata = alloc_in(h.region, (ncap * h.elem) as usize);
             if h.len > 0 {
                 core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * h.elem) as usize);
             }
@@ -186,12 +236,169 @@ mod tests {
             len: 0,
             cap: 0,
             elem: 0,
+            region: core::ptr::null_mut(),
         };
         let base = (&raw const hdr) as usize;
         assert_eq!((&raw const hdr.data) as usize - base, 0, "LIST_DATA_OFF");
         assert_eq!((&raw const hdr.len) as usize - base, 8, "LIST_LEN_OFF");
-        assert_eq!(core::mem::size_of::<ListHdr>(), 32);
+        // s76 appended `region` — the two lowering-visible offsets are
+        // unchanged, which is the whole point of appending.
+        assert_eq!(core::mem::size_of::<ListHdr>(), 40);
         assert_eq!(core::mem::align_of::<ListHdr>(), 8);
+    }
+
+    // ------------------------------- s76: where a List allocates ----
+
+    /// Target 1: header AND element buffer land in the region that was
+    /// ambient at the allocation site. Asserted with the runtime's own
+    /// per-region ledger (`region_bytes`), which moves for exactly one
+    /// reason — no RSS, no noise.
+    #[test]
+    fn header_and_buffer_land_in_the_ambient_region() {
+        let r = crate::native::__wolf_rt_region_new();
+        unsafe {
+            let prev = crate::native::__wolf_rt_region_ambient_enter(r);
+            assert!(prev.is_null(), "a test thread starts at the process root");
+            assert_eq!(crate::native::region_bytes(r), 0);
+            let h = __wolf_rt_list_new(8);
+            let after_hdr = crate::native::region_bytes(r);
+            assert!(after_hdr >= 40, "the header is region storage: {after_hdr}");
+            for v in 0..4096i64 {
+                __wolf_rt_list_push(h, (&raw const v) as i64);
+            }
+            let after_buf = crate::native::region_bytes(r);
+            assert!(
+                after_buf >= after_hdr + 4096 * 8,
+                "the element buffer is region storage too: {after_hdr} -> {after_buf}"
+            );
+            crate::native::__wolf_rt_region_ambient_leave(prev);
+            crate::native::__wolf_rt_region_free(r);
+        }
+    }
+
+    /// No ambient region ⇒ the process root, exactly as before s76: a
+    /// program with no `region` block is unchanged.
+    #[test]
+    fn no_ambient_region_means_the_process_root() {
+        let r = crate::native::__wolf_rt_region_new();
+        unsafe {
+            assert!(crate::native::ambient_region().is_null());
+            let h = __wolf_rt_list_new(8);
+            for v in 0..1024i64 {
+                __wolf_rt_list_push(h, (&raw const v) as i64);
+            }
+            assert_eq!(
+                crate::native::region_bytes(r),
+                0,
+                "nothing charged to a region that was never ambient"
+            );
+            assert_eq!(__wolf_rt_list_len(h), 1024);
+            crate::native::__wolf_rt_region_free(r);
+        }
+    }
+
+    /// Target 2: growth stays in the region the list was BORN in, even
+    /// when a different region is ambient at the `push`. A region frees
+    /// as a unit ([mem.region.intra.2]), so a list whose header and
+    /// buffer straddled two regions would be a dangling read waiting to
+    /// happen.
+    #[test]
+    fn growth_stays_in_the_birth_region() {
+        let a = crate::native::__wolf_rt_region_new();
+        let b = crate::native::__wolf_rt_region_new();
+        unsafe {
+            let outer = crate::native::__wolf_rt_region_ambient_enter(a);
+            let h = __wolf_rt_list_new(8);
+            let v = 1i64;
+            __wolf_rt_list_push(h, (&raw const v) as i64);
+            let a_before = crate::native::region_bytes(a);
+            crate::native::__wolf_rt_region_ambient_leave(outer);
+
+            let outer_b = crate::native::__wolf_rt_region_ambient_enter(b);
+            for v in 0..4096i64 {
+                __wolf_rt_list_push(h, (&raw const v) as i64);
+            }
+            crate::native::__wolf_rt_region_ambient_leave(outer_b);
+
+            assert_eq!(
+                crate::native::region_bytes(b),
+                0,
+                "growth must not migrate into whatever is ambient at the push"
+            );
+            assert!(
+                crate::native::region_bytes(a) > a_before + 4096 * 8,
+                "growth belongs to the birth region"
+            );
+            // The elements survived the reallocation chain.
+            let mut out = [0i64; 1];
+            assert_eq!(__wolf_rt_list_len(h), 4097);
+            assert_eq!(__wolf_rt_list_read(h, 4096, out.as_mut_ptr() as i64), 1);
+            assert_eq!(out[0], 4095);
+            crate::native::__wolf_rt_region_free(b);
+            crate::native::__wolf_rt_region_free(a);
+        }
+    }
+
+    /// Target 4, the `move` half: a region holding a container crosses
+    /// a spawn boundary (s34's transfer/adopt ledger seam) and stays
+    /// usable. Both seams are identity on the handle, which is exactly
+    /// why a header's remembered region survives the move — assert it
+    /// rather than argue it.
+    #[test]
+    fn a_moved_region_keeps_its_container() {
+        let a = crate::native::__wolf_rt_region_new();
+        unsafe {
+            let prev = crate::native::__wolf_rt_region_ambient_enter(a);
+            let h = __wolf_rt_list_new(8);
+            for v in 0..64i64 {
+                __wolf_rt_list_push(h, (&raw const v) as i64);
+            }
+            crate::native::__wolf_rt_region_ambient_leave(prev);
+
+            let moved = crate::task::__wolf_rt_region_transfer(a);
+            let adopted = crate::task::__wolf_rt_region_adopt(moved);
+            assert_eq!(adopted, a, "transfer/adopt are identity on the handle");
+
+            // Growth after the move still lands in the same arena.
+            let before = crate::native::region_bytes(adopted);
+            for v in 64..4096i64 {
+                __wolf_rt_list_push(h, (&raw const v) as i64);
+            }
+            assert!(crate::native::region_bytes(adopted) > before);
+            let mut out = [0i64; 1];
+            assert_eq!(__wolf_rt_list_len(h), 4096);
+            assert_eq!(__wolf_rt_list_read(h, 4095, out.as_mut_ptr() as i64), 1);
+            assert_eq!(out[0], 4095);
+            crate::native::__wolf_rt_region_free(adopted);
+        }
+    }
+
+    /// Nested regions restore the enclosing one on the way out — the
+    /// save/restore discipline lowering emits on the X4 cleanup chain.
+    #[test]
+    fn nested_regions_restore_the_enclosing_ambient() {
+        let outer = crate::native::__wolf_rt_region_new();
+        let inner = crate::native::__wolf_rt_region_new();
+        unsafe {
+            let p0 = crate::native::__wolf_rt_region_ambient_enter(outer);
+            let a = __wolf_rt_list_new(8);
+            let p1 = crate::native::__wolf_rt_region_ambient_enter(inner);
+            let b = __wolf_rt_list_new(8);
+            let v = 7i64;
+            __wolf_rt_list_push(b, (&raw const v) as i64);
+            crate::native::__wolf_rt_region_ambient_leave(p1);
+            assert_eq!(crate::native::ambient_region(), outer);
+            // The inner region's list dies with it; the outer list does
+            // not (this is the shape the checker enforces statically).
+            let inner_bytes = crate::native::region_bytes(inner);
+            crate::native::__wolf_rt_region_free(inner);
+            assert!(inner_bytes >= 40);
+            __wolf_rt_list_push(a, (&raw const v) as i64);
+            assert_eq!(__wolf_rt_list_len(a), 1);
+            crate::native::__wolf_rt_region_ambient_leave(p0);
+            assert!(crate::native::ambient_region().is_null());
+            crate::native::__wolf_rt_region_free(outer);
+        }
     }
 
     #[test]

@@ -347,11 +347,20 @@ pub enum Opcode {
     /// provenance, escape-to-stack promotion's landing pad (s19).
     StackAlloc,
     /// `%m: mem.rN = region.foreign` (s75) — root rN over storage the
-    /// RUNTIME owns and outlives this frame: the `List` element buffers
-    /// and their headers, allocated by `wolf_rt` in the ambient region.
-    /// A token root like `region.new`, but with no handle and no
+    /// RUNTIME allocates and this frame does not own: the `List` element
+    /// buffers and their headers, placed by `wolf_rt` in the ambient
+    /// region. A token root like `region.new`, but with no handle and no
     /// `region.free` — the frame never owns this memory, so it can
     /// never free it, and the verifier's linearity story is unchanged.
+    ///
+    /// s76 correction: this storage does NOT necessarily outlive the
+    /// frame. Since containers allocate in the ambient region at their
+    /// site, a `List` built inside `region scratch { }` dies at that
+    /// block's `region.free`. Nothing here changes — a foreign root has
+    /// no lifetime claim to make, only an aliasing one — but the old
+    /// "outlives this frame" wording was a claim the code no longer
+    /// makes. What keeps a container from being READ past its region is
+    /// `wolf_mem`'s escape analysis (E1010), not this token.
     /// Emits NOTHING at either backend: it exists so container element
     /// traffic is ordinary `load`/`store` under the ordinary token
     /// discipline instead of an opaque runtime call.

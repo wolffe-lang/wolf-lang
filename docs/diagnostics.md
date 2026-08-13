@@ -1287,7 +1287,7 @@ region immortal and immutable) and `shared` (counted escape) are
 coming in later tiers for the cases that genuinely need to outlive
 the region.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_container.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
 
 ## E1011 — this would open a region while a region that contains it is open
 

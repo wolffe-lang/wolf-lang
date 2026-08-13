@@ -1,0 +1,49 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.region.create.3, mem.region.intra.2
+//!
+//! s76 (wolf-lang#81), the end-to-end half of the reclamation litmus: a
+//! scratch region per round, each holding a `List` grown far past the
+//! region's first chunk, summed, and freed wholesale. Both the header
+//! and the element buffer are the region's storage now, so each round
+//! hands every byte back — the deterministic assertion on that is
+//! `crates/wolf_rt/tests/region_containers.rs`, which reads the
+//! runtime's own live-region-bytes ledger. What THIS file adds is the
+//! compiled path: the ambient bracket lowering emits, growth across
+//! several region chunks, and three-lane agreement on the answer.
+//!
+//! `fill` allocates in its CALLER's region (D12), which is why the
+//! ambient region is dynamic rather than lexical.
+
+fn fill(n: int) -> List[int] {
+    var xs = List[int]()           // lands in the caller's region
+    var i = 0
+    while i < n {
+        (mut xs).push(i)           // growth stays in that same region
+        i = i + 1
+    }
+    xs
+}
+
+fn round(n: int) -> int {
+    var sum = 0
+    region scratch {
+        let xs = fill(n)
+        var i = 0
+        while i < xs.len {
+            sum = sum + xs[i]
+            i = i + 1
+        }
+    }                              // wholesale free [mem.region.intra.2]
+    sum
+}
+
+fn main() -> !int {
+    var total = 0
+    var r = 0
+    while r < 16 {
+        total = total + round(2048)   // 0+1+...+2047 = 2096128 per round
+        r = r + 1
+    }
+    if total == 33538048 { 0 } else { 1 }
+}

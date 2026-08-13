@@ -1068,6 +1068,10 @@ struct ScopeFrame<'t> {
     binds: Vec<(String, LocalBind)>,
     defers: Vec<DeferEntry<'t>>,
     region: Option<(RegionId, Value)>,
+    /// s76: this scope opened an AMBIENT region — the saved previous
+    /// ambient handle, restored on every exit edge ahead of the free
+    /// (`[mem.region.create.3]`; see [`Lower::open_ambient`]).
+    ambient_prev: Option<Value>,
     /// s73: a held `when` set to release on every exit edge —
     /// (cells array pointer, its slot region, set length).
     when_release: Option<(Value, RegionId, i64)>,
@@ -1419,19 +1423,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     // ---------------------------------------------------- blocks ----
 
     fn lower_block(&mut self, block: AstBlock<'t>, want_value: bool) -> R<Flow> {
-        self.lower_block_in(block, want_value, None)
+        self.lower_block_in(block, want_value, None, None)
     }
 
     /// Lower a block in a fresh scope; `region` attaches the X4 sugar's
-    /// wholesale free as the scope's outermost cleanup entry.
+    /// wholesale free as the scope's outermost cleanup entry, and
+    /// `ambient_prev` (s76) attaches the ambient-region restore just
+    /// inside it.
     fn lower_block_in(
         &mut self,
         block: AstBlock<'t>,
         want_value: bool,
         region: Option<(RegionId, Value)>,
+        ambient_prev: Option<Value>,
     ) -> R<Flow> {
         self.scopes.push(ScopeFrame {
             region,
+            ambient_prev,
             ..ScopeFrame::default()
         });
         let last_value = if want_value {
@@ -1514,6 +1522,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // edges (the explicit exit's value wins — recorded rule).
         if let Some(handle) = self.scopes[si].conc_scope {
             self.rt_call("__wolf_rt_scope_join_free", &[handle], Some(types::I64));
+        }
+        // s76: close the ambient region BEFORE the free — after this
+        // point allocations belong to the enclosing region again, and
+        // the ambient slot never names a freed arena.
+        if let Some(prev) = self.scopes[si].ambient_prev {
+            self.rt_call("__wolf_rt_region_ambient_leave", &[prev], None);
         }
         if let Some((region, handle)) = self.scopes[si].region {
             // The X4 free point: LIFO-outermost in its scope, present
@@ -2659,6 +2673,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     // ----------------------------------------------- regions (s26) ----
 
+    /// Make `handle` the AMBIENT region for the construct being lowered
+    /// (s76, wolf-lang#81), returning the saved previous handle to hand
+    /// to [`ScopeFrame::ambient_prev`].
+    ///
+    /// `[mem.region.create.3]` places an allocation in the ambient
+    /// region at its site, and D12 makes a callee allocate into its
+    /// CALLER's region — so "ambient" is a property of the dynamic call
+    /// stack, exactly as `wolf_mem`'s checker models it with its own
+    /// ambient stack. The runtime therefore keeps a per-thread slot and
+    /// lowering brackets it: the enter is emitted at the point the
+    /// region opens (so it dominates the whole body), the leave rides
+    /// the X4 cleanup chain (so every exit edge — fall-through,
+    /// `return`, `?`-err, `break`/`continue` crossing the boundary —
+    /// restores it, in LIFO order, ahead of the free).
+    ///
+    /// Scalars and flat aggregates are register-resident and do not
+    /// care; what this buys is the CONTAINERS — `wolf_rt::list` reads
+    /// the slot, so `region scratch { … }` around container work now
+    /// frees the bytes the container used instead of leaking them into
+    /// the process root.
+    fn open_ambient(&mut self, handle: Value) -> Option<Value> {
+        self.rt_call(
+            "__wolf_rt_region_ambient_enter",
+            &[handle],
+            Some(types::PTR),
+        )
+    }
+
     /// `region name? { body }` — X4 block sugar: `region.new`, the
     /// body with the name bound, `region.free` wholesale at the end
     /// (the s19 frame-local free point). Early exits across the
@@ -2669,6 +2711,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         let (region, handle) = self.b.ins_region_new();
+        // s76: the block's region becomes the ambient one for its body
+        // — `[mem.region.create.3]`, and the reason `region scratch { }`
+        // now reclaims what a container inside it allocated.
+        let ambient_prev = self.open_ambient(handle);
         // The name binding lives in a thin wrapper scope; the
         // wholesale free rides the BODY scope's cleanup chain (X4: the
         // sugar's free is an ordinary defer entry, so every exit edge
@@ -2687,25 +2733,30 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 },
             ));
         }
-        let out = self.lower_block_in(body, want, Some((region, handle)));
+        let out = self.lower_block_in(body, want, Some((region, handle)), ambient_prev);
         self.scopes.pop();
         out
     }
 
-    /// `in r { body }` — open a region value for ambient placement.
-    /// Allocation sites that target the ambient region arrive with the
-    /// s27 container surface; scalar/aggregate work is register-
-    /// resident, so opening is compile-time bookkeeping today.
+    /// `in r { body }` — open a region value for ambient placement
+    /// ([mem.region.create.3]). s76 makes this REAL for containers: the
+    /// body runs with `r` as the thread's ambient region, so a `List`
+    /// built inside (here or in anything it calls — D12) lands in `r`
+    /// and dies with `r`, not with the process. Scalar and flat
+    /// aggregate work is register-resident and unaffected.
     fn lower_in_block(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
         let d = wolf_ast::InBlock::cast(e).expect("kind");
         let Some(region_expr) = d.region() else {
             return Err(refuse("an `in` block without a region", e.span));
         };
-        let (_region, _handle) = self.expect_region(region_expr)?;
+        let (_region, handle) = self.expect_region(region_expr)?;
         let Some(body) = d.body() else {
             return Ok(Flow::Val(None));
         };
-        self.lower_block(body, want)
+        // Opening is not owning: `in` never frees `r` (the region value's
+        // owner does), so only the ambient restore rides the chain.
+        let ambient_prev = self.open_ambient(handle);
+        self.lower_block_in(body, want, None, ambient_prev)
     }
 
     // ------------------------------------- the conc surface (s73) ----
@@ -2928,6 +2979,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         let (region, handle) = self.b.ins_region_new();
+        // s76: the block body's ambient region, same as `region { }` —
+        // the difference is the ending (freeze, never free), so the
+        // arena is immutable forever and a container in it outlives the
+        // block legally ([mem.region.freeze.1]).
+        let ambient_prev = self.open_ambient(handle);
         self.scopes.push(ScopeFrame::default());
         if let Some(name_tok) = d.name() {
             let name = self.text(name_tok.span);
@@ -2940,7 +2996,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 },
             ));
         }
-        let out = self.lower_block_in(body, want, None);
+        let out = self.lower_block_in(body, want, None, ambient_prev);
         self.scopes.pop();
         let flow = out?;
         if matches!(flow, Flow::Diverged) {
