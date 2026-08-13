@@ -1,0 +1,20 @@
+//! check: fail(E1101)
+//! phase: resolve
+//! conforms: conc.task.spawn
+//! warns: W1101, W1102
+//! The capture law's ASSIGNMENT spelling (s74, #71), kept beside its
+//! lend twin `capture_mut_lend.lu` on purpose. This half was always
+//! rejected; the other half compiled and raced, and the class went
+//! unwitnessed because only one spelling had a file. Now both do, so a
+//! future change that catches one and not the other fails the corpus
+//! rather than the reader.
+
+fn main() -> !int {
+    var n = 0
+    scope s {
+        s.spawn(fn() { n = 1 })   // ERROR E1101: a write to captured state
+        s.spawn(fn() { n = 2 })
+    }
+    print("{n}")
+    0
+}

@@ -1367,7 +1367,14 @@ every access inside a `when` block, whose body has exclusive access
 to the payloads. The write the checker flagged would otherwise land
 on the task's private copy at best and race at worst.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__teach_note_grouped.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap
+A write is not only an assignment. Handing a captured binding to a
+callee in `mut` mode — `(mut xs).push(1)` on the receiver, `f(mut xs)`
+at an argument — opens the same exclusive window, and for
+handle-backed state such as a `List` the callee's write reaches the
+enclosing function's allocation rather than the task's copy. Both
+spellings are this diagnostic.
+
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__teach_note_grouped.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_mut_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_mut_lend.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_mut_lend_argument.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_mut_lend_receiver.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_projection_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap
 
 ## E1102 — this channel's payload type is not sendable
 
@@ -1922,7 +1929,7 @@ value that was never updated. Send the result over a channel, or
 return it through the scope's join, so the data flow between tasks is
 explicit; cross-task shared mutation is what `sync` types are for.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__teach_note_grouped.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__teach_note_grouped.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_task_capture_write.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1101_two_spawns_note_once.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1101_task_capture_write.snap
 
 ## W1102 — the closure captured this value before it changed
 
@@ -1934,7 +1941,7 @@ looks like the closure tracks the variable. Create the closure after
 the last assignment, pass the value as a parameter at each call, or
 restructure so the captured binding never changes underneath it.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1102_stale_capture.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1102_stale_capture.snap
 
 ## W1301 — this `unsafe` block does not state its invariant
 

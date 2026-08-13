@@ -60,6 +60,16 @@ rejects unknown *events*.
   divergence under `--schedules=N` lands here too, and the finding's
   `detail` carries the diverging seeds and the `--replay=` line
   (spec/07 `[sched.flags]`).
+
+  On the native lane that `--replay=` line is measured before it is
+  printed: the driver re-runs the diverging seed a few times, and
+  `detail` either states that the replay was confirmed or states what
+  the seed does not pin. A decimal seed reaches `wolf_rt`'s scheduler
+  PRNG — steal victims, `select` tie-breaks — while cross-task arrival
+  order on the worker pool is not derived from it, so an
+  arrival-order divergence need not come back. `[sched.stable]`'s
+  byte-identical guarantee is stated over a recorded decision stream
+  (`w1-`/`ev:`), which the native lane does not yet emit.
 - `2`: usage or environment error. A malformed `--replay` schedule
   spec, `--schedules` combined with `--replay`, or `--chaos`, whose
   injection engine is a parked c07-closeout handoff.

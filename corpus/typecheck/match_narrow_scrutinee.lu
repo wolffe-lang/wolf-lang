@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="50 200 2\n")
+//! phase: run
+//! conforms: ty.match.exhaustive, arith.checked
+//! An arm constant lives at the SCRUTINEE's width, not `int`'s (s74,
+//! #67). A `for` induction variable, an `i32`, a `u8` — each gives the
+//! decision chain a discriminant narrower than i64, and `icmp` demands
+//! one shared operand type. The book's ch03 §15 sample (a `match` on a
+//! loop counter) ICE'd the WIR verifier on exactly this; the constant
+//! scrutinee below is the same bug's quieter half — the fold path
+//! compared a raw `255` against the `u8` value's `-1` payload and
+//! answered the wrong arm.
+
+fn main() -> !int {
+    var hits = 0
+    for code in 0..3 {
+        let k = match code {
+            0 => 10,
+            1 | 2 => 20,
+            _ => 0,
+        }
+        hits += k
+    }
+    let n: i32 = 2
+    let w = match n {
+        1 => 100,
+        2 => 200,
+        _ => 0,
+    }
+    let u: u8 = 255
+    let m = match u {
+        0 => 1,
+        255 => 2,
+        _ => 3,
+    }
+    print("{hits} {w} {m}")
+    hits + w - 250
+}
