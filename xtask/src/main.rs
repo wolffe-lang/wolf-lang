@@ -60,6 +60,7 @@ fn main() -> ExitCode {
         Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
         Some("conformance") => conformance_cmd(&args[1..]),
         Some("differ") => differ_cmd(&args[1..]),
+        Some("lane-coverage") => lane_coverage_cmd(&args[1..]),
         Some("print-gate") => print_gate(),
         Some("diag-catalog") => diag_catalog(args.iter().any(|a| a == "--check")),
         Some("doc-catalog") => doc_catalog(args.iter().any(|a| a == "--check")),
@@ -67,7 +68,10 @@ fn main() -> ExitCode {
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+            );
+            eprintln!(
+                "       cargo xtask lane-coverage [--json]   (the [proto.cmp.coverage] gate)"
             );
             eprintln!(
                 "       cargo xtask bench --track=<runtime|compile|t1|irvolume> [--runs=N] [--out=FILE]"
@@ -126,6 +130,11 @@ fn ci() -> ExitCode {
         // and a later license edit made staging panic outright).
         ("dist-smoke", &["xtask", "dist"]),
         ("differ-self", &["xtask", "differ", "--self"]),
+        // s82: what the differential actually covers, gated. The
+        // release-parity floor keeps two tiers compared on a file set
+        // that may not shrink; this keeps the file set itself from
+        // shrinking under all three lanes at once.
+        ("lane-coverage", &["xtask", "lane-coverage"]),
     ];
     for (name, args) in steps {
         eprintln!("== xtask ci: {name}");
@@ -482,6 +491,288 @@ fn collect_wolf_files(dir: &Path, out: &mut Vec<PathBuf>) {
             out.push(p);
         }
     }
+}
+
+// --------------------------------------------------------- lane-coverage --
+
+/// The lanes wolfgang can reach the `run` rung on, in report order.
+/// `default` (no flag) is carried deliberately: its count is the
+/// evidence that a plain `conform-run` compares nothing dynamically,
+/// which is the shape of the bug lupin 0.1.9 was running into for four
+/// pins before anyone noticed.
+const RUN_LANES: &[(&str, &str)] = &[
+    ("default", ""),
+    ("checked", "--checked"),
+    ("native", "--native"),
+    ("release", "--release"),
+];
+
+/// The lanes the coverage figure is the union OF.
+const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
+
+/// Coverage floors (`[proto.cmp.coverage]`, s82 — wolf-lang#90).
+///
+/// Written in the shape of the release-parity floor
+/// (`crates/wolf_driver/tests/release_native.rs`) and for the same
+/// reason: a gate whose measured set can shrink in silence is a gate
+/// that stays green while it stops testing anything. These RATCHET —
+/// when a lane learns to execute more of the corpus, raise them in the
+/// same commit; they are never lowered to make a run pass. Lowering one
+/// is a deliberate, reviewed statement that the differential now sees
+/// less than it did, and it needs the reason written next to it.
+///
+/// s82 baseline, measured at the sprint's HEAD over 261 non-member
+/// entries: checked 130, native 125, release 115, union 145, all-three
+/// 110. The union is 15 above the best single lane — that gap IS the
+/// non-nesting wolf-lang#90 reported, and it is why no single-lane
+/// count may stand in for the coverage of the differential.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 130), ("native", 125), ("release", 115)];
+const UNION_FLOOR: usize = 145;
+const ALL_THREE_FLOOR: usize = 110;
+
+/// One lane's observation of one corpus entry.
+struct LaneObs {
+    verdict: String,
+    phase: String,
+    /// The lane's own words for a refusal, lifted off stderr. Derived
+    /// every run from the compiler that produced it, so the residue's
+    /// reasons cannot drift out of date the way a hand-kept list would.
+    reason: Option<String>,
+}
+
+/// Run `conform-run` on one file in one lane. `Err` = the environment
+/// cannot drive this lane (exit 2: no cc/clang, no libwolf_rt.a) — the
+/// caller skips loudly rather than reporting a lane that never ran as a
+/// lane that covers nothing.
+fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, String> {
+    let mut cmd = Command::new(wolf);
+    cmd.arg("conform-run").arg(file).arg("--json");
+    if !flag.is_empty() {
+        cmd.arg(flag);
+    }
+    let out = cmd.output().map_err(|e| format!("spawn wolf: {e}"))?;
+    if out.status.code() == Some(2) {
+        return Err(format!(
+            "environment cannot drive `{flag}`: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    if !out.status.success() {
+        return Err(format!(
+            "conform-run {flag} failed on {}: {}",
+            file.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let rec: serde_json::Value =
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("bad record: {e}"))?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let reason = stderr
+        .lines()
+        .find_map(|l| l.split_once("unsupported — "))
+        .map(|(_, why)| why.split_whitespace().collect::<Vec<_>>().join(" "));
+    Ok(LaneObs {
+        verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
+        phase: rec["phase_reached"].as_str().unwrap_or("none").to_string(),
+        reason,
+    })
+}
+
+/// Why no lane executed an entry — the residue, classified. The classes
+/// are computed from the records on every run, never declared in a list
+/// somebody has to remember to update: that is the whole reason the
+/// number cannot rot into folklore between differentials.
+fn residue_class(obs: &BTreeMap<&str, LaneObs>) -> String {
+    let lanes: Vec<&LaneObs> = COMPARED_LANES.iter().filter_map(|l| obs.get(l)).collect();
+    if lanes.iter().all(|o| o.verdict.starts_with("fail(")) {
+        // Rejected by every lane: a NEGATIVE entry. It IS compared — at
+        // its rejection rung, under [proto.cmp.rung] — so it is not a
+        // hole in the differential, only outside the run rung. Counting
+        // these as a coverage failure would be the same error in the
+        // other direction: treating a working comparison as a gap.
+        "rejected".to_string()
+    } else if lanes.iter().all(|o| o.verdict == "unsupported") {
+        // Declined by every lane: the real scope gap, and the number
+        // this sprint exists to drive down. The rung it stopped at is
+        // the coarse machine-readable reason, and it is always present
+        // even where the lane printed no prose (the typecheck rung
+        // declines silently today — the per-lane `reason` is null there
+        // and the rung is what carries the meaning).
+        let deepest = lanes
+            .iter()
+            .map(|o| o.phase.as_str())
+            .max_by_key(|p| corpus::phase_rank(p).unwrap_or(0))
+            .unwrap_or("none");
+        format!("refused@{deepest}")
+    } else {
+        // Lanes disagreeing about whether the program is even admissible
+        // — one rejects it, another declines it. Never silent.
+        "mixed".to_string()
+    }
+}
+
+/// `cargo xtask lane-coverage [--json]` — publish what the differential
+/// actually covers (`[proto.cmp.coverage]`; wolf-lang#90).
+///
+/// lupin 0.1.11 measured this from OUTSIDE the runner, on the grounds
+/// that auditing a lane with itself is circular, and found the three
+/// run-reaching lanes are not nested: 56 of the entries it executes are
+/// met by no wolfgang lane at all. This command is that audit brought
+/// in-tree and made a gate — same measurement, same definition of
+/// "executed" (`protocol::covered_at_run`), run on every commit so the
+/// figure cannot decay into folklore between differentials.
+fn lane_coverage_cmd(args: &[String]) -> ExitCode {
+    let json = args.iter().any(|a| a == "--json");
+    if !run_ok(
+        "cargo",
+        &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
+    ) {
+        eprintln!("lane-coverage: failed to build wolf + libwolf_rt.a");
+        return ExitCode::FAILURE;
+    }
+    let wolf = PathBuf::from("target/debug/wolf");
+    let mut files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut files);
+    files.sort();
+    // Members compile through their module's entry file (s12), so they
+    // are not entries and must not sit in the denominator.
+    files.retain(|f| {
+        !std::fs::read_to_string(f)
+            .ok()
+            .and_then(|s| corpus::parse_directives(&s).ok())
+            .is_some_and(|d| d.member)
+    });
+
+    let mut cov = xtask::protocol::Coverage::default();
+    let mut per_file: BTreeMap<String, BTreeMap<&str, LaneObs>> = BTreeMap::new();
+    for f in &files {
+        let key = f.display().to_string();
+        for (lane, flag) in RUN_LANES {
+            match lane_observe(&wolf, f, flag) {
+                Ok(obs) => {
+                    let rec = serde_json::json!({
+                        "phase_reached": obs.phase, "verdict": obs.verdict,
+                    });
+                    cov.observe(lane, &key, &rec);
+                    per_file.entry(key.clone()).or_default().insert(lane, obs);
+                }
+                Err(e) => {
+                    // Loud skip, never a silent green: a lane that could
+                    // not run is not a lane that covers nothing.
+                    eprintln!("lane-coverage: SKIP — {e}");
+                    return ExitCode::SUCCESS;
+                }
+            }
+        }
+    }
+
+    let union = cov.union(COMPARED_LANES);
+    let all_three = cov.intersection(COMPARED_LANES);
+    let uncovered = cov.uncovered(COMPARED_LANES);
+    eprintln!(
+        "lane-coverage: {} non-member corpus entries ([proto.cmp.coverage])",
+        cov.entries()
+    );
+    for (lane, _) in RUN_LANES {
+        let n = cov.lane(lane);
+        let holes = cov.holes(lane, COMPARED_LANES).len();
+        eprintln!(
+            "lane-coverage:   {lane:<8} executes {n:>3} at run{}",
+            if COMPARED_LANES.contains(lane) {
+                format!("  ({holes} the other lanes reach and it does not)")
+            } else {
+                String::new()
+            }
+        );
+    }
+    eprintln!(
+        "lane-coverage:   UNION {} of {} — all three {}, so the lanes are {}nested",
+        union.len(),
+        cov.entries(),
+        all_three.len(),
+        if union.len() == all_three.len() {
+            ""
+        } else {
+            "NOT "
+        }
+    );
+
+    // The residue, by class. `rejected` entries are compared at their
+    // rejection rung and are NOT counted as a coverage failure; the
+    // `refused` ones are the honest gap.
+    let mut by_class: BTreeMap<String, Vec<&String>> = BTreeMap::new();
+    for f in &uncovered {
+        let Some(obs) = per_file.get(f) else { continue };
+        by_class.entry(residue_class(obs)).or_default().push(f);
+    }
+    for (class, fs) in &by_class {
+        eprintln!("lane-coverage:   residue `{class}`: {}", fs.len());
+    }
+    if json {
+        for f in &uncovered {
+            let Some(obs) = per_file.get(f) else { continue };
+            let lanes: serde_json::Map<String, serde_json::Value> = COMPARED_LANES
+                .iter()
+                .filter_map(|l| {
+                    obs.get(l).map(|o| {
+                        (
+                            (*l).to_string(),
+                            serde_json::json!({
+                                "verdict": o.verdict,
+                                "phase_reached": o.phase,
+                                "reason": o.reason,
+                            }),
+                        )
+                    })
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "file": f, "class": residue_class(obs), "lanes": lanes,
+                })
+            );
+        }
+    }
+
+    // The ratchet. Coverage may rise and may not fall.
+    let mut fell = false;
+    for (lane, floor) in LANE_FLOORS {
+        let n = cov.lane(lane);
+        if n < *floor {
+            eprintln!(
+                "lane-coverage: the `{lane}` lane executes {n} entries, below its floor of {floor} \
+                 — a lane stopped running programs it used to run; fix the refusal or lower the \
+                 floor deliberately, with the reason"
+            );
+            fell = true;
+        }
+    }
+    if union.len() < UNION_FLOOR {
+        eprintln!(
+            "lane-coverage: union coverage {} is below the floor of {UNION_FLOOR} — the \
+             differential sees less of the corpus than it did",
+            union.len()
+        );
+        fell = true;
+    }
+    if all_three.len() < ALL_THREE_FLOOR {
+        eprintln!(
+            "lane-coverage: all-three coverage {} is below the floor of {ALL_THREE_FLOOR} — the \
+             lanes are diverging in scope, not converging",
+            all_three.len()
+        );
+        fell = true;
+    }
+    if fell {
+        return ExitCode::FAILURE;
+    }
+    eprintln!(
+        "lane-coverage: floors held (checked/native/release/union/all-three \
+         ≥ {}/{}/{}/{UNION_FLOOR}/{ALL_THREE_FLOOR})",
+        LANE_FLOORS[0].1, LANE_FLOORS[1].1, LANE_FLOORS[2].1,
+    );
+    ExitCode::SUCCESS
 }
 
 // ----------------------------------------------------------------- bench --
@@ -2286,6 +2577,15 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     let mut completeness = 0u32;
     let mut agreements = 0u32;
     let mut unsupported = 0u32;
+    // Coverage of THIS lane pairing ([proto.cmp.coverage], s82): how
+    // many entries each side executed at the run rung, and how many
+    // both did — the only files this invocation could compare
+    // dynamically. Published in the report because a divergence count
+    // is meaningless without the size of the set it was drawn from,
+    // and because wolf-lang#90 was a coverage collapse that no
+    // divergence count could have shown.
+    let mut entries = 0u32;
+    let (mut a_run, mut b_run, mut both_run) = (0u32, 0u32, 0u32);
     for f in &files {
         let is_member = std::fs::read_to_string(f)
             .ok()
@@ -2308,6 +2608,14 @@ fn differ_cmd(args: &[String]) -> ExitCode {
                 divergences += 1;
             }
         }
+        entries += 1;
+        let (ca, cb) = (
+            xtask::protocol::covered_at_run(&ra),
+            xtask::protocol::covered_at_run(&rb),
+        );
+        a_run += u32::from(ca);
+        b_run += u32::from(cb);
+        both_run += u32::from(ca && cb);
         let structural =
             !ra["seeded"].as_bool().unwrap_or(false) || !rb["seeded"].as_bool().unwrap_or(false);
         if ra["verdict"] == serde_json::json!("unsupported")
@@ -2397,6 +2705,11 @@ fn differ_cmd(args: &[String]) -> ExitCode {
             unsupported
         );
     }
+    eprintln!(
+        "differ: run-rung coverage — A executed {a_run}, B executed {b_run}, \
+         BOTH executed {both_run} of {entries} entries ([proto.cmp.coverage]; \
+         `cargo xtask lane-coverage` is the gated union across A's lanes)"
+    );
     if divergences > 0 {
         ExitCode::FAILURE
     } else {

@@ -292,6 +292,7 @@
     "mem.unsafe.raw.3": "02-memory-model.md",
     "mem.unsafe.scope": "02-memory-model.md",
     "proto.cmp": "06-differential-protocol.md",
+    "proto.cmp.coverage": "06-differential-protocol.md",
     "proto.cmp.defined-divergence": "06-differential-protocol.md",
     "proto.cmp.phase": "06-differential-protocol.md",
     "proto.cmp.rung": "06-differential-protocol.md",

@@ -120,6 +120,22 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   (Tier-3 address inspection); diagnostic count beyond the first;
   `x-` keys absent on one side; the `warnings` array absent on one side;
   `unsupported` on either side.
+- `[proto.cmp.coverage]` Coverage, the conservatism ledger's sibling
+  (s82, wolf-lang#90). A report states, per lane and as their **union**,
+  how many corpus entries the lane *executed*: `phase_reached` is `run`
+  and the verdict is a dynamic observation — `exit`, `trap` or `ub`.
+  Nothing else is coverage. `unsupported` is a refusal
+  (`[proto.record.unsupported]`) and two lanes refusing the same entry
+  is not agreement about it; `fail(CODE)` is a rejection compared at its
+  own rung under `[proto.cmp.rung]`, which is comparison but not
+  run-rung coverage; `pass` answers a `--phase` request and carries no
+  program outcome. An implementation with several execution engines
+  publishes the **union and the intersection both**: the lanes are not
+  required to nest, and where they do not, the union is the honest
+  figure while any single lane's count overstates what one run compares.
+  A conforming report never lets the number rise by widening what counts
+  as compared — the divergence count and the coverage it was drawn from
+  are read together or not at all.
 - `[proto.cmp.triage]` Everything else is a divergence and files a bug.
   Triage rule, normative: **the spec document is the defendant first** —
   an ambiguous clause is presumed the root cause until the clause is
