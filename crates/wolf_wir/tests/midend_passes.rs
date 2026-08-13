@@ -506,6 +506,126 @@ fn rangeopt_keeps_a_bounds_test_over_an_unrelated_bound() {
     );
 }
 
+/// s78, the AFFINE half of the relational channel — `a2_stencil1d`'s
+/// exact shape, which the same-pair rule could not touch: the guard is
+/// `i < n - 1` and the three indices are `i - 1`, `i`, `i + 1`. Each
+/// query decomposes to the same base pair as the guard, so the
+/// difference interval decides all three, trap arms and all. Both
+/// forms of the offset are here on purpose: `isub.wrap` (admitted
+/// because the interval channel proves it cannot wrap — this is the
+/// form the pass's own first round mints) and `iadd.chk` (admitted
+/// because a trap already ruled the wrap out).
+///
+/// Note what carries the unsigned indices: nothing bounds the opaque
+/// length `%0` below on its own, so crossing from the guard's signed
+/// ordering to the checks' unsigned one comes from refining `n - 1`
+/// BACKWARD onto `n` at π seeding time.
+#[test]
+fn rangeopt_affine_relation_proves_offset_indices() {
+    let src = "fn @stencil(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iconst.i64 1\n  \
+               %2 = isub.chk %0, %1\n  \
+               jmp b1(%1, %1)\n\
+               b1(%3: i64, %4: i64):\n  \
+               %5 = icmp.slt %3, %2\n  \
+               br %5, b2, b9\n\
+               b2:\n  \
+               %6 = isub.wrap %3, %1\n  \
+               %7 = icmp.ult %6, %0\n  \
+               br %7, b3, b6\n\
+               b3:\n  \
+               %8 = icmp.ult %3, %0\n  \
+               br %8, b4, b7\n\
+               b4:\n  \
+               %9 = iadd.chk %3, %1\n  \
+               %10 = icmp.ult %9, %0\n  \
+               br %10, b5, b8\n\
+               b5:\n  \
+               jmp b1(%9, %4)\n\
+               b6:\n  \
+               trap.bounds\n\
+               b7:\n  \
+               trap.bounds\n\
+               b8:\n  \
+               trap.bounds\n\
+               b9:\n  \
+               ret %4\n\
+               }\n";
+    let (out, stats) = one_pass(src, "rangeopt");
+    assert_eq!(stats.bounds_checks_seen, 3, "{stats}");
+    assert_eq!(
+        stats.bounds_checks_eliminated, 3,
+        "all three affine offsets of the guarded pair: {stats}"
+    );
+    assert!(
+        !out.contains("trap.bounds"),
+        "the proven guards take their trap arms with them:\n{out}"
+    );
+}
+
+/// The other half, and the one the sprint's risk posture cares about:
+/// an offset whose arithmetic is NOT proven wrap-free is not an affine
+/// offset, and the check stays. `%7 = iadd.wrap %4, 1` sits under a
+/// guard that bounds `i` from BELOW only, so nothing rules out
+/// `i == i64::MAX`, where `i + 1` is not `i + 1` — and a decomposition
+/// that is not an identity would decide the comparison wrongly.
+/// [`rangeopt_affine_wrap_admitted_when_bounded`] is the same body with
+/// the check form, which the channel does prove.
+#[test]
+fn rangeopt_affine_refuses_an_unproven_wrap() {
+    let (out, stats) = one_pass(&affine_wrap_src("iadd.wrap"), "rangeopt");
+    assert_eq!(stats.bounds_checks_seen, 1, "{stats}");
+    assert_eq!(
+        stats.bounds_checks_eliminated, 0,
+        "an unbounded wrap is not an affine offset: {stats}"
+    );
+    assert!(
+        out.contains("trap.bounds"),
+        "the unproven guard keeps its trap:\n{out}"
+    );
+}
+
+#[test]
+fn rangeopt_affine_wrap_admitted_when_bounded() {
+    let (out, stats) = one_pass(&affine_wrap_src("iadd.chk"), "rangeopt");
+    assert_eq!(stats.bounds_checks_seen, 1, "{stats}");
+    assert_eq!(
+        stats.bounds_checks_eliminated, 1,
+        "a checked offset carries its own no-wrap proof: {stats}"
+    );
+    assert!(!out.contains("trap.bounds"), "{out}");
+}
+
+/// `i > n - 1` guards the loop (a LOWER bound on `i`, so `i + 1` is
+/// only an affine offset when the op itself rules the wrap out), and
+/// `i + 1 > n` follows from it.
+fn affine_wrap_src(op: &str) -> String {
+    format!(
+        "fn @above(i64) -> i64 {{\n\
+         b0(%0: i64):\n  \
+         %1 = iconst.i64 1\n  \
+         %2 = isub.chk %0, %1\n  \
+         %3 = iconst.i64 0\n  \
+         jmp b1(%3, %3)\n\
+         b1(%4: i64, %5: i64):\n  \
+         %6 = icmp.sgt %4, %2\n  \
+         br %6, b2, b5\n\
+         b2:\n  \
+         %7 = {op} %4, %1\n  \
+         %8 = icmp.sgt %7, %0\n  \
+         br %8, b3, b4\n\
+         b3:\n  \
+         %9 = iadd.chk %4, %1\n  \
+         jmp b1(%9, %5)\n\
+         b4:\n  \
+         trap.bounds\n\
+         b5:\n  \
+         ret %5\n\
+         }}\n"
+    )
+}
+
 /// A loop containing a CALL never versions (schedule points, spec/07).
 #[test]
 fn rangeopt_versioning_skips_loops_with_calls() {

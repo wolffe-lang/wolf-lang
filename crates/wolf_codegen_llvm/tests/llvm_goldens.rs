@@ -223,6 +223,60 @@ fn all_modules() -> Vec<(String, Module)> {
     out
 }
 
+/// s78 acceptance (wolf-lang#82): EVERY load and store through a
+/// region-tagged pointer carries scope metadata — including the ones
+/// whose pointer was itself loaded out of region memory, which is what
+/// every container access looks like after s75. Machine-checked as a
+/// lower bound over every module the tier can emit: one annotated
+/// memory line per region-tokened memory op (an aggregate op lowers to
+/// several, hence `>=`), and nothing silently losing its scopes.
+///
+/// The region SCOPE is what the emitter can honestly claim here.
+/// Per-container disjointness is NOT claimed and must not be: two
+/// `List` values may share one buffer (`let b = a` copies a header
+/// pointer), so the buffers of two distinct containers are not a
+/// theorem anyone proved — see the `#82` note in `emit.rs`.
+#[test]
+fn every_region_access_carries_scopes() {
+    let mut total = 0usize;
+    for (name, m) in all_modules() {
+        let Some(ir) = ir_of(&m) else { return };
+        let mut expect = 0usize;
+        for (_, f) in m.funcs.iter() {
+            for b in wolf_wir::block_order(f) {
+                for &i in &f.blocks[b].insts {
+                    let tok = match f.insts[i].op {
+                        Opcode::Load => f.vpool.get(f.insts[i].args).get(1).copied(),
+                        Opcode::Store => f.vpool.get(f.insts[i].args).get(2).copied(),
+                        _ => None,
+                    };
+                    if let Some(tok) = tok
+                        && matches!(
+                            m.types.get(f.value_ty(tok)),
+                            wolf_wir::types::TypeData::Mem(_)
+                        )
+                    {
+                        expect += 1;
+                    }
+                }
+            }
+        }
+        let got = ir
+            .lines()
+            .filter(|l| {
+                l.contains("!alias.scope") && (l.contains(" load ") || l.contains("  store "))
+            })
+            .count();
+        assert!(
+            got >= expect,
+            "{name}: {expect} region-tokened memory op(s) but only {got} \
+             annotated line(s):\n{ir}"
+        );
+        total += expect;
+    }
+    assert!(total > 0, "the guard must have something to guard");
+}
+
 /// Byte-identical IR for identical input, twice (s41 acceptance:
 /// domain assignment and everything else is deterministic).
 #[test]

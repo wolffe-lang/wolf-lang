@@ -37,6 +37,23 @@
 //!   supplies exactly that non-negativity). This is what discharges
 //!   `l[i]`'s bounds check inside `while i < l.len`, which is the
 //!   shape the container work of s75 made common.
+//! - **Branch folding by relation, AFFINE** (s78, wolf-lang#82's
+//!   sibling finding): a stencil's guard is `i < len - 1` and its
+//!   indices are `i - 1`, `i`, `i + 1` — every one an affine offset
+//!   away from the pair the guard related, so the same-pair rule
+//!   proves none of them. The channel therefore decomposes both sides
+//!   of every comparison into `base + constant` and reasons about the
+//!   DIFFERENCE of the two bases: a known `bx + p CC by + q` pins an
+//!   interval on `d = bx - by`, and a query `bx + k1 cc by + k2` is
+//!   decided by that interval. A decomposition step is admitted only
+//!   when the machine result IS the mathematical one: a `chk` op has
+//!   already trapped otherwise (and a use is dominated by its def),
+//!   and a `wrap` op is admitted only when the interval channel
+//!   proves it cannot wrap. The same decomposition runs BACKWARD at π
+//!   seeding time — refining `len - 1` refines `len` — which is how an
+//!   opaque loaded length becomes non-negative inside the loop, the
+//!   precondition for crossing between the signed and unsigned
+//!   orderings at all.
 //! - **Loop-level check versioning** (amendment 3, demand-driven —
 //!   the ≥80% backstop): an innermost, call-free loop with remaining
 //!   eliminable-class checks gets a guarded fast copy; the guard
@@ -61,6 +78,16 @@ use super::analysis::{self, Doms};
 use super::{ModView, OptStats, Thresholds, run_managed};
 
 type Range = (i128, i128);
+
+/// How many constant-offset steps [`RangeCx::affine_of`] walks. Two is
+/// enough for every shape the container work produces (`len - 1`,
+/// `i + 1`); the bound is what keeps the analysis D4-budgeted.
+const AFFINE_DEPTH: usize = 4;
+
+/// Stand-in for ±∞ in difference intervals — far outside any integer
+/// type's range, and far enough from i128's own bounds that the
+/// interval algebra cannot overflow.
+const INF: i128 = 1i128 << 100;
 
 pub(crate) fn run(
     m: &mut Module,
@@ -113,6 +140,10 @@ struct RangeCx<'a> {
     /// Range per value at its DEF site (memoized; π information from
     /// the def block's dominator chain propagates through arithmetic).
     base: HashMap<Value, Range>,
+    /// Affine decomposition memo (s78): `v == affine[v].0 +
+    /// affine[v].1` as MATHEMATICAL integers on every execution that
+    /// reaches v's definition.
+    affine: HashMap<Value, (Value, i128)>,
     /// Hypothetical overrides (versioning what-if queries).
     hypo: HashMap<Value, Range>,
     /// Recursion guard.
@@ -153,6 +184,7 @@ impl<'a> RangeCx<'a> {
             pi: HashMap::new(),
             rel: HashMap::new(),
             base: HashMap::new(),
+            affine: HashMap::new(),
             hypo,
             visiting: HashSet::new(),
             place,
@@ -254,11 +286,10 @@ impl<'a> RangeCx<'a> {
         // Unsigned conditions refine in the signed domain only when
         // both sides are known non-negative.
         let nonneg = ra.0 >= 0 && rb.0 >= 0;
-        let mut put = |v: Value, r: Range| {
-            let e = self.pi.entry((target, v)).or_insert((i128::MIN, i128::MAX));
-            e.0 = e.0.max(r.0);
-            e.1 = e.1.min(r.1);
-        };
+        // Collected first, applied below: an affine subject refines its
+        // BASE too (s78), and computing the decomposition needs `self`.
+        let mut puts: Vec<(Value, Range)> = Vec::new();
+        let mut put = |v: Value, r: Range| puts.push((v, r));
         match cc {
             IntCc::Eq => {
                 put(a, rb);
@@ -299,6 +330,87 @@ impl<'a> RangeCx<'a> {
             }
             _ => {}
         }
+        // Backward through the affine channel: refining `len - 1`
+        // refines `len` by the same interval, shifted. The identity is
+        // exact (see `affine_of`) and the subject's def dominates this
+        // branch, so the shifted refinement holds wherever the edge's
+        // does.
+        for k in 0..puts.len() {
+            let (v, r) = puts[k];
+            let (base, off) = self.affine_of(v);
+            if base != v && off != 0 {
+                puts.push((base, (r.0.saturating_sub(off), r.1.saturating_sub(off))));
+            }
+        }
+        for (v, r) in puts {
+            let e = self.pi.entry((target, v)).or_insert((i128::MIN, i128::MAX));
+            e.0 = e.0.max(r.0);
+            e.1 = e.1.min(r.1);
+        }
+    }
+
+    /// Decompose `v` into `base + offset` over constant-offset add/sub
+    /// chains, where the equality holds over the MATHEMATICAL integers
+    /// on every execution that reaches v's definition.
+    ///
+    /// A `chk` step is free: had the mathematical result not been
+    /// representable the op would have trapped, and a use is dominated
+    /// by its def — so on any execution that observes `v`, no wrap
+    /// happened. A `wrap` step (which this very pass mints, so refusing
+    /// it would make the analysis weaker on its own second round) is
+    /// admitted only when the interval channel proves the mathematical
+    /// result in range at the def site. Everything else stops the walk:
+    /// `(v, 0)` is always a true decomposition.
+    fn affine_of(&mut self, v: Value) -> (Value, i128) {
+        if let Some(&r) = self.affine.get(&v) {
+            return r;
+        }
+        let bits = self.view.types.int_bits(self.f.value_ty(v));
+        let mut base = v;
+        let mut off: i128 = 0;
+        for _ in 0..AFFINE_DEPTH {
+            let Some(inst) = analysis::def_inst(self.f, base) else {
+                break;
+            };
+            let sign: i128 = match self.f.insts[inst].op {
+                Opcode::IaddChk | Opcode::IaddWrap => 1,
+                Opcode::IsubChk | Opcode::IsubWrap => -1,
+                _ => break,
+            };
+            let args = self.f.vpool.get(self.f.insts[inst].args);
+            let Some(c) = analysis::const_int(self.f, args[1]) else {
+                break;
+            };
+            // One width throughout: an offset means nothing across a
+            // truncation, and the operand type is the result type here.
+            if self.view.types.int_bits(self.f.value_ty(args[0])) != bits {
+                break;
+            }
+            if matches!(self.f.insts[inst].op, Opcode::IaddWrap | Opcode::IsubWrap)
+                && !self.wrap_is_exact(inst, args[0], sign * c as i128)
+            {
+                break;
+            }
+            base = args[0];
+            off += sign * c as i128;
+        }
+        let r = (base, off);
+        self.affine.insert(v, r);
+        r
+    }
+
+    /// Does `x + delta` provably stay inside its type at `inst`'s
+    /// block? (The wrap-form admission test for [`Self::affine_of`].)
+    fn wrap_is_exact(&mut self, inst: Inst, x: Value, delta: i128) -> bool {
+        let Some((tlo, thi)) = self.view.types.int_bounds(self.f.value_ty(x)) else {
+            return false;
+        };
+        let r = match self.place.get(&inst).copied() {
+            Some(b) => self.range_at(x, b),
+            None => self.def_range(x),
+        };
+        let Some(r) = r else { return false };
+        r.0 + delta >= tlo && r.1 + delta <= thi
     }
 
     /// Context-free range of a value (its def, seeded facts, induction
@@ -469,6 +581,33 @@ impl<'a> RangeCx<'a> {
                     c.iter().copied().max().expect("nonempty"),
                 )
             }
+            // Wrap forms: no trap means no free postcondition, so the
+            // interval is the mathematical one only when it provably
+            // fits. It often does — this pass mints wrap forms out of
+            // checks it proved, and refusing to read them back would
+            // make the analysis weaker on its own second round.
+            Opcode::IaddWrap | Opcode::IsubWrap | Opcode::ImulWrap => {
+                let op = self.f.insts[inst].op;
+                let (Some(a), Some(b)) = (ar(self, 0), ar(self, 1)) else {
+                    return tb;
+                };
+                let cand = match op {
+                    Opcode::IaddWrap => (a.0 + b.0, a.1 + b.1),
+                    Opcode::IsubWrap => (a.0 - b.1, a.1 - b.0),
+                    _ => {
+                        let c = [a.0 * b.0, a.0 * b.1, a.1 * b.0, a.1 * b.1];
+                        (
+                            c.iter().copied().min().expect("nonempty"),
+                            c.iter().copied().max().expect("nonempty"),
+                        )
+                    }
+                };
+                if cand.0 >= tb.0 && cand.1 <= tb.1 {
+                    cand
+                } else {
+                    tb
+                }
+            }
             Opcode::IremChk => match analysis::const_int(self.f, args[1]) {
                 Some(c) if c > 0 => (-(c as i128 - 1), c as i128 - 1),
                 _ => tb,
@@ -608,6 +747,91 @@ impl<'a> RangeCx<'a> {
         }
         None
     }
+
+    /// The affine generalization (s78): decide `a cc b` from known
+    /// relations over the same pair of affine BASES, by intervals on
+    /// the bases' difference.
+    ///
+    /// `a = ba + ka` and `b = bb + kb` reduce the query to
+    /// `d = ba - bb  cc  kb - ka`; a known relation over the same two
+    /// bases reduces the same way to an interval on `d`. Intervals from
+    /// every dominating relation intersect, and the query is decided
+    /// when the surviving interval sits entirely inside — or entirely
+    /// outside — the query's admitted set. Crossing between the signed
+    /// and unsigned orderings needs both sides of the relation being
+    /// crossed non-negative, exactly as the same-pair rule does.
+    fn decide_rel_affine(&mut self, cc: IntCc, a: Value, b: Value, block: Block) -> Option<bool> {
+        let (ba, ka) = self.affine_of(a);
+        let (bb, kb) = self.affine_of(b);
+        if ba == bb {
+            return None; // same base: pure arithmetic, the intervals own it
+        }
+        let qcc = self.signed_view(cc, a, b, block)?;
+        let target = kb.checked_sub(ka)?;
+        let mut d: Range = (-INF, INF);
+        let mut cur = Some(block);
+        while let Some(at) = cur {
+            for (kcc, x, y) in self.rel.get(&at).cloned().unwrap_or_default() {
+                let (bx, kx) = self.affine_of(x);
+                let (by, ky) = self.affine_of(y);
+                // Orient the known relation onto (ba - bb).
+                let (kcc, p, q) = if (bx, by) == (ba, bb) {
+                    (kcc, kx, ky)
+                } else if (bx, by) == (bb, ba) {
+                    (swap_cc(kcc), ky, kx)
+                } else {
+                    continue;
+                };
+                let Some(kcc) = self.signed_view(kcc, x, y, block) else {
+                    continue;
+                };
+                let Some(c) = q.checked_sub(p) else { continue };
+                let Some(known) = diff_interval(kcc, c) else {
+                    continue;
+                };
+                d = (d.0.max(known.0), d.1.min(known.1));
+                if d.0 > d.1 {
+                    return None; // contradiction: claim nothing, ever
+                }
+                if let Some(v) = decide_cc(qcc, d, (target, target)) {
+                    return Some(v);
+                }
+            }
+            cur = self.doms.idom(at);
+        }
+        None
+    }
+
+    /// `cc` read in the SIGNED ordering, or `None` when it cannot be:
+    /// an unsigned condition agrees with the signed one exactly on the
+    /// non-negative half, and that is what the interval channel is
+    /// asked for here.
+    fn signed_view(&mut self, cc: IntCc, a: Value, b: Value, block: Block) -> Option<IntCc> {
+        let signed = match cc {
+            IntCc::Ult => IntCc::Slt,
+            IntCc::Ule => IntCc::Sle,
+            IntCc::Ugt => IntCc::Sgt,
+            IntCc::Uge => IntCc::Sge,
+            other => return Some(other),
+        };
+        let ra = self.range_at(a, block)?;
+        let rb = self.range_at(b, block)?;
+        (ra.0 >= 0 && rb.0 >= 0).then_some(signed)
+    }
+}
+
+/// The interval a relation `d CC c` pins on `d` (signed conditions
+/// only — [`RangeCx::signed_view`] is the gate).
+fn diff_interval(cc: IntCc, c: i128) -> Option<Range> {
+    Some(match cc {
+        IntCc::Slt => (-INF, c - 1),
+        IntCc::Sle => (-INF, c),
+        IntCc::Sgt => (c + 1, INF),
+        IntCc::Sge => (c, INF),
+        IntCc::Eq => (c, c),
+        // `!=` admits two intervals; an interval domain cannot hold it.
+        _ => return None,
+    })
 }
 
 // ---------------------------------------------- the ordering algebra ----
@@ -775,8 +999,11 @@ fn eliminate_round(
                     };
                     // Intervals first (cheap, and they subsume the
                     // relational answer when they can give one), then
-                    // the relation over the same pair.
-                    let decided = by_range.or_else(|| cx.decide_rel(cc, x, y, b));
+                    // the relation over the same pair, then the same
+                    // relation read through affine offsets (s78).
+                    let decided = by_range
+                        .or_else(|| cx.decide_rel(cc, x, y, b))
+                        .or_else(|| cx.decide_rel_affine(cc, x, y, b));
                     if let Some(decided) = decided {
                         branch_jmps.push((inst, decided));
                         if count_metrics && is_bounds && decided {
