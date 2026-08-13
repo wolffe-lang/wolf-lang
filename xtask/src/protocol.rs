@@ -2,6 +2,8 @@
 //! comparison. `xtask differ` and the fixture tests are the consumers;
 //! wolf-interp implements the same document independently.
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use crate::corpus::TRAP_KINDS;
 
 /// Parsed verdict per `[proto.record.verdict]`.
@@ -203,6 +205,128 @@ pub fn compare(
     None
 }
 
+// ------------------------------------------------------- lane coverage --
+
+/// Does this record show the lane **executing the program**?
+/// (`[proto.cmp.coverage]`, s82 — the answer to wolf-lang#90.)
+///
+/// The run rung can only compare files a lane actually ran, so coverage
+/// counts exactly the records carrying a dynamic observation:
+/// `phase_reached` is `run` and the verdict is one the run rung can
+/// answer — `exit`, `trap`, `ub`. Nothing else counts, and the
+/// exclusions are the whole point of the number:
+///
+/// - `unsupported` is a **refusal** (`[proto.record.unsupported]`). It
+///   belongs to the conservatism ledger, and two lanes declining the
+///   same file is not agreement about that file. A coverage metric that
+///   scored refusals would climb every time a lane got *worse* — worse
+///   than publishing no number at all.
+/// - `fail(CODE)` is a **rejection** observed at a static rung. It is
+///   compared, at that rung, under `[proto.cmp.rung]` — but it is not
+///   run-rung coverage, and folding it in here would let a lane that
+///   stopped executing programs hide behind one that still rejects them.
+/// - `pass` answers an explicit `--phase` request; there is no program
+///   outcome in it.
+pub fn covered_at_run(record: &serde_json::Value) -> bool {
+    if record.get("phase_reached").and_then(|p| p.as_str()) != Some("run") {
+        return false;
+    }
+    let Some(v) = record.get("verdict").and_then(|v| v.as_str()) else {
+        return false;
+    };
+    matches!(
+        parse_verdict(v),
+        Ok(Verdict::Exit(_) | Verdict::Trap(_) | Verdict::Ub(_))
+    )
+}
+
+/// Run-rung coverage of one corpus walk, per lane
+/// (`[proto.cmp.coverage]`).
+///
+/// The three run-reaching lanes are **not nested** (wolf-lang#90:
+/// `checked` reaches `run` on files `native` declines, and the other way
+/// round), so no single lane's count is the coverage of the
+/// differential. The union is the honest figure; the intersection is
+/// what running one lane and calling it "the run tier" would have you
+/// believe. Both are published, because the distance between them is
+/// the non-nesting made visible.
+#[derive(Debug, Default)]
+pub struct Coverage {
+    entries: BTreeSet<String>,
+    lanes: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl Coverage {
+    /// Record one lane's observation of one corpus entry. Every entry
+    /// is counted in the denominator whether or not any lane ran it —
+    /// a file nobody executes is exactly what the number must expose.
+    pub fn observe(&mut self, lane: &str, file: &str, record: &serde_json::Value) {
+        self.entries.insert(file.to_string());
+        let set = self.lanes.entry(lane.to_string()).or_default();
+        if covered_at_run(record) {
+            set.insert(file.to_string());
+        }
+    }
+
+    /// Corpus entries walked (the denominator).
+    pub fn entries(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Entries this lane executed at `run`.
+    pub fn lane(&self, lane: &str) -> usize {
+        self.lanes.get(lane).map_or(0, BTreeSet::len)
+    }
+
+    /// Entries executed by **at least one** of `lanes` — honest coverage.
+    pub fn union(&self, lanes: &[&str]) -> BTreeSet<String> {
+        let mut u = BTreeSet::new();
+        for l in lanes {
+            if let Some(s) = self.lanes.get(*l) {
+                u.extend(s.iter().cloned());
+            }
+        }
+        u
+    }
+
+    /// Entries executed by **every** one of `lanes`.
+    pub fn intersection(&self, lanes: &[&str]) -> BTreeSet<String> {
+        let mut it = lanes.iter();
+        let Some(first) = it.next().and_then(|l| self.lanes.get(*l)) else {
+            return BTreeSet::new();
+        };
+        let mut acc = first.clone();
+        for l in it {
+            match self.lanes.get(*l) {
+                Some(s) => acc.retain(|f| s.contains(f)),
+                None => return BTreeSet::new(),
+            }
+        }
+        acc
+    }
+
+    /// Entries **no** lane executed — the residue the differential
+    /// cannot see at `run`, in walk order.
+    pub fn uncovered(&self, lanes: &[&str]) -> Vec<String> {
+        let u = self.union(lanes);
+        self.entries
+            .iter()
+            .filter(|f| !u.contains(*f))
+            .cloned()
+            .collect()
+    }
+
+    /// Entries some other lane executed and `lane` did not — this
+    /// lane's share of the non-nesting.
+    pub fn holes(&self, lane: &str, lanes: &[&str]) -> Vec<String> {
+        let mine = self.lanes.get(lane).cloned().unwrap_or_default();
+        self.union(lanes)
+            .into_iter()
+            .filter(|f| !mine.contains(f))
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,5 +402,73 @@ mod tests {
         let mut bad = record("pass");
         bad["warnings"] = json!([{"code": 7}]);
         assert!(validate_record(&bad).is_err());
+    }
+
+    /// A record at a shallower rung: what a refusal actually looks like.
+    fn at(verdict: &str, phase: &str) -> serde_json::Value {
+        let mut r = record(verdict);
+        r["phase_reached"] = json!(phase);
+        r
+    }
+
+    #[test]
+    fn only_dynamic_observations_are_coverage() {
+        // The three run-rung outcomes count.
+        assert!(covered_at_run(&record("exit(0)")));
+        assert!(covered_at_run(&record("trap(overflow)")));
+        assert!(covered_at_run(&record("ub(mem.ub)")));
+        // A refusal never counts, at any rung — including one that
+        // somehow names `run`.
+        assert!(!covered_at_run(&at("unsupported", "mem")));
+        assert!(!covered_at_run(&at("unsupported", "run")));
+        // A rejection is compared at its own rung, never here.
+        assert!(!covered_at_run(&at("fail(E1002)", "mem")));
+        // `pass` answers a --phase request; no program outcome in it.
+        assert!(!covered_at_run(&at("pass", "run")));
+        // A dynamic verdict that never reached `run` is not coverage.
+        assert!(!covered_at_run(&at("exit(0)", "wir")));
+    }
+
+    #[test]
+    fn two_refusals_are_conservatism_not_coverage() {
+        // The failure mode the metric exists to make impossible: a file
+        // both lanes decline must not lift the number.
+        let mut c = Coverage::default();
+        c.observe("checked", "a.lu", &at("unsupported", "mem"));
+        c.observe("native", "a.lu", &at("unsupported", "wir"));
+        assert_eq!(c.entries(), 1);
+        assert_eq!(c.lane("checked"), 0);
+        assert_eq!(c.union(&["checked", "native"]).len(), 0);
+        assert_eq!(c.uncovered(&["checked", "native"]), vec!["a.lu"]);
+    }
+
+    #[test]
+    fn the_lanes_need_not_nest() {
+        // wolf-lang#90 in miniature: each lane runs what the other
+        // declines, so neither count is the coverage and the union is.
+        let mut c = Coverage::default();
+        c.observe("checked", "x.lu", &record("exit(0)"));
+        c.observe("native", "x.lu", &at("unsupported", "mem"));
+        c.observe("checked", "y.lu", &at("unsupported", "mem"));
+        c.observe("native", "y.lu", &record("exit(0)"));
+        c.observe("checked", "z.lu", &record("exit(0)"));
+        c.observe("native", "z.lu", &record("exit(0)"));
+        let lanes = ["checked", "native"];
+        assert_eq!(c.lane("checked"), 2);
+        assert_eq!(c.lane("native"), 2);
+        assert_eq!(c.union(&lanes).len(), 3);
+        assert_eq!(c.intersection(&lanes).len(), 1);
+        assert_eq!(c.holes("checked", &lanes), vec!["y.lu"]);
+        assert_eq!(c.holes("native", &lanes), vec!["x.lu"]);
+        assert!(c.uncovered(&lanes).is_empty());
+    }
+
+    #[test]
+    fn a_lane_that_never_ran_contributes_nothing() {
+        let mut c = Coverage::default();
+        c.observe("checked", "a.lu", &record("exit(0)"));
+        assert_eq!(c.lane("release"), 0);
+        assert!(c.intersection(&["checked", "release"]).is_empty());
+        assert_eq!(c.holes("release", &["checked"]), vec!["a.lu"]);
     }
 }
