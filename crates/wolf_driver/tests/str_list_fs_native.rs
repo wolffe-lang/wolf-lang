@@ -298,9 +298,10 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
             .count();
         assert!(n > 0, "no {family} symbols in RT_SYMBOLS");
     }
+    // 78 at s40/s73; s75 adds the D43 line brackets.
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        78,
+        80,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

@@ -159,9 +159,11 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
     // would stay green while comparing nothing. The floor ratchets —
     // raise it when the compared set grows, never lower it to pass.
     let compared = checked - conservatism;
+    // s44 floor 99; s75 ratchets to 102 (the corpus grew, and no
+    // container program turned into a release-lane refusal).
     assert!(
-        compared >= 99,
-        "the two tiers must stay compared on at least 99 files \
+        compared >= 102,
+        "the two tiers must stay compared on at least 102 files \
          (compared {compared} of {checked}; {conservatism} refused) — \
          if a refusal grew legitimately, raise the floor deliberately"
     );

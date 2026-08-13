@@ -52,7 +52,9 @@ Not implemented at s44, and why (the full accounting is in
 `b2-json-dom`, `b4-pointer-chase`, `c1-particles`, `c3-niche-filter`,
 `d4-format` are shapes of kernels already present, and they would add
 measurement time without adding a distinct finding while the container gap
-(G1 in the ledger) dominates every array-shaped result. **Family F
+(G1 in the ledger) dominates every array-shaped result. s75 closed G1, so
+the array-shaped ones now measure their own theses and are the first to
+add; the string- and allocation-shaped ones wait on G2 and G5. **Family F
 (concurrency) cannot be measured at all**: the release tier refuses
 `func.addr`, so no wolf task or channel program compiles through Tier-R
 (`wolf_codegen_llvm::emit` — "the release tier does not lower concurrency
@@ -165,6 +167,10 @@ level the backend itself uses). The counts are deterministic, so **they
 gate**: `bench/gates.json` records a floor per lane per kernel, and
 `cargo xtask bench-gates` fails when a loop that used to vectorize stops.
 A de-vectorized loop is thereby visible before any wall clock moves.
+
+Every wolf floor was 0 at s44 — that was the finding, not the target. s75
+ratchets `alias_daxpy` to 1: the first loop wolf vectorizes on this suite,
+and now the first one that would fail the gate by stopping.
 
 ## 6. The metadata-drop sentinel (report-10 amendment 3)
 
