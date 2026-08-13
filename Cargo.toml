@@ -18,6 +18,7 @@ rust-version = "1.97"
 [workspace.dependencies]
 wolf_span = { path = "crates/wolf_span" }
 wolf_query = { path = "crates/wolf_query" }
+wolf_doc = { path = "crates/wolf_doc" }
 wolf_lsp = { path = "crates/wolf_lsp" }
 wolf_diag = { path = "crates/wolf_diag" }
 wolf_lex = { path = "crates/wolf_lex" }

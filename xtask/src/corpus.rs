@@ -102,6 +102,11 @@ pub fn parse_directives(src: &str) -> Result<Directives, String> {
     let mut d = Directives::default();
     for (i, line) in src.lines().enumerate() {
         let line = line.trim_start();
+        // s53: an executable script opens with `#!`, which the lexer
+        // takes as trivia at byte 0. The header block starts after it.
+        if i == 0 && line.starts_with("#!") {
+            continue;
+        }
         let Some(rest) = line.strip_prefix("//!") else {
             break; // header block ends at the first non-`//!` line
         };

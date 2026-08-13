@@ -1533,6 +1533,42 @@ change is intentional (you deliberately updated the dependency), run
 the supply-chain alarm it is.
 "#);
 
+code!(E1507, "the script's frontmatter is not a manifest a single file may carry", r#"
+A script carries its manifest inside its leading `//!` block, as a
+`pkg { }` literal — the same schema and the same parser as `wolf.pkg`,
+so the two can never drift. A script's manifest is a SUBSET, though:
+`edition`, `wolf`, `deps`, `features`, and `capabilities`, and nothing
+else. There are no target-scoped dependency sections and no C build
+recipes, because a program that needs those has outgrown a single file:
+`wolf init --from-script <file>` turns the script into a real package
+with a real manifest, keeping the dependency entries verbatim. A
+script's identity is its path, so `name`, `version` and `fingerprint`
+have nothing to identify and are refused rather than ignored.
+"#);
+
+code!(E1508, "the script's frontmatter no longer matches its pinned resolution", r#"
+A script is one file, and it is still reproducible: the first run pins
+its resolved dependency versions in the cache, keyed by the script's
+path and the bytes of its frontmatter, and every later run replays that
+pin. `--locked` asserts the pin is still the answer — it is the CI
+posture, the same promise a checked-in lockfile makes for a project —
+and this error says the frontmatter changed since the pin was taken.
+Run without `--locked` (or with `--update`) to re-resolve and re-pin.
+Nothing was mutated: a resolution in the cache is never edited in
+place, so the old pin is still exactly what it was.
+"#);
+
+code!(E1509, "a dependency is not in the cache and fetching is off", r#"
+Resolution is the only phase that may reach the network; a build never
+does (D33). This run needed a dependency the content store does not
+hold, while `--offline` (or a build's own no-fetch posture) forbade
+fetching it. The message names the package and the command that would
+fetch it. Nothing is silently skipped, and in particular a package that
+has never been verified cannot be used unverified: the failure is
+closed, not degraded. Once a dependency is in the store, every script
+and project that names it runs fully offline.
+"#);
+
 // ------------------------------------------------------------------------
 // W03xx — frontend/resolution-adjacent warnings (s67; W0301 is the
 // formatter's grandfathered s11 code). Warnings are leveled via
@@ -1898,6 +1934,23 @@ the two names alias while the license to assume otherwise still
 stands, which is undefined behavior waiting for an optimizer. State
 the assumption after the last assignment of its operands, or bind the
 asserted pointers to names that never change.
+"#);
+
+// ------------------------------------------------------------------------
+// W15xx — documentation warnings, paired with the E15xx tooling family.
+// Documentation is checked like code or it rots like prose.
+// ------------------------------------------------------------------------
+
+code!(W1501, "this doc comment links to a name that does not resolve", r#"
+A bracketed dotted path in a doc comment — `[List.push]`, `[connect]` —
+is an intra-doc link, and it resolves through the compiler's own name
+resolution rather than through string matching. That is the whole point:
+when the item it names is renamed or removed, the link breaks HERE,
+loudly, instead of silently becoming a dead reference on a published
+page. Write the path the code writes, or, if the brackets were meant as
+ordinary prose, drop them. Cross-package `std.` paths are not checked
+against this package's names and never warn. Documentation carries the
+same covenant as tests: it is verified, or it is not trusted.
 "#);
 
 }
