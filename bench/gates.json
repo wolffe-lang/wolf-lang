@@ -1,0 +1,25 @@
+{
+  "note": "s44's DETERMINISTIC gates — the only bench numbers allowed to fail a PR (D5). Everything wall-derived (ns/op, speedups, geomeans, the X3 delta, the sentinel delta, LLVM's wall share) is report-only and lives in the nightly report JSON. `cargo xtask bench-gates` recomputes these and fails on regression.",
+
+  "ir_volume": {
+    "contract_target": 0.5,
+    "contract_target_met": false,
+    "why_not_a_hard_gate": "The contract (#70 metric 1) budgets the LLVM IR handed to LLVM at <= 50% of the naive s41 lowering. Measured at s44: 57.7% over the corpus, 87.5% over the 13 hot kernels. Asserting 0.50 today would make every commit red without telling anyone anything new, so the gate is a RATCHET at the measured value plus slack, and the shortfall is reported as an open item (see bench/loss-ledger.md, gap G1). Tighten the ceiling whenever the mid-end earns it; the contract target stays recorded here so nobody forgets what it was.",
+    "kernel_geomean_ceiling": 0.9,
+    "corpus_geomean_ceiling": 0.6
+  },
+
+  "vectorization_witnesses": {
+    "note": "report 10 delta 2. Deterministic, so it gates: a loop that stops vectorizing fails here before wall time moves on the current machine. `wolf` counts remarks from `clang -x ir -O2` on the module the backend actually emits; `c_naive` from `clang -O3` on ref.c. A wolf count of 0 across the board is the s44 finding, not the s44 target — the floors are recorded so the first kernel that starts vectorizing is visible, and so one that stops again is a red gate.",
+    "kernels": {
+      "alias_daxpy":      { "wolf_min": 0, "c_naive_min": 1 },
+      "a2_stencil1d":     { "wolf_min": 0, "c_naive_min": 2 },
+      "a5_hoist_call":    { "wolf_min": 0, "c_naive_min": 1 },
+      "aos_dot":          { "wolf_min": 0, "c_naive_min": 0 },
+      "c2_ecs_sweep":     { "wolf_min": 0, "c_naive_min": 0 },
+      "e1_sum_reduce":    { "wolf_min": 0, "c_naive_min": 1 },
+      "e2_checksum":      { "wolf_min": 0, "c_naive_min": 0 },
+      "e3_index_arith":   { "wolf_min": 0, "c_naive_min": 1 }
+    }
+  }
+}

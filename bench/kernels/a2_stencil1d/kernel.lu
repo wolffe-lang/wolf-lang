@@ -1,0 +1,54 @@
+// a2-stencil1d (family A) — 3-point stencil with DISTINCT in/out buffers
+// passed as parameters. wolf's `mut out` / `read src` modes prove
+// disjointness; naive C must assume overlap (ref.c), expert C says
+// `restrict` (expert.c).
+//
+// Integer-typed on purpose: family A's thesis is aliasing, which is
+// type-independent, and integers keep the correctness sink exact across
+// all four lanes.
+//
+// Protocol: argv[1]=ops, prints {"ns":..,"ops":..,"sink":..}.
+
+fn ops_arg(fallback: int) -> int {
+    let args = env_args()
+    let first = args.first() else { return fallback }
+    var n = 0
+    for b in first.bytes() {
+        if b < 48 { return fallback }
+        if b > 57 { return fallback }
+        n = n * 10 + (b - 48)
+    }
+    if n == 0 { fallback } else { n }
+}
+
+fn stencil(mut out: List[int], src: List[int]) {
+    var i = 1
+    let last = src.len - 1
+    while i < last {
+        out[i] = (src[i - 1] + src[i] + src[i + 1]) & 1048575
+        i = i + 1
+    }
+}
+
+fn main() -> !int {
+    let ops = ops_arg(300)
+    let n = 4096
+    var src = List[int]()
+    var out = List[int]()
+    var i = 0
+    while i < n {
+        (mut src).push(i & 255)
+        (mut out).push(0)
+        i = i + 1
+    }
+    let t0 = time_now_ms()
+    var k = 0
+    while k < ops {
+        stencil(mut out, src)
+        k = k + 1
+    }
+    let t1 = time_now_ms()
+    let ns = (t1 - t0) * 1000000
+    print("{{\"ns\":{ns},\"ops\":{ops * n},\"sink\":{out[2048]}}}")
+    0
+}

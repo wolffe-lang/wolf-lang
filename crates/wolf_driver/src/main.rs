@@ -886,13 +886,23 @@ fn compile_native(
     // granularity (D4's honest tiers). `WOLF_MIDEND=1` forces the s42
     // pipeline onto the debug tier (the conc-conservatism differential
     // litmus runs spawn corpus through Tier-F with and without it).
+    //
+    // `WOLF_MIDEND=0` is the reverse hatch, and it exists for exactly
+    // one consumer: s44's IR-volume lane (#70). The contract states the
+    // budget as "LLVM IR handed to LLVM <= 50% of the NAIVE s41
+    // lowering", so the naive lowering has to be reachable — otherwise
+    // the denominator is a guess. It is a MEASUREMENT mode, never a
+    // supported build mode: the mid-end and the whole-program phase are
+    // both skipped, so the build falls back to per-module units with no
+    // clustering, no dedup, and no cross-module inlining.
     let ice = |e: wolf_wir::VerifyError| -> ! {
         eprintln!("wolf build: ICE: mid-end broke the module\n{e}");
         std::process::exit(2);
     };
     let mid_stats = std::env::var("WOLF_MIDEND_STATS").as_deref() == Ok("1");
+    let midend_off = std::env::var("WOLF_MIDEND").as_deref() == Ok("0");
     let mut whole: Option<wolf_wir::midend::WholeProgram> = None;
-    if opts.release {
+    if opts.release && !midend_off {
         let homes = wolf_wir::midend::summary::Homes::from_package(&res.package, &module);
         let wp = wolf_wir::midend::optimize_whole_program(
             &mut module,
@@ -934,7 +944,8 @@ fn compile_native(
     // `--emit=llvm-ir` (s41): the release tier's whole-module IR, one
     // inspectable text — every stage inspectable, like `--emit=wir`.
     if opts.emit == Emit::LlvmIr {
-        let mut backend = wolf_codegen_llvm::LlvmBackend::new().map_err(|e| refuse("wir", e))?;
+        let mut backend = wolf_codegen_llvm::LlvmBackend::with_options(strip_facts_opts())
+            .map_err(|e| refuse("wir", e))?;
         let all: Vec<wolf_wir::FuncId> = module.funcs.keys().collect();
         wolf_codegen_clif::compile_selected(
             &mut backend,
@@ -1325,6 +1336,24 @@ fn codegen_report(wp: &wolf_wir::midend::WholeProgram) -> String {
     out
 }
 
+/// Release-tier emission options: `WOLF_STRIP_FACTS=1` lowers with
+/// EVERY fact channel silenced — no `noalias`/`readonly`/`deref`, no
+/// scoped-noalias, no `!range`/`!invariant.load`/`!prof`, alignment
+/// claims dropped to 1.
+///
+/// This is s44's metadata-drop sentinel (D42 ruling 3), the permanent
+/// nightly lane that PRICES the bonus channel: metadata is a bonus (D2)
+/// — our own mid-end exploits the same facts in WIR, so dropping it
+/// costs speed, never correctness. Compiling the A-family both ways per
+/// commit is how channel decay (an LLVM bump quietly ignoring us) shows
+/// up as a number instead of as a mystery. Never a supported build
+/// mode; the flag is deliberately an env var, not a CLI switch.
+fn strip_facts_opts() -> wolf_codegen_llvm::EmitOptions {
+    wolf_codegen_llvm::EmitOptions {
+        strip_facts: std::env::var("WOLF_STRIP_FACTS").as_deref() == Ok("1"),
+    }
+}
+
 /// Compile one module unit to relocatable object bytes: its own
 /// backend instance, its own DWARF builder over ONLY its files (the
 /// object must not observe other modules' file tables — cache keys
@@ -1349,7 +1378,7 @@ fn compile_unit(
         }
     };
     let mut backend: Box<dyn wolf_backend::Backend> = if release {
-        Box::new(wolf_codegen_llvm::LlvmBackend::new().map_err(refuse)?)
+        Box::new(wolf_codegen_llvm::LlvmBackend::with_options(strip_facts_opts()).map_err(refuse)?)
     } else {
         Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?)
     };

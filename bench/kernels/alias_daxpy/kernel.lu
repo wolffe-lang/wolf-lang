@@ -1,0 +1,61 @@
+// alias_daxpy = a1-triad (family A) in wolf. `out` is a `mut` parameter
+// and `a`/`b` are `read` parameters, so the c04 mode theorems make all
+// three provably disjoint: the LLVM tier stamps `noalias`/`readonly` on
+// every pointer without the programmer writing anything (reports/01
+// facts 1-2). Naive C cannot claim that (`ref.c`); expert C writes
+// `restrict` by hand (`expert.c`).
+//
+// The honest caveat, measured rather than hidden: `List` is wolf's only
+// bulk container at this surface and its element traffic is an
+// out-of-line runtime call per access, so the `noalias` fact has nothing
+// vectorizable to pay for yet. See bench/loss-ledger.md (classification
+// (b): the fact exists, the container does not).
+//
+// Protocol: argv[1]=ops, prints {"ns":..,"ops":..,"sink":..}.
+
+fn ops_arg(fallback: int) -> int {
+    let args = env_args()
+    let first = args.first() else { return fallback }
+    var n = 0
+    for b in first.bytes() {
+        if b < 48 { return fallback }
+        if b > 57 { return fallback }
+        n = n * 10 + (b - 48)
+    }
+    if n == 0 { fallback } else { n }
+}
+
+fn daxpy(mut y: List[f64], x: List[f64], a: f64) {
+    var i = 0
+    while i < x.len {
+        y[i] = y[i] + a * x[i]
+        i = i + 1
+    }
+}
+
+fn main() -> !int {
+    let ops = ops_arg(300)
+    let n = 4096
+    var x = List[f64]()
+    var y = List[f64]()
+    var v = 0.0
+    var w = 0.0
+    var i = 0
+    while i < n {
+        (mut x).push(v)
+        (mut y).push(w)
+        v = v + 0.5
+        w = w + 1.0
+        i = i + 1
+    }
+    let t0 = time_now_ms()
+    var k = 0
+    while k < ops {
+        daxpy(mut y, x, 1.000001)
+        k = k + 1
+    }
+    let t1 = time_now_ms()
+    let ns = (t1 - t0) * 1000000
+    print("{{\"ns\":{ns},\"ops\":{ops * n},\"sink\":{y[4095]}}}")
+    0
+}

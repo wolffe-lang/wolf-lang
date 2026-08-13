@@ -6,5 +6,8 @@ AGENTS.md
 /target
 bench-results/
 corpus/.lu-cache/
+# The package cache lands next to whatever entry file was built, so any
+# directory holding a buildable .lu can grow one (s44 builds bench/kernels/).
+.lu-cache/
 /hello
 .claude/

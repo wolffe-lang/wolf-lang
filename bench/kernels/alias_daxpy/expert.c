@@ -1,12 +1,8 @@
-/* alias_daxpy = a1-triad (family A), NAIVE C — what people actually write:
- * `y[i] += a*x[i]` through plain pointer parameters, no `restrict`. clang
- * cannot prove y and x disjoint, so it either serializes or emits a
- * runtime overlap check + a scalar fallback. `expert.c` is the same loop
- * with hand-written `restrict` — what experts write.
- *
- * This split is s44's honesty fix: the file s01 shipped as `ref.c` was
- * the RESTRICT version, i.e. the naive-C gate was silently being scored
- * against expert C. It now lives in `expert.c` where it belongs.
+/* alias_daxpy = a1-triad (family A), EXPERT C: the same loop with
+ * hand-written `restrict` on both pointer parameters — the disjointness
+ * fact wolf's `mut`/`read` param modes prove for free (D3, reports/01
+ * facts 1-2). This is the secondary (report-only) comparison and the
+ * scrutiny lane's source; `ref.c` is the gated naive comparison.
  *
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
@@ -16,7 +12,7 @@
 
 #define N 4096
 
-static void daxpy(double *y, const double *x, double a) {
+static void daxpy(double *restrict y, const double *restrict x, double a) {
     for (int i = 0; i < N; i++) y[i] += a * x[i];
 }
 

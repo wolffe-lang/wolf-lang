@@ -1,0 +1,116 @@
+{
+  "protocol": 1,
+  "note": "The T1 micro suite (s44). `ops`/`ops_wolf` are the sweep counts for the C/Rust and wolf lanes; the harness allows them to differ, but the suite sets them EQUAL because every kernel's correctness sink chains across sweeps and unequal counts would make the lanes compute different values. Sizes are picked so the slowest lane (always wolf today) spends 150-400 ms under the clock; every lane's MAD is published so a reader can judge the faster lanes' timing resolution. `expert`: a hand-tuned expert.c exists. `wrapping`: a wrapping.lu X3 variant exists. `witness`: vectorization remarks are collected. `sink`: `float` compares with a relative tolerance instead of exactly.",
+  "kernels": [
+    {
+      "name": "alias_daxpy",
+      "family": "A",
+      "thesis": "a1-triad: mut/read param modes prove noalias that naive C needs hand-restrict for",
+      "ops": 1000,
+      "ops_wolf": 1000,
+      "expert": true,
+      "witness": true,
+      "sink": "float"
+    },
+    {
+      "name": "a2_stencil1d",
+      "family": "A",
+      "thesis": "3-point stencil, distinct in/out params: disjointness for free vs assumed overlap",
+      "ops": 600,
+      "ops_wolf": 600,
+      "expert": true,
+      "witness": true
+    },
+    {
+      "name": "a5_hoist_call",
+      "family": "A",
+      "thesis": "read param immutable across an opaque call: the CSE-across-calls holy grail",
+      "ops": 600,
+      "ops_wolf": 600,
+      "expert": true,
+      "witness": true
+    },
+    {
+      "name": "list_alloc",
+      "family": "B",
+      "thesis": "region bump-allocate + wholesale free vs malloc/free per node",
+      "ops": 200,
+      "ops_wolf": 200,
+      "expert": true
+    },
+    {
+      "name": "b3_churn",
+      "family": "B",
+      "thesis": "b3-request-churn: one scratch region per request vs malloc/free per request",
+      "ops": 100000,
+      "ops_wolf": 100000
+    },
+    {
+      "name": "aos_dot",
+      "family": "C",
+      "thesis": "layout-free internal ABI + SoA-as-idiom vs C's fixed AoS ABI (report 10 amendment 4)",
+      "ops": 30,
+      "ops_wolf": 30,
+      "expert": true,
+      "witness": true,
+      "sink": "float"
+    },
+    {
+      "name": "c2_ecs_sweep",
+      "family": "C",
+      "thesis": "one hot field of an 8-field record: SoA idiom vs AoS cache-line tax",
+      "ops": 30,
+      "ops_wolf": 30,
+      "expert": true,
+      "witness": true
+    },
+    {
+      "name": "word_count",
+      "family": "D",
+      "thesis": "d3-split-count: zero-copy words() views vs a hand-written two-state byte scan",
+      "ops": 20,
+      "ops_wolf": 20
+    },
+    {
+      "name": "d1_utf8_validate",
+      "family": "D",
+      "thesis": "structural UTF-8 scan over a zero-copy byte view",
+      "ops": 20,
+      "ops_wolf": 20
+    },
+    {
+      "name": "d2_substr_search",
+      "family": "D",
+      "thesis": "sliding zero-copy range-slice compare vs sliding memcmp",
+      "ops": 10,
+      "ops_wolf": 10
+    },
+    {
+      "name": "e1_sum_reduce",
+      "family": "E",
+      "thesis": "i64 reduction with boundable ranges: checked-arith cost on a vectorizable loop",
+      "ops": 4000,
+      "ops_wolf": 4000,
+      "wrapping": true,
+      "witness": true
+    },
+    {
+      "name": "e2_checksum",
+      "family": "E",
+      "thesis": "multiply-add-mask rolling hash: two checked ops per iteration",
+      "ops": 2000,
+      "ops_wolf": 2000,
+      "wrapping": true,
+      "witness": true
+    },
+    {
+      "name": "e3_index_arith",
+      "family": "E",
+      "thesis": "scaled index arithmetic against an opaque bound: the loop-versioning backstop",
+      "ops": 1000,
+      "ops_wolf": 1000,
+      "wrapping": true,
+      "witness": true
+    }
+  ]
+}

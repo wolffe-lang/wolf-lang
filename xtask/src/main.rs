@@ -9,6 +9,8 @@ use std::time::Instant;
 use xtask::corpus::{self, Directives};
 use xtask::stats;
 
+mod bench_t1;
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -51,6 +53,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("bench") => bench_cmd(&args[1..]),
+        Some("bench-gates") => bench_t1::bench_gates(),
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("fmt-fuzz") => fmt_fuzz(&args[1..]),
         Some("dist") => dist(),
@@ -63,10 +66,14 @@ fn main() -> ExitCode {
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci|deps-check|corpus|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|print-gate|diag-catalog|fmt-lu|audit-surface|midend-rate>"
             );
-            eprintln!("       cargo xtask bench --track=<runtime|compile> [--runs=N] [--out=FILE]");
+            eprintln!(
+                "       cargo xtask bench --track=<runtime|compile|t1|irvolume> [--runs=N] [--out=FILE]"
+            );
+            eprintln!("                         [--kernels=a,b]   (t1 only)");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
+            eprintln!("       cargo xtask bench gate <t1.jsonl>    (the M2 verdict, nightly)");
             eprintln!(
                 "       cargo xtask fmt-fuzz [--ci] [--seconds=N] [--seed=N] [--cases=N] [--out=DIR]"
             );
@@ -99,6 +106,11 @@ fn ci() -> ExitCode {
         ("abi-check", &["xtask", "abi-check"]),
         ("debug-check", &["xtask", "debug-check"]),
         ("midend-rate", &["xtask", "midend-rate"]),
+        // s44: the DETERMINISTIC bench gates only (IR volume ratchet +
+        // vectorization witnesses). Wall-derived M2 numbers are nightly
+        // and report-only — D5, and this sprint is where that line got
+        // drawn on purpose rather than by accident.
+        ("bench-gates", &["xtask", "bench-gates"]),
         ("spec-extract", &["xtask", "spec-extract", "--check"]),
         ("conformance", &["xtask", "conformance"]),
         ("print-gate", &["xtask", "print-gate"]),
@@ -438,6 +450,24 @@ fn corpus_cmd() -> ExitCode {
     }
 }
 
+/// Every corpus file that is a `phase: run` ENTRY (not a `member:`
+/// module) — the set that compiles end to end through both native tiers.
+/// s44's IR-volume lane sweeps it because #70 states its budget "geomean
+/// across the corpus", and the 13-kernel suite is a deliberately hot
+/// sample of it.
+fn corpus_run_entries() -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut files);
+    files.sort();
+    files.retain(|f| {
+        std::fs::read_to_string(f)
+            .ok()
+            .and_then(|src| corpus::parse_directives(&src).ok())
+            .is_some_and(|d| !d.member && d.phase.as_deref() == Some("run"))
+    });
+    files
+}
+
 fn collect_wolf_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -467,9 +497,17 @@ fn bench_cmd(args: &[String]) -> ExitCode {
     if args.first().map(String::as_str) == Some("diff") {
         return bench_diff(&args[1..]);
     }
+    if args.first().map(String::as_str) == Some("gate") {
+        let Some(path) = args.get(1) else {
+            eprintln!("bench gate: need <t1.jsonl>");
+            return ExitCode::from(2);
+        };
+        return bench_t1::gate(path);
+    }
     let mut track = None;
     let mut runs: u32 = 10;
     let mut out_path: Option<PathBuf> = None;
+    let mut kernels: Option<String> = None;
     for a in args {
         if let Some(v) = a.strip_prefix("--track=") {
             track = Some(v.to_string());
@@ -477,6 +515,8 @@ fn bench_cmd(args: &[String]) -> ExitCode {
             runs = v.parse().expect("--runs=N");
         } else if let Some(v) = a.strip_prefix("--out=") {
             out_path = Some(PathBuf::from(v));
+        } else if let Some(v) = a.strip_prefix("--kernels=") {
+            kernels = Some(v.to_string());
         } else {
             eprintln!("bench: unknown argument `{a}`");
             return ExitCode::from(2);
@@ -486,8 +526,13 @@ fn bench_cmd(args: &[String]) -> ExitCode {
     let records = match track.as_deref() {
         Some("runtime") => bench_runtime(runs, &commit),
         Some("compile") => bench_compile(runs.min(3), &commit),
+        // s44: the T1 micro suite (the M2 gate) and issue #70's two
+        // IR-volume metrics. Separate tracks, because they answer
+        // separate questions and the nightly lane schedules them apart.
+        Some("t1") => bench_t1::run(runs.max(3), kernels.as_deref(), &commit),
+        Some("irvolume") => bench_t1::irvolume(&commit),
         _ => {
-            eprintln!("bench: --track=<runtime|compile> is required");
+            eprintln!("bench: --track=<runtime|compile|t1|irvolume> is required");
             return ExitCode::from(2);
         }
     };
