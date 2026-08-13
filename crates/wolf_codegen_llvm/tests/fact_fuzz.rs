@@ -7,8 +7,11 @@
 //! either way it blocks emission of that pattern until triaged.
 //!
 //! The permanent seed corpus is the three historical Rust-miscompile
-//! shapes + the CFG-duplication stressor (report 10 amendment 1),
-//! rebuilt in WIR terms in `wolf_codegen_llvm::fuzzgen`. The seeded
+//! shapes + the CFG-duplication stressor (report 10 amendment 1), plus
+//! the five shapes wolf found in ITS OWN fact rig — the loaded-pointer
+//! case (s78), the two foreign-root cases (s80), and the two call-site
+//! cases (s83) — rebuilt in WIR terms in
+//! `wolf_codegen_llvm::fuzzgen`. The seeded
 //! random lane runs a small budget in PR CI (part of the workspace
 //! test wall); nightly/long runs raise `WOLF_FACT_FUZZ_N`. The
 //! LLVM-version bump policy requires a clean long run first.
@@ -33,8 +36,9 @@ fn differential(tag: &str, module: wolf_wir::Module) -> bool {
 }
 
 /// [`differential`] plus a MID-END lane: the same module optimized by
-/// s42 is emitted and run alongside the unoptimized one, and all
-/// twenty-four executions must agree (s80).
+/// s42 is emitted and run alongside the unoptimized one, and all twelve
+/// executions must agree (s80) — two phases × two metadata lanes ×
+/// three opt levels.
 ///
 /// The plain rig cannot witness an optimizer bug and it is worth being
 /// exact about why: it compares metadata-on against metadata-stripped,
@@ -169,6 +173,65 @@ fn foreign_storage_survives_a_non_inlining_call_under_the_midend() {
 #[test]
 fn a_foreign_load_does_not_hoist_over_a_call() {
     differential_midend("foreign_licm_call", fuzzgen::shape_foreign_licm_call());
+}
+
+/// s83 (#92): the call-site `!noalias` fact's guard. The caller hands a
+/// RAW POINTER into a local region across an opaque call and the callee
+/// writes through it — no token changes hands, so both `memopt`'s "no
+/// token ⇒ no effect" and the emitter's new call-site fact would license
+/// forwarding the pre-call load. Neither may.
+#[test]
+fn an_escaped_pointer_defeats_the_call_site_fact() {
+    differential(
+        "call_escaped_pointer",
+        fuzzgen::shape_call_escaped_pointer(),
+    );
+}
+
+#[test]
+fn an_escaped_pointer_defeats_the_call_site_fact_under_the_midend() {
+    differential_midend(
+        "call_escaped_pointer_mid",
+        fuzzgen::shape_call_escaped_pointer(),
+    );
+}
+
+/// s83: the same fact where it is TRUE. A second region that never
+/// leaves the frame may be forwarded across the very call that writes
+/// the first. Both lanes must agree — this is the shape that goes quiet
+/// if the fact is dropped and LOUD if it is widened by one region.
+#[test]
+fn a_call_cannot_reach_a_region_it_was_never_given() {
+    differential("call_noalias_local", fuzzgen::shape_call_noalias_local());
+}
+
+#[test]
+fn a_call_cannot_reach_a_region_it_was_never_given_under_the_midend() {
+    differential_midend(
+        "call_noalias_local_mid",
+        fuzzgen::shape_call_noalias_local(),
+    );
+}
+
+/// The call-site witnesses only witness if the call SURVIVES, for the
+/// same reason the s80 one does.
+#[test]
+fn the_call_site_witnesses_really_do_not_inline() {
+    for (tag, mut m) in [
+        (
+            "call_escaped_pointer",
+            fuzzgen::shape_call_escaped_pointer(),
+        ),
+        ("call_noalias_local", fuzzgen::shape_call_noalias_local()),
+    ] {
+        let stats =
+            wolf_wir::midend::optimize_module(&mut m, &wolf_wir::midend::Options::default())
+                .unwrap();
+        assert_eq!(
+            stats.inlined_calls, 0,
+            "{tag} inlined, so it no longer witnesses anything — grow the padding"
+        );
+    }
 }
 
 /// The witness only witnesses if the call SURVIVES: an inlined callee

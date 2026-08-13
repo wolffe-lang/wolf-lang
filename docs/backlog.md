@@ -197,6 +197,95 @@ ms, `list_alloc` 6805 vs 7000 ms — are inside the noise in both directions.
 s79 is re-measuring the suite concurrently on its own baseline; these
 numbers are a cost check, not a suite reading.
 
+## the ABI answer #91 wanted, and why s83 did not land it (2026-08-13, s83)
+
+s83 wrote the inventory s80 owed — what token propagation does at each of
+ordinary calls, `main`, exports, `c_call`, task entry shims, task/proc
+bodies, runtime shims, and indirect calls (none exist). Two things fell
+out of writing it, and together they are why the propagation is a
+successor sprint and not this one.
+
+**The mechanism is not the problem.** Token params have been ordinary
+signature params since s26: `verify.rs` checks a formal→actual region
+substitution per call site, `ins_call_regions` threads them and mints
+successors, `FuncBuilder::new` turns a `mem.rN` entry param into a live
+chain, and `rt_call_foreign` ALREADY passes both foreign tokens to every
+container shim. Appending two more params to `wir_sig_of` is a small
+edit. Tokens erase at both backends, so the change is free at the
+machine level.
+
+**1. Uniform propagation restores no optimization by itself.** If every
+wolf signature carries both foreign tokens then every wolf call consumes
+and re-mints them, so availability keyed on the pre-call token is
+unnameable afterwards — memopt loses container CSE across calls by token
+VERSIONING instead of by s80's explicit rule, which is the same
+conservatism relocated. licm likewise: the token stops being
+loop-invariant. Restoring the motion needs a transitive per-callee
+effect summary ("never stores through its role-R token, mints no role-R
+root, reaches no tokenless seam that could") used to RE-KEY availability
+across the call. `midend/summary.rs` is the home and its schema is
+**frozen at v1**, so that is a version bump with c12 and the tooling
+track downstream of it. The blocker for memopt/licm is the SUMMARY, not
+the signatures — naming that correctly is the most useful line here.
+
+**2. The propagation has a trapdoor that must land with it.**
+`build_scopes` (`emit.rs`) learns which regions are foreign by scanning
+for `region.foreign` INSTRUCTIONS. The moment a foreign root arrives as
+an entry PARAMETER instead, the emitter classifies it `Local(r)` — one
+scope per region id — and two same-role foreign regions in one function
+are declared `!noalias`. That is the s80 miscompile verbatim.
+`memopt::foreign_roles` has the same shape and the same hole. So the
+role has to become a field on `ir::Param` and travel with the signature
+first, with every role consumer reading both places, and only then the
+signatures. Any other order ships a miscompile. #91 stays open with this
+as its plan.
+
+**What s83 landed instead.** s78's declined call-site fact, in the half
+that has a theorem. The emitter's own note already said it was
+emittable: local regions' tokens ARE exhaustive. A call now carries
+`!noalias` over every region `wolf_wir::midend::exhaustive_regions`
+admits — rooted here by `region.new`/`stack.alloc` or lent by the
+caller, with no pointer escaped and no handle handed out — whose token
+the call does not take. Foreign roots are never listed; that decline
+stands, now for a stated reason. The predicate is IMPORTED by the
+emitter rather than re-derived, so the fact rig and the passes cannot
+drift.
+
+**#92, and it was real.** `rle_and_forward` rests on "no token ⇒ no
+effect" and had no escape guard, while `dse_dying_regions` has had one
+since s42. A local region whose pointer reached a tokenless seam
+(`__wolf_rt_print_str`-class shims take raw pointers) is writable
+without its token, and rle forwarded across it. Same guard now, same
+predicate, plus the loop-header form of it — a call in a loop body runs
+before the header's second visit, and the pass's kill is a linear RPO
+scan (the same back-edge subtlety s80 hit). licm gets the matching rule.
+Witnessed by `fuzzgen::shape_call_escaped_pointer` on BOTH axes.
+
+**#93, pinned.** The two accidents that make #83's original shape
+unreachable from source are now tests
+(`lower_shapes.rs`): the `mut`-arg spill's post-call reload, and `let b
+= a` moving. Neither is a claim about tokens; both are now claims that
+fail loudly if they go.
+
+**Cost, per kernel: EXACTLY ZERO.** Optimized WIR is byte-identical with
+the #92 guard on and off across all thirteen kernels (`a2_stencil1d`,
+`a5_hoist_call`, `alias_daxpy`, `aos_dot`, `b3_churn`, `c2_ecs_sweep`,
+`d1_utf8_validate`, `d2_substr_search`, `e1_sum_reduce`, `e2_checksum`,
+`e3_index_arith`, `list_alloc`, `word_count`) — same hashes, same
+`rle`/`fwd`/`dse`/`hoist` counters. The shapes it declines are shapes
+the lowering does not currently produce, which is the same fact as "no
+source witness", which is why the fuzz shape is the witness.
+
+**And the new fact buys nothing on those kernels either, which is the
+finding.** Emitted call-site `!noalias` count at `--release`: 0 of 27-31
+calls, on every one of the thirteen. The kernels' region traffic is
+container traffic, and container storage is exactly the FOREIGN case the
+fact declines. The theorem is right, the channel works
+(`llvm_goldens::a_call_claims_only_the_regions_it_cannot_reach` pins
+both directions), and it will stay unspent on this suite until #91
+lands. That is the honest measurement of what the ABI change is worth,
+taken before paying for it.
+
 ## a2_stencil1d's early exits are two thirds ARITHMETIC (2026-08-13, s78)
 
 s78's affine relational channel discharges three of the stencil's four

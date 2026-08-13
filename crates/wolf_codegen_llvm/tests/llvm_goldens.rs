@@ -338,3 +338,42 @@ fn strip_lane_is_stripped() {
         }
     }
 }
+
+/// s83 acceptance: the call-site `!noalias` fact s78 declined, in the
+/// half that has a theorem — emitted where the callee provably cannot
+/// reach the region, and NOT emitted where it can.
+///
+/// Both directions in one test on purpose. A fact that is never emitted
+/// passes any "is it sound?" check trivially, and a fact that is always
+/// emitted passes any "is it useful?" check trivially; the pair is the
+/// only thing that pins the boundary. The dynamic half is
+/// `fact_fuzz.rs`'s `call_noalias_local` / `call_escaped_pointer`, on
+/// both the strip axis and the optimized-vs-unoptimized axis.
+#[test]
+fn a_call_claims_only_the_regions_it_cannot_reach() {
+    let claim = fuzzgen::shape_call_noalias_local();
+    let Some(ir) = ir_of(&claim) else { return };
+    let calls: Vec<&str> = ir
+        .lines()
+        .filter(|l| l.contains("call ") && l.contains("@\"") && !l.contains("declare"))
+        .collect();
+    assert!(
+        calls.iter().any(|l| l.contains("!noalias")),
+        "call_noalias_local: no call carries the fact — a region the \
+         callee was never given must be claimed:\n{ir}"
+    );
+
+    // The guard: every region in the escaped shape is reachable through
+    // the pointer that crossed, so NO call may claim anything.
+    let guard = fuzzgen::shape_call_escaped_pointer();
+    let Some(ir) = ir_of(&guard) else { return };
+    for l in ir.lines() {
+        if l.contains("call ") && l.contains("@\"writer\"") {
+            assert!(
+                !l.contains("!noalias"),
+                "call_escaped_pointer: the call claims a region whose \
+                 pointer it was HANDED — that is the #92 miscompile:\n{l}"
+            );
+        }
+    }
+}

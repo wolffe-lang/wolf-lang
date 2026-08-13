@@ -20,9 +20,24 @@
 //! over a write it cannot see.
 //!
 //! The rule: a load on a FOREIGN token does not hoist out of a loop
-//! that contains a call. Local regions are untouched — for them the
-//! token really is exhaustive, which is the whole point of the token
-//! discipline and is why the conservatism is this narrow.
+//! that contains a call.
+//!
+//! # The same argument, one door over (s83, wolf-lang#92)
+//!
+//! "The runtime owns it" is not the only way memory becomes reachable
+//! without its token. A LOCAL region whose pointer ESCAPED is reachable
+//! the same way — tokenless runtime seams take raw pointers, and a call
+//! in the loop body can write through one while the loop's token sits
+//! outside, untouched. `memopt`'s `dse` has guarded escape since s42;
+//! nothing here did.
+//!
+//! So the rule generalizes: a load does not hoist out of a loop
+//! containing a call unless its region's token is EXHAUSTIVE
+//! ([`super::memopt::exhaustive_regions`] — rooted here or lent, no
+//! pointer escaped, no handle handed out). Foreign roots are never
+//! exhaustive, so the s80 rule is the special case rather than the
+//! whole story. Regions that ARE exhaustive are untouched, which is the
+//! token discipline's dividend and why the conservatism stays narrow.
 //!
 //! Speculation is safe by construction: safe-tier WIR loads cannot
 //! trap (a live token is structural validity — reports/01), so a load
@@ -53,6 +68,7 @@ pub(crate) fn run(
 ) -> Result<bool, VerifyError> {
     run_managed(m, fid, "licm", verify_each, |f, view, _ctx| {
         let foreign = super::memopt::foreign_roles(f, view);
+        let exhaustive = super::memopt::exhaustive_regions(f, view);
         let cfg = analysis::cfg(f);
         let doms = analysis::dominators(&cfg);
         let loops = analysis::loops(f, &cfg, &doms);
@@ -101,6 +117,18 @@ pub(crate) fn run(
             // are untouched: there the token really is exhaustive.
             let blocked: HashSet<ForeignRole> =
                 super::memopt::blocked_roles(f, view, &foreign, l.blocks.iter());
+            // The #92 half (s83): the same argument, for a LOCAL region
+            // whose pointer escaped. A tokenless seam takes a raw
+            // pointer and can write through it, so a call in the body
+            // is a write the loop's outside-defined token never sees —
+            // exactly the foreign case, with escape standing in for
+            // "the runtime owns it".
+            let body_has_call = l.blocks.iter().any(|&b| {
+                f.blocks[b]
+                    .insts
+                    .iter()
+                    .any(|&i| f.insts[i].op == Opcode::Call)
+            });
             // One sweep per loop: collect hoistable instructions in
             // deterministic block order.
             let mut hoist: Vec<(Block, Inst)> = Vec::new();
@@ -123,6 +151,14 @@ pub(crate) fn run(
                         && let Some(&tok) = args.get(1)
                         && let Some(role) = super::memopt::token_role(f, view, &foreign, tok)
                         && blocked.contains(&role)
+                    {
+                        continue;
+                    }
+                    if op == Opcode::Load
+                        && body_has_call
+                        && let Some(&tok) = args.get(1)
+                        && let crate::types::TypeData::Mem(r) = view.types.get(f.value_ty(tok))
+                        && !exhaustive.contains(&crate::entity::EntityRef::as_u32(*r))
                     {
                         continue;
                     }

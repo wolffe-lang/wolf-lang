@@ -276,6 +276,25 @@ impl std::fmt::Display for OptStats {
     }
 }
 
+/// The regions of `f` whose effect token names EVERY writer of their
+/// storage — the mid-end's own soundness predicate, published so the
+/// BACKENDS can rest on exactly the same theorem the passes do (s83).
+///
+/// The LLVM tier's call-site `!noalias` fact is the first consumer:
+/// a call that does not take an exhaustive region's token provably
+/// cannot touch its memory, which is the claim s78 declined for want
+/// of a theorem. Keeping one definition is the point — an emitter that
+/// re-derived this would be free to drift from the passes, and an
+/// unenforced asymmetry in the fact rig is exactly how s80's miscompile
+/// happened.
+pub fn exhaustive_regions(m: &Module, f: &crate::ir::Function) -> std::collections::HashSet<u32> {
+    let view = ModView {
+        types: &m.types,
+        sigs: &m.sigs,
+    };
+    memopt::exhaustive_regions(f, &view)
+}
+
 /// Read-only module context passes see beside the function they own.
 pub(crate) struct ModView<'a> {
     pub types: &'a TypeInterner,

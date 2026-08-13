@@ -69,29 +69,28 @@
 //!   a second path to the same payload — including the `copy` the
 //!   E1014 diagnostic recommends — is invisible to it. A deep claim
 //!   here would be a miscompile, not a missed hoist.
-//! - **Call-site region effects.** A call carries no `!noalias` list,
-//!   even though its WIR signature names every region token it takes.
-//!   `region.foreign` roots are minted per function over storage the
-//!   RUNTIME owns, so a callee can touch a caller's foreign region
-//!   without receiving its token, and "no token ⇒ no effect" is not a
-//!   theorem across the call boundary. **s80 audited this and the
-//!   hazard is real, so the decline STANDS** — but it is now enforced
-//!   rather than merely feared: `memopt` drops every foreign-region
-//!   availability entry at a call and `licm` refuses to hoist a
-//!   foreign-token load out of a loop that contains one, so no pass
-//!   makes the claim this fact would have handed to LLVM. Emitting it
-//!   would need the tokens PROPAGATED THROUGH SIGNATURES, which is a
-//!   lowering-wide change s80 costed and did not take (see
-//!   `docs/backlog.md`). The claim is sound for local regions and
-//!   false only for foreign ones; a per-region call-site list that
-//!   omitted the foreign roots would be emittable — it is left unspent
-//!   because the mid-end already cashes the motion (the s78 sentinel
-//!   reading) and an unenforced asymmetry in this file is how the
+//! - **Call-site region effects, for FOREIGN roots only.** s78
+//!   declined this fact whole; s80 audited the decline and let it
+//!   stand; s83 SPENT THE HALF THAT HAS A THEOREM and left the rest
+//!   declined for a stated reason. A call now carries `!noalias` over
+//!   every region [`wolf_wir::midend::exhaustive_regions`] admits and
+//!   whose token the call does not take — see
+//!   [`Fx::call_noalias_suffix`]. What is still not claimed is the
+//!   foreign roots: a foreign root is minted per function over storage
+//!   the RUNTIME owns, so a callee reaches a caller's container buffers
+//!   by minting its own root while holding none of the caller's tokens
+//!   (s80, wolf-lang#83). "No token ⇒ no effect" is FALSE there, and
+//!   claiming it would be s80's miscompile handed to LLVM on purpose.
+//!   Making it true needs the tokens PROPAGATED THROUGH SIGNATURES —
+//!   wolf-lang#91, whose ABI inventory s83 wrote and whose size is why
+//!   s83 did not land it. The predicate is IMPORTED from the mid-end
+//!   rather than re-derived here, so this file and `memopt`/`licm`
+//!   cannot drift: an unenforced asymmetry in this file is how the
 //!   miscompile below happened.
 //!
 //! What s80 found while auditing that decline was NOT a declined fact
 //! but an ASSERTED one that was false: one `!alias.scope` per region
-//! id. See [`FnCx::build_scopes`] — after inlining, two foreign roots
+//! id. See [`Fx::build_scopes`] — after inlining, two foreign roots
 //! over the same buffers were told they could not alias, and LLVM
 //! forwarded a stale load across a store on the strength of it. Scopes
 //! are keyed by region CLASS now.
@@ -480,6 +479,14 @@ pub(crate) struct Fx<'a> {
     region_scope: BTreeMap<u32, usize>,
     /// Region index → (`!alias.scope` LIST id, `!noalias` LIST id).
     scope_lists: BTreeMap<u32, (usize, Option<usize>)>,
+    /// Regions whose effect token names every writer of their storage
+    /// (`wolf_wir::midend::exhaustive_regions`) — the call-site
+    /// `!noalias` fact's whole license (s83).
+    exhaustive: HashSet<u32>,
+    /// Interned `!noalias` lists for call sites, keyed by scope-id set:
+    /// one node per distinct set keeps the metadata small and the
+    /// output byte-stable.
+    call_noalias: BTreeMap<Vec<usize>, usize>,
     /// Entry sret pointers, in aggregate-result order.
     sret: Vec<String>,
     reachable: HashSet<WBlock>,
@@ -521,6 +528,12 @@ pub(crate) fn emit_function(
         frozen: HashSet::new(),
         region_scope: BTreeMap::new(),
         scope_lists: BTreeMap::new(),
+        exhaustive: if opts.strip_facts {
+            HashSet::new()
+        } else {
+            wolf_wir::midend::exhaustive_regions(m, f)
+        },
+        call_noalias: BTreeMap::new(),
         sret: Vec::new(),
         reachable: HashSet::new(),
     };
@@ -791,6 +804,81 @@ impl<'a> Fx<'a> {
             let _ = write!(s, ", !noalias !{na}");
         }
         s
+    }
+
+    /// The `!noalias` suffix for a CALL: every region this function
+    /// touches whose memory the callee provably cannot reach (s83 —
+    /// the fact s78 declined, in the half that has a theorem).
+    ///
+    /// The claim is "no token ⇒ no effect", and it is a theorem exactly
+    /// for the regions `wolf_wir::midend::exhaustive_regions` admits:
+    /// rooted here (or lent by the caller), with no pointer escaped to
+    /// a tokenless seam and no handle handed out. For those, a call
+    /// that does not take the token has no way to name the storage —
+    /// tokens are linear, and the only other door is a raw pointer.
+    ///
+    /// What is deliberately NOT listed, and why the list is computed
+    /// from the mid-end's own predicate rather than from the signature:
+    ///
+    /// - **`region.foreign` roots.** A foreign root is minted per
+    ///   function over storage the RUNTIME owns, so a callee reaches a
+    ///   caller's container buffers by minting its own root, holding
+    ///   none of the caller's tokens (s80, wolf-lang#83). "No token ⇒
+    ///   no effect" is simply false there. Claiming it would be the
+    ///   s80 miscompile handed to LLVM on purpose. The theorem needs
+    ///   the tokens PROPAGATED THROUGH SIGNATURES — see wolf-lang#91
+    ///   and the s83 ABI inventory for what that costs.
+    /// - **Regions whose pointer escaped.** Runtime read/write shims
+    ///   take raw pointers with no token operand.
+    /// - **Regions whose token this call DOES take.** The callee is
+    ///   licensed to write them; that is what the token means.
+    ///
+    /// The predicate is imported, not re-derived, so the emitter and
+    /// `memopt`/`licm` cannot drift apart — an unenforced asymmetry in
+    /// this file is how s80's miscompile happened.
+    fn call_noalias_suffix(&mut self, args: &[WValue]) -> String {
+        if self.cx.opts.strip_facts {
+            return String::new();
+        }
+        let taken: HashSet<u32> = args
+            .iter()
+            .filter_map(|&a| match self.m.types.get(self.f.value_ty(a)) {
+                TypeData::Mem(r) => Some(r.index() as u32),
+                _ => None,
+            })
+            .collect();
+        // Scope ids of the regions the callee cannot reach, minus any
+        // scope shared with a region it can (a class is only ever as
+        // strong as its weakest member).
+        let mut claim: BTreeSet<usize> = BTreeSet::new();
+        let mut deny: BTreeSet<usize> = BTreeSet::new();
+        for (&r, &scope) in &self.region_scope {
+            if self.exhaustive.contains(&r) && !taken.contains(&r) {
+                claim.insert(scope);
+            } else {
+                deny.insert(scope);
+            }
+        }
+        let ids: Vec<usize> = claim.difference(&deny).copied().collect();
+        if ids.is_empty() {
+            return String::new();
+        }
+        let node = match self.call_noalias.get(&ids) {
+            Some(&id) => id,
+            None => {
+                let body = format!(
+                    "!{{{}}}",
+                    ids.iter()
+                        .map(|s| format!("!{s}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                let id = self.cx.meta_node(body);
+                self.call_noalias.insert(ids, id);
+                id
+            }
+        };
+        format!(", !noalias !{node}")
     }
 
     /// Is this load's memory frozen for the token's whole extent?
@@ -2117,7 +2205,8 @@ impl<'a> Fx<'a> {
             }
         }
         let ret_ty = si.ret_ty();
-        let rendered = format!("call {ret_ty} @\"{symbol}\"({})", cargs.join(", "));
+        let na = self.call_noalias_suffix(args);
+        let rendered = format!("call {ret_ty} @\"{symbol}\"({}){na}", cargs.join(", "));
         let retval = if si.ret_comps.is_empty() {
             self.line(format!("  {rendered}"));
             String::new()

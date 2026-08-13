@@ -33,6 +33,25 @@
 //! and why that is a lowering accident rather than a theorem), and
 //! enforces the conservatism here so nothing rests on the accident.
 //!
+//! # The same hole, one door over (s83, wolf-lang#92)
+//!
+//! "The runtime owns it" is not the only way memory becomes reachable
+//! without its token. A LOCAL region whose POINTER escaped is reachable
+//! the same way: tokenless runtime seams (`__wolf_rt_print_str`-class)
+//! take raw pointers and can write through them. `dse_dying_regions`
+//! has refused to touch an escaped region since s42;
+//! `rle_and_forward` forwarded across one, which is the identical
+//! hazard class as s80's and was a real gap rather than a tidiness
+//! complaint.
+//!
+//! Both rules now key on ONE predicate, [`exhaustive_regions`], stated
+//! once so nothing can drift: a call kills availability keyed on any
+//! region whose token is not exhaustive, and so does entering a loop
+//! whose body contains a call. `licm` asks the same question, and so —
+//! deliberately — does the LLVM tier's call-site `!noalias` fact, which
+//! is the half of s78's declined fact that has a theorem
+//! (`wolf_wir::midend::exhaustive_regions` is public for exactly that).
+//!
 //! Clients shipped here:
 //! - redundant-load elimination and store-to-load forwarding,
 //!   dominator-scoped, keyed by (token version, address, type);
@@ -64,8 +83,9 @@ pub(crate) fn run(
 ) -> Result<bool, VerifyError> {
     run_managed(m, fid, "memopt", verify_each, |f, view, ctx| {
         let foreign = foreign_roles(f, view);
+        let exhaustive = exhaustive_regions(f, view);
         let mut changed = false;
-        changed |= rle_and_forward(f, view, &foreign, stats);
+        changed |= rle_and_forward(f, view, &foreign, &exhaustive, stats);
         changed |= dse_dying_regions(f, view, ctx, stats);
         changed
     })
@@ -137,6 +157,199 @@ pub(crate) fn blocked_roles<'a>(
     out
 }
 
+/// The regions whose token is EXHAUSTIVE — names every operation that
+/// can reach their storage (s83, wolf-lang#92/#91).
+///
+/// This is the predicate BOTH conservatism rules and the LLVM tier's
+/// call-site `!noalias` fact rest on, so it is stated once, here, and
+/// deliberately errs small. A region qualifies when all four hold:
+///
+/// 1. **This function roots it**, at `region.new` or `stack.alloc`, OR
+///    it is an entry-parameter region the caller lent. A
+///    `region.foreign` root is the RUNTIME's and is never exhaustive
+///    (s80): any function may mint its own root over the same bytes.
+///    A lent region qualifies only when NO pointer-typed entry
+///    parameter escapes — the `(ptr, mem.rK)` pairing that says which
+///    pointer belongs to which lent region is a lowering convention,
+///    not a verified fact, so the question is asked once over all of
+///    them rather than per region on the strength of adjacency.
+/// 2. **No pointer into it escapes.** Tokenless runtime seams take raw
+///    pointers (`__wolf_rt_print_str`-class), so a region whose address
+///    reached a call, a store value, a return, an aggregate or a block
+///    argument is reachable WITHOUT its token. `dse` has guarded this
+///    since s42; `rle_and_forward` did not, which is #92 — the same
+///    hazard class as s80's, one door over.
+/// 3. **Its handle is used only to allocate and free.** A `region.new`
+///    handle is not a data pointer, so rule 2's provenance sweep does
+///    not see it, but handing it to `__wolf_rt_region_ambient_enter`
+///    lets a callee place allocations inside — the region stops being
+///    this frame's private business.
+/// 4. It is not also a foreign root (region ids are per function and
+///    disjoint by construction, so this is a belt-and-braces read).
+///
+/// What it buys: for a region in this set, a call that does not take
+/// its token provably cannot touch its memory. That is the theorem s78
+/// went looking for and could not have for FOREIGN regions; it holds
+/// for these, and only for these.
+pub(crate) fn exhaustive_regions(f: &Function, view: &ModView) -> HashSet<u32> {
+    let region_of = |ty: TypeId| -> Option<u32> {
+        match view.types.get(ty) {
+            TypeData::Mem(r) => Some(crate::entity::EntityRef::as_u32(*r)),
+            _ => None,
+        }
+    };
+    // Rule 1: locally rooted regions, plus the `region.new` handles.
+    let mut rooted: HashSet<u32> = HashSet::new();
+    let mut handles: Vec<(Value, u32)> = Vec::new();
+    for &b in &f.layout {
+        for &i in &f.blocks[b].insts {
+            let results = f.vpool.get(f.insts[i].results);
+            let Some(&tok) = results.get(1) else { continue };
+            let Some(r) = region_of(f.value_ty(tok)) else {
+                continue;
+            };
+            match f.insts[i].op {
+                Opcode::RegionNew => {
+                    rooted.insert(r);
+                    handles.push((results[0], r));
+                }
+                Opcode::StackAlloc => {
+                    rooted.insert(r);
+                }
+                _ => {}
+            }
+        }
+    }
+    // Rule 3: a handle may only reach `region.alloc`/`region.free`, in
+    // the handle position (operand 0 of both).
+    for &b in &f.layout {
+        for &i in &f.blocks[b].insts {
+            let op = f.insts[i].op;
+            let args = f.vpool.get(f.insts[i].args);
+            for (pos, &a) in args.iter().enumerate() {
+                for &(h, r) in &handles {
+                    if a != h {
+                        continue;
+                    }
+                    let ok = pos == 0 && matches!(op, Opcode::RegionAlloc | Opcode::RegionFree);
+                    if !ok {
+                        rooted.remove(&r);
+                    }
+                }
+            }
+            // A handle riding a branch edge leaves this function's
+            // sight exactly like any other escape.
+            let edges: Vec<crate::ir::BlockCall> = match f.insts[i].aux {
+                Aux::Jump(bc) => vec![bc],
+                Aux::Br(t, e) => vec![t, e],
+                _ => Vec::new(),
+            };
+            for bc in edges {
+                for v in f.vpool.get(bc.args) {
+                    for &(h, r) in &handles {
+                        if v == h {
+                            rooted.remove(&r);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Rule 2.
+    let mut out: HashSet<u32> = rooted
+        .into_iter()
+        .filter(|&r| !analysis::region_pointers(f, view.types, r).escapes)
+        .collect();
+    // Lent regions: exhaustive together or not at all.
+    if let Some(entry) = f.entry()
+        && !entry_ptrs_escape(f, entry)
+    {
+        for &p in &f.block_params(entry) {
+            if let Some(r) = region_of(f.value_ty(p)) {
+                out.insert(r);
+            }
+        }
+    }
+    // Rule 4, spelled out rather than argued: region ids are per
+    // function and disjoint by construction, so a foreign root cannot
+    // reach the set above — but this predicate is a SOUNDNESS gate for
+    // two passes and a backend fact, and the one thing s80 established
+    // is that a foreign root reaching a disjointness claim is how the
+    // miscompile happens. Cheap check, no reliance on the argument.
+    let foreign = foreign_roles(f, view);
+    out.retain(|r| !foreign.contains_key(r));
+    out
+}
+
+/// Does any pointer-typed ENTRY parameter escape? Same escape rules as
+/// [`analysis::region_pointers`] — a pointer is safe in a load/store
+/// ADDRESS position, as a `ptr.off` base, and under `icmp`; anywhere
+/// else (a call argument, a stored value, a return, an aggregate, a
+/// block argument) it is published, and a tokenless seam can then write
+/// the caller's memory without naming the token that roots it.
+fn entry_ptrs_escape(f: &Function, entry: Block) -> bool {
+    let mut ptrs: HashSet<Value> = f
+        .block_params(entry)
+        .into_iter()
+        .filter(|&p| f.value_ty(p) == crate::types::PTR)
+        .collect();
+    if ptrs.is_empty() {
+        return false;
+    }
+    // Close over `ptr.off` first, to a fixpoint: `f.layout` is block
+    // order, which is not guaranteed to be a def-before-use order, so
+    // a single forward sweep could miss a derived pointer.
+    loop {
+        let before = ptrs.len();
+        for &b in &f.layout {
+            for &i in &f.blocks[b].insts {
+                if f.insts[i].op == Opcode::PtrOff
+                    && ptrs.contains(&f.vpool.get(f.insts[i].args)[0])
+                {
+                    ptrs.insert(f.vpool.get(f.insts[i].results)[0]);
+                }
+            }
+        }
+        if ptrs.len() == before {
+            break;
+        }
+    }
+    for &b in &f.layout {
+        for &i in &f.blocks[b].insts {
+            let args = f.vpool.get(f.insts[i].args);
+            match f.insts[i].op {
+                // args = (addr, token): the address position is safe.
+                Opcode::Load => {}
+                // args = (value, addr, token): only the VALUE publishes.
+                Opcode::Store => {
+                    if ptrs.contains(&args[0]) {
+                        return true;
+                    }
+                }
+                // Provenance, closed above; comparing addresses reveals
+                // nothing loadable.
+                Opcode::PtrOff | Opcode::Icmp => {}
+                _ => {
+                    if args.iter().any(|v| ptrs.contains(v)) {
+                        return true;
+                    }
+                }
+            }
+            let edges: Vec<crate::ir::BlockCall> = match f.insts[i].aux {
+                Aux::Jump(bc) => vec![bc],
+                Aux::Br(t, e) => vec![t, e],
+                _ => Vec::new(),
+            };
+            for bc in edges {
+                if f.vpool.get(bc.args).iter().any(|v| ptrs.contains(v)) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 /// `v`'s foreign role, if `v` is a token naming a foreign region.
 pub(crate) fn token_role(
     f: &Function,
@@ -164,6 +377,7 @@ fn rle_and_forward(
     f: &mut Function,
     view: &ModView,
     foreign: &HashMap<u32, ForeignRole>,
+    exhaustive: &HashSet<u32>,
     stats: &mut OptStats,
 ) -> bool {
     let cfg = analysis::cfg(f);
@@ -176,24 +390,48 @@ fn rle_and_forward(
     // header therefore kills whatever that loop's body can write
     // without versioning a token; entries minted INSIDE the body are
     // re-minted every iteration and handled by the linear scan.
-    let mut header_kill: HashMap<Block, HashSet<ForeignRole>> = HashMap::new();
-    if !foreign.is_empty() {
+    let mut header_kill: HashMap<Block, (HashSet<ForeignRole>, bool)> = HashMap::new();
+    {
         let loops = analysis::loops(f, &cfg, &doms);
         for l in &loops.loops {
             let roles = blocked_roles(f, view, foreign, l.blocks.iter());
-            header_kill.entry(l.header).or_default().extend(roles);
+            let has_call = l.blocks.iter().any(|&b| {
+                f.blocks[b]
+                    .insts
+                    .iter()
+                    .any(|&i| f.insts[i].op == Opcode::Call)
+            });
+            let e = header_kill
+                .entry(l.header)
+                .or_insert((HashSet::new(), false));
+            e.0.extend(roles);
+            e.1 |= has_call;
         }
+        header_kill.retain(|_, (roles, has_call)| !roles.is_empty() || *has_call);
     }
     let mut avail: HashMap<(Value, Value, TypeId), (Value, Block, Src)> = HashMap::new();
     let mut repl: HashMap<Value, Value> = HashMap::new();
     let mut changed = false;
     for &b in &cfg.rpo {
-        if let Some(roles) = header_kill.get(&b)
-            && !roles.is_empty()
-        {
-            avail.retain(|&(tok, _, _), _| match token_role(f, view, foreign, tok) {
-                Some(role) => !roles.contains(&role),
-                None => true,
+        if let Some((roles, has_call)) = header_kill.get(&b) {
+            avail.retain(|&(tok, _, _), _| {
+                if let Some(role) = token_role(f, view, foreign, tok)
+                    && roles.contains(&role)
+                {
+                    return false;
+                }
+                // The same back-edge argument for the #92 guard: a call
+                // in the body runs before the header's second visit, so
+                // an entry minted in the preheader over a NON-exhaustive
+                // region is stale inside the loop even though the linear
+                // scan never passed the call on the way in.
+                if *has_call
+                    && let TypeData::Mem(r) = view.types.get(f.value_ty(tok))
+                    && !exhaustive.contains(&crate::entity::EntityRef::as_u32(*r))
+                {
+                    return false;
+                }
+                true
             });
         }
         let insts = f.blocks[b].insts.clone();
@@ -254,13 +492,29 @@ fn rle_and_forward(
                     // by keying (no future op can name it).
                     avail.insert((m2, p, ty), (v, b, Src::Store));
                 }
-                // A call is opaque to FOREIGN storage regardless of
-                // which tokens it consumes (s80): the callee mints its
-                // own root over the same runtime memory. Drop every
-                // entry keyed on a foreign token; local regions keep
-                // the token theorem and ride across untouched.
-                Opcode::Call if !foreign.is_empty() => {
-                    avail.retain(|&(tok, _, _), _| token_role(f, view, foreign, tok).is_none());
+                // A call rides over exactly the regions whose token is
+                // EXHAUSTIVE, and no others (s83, #92 — this used to
+                // drop only the FOREIGN entries, which was s80's rule
+                // and half the story).
+                //
+                // - foreign regions: never exhaustive. The callee mints
+                //   its own root over the same runtime memory (s80).
+                // - a local region whose pointer ESCAPED: reachable
+                //   through a raw pointer with no token operand, which
+                //   is how `__wolf_rt_print_str`-class seams work.
+                //   `dse_dying_regions` has refused to touch these
+                //   since s42; this pass forwarded across them, which
+                //   is the same hazard class one door over (#92).
+                // - everything else: no token, no effect. That is the
+                //   token discipline's whole dividend and it survives
+                //   intact.
+                Opcode::Call => {
+                    avail.retain(|&(tok, _, _), _| match view.types.get(f.value_ty(tok)) {
+                        TypeData::Mem(r) => {
+                            exhaustive.contains(&crate::entity::EntityRef::as_u32(*r))
+                        }
+                        _ => true,
+                    });
                 }
                 _ => {}
             }
