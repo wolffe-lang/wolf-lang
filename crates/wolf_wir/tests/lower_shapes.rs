@@ -754,3 +754,128 @@ fn no_dangling_param_defs_after_removal() {
         }
     }
 }
+
+// ---- wolf-lang#93: the two lowering accidents, pinned -----------------
+//
+// s80 audited #83 and found its original shape — an opaque callee
+// writing a caller's `region.foreign` storage while holding none of its
+// tokens — unreachable from SOURCE for two reasons that are ACCIDENTS
+// of the lowering rather than guarantees anything makes. It recorded
+// both in `docs/backlog.md` and said, correctly, that either could
+// evaporate for unrelated reasons and take the guarantee with it.
+//
+// s80's conservatism (and s83's #92 guard) mean the hazard would not
+// miscompile today even if both accidents went. These tests are not
+// here to catch a miscompile; they are here so that a change removing
+// an accident CANNOT do it silently. If one fails, the right response
+// is to read #93 and decide deliberately — not to update the test.
+
+/// Resolve + typecheck + memory-check, returning the error codes. The
+/// twin of [`lower`] for programs that are supposed to be REJECTED.
+fn mem_error_codes(src: &str) -> Vec<String> {
+    let mut ml = MemoryLoader::new("wirlow");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    let mem = wolf_mem::check_package(&res.package, &tc);
+    res.diagnostics
+        .iter()
+        .chain(tc.diagnostics.iter())
+        .chain(mem.diagnostics.iter())
+        .filter(|d| d.severity == wolf_diag::Severity::Error)
+        .map(|d| d.code.to_string())
+        .collect()
+}
+
+/// Accident 1 (#93): a `mut List` argument SPILLS its header pointer to
+/// a stack slot before the call and RELOADS it afterwards, so the
+/// caller's post-call element address is a fresh SSA value and
+/// `memopt`'s `(token, address)` key misses. The address, not the
+/// token, is what saves the shape — and the pass comments used to
+/// assert the opposite of what the code relied on.
+///
+/// Pinned as: some address stored before the call is loaded back after
+/// it. Make the `mut` spill smarter and this stops being true.
+#[test]
+fn a_mut_list_argument_reloads_its_header_after_the_call() {
+    let build = lower(
+        "fn writer(mut out: List[int]) { out[0] = 9 }\n\
+         fn main() -> !int {\n\
+         \x20   var b = List[int]()\n\
+         \x20   (mut b).push(5)\n\
+         \x20   let before = b[0]\n\
+         \x20   writer(mut b)\n\
+         \x20   let after = b[0]\n\
+         \x20   before + after\n\
+         }\n",
+    );
+    assert!(
+        build.not_yet.is_empty(),
+        "shape lowers: {:?}",
+        build.not_yet
+    );
+    let main = build
+        .module
+        .funcs
+        .values()
+        .find(|f| f.name.ends_with("main"))
+        .expect("a main");
+    let insts: Vec<_> = main
+        .layout
+        .iter()
+        .flat_map(|&b| main.blocks[b].insts.iter().copied())
+        .collect();
+    let call_at = insts
+        .iter()
+        .position(|&i| {
+            matches!(main.insts[i].aux, Aux::Callee(ef)
+                if main.ext_funcs[ef].name.ends_with("writer"))
+        })
+        .expect("the call to @writer survives lowering");
+    // store args = (value, addr, token); load args = (addr, token).
+    let stored_before: Vec<_> = insts[..call_at]
+        .iter()
+        .filter(|&&i| main.insts[i].op == wolf_wir::Opcode::Store)
+        .map(|&i| main.vpool.get(main.insts[i].args)[1])
+        .collect();
+    let loaded_after: Vec<_> = insts[call_at + 1..]
+        .iter()
+        .filter(|&&i| main.insts[i].op == wolf_wir::Opcode::Load)
+        .map(|&i| main.vpool.get(main.insts[i].args)[0])
+        .collect();
+    assert!(
+        loaded_after.iter().any(|a| stored_before.contains(a)),
+        "wolf-lang#93 accident 1 is gone: nothing spilled before the \
+         `mut` call is reloaded after it, so the post-call element \
+         address is no longer forced fresh and #83's original shape may \
+         be reachable from source. Read the issue before touching this."
+    );
+}
+
+/// Accident 2 (#93): two live `List` values cannot share one buffer at
+/// source level, because `let b = a` MOVES. The IR-level sharing the
+/// s78 note describes is real; what keeps it out of a single frame is
+/// the move checker, not anything about tokens.
+///
+/// Pinned as: reading the moved-from binding is a hard error. Land a
+/// sharing container (or make `let b = a` an alias) and this fails.
+#[test]
+fn two_live_lists_cannot_share_a_buffer() {
+    let codes = mem_error_codes(
+        "fn main() -> !int {\n\
+         \x20   var a = List[int]()\n\
+         \x20   (mut a).push(5)\n\
+         \x20   let b = a\n\
+         \x20   let x = a[0]\n\
+         \x20   let y = b[0]\n\
+         \x20   x + y\n\
+         }\n",
+    );
+    assert!(
+        !codes.is_empty(),
+        "wolf-lang#93 accident 2 is gone: `let b = a` no longer keeps two \
+         readable paths to one `List` buffer out of a single frame, so \
+         #83's original shape may be reachable from source. Read the \
+         issue before touching this."
+    );
+}

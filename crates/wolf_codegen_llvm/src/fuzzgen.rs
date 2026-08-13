@@ -39,7 +39,18 @@
 //!    tokens. Deliberately too large to inline — the shapes that hid
 //!    this hazard hid it by inlining first.
 //!
-//! Shapes 6 and 7 are mid-end findings, so the rig runs them through
+//! 8. **The call-site `!noalias` fact** (s83, wolf-lang#92): the fact
+//!    s78 declined, in the half that has a theorem — a call carries
+//!    `!noalias` over the regions it provably cannot reach. Two shapes,
+//!    because one alone proves nothing. `call_escaped_pointer` is the
+//!    guard: the caller hands a RAW POINTER across and the callee
+//!    writes through it, so the region must NOT be listed and the
+//!    reload must happen. `call_noalias_local` is the claim: a second
+//!    region that never leaves the frame, whose load may forward across
+//!    the same call. Drop the fact and 8b goes quiet; widen it by one
+//!    region and 8a fails.
+//!
+//! Shapes 6, 7 and 8 are mid-end findings, so the rig runs them through
 //! [`wolf_wir::midend`] as well as straight to the emitter: a lane that
 //! never optimizes cannot witness an optimizer bug.
 //!
@@ -640,17 +651,8 @@ pub fn shape_foreign_cross_call() -> Module {
     let mut w = Fb::new("writer", writer_sig, &[types::PTR]);
     let p = w.params(w.cur)[0];
     let wfb = w.region_foreign(&mut m, 0, ForeignRole::Buffer);
-    // Padding that SURVIVES the callee's own optimization — the inliner
-    // sizes a callee AFTER simplify folds and DCE, so a constant chain
-    // would vanish and the shape would inline after all. Seed on a load
-    // with nothing to forward from, chain on it, and return the result
-    // so nothing is dead.
-    let mut acc = w.load(p, wfb);
-    for k in 1..120i64 {
-        let c = w.iconst(k);
-        acc = w.ins(Opcode::Bxor, &[acc, c], &[types::I64], Aux::None)[0];
-        acc = w.add_wrap(acc, c);
-    }
+    let seed = w.load(p, wfb);
+    let acc = inline_proof_padding(&mut w, seed);
     let nine = w.iconst(9);
     let _t = w.store(&mut m, 0, nine, p, wfb);
     w.ret(acc);
@@ -701,12 +703,8 @@ pub fn shape_foreign_licm_call() -> Module {
     let one = w.iconst(1);
     let next = w.add_wrap(cur, one);
     let t = w.store(&mut m, 0, next, p, wfb);
-    let mut acc = w.load(p, t);
-    for k in 1..120i64 {
-        let c = w.iconst(k);
-        acc = w.ins(Opcode::Bxor, &[acc, c], &[types::I64], Aux::None)[0];
-        acc = w.add_wrap(acc, c);
-    }
+    let seed = w.load(p, t);
+    let acc = inline_proof_padding(&mut w, seed);
     w.ret(acc);
     m.add_func(w.f);
 
@@ -744,7 +742,121 @@ pub fn shape_foreign_licm_call() -> Module {
     m
 }
 
-/// The seven permanent regression shapes, named.
+/// Padding that survives the callee's own optimization, so a witness
+/// callee stays too big to inline. The inliner sizes a callee AFTER
+/// simplify folds and DCE, so a constant chain would vanish and the
+/// shape would inline after all: seed on a load with nothing to forward
+/// from, chain on it, and return the result so nothing is dead.
+fn inline_proof_padding(w: &mut Fb, seed: Value) -> Value {
+    let mut acc = seed;
+    for k in 1..120i64 {
+        let c = w.iconst(k);
+        acc = w.ins(Opcode::Bxor, &[acc, c], &[types::I64], Aux::None)[0];
+        acc = w.add_wrap(acc, c);
+    }
+    acc
+}
+
+/// Shape 8a — the call-site `!noalias` fact's ESCAPE guard (s83,
+/// wolf-lang#92). The mirror image of shape 7: there the callee reached
+/// the caller's storage by minting a foreign root; here it reaches an
+/// ordinary `region.new` region through a RAW POINTER the caller handed
+/// it. The caller's token is not an argument and is not versioned, so
+/// both `memopt`'s "no token ⇒ no effect" and the emitter's call-site
+/// `!noalias` would license forwarding the pre-call load across it.
+///
+/// Neither may. `dse_dying_regions` has refused to touch an escaped
+/// region since s42; `rle_and_forward` did not, and the emitter would
+/// have handed the same false claim to LLVM. The load must reload and
+/// read 9, so the answer is 5*8 + 9 = 49; a stale forward gives 45.
+pub fn shape_call_escaped_pointer() -> Module {
+    let mut m = Module::new();
+    let writer_sig = m.make_sig(vec![Param::val(types::PTR)], vec![types::I64]);
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+
+    // writer(p): *p = 9 through its own foreign root — an opaque callee
+    // that writes memory it was only ever handed the address of.
+    let mut w = Fb::new("writer", writer_sig, &[types::PTR]);
+    let p = w.params(w.cur)[0];
+    let wfb = w.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    let seed = w.load(p, wfb);
+    let acc = inline_proof_padding(&mut w, seed);
+    let nine = w.iconst(9);
+    let _t = w.store(&mut m, 0, nine, p, wfb);
+    w.ret(acc);
+    m.add_func(w.f);
+
+    let mut f = Fb::new("main", main_sig, &[]);
+    let size = f.iconst(8);
+    let (h, t) = f.region_new(&mut m, 0);
+    let (buf, t1) = f.alloc(&mut m, 0, h, size, t);
+    let five = f.iconst(5);
+    let t2 = f.store(&mut m, 0, five, buf, t1);
+    let a = f.load(buf, t2);
+    let callee = f.f.import_func("writer", writer_sig);
+    f.ins(Opcode::Call, &[buf], &[types::I64], Aux::Callee(callee));
+    // Same address, same token, and the call took no token — but the
+    // ADDRESS went across, which is the whole point.
+    let b = f.load(buf, t2);
+    let eight = f.iconst(8);
+    let sa = f.ins(Opcode::ImulWrap, &[a, eight], &[types::I64], Aux::None)[0];
+    let s = f.add_wrap(sa, b);
+    finish_main(&mut f, s); // 5*8 + 9 = 49
+    m.add_func(f.f);
+    m
+}
+
+/// Shape 8b — the call-site `!noalias` fact where it is TRUE (s83).
+///
+/// Two local regions. `r1`'s pointer crosses to an opaque callee that
+/// writes it; `r0`'s never leaves the frame, its handle only ever
+/// allocates, and its token is not among the call's arguments — so
+/// nothing the callee can do reaches `r0`, and the call carries `r0`'s
+/// scope in `!noalias`. The load of `r0` across the call may forward;
+/// the load of `r1` may not. 5 + 5 + 9 = 19, and a lane that got either
+/// half wrong reads 5+9+9=23 or 5+5+7=17.
+///
+/// This is the shape that would go quiet if the fact were dropped and
+/// LOUD if it were widened to a region the callee can reach, which is
+/// what makes it worth keeping around.
+pub fn shape_call_noalias_local() -> Module {
+    let mut m = Module::new();
+    let writer_sig = m.make_sig(vec![Param::val(types::PTR)], vec![types::I64]);
+    let main_sig = m.make_sig(vec![], vec![types::I64]);
+
+    let mut w = Fb::new("writer", writer_sig, &[types::PTR]);
+    let p = w.params(w.cur)[0];
+    let wfb = w.region_foreign(&mut m, 0, ForeignRole::Buffer);
+    let seed = w.load(p, wfb);
+    let acc = inline_proof_padding(&mut w, seed);
+    let nine = w.iconst(9);
+    let _t = w.store(&mut m, 0, nine, p, wfb);
+    w.ret(acc);
+    m.add_func(w.f);
+
+    let mut f = Fb::new("main", main_sig, &[]);
+    let size = f.iconst(8);
+    let (h0, t0) = f.region_new(&mut m, 0);
+    let (p0, t0a) = f.alloc(&mut m, 0, h0, size, t0);
+    let (h1, t1) = f.region_new(&mut m, 1);
+    let (p1, t1a) = f.alloc(&mut m, 1, h1, size, t1);
+    let five = f.iconst(5);
+    let seven = f.iconst(7);
+    let t0b = f.store(&mut m, 0, five, p0, t0a);
+    let t1b = f.store(&mut m, 1, seven, p1, t1a);
+    let a = f.load(p0, t0b);
+    let callee = f.f.import_func("writer", writer_sig);
+    f.ins(Opcode::Call, &[p1], &[types::I64], Aux::Callee(callee));
+    let b = f.load(p0, t0b); // unreachable by the callee: may forward
+    let c = f.load(p1, t1b); // the callee wrote it: must reload → 9
+    let ab = f.add_wrap(a, b);
+    let s = f.add_wrap(ab, c);
+    finish_main(&mut f, s); // 5 + 5 + 9 = 19
+    m.add_func(f.f);
+    m
+}
+
+/// The eleven permanent regression shapes, named.
 pub fn historical_shapes() -> Vec<(&'static str, Module)> {
     vec![
         ("inline_noalias", shape_inline_noalias()),
@@ -759,6 +871,8 @@ pub fn historical_shapes() -> Vec<(&'static str, Module)> {
         ),
         ("foreign_cross_call", shape_foreign_cross_call()),
         ("foreign_licm_call", shape_foreign_licm_call()),
+        ("call_escaped_pointer", shape_call_escaped_pointer()),
+        ("call_noalias_local", shape_call_noalias_local()),
     ]
 }
 

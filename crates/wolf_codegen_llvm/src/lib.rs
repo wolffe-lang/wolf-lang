@@ -52,10 +52,13 @@
 //! |                        | arith postconditions ride the overflow-    |
 //! |                        | checked CFG itself (no metadata needed)    |
 //! | `region p rN`          | USED: one `!alias.scope` domain per        |
-//! |                        | function, one scope per region; every      |
-//! |                        | load/store lists all other regions in      |
-//! |                        | `!noalias` (interprocedural-strength       |
-//! |                        | disjointness — reports/01 fact 2)          |
+//! |                        | function, one scope per region CLASS (s80: |
+//! |                        | every same-role `region.foreign` root      |
+//! |                        | shares one); every load/store lists all    |
+//! |                        | other classes in `!noalias`, and every     |
+//! |                        | CALL lists the classes it provably cannot  |
+//! |                        | reach (s83 — interprocedural-strength      |
+//! |                        | disjointness, reports/01 fact 2)           |
 //! | `frozen p`             | USED: `!invariant.load` on loads through   |
 //! |                        | `sync.freeze` tokens / frozen pointers     |
 //! | allocation alignment   | USED: `align 16` on `region.alloc`/        |
