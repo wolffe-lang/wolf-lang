@@ -435,6 +435,35 @@ fn doc_comment_kinds() {
 }
 
 #[test]
+fn shebang_is_trivia_at_byte_zero_only() {
+    // s53: `wolf run script.lu` lexes an executable file unchanged.
+    let src = "#!/usr/bin/env -S wolf run\n//! doc\nx\n";
+    let lexed = lex(src);
+    assert!(!lexed.has_errors(), "{:?}", lexed.diagnostics);
+    let lead = &lexed.tokens[0].leading;
+    use wolf_lex::TriviaKind::*;
+    assert_eq!(lead[0].kind, Shebang);
+    assert_eq!(
+        &src[lead[0].span.lo as usize..lead[0].span.hi as usize],
+        "#!/usr/bin/env -S wolf run"
+    );
+    assert!(
+        lead.iter().any(|t| t.kind == InnerDocComment),
+        "the module header still lexes after the shebang"
+    );
+    // The lossless invariant holds with the new trivia in it.
+    assert_eq!(lexed.reassemble(src.as_bytes()), src.as_bytes());
+    // One offset only: a `#!` on line 2 is still the stray-byte error.
+    let later = lex("x\n#!/bin/sh\n");
+    assert!(later.has_errors(), "a mid-file `#!` must not be trivia");
+    assert!(
+        later.diagnostics.iter().any(|d| d.code.as_str() == "E0107"),
+        "{:?}",
+        later.diagnostics
+    );
+}
+
+#[test]
 fn eof_token_owns_dangling_trivia() {
     let lexed = lex("x\n// tail comment\n");
     let eof = lexed.tokens.last().unwrap();

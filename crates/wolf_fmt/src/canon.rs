@@ -347,6 +347,10 @@ pub fn comment_multiset(file: wolf_span::FileId, src: &[u8]) -> Vec<Vec<u8>> {
                 wolf_lex::TriviaKind::LineComment
                     | wolf_lex::TriviaKind::DocComment
                     | wolf_lex::TriviaKind::InnerDocComment
+                    // The `#!` line is not prose, but losing it turns an
+                    // executable script into a file the kernel refuses:
+                    // the round-trip self-check counts it too (s53).
+                    | wolf_lex::TriviaKind::Shebang
             ) {
                 let bytes = &src[tr.span.lo as usize..tr.span.hi as usize];
                 let mut b = bytes.to_vec();

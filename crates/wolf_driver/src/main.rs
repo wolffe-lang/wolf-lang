@@ -16,7 +16,10 @@ use std::path::{Path, PathBuf};
 use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
+mod doc_cmd;
+mod doctest_cmd;
 mod pkg_cmd;
+mod script_cmd;
 mod test_cmd;
 
 /// The reference-interpreter pairing (r01 criteria row 7): the lupin
@@ -57,14 +60,18 @@ fn main() {
         Some("audit") => pkg_cmd::audit(&args[1..]),
         Some("tree") => pkg_cmd::tree(&args[1..]),
         Some("why") => pkg_cmd::why(&args[1..]),
+        // s53: documentation and the script-mode cache.
+        Some("doc") => doc_cmd::doc(&args[1..]),
+        Some("cache") => script_cmd::cache(&args[1..]),
+        Some("init") => pkg_cmd::init(&args[1..]),
         // D34: the single binary grows per-campaign; stubs are honest.
-        Some(cmd @ ("doc" | "bench" | "dbg" | "vendor" | "publish")) => {
+        Some(cmd @ ("bench" | "dbg" | "vendor" | "publish")) => {
             eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
             std::process::exit(2);
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|test|fix|fmt|lsp|add|rm|update|audit|tree|why|interface|audit-surface|conform-run|--explain|--version"
+                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|interface|audit-surface|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }
@@ -765,6 +772,11 @@ fn compile_native(
     out: &Path,
     sources: &mut Sources,
     opts: &BuildOpts,
+    // `resolved`: a dependency graph the caller already resolved —
+    // script mode (s53), whose manifest rode in the script's `//!` block
+    // rather than in a `wolf.pkg` on disk. `None` means "look for a
+    // manifest next to the entry", the s51 project path.
+    resolved: Option<&wolf_pkg::Project>,
 ) -> Result<(), BuildStop> {
     let mut sm = wolf_span::SourceMap::new();
     // The s51 hookup: a real `wolf.pkg` next to the entry file makes
@@ -772,8 +784,12 @@ fn compile_native(
     // (path trees in place, git trees via the pinned store; reading it
     // executes nothing, D33), and its aliases become loader roots.
     let root = file.parent().unwrap_or(Path::new("."));
-    let pkg_project = pkg_cmd::project_for_build(root, &mut sm);
-    if let Some(project) = &pkg_project {
+    let owned_project = match resolved {
+        Some(_) => None,
+        None => pkg_cmd::project_for_build(root, &mut sm),
+    };
+    let pkg_project: Option<&wolf_pkg::Project> = resolved.or(owned_project.as_ref());
+    if let Some(project) = pkg_project {
         for m in &project.manifests {
             sources.add(m.file, m.display.clone(), m.text.as_bytes());
         }
@@ -786,7 +802,7 @@ fn compile_native(
             return Err(BuildStop::Errors);
         }
     }
-    let res = resolve_from_entry(file, &mut sm, sources, std_root, pkg_project.as_ref())
+    let res = resolve_from_entry(file, &mut sm, sources, std_root, pkg_project)
         .map_err(BuildStop::Environment)?;
     // The warning system (s67): source `#[allow]` regions + manifest
     // levels + CLI levels decide each warning's fate — dropped,
@@ -825,7 +841,7 @@ fn compile_native(
     // I13's import-graph half (s51): a package whose modules import a
     // capability-carrying std facade module must declare the
     // capability in its manifest — E1504, an error, never a warning.
-    if let Some(project) = &pkg_project {
+    if let Some(project) = pkg_project {
         gate(
             sources,
             &mut pending,
@@ -1517,6 +1533,9 @@ struct BuildCli {
     /// Arguments after the file (`wolf run prog.lu -- args…` or just
     /// trailing words): the program's argv.
     prog_args: Vec<String>,
+    /// s53 script-mode posture (`--locked`, `--update`, `--offline`,
+    /// `--yes`). Ignored by `wolf build` of a non-script.
+    script: script_cmd::Posture,
 }
 
 /// Parse the shared build/run flag surface (s31): `-o|--out`,
@@ -1561,6 +1580,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         error_limit: DEFAULT_ERROR_LIMIT,
     };
     let mut prog_args: Vec<String> = Vec::new();
+    let mut script = script_cmd::Posture::default();
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
@@ -1637,6 +1657,14 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         } else if a == "--codegen-report" {
             // s43: dump the summary index + cluster/import decisions.
             opts.codegen_report = true;
+        } else if a == "--locked" {
+            script.locked = true;
+        } else if a == "--update" {
+            script.update = true;
+        } else if a == "--offline" {
+            script.offline = true;
+        } else if a == "--yes" || a == "-y" {
+            script.yes = true;
         } else if a.starts_with('-') {
             fail(&format!("unknown flag `{a}`"));
         } else {
@@ -1670,6 +1698,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         std_root,
         opts,
         prog_args,
+        script,
     }
 }
 
@@ -1727,7 +1756,14 @@ fn build(args: &[String]) {
         }
     });
     let mut sources = Sources::new();
-    match compile_native(path, cli.std_root.as_deref(), &out, &mut sources, &cli.opts) {
+    match compile_native(
+        path,
+        cli.std_root.as_deref(),
+        &out,
+        &mut sources,
+        &cli.opts,
+        None,
+    ) {
         Ok(()) => {}
         Err(stop) => report_build_stop("build", stop),
     }
@@ -1737,10 +1773,17 @@ fn build(args: &[String]) {
 /// and exec, exit code propagated (the cargo-run sugar promised at
 /// s12). All build flags apply; the binary lands in `.lu-cache/bin/`.
 fn run(args: &[String]) {
-    let cli = parse_build_cli("run", args, true);
+    let mut cli = parse_build_cli("run", args, true);
     if cli.opts.emit != Emit::Bin {
         eprintln!("wolf run: --emit makes no sense here; use `wolf build`");
         std::process::exit(2);
+    }
+    // s53 script mode: a file that announces itself with `#!` or with a
+    // `pkg { … }` frontmatter block is a first-class package whose state
+    // lives in the cache, never next to the script.
+    let text = std::fs::read_to_string(&cli.file).unwrap_or_default();
+    if script_cmd::is_script(&text) {
+        run_script(&mut cli, &text);
     }
     let path = Path::new(&cli.file);
     let stem = path
@@ -1762,7 +1805,14 @@ fn run(args: &[String]) {
         },
     };
     let mut sources = Sources::new();
-    match compile_native(path, cli.std_root.as_deref(), &out, &mut sources, &cli.opts) {
+    match compile_native(
+        path,
+        cli.std_root.as_deref(),
+        &out,
+        &mut sources,
+        &cli.opts,
+        None,
+    ) {
         Ok(()) => {}
         Err(stop) => report_build_stop("run", stop),
     }
@@ -1782,6 +1832,116 @@ fn run(args: &[String]) {
             std::process::exit(2);
         }
     }
+}
+
+/// The script-mode half of `wolf run` (s53). Never returns: a script
+/// either execs its program or exits with a reason.
+///
+/// The warm path is the point. Second run: read the file, hash it with
+/// its pinned resolution, stat one binary, exec. No resolver, no
+/// network, no compiler phase — the "instant on the second run" claim,
+/// as code rather than as an aspiration.
+fn run_script(cli: &mut BuildCli, text: &str) -> ! {
+    let path = PathBuf::from(&cli.file);
+    let mut sm = wolf_span::SourceMap::new();
+    let mut sources = Sources::new();
+    let mut text = text.to_string();
+    let mut script = script_cmd::prepare(&path, &text, cli.script, &mut sm, &mut sources);
+    // The prompt (s53 §3): in SCRIPT mode a missing dependency is a
+    // question — project mode keeps the s51 error-with-fix-it, and
+    // nothing here changes that. Answered once, then re-resolved: the
+    // accepted entry is real frontmatter, so the second pass runs the
+    // ordinary path with nothing special about it.
+    let missing = script_cmd::missing_imports(&path, &text, script.project.as_ref());
+    if !missing.is_empty() {
+        let mut edited = false;
+        for alias in &missing {
+            let Some(source) = script_cmd::prompt_add(&path, alias, cli.script) else {
+                std::process::exit(1);
+            };
+            let Some(manifest) = script_cmd::manifest_of(&path, &text) else {
+                eprintln!(
+                    "wolf run: `{alias}` needs a frontmatter block to be added to; \
+                     write `//! pkg {{ deps: {{ … }} }}` at the head of the script"
+                );
+                std::process::exit(1);
+            };
+            match script_cmd::insert_dep(&text, &manifest, alias, &source) {
+                Some(next) => {
+                    text = next;
+                    edited = true;
+                }
+                None => {
+                    eprintln!("wolf run: cannot place `{alias}` in the frontmatter");
+                    std::process::exit(1);
+                }
+            }
+        }
+        if edited {
+            if let Err(e) = std::fs::write(&path, &text) {
+                eprintln!("wolf run: write {}: {e}", path.display());
+                std::process::exit(2);
+            }
+            let mut sm = wolf_span::SourceMap::new();
+            sources = Sources::new();
+            script = script_cmd::prepare(&path, &text, cli.script, &mut sm, &mut sources);
+        }
+    }
+    let out = cli.out.clone().unwrap_or_else(|| script.binary());
+    let exec = |out: &Path| -> ! {
+        let status = std::process::Command::new(out)
+            .args(&cli.prog_args)
+            .status();
+        match status {
+            Ok(s) => match s.code() {
+                Some(code) => std::process::exit(code),
+                None => {
+                    eprintln!("wolf run: program terminated by a signal");
+                    std::process::exit(2);
+                }
+            },
+            Err(e) => {
+                eprintln!("wolf run: cannot run {}: {e}", out.display());
+                std::process::exit(2);
+            }
+        }
+    };
+    // Warm: the artifact under this build key already exists, and a
+    // build key covers every input that could change the artifact.
+    if cli.opts.verbose {
+        eprintln!(
+            "wolf run: script {} — pin {}, build {}",
+            &script.id[..12],
+            script.state.display(),
+            &script.build_key[..12]
+        );
+    }
+    if !cli.opts.no_cache && cli.out.is_none() && script.warm() {
+        if cli.opts.verbose {
+            eprintln!("wolf run: warm — no resolver, no compiler, no network");
+        }
+        exec(&out);
+    }
+    if let Err(e) = std::fs::create_dir_all(&script.build_dir) {
+        eprintln!("wolf run: create {}: {e}", script.build_dir.display());
+        std::process::exit(2);
+    }
+    // Artifacts live in the cache, so the script's own directory is
+    // never written to (s53: "no cache writes beyond builds/").
+    cli.opts.cache_root = Some(script.build_dir.clone());
+    let mut sources = Sources::new();
+    match compile_native(
+        &path,
+        cli.std_root.as_deref(),
+        &out,
+        &mut sources,
+        &cli.opts,
+        script.project.as_ref(),
+    ) {
+        Ok(()) => {}
+        Err(stop) => report_build_stop("run", stop),
+    }
+    exec(&out);
 }
 
 /// `wolf fix <file.lu> [--apply] [--std-root <dir>]` — promote
@@ -2001,7 +2161,7 @@ fn native_run(
         release,
         ..BuildOpts::ephemeral()
     };
-    let result = compile_native(file, std_root, &exe, &mut scratch_sources, &opts);
+    let result = compile_native(file, std_root, &exe, &mut scratch_sources, &opts, None);
     let outcome = match result {
         Ok(()) => {
             let mut cmd = std::process::Command::new(&exe);

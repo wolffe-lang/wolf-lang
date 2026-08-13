@@ -113,6 +113,10 @@ pub fn test_cmd(args: &[String]) {
     let mut fail_fast = false;
     let mut list = false;
     let mut json = false;
+    // s53: doctests run by default; `--no-doc` skips them, `--doc` runs
+    // only them.
+    let mut no_doc = false;
+    let mut only_doc = false;
     let mut schedules: Option<u32> = None;
     let mut replay: Option<String> = None;
     let mut lints = LintLevels::new();
@@ -134,6 +138,10 @@ pub fn test_cmd(args: &[String]) {
             list = true;
         } else if a == "--json" {
             json = true;
+        } else if a == "--no-doc" {
+            no_doc = true;
+        } else if a == "--doc" {
+            only_doc = true;
         } else if a == "--deny-warnings" {
             lints.deny_warnings();
         } else if let Some((flag, level)) = match a.as_str() {
@@ -229,9 +237,16 @@ pub fn test_cmd(args: &[String]) {
         eprintln!("wolf test: replaying schedule `{spec}`");
     }
 
+    if no_doc && only_doc {
+        fail("--doc and --no-doc are exclusive: one says only doctests, the other says none");
+    }
+
     // ---- discovery: `*_test.lu` files, sorted (deterministic order) --
     let mut files: Vec<PathBuf> = Vec::new();
     for p in &paths {
+        if only_doc {
+            break;
+        }
         let path = PathBuf::from(p);
         if path.is_dir() {
             let mut all = Vec::new();
@@ -589,6 +604,25 @@ pub fn test_cmd(args: &[String]) {
         }
     }
 
+    // ---- doctests (s53): fences in doc comments are tests, by default --
+    //
+    // A separate pass over EVERY `.lu` file the paths name (docs live in
+    // source, not in `*_test.lu`), so a package's documentation is
+    // verified by the same command that verifies its tests. `--no-doc`
+    // opts out; `--doc` runs only this pass.
+    if !no_doc {
+        run_doctests(
+            &paths,
+            std_root.as_deref(),
+            &filter,
+            list,
+            json,
+            fail_fast,
+            &mut tally,
+            &mut stopped_early,
+        );
+    }
+
     if list {
         std::process::exit(0);
     }
@@ -615,6 +649,107 @@ pub fn test_cmd(args: &[String]) {
         );
     }
     std::process::exit(if ok { 0 } else { 1 });
+}
+
+/// The doctest pass (s53). Every `.lu` file under the given paths is
+/// asked for its doc fences; each fence is one test, reported through
+/// the same `wolf-test/0` records as any other test — a doctest that
+/// fails fails the run, which is the whole covenant.
+#[allow(clippy::too_many_arguments)]
+fn run_doctests(
+    paths: &[String],
+    std_root: Option<&std::path::Path>,
+    filter: &Option<String>,
+    list: bool,
+    json: bool,
+    fail_fast: bool,
+    tally: &mut Tally,
+    stopped_early: &mut bool,
+) {
+    let mut files: Vec<PathBuf> = Vec::new();
+    for p in paths {
+        let path = PathBuf::from(p);
+        if path.is_dir() {
+            crate::collect_lu(&path, &mut files);
+        } else if path.is_file() {
+            files.push(path);
+        }
+    }
+    files.sort();
+    files.dedup();
+    let scratch = crate::doctest_cmd::scratch_dir();
+    let _ = std::fs::remove_dir_all(&scratch);
+    for file in &files {
+        let display = file.display().to_string().replace('\\', "/");
+        // Cheap pre-filter: no fence, no work. Resolving a package per
+        // source file is the expensive part, and most files have no
+        // doc examples.
+        let text = std::fs::read_to_string(file).unwrap_or_default();
+        if !text.contains("```") {
+            continue;
+        }
+        let surface = match crate::doctest_cmd::collect(file, std_root) {
+            Ok(d) => d,
+            Err(e) => {
+                if !json {
+                    eprintln!("wolf test: {display}: {e}");
+                }
+                continue;
+            }
+        };
+        if surface.doctests.is_empty() {
+            continue;
+        }
+        if json {
+            emit_json(serde_json::json!({
+                "schema": "wolf-test/0", "event": "suite",
+                "file": display, "tests": surface.doctests.len(),
+            }));
+        }
+        for dt in &surface.doctests {
+            let qualified = format!("{display}::{} (doctest)", dt.name);
+            if let Some(f) = filter
+                && !qualified.contains(f.as_str())
+            {
+                tally.filtered_out += 1;
+                continue;
+            }
+            if list {
+                println!("{qualified}");
+                continue;
+            }
+            let outcome = crate::doctest_cmd::run(dt, &surface, std_root, &scratch);
+            match outcome.status() {
+                "pass" => tally.passed += 1,
+                "unsupported" => tally.unsupported += 1,
+                _ => tally.failed += 1,
+            }
+            if json {
+                emit_json(serde_json::json!({
+                    "schema": "wolf-test/0", "event": "test", "file": display,
+                    "name": format!("{} (doctest)", dt.name),
+                    "status": outcome.status(), "detail": outcome.detail(),
+                }));
+            } else {
+                let word = match outcome.status() {
+                    "pass" => "ok",
+                    "unsupported" => "unsupported",
+                    _ => "FAILED",
+                };
+                println!("doctest {qualified} ... {word} ({})", outcome.detail());
+            }
+            if outcome.status() != "pass" && fail_fast {
+                *stopped_early = true;
+                let _ = std::fs::remove_dir_all(&scratch);
+                return;
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&scratch);
+}
+
+fn emit_json(v: serde_json::Value) {
+    println!("{v}");
 }
 
 /// Validate a `--replay` schedule spec (spec/07 `[sched.seed]`):
@@ -674,6 +809,7 @@ fn native_schedule_runs(
         &exe,
         &mut scratch,
         &crate::BuildOpts::ephemeral(),
+        None,
     );
     let out = match compiled {
         Ok(()) => {

@@ -1,0 +1,16 @@
+---
+source: crates/wolf_pkg/tests/project_diags.rs
+expression: reporter.take_output()
+---
+error[E1508]: this script's frontmatter changed since its resolution was pinned
+ --> drift.lu:2:5
+  |
+2 | //! pkg {
+  |     ^^^^^
+3 | //!     edition: "1",
+4 | //! }
+  | ^^^^^ the pinned resolution answers a different manifest
+  |
+  = note: `--locked` asserts the pin still answers the frontmatter, which is the posture CI wants.
+    Run without `--locked`, or with `--update`, to re-resolve and re-pin. Nothing in the
+    cache was modified.

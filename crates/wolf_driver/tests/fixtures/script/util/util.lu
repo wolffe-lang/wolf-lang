@@ -1,0 +1,14 @@
+/// A script's dependency, resolved through the same machinery a
+/// project's dependency is (s53): one resolver, one store, one ledger
+/// format, whether the manifest was a file or a doc comment.
+
+/// Twice the input plus one.
+pub fn twist(x: int) -> int {
+    2 * x + 1
+}
+
+/// The inverse of `twist`, so the module is the family its name
+/// promises (W0314).
+pub fn untwist(x: int) -> int {
+    (x - 1) / 2
+}

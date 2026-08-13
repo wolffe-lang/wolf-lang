@@ -1,0 +1,20 @@
+---
+source: crates/wolf_pkg/tests/script_frontmatter.rs
+expression: rendered
+---
+error[E1507]: `version` is not a key a script's frontmatter may carry
+ --> count.lu:6:9
+  |
+6 | //!     version: "1.0.0",
+  |         ^^^^^^^
+  |
+  = note: a script's frontmatter carries `edition`, `wolf`, `deps`, `features` and `capabilities`
+    — nothing else. `wolf init --from-script` promotes the script to a package with a real
+    manifest, dependency entries kept verbatim.
+
+error[E1507]: `test` is not a key a script's frontmatter may carry
+ --> count.lu:7:9
+  |
+7 | //!     test: { deps: {} },
+  |         ^^^^
+  |

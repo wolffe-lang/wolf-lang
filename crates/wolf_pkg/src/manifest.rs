@@ -632,10 +632,41 @@ fn parse_deps(key: &str, v: &Value, diags: &mut Vec<Diagnostic>) -> Vec<Dep> {
     out
 }
 
+/// Schema knobs. There is exactly one, and it exists because a script's
+/// manifest rides in the script (s53): a script's identity is its path,
+/// so it has no `name:` to state, while a package on disk must have one.
+#[derive(Clone, Debug)]
+pub struct ParseOpts {
+    /// Is a `name:` entry required? (`false` for script frontmatter,
+    /// which supplies `default_name` instead.)
+    pub require_name: bool,
+    /// The name to record when `require_name` is false and none was
+    /// written.
+    pub default_name: String,
+}
+
+impl Default for ParseOpts {
+    fn default() -> Self {
+        ParseOpts {
+            require_name: true,
+            default_name: String::new(),
+        }
+    }
+}
+
 /// Parse and schema-check a manifest. `file` is the manifest's own
 /// FileId (register the text under it so spans render). On any error
 /// the manifest is refused — `None` plus the diagnostics.
 pub fn parse(file: FileId, text: &str) -> (Option<Manifest>, Vec<Diagnostic>) {
+    parse_opts(file, text, &ParseOpts::default())
+}
+
+/// [`parse`] with the schema knobs spelled out.
+pub fn parse_opts(
+    file: FileId,
+    text: &str,
+    opts: &ParseOpts,
+) -> (Option<Manifest>, Vec<Diagnostic>) {
     let lexed = wolf_lex::lex(file, text.as_bytes());
     let mut diags: Vec<Diagnostic> = lexed.diagnostics;
     let had_lex_errors = diags
@@ -789,10 +820,14 @@ pub fn parse(file: FileId, text: &str) -> (Option<Manifest>, Vec<Diagnostic>) {
         }
     }
     if m.name.is_empty() {
-        diags.push(schema_err(
-            pkg_span,
-            "the manifest needs a `name: \"owner/pkg\"` entry".to_string(),
-        ));
+        if opts.require_name {
+            diags.push(schema_err(
+                pkg_span,
+                "the manifest needs a `name: \"owner/pkg\"` entry".to_string(),
+            ));
+        } else {
+            m.name = opts.default_name.clone();
+        }
     }
     if diags
         .iter()

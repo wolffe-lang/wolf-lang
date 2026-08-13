@@ -18,6 +18,10 @@
 //! [`project`] (disk resolution) → [`audit`] (I13 trees and the E1504
 //! import-graph check). The driver owns the verbs; this crate owns the
 //! formats and never touches sema.
+//!
+//! s53 adds [`script`]: the same manifest schema and the same parser
+//! reading a manifest that rides in a script's `//!` block, plus the
+//! cache layout ([`source::cache_root`]) every artifact lives under.
 
 pub mod audit;
 pub mod lock;
@@ -25,10 +29,12 @@ pub mod log;
 pub mod manifest;
 pub mod mvs;
 pub mod project;
+pub mod script;
 pub mod source;
 pub mod version;
 
 pub use lock::{Lock, LockEntry, hash_tree};
 pub use manifest::{Cap, Dep, DepSource, Manifest, is_manifest};
-pub use project::{Project, ResolveOpts, ResolvedPkg, resolve_project};
+pub use project::{Project, ResolveOpts, ResolvedPkg, resolve_manifest, resolve_project};
+pub use script::{Frontmatter, Script, script_id};
 pub use version::Version;

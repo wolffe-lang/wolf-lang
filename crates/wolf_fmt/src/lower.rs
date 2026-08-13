@@ -632,13 +632,17 @@ impl<'a> Fmt<'a> {
     pub(crate) fn source_file(&self, root: &GreenNode) -> Doc {
         let mut out = Vec::new();
 
-        // The `//!` header block stays at the very top, untouched.
+        // The `#!` interpreter line (s53) and the `//!` header block
+        // stay at the very top, untouched and in that order.
         let mut header_end: Option<u32> = None;
         if let Some(first) = first_token_of_children(root) {
             let mut consumed = self.consumed.borrow_mut();
             for s in &first.leading {
                 let bytes = self.slice(*s);
-                if bytes.starts_with(b"//!") {
+                // `#!` at byte 0 is the script's interpreter line; the
+                // `//!` lines are the module header. Both pin to the
+                // top, in source order.
+                if (bytes.starts_with(b"#!") && s.lo == 0) || bytes.starts_with(b"//!") {
                     consumed.insert((s.lo, s.hi));
                     header_end = Some(s.hi);
                 } else if is_comment(bytes) {

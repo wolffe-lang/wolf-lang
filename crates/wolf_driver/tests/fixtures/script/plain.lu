@@ -1,0 +1,8 @@
+#!/usr/bin/env -S wolf run
+//! A std-only script: no frontmatter, no dependencies, no state outside
+//! the build cache (s53's "works with no cache writes beyond builds/").
+
+fn main() -> !int {
+    print("plain")
+    0
+}

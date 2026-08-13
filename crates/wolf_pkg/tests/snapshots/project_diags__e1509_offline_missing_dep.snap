@@ -1,0 +1,13 @@
+---
+source: crates/wolf_pkg/tests/project_diags.rs
+expression: render(&project)
+---
+error[E1509]: `g` (https://example.org/g.git at v1.0.0) is not in the content store, and this run is offline
+ --> wolf.pkg:6:9
+  |
+6 |         g: { git: "https://example.org/g.git", tag: "v1.0.0" },
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no cached copy, and fetching is off
+  |
+  = note: run `wolf add g --git https://example.org/g.git --tag v1.0.0` (or `wolf update`) once
+    with the network to fetch and record it; every later run of every project and script
+    that names it is then fully offline.
