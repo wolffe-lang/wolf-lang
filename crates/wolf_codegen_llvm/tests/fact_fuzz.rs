@@ -28,19 +28,51 @@ const OPT_LEVELS: [&str; 3] = ["-O0", "-O2", "-O3"];
 /// Lower `module` both ways, compile each at every opt level, run all
 /// six, and assert one behavior. Returns false when the host cannot
 /// run the rig (skip loudly).
-fn differential(tag: &str, mut module: wolf_wir::Module) -> bool {
+fn differential(tag: &str, module: wolf_wir::Module) -> bool {
+    differential_lane(tag, module, false)
+}
+
+/// [`differential`] plus a MID-END lane: the same module optimized by
+/// s42 is emitted and run alongside the unoptimized one, and all
+/// twenty-four executions must agree (s80).
+///
+/// The plain rig cannot witness an optimizer bug and it is worth being
+/// exact about why: it compares metadata-on against metadata-stripped,
+/// and a mid-end miscompile lands in BOTH lanes identically, so they
+/// agree and the rig reports nothing. Optimized-against-unoptimized is
+/// the axis that catches it — the same axis `WOLF_MIDEND=0` gives the
+/// driver. The shim is added AFTER the mid-end runs: dead-function
+/// elimination roots at `main` and exports, and the shim is neither.
+fn differential_midend(tag: &str, module: wolf_wir::Module) -> bool {
+    differential_lane(tag, module, true)
+}
+
+fn differential_lane(tag: &str, module: wolf_wir::Module, midend: bool) -> bool {
     wolf_wir::verify_module(&module).expect("generated module verifies");
-    let shim = add_plain_entry_shim(&mut module);
-    let Some(ir_on) = module_ir(&module, Some(shim), EmitOptions { strip_facts: false }) else {
-        return false;
-    };
-    let ir_off = module_ir(&module, Some(shim), EmitOptions { strip_facts: true })
-        .expect("strip lane emits");
+    let mut lanes: Vec<(&str, wolf_wir::Module)> = vec![("raw", module.clone())];
+    if midend {
+        let mut opt = module;
+        wolf_wir::midend::optimize_module(&mut opt, &wolf_wir::midend::Options::default())
+            .expect("the mid-end optimizes the generated module");
+        lanes.push(("mid", opt));
+    }
     let mut outcomes: Vec<(String, (i32, String, String))> = Vec::new();
-    for (lane, ir) in [("meta", &ir_on), ("strip", &ir_off)] {
-        for opt in OPT_LEVELS {
-            let got = run_ir(&format!("fuzz_{tag}_{lane}_{}", &opt[1..]), ir, opt);
-            outcomes.push((format!("{lane}{opt}"), got));
+    let mut first_ir = String::new();
+    for (phase, mut m) in lanes {
+        let shim = add_plain_entry_shim(&mut m);
+        let Some(ir_on) = module_ir(&m, Some(shim), EmitOptions { strip_facts: false }) else {
+            return false;
+        };
+        let ir_off =
+            module_ir(&m, Some(shim), EmitOptions { strip_facts: true }).expect("strip lane emits");
+        if first_ir.is_empty() {
+            first_ir = ir_on.clone();
+        }
+        for (lane, ir) in [("meta", &ir_on), ("strip", &ir_off)] {
+            for opt in OPT_LEVELS {
+                let got = run_ir(&format!("fuzz_{tag}_{phase}_{lane}_{}", &opt[1..]), ir, opt);
+                outcomes.push((format!("{phase}/{lane}{opt}"), got));
+            }
         }
     }
     let (ref base_name, ref base) = outcomes[0];
@@ -49,7 +81,7 @@ fn differential(tag: &str, mut module: wolf_wir::Module) -> bool {
             (got.0, &got.1, &got.2),
             (base.0, &base.1, &base.2),
             "divergence on `{tag}`: {name} disagrees with {base_name}\n\
-             --- annotated IR ---\n{ir_on}"
+             --- annotated IR ---\n{first_ir}"
         );
     }
     true
@@ -84,6 +116,85 @@ fn cfg_duplication_stressor() {
 #[test]
 fn loaded_pointer_scopes() {
     differential("loaded_pointer", fuzzgen::shape_loaded_pointer_scopes());
+}
+
+/// s80 (wolf-lang#83): two `region.foreign` roots of one role over one
+/// piece of storage — the state inlining a container-touching callee
+/// produces. Under one-scope-per-region this MISCOMPILED: the roots
+/// were declared `!noalias` and LLVM forwarded a load across a store
+/// into the same bytes. Both lanes, because the mid-end had the same
+/// hole (`memopt`'s token versions do not cross chains).
+#[test]
+fn foreign_dup_roots_do_not_claim_disjoint() {
+    differential("foreign_dup_roots", fuzzgen::shape_foreign_dup_roots());
+}
+
+/// The half that indicts the METADATA: two addresses LLVM cannot prove
+/// equal, so it has to consult the scopes it was given.
+#[test]
+fn foreign_dup_roots_under_opaque_indices() {
+    differential(
+        "foreign_dup_roots_opaque",
+        fuzzgen::shape_foreign_dup_roots_opaque_index(),
+    );
+}
+
+#[test]
+fn foreign_dup_roots_survive_the_midend() {
+    differential_midend("foreign_dup_roots_mid", fuzzgen::shape_foreign_dup_roots());
+}
+
+/// s80: the NON-INLINING witness the audit owed. An opaque callee
+/// writes the caller's foreign storage while consuming none of its
+/// tokens; the caller's load around the call must not forward. The
+/// mid-end lane is the one that matters — this is `memopt`'s and
+/// `licm`'s claim, not the emitter's.
+#[test]
+fn foreign_storage_survives_a_non_inlining_call() {
+    differential("foreign_cross_call", fuzzgen::shape_foreign_cross_call());
+}
+
+#[test]
+fn foreign_storage_survives_a_non_inlining_call_under_the_midend() {
+    differential_midend(
+        "foreign_cross_call_mid",
+        fuzzgen::shape_foreign_cross_call(),
+    );
+}
+
+/// s80: `licm`'s half. The loop's foreign token is defined outside the
+/// loop and consumed nowhere inside it, which is the pass's entire test
+/// for hoisting a load — and the call in the body writes the bytes the
+/// load reads. Loop-invariant TOKEN is not loop-invariant MEMORY.
+#[test]
+fn a_foreign_load_does_not_hoist_over_a_call() {
+    differential_midend("foreign_licm_call", fuzzgen::shape_foreign_licm_call());
+}
+
+/// The witness only witnesses if the call SURVIVES: an inlined callee
+/// hides the very hazard under audit, which is how #83 went unfiled for
+/// two sprints. Pin it.
+#[test]
+fn the_cross_call_witness_really_does_not_inline() {
+    let mut m = fuzzgen::shape_foreign_cross_call();
+    let stats =
+        wolf_wir::midend::optimize_module(&mut m, &wolf_wir::midend::Options::default()).unwrap();
+    assert_eq!(
+        stats.inlined_calls, 0,
+        "the s80 witness inlined, so it no longer witnesses anything — grow the padding"
+    );
+    let main = m
+        .funcs
+        .values()
+        .find(|f| f.name == "main")
+        .expect("witness has a main");
+    let calls = main
+        .layout
+        .iter()
+        .flat_map(|&b| main.blocks[b].insts.iter())
+        .filter(|&&i| main.insts[i].op == wolf_wir::ops::Opcode::Call)
+        .count();
+    assert_eq!(calls, 1, "the call to @writer must survive into codegen");
 }
 
 /// The seeded random lane. PR CI runs a small budget; raise

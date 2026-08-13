@@ -38,7 +38,7 @@
 
 use crate::entity::EntityRef;
 use crate::ir::{Aux, Block, BlockCall, ExtFunc, Function, Inst, Value, ValueDef};
-use crate::ops::{IntCc, Opcode, TrapKind};
+use crate::ops::{ForeignRole, IntCc, Opcode, TrapKind};
 use crate::peephole_rules::{self, Rewrite};
 use crate::types::{RegionId, TypeData, TypeId, TypeInterner};
 use std::collections::{HashMap, HashSet};
@@ -1028,23 +1028,27 @@ impl<'m> FuncBuilder<'m> {
         (r, vals[0])
     }
 
-    /// `%m: mem.rN = region.foreign` (s75) — root a region over
-    /// runtime-owned storage (container buffers). The root is
+    /// `%m: mem.rN = region.foreign ROLE` (s75) — root a region over
+    /// runtime-owned storage of the given [`ForeignRole`]. The root is
     /// PREPENDED to the entry block, so it dominates every access
     /// wherever the first container touch happens to sit, and the
     /// token is seeded there for Braun to merge like any other.
     ///
-    /// Callers hold one per function ([`crate::lower`]'s
-    /// `foreign_region`): the op emits nothing at either backend, but
-    /// two roots would be two regions, and two regions are a
-    /// `!noalias` claim about memory nothing proved disjoint.
-    pub fn ins_region_foreign(&mut self) -> RegionId {
+    /// Callers hold one per role per function ([`crate::lower`]'s
+    /// `foreign_regions`): the op emits nothing at either backend, and
+    /// the role — not the region id — is what any downstream
+    /// disjointness claim may key on (s80).
+    pub fn ins_region_foreign(&mut self, role: ForeignRole) -> RegionId {
         let r = self.fresh_region();
         let tok_ty = self.module.types.mem(r);
         let entry = self.func.entry().expect("a builder always has an entry");
-        let (_, vals) =
-            self.func
-                .append_inst(entry, Opcode::RegionForeign, &[], &[tok_ty], Aux::None);
+        let (_, vals) = self.func.append_inst(
+            entry,
+            Opcode::RegionForeign,
+            &[],
+            &[tok_ty],
+            Aux::Int(role.code()),
+        );
         // `append_inst` pushed at the end — a filled entry block ends
         // in its terminator, so move the root to the front.
         let insts = &mut self.func.blocks[entry].insts;

@@ -10,6 +10,29 @@
 //! analysis; most may-alias queries never reach an oracle because the
 //! chains never meet (reports/01 fact 2, mechanized).
 //!
+//! # Where that theorem stops: foreign roots (s80, wolf-lang#83)
+//!
+//! "No token ⇒ no effect" holds for a region whose ROOT this function
+//! owns or received: `region.new` and `stack.alloc` mint storage
+//! nobody else can name, and a `mem.rN` entry parameter is a region
+//! the caller lent — in both cases the only way to reach the memory is
+//! through a token, and tokens are linear.
+//!
+//! It is FALSE for `region.foreign`. A foreign root names storage the
+//! RUNTIME owns, and any function can mint its own root over it: a
+//! callee writes a caller's container buffers while holding none of the
+//! caller's tokens (`@stencil` in the kernel suite does exactly this).
+//! The token is not exhaustive across a call boundary, so a call KILLS
+//! every availability entry keyed on a foreign region's token. That
+//! costs the cross-call CSE for container traffic only; every other
+//! region keeps the full theorem.
+//!
+//! s78 declined the matching LLVM call-site fact for this reason and
+//! recorded the hazard; s80 audited it, found no source-level dynamic
+//! witness (see the note in `docs/backlog.md` on what blocks one today,
+//! and why that is a lowering accident rather than a theorem), and
+//! enforces the conservatism here so nothing rests on the accident.
+//!
 //! Clients shipped here:
 //! - redundant-load elimination and store-to-load forwarding,
 //!   dominator-scoped, keyed by (token version, address, type);
@@ -23,10 +46,10 @@
 //! delta, recorded): reordering against calls would need schedule-
 //! point reasoning (spec/07) — conservatism first.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ir::{Aux, Block, FuncId, Function, Inst, Module, Value};
-use crate::ops::Opcode;
+use crate::ops::{ForeignRole, Opcode};
 use crate::types::{TypeData, TypeId};
 use crate::verify::{Invalidation, PassCtx, VerifyError};
 
@@ -40,11 +63,91 @@ pub(crate) fn run(
     stats: &mut OptStats,
 ) -> Result<bool, VerifyError> {
     run_managed(m, fid, "memopt", verify_each, |f, view, ctx| {
+        let foreign = foreign_roles(f, view);
         let mut changed = false;
-        changed |= rle_and_forward(f, stats);
+        changed |= rle_and_forward(f, view, &foreign, stats);
         changed |= dse_dying_regions(f, view, ctx, stats);
         changed
     })
+}
+
+/// The regions this function roots with `region.foreign`, each with
+/// its role (s80). These are the regions whose tokens are NOT
+/// exhaustive; every other region's is, so this map is exactly the
+/// scope of both conservatism rules:
+///
+/// 1. a CALL may write foreign storage while consuming none of its
+///    tokens (the callee mints its own root);
+/// 2. two roots with the SAME role name the same class of storage, so
+///    a store through one is a write the other's token does not
+///    version — region identity is not the aliasing unit here, the
+///    role is (the same rule the LLVM tier's scope classes follow).
+pub(crate) fn foreign_roles(f: &Function, view: &ModView) -> HashMap<u32, ForeignRole> {
+    let mut out = HashMap::new();
+    for &b in &f.layout {
+        for &inst in &f.blocks[b].insts {
+            if f.insts[inst].op != Opcode::RegionForeign {
+                continue;
+            }
+            if let Some(&tok) = f.vpool.get(f.insts[inst].results).first()
+                && let TypeData::Mem(r) = view.types.get(f.value_ty(tok))
+                && let Aux::Int(code) = f.insts[inst].aux
+                && let Some(role) = ForeignRole::from_code(code)
+            {
+                out.insert(crate::entity::EntityRef::as_u32(*r), role);
+            }
+        }
+    }
+    out
+}
+
+/// Which foreign roles a set of blocks can write WITHOUT versioning any
+/// foreign token those blocks carry (s80). A call writes every role (it
+/// mints its own roots); a store through a foreign token writes that
+/// role for every OTHER root of it. Shared with `licm`, which asks the
+/// same question about a loop body.
+pub(crate) fn blocked_roles<'a>(
+    f: &Function,
+    view: &ModView,
+    foreign: &HashMap<u32, ForeignRole>,
+    blocks: impl IntoIterator<Item = &'a crate::ir::Block>,
+) -> HashSet<ForeignRole> {
+    let mut out = HashSet::new();
+    if foreign.is_empty() {
+        return out;
+    }
+    for &b in blocks {
+        for &i in &f.blocks[b].insts {
+            match f.insts[i].op {
+                Opcode::Call => {
+                    out.extend(ForeignRole::ALL);
+                }
+                Opcode::Store => {
+                    let args = f.vpool.get(f.insts[i].args);
+                    if let Some(&tok) = args.get(2)
+                        && let Some(role) = token_role(f, view, foreign, tok)
+                    {
+                        out.insert(role);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// `v`'s foreign role, if `v` is a token naming a foreign region.
+pub(crate) fn token_role(
+    f: &Function,
+    view: &ModView,
+    foreign: &HashMap<u32, ForeignRole>,
+    v: Value,
+) -> Option<ForeignRole> {
+    match view.types.get(f.value_ty(v)) {
+        TypeData::Mem(r) => foreign.get(&crate::entity::EntityRef::as_u32(*r)).copied(),
+        _ => None,
+    }
 }
 
 /// Where an availability entry came from (metrics only).
@@ -57,13 +160,42 @@ enum Src {
 /// Redundant-load elimination + store-to-load forwarding, dominator-
 /// scoped: an entry only fires when its defining block dominates the
 /// use site (RPO guarantees dominators are visited first).
-fn rle_and_forward(f: &mut Function, stats: &mut OptStats) -> bool {
+fn rle_and_forward(
+    f: &mut Function,
+    view: &ModView,
+    foreign: &HashMap<u32, ForeignRole>,
+    stats: &mut OptStats,
+) -> bool {
     let cfg = analysis::cfg(f);
     let doms = analysis::dominators(&cfg);
+    // The kill below is a LINEAR scan in RPO, and a back edge is not
+    // linear: a call in a loop body runs before the header's second
+    // visit, so an entry minted in the preheader is stale inside the
+    // loop even though nothing killed it on the way there (s80 —
+    // `licm`'s witness caught this in `memopt` first). Entering a loop
+    // header therefore kills whatever that loop's body can write
+    // without versioning a token; entries minted INSIDE the body are
+    // re-minted every iteration and handled by the linear scan.
+    let mut header_kill: HashMap<Block, HashSet<ForeignRole>> = HashMap::new();
+    if !foreign.is_empty() {
+        let loops = analysis::loops(f, &cfg, &doms);
+        for l in &loops.loops {
+            let roles = blocked_roles(f, view, foreign, l.blocks.iter());
+            header_kill.entry(l.header).or_default().extend(roles);
+        }
+    }
     let mut avail: HashMap<(Value, Value, TypeId), (Value, Block, Src)> = HashMap::new();
     let mut repl: HashMap<Value, Value> = HashMap::new();
     let mut changed = false;
     for &b in &cfg.rpo {
+        if let Some(roles) = header_kill.get(&b)
+            && !roles.is_empty()
+        {
+            avail.retain(|&(tok, _, _), _| match token_role(f, view, foreign, tok) {
+                Some(role) => !roles.contains(&role),
+                None => true,
+            });
+        }
         let insts = f.blocks[b].insts.clone();
         let mut kept: Vec<Inst> = Vec::with_capacity(insts.len());
         for inst in insts {
@@ -105,13 +237,30 @@ fn rle_and_forward(f: &mut Function, stats: &mut OptStats) -> bool {
                 }
                 Opcode::Store => {
                     let args = f.vpool.get(f.insts[inst].args);
-                    let (v, p, _tok) = (args[0], args[1], args[2]);
+                    let (v, p, tok) = (args[0], args[1], args[2]);
                     let ty = f.value_ty(v);
                     let m2 = f.vpool.get(f.insts[inst].results)[0];
+                    // A store into foreign storage is a write EVERY
+                    // same-role foreign root can see (s80), and the
+                    // other roots' chains do not version against it —
+                    // so their entries die here, by hand. For a local
+                    // region the version keying below is the whole
+                    // story.
+                    if let Some(role) = token_role(f, view, foreign, tok) {
+                        avail.retain(|&(t, _, _), _| token_role(f, view, foreign, t) != Some(role));
+                    }
                     // The stored value is available at the successor
                     // version; the consumed version's entries go stale
                     // by keying (no future op can name it).
                     avail.insert((m2, p, ty), (v, b, Src::Store));
+                }
+                // A call is opaque to FOREIGN storage regardless of
+                // which tokens it consumes (s80): the callee mints its
+                // own root over the same runtime memory. Drop every
+                // entry keyed on a foreign token; local regions keep
+                // the token theorem and ride across untouched.
+                Opcode::Call if !foreign.is_empty() => {
+                    avail.retain(|&(tok, _, _), _| token_role(f, view, foreign, tok).is_none());
                 }
                 _ => {}
             }

@@ -9,6 +9,21 @@
 //! (`sync.freeze` results, never invalidated) are the special case
 //! that needs no case: they satisfy the same test forever.
 //!
+//! # The one region where that argument fails (s80, wolf-lang#83)
+//!
+//! "Anything that wrote this region would have consumed the token"
+//! assumes the token names every writer. A `region.foreign` root does
+//! not: it names storage the RUNTIME owns, and a callee mints its own
+//! root over the same bytes rather than receiving one (`@stencil`).
+//! So a call inside the loop can write foreign memory while leaving the
+//! loop's foreign token defined outside it, and the load would hoist
+//! over a write it cannot see.
+//!
+//! The rule: a load on a FOREIGN token does not hoist out of a loop
+//! that contains a call. Local regions are untouched — for them the
+//! token really is exhaustive, which is the whole point of the token
+//! discipline and is why the conservatism is this narrow.
+//!
 //! Speculation is safe by construction: safe-tier WIR loads cannot
 //! trap (a live token is structural validity — reports/01), so a load
 //! that ran conditionally may run unconditionally in the preheader.
@@ -24,7 +39,7 @@
 use std::collections::HashSet;
 
 use crate::ir::{Aux, Block, FuncId, Inst, Module, Value, ValueDef};
-use crate::ops::Opcode;
+use crate::ops::{ForeignRole, Opcode};
 use crate::verify::VerifyError;
 
 use super::analysis;
@@ -36,7 +51,8 @@ pub(crate) fn run(
     verify_each: bool,
     stats: &mut OptStats,
 ) -> Result<bool, VerifyError> {
-    run_managed(m, fid, "licm", verify_each, |f, _view, _ctx| {
+    run_managed(m, fid, "licm", verify_each, |f, view, _ctx| {
+        let foreign = super::memopt::foreign_roles(f, view);
         let cfg = analysis::cfg(f);
         let doms = analysis::dominators(&cfg);
         let loops = analysis::loops(f, &cfg, &doms);
@@ -74,6 +90,17 @@ pub(crate) fn run(
                         .any(|&b| l.blocks.contains(&b) && f.blocks[b].insts.contains(&i)),
                 }
             };
+            // What in this loop can write foreign storage WITHOUT
+            // versioning a foreign token the loop carries (s80):
+            // - any call (the callee mints its own root over the same
+            //   runtime memory and never names the caller's token);
+            // - a store through some OTHER same-role foreign root,
+            //   whose chain is a different chain entirely.
+            // Either one blocks a foreign-token load from hoisting,
+            // however loop-invariant that token looks. Local regions
+            // are untouched: there the token really is exhaustive.
+            let blocked: HashSet<ForeignRole> =
+                super::memopt::blocked_roles(f, view, &foreign, l.blocks.iter());
             // One sweep per loop: collect hoistable instructions in
             // deterministic block order.
             let mut hoist: Vec<(Block, Inst)> = Vec::new();
@@ -92,6 +119,13 @@ pub(crate) fn run(
                         continue;
                     }
                     let args = f.vpool.get(f.insts[inst].args);
+                    if op == Opcode::Load
+                        && let Some(&tok) = args.get(1)
+                        && let Some(role) = super::memopt::token_role(f, view, &foreign, tok)
+                        && blocked.contains(&role)
+                    {
+                        continue;
+                    }
                     let all_invariant = args
                         .iter()
                         .all(|&a| !defined_in_loop(f, a) || hoisted_vals.contains(&a));

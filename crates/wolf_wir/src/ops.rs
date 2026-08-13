@@ -183,6 +183,52 @@ impl TrapKind {
     }
 }
 
+/// Which class of runtime-owned storage a `region.foreign` root names
+/// (s80, wolf-lang#83). The set is CLOSED: a role is a disjointness
+/// claim, so adding one asserts a new separation the runtime has to
+/// guarantee. Both current members are backed by D46 — `wolf_rt` always
+/// allocates a container's header and its element buffer as separate
+/// objects.
+///
+/// Two roots with the same role are never disjoint, wherever they came
+/// from; two roots with different roles always are. See
+/// [`Opcode::RegionForeign`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum ForeignRole {
+    /// Container headers (`{data, len, cap}` records).
+    Header,
+    /// Container element buffers.
+    Buffer,
+}
+
+impl ForeignRole {
+    pub const ALL: [ForeignRole; 2] = [ForeignRole::Header, ForeignRole::Buffer];
+
+    /// The textual/immediate encoding (`region.foreign 0`).
+    pub fn code(self) -> i64 {
+        match self {
+            ForeignRole::Header => 0,
+            ForeignRole::Buffer => 1,
+        }
+    }
+
+    /// Decode an immediate; `None` for anything outside the closed set.
+    pub fn from_code(n: i64) -> Option<ForeignRole> {
+        match n {
+            0 => Some(ForeignRole::Header),
+            1 => Some(ForeignRole::Buffer),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            ForeignRole::Header => "header",
+            ForeignRole::Buffer => "buffer",
+        }
+    }
+}
+
 /// Every WIR opcode. One doc line of semantics each — this is the
 /// reference.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -346,12 +392,40 @@ pub enum Opcode {
     /// `%size` bytes (an iconst), its own one-slot region rN: stack
     /// provenance, escape-to-stack promotion's landing pad (s19).
     StackAlloc,
-    /// `%m: mem.rN = region.foreign` (s75) — root rN over storage the
-    /// RUNTIME allocates and this frame does not own: the `List` element
-    /// buffers and their headers, placed by `wolf_rt` in the ambient
-    /// region. A token root like `region.new`, but with no handle and no
-    /// `region.free` — the frame never owns this memory, so it can
-    /// never free it, and the verifier's linearity story is unchanged.
+    /// `%m: mem.rN = region.foreign ROLE` (s75) — root rN over storage
+    /// the RUNTIME allocates and this frame does not own: the `List`
+    /// element buffers and their headers, placed by `wolf_rt` in the
+    /// ambient region. A token root like `region.new`, but with no
+    /// handle and no `region.free` — the frame never owns this memory,
+    /// so it can never free it, and the verifier's linearity story is
+    /// unchanged.
+    ///
+    /// # The ROLE immediate (s80, wolf-lang#83)
+    ///
+    /// The immediate is a [`ForeignRole`]: which CLASS of runtime
+    /// storage this root names. It exists because a foreign root is
+    /// per-FUNCTION while the storage is not, so region identity alone
+    /// cannot answer "may these two accesses alias?" — and s80 produced
+    /// a live miscompile out of exactly that gap. Inlining a
+    /// container-touching callee gives the caller a SECOND foreign root
+    /// over the SAME buffers (the inliner freshens callee-internal
+    /// region ids, correctly for `region.new`, wrongly here), and the
+    /// LLVM tier's one-scope-per-region rule then told the optimizer
+    /// the two could not alias. They always can.
+    ///
+    /// The rule the role encodes, and the ONLY disjointness a foreign
+    /// root licenses:
+    ///
+    /// - two foreign roots with the SAME role, wherever they came from,
+    ///   name the same class of storage and are NEVER disjoint;
+    /// - two foreign roots with DIFFERENT roles are disjoint, because
+    ///   the runtime always allocates a container's header and its
+    ///   element buffer as separate objects (D46: a theorem, not a
+    ///   convenience).
+    ///
+    /// Consumers that claim disjointness from region identity must
+    /// therefore key on the role, not the region: the LLVM emitter
+    /// gives all same-role foreign regions ONE `!alias.scope`.
     ///
     /// s76 correction: this storage does NOT necessarily outlive the
     /// frame. Since containers allocate in the ambient region at their
@@ -365,13 +439,21 @@ pub enum Opcode {
     /// traffic is ordinary `load`/`store` under the ordinary token
     /// discipline instead of an opaque runtime call.
     ///
-    /// Lowering roots exactly TWO per function — container headers and
-    /// container element buffers, which the runtime always allocates
-    /// separately — and puts every container in the same pair. It does
-    /// NOT root one per container: two containers may share a buffer
-    /// (`let b = a` copies a header pointer), so splitting them would
-    /// hand the backend a `!noalias` pair nothing proved. Per-container
-    /// disjointness is a checker theorem, not a lowering convenience.
+    /// Lowering roots exactly TWO per function — one per role — and
+    /// puts every container in the same pair. It does NOT root one per
+    /// container: two containers may share a buffer (`let b = a` copies
+    /// a header pointer), so splitting them would hand the backend a
+    /// `!noalias` pair nothing proved. Per-container disjointness is a
+    /// checker theorem, not a lowering convenience.
+    ///
+    /// A foreign token is also NOT EXHAUSTIVE across a call boundary:
+    /// a callee can write a caller's foreign storage without receiving
+    /// the caller's token, because it mints its own root over the same
+    /// runtime storage (`@stencil` does). The mid-end's "a call that
+    /// does not consume a region's token cannot touch that region" is a
+    /// theorem for `region.new`/`stack.alloc`/token-parameter regions
+    /// and a FALSEHOOD for this one, so `memopt` and `licm` special-case
+    /// it (s80).
     RegionForeign,
 
     // ---- RESERVED mnemonics (parse/print now; semantics c05) -----------

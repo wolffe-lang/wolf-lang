@@ -84,7 +84,118 @@ over storage the RUNTIME owns, so a callee can write a caller's foreign
 region without receiving a token — `@stencil` does exactly that. No dynamic
 witness was produced (the shapes that would show it inline first), so this
 is a hazard to audit, not a filed miscompile; s78 refused to hand the same
-claim to LLVM as call-site `!noalias`.
+claim to LLVM as call-site `!noalias`. **Audited at s80 — see below.**
+
+## the foreign-root audit and what it turned up (2026-08-13, s80, #83)
+
+s80 went looking for the #83 miscompile and found a DIFFERENT one, live and
+reachable from source, in a fact this file never listed because nobody had
+doubted it: **one `!alias.scope` per region id**.
+
+`region.foreign` roots are per function. The inliner freshens every
+callee-internal region id — correct for `region.new`/`stack.alloc`, where
+the callee's arena really is its own — and a foreign root is neither. So
+inlining any container-touching callee left the caller holding two roots
+over the SAME element buffers, and one-scope-per-region declared them
+`!noalias`. LLVM cashed it. The witness, `wolf run --release` against `wolf
+run`:
+
+```
+fn peek(l: List[int], i: int) -> int { l[i] }
+fn main() -> int {
+    var a = List[int]()
+    (mut a).push(0)  (mut a).push(0)  (mut a).push(5)
+    let i = a[0] + 2          // 2, opaquely
+    let j = a[1] + 2          // 2, opaquely
+    let x = peek(a, i)        // inlined: loads under a FRESH foreign root
+    a[j] = 7                  // stores under main's own foreign root
+    let y = peek(a, i)        // inlined again, another fresh root
+    print("x={x} y={y}")
+    0
+}
+```
+
+Checked lane and debug native: `x=5 y=7`. Release: `x=5 y=5`. In the -O3 IR
+the second `peek`'s load is gone and `%t33` — the value loaded BEFORE the
+store — is printed twice:
+
+```
+%t33.i = load i64, ptr %t32.i, !alias.scope !21, !noalias !22   ; x
+store i64 7, ptr %t38.i,       !alias.scope !18, !noalias !19   ; a[j] = 7
+call void @__wolf_rt_print_i64(i64 %t33.i)                      ; x
+call void @__wolf_rt_print_i64(i64 %t33.i)                      ; y, stale
+```
+
+The two indices have to be opaque-but-equal or basic AA answers MustAlias
+and never consults the metadata — which is why the earlier attempts at a
+witness kept coming out correct.
+
+**Fix.** Region identity is not the aliasing unit for runtime-owned
+storage; the ROLE is. `region.foreign` carries a role immediate now
+(`0` header, `1` buffer, a closed set the verifier enforces), and every
+consumer that claims disjointness keys on the class:
+
+- the LLVM emitter gives all same-role foreign regions ONE `!alias.scope`;
+  header-vs-buffer separation is untouched, which is the whole D46 theorem
+  and all s75 ever needed.
+- `memopt` drops availability entries whose token names a foreign region at
+  every call, at every store through a same-role foreign token, and on
+  entry to any loop header whose body does either — the last one because
+  the pass's kill is a linear RPO scan and a back edge is not linear.
+- `licm` will not hoist a foreign-token load out of a loop that contains a
+  call or a same-role foreign store. A loop-invariant TOKEN is not
+  loop-invariant MEMORY once the token stops being exhaustive.
+
+**Why conservatism and not token propagation.** Propagating the foreign
+tokens through signatures is the stronger answer and it would also unlock
+s78's declined call-site `!noalias`: the call would consume and re-mint the
+caller's foreign chain, the inliner's existing signature binding would map
+the callee's roots onto the caller's with no freshening, and memopt/licm
+would need no special case at all. It is not a mid-end change. It puts two
+token parameters on every wolf function signature and has to answer for
+`@main`, exported functions, `c_call`, task entries, and the backends' entry
+shims — a lowering-wide ABI change (free at the machine level, since tokens
+erase) that an audit sprint should not land alongside a live miscompile
+fix. It stays open as the way to CLAIM the fact rather than merely stop
+relying on it.
+
+**#83's own hazard: real, and still not reachable from source.** The
+non-inlining shape — an opaque callee writing the caller's foreign storage
+with none of its tokens — is admissible WIR and now has a differential
+witness (`fuzzgen::shape_foreign_cross_call`, plus the LICM variant). What
+stops today's LOWERING from emitting it is worth naming precisely, because
+it is an accident and not a theorem:
+
+- a `mut List` argument spills its header pointer to a stack slot and
+  RELOADS it after the call, so the caller's post-call element address is a
+  fresh SSA value and memopt's `(token, address)` key misses. Re-lending a
+  `mut` parameter passes the slot through instead, and then the slot's own
+  token is what changes. Either way the address, not the token, is what
+  saves it.
+- two live `List` values cannot share a buffer at source level: `let b = a`
+  moves, and `copy a` is a deep copy. The IR-level sharing the s78 note
+  describes is real, but the move checker keeps two readable paths to one
+  buffer out of a single frame.
+
+Neither is a claim about tokens. Both would evaporate if the `mut` spill
+got smarter or a sharing container landed, and the pass comments asserted
+the opposite of what the code relied on. The conservatism costs nothing
+today (below), so there is no reason to keep resting on them.
+
+**Cost, per kernel.** The mid-end rules cost EXACTLY ZERO: optimized WIR is
+byte-identical with them on and off across all thirteen kernels
+(`a2_stencil1d`, `a5_hoist_call`, `alias_daxpy`, `aos_dot`, `b3_churn`,
+`c2_ecs_sweep`, `d1_utf8_validate`, `d2_substr_search`, `e1_sum_reduce`,
+`e2_checksum`, `e3_index_arith`, `list_alloc`, `word_count`) — the shapes
+they decline are the shapes the lowering does not currently produce, which
+is the same fact as "no source witness". The scope-class change removes 0-2
+`!alias.scope` nodes per kernel, and every claim it removes was a false one
+(the duplicate roots inlining minted); the header/buffer pair survives in
+every kernel that has one. Self-timed medians over 7 alternating runs, this
+worktree, this box — `a2_stencil1d` 161 vs 159 ms, `alias_daxpy` 46 vs 49
+ms, `list_alloc` 6805 vs 7000 ms — are inside the noise in both directions.
+s79 is re-measuring the suite concurrently on its own baseline; these
+numbers are a cost check, not a suite reading.
 
 ## a2_stencil1d's early exits are two thirds ARITHMETIC (2026-08-13, s78)
 

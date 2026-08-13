@@ -46,6 +46,12 @@ void __wolf_rt_main_err(long long tag, long long len,
     exit(1);
 }
 
+/* s80: an identity the optimizer cannot see through (a separate TU, no
+   LTO). A witness needs two pointers LLVM cannot prove equal — with one
+   SSA address, basic AA answers MustAlias and never consults the scope
+   metadata under test. */
+long long __wolf_rt_test_opaque(long long x) { return x; }
+
 void *__wolf_rt_region_new(void) { return malloc(sizeof(void *)); }
 void *__wolf_rt_region_alloc(void *h, long long size) {
     (void)h;
