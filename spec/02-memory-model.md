@@ -501,6 +501,100 @@ definitions so `std.str` drops its guards and delegates.)
   three lanes, previously spelled `bounds` and cited against
   `[mem.ub.defined]`, which never defined it). `n == 0` answers `""`.
 
+(Appended 2026-08-13, s84 — wolf-lang#95. `words`, `lines` and `split`
+had no ruling: the two lanes agreed only because one was written from
+the other, and "whatever Rust's `split_whitespace` does" is not a
+definition a third implementation can be held to. Lazy iteration forced
+the question — a compiler cannot inline a predicate nobody has written
+down — so the clauses come first and both implementations follow them.
+Everything below was already the executed behaviour on both lanes: this
+is a ruling, not a behaviour change, and the corpus now witnesses it on
+the inputs that would have decided it either way.)
+
+- `[mem.str.ws]` The **separator set is Unicode `White_Space`**: the 25
+  scalars carrying that property, and no others.
+
+  ```text
+  U+0009..U+000D   U+0020   U+0085   U+00A0   U+1680
+  U+2000..U+200A   U+2028   U+2029   U+202F   U+205F   U+3000
+  ```
+
+  This is the one set `words`, `trim`, `trim_start` and `trim_end` test
+  against. A position in a `str` is a separator when the scalar
+  **encoded** there is in the set — never when a byte of a longer
+  encoding happens to resemble one. A UTF-8 continuation byte is
+  therefore never a separator, so every boundary these operations
+  produce is a code-point boundary and every `str` they yield is one
+  `[mem.str.get]` would have handed back. U+180E is deliberately absent
+  (it left `White_Space` in Unicode 6.3). The set is **frozen at v1**:
+  a later Unicode revision does not silently re-split a program's text,
+  and a lane whose host library grows a 26th scalar has diverged, which
+  `[proto.*]` is entitled to catch. Weighed and rejected: "whatever the
+  host's `is_whitespace` says" — that is a lane-dependent primitive,
+  exactly what `[mem.str.empty]` was written to stop.
+
+- `[mem.str.words]` `s.words()` yields the **maximal non-empty runs of
+  non-separator scalars**, left to right. That single sentence settles
+  the boundary cases, and they are the ruling: a yielded word is never
+  empty; leading and trailing separators yield nothing; a RUN of
+  separators is one boundary, not several; `"".words()` and
+  `"   ".words()` yield nothing at all. Consequently `s.words()` and
+  `s.trim().words()` agree for every `s`, and a word counter is a
+  counter rather than a counter plus a non-empty filter. Weighed and
+  rejected: the field reading, under which `" a ".words()` would be
+  `["", "a", ""]`. `words` answers *which words are in this text*, and
+  the empty string is never an answer to that; a caller who wants
+  fields has `split`, which gives them exactly and keeps the two
+  spellings meaning different things — which is the point of having
+  both.
+
+- `[mem.str.lines]` `s.lines()` splits on **U+000A (LF) only**, and
+  absorbs one U+000D (CR) immediately preceding an LF. Precisely: `s`
+  decomposes uniquely into segments, each either ending in LF or being
+  a non-empty final segment containing no LF; each segment yields one
+  line, being that segment minus its trailing LF, minus one further CR
+  if a CR immediately preceded that LF. So `"".lines()` yields nothing;
+  `"a"` and `"a\n"` both yield `["a"]`; `"\n"` yields `[""]`;
+  `"a\n\nb"` yields `["a", "", "b"]`; and `"a\r"` yields `["a\r"]` —
+  the CR is absorbed only when an LF followed it, never on its own.
+  Empty lines are REAL (a blank line in a file is an empty yield); only
+  a trailing LF at the very end produces none, because it terminates
+  the line before it rather than opening one after it. U+2028, U+2029
+  and U+0085 are separators for `words` and are **not** line
+  terminators here. Weighed and rejected: the UAX #14 line-boundary
+  set. `lines` is the operation that reads a FILE, and a file's lines
+  are delimited by the bytes a writer wrote; splitting U+2028 out of a
+  string literal that merely contains one loses data in the direction
+  nobody asked for. The Unicode reading is writable in library code on
+  top of this one; the file reading is not recoverable from it.
+
+- `[mem.str.split]` `s.split(sep)` splits at every **leftmost,
+  non-overlapping** occurrence of `sep`, scanning left to right, and
+  yields the text between occurrences — **every** field, empty ones
+  included. The count is exact, and it ties the two operations
+  together: `s.split(sep)` yields exactly `s.count(sep) + 1` fields,
+  for every `s` and every `sep` **including the empty one**
+  (`[mem.str.empty]` makes an empty needle match nothing, so `count` is
+  0 and `split` yields the one whole-string field — the rule and its
+  apparent exception are the same rule). Hence a leading separator
+  yields a leading empty field, a trailing separator a trailing empty
+  field, a run of `k` adjacent separators the `k-1` empty fields
+  between them, and `"".split(sep)` yields one empty field, never zero.
+  Weighed and rejected: collapsing empty fields. `split` is the
+  parser's primitive — `"a,,b"` has three fields and the middle one is
+  empty, and a reader that cannot see that cannot round-trip.
+
+- `[mem.str.view]` All three yield **views**: every yielded `str` is a
+  subslice of the receiver's own storage — the same `{ptr, len}`
+  representation `bytes()` and the `trim`/`get`/`strip_*` family
+  already hand back — so iterating them allocates **nothing**, on every
+  lane. This is a commitment, not an optimization note:
+  `[mem.region.create.3]` charges every materialization to the ambient
+  region and these operations perform none, which is what makes
+  `for w in s.words()` legal under `#[noalloc]`. A `List[str]` in a
+  non-iterating position is still an allocation — but the LIST is,
+  never the strings inside it.
+
 ---
 
 ## Appendix A — `corpus/regions.lu`, clause by clause `[mem.appendix]`
