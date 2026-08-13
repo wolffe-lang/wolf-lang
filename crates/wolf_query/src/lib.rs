@@ -49,10 +49,14 @@
 //! between lex/parse/resolve/typecheck); the resident daemon tightens
 //! granularity without changing the contract.
 
+pub mod docs;
 mod host;
 mod overlay;
 mod queries;
 
+pub use docs::{
+    Directive, DocComment, DocFence, DocItem, DocModule, DocPackage, doc_package, resolve_links,
+};
 pub use host::{CancelToken, Cancelled, Change, QueryHost, Snapshot};
 pub use queries::{
     DefResult, DiagnosticsBatch, DocSymbol, FormatResult, HoverResult, SourceFile, SymbolKind,
@@ -61,7 +65,12 @@ pub use queries::{
 /// The query-contract version (clause list in the crate docs). Bump on
 /// any breaking change to the public surface; s57 implements the same
 /// numbered contract.
-pub const CONTRACT_VERSION: u32 = 1;
+///
+/// v2 (s53): the [`docs`] model joins the surface — additive, but the
+/// version names a surface rather than a compatibility promise, so it
+/// moves. `wolf doc` and hover now read doc comments through one
+/// module, which is the clause-5 "one truth" rule applied to prose.
+pub const CONTRACT_VERSION: u32 = 2;
 
 /// Test-only knob: when set to a number of milliseconds, every query
 /// sleeps that long at its first checkpoint (in small cancellable

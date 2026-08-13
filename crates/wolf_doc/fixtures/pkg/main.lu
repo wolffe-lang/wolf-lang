@@ -1,0 +1,27 @@
+//! member: true
+//!
+//! The fixture package's root module. It depends on [shelf] and
+//! documents one item of its own.
+
+use shelf
+
+/// The whole shelf's width, given a slot count. Undocumented items
+/// exist in this fixture too — `stack_of` below is one, deliberately,
+/// so the coverage report has something to name.
+///
+/// ```wolf
+/// use shelf
+/// shelf.slot_of(1) == 2
+/// ```
+pub fn total_width(slots: int) -> int {
+    shelf.width_of(slots)
+}
+
+pub fn stack_of(n: int) -> int {
+    n
+}
+
+fn main() -> !int {
+    print("{total_width(4)}")
+    0
+}

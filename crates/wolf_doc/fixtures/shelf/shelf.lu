@@ -1,0 +1,81 @@
+//! member: true
+//!
+//! A shelf of numbered slots — the s53 documentation fixture.
+//!
+//! This module exists to be *documented*, so it exercises every part of
+//! the doc surface at once: a module `//!` block with prose and a
+//! doctest, `///` comments with summary sentences, an intra-doc link to
+//! [slot_of], every fence directive, and a `pub(pkg)` item that a
+//! default run publishes and a `--private` run joins with the private
+//! one below.
+//!
+//! ```wolf
+//! shelf.slot_of(3) == 4
+//! ```
+
+/// The slot a book of width `w` occupies. The first sentence ends
+/// here, and everything after it is the body — which is how a listing
+/// can be one line while a page is a page.
+///
+/// A shelf is one-indexed, so the answer is always at least 1. See
+/// [width_of] for the inverse, and [shelf.slot_of] for this same
+/// function named the long way.
+///
+/// ```wolf
+/// shelf.slot_of(0) == 1
+/// shelf.slot_of(7) == 8
+/// ```
+pub fn slot_of(w: int) -> int {
+    w + 1
+}
+
+/// The width a slot holds — the inverse of [slot_of].
+///
+/// The fence below is compiled and never executed: it demonstrates the
+/// shape of a call whose value nobody wants.
+///
+/// ```wolf,no_run
+/// let w = shelf.width_of(9)
+/// ```
+pub fn width_of(s: int) -> int {
+    s - 1
+}
+
+/// Whether a slot number is one a shelf could have.
+///
+/// Passing a string where an `int` belongs is refused, and this fence
+/// asserts the refusal rather than describing it:
+///
+/// ```wolf,should_fail(E0401)
+/// shelf.is_slot("three")
+/// ```
+pub fn is_slot(s: int) -> bool {
+    s > 0
+}
+
+/// The label a shelf prints. The fence here is prose in a fence — a
+/// shape, not a program — so it carries `ignore`.
+///
+/// ```wolf,ignore
+/// <slot>: <title> (<width>)
+/// ```
+pub fn label(s: int) -> int {
+    s
+}
+
+/// A package-visible helper: `pub(pkg)` is published surface inside the
+/// package and invisible outside it, and the page says which.
+///
+/// ```wolf
+/// shelf.rows(2) == 2
+/// ```
+pub(pkg) fn rows(n: int) -> int {
+    n
+}
+
+/// A private item. A default run does not document it; `--private`
+/// does, and the coverage gate never counts it — a gate on items no
+/// consumer can see would measure nothing.
+fn hidden(n: int) -> int {
+    n
+}
