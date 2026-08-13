@@ -173,6 +173,27 @@ pub unsafe extern "C" fn __wolf_rt_list_clear(hdr: i64) {
 mod tests {
     use super::*;
 
+    /// s75: compiled code addresses `data` and `len` DIRECTLY —
+    /// element access is `ptr.off` + `load`, not a shim call — so
+    /// these two offsets are part of the runtime ABI, not a private
+    /// layout. `wolf_wir::lower`'s `LIST_DATA_OFF` / `LIST_LEN_OFF`
+    /// are the compiler's copy; move a field here and this test is
+    /// what tells you the lowering moved with it.
+    #[test]
+    fn header_offsets_are_the_lowering_abi() {
+        let hdr = ListHdr {
+            data: core::ptr::null_mut(),
+            len: 0,
+            cap: 0,
+            elem: 0,
+        };
+        let base = (&raw const hdr) as usize;
+        assert_eq!((&raw const hdr.data) as usize - base, 0, "LIST_DATA_OFF");
+        assert_eq!((&raw const hdr.len) as usize - base, 8, "LIST_LEN_OFF");
+        assert_eq!(core::mem::size_of::<ListHdr>(), 32);
+        assert_eq!(core::mem::align_of::<ListHdr>(), 8);
+    }
+
     #[test]
     fn push_pop_read_write_len() {
         let h = __wolf_rt_list_new(8);
