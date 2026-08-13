@@ -49,33 +49,67 @@ pub(crate) fn successors(f: &Function, b: Block) -> Vec<Block> {
     }
 }
 
-pub(crate) fn canonicalize(f: &Function) -> Canon {
-    // Reverse postorder from the entry.
+/// The order a consumer must WALK a function's blocks in: reverse
+/// postorder from the entry, then any remaining layout block in layout
+/// order (s74, #72).
+///
+/// `Function::layout` is a *printing* order — entry first, nothing more
+/// (see its doc). Lowering appends blocks as it creates them, and a
+/// construct that creates a joining block before the block that feeds it
+/// (a `select` arm inside a loop: the latch exists before the arm body
+/// does) leaves a use ahead of its def in layout order. That is legal
+/// WIR — the verifier checks *dominance*, which the CFG satisfies — so
+/// any backend translating in a single forward pass must ask for this
+/// order instead of assuming the layout is one. RPO is exactly the
+/// guarantee such a pass needs: every reachable definition is visited
+/// before every reachable use of it.
+///
+/// The reachable prefix matches the canonical print numbering, so a
+/// dump and a codegen walk see one order.
+pub fn block_order(f: &Function) -> Vec<Block> {
+    let mut order = reachable_rpo(f);
+    let seen: HashSet<Block> = order.iter().copied().collect();
+    for &b in &f.layout {
+        if !seen.contains(&b) {
+            order.push(b);
+        }
+    }
+    order
+}
+
+/// Reverse postorder over the blocks reachable from the entry.
+/// Successors are visited in reverse so the RPO lists then-targets
+/// before else-targets (natural reading order for diamonds and loops).
+fn reachable_rpo(f: &Function) -> Vec<Block> {
     let mut post: Vec<Block> = Vec::new();
     let mut seen: HashSet<Block> = HashSet::new();
-    if let Some(entry) = f.entry() {
-        // Iterative DFS: (block, next successor index to visit).
-        let mut stack: Vec<(Block, usize)> = vec![(entry, 0)];
-        seen.insert(entry);
-        while let Some((b, i)) = stack.last().copied() {
-            // Successors are visited in reverse so the resulting RPO
-            // lists then-targets before else-targets (natural reading
-            // order for diamonds and loops).
-            let mut succs = successors(f, b);
-            succs.reverse();
-            if i < succs.len() {
-                stack.last_mut().expect("nonempty").1 += 1;
-                let s = succs[i];
-                if f.blocks.contains(s) && seen.insert(s) {
-                    stack.push((s, 0));
-                }
-            } else {
-                post.push(b);
-                stack.pop();
+    let Some(entry) = f.entry() else {
+        return post;
+    };
+    // Iterative DFS: (block, next successor index to visit).
+    let mut stack: Vec<(Block, usize)> = vec![(entry, 0)];
+    seen.insert(entry);
+    while let Some((b, i)) = stack.last().copied() {
+        let mut succs = successors(f, b);
+        succs.reverse();
+        if i < succs.len() {
+            stack.last_mut().expect("nonempty").1 += 1;
+            let s = succs[i];
+            if f.blocks.contains(s) && seen.insert(s) {
+                stack.push((s, 0));
             }
+        } else {
+            post.push(b);
+            stack.pop();
         }
     }
     post.reverse();
+    post
+}
+
+pub(crate) fn canonicalize(f: &Function) -> Canon {
+    let mut post = reachable_rpo(f);
+    let seen: HashSet<Block> = post.iter().copied().collect();
     // Unreachable blocks (and blocks outside the layout) print too —
     // the printer must not lose code on unverified modules. Appended
     // in entity-index order.

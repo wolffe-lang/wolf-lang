@@ -1,0 +1,22 @@
+//! check: fail(E1101)
+//! phase: resolve
+//! conforms: conc.task.spawn, mem.tier0.mode.mut
+//! The lend spelling in ARGUMENT position (s74, #71): `f(mut n)` is the
+//! call-site mode X1 requires, and inside a task closure it is a write
+//! to captured state exactly as `(mut n).m()` is. The scalar case
+//! lands on the task's own copy, so this file is the law being
+//! uniform rather than a race being caught — one rule, both positions.
+
+fn bump(mut k: int) {
+    k = k + 1
+}
+
+fn main() -> !int {
+    var n = 0
+    scope s {
+        s.spawn(fn() { bump(mut n) })   // ERROR E1101: captured, lent mut
+        s.spawn(fn() { bump(mut n) })
+    }
+    print("{n}")
+    0
+}

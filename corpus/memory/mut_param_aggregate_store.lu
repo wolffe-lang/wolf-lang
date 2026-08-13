@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="regions / draft\n1 0\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.move
+//! A write through a `mut` parameter whose type is a flat AGGREGATE —
+//! `str` is `{ptr, len}`, a two-scalar struct is two fields — stores
+//! field by field (s74, #67). The read side always rebuilt aggregates
+//! that way; the write side emitted one `store` of the whole aggregate,
+//! which the WIR's own scalar-only store rule rejects, so the book's
+//! ch07 §12 `swap` ICE'd the verifier instead of running.
+
+struct Pair {
+    a: int,
+    b: int,
+}
+
+fn swap_str(mut a: str, mut b: str) {
+    let t = move a
+    a = move b
+    b = t
+}
+
+fn swap_pair(mut p: Pair) {
+    let t = p.a
+    p = Pair { a: p.b, b: t }
+}
+
+fn main() -> !int {
+    var d = Pair { a: 0, b: 1 }
+    var title = "draft"
+    var subtitle = "regions"
+    swap_str(mut title, mut subtitle)
+    print("{title} / {subtitle}")
+    swap_pair(mut d)
+    print("{d.a} {d.b}")
+    0
+}

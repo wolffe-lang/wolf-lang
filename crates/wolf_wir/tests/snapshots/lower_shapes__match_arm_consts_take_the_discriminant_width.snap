@@ -1,0 +1,44 @@
+---
+source: crates/wolf_wir/tests/lower_shapes.rs
+expression: out
+---
+fn @main() -> i64 {
+b0:
+  %0 = iconst.i64 0
+  %1 = iconst.i32 0
+  %2 = iconst.i32 3
+  jmp b1(%1, %0)
+b1(%3: i32, %4: i64):
+  %5 = icmp.slt %3, %2
+  br %5, b2, b10
+b2:
+  %6 = icmp.eq %3, %1
+  br %6, b3, b4
+b3:
+  %7 = iconst.i64 10
+  jmp b8(%7)
+b4:
+  %8 = iconst.i32 1
+  %9 = icmp.eq %3, %8
+  br %9, b6, b5
+b5:
+  %10 = iconst.i32 2
+  %11 = icmp.eq %3, %10
+  br %11, b6, b7
+b6:
+  %12 = iconst.i64 20
+  jmp b8(%12)
+b7:
+  jmp b8(%0)
+b8(%13: i64):
+  %14 = iadd.chk %4, %13
+  jmp b9
+b9:
+  %15 = iconst.i32 1
+  %16 = iadd.chk %3, %15
+  jmp b1(%16, %14)
+b10:
+  %17 = iconst.i64 50
+  %18 = isub.chk %4, %17
+  ret %18
+}

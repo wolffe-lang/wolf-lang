@@ -26,6 +26,10 @@ comptime/sandbox_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/size_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime.lu: lowers
 conc/cancel_sibling.lu: lowers
+conc/capture_mut_arg.lu: not mem-clean (pre-wir rungs own it)
+conc/capture_mut_lend.lu: not mem-clean (pre-wir rungs own it)
+conc/capture_write_assign.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_drain_after_inclusive_loop.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
 conc/freeze_publish.lu: lowers
 conc/message_passing.lu: lowers
@@ -33,6 +37,7 @@ conc/proc_cancel_defers.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/select_seeded.lu: lowers
+conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
@@ -122,6 +127,7 @@ memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_aggregate_store.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/prov_holy_grail.lu: refused — this type in WIR lowering; closure lowering outside `spawn` (fn values, c05)
@@ -236,6 +242,7 @@ typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/match_exhaustive.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_narrow_scrutinee.lu: lowers
 typecheck/match_str_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)

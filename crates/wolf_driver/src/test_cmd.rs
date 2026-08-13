@@ -43,6 +43,16 @@
 //!   line.
 //! - `--replay=<seed | w1-token | ev:stream>` is the one reproduction
 //!   verb — it accepts every schedule spelling (`[sched.seed]`).
+//!   Its SCOPE on the native lane (s74, #65): a decimal seed reaches
+//!   `wolf_rt`'s scheduler PRNG — steal victims, `select` tie-breaks —
+//!   and cross-task arrival order on the real worker pool is not
+//!   derived from it. `[sched.stable]` states byte-identical replay
+//!   over a recorded *decision stream*, which only the det engine's
+//!   `w1-`/`ev:` forms carry, and the native lane does not emit one
+//!   yet. So a native divergence's replay line is MEASURED before it
+//!   is printed ([`native_replay_scope`]): the line either reports a
+//!   confirmed reproduction or says what the seed does not pin. The
+//!   flag never claims a reproduction it has not observed.
 //! - `--chaos` is parked with its owner named (the c07 closeout; the
 //!   injection engine lands on the s35 submit/deliver seams) and
 //!   refuses loudly until then.
@@ -227,6 +237,17 @@ pub fn test_cmd(args: &[String]) {
     }
     if let Some(spec) = &replay {
         eprintln!("wolf test: replaying schedule `{spec}`");
+        // The scope, said once and up front (s74, #65): a decimal seed
+        // on a main-shaped test drives the REAL runtime, where it pins
+        // the scheduler PRNG and not cross-task arrival order.
+        if spec.parse::<u64>().is_ok() {
+            eprintln!(
+                "wolf test: a decimal seed pins the runtime's scheduler PRNG (steal \
+                 victims, `select` tie-breaks); cross-task arrival order on the worker \
+                 pool is not seed-derived, so a divergence that came from arrival order \
+                 may not come back ([sched.seed])"
+            );
+        }
     }
 
     // ---- discovery: `*_test.lu` files, sorted (deterministic order) --
@@ -462,7 +483,13 @@ pub fn test_cmd(args: &[String]) {
                                 format!(
                                     "schedule divergence: seed {seed0} → {d0}, seed \
                                      {seed_div} → {d_div} — replay: wolf test \
-                                     --replay={seed_div} {display}"
+                                     --replay={seed_div} {display}{}",
+                                    native_replay_scope(
+                                        file,
+                                        std_root.as_deref(),
+                                        seed_div,
+                                        &d_div,
+                                    )
                                 ),
                                 runs.iter()
                                     .find(|(sd, ..)| sd.unwrap_or(0) == seed_div)
@@ -640,6 +667,54 @@ fn parse_schedule_spec(s: &str) -> Option<()> {
         return None;
     }
     s.parse::<u64>().ok().map(|_| ())
+}
+
+/// How many times a native divergence's seed is re-run to see whether
+/// the printed `--replay=` line actually reproduces it (s74, #65).
+const NATIVE_REPLAY_PROBE: usize = 3;
+
+/// Say what the printed `--replay=SEED` line is worth on the NATIVE
+/// lane, having MEASURED it (s74, #65).
+///
+/// A decimal seed reaches `wolf_rt`'s scheduler PRNG — steal victims,
+/// `select` tie-breaks — and nothing else. Cross-task arrival order on
+/// the real worker pool is not seed-derived, so a divergence that came
+/// from arrival order is not reproducible from the seed, and the flag
+/// used to print the line anyway. `[sched.stable]`'s byte-identical
+/// guarantee is stated over a *decision stream*, which only the det
+/// engine's `w1-`/`ev:` recordings carry; the native lane has no such
+/// recording yet (owner: the s36/s73 family, det-engine runtime build).
+///
+/// So: re-run the seed a few times. If the verdict comes back, the line
+/// is confirmed and says so. If it does not, the line says what the
+/// seed does and does not pin, and points at what reproduces instead.
+/// Nothing here promises what it has not seen.
+fn native_replay_scope(
+    file: &std::path::Path,
+    std_root: Option<&std::path::Path>,
+    seed: u64,
+    want: &str,
+) -> String {
+    let probe = vec![Some(seed); NATIVE_REPLAY_PROBE];
+    let Ok(runs) = native_schedule_runs(file, std_root, &probe) else {
+        return String::new(); // the probe itself failed: claim nothing
+    };
+    let hits = runs.iter().filter(|(_, _, d, _, _)| d == want).count();
+    if hits == runs.len() {
+        return format!(" (replay confirmed: reproduced {hits}/{})", runs.len());
+    }
+    format!(
+        " — NOTE: that replay reproduced this verdict {hits}/{} times. On the \
+         native lane a decimal seed pins the runtime's scheduler PRNG (steal \
+         victims, `select` tie-breaks), NOT cross-task arrival order on the \
+         worker pool, so an arrival-order divergence is not reproducible from \
+         the seed alone ([sched.seed]; byte-identical replay in [sched.stable] \
+         is stated over a recorded decision stream, which the native lane does \
+         not yet emit). Re-explore with --schedules=N, or make the property \
+         schedule-independent — compare a sorted or hashed output rather than \
+         an interleaving",
+        runs.len()
+    )
 }
 
 /// s73 — the native schedule lane (X12's promise, end to end): a

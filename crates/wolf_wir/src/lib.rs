@@ -106,7 +106,7 @@ pub use ir::{
 pub use lower::{Build, lower_package};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
-pub use print::{print_module, print_selected};
+pub use print::{block_order, print_module, print_selected};
 pub use types::{RegionId, TypeData, TypeId, TypeInterner};
 pub use verify::{
     ErrClass, Invalidation, PassCtx, VerifyError, run_pass, verify_function, verify_module,

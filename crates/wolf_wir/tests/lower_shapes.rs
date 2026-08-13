@@ -257,6 +257,132 @@ fn gvn_misses_across_arms_but_dominating_entries_hit() {
     insta::assert_snapshot!(out);
 }
 
+/// The #67 pair, red-then-green (s74). A `match` whose discriminant is
+/// narrower than i64 — here a `for` induction variable, the book's ch03
+/// §15 shape — used to emit its arm tests as `icmp` against an i64
+/// constant and fail `[type]` verification. `dump` verifies, so the
+/// test IS the regression; the assertion pins the width so a later
+/// refactor cannot quietly restore i64.
+#[test]
+fn match_arm_consts_take_the_discriminant_width() {
+    let out = dump(
+        "fn main() -> !int {\n\
+         \x20   var hits = 0\n\
+         \x20   for code in 0..3 {\n\
+         \x20       hits += match code {\n\
+         \x20           0 => 10,\n\
+         \x20           1 | 2 => 20,\n\
+         \x20           _ => 0,\n\
+         \x20       }\n\
+         \x20   }\n\
+         \x20   hits - 50\n\
+         }\n",
+    );
+    assert!(
+        !out.contains("icmp.eq") || out.contains("iconst.i32"),
+        "arm constants must share the i32 discriminant's width: {out}"
+    );
+    insta::assert_snapshot!(out);
+}
+
+/// The #67 pair's other half: a write through a `mut` parameter whose
+/// type is a flat aggregate (`str` is `{ptr, i64}`) stores field by
+/// field. One aggregate `store` is not a legal WIR instruction, and the
+/// book's ch07 §12 `swap` produced exactly one.
+#[test]
+fn mut_param_aggregate_writes_are_fieldwise() {
+    let out = dump(
+        "fn swap(mut a: str, mut b: str) {\n\
+         \x20   let t = move a\n\
+         \x20   a = move b\n\
+         \x20   b = t\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   var x = \"one\"\n\
+         \x20   var y = \"two\"\n\
+         \x20   swap(mut x, mut y)\n\
+         \x20   0\n\
+         }\n",
+    );
+    assert!(
+        !out.contains("store.{"),
+        "no aggregate store may survive lowering: {out}"
+    );
+    insta::assert_snapshot!(out);
+}
+
+/// #66 (s74): an INCLUSIVE `for` whose body can exit early, followed by
+/// a read of a binding declared before it. Resolving that read cascades
+/// the Braun trivial-φ test, and the cascade used to retire the very
+/// parameter the outer removal had chosen as its replacement — the
+/// outer frame kept the dead handle and the next instruction took a
+/// phantom operand. `dump` verifies and reparses, which is exactly the
+/// check that caught it.
+#[test]
+fn inclusive_for_then_later_read_keeps_live_definitions() {
+    let out = dump(
+        "fn main() -> !int {\n\
+         \x20   let ch = channel[int](8)\n\
+         \x20   for i in 1..=3 { ch.send(i) }\n\
+         \x20   ch.close()\n\
+         \x20   var sum = 0\n\
+         \x20   for v in ch { sum += v }\n\
+         \x20   sum - 6\n\
+         }\n",
+    );
+    assert!(!out.contains("%?"), "no value may go unnamed: {out}");
+    insta::assert_snapshot!(out);
+}
+
+/// #72 (s74): `block_order` is the walk order a single-pass backend
+/// needs — every reachable definition before every use of it. The
+/// `select`-in-a-loop shape is the one that broke the assumption that
+/// `Function::layout` already was such an order, so it is the shape the
+/// invariant is asserted on.
+#[test]
+fn block_order_puts_every_definition_before_its_uses() {
+    use std::collections::HashSet;
+    let build = lower(
+        "fn main() -> !int {\n\
+         \x20   let done = channel[int](0)\n\
+         \x20   scope s {\n\
+         \x20       s.spawn(fn() { done.send(1) })\n\
+         \x20       var live = 1\n\
+         \x20       while live > 0 {\n\
+         \x20           select {\n\
+         \x20               _ from done => { live -= 1 },\n\
+         \x20           }\n\
+         \x20       }\n\
+         \x20   }\n\
+         \x20   0\n\
+         }\n",
+    );
+    assert!(build.not_yet.is_empty(), "lowers: {:?}", build.not_yet);
+    let mut checked = 0usize;
+    for func in build.module.funcs.values() {
+        let mut defined: HashSet<wolf_wir::Value> = HashSet::new();
+        for b in wolf_wir::block_order(func) {
+            for p in func.block_params(b) {
+                defined.insert(p);
+            }
+            for &inst in &func.blocks[b].insts {
+                for a in func.vpool.get(func.insts[inst].args) {
+                    assert!(
+                        defined.contains(&a),
+                        "@{}: {b:?} uses a value the walk has not defined yet",
+                        func.name
+                    );
+                    checked += 1;
+                }
+                for r in func.vpool.get(func.insts[inst].results) {
+                    defined.insert(r);
+                }
+            }
+        }
+    }
+    assert!(checked > 0, "the shape has operands to check");
+}
+
 // ------------------------------------------ the reducible-CFG suite ----
 
 /// xorshift64* — deterministic seeds, no flaky randomness in CI.

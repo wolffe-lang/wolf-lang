@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 540..579 name=Pair fields=2
+FnDecl 581..664 name=swap_str body=Block
+FnDecl 666..741 name=swap_pair body=Block
+FnDecl 743..973 name=main body=Block

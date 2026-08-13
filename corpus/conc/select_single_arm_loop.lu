@@ -1,0 +1,27 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: conc.select.ready, conc.task.scope
+//! A single-arm `select` inside a loop whose arm body assigns to a
+//! binding declared outside it (s74, #72). The shape is what a reader
+//! writes first when draining one channel, and it used to reach the
+//! backend as `expected scalar repr, found None`: the loop's latch block
+//! is created before the select's arm body, so `Function::layout` — a
+//! PRINTING order, entry-first and nothing more — held the use of the
+//! decremented counter ahead of its definition. Backends now walk in
+//! reverse postorder, where every reachable definition precedes every
+//! use of it. Two arms, or no loop, never tripped it, which is what
+//! named the bug.
+
+fn main() -> !int {
+    let done = channel[int](0)
+    scope s {
+        s.spawn(fn() { done.send(1) })
+        var live = 1
+        while live > 0 {
+            select {
+                _ from done => { live -= 1 },
+            }
+        }
+    }
+    0
+}

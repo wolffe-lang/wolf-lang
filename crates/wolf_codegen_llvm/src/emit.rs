@@ -998,8 +998,14 @@ impl<'a> Fx<'a> {
 
     fn run(&mut self, si: &LSig) -> Result<(), BackendError> {
         let entry = self.f.entry().ok_or_else(|| ice("no entry"))?;
+        // The WALK order (s74, #72): reverse postorder, not `layout`.
+        // `layout` is a printing order and lowering may append a block
+        // that uses a value before the block defining it (a `select` arm
+        // inside a loop). This emitter is one forward pass over the
+        // text, so defs must come first — RPO is that guarantee.
+        let order = wolf_wir::block_order(self.f);
         // Labels for every reachable WIR block.
-        for &wb in &self.f.layout {
+        for &wb in &order {
             if self.reachable.contains(&wb) {
                 self.wlabel.insert(wb, format!("b{}", wb.index()));
             }
@@ -1050,7 +1056,7 @@ impl<'a> Fx<'a> {
         }
 
         // Non-entry block params: scalar → named phi; aggregate → slot.
-        for &wb in &self.f.layout {
+        for &wb in &order {
             if wb == entry || !self.reachable.contains(&wb) {
                 continue;
             }
@@ -1078,9 +1084,8 @@ impl<'a> Fx<'a> {
             self.phis.insert(wb, accs);
         }
 
-        // Translate every reachable block in layout order.
-        for bi in 0..self.f.layout.len() {
-            let wb = self.f.layout[bi];
+        // Translate every reachable block in walk order.
+        for &wb in &order {
             if !self.reachable.contains(&wb) {
                 continue;
             }

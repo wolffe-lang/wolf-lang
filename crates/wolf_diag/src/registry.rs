@@ -1331,6 +1331,13 @@ or, when the state truly is shared, guard it with a `Mutex` and do
 every access inside a `when` block, whose body has exclusive access
 to the payloads. The write the checker flagged would otherwise land
 on the task's private copy at best and race at worst.
+
+A write is not only an assignment. Handing a captured binding to a
+callee in `mut` mode — `(mut xs).push(1)` on the receiver, `f(mut xs)`
+at an argument — opens the same exclusive window, and for
+handle-backed state such as a `List` the callee's write reaches the
+enclosing function's allocation rather than the task's copy. Both
+spellings are this diagnostic.
 "#);
 
 code!(E1102, "this channel's payload type is not sendable", r#"

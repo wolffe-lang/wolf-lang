@@ -2794,6 +2794,49 @@ impl<'a> Checker<'a> {
         );
     }
 
+    /// E1101, the lend half (s74, #71). A write to captured state is
+    /// not only an assignment: `(mut xs).push(1)` and `f(mut xs)` hand
+    /// the callee an exclusive window onto the binding, and for
+    /// handle-backed state (`List`, `Pool`, a `Shared` cell) the write
+    /// lands on the parent's allocation, not on the task's copy — the
+    /// race the assignment form is rejected for, one spelling over.
+    /// So a `mut` lend of a captured binding IS a write under
+    /// [conc.task.spawn], in either position.
+    ///
+    /// `take` is deliberately not here: consuming a captured binding is
+    /// the move tier's question (E1001 use-after-move on the parent's
+    /// copy), not the capture law's, and the two diagnostics would
+    /// stack on one span.
+    fn check_task_capture_lends(&mut self, call: CallExpr<'_>) {
+        if self.spawn_ctx.is_none() {
+            return; // not inside a task closure: nothing to check
+        }
+        // Receiver position: `(mut place).method(…)`.
+        if let Some(base) = call
+            .callee()
+            .filter(|c| c.kind == SyntaxKind::MemberExpr)
+            .and_then(MemberExpr::cast)
+            .and_then(|m| m.base())
+            && base.kind == SyntaxKind::ParenExpr
+            && let Some(p) = ParenExpr::cast(base)
+            && p.mode() == Some(wolf_ast::ParamMode::Mut)
+            && let Some(inner) = p.expr()
+        {
+            self.check_task_capture_write(inner);
+        }
+        // Argument position: `f(mut place)` / `r.m(mut place)`.
+        if let Some(args) = call.args() {
+            for a in args.args() {
+                if a.mode() == Some(wolf_ast::ParamMode::Mut)
+                    && let Some(v) = a.value()
+                    && is_expr_kind(v.kind)
+                {
+                    self.check_task_capture_write(v);
+                }
+            }
+        }
+    }
+
     /// The root binding name of an assignable place: strip member,
     /// index, and paren steps down to the base path.
     fn place_root_ident(&self, place: &GreenNode) -> Option<(String, Span)> {
@@ -5123,6 +5166,10 @@ impl<'a> Checker<'a> {
 
     fn synth_call(&mut self, e: &GreenNode) -> R<TyId> {
         let d = CallExpr::cast(e).expect("kind");
+        // E1101's lend half (s74, #71) — every call expression funnels
+        // through here, so one hook covers named calls, method calls,
+        // ctors and calls-by-type alike.
+        self.check_task_capture_lends(d);
         let Some(callee) = d.callee() else {
             return Ok(self.error_ty());
         };

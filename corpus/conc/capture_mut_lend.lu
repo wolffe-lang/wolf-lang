@@ -1,0 +1,25 @@
+//! check: fail(E1101)
+//! phase: resolve
+//! conforms: conc.task.spawn
+//! The capture law's LEND spelling (s74, #71); its assignment twin is
+//! `capture_write_assign.lu`, and the two must never drift again.
+//! Assignment is not the only write: `(mut xs)` hands `push` an
+//! exclusive window onto the captured `List`, and a List is
+//! handle-backed, so the write lands on the parent's allocation.
+//!
+//! Both implementations ACCEPTED this program and then disagreed about
+//! what it means — wolfgang printed 2 (the parent saw both pushes: a
+//! real shared mutable window, the race the memory model forbids),
+//! lupin printed 0 (capture by value per S-10, writes lost). A racing
+//! program that compiles on both machines and means two different
+//! things is why this file exists. E1101 is the code on both sides.
+
+fn main() -> !int {
+    var xs = List[int]()
+    scope s {
+        s.spawn(fn() { (mut xs).push(1) })   // ERROR E1101: a mut lend
+        s.spawn(fn() { (mut xs).push(2) })   //   of captured state is a write
+    }
+    print("{xs.len}")
+    0
+}

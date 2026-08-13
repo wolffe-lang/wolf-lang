@@ -229,6 +229,29 @@ fn replay_accepts_every_schedule_spelling() {
     );
 }
 
+/// The replay line's SCOPE is stated where a reader meets it (s74,
+/// #65). A decimal `--replay` drives the real runtime, where the seed
+/// pins the scheduler PRNG and not cross-task arrival order; the banner
+/// says so rather than letting the flag imply a guarantee it cannot
+/// keep. The `w1-`/`ev:` forms carry a decision stream, so they get no
+/// such caveat.
+#[test]
+fn decimal_replay_states_its_native_scope() {
+    let dir = fixture("x12-scope", &[("d_test.lu", PASSING)]);
+    let (code, _out, err) = run_test(&dir, &["--replay=42"]);
+    assert_eq!(code, 0, "the replay runs:\n{err}");
+    assert!(
+        err.contains("arrival order") && err.contains("sched.seed"),
+        "a decimal replay states what the seed does not pin:\n{err}"
+    );
+    let (code, _out, err) = run_test(&dir, &["--replay=ev:0,1,0"]);
+    assert_eq!(code, 0, "the stream replay runs:\n{err}");
+    assert!(
+        !err.contains("arrival order"),
+        "a recorded decision stream needs no arrival-order caveat:\n{err}"
+    );
+}
+
 /// `--schedules` and `--replay` are exclusive verbs.
 #[test]
 fn schedules_and_replay_are_exclusive() {

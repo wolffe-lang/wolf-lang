@@ -1970,7 +1970,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let newval = if op == SyntaxKind::Eq {
                     rhs
                 } else {
-                    let cur = self.b.ins_load(elem, ptr, region);
+                    let cur = self.read_mut_ref(ptr, region, elem, stmt.span)?;
                     let Some(bin) = Self::compound_bin(op) else {
                         return Err(refuse("this compound assignment operator", stmt.span));
                     };
@@ -1979,7 +1979,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         None => return Ok(Flow::Diverged),
                     }
                 };
-                self.b.ins_store(newval, ptr, region);
+                // Field-wise, not one aggregate store (s74, #67): the
+                // read side already rebuilds flat aggregates field by
+                // field, and `store` is scalar-only by the WIR's own
+                // rule — a `mut str` / `mut` struct parameter took the
+                // asymmetric path and ICE'd the verifier.
+                self.store_flat(newval, ptr, region, stmt.span)?;
                 Ok(Flow::Val(None))
             }
             // s73: a `when` payload write — through the held cell's
@@ -3938,6 +3943,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let exit_bb = self.b.create_block();
         self.b.ins_jmp(header, &[]);
         self.b.switch_to_block(header);
+        // The loop's GVN scope (s74, #66): values born in the header and
+        // the body do not dominate what follows the loop, so they must
+        // not be reusable there. `for` over a range and over a `List`
+        // both scope their loops this way; this one did not, and a
+        // constant minted inside a channel loop's body was hash-consed
+        // into a later block it does not dominate.
+        self.b.gvn_push_scope();
         let status = self
             .rt_call_slot("__wolf_rt_chan_recv", &[ch], slot, region, Some(types::I32))
             .expect("recv status");
@@ -4010,6 +4022,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Ok(f) => f,
             Err(x) => {
                 self.scopes.pop();
+                self.b.gvn_pop_scope();
                 return Err(x);
             }
         };
@@ -4017,6 +4030,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if !matches!(body_flow, Flow::Diverged) {
             self.b.ins_jmp(header, &[]);
         }
+        self.b.gvn_pop_scope();
         self.b.seal_block(header);
         self.b.seal_block(exit_bb);
         self.b.switch_to_block(exit_bb);
@@ -8147,6 +8161,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 }
                 PatShape::Tests(consts, binds) => {
+                    // The arm constants live at the DISCRIMINANT's type,
+                    // not `int`'s (s74, #67). A scalar scrutinee can be
+                    // any integer width — a `for` induction variable, a
+                    // narrow field, an enum tag — and `icmp` demands
+                    // both operands share one type; emitting the test at
+                    // a fixed i64 ICE'd the verifier. Sign-wrapping into
+                    // that width is what literal *expressions* already
+                    // do, so an unsigned pattern like `255` on a `u8`
+                    // scrutinee becomes the same `-1` bit pattern the
+                    // value carries — and the constant-fold path below
+                    // compares against the same payload, which it did
+                    // not before (it answered the wrong arm silently).
+                    let dty = self.b.func.value_ty(disc);
+                    let consts: Vec<i64> = match self.b.module.types.int_bits(dty) {
+                        Some(bits) => consts.iter().map(|&c| wrap_bits(c as u64, bits)).collect(),
+                        None => consts,
+                    };
                     if let Some(n) = self.b.as_int_const(disc) {
                         self.b.stats.identity += 1;
                         if !consts.contains(&n) {
@@ -8190,7 +8221,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         // them out of the enclosing GVN scope.
                         let mut chain_scopes = 0usize;
                         for (k, &c) in consts.iter().enumerate() {
-                            let cv = self.b.iconst(types::I64, c);
+                            let cv = self.b.iconst(dty, c);
                             let t = self
                                 .b
                                 .ins(
