@@ -165,8 +165,16 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
 /// package using only these stays capability-free. The comptime engine
 /// still refuses them (it models no json evaluator at v0; growing the
 /// D33 allowlist is a design decision, not a convenience).
+/// (s81 adds `str_from_utf8` to the same shelf: turning bytes into text
+/// is pure arithmetic over a byte sequence, reaches no ambient surface,
+/// and carries no capability. It stays comptime-refused with the rest —
+/// admitting it would mean modelling `List` values in the D33 sandbox,
+/// which is a design decision, not a convenience.)
 pub fn pure_builtin(name: &str) -> bool {
-    matches!(name, "json_valid" | "json_get" | "json_type" | "json_len")
+    matches!(
+        name,
+        "json_valid" | "json_get" | "json_type" | "json_len" | "str_from_utf8"
+    )
 }
 
 /// Convert a checker type to a self-contained comptime type value at

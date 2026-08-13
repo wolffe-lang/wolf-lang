@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="1 0 1 0 1 1 1 1\ntrue 1 1 0")
+//! phase: run
+//! conforms: str.views, mem.str.order
+//!
+//! s81 — `==` and `!=` on `str` stopped being `__wolf_rt_str_eq` and
+//! became a length guard plus an inline byte compare (`ptr.off` at
+//! stride 1 + `load.i8`, the s77 byte view read from two bases at
+//! once). `d2_substr_search` went from 0.014x to ~0.9x of naive
+//! `clang -O3` on that change alone; the IR shape is pinned in
+//! `wolf_wir`'s `lower_shapes` suite, and what this file pins is that
+//! the ANSWERS did not move on any lane.
+//!
+//! The cases that matter to a byte compare, in order: two empties (no
+//! bytes to read, still equal), a prefix against its extension (the
+//! length guard alone decides), same length with a difference in the
+//! last byte (only a full scan finds it), a difference in the FIRST
+//! byte (the early exit), multi-byte scalars, zero-copy subslices
+//! compared with literals (a subslice borrows its receiver's storage,
+//! so its bytes are at an offset), and an operand past the inline
+//! threshold, which routes to the runtime's `memcmp` and must answer
+//! identically.
+
+fn eq(a: str, b: str) -> int {
+    if a == b { 1 } else { 0 }
+}
+
+fn ne(a: str, b: str) -> int {
+    if a != b { 1 } else { 0 }
+}
+
+fn main() -> !int {
+    let s = "the wolf runs"
+    let empty_pair = eq("", "")
+    let prefix = eq("wolf", "wolves")
+    let last_byte_same = eq("wolfa", "wolfa")
+    let last_byte_diff = eq("wolfa", "wolfb")
+    let first_byte_diff = ne("awolf", "bwolf")
+    let multibyte = eq("é€🐺", "é€🐺")
+    let multibyte_ne = ne("é", "e")
+    let subslice = eq(s[4..8], "wolf")
+    print(
+        "{empty_pair} {prefix} {last_byte_same} {last_byte_diff} {first_byte_diff} {multibyte} {multibyte_ne} {subslice}",
+    )
+
+    // Past STR_EQ_INLINE_MAX (64 bytes): the memcmp route. Same answers,
+    // including a difference in the final byte of a long operand, which
+    // is where a length-only comparison would lie.
+    let long_a = "wolf".repeat(40)
+    let long_b = "wolf".repeat(40)
+    let long_c = "{"wolf".repeat(39)}wolg"
+    let long_eq = eq(long_a, long_b)
+    let long_ne = ne(long_a, long_c)
+    let long_len = eq(long_a, "wolf".repeat(39))
+    print("{long_a.len == 160} {long_eq} {long_ne} {long_len}")
+
+    if empty_pair == 1 && prefix == 0 && last_byte_diff == 0 && subslice == 1 && long_eq == 1 {
+        0
+    } else {
+        1
+    }
+}

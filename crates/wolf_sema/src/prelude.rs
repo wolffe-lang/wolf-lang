@@ -104,6 +104,14 @@ pub const PRELUDE: &[&str] = &[
     "json_get",
     "json_type",
     "json_len",
+    // the str-construction border (s81, wolf-lang#58). `s.bytes()` is a
+    // byte VIEW (s77) and there was no byte SOURCE: nothing anywhere
+    // turned bytes back into a `str`, which is what blocked wolf-std's
+    // `bytes.to_str`. This is the ONLY entry that builds a `str` from
+    // arbitrary numbers, and it VALIDATES — its failure is the `utf8`
+    // row, never a trap and never a cast. PURE (no capability, no
+    // sandbox category), like the json family.
+    "str_from_utf8",
     // provisional corpus stand-ins (retire with s05's real std surface)
     "acquire",
     "release",

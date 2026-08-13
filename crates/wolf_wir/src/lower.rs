@@ -559,6 +559,29 @@ fn refuse(construct: &'static str, span: Span) -> NotYet {
 const LIST_DATA_OFF: u64 = 0;
 const LIST_LEN_OFF: u64 = 8;
 
+/// The longest operand `==` on `str` compares INLINE (s81). Above it,
+/// lowering routes to `__wolf_rt_str_eq`, whose body is a `memcmp`.
+///
+/// The number is a measurement, not a taste: on this host's LLVM tier
+/// the inline byte loop runs at ~1.45 ns/byte and `memcmp` at ~0.012
+/// (4 KiB operands; the wolf kernel goes 1.45 → 0.024 ns/byte when the
+/// route is taken, a 60x drop), while a cross-crate call costs a few ns
+/// fixed. The crossover therefore sits in the low tens of bytes, and 64
+/// is the round number above it that still keeps every dispatch-shaped
+/// compare — `match` arms, tokens, keywords, `d2_substr_search`'s
+/// five-byte needle — on the call-free path. A constant length folds
+/// the test away entirely, so those sites emit no call even as dead
+/// code.
+///
+/// The branch is not free on the short path, and it was measured there
+/// too: `d2_substr_search` came out at 0.868x WITH the route and 0.789x
+/// without, over 11 paired runs each against per-run layout floors of
+/// ~10% — the same number twice, and the kernel's spread across three
+/// independent runs (0.87–0.97) is wider than the difference. So the
+/// route buys 60x where it applies and costs nothing measurable where
+/// it does not.
+const STR_EQ_INLINE_MAX: i64 = 64;
+
 /// The WIR shape of `str` (s31): a `{ptr, i64}` fat pair — bytes
 /// pointer + byte length, exactly the s30 type-DIE mapping.
 fn str_ty(it: &mut types::TypeInterner) -> TypeId {
@@ -4344,8 +4367,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     )));
                 }
                 // s40: str comparison — byte equality and the
-                // byte-lexicographic order ([mem.str.order]), through
-                // the runtime (the checked executor's semantics).
+                // byte-lexicographic order ([mem.str.order]). s81
+                // inlines EQUALITY ([`Self::str_eq_inline`]); order
+                // still goes through the runtime, where the checked
+                // executor's `Ord` on bytes is the reference.
                 let lhs_is_str = d
                     .lhs()
                     .and_then(|l| self.expr_sema_ty(l.span))
@@ -4354,17 +4379,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 if lhs_is_str {
                     let (ap, al) = self.str_parts(a);
                     let (bp, bl) = self.str_parts(bv);
+                    if matches!(op, SyntaxKind::EqEq | SyntaxKind::NotEq) {
+                        let want_eq = op == SyntaxKind::EqEq;
+                        return Ok(Flow::Val(Some(self.str_eq_inline(ap, al, bp, bl, want_eq))));
+                    }
                     let z = self.b.iconst(types::I64, 0);
-                    let (sym, cc) = match op {
-                        SyntaxKind::EqEq => ("__wolf_rt_str_eq", IntCc::Ne),
-                        SyntaxKind::NotEq => ("__wolf_rt_str_eq", IntCc::Eq),
-                        SyntaxKind::Lt => ("__wolf_rt_str_cmp", IntCc::Slt),
-                        SyntaxKind::Gt => ("__wolf_rt_str_cmp", IntCc::Sgt),
-                        SyntaxKind::LtEq => ("__wolf_rt_str_cmp", IntCc::Sle),
-                        _ => ("__wolf_rt_str_cmp", IntCc::Sge),
+                    let cc = match op {
+                        SyntaxKind::Lt => IntCc::Slt,
+                        SyntaxKind::Gt => IntCc::Sgt,
+                        SyntaxKind::LtEq => IntCc::Sle,
+                        _ => IntCc::Sge,
                     };
                     let rc = self
-                        .rt_call(sym, &[ap, al, bp, bl], Some(types::I64))
+                        .rt_call("__wolf_rt_str_cmp", &[ap, al, bp, bl], Some(types::I64))
                         .expect("rc");
                     return Ok(Flow::Val(Some(
                         self.b
@@ -5055,6 +5082,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "json builtins in native lowering (checked lane only at s40)",
                 e.span,
             ));
+        }
+        // s81 (#58): the validating byte source. Unlike json it lands on
+        // BOTH lanes in the sprint that introduces it — a border post
+        // only wolf-std's checked tests can cross would not be a border
+        // post.
+        if callee_text == "str_from_utf8" {
+            return self.lower_str_from_utf8(d, e);
         }
         if cs.is_none() {
             match callee_text.as_str() {
@@ -6604,6 +6638,67 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// `str_from_utf8(b: List[int]) -> str ! {utf8}` (s81, wolf-lang#58)
+    /// — the byte SOURCE s77 deliberately did not add, added the honest
+    /// way.
+    ///
+    /// One call to `__wolf_rt_str_from_utf8` with the list header and a
+    /// 16-byte out slot: code 0 hands back the materialized `{ptr, len}`
+    /// pair, anything else becomes the `utf8` tag. The validation is the
+    /// runtime's (`core::str::from_utf8`, the same reference the checked
+    /// executor uses), the SPELLING of the failure is decided here — a
+    /// row, never a trap — which is the same division of labour every
+    /// other fallible builtin uses.
+    ///
+    /// The call goes through [`Self::rt_call_foreign`] because the shim
+    /// READS foreign storage (the caller's list buffer) as well as
+    /// writing the slot: no `data`/`len` the caller loaded may survive
+    /// it.
+    fn lower_str_from_utf8(&mut self, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("a unit-typed byte list", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let Some(hdr) = argv.first().copied() else {
+            return Err(refuse("`str_from_utf8` without its byte list", e.span));
+        };
+        let (region, slot) = self.rt_slot(16);
+        let rc = self
+            .rt_call_foreign(
+                "__wolf_rt_str_from_utf8",
+                &[hdr],
+                Some((slot, region)),
+                Some(types::I64),
+            )
+            .expect("rc");
+        let z = self.b.iconst(types::I64, 0);
+        let hit = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[rc, z],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let eu = self.eu_ty_of(e.span)?;
+        let out = self.eu_join(
+            eu,
+            hit,
+            |zelf| Ok(Some(zelf.load_str_slot(slot, region, e.span)?)),
+            |zelf| {
+                let id = zelf.b.module.tag_id("utf8");
+                Ok(zelf.b.iconst(types::I64, id))
+            },
+        )?;
+        Ok(Flow::Val(Some(out)))
+    }
+
     /// Map a runtime error code to a row tag through a branch chain:
     /// `pairs` are `(code, tag)` cases, `fallback` catches every other
     /// nonzero code — the compile-time-dispatched twin of
@@ -7181,6 +7276,198 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .one()
     }
 
+    /// `==` / `!=` on `str`, INLINE (s81, the last call out of family
+    /// D's hot loop): a length guard, then a byte-at-a-time compare
+    /// over the two operands' own storage — the s77 byte view's
+    /// `ptr.off` + `load.i8`, read from two bases at once.
+    /// `__wolf_rt_str_eq` was the one call left inside
+    /// `d2_substr_search`'s loop after s77 inlined the slice; the A/B
+    /// that replaced it with a byte compare measured 45.8 → 0.91
+    /// ns/byte (50x, ~0.70x of C), so this is a shape with a number
+    /// behind it, not a guess.
+    ///
+    /// `want_eq` picks which answer each exit carries, so `!=` costs
+    /// exactly what `==` costs: the two constants swap places and no
+    /// negation block is emitted (WIR has no boolean-not op).
+    ///
+    /// The trip count is the RIGHT operand's length on purpose. The
+    /// guard has already proved the two lengths equal, and the right
+    /// operand is the interned literal at every `match` arm and at
+    /// nearly every source-level `==`, so the loop LLVM sees there has
+    /// a CONSTANT bound and unrolls into a straight-line compare.
+    ///
+    /// Why not a word-at-a-time compare INLINE: WIR loads carry NATURAL
+    /// alignment (`emit.rs` writes `align 8` for an `i64`), and a str's
+    /// bytes have no alignment guarantee — every zero-copy subslice
+    /// starts wherever its receiver's code points do. An unaligned wide
+    /// load needs an alignment concept WIR does not have yet, so the
+    /// wide path is the runtime's `memcmp`, taken past
+    /// [`STR_EQ_INLINE_MAX`].
+    ///
+    /// There is no EMITTED pointer-identity shortcut: `icmp` is
+    /// integer-only by the verifier's rule, so `ap == bp` would need a
+    /// pointer compare added to the IR surface (verifier, both
+    /// backends, the roundtrip fuzzer). The build-time half of it is
+    /// free, though — when the two bases are the same WIR VALUE (two
+    /// uses of one interned literal, or a str compared with itself),
+    /// equality IS the length test, and that case returns without
+    /// reading a byte. Empty-vs-empty needs neither: two zero lengths
+    /// pass the guard and the loop runs zero times.
+    ///
+    /// The length guard can DECIDE at build time (`"wolf" == "wolves"`
+    /// interns two constant lengths), and a decided guard is asked
+    /// BEFORE its block exists: `ins_br` on a constant condition emits
+    /// a plain jump, so a block created for the arm that lost would sit
+    /// predecessorless — the shape Braun's `use_var` panics on when a
+    /// later byte load walks its memory token back through it.
+    fn str_eq_inline(
+        &mut self,
+        ap: Value,
+        al: Value,
+        bp: Value,
+        bl: Value,
+        want_eq: bool,
+    ) -> Value {
+        // Different lengths, different strings — one compare, and it is
+        // the whole answer at a `match` arm whose literal is a
+        // different width than the scrutinee.
+        let len_eq = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[al, bl],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        if let Some(c) = self.b.as_bool_const(len_eq)
+            && (!c || ap == bp)
+        {
+            // Decided outright: unequal lengths, or equal lengths over
+            // the same storage.
+            self.b.stats.fold += 1;
+            return self.b.bconst(c == want_eq);
+        }
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, types::BOOL);
+        // `yes` is what an EQUAL verdict carries out; `!=` swaps them.
+        let yes = self.b.bconst(want_eq);
+        let no = self.b.bconst(!want_eq);
+        // Same storage, same bytes: equality is exactly the length
+        // test, decided without a scan.
+        if ap == bp {
+            self.b.stats.fold += 1;
+            self.b.ins_br(len_eq, merge, &[yes], merge, &[no]);
+            self.b.seal_block(merge);
+            self.b.switch_to_block(merge);
+            return out;
+        }
+        if self.b.as_bool_const(len_eq).is_none() {
+            let same_len = self.b.create_block();
+            self.b.ins_br(len_eq, same_len, &[], merge, &[no]);
+            self.b.seal_block(same_len);
+            self.b.switch_to_block(same_len);
+        }
+        self.b.gvn_push_scope();
+        // The long-operand route ([`STR_EQ_INLINE_MAX`]). The byte loop
+        // runs at ~1.45 ns/byte and `memcmp` at ~0.012 (measured, s81:
+        // 4 KiB operands, this host, LLVM tier), so past a few dozen
+        // bytes the call is two orders of magnitude cheaper and the
+        // honest lowering takes it. A KNOWN length settles the test
+        // without emitting the constant at all — every `match` arm and
+        // every literal compare — so the dispatch path this sprint
+        // exists for emits no call, not even as dead code.
+        let long = match self.b.as_int_const(bl) {
+            Some(n) => self.b.bconst(n > STR_EQ_INLINE_MAX),
+            None => {
+                let k = self.b.iconst(types::I64, STR_EQ_INLINE_MAX);
+                self.b
+                    .ins(
+                        Opcode::Icmp,
+                        &[bl, k],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sgt),
+                    )
+                    .one()
+            }
+        };
+        match self.b.as_bool_const(long) {
+            // Provably short: no call, no branch, straight to the scan.
+            Some(false) => {}
+            // Provably long: the scan is dead, so it is not built.
+            Some(true) => {
+                let rc = self
+                    .rt_call("__wolf_rt_str_eq", &[ap, al, bp, bl], Some(types::I64))
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                self.b.ins_br(hit, merge, &[yes], merge, &[no]);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(merge);
+                self.b.switch_to_block(merge);
+                return out;
+            }
+            None => {
+                let wide = self.b.create_block();
+                let narrow = self.b.create_block();
+                self.b.ins_br(long, wide, &[], narrow, &[]);
+                self.b.seal_block(wide);
+                self.b.switch_to_block(wide);
+                self.b.gvn_push_scope();
+                let rc = self
+                    .rt_call("__wolf_rt_str_eq", &[ap, al, bp, bl], Some(types::I64))
+                    .expect("rc");
+                let hit = self.nonzero(rc);
+                self.b.ins_br(hit, merge, &[yes], merge, &[no]);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(narrow);
+                self.b.switch_to_block(narrow);
+            }
+        }
+        let zero = self.b.iconst(types::I64, 0);
+        let header = self.b.create_block();
+        let i = self.b.add_block_param(header, types::I64);
+        self.b.ins_jmp(header, &[zero]);
+        self.b.switch_to_block(header);
+        let more = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[i, bl],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let body = self.b.create_block();
+        self.b.ins_br(more, body, &[], merge, &[yes]);
+        self.b.seal_block(body);
+        self.b.switch_to_block(body);
+        let x = self.bytes_load_at(ap, i);
+        let y = self.bytes_load_at(bp, i);
+        let same = self
+            .b
+            .ins(Opcode::Icmp, &[x, y], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+            .one();
+        let latch = self.b.create_block();
+        self.b.ins_br(same, latch, &[], merge, &[no]);
+        self.b.seal_block(latch);
+        self.b.switch_to_block(latch);
+        let one = self.b.iconst(types::I64, 1);
+        // `.wrap`, not `.chk`: the index is bounded by a str's byte
+        // length, which is an `i64` the allocator already handed out —
+        // a checked add here would be a trap edge no execution reaches
+        // and a block the mid-end would then have to prune.
+        let next = self
+            .b
+            .ins(Opcode::IaddWrap, &[i, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(header, &[next]);
+        self.b.seal_block(header);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        out
+    }
+
     /// `for b in <str>.bytes()` — a counted loop over the receiver's
     /// own bytes: `len` once into the trip count, then one `load.i8`
     /// per iteration. No iterator protocol, no allocation, no call, and
@@ -7327,16 +7614,28 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// length. Zero-length literals intern one NUL byte (a zero-size
     /// data symbol is degenerate) but keep len 0.
     fn str_value(&mut self, bytes: &[u8]) -> Value {
+        let (p, len) = self.str_literal_parts(bytes);
+        let sty = str_ty(self.b.types());
+        self.b
+            .ins(Opcode::AggMake, &[p, len], &[sty], Aux::None)
+            .one()
+    }
+
+    /// The `{ptr, len}` halves of a byte-literal string WITHOUT building
+    /// the pair. `agg.get(agg.make(p, len), 1)` does not fold back to
+    /// `len` at build time, so a caller that only wants the halves and
+    /// goes through [`Self::str_value`] loses the length's constness —
+    /// and with it the s81 threshold fold that keeps `match`-over-str
+    /// dispatch call-free, and the constant trip count that lets LLVM
+    /// unroll the compare.
+    fn str_literal_parts(&mut self, bytes: &[u8]) -> (Value, Value) {
         let idx = self
             .b
             .module
             .intern_data(if bytes.is_empty() { &[0u8] } else { bytes });
         let p = self.b.ins_data_addr(idx);
         let len = self.b.iconst(types::I64, bytes.len() as i64);
-        let sty = str_ty(self.b.types());
-        self.b
-            .ins(Opcode::AggMake, &[p, len], &[sty], Aux::None)
-            .one()
+        (p, len)
     }
 
     /// Cook a hole-free string EPISODE (a `StringLit` pattern node)
@@ -9005,8 +9304,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 PatShape::StrTests(cands) => {
                     // Dispatch-by-equality (#54, v0): each candidate is
-                    // one `__wolf_rt_str_eq` test against the interned
-                    // literal bytes, chained in arm order.
+                    // one INLINE str equality against the interned
+                    // literal bytes (s81), chained in arm order. The
+                    // literal's length is a constant here, so the
+                    // length guard folds to a compare against a
+                    // constant and the byte loop gets a constant trip
+                    // count — a `match` on short literals unrolls.
                     if is_last && exhaustive && arm.guard().is_none() {
                         self.enter_match_arm(
                             arm,
@@ -9023,25 +9326,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         continue;
                     }
                     let (sp, sl) = self.str_parts(sv);
-                    let z = self.b.iconst(types::I64, 0);
                     let arm_bb = self.b.create_block();
                     let next_bb = self.b.create_block();
                     let mut chain_scopes = 0usize;
                     for (k, bytesc) in cands.iter().enumerate() {
-                        let cv = self.str_value(bytesc);
-                        let (cp, cl) = self.str_parts(cv);
-                        let rc = self
-                            .rt_call("__wolf_rt_str_eq", &[sp, sl, cp, cl], Some(types::I64))
-                            .expect("rc");
-                        let t = self
-                            .b
-                            .ins(
-                                Opcode::Icmp,
-                                &[rc, z],
-                                &[types::BOOL],
-                                Aux::IntCc(IntCc::Ne),
-                            )
-                            .one();
+                        let (cp, cl) = self.str_literal_parts(bytesc);
+                        let t = self.str_eq_inline(sp, sl, cp, cl, true);
                         if k + 1 == cands.len() {
                             self.b.ins_br(t, arm_bb, &[], next_bb, &[]);
                         } else {

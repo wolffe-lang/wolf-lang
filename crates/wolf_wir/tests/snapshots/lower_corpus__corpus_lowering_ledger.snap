@@ -207,11 +207,13 @@ strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/empty_needle.lu: lowers
+strings/equality_lanes.lu: lowers
 strings/float_format.lu: lowers
 strings/format_spec_full.lu: lowers
 strings/format_spec_malformed.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
+strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
 strings/match_str_dispatch.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
