@@ -7,13 +7,27 @@ b0(%0: i64):
   %1 = iconst.i64 0
   jmp b1(%1, %1)
 b1(%2: i64, %3: i64):
-  %4 = icmp.slt %2, %0
-  br %4, b2, b3
-b2:
-  %5 = iconst.i64 1
-  %6 = iadd.wrap %2, %5
-  %7 = iadd.chk %3, %2
-  jmp b1(%6, %7)
-b3:
-  ret %3
+  %4 = iconst.i64 2147483647
+  %5 = icmp.sle %0, %4
+  br %5, b2(%2, %3), b5(%2, %3)
+b2(%6: i64, %7: i64):
+  jmp b3(%6, %7)
+b3(%8: i64, %9: i64):
+  %10 = icmp.slt %8, %0
+  br %10, b4, b7(%9)
+b4:
+  %11 = iconst.i64 1
+  %12 = iadd.wrap %8, %11
+  %13 = iadd.wrap %9, %8
+  jmp b3(%12, %13)
+b5(%14: i64, %15: i64):
+  %16 = icmp.slt %14, %0
+  br %16, b6, b7(%15)
+b6:
+  %17 = iconst.i64 1
+  %18 = iadd.wrap %14, %17
+  %19 = iadd.chk %15, %14
+  jmp b5(%18, %19)
+b7(%20: i64):
+  ret %20
 }

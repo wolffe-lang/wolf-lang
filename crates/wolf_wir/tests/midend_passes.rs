@@ -366,8 +366,17 @@ fn coalesce_never_crosses_a_call() {
 
 /// X3's claw-back: the canonical counter's increment check is proven
 /// by the loop guard's π refinement alone (i < n ⇒ i+1 ≤ MAX) plus
-/// the induction lower bound; the data accumulator's check stays —
-/// checked-in-release means data-dependent overflow still traps.
+/// the induction lower bound.
+///
+/// The data accumulator is the s85 case. `acc = acc + i` cannot be
+/// proven outright — `n` is opaque, so nothing bounds the sum — and
+/// before s85 the check simply stayed. Now the reduction versions:
+/// `n <= 2^31-1` is tested ONCE outside, and under it the trip-scaled
+/// bound puts the accumulator inside `0..=n(n-1)`, which is inside
+/// i64. The fast copy is not unchecked arithmetic; it is arithmetic
+/// whose check was discharged by the guard above it, and the slow
+/// copy — the one a larger `n` actually runs — keeps every check.
+/// Both halves are in the snapshot for exactly that reason.
 #[test]
 fn rangeopt_counter_eliminates_accumulator_stays() {
     let src = "fn @sum(i64) -> i64 {\n\
@@ -388,9 +397,10 @@ fn rangeopt_counter_eliminates_accumulator_stays() {
     let (out, stats) = one_pass(src, "rangeopt");
     assert!(stats.checks_rewritten >= 1, "{stats}");
     assert!(out.contains("iadd.wrap"), "counter proven:\n{out}");
+    assert_eq!(stats.loops_versioned, 1, "the reduction versions: {stats}");
     assert!(
         out.contains("iadd.chk %"),
-        "accumulator keeps its check (verdicts are sacred):\n{out}"
+        "the slow copy keeps its check (verdicts are sacred):\n{out}"
     );
     insta::assert_snapshot!("rangeopt_counter_loop", out);
 }
@@ -650,6 +660,161 @@ fn rangeopt_versioning_skips_loops_with_calls() {
                }\n";
     let (_, stats) = one_pass(src, "rangeopt");
     assert_eq!(stats.loops_versioned, 0, "calls bar versioning: {stats}");
+}
+
+/// s85, the trip-scaled accumulator, on the shape D44 named: `acc =
+/// acc + (i & 1023)` over a loop whose bound is a CONSTANT. Nothing
+/// about the accumulator is constant — it is not an induction variable
+/// with a fixed step, which is why every earlier round left its check
+/// alone — but the increment is bounded by the mask and the iteration
+/// count is bounded by the guard, and the product of the two is a
+/// bound on the sum. No guard, no clone, no second copy of the loop:
+/// the ranges simply close.
+#[test]
+fn rangeopt_trip_scaled_accumulator_needs_no_guard() {
+    let src = "fn @sum() -> i64 {\n\
+               b0:\n  \
+               %0 = iconst.i64 0\n  \
+               jmp b1(%0, %0)\n\
+               b1(%1: i64, %2: i64):\n  \
+               %3 = iconst.i64 100000\n  \
+               %4 = icmp.slt %1, %3\n  \
+               br %4, b2, b3\n\
+               b2:\n  \
+               %5 = iconst.i64 1023\n  \
+               %6 = band %1, %5\n  \
+               %7 = iadd.chk %2, %6\n  \
+               %8 = iconst.i64 1\n  \
+               %9 = iadd.chk %1, %8\n  \
+               jmp b1(%9, %7)\n\
+               b3:\n  \
+               ret %2\n\
+               }\n";
+    let (out, stats) = one_pass(src, "rangeopt");
+    assert_eq!(stats.loops_versioned, 0, "no guard is needed: {stats}");
+    assert!(
+        !out.contains("iadd.chk"),
+        "100000 iterations of at most 1023 each is 102_300_000, and that fits:\n{out}"
+    );
+    assert_eq!(
+        stats.loop_checks_eliminated, stats.loop_checks_seen,
+        "{stats}"
+    );
+}
+
+/// The same reduction with an OPAQUE bound. Nothing bounds the trip
+/// count, so nothing bounds the sum, so the direct round proves
+/// nothing — and this is where the versioning client earns its place:
+/// it hoists `n <= K` above the loop and the fast copy's checks fall
+/// to the same trip-scaled rule under the guard. The slow copy still
+/// carries every check, which is the distinction that matters: the
+/// fast body is not unchecked arithmetic, it is arithmetic whose check
+/// was discharged once, outside.
+#[test]
+fn rangeopt_versions_a_reduction_against_an_opaque_bound() {
+    let src = "fn @sum(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iconst.i64 0\n  \
+               jmp b1(%1, %1)\n\
+               b1(%2: i64, %3: i64):\n  \
+               %4 = icmp.slt %2, %0\n  \
+               br %4, b2, b3\n\
+               b2:\n  \
+               %5 = iconst.i64 1023\n  \
+               %6 = band %2, %5\n  \
+               %7 = iadd.chk %3, %6\n  \
+               %8 = iconst.i64 1\n  \
+               %9 = iadd.chk %2, %8\n  \
+               jmp b1(%9, %7)\n\
+               b3:\n  \
+               ret %3\n\
+               }\n";
+    let (out, stats) = one_pass(src, "rangeopt");
+    assert_eq!(stats.loops_versioned, 1, "{stats}");
+    assert!(out.contains("iadd.wrap"), "fast copy discharged:\n{out}");
+    assert!(
+        out.contains("iadd.chk"),
+        "slow copy keeps every check:\n{out}"
+    );
+}
+
+/// The monotonicity rule is CHECKED-only, and this is the litmus.
+/// `%6 = iadd.wrap %2, 1` is user `wrapping[T]` arithmetic as far as
+/// this pass can tell — it carries no trap, so "the counter never
+/// descends below its entry value" is not a theorem about it. Here the
+/// loop exits on `!=`, which pins no interval at all, so nothing rules
+/// out the counter reaching `i64::MAX` and wrapping to `i64::MIN` on
+/// the next step; the trip-scaled rule refuses for exactly that reason
+/// (its wrap admission needs the step proven representable) and the
+/// `i < 0` guard keeps its trap.
+///
+/// This is a soundness regression test, not a precision one: before
+/// s85 the wrap form was accepted as monotone on the stated grounds
+/// that this pass only mints wrap forms it has already proven — true
+/// of the ones it mints, false of the ones a `wrapping[T]` program
+/// hands it, and the difference is a trap that would go missing.
+#[test]
+fn rangeopt_refuses_monotonicity_from_a_wrapping_counter() {
+    let src = "fn @f(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iconst.i64 0\n  \
+               jmp b1(%1)\n\
+               b1(%2: i64):\n  \
+               %3 = icmp.ne %2, %0\n  \
+               br %3, b2, b5\n\
+               b2:\n  \
+               %4 = iconst.i64 0\n  \
+               %5 = icmp.slt %2, %4\n  \
+               br %5, b3, b4\n\
+               b3:\n  \
+               trap.bounds\n\
+               b4:\n  \
+               %7 = iconst.i64 1\n  \
+               %6 = iadd.wrap %2, %7\n  \
+               jmp b1(%6)\n\
+               b5:\n  \
+               ret %2\n\
+               }\n";
+    let (out, stats) = one_pass(src, "rangeopt");
+    assert_eq!(
+        stats.bounds_checks_eliminated, 0,
+        "a wrapping counter with no upper guard is not monotone: {stats}"
+    );
+    assert!(out.contains("trap.bounds"), "the guard stays:\n{out}");
+}
+
+/// The other side of the same rule, so the litmus above is not just
+/// the analysis being blind: give the SAME wrapping counter an upper
+/// guard and the step is provably representable (`i < n` ⇒ `i + 1 ≤
+/// n ≤ MAX`), the trip bound closes, and the counter's floor comes
+/// back — this time as a proof rather than as a promise.
+#[test]
+fn rangeopt_wrapping_counter_under_a_guard_is_bounded() {
+    let src = "fn @f(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iconst.i64 0\n  \
+               jmp b1(%1)\n\
+               b1(%2: i64):\n  \
+               %3 = icmp.slt %2, %0\n  \
+               br %3, b2, b5\n\
+               b2:\n  \
+               %4 = iconst.i64 0\n  \
+               %5 = icmp.slt %2, %4\n  \
+               br %5, b3, b4\n\
+               b3:\n  \
+               trap.bounds\n\
+               b4:\n  \
+               %7 = iconst.i64 1\n  \
+               %6 = iadd.wrap %2, %7\n  \
+               jmp b1(%6)\n\
+               b5:\n  \
+               ret %2\n\
+               }\n";
+    let (out, _) = one_pass(src, "rangeopt");
+    assert!(
+        !out.contains("trap.bounds"),
+        "the guarded counter is provably non-negative:\n{out}"
+    );
 }
 
 // ----------------------------------------------------------- licm ----

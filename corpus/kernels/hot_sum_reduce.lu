@@ -1,0 +1,57 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//! s85 checked-arith kernel tier: the SUMMATION D44 named. An
+//! accumulator over a container's elements is the shape that carried
+//! the whole of X3's measured cost, and it takes both of s85's
+//! mechanisms to discharge:
+//!
+//!  1. the element load has a range because the element TYPE has a
+//!     width — a `u8` widened for the addition lands in `0..=255`,
+//!     which is what makes the per-iteration increment bounded at all;
+//!  2. the accumulator is then bounded by the trip count times that
+//!     increment, and since the trip count is `l.len` (opaque), the
+//!     bound only closes under a guard: `len <= MAX/255`, tested ONCE
+//!     outside the loop, with a slow copy behind it that keeps every
+//!     check for the lengths the guard rejects.
+//!
+//! The `List[int]` twin below is the negative control, and it is the
+//! point of the file as much as the positive one: an `int` element
+//! carries no width bound, nothing bounds the increment, and the check
+//! STAYS. A proof that cannot be made is not made.
+
+fn total_bytes(l: List[u8]) -> int {
+    var acc = 0
+    var i = 0
+    while i < l.len {
+        acc = acc + l[i] as int
+        i = i + 1
+    }
+    acc
+}
+
+fn total_ints(l: List[int]) -> int {
+    var acc = 0
+    var i = 0
+    while i < l.len {
+        // No width to lean on: this check stays, in every profile.
+        acc = acc % 1048576 + l[i] % 1048576
+        i = i + 1
+    }
+    acc
+}
+
+fn main() -> !int {
+    var bytes = List[u8]()
+    var ints = List[int]()
+    var i = 0
+    while i < 512 {
+        (mut bytes).push(3)
+        (mut ints).push(5)
+        i = i + 1
+    }
+    let a = total_bytes(bytes)
+    let b = total_ints(ints)
+    if a != 1536 { return 1 }
+    if b >= 0 { 0 } else { 1 }
+}

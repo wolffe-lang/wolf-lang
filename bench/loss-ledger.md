@@ -587,6 +587,48 @@ consecutive re-measurement to re-trigger the D2/X3 revisit clause at the
 same magnitude and reach the same conclusion, and the first one where the
 family-E numbers are known not to be clock artefacts. D44 stands.
 
+### s85 re-measurement — the optimizer gap was an optimizer gap
+
+D44's ruling was a claim about the compiler, not about the language:
+the cost is "a mid-end problem (range analysis plus loop versioning
+already in s42's pass list), not a semantics problem". s85 tested it
+by building the two mechanisms D44 named, and the claim survives.
+
+Both lanes re-measured back to back on one host, 7 runs, the only
+difference between them being the compiler:
+
+| kernel | checked | wrapping | X3 delta | pre-s85 X3 | vs naive C |
+|---|---|---|---|---|---|
+| `e1_sum_reduce` | 0.1500 ns/op | 0.1500 | **+0.0%** | +177.0% | 0.366x → **0.971x** |
+| `e2_checksum` | 0.8214 | 0.8571 | −4.2% | −0.3% | 1.007x → 0.996x |
+| `e3_index_arith` | 0.1250 | 0.1290 | −3.1% | −1.9% | 0.500x → 0.517x |
+| **family E geomean** | | | **−2.4%** | **+39.4%** | |
+
+The bimodality is gone because its one mode is gone. `e1`'s
+accumulator is now bounded by the trip count times the masked
+increment, so its check folds and LLVM vectorizes the reduction; the
+two latency-bound loops are where they always were. A −2.4% geomean
+means checked and wrapping compile to the same loop and the residual
+is host noise, so the honest statement is **X3's measured cost on
+family E is zero, inside the floor** — comfortably under the ~2–3%
+D44 set as its revisit threshold. **The D2/X3 revisit clause is not
+re-triggered.**
+
+Two cautions on the number, so it is not read as more than it is.
+First, family E is three kernels: this is not a claim that checked
+arithmetic is free everywhere, only that it is free on everything this
+suite can currently see. Second, the win rides on ranges that close:
+where nothing bounds an element (`List[int]`) or an entry value
+(`e2`'s opaque seed), no proof is available, the check stays, and the
+program pays for it. `corpus/kernels/hot_sum_reduce.lu` carries both
+halves — the `u8` reduction that discharges and the `int` reduction
+that does not — so the boundary is a regression test rather than a
+recollection.
+
+`e3` keeps its loss at 0.517x and it is still not an X3 loss: the
+checked and wrapping lanes agree to within 3%, so the gap is the (a)
+tail already recorded above, not the semantics.
+
 ## G4 — trivially-false checks survive the mid-end into LLVM IR
 
 **Classification (a), small and cheap, still open.** The emitted IR still
