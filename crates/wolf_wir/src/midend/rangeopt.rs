@@ -16,6 +16,41 @@
 //! argument is a positive-step checked increment never descends below
 //! its entry value).
 //!
+//! # Loop-carried parameters (s85)
+//!
+//! D44 held X3 on the argument that checked arithmetic's measured cost
+//! was an optimizer gap rather than a semantics problem, and named the
+//! gap: a loop that sums bounded values could not prove its
+//! accumulator safe, because an accumulator is not an induction
+//! variable — its step is a value, not a constant, so the
+//! monotonicity rule above says nothing about it. A header parameter
+//! is therefore bounded by the MEET of three independent rules, each
+//! sound alone:
+//!
+//! - **monotonicity**, as above, and now CHECKED-only. A `wrap` form
+//!   carries no trap and therefore no floor, and `wrapping[T]`
+//!   arithmetic lowers to the same opcode this pass mints — the two
+//!   are indistinguishable at the opcode, so the stronger reading was
+//!   a claim about programs it had not seen.
+//! - **trip-scaled accumulation**: `v ± d` once per iteration, with
+//!   `d` bounded and the iteration count bounded, bounds `v` by
+//!   `entry + trip · extreme(d)`. This is the rule the summation
+//!   needed. It also recovers the wrap case the first rule gave up,
+//!   honestly: when the whole computed span fits the type, no
+//!   intermediate could have wrapped, and that is the same sentence
+//!   read as an induction.
+//! - **join**: a parameter IS one of its incoming arguments, so a
+//!   back-edge argument bounded by its own defining op — a mask, a
+//!   remainder — bounds the parameter. `acc = (acc + x) & 0xFFFFF` is
+//!   the checksum idiom, and the mask is what makes it finite.
+//!
+//! The trip bound itself is read off any constant-step induction
+//! variable of the same header: it starts at or above its entry floor,
+//! advances by exactly `s > 0`, and sits at or below the guard's
+//! refinement where the advance is computed. Where nothing bounds the
+//! guard's limit, the bound does not close — and that is the demand
+//! the versioning client below answers.
+//!
 //! # Clients
 //!
 //! - **Check elimination** (X3's claw-back): an overflow check whose
@@ -62,6 +97,12 @@
 //!   copy keeps every check — behavior is identical on both paths,
 //!   only the proven-impossible traps are gone from the hot one.
 //!   Loops containing calls never version (schedule points, spec/07).
+//!   With s85's trip-scaled rule underneath it, this client now fires
+//!   for REDUCTIONS as well as scaled indices: `n <= K` above the loop
+//!   bounds the trip count, which bounds the sum. The fast copy is not
+//!   unchecked arithmetic — it is arithmetic whose check was
+//!   discharged once, outside — and the distinction is the whole
+//!   difference between an optimization and a change of semantics.
 //!
 //! The hot-loop elimination RATE is measured here (`loop_checks_seen`
 //! / `loop_checks_eliminated`) — the empirical defense of
@@ -150,6 +191,12 @@ struct RangeCx<'a> {
     visiting: HashSet<Value>,
     /// Instruction placement (batch-computed; the egg discipline).
     place: HashMap<Inst, Block>,
+    /// Trip-count bounds per loop header (s85), memoized: how many
+    /// times the header's back edges can be traversed.
+    trip: HashMap<Block, Option<i128>>,
+    /// Recursion guard for the above (a trip query asks for the
+    /// induction variable's range, which asks for the trip count).
+    trip_busy: HashSet<Block>,
 }
 
 fn type_bounds(cx: &RangeCx, v: Value) -> Option<Range> {
@@ -188,9 +235,23 @@ impl<'a> RangeCx<'a> {
             hypo,
             visiting: HashSet::new(),
             place,
+            trip: HashMap::new(),
+            trip_busy: HashSet::new(),
         };
         cx.seed_facts();
+        // The fact seeds are the only memo entries that predate the π
+        // environment legitimately; everything else cached while
+        // BUILDING that environment saw a partial one, because seeding
+        // an edge queries the operand ranges at the branch. Snapshot
+        // the seeds, seed π, then drop the derived memos so every
+        // client query re-derives against the finished environment.
+        // (Without this a trip bound computed mid-seed reads a loop
+        // counter as unbounded and memoizes the answer — s85.)
+        let seeded = cx.base.clone();
         cx.seed_pi(cfg);
+        cx.base = seeded;
+        cx.affine.clear();
+        cx.trip.clear();
         cx
     }
 
@@ -441,16 +502,12 @@ impl<'a> RangeCx<'a> {
         }
     }
 
-    /// Induction seeding: a header parameter whose back-edge argument
-    /// is `iadd.chk(param, positive const)` (or the wrap form this
-    /// pass itself proved) cannot descend below its entry argument's
-    /// lower bound; symmetrically for negative steps and upper bounds.
-    fn param_range(&mut self, v: Value, b: Block, idx: u16, tb: Range) -> Range {
-        // Collect incoming (pred, arg) pairs from the whole layout.
+    /// Every (block, argument) pair flowing into parameter `idx` of
+    /// `b`, split into entry edges and back edges.
+    fn incoming(&self, b: Block, idx: u16) -> (Vec<Value>, Vec<(Block, Value)>) {
         let mut entry_args: Vec<Value> = Vec::new();
-        let mut back_args: Vec<Value> = Vec::new();
-        let blocks: Vec<Block> = self.f.layout.clone();
-        for pb in blocks {
+        let mut back_args: Vec<(Block, Value)> = Vec::new();
+        for &pb in &self.f.layout {
             let Some(&term) = self.f.blocks[pb].insts.last() else {
                 continue;
             };
@@ -472,12 +529,34 @@ impl<'a> RangeCx<'a> {
                     continue;
                 };
                 if self.doms.dominates(b, pb) {
-                    back_args.push(arg);
+                    back_args.push((pb, arg));
                 } else {
                     entry_args.push(arg);
                 }
             }
         }
+        (entry_args, back_args)
+    }
+
+    /// A loop-carried parameter's range, as the MEET of three
+    /// independent over-approximations (each sound on its own, so
+    /// intersecting them is sound):
+    ///
+    /// - **monotonicity** — a checked constant-step increment never
+    ///   descends below its entry floor, because the descent it would
+    ///   need is the wrap a checked op traps on instead;
+    /// - **trip-scaled accumulation** (s85) — a parameter incremented
+    ///   once per iteration by a BOUNDED (not necessarily constant)
+    ///   delta cannot travel further than the trip count times that
+    ///   delta's extreme. This is the rule a summation needs: `acc =
+    ///   acc + (i & 1023)` over a loop of 100000 lands in
+    ///   `0..=102_300_000`, and the accumulator's own overflow check
+    ///   dies on the ranges rather than on a promise;
+    /// - **join** — the parameter is one of its incoming arguments, so
+    ///   an argument whose defining op bounds it outright (a mask, a
+    ///   remainder) bounds the parameter too.
+    fn param_range(&mut self, v: Value, b: Block, idx: u16, tb: Range) -> Range {
+        let (entry_args, back_args) = self.incoming(b, idx);
         if entry_args.is_empty() {
             return tb;
         }
@@ -496,47 +575,248 @@ impl<'a> RangeCx<'a> {
         if back_args.is_empty() {
             return (elo, ehi);
         }
-        // Monotonicity: every back-edge argument is a checked (or
-        // proven-wrap-free) constant-step increment of the parameter.
+        let mut r = tb;
+        let mut meet = |x: Option<Range>| {
+            if let Some(x) = x {
+                r = (r.0.max(x.0), r.1.min(x.1));
+            }
+        };
+        let mono = self.mono_range(v, &back_args, elo, ehi, tb);
+        meet(mono);
+        let acc = self.accum_range(v, b, &back_args, elo, ehi, tb);
+        meet(acc);
+        let join = self.join_range(&back_args, elo, ehi);
+        meet(join);
+        if r.0 > r.1 { tb } else { r }
+    }
+
+    /// Monotone constant-step induction. **Checked forms only**: a
+    /// checked op traps rather than wrapping, so "never descends below
+    /// the entry floor" is a theorem about it. A wrap form carries no
+    /// such postcondition — user `wrapping[T]` arithmetic lowers to the
+    /// same opcode — and monotonicity claimed from one would be a
+    /// proof this pass has no right to. The bounded-trip rule below
+    /// recovers the wrap case honestly, when it can.
+    fn mono_range(
+        &mut self,
+        v: Value,
+        back: &[(Block, Value)],
+        elo: i128,
+        ehi: i128,
+        tb: Range,
+    ) -> Option<Range> {
         let mut pos = true;
         let mut neg = true;
-        for &a in &back_args {
-            let Some(ai) = analysis::def_inst(self.f, a) else {
-                return tb;
-            };
+        for &(_, a) in back {
+            let ai = analysis::def_inst(self.f, a)?;
             let op = self.f.insts[ai].op;
-            if !matches!(op, Opcode::IaddChk | Opcode::IaddWrap | Opcode::IsubChk) {
-                return tb;
+            if !matches!(op, Opcode::IaddChk | Opcode::IsubChk) {
+                return None;
             }
             let args = self.f.vpool.get(self.f.insts[ai].args);
             if args[0] != v {
-                return tb;
+                return None;
             }
-            let Some(step) = analysis::const_int(self.f, args[1]) else {
-                return tb;
-            };
-            // The wrap form is only monotone if this pass proved it
-            // trap-free, which it did before rewriting — accept it
-            // (the rewrite preserved values on all executions).
+            let step = analysis::const_int(self.f, args[1])?;
             let step = if op == Opcode::IsubChk { -step } else { step };
-            if step < 0 {
+            if step <= 0 {
                 pos = false;
             }
-            if step > 0 {
-                neg = false;
-            }
-            if step == 0 {
-                pos = false;
+            if step >= 0 {
                 neg = false;
             }
         }
         if pos {
-            (elo, tb.1)
+            Some((elo, tb.1))
         } else if neg {
-            (tb.0, ehi)
+            Some((tb.0, ehi))
         } else {
-            tb
+            None
         }
+    }
+
+    /// The trip-scaled accumulator bound (s85, D44's first mechanism).
+    ///
+    /// Every back edge feeds `v ± d` where `d` is bounded but need not
+    /// be constant, so after `k` iterations `v = entry + Σ d_i` with
+    /// `k ≤ trip`. The bound is `entry + trip · extreme(d)` on each
+    /// side. For CHECKED increments the machine value equals that
+    /// mathematical one on every execution that reaches the use (an
+    /// intermediate that did not fit would have trapped first). For
+    /// WRAP increments there is no such postcondition, so the rule is
+    /// admitted only when the whole computed span fits the type — in
+    /// which case no intermediate could have wrapped, which is the
+    /// same statement read as an induction.
+    fn accum_range(
+        &mut self,
+        v: Value,
+        header: Block,
+        back: &[(Block, Value)],
+        elo: i128,
+        ehi: i128,
+        tb: Range,
+    ) -> Option<Range> {
+        let trip = self.trip_bound(header)?;
+        let mut dlo = i128::MAX;
+        let mut dhi = i128::MIN;
+        let mut wrapping = false;
+        for &(_, a) in back {
+            let ai = analysis::def_inst(self.f, a)?;
+            // Unsigned checked ops are deliberately absent: their trap
+            // boundary is `u64::MAX`, so their result can be negative
+            // read as a signed interval, and this whole channel is
+            // signed.
+            let sign: i128 = match self.f.insts[ai].op {
+                Opcode::IaddChk => 1,
+                Opcode::IsubChk => -1,
+                Opcode::IaddWrap => {
+                    wrapping = true;
+                    1
+                }
+                Opcode::IsubWrap => {
+                    wrapping = true;
+                    -1
+                }
+                _ => return None,
+            };
+            let args = self.f.vpool.get(self.f.insts[ai].args);
+            if args[0] != v {
+                return None;
+            }
+            // The delta AT THE INCREMENT'S OWN BLOCK: the loop guard's
+            // π refinement is what bounds a delta that is itself the
+            // induction variable (`acc = acc + i`).
+            let d = match self.place.get(&ai).copied() {
+                Some(b) => self.range_at(args[1], b)?,
+                None => self.def_range(args[1])?,
+            };
+            let (clo, chi) = if sign > 0 { (d.0, d.1) } else { (-d.1, -d.0) };
+            dlo = dlo.min(clo);
+            dhi = dhi.max(chi);
+        }
+        let lo = elo.checked_add(trip.checked_mul(dlo.min(0))?)?;
+        let hi = ehi.checked_add(trip.checked_mul(dhi.max(0))?)?;
+        if lo > hi {
+            return None;
+        }
+        if wrapping && (lo < tb.0 || hi > tb.1) {
+            return None;
+        }
+        Some((lo, hi))
+    }
+
+    /// The join rule: a parameter takes one of its incoming arguments'
+    /// values, so an argument bounded by its own defining op bounds the
+    /// parameter. `acc = (acc + x) & 0xFFFFF` is the shape — the mask
+    /// is what makes a checksum accumulator finite.
+    fn join_range(&mut self, back: &[(Block, Value)], elo: i128, ehi: i128) -> Option<Range> {
+        let mut lo = elo;
+        let mut hi = ehi;
+        for &(_, a) in back {
+            let r = self.selfbound(a)?;
+            lo = lo.min(r.0);
+            hi = hi.max(r.1);
+        }
+        Some((lo, hi))
+    }
+
+    /// The range of a value whose defining op bounds it WITHOUT
+    /// consulting operand ranges. The restriction is the point: a
+    /// general query here would recurse through the very parameter
+    /// being computed, hit the cycle guard, and MEMOIZE type bounds for
+    /// a loop-carried value that later rounds could have done better on.
+    fn selfbound(&mut self, v: Value) -> Option<Range> {
+        let inst = analysis::def_inst(self.f, v)?;
+        if !matches!(
+            self.f.insts[inst].op,
+            Opcode::Iconst | Opcode::Band | Opcode::IremChk | Opcode::UremChk | Opcode::Lshr
+        ) {
+            return None;
+        }
+        self.def_range(v)
+    }
+
+    /// An upper bound on how many times the back edges of the loop
+    /// headed at `h` can be traversed (s85), or `None` when none is
+    /// derivable.
+    fn trip_bound(&mut self, h: Block) -> Option<i128> {
+        if let Some(&t) = self.trip.get(&h) {
+            return t;
+        }
+        // A trip query asks for the induction variable's range, which
+        // asks for the trip count. The guard cuts that cycle: the
+        // inner query answers from the π environment alone, which is
+        // exactly the information the bound is built from.
+        if !self.trip_busy.insert(h) {
+            return None;
+        }
+        let mut best: Option<i128> = None;
+        for (i, j) in self.f.block_params(h).into_iter().enumerate() {
+            if let Some(t) = self.trip_from_iv(h, j, i as u16) {
+                best = Some(best.map_or(t, |b: i128| b.min(t)));
+            }
+        }
+        self.trip_busy.remove(&h);
+        self.trip.insert(h, best);
+        best
+    }
+
+    /// The trip bound read off one induction variable: `j` starts at or
+    /// above `elo`, advances by exactly `s > 0` per traversal, and sits
+    /// at or below `hi` at the point the advance is computed — so the
+    /// traversal count cannot exceed `(hi - elo) / s + 1`.
+    ///
+    /// `hi` comes from the π environment at the back edge's own block,
+    /// which is where a `while j < n` guard has already refined it.
+    fn trip_from_iv(&mut self, h: Block, j: Value, idx: u16) -> Option<i128> {
+        let (entry, back) = self.incoming(h, idx);
+        if entry.is_empty() || back.is_empty() {
+            return None;
+        }
+        let jtb = type_bounds(self, j)?;
+        let mut elo = i128::MAX;
+        for &a in &entry {
+            elo = elo.min(self.def_range(a)?.0);
+        }
+        let mut step: Option<i128> = None;
+        let mut hi = i128::MIN;
+        for &(from, a) in &back {
+            let ai = analysis::def_inst(self.f, a)?;
+            let op = self.f.insts[ai].op;
+            let sign: i128 = match op {
+                Opcode::IaddChk | Opcode::IaddWrap => 1,
+                Opcode::IsubChk | Opcode::IsubWrap => -1,
+                _ => return None,
+            };
+            let args = self.f.vpool.get(self.f.insts[ai].args);
+            if args[0] != j {
+                return None;
+            }
+            let s = sign * analysis::const_int(self.f, args[1])? as i128;
+            if s <= 0 {
+                return None;
+            }
+            if *step.get_or_insert(s) != s {
+                return None;
+            }
+            let r = self.pi_at(j, from)?;
+            // A wrap-form advance only counts if it provably does not
+            // wrap: a wrapped step restarts the variable at the bottom
+            // of the type and the count below would be a fiction.
+            if matches!(op, Opcode::IaddWrap | Opcode::IsubWrap) && r.1.checked_add(s)? > jtb.1 {
+                return None;
+            }
+            hi = hi.max(r.1);
+        }
+        let s = step?;
+        if elo == i128::MAX || hi == i128::MIN {
+            return None;
+        }
+        let span = hi.checked_sub(elo)?;
+        if span < 0 {
+            return Some(0);
+        }
+        Some(span / s + 1)
     }
 
     fn result_range(&mut self, v: Value, inst: Inst, tb: Range) -> Range {
@@ -682,6 +962,35 @@ impl<'a> RangeCx<'a> {
     /// with every π refinement on the dominator chain.
     fn range_at(&mut self, v: Value, block: Block) -> Option<Range> {
         let mut r = self.def_range(v)?;
+        let mut b = block;
+        loop {
+            if let Some(&(plo, phi)) = self.pi.get(&(b, v)) {
+                r = (r.0.max(plo), r.1.min(phi));
+            }
+            match self.doms.idom(b) {
+                Some(d) => b = d,
+                None => break,
+            }
+        }
+        Some(r)
+    }
+
+    /// The π-ONLY view of `v` inside `block`: type bounds intersected
+    /// with the refinements on `block`'s dominator chain, without ever
+    /// consulting `v`'s own definition.
+    ///
+    /// [`Self::trip_bound`] needs exactly this. The upper bound it
+    /// wants is the loop guard's, and asking [`Self::range_at`] for it
+    /// would recurse into the induction variable's definition — whose
+    /// own range is one of the things the trip bound is computed FOR.
+    /// The cycle guard would answer that query with type bounds and
+    /// then memoize the answer, so the ordering of the first query
+    /// would decide the precision of every later one.
+    fn pi_at(&mut self, v: Value, block: Block) -> Option<Range> {
+        let mut r = match self.hypo.get(&v) {
+            Some(&h) => h,
+            None => type_bounds(self, v)?,
+        };
         let mut b = block;
         loop {
             if let Some(&(plo, phi)) = self.pi.get(&(b, v)) {

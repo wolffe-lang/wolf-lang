@@ -16,6 +16,30 @@ the win, the measured cost, and the condition under which it is revisited.
 The gate reads this file, so each entry needs the marker line
 `- exception: <kernel-directory-name>` for the kernel to count as excepted.
 
+## Status at s85: still EMPTY — and the one candidate is now withdrawn.
+
+The `e1_sum_reduce` exception drafted below was never filed, on the
+stated condition that it should wait until "s42 proves the
+accumulator's range (making the check foldable)". s85 did that: a
+loop-carried accumulator is bounded by the trip count times its
+per-iteration increment, and where the trip count is opaque the
+versioner hoists the bound test. On this host, re-measured back to
+back with the pre-s85 compiler:
+
+| kernel | checked | wrapping | X3 delta | was |
+|---|---|---|---|---|
+| `e1_sum_reduce` | 0.1500 | 0.1500 | **+0.0%** | +177.0% |
+| `e2_checksum` | 0.8214 | 0.8571 | −4.2% | −0.3% |
+| `e3_index_arith` | 0.1250 | 0.1290 | −3.1% | −1.9% |
+| **family E geomean** | | | **−2.4%** | **+39.4%** |
+
+`e1` goes from 0.366x to 0.971x against naive `clang -O3`, inside its
+own noise floor. The revisit condition on the draft below is met, so
+the template stays a template: there is no longer a measured cost to
+except. What X3 costs on this suite is now zero to within the floor,
+and the remaining `e3` loss (0.517x) is not an X3 cost — its checked
+and wrapping lanes agree — but a separate gap already in the ledger.
+
 ## Status at s79: still EMPTY. No exceptions are claimed.
 
 The s44 reasoning below is unchanged in substance and its numbers have

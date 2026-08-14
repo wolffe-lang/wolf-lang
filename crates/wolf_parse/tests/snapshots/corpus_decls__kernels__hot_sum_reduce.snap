@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1117..1271 name=total_bytes body=Block
+FnDecl 1273..1508 name=total_ints body=Block
+FnDecl 1510..1819 name=main body=Block

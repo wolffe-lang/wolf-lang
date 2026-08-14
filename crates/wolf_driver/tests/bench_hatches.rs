@@ -29,19 +29,43 @@ fn out_dir() -> PathBuf {
     d
 }
 
-/// A loop the mid-end has real work to do on: an inlinable helper called
-/// from a hot loop, with checked arithmetic against constant operands.
+/// A loop the mid-end has real work to do on, over values it CANNOT
+/// fold away.
+///
+/// The arithmetic rides `List` elements behind `mut`/`read` params, so
+/// the annotated lane carries the channels the sentinel exists to
+/// price: `noalias` and `dereferenceable` from the param modes,
+/// `!alias.scope` on the element traffic, and `!prof` on the overflow
+/// check that an opaque element operand keeps. s85 is why this is not
+/// the old constant-bounded counter: once the trip-scaled accumulator
+/// bound landed, the mid-end proved that fixture's every check away
+/// and the "annotated" lane had nothing left to strip — the sentinel
+/// would have been measuring nothing against nothing, which is the one
+/// thing this test exists to refuse.
 const SRC: &str = "\
-fn step(x: int) -> int {
-    (x * 3 + 7) & 1023
+fn blend(mut out: List[int], src: List[int]) {
+    var i = 0
+    while i < src.len {
+        out[i] = (src[i] * 3 + 7) & 1023
+        i = i + 1
+    }
 }
 
 fn main() -> !int {
-    var acc = 0
+    var src = List[int]()
+    var out = List[int]()
     var i = 0
     while i < 64 {
-        acc = (acc + step(i)) & 65535
+        (mut src).push(i)
+        (mut out).push(0)
         i = i + 1
+    }
+    blend(mut out, src)
+    var acc = 0
+    var k = 0
+    while k < 64 {
+        acc = (acc + out[k]) & 65535
+        k = k + 1
     }
     if acc >= 0 { 0 } else { 1 }
 }

@@ -86,6 +86,7 @@ json/rows.lu: refused — json builtins in native lowering (checked lane only at
 kernels/churn_b3.lu: lowers
 kernels/hot_counter.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
+kernels/hot_sum_reduce.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers
