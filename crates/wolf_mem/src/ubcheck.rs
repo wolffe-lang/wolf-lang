@@ -2926,13 +2926,34 @@ impl<'t> Machine<'t> {
                 payload: Vec::new(),
             })
         }
+        // s90 widens the map with `exists` (AlreadyExists) and
+        // `cross_device` (EXDEV / ERROR_NOT_SAME_DEVICE). Both arrive
+        // from `io::ErrorKind` like `not_found`/`denied`, so both take
+        // the SAME coarsening: a builtin whose row does not declare
+        // the tag reports `io`. (`invalid` is never produced here — it
+        // is a caller mistake the machine decides itself, before the
+        // host is touched, exactly as the native runtime does.)
         fn errtag(e: &std::io::Error, declared: &[&str]) -> String {
             let t = match e.kind() {
                 std::io::ErrorKind::NotFound => "not_found",
                 std::io::ErrorKind::PermissionDenied => "denied",
+                std::io::ErrorKind::AlreadyExists => "exists",
+                std::io::ErrorKind::CrossesDevices => "cross_device",
                 _ => "io",
             };
             if declared.contains(&t) { t } else { "io" }.to_string()
+        }
+        /// A `SystemTime` as ms from the Unix epoch, negative before
+        /// it — `time_unix_ms`'s unit, so the two compare. `None` when
+        /// it does not fit an `i64` (the `io` row). Identical to
+        /// `wolf_rt::fs::unix_ms`.
+        fn unix_ms(t: std::time::SystemTime) -> Option<i64> {
+            match t.duration_since(std::time::UNIX_EPOCH) {
+                Ok(d) => i64::try_from(d.as_millis()).ok(),
+                Err(before) => i64::try_from(before.duration().as_millis())
+                    .ok()
+                    .map(|ms| -ms),
+            }
         }
         let str_arg = |i: usize| -> Option<String> {
             match argv.get(i) {
@@ -2985,21 +3006,42 @@ impl<'t> Machine<'t> {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
-            "fs_open" | "fs_create" => {
+            // s90/#52: one moded open under three spellings.
+            // `fs_open`/`fs_create` ARE modes 0 and 1 — they were the
+            // two modes s38 happened to have — so widening the entry
+            // left every existing call site exact. Mode 2 is a real
+            // append handle, which is what stops `std.fs.append_text`
+            // reading the file it appends to.
+            "fs_open" | "fs_create" | "fs_open_mode" => {
                 let Some(path) = str_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
-                let opened = if name == "fs_open" {
-                    std::fs::OpenOptions::new().read(true).open(&path)
-                } else {
-                    std::fs::File::create(&path)
+                let mode = match name {
+                    "fs_open" => 0,
+                    "fs_create" => 1,
+                    _ => match int_arg(1) {
+                        Some(m) => m,
+                        None => return self.refuse("this fs call shape", span),
+                    },
                 };
-                let declared: &[&str] = if name == "fs_open" {
-                    &["not_found", "denied", "io"]
-                } else {
-                    &["denied", "io"]
+                let mut o = std::fs::OpenOptions::new();
+                let opts = match mode {
+                    0 => o.read(true),
+                    1 => o.write(true).create(true).truncate(true),
+                    2 => o.append(true).create(true),
+                    3 => o.read(true).write(true).create(true),
+                    4 => o.read(true).write(true).create_new(true),
+                    // Decided before the filesystem is touched, and
+                    // `invalid` is only in `fs_open_mode`'s row: the
+                    // 1-argument spellings cannot reach it.
+                    _ => return Ok(tag("invalid")),
                 };
-                match opened {
+                let declared: &[&str] = match name {
+                    "fs_open" => &["not_found", "denied", "io"],
+                    "fs_create" => &["denied", "io"],
+                    _ => &["not_found", "denied", "exists", "invalid", "io"],
+                };
+                match opts.open(&path) {
                     Err(e) => Ok(tag(&errtag(&e, declared))),
                     Ok(f) => {
                         let fd = self.files.len() as i64;
@@ -3073,8 +3115,237 @@ impl<'t> Machine<'t> {
                 };
                 Ok(Flow::Val(Value::Bool(std::path::Path::new(&path).exists())))
             }
+            // --------------------------------- s90 (#51): bytes --
+            "fs_read_bytes" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::read(&path) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(bytes) => {
+                        self.charge_mem(bytes.len() as u64)?;
+                        // No UTF-8 gate: bytes are bytes. This is the
+                        // entry `copy_file` should always have had.
+                        Ok(Flow::Val(self.byte_list_value(&bytes)))
+                    }
+                }
+            }
+            "fs_write_bytes" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let bytes = match self.bytes_of(argv.get(1)) {
+                    None => return self.refuse("this fs call shape", span),
+                    Some(Err(())) => return Ok(tag("invalid")),
+                    Some(Ok(b)) => b,
+                };
+                match std::fs::write(&path, &bytes) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            "fs_read_chunk" => {
+                let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                // The HANDLE before the size, `fs_read`'s order: a
+                // forged fd is `io` whatever `max` says. (The native
+                // shim checks in the same order — s90 aligned the two
+                // after finding `fs_read` disagreed with itself
+                // across the lanes at `max <= 0`.)
+                if !self.fd_open(fd) {
+                    return Ok(tag("io"));
+                }
+                if max <= 0 {
+                    return Ok(Flow::Val(self.byte_list_value(&[])));
+                }
+                let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                // The `fs_read` clamp, byte for byte — the only
+                // difference is that a boundary here cannot land
+                // inside a code point.
+                let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+                match f.read(&mut buf) {
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(0) => Ok(tag("eof")),
+                    Ok(n) => {
+                        buf.truncate(n);
+                        self.charge_mem(n as u64)?;
+                        Ok(Flow::Val(self.byte_list_value(&buf)))
+                    }
+                }
+            }
+            "fs_write_chunk" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let bytes = match self.bytes_of(argv.get(1)) {
+                    None => return self.refuse("this fs call shape", span),
+                    Some(Err(())) => return Ok(tag("invalid")),
+                    Some(Ok(b)) => b,
+                };
+                let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                match f.write_all(&bytes) {
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // ---------------------------- s90 (#51): directories --
+            "fs_read_dir" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let entries = match std::fs::read_dir(&path) {
+                    Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(rd) => rd,
+                };
+                let mut names: Vec<String> = Vec::new();
+                for entry in entries {
+                    match entry {
+                        Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(e) => match e.file_name().into_string() {
+                            Ok(n) => names.push(n),
+                            // A name this str tier cannot hold fails
+                            // the listing rather than vanishing from
+                            // it (see `wolf_rt::fs`'s decision note).
+                            Err(_) => return Ok(tag("utf8")),
+                        },
+                    }
+                }
+                // SORTED — the decision, in both lanes, for the same
+                // reason: filesystem order is not a property a test
+                // can depend on.
+                names.sort();
+                self.charge_mem(names.iter().map(|n| n.len() as u64).sum())?;
+                let items: Vec<Value> = names.into_iter().map(Value::Str).collect();
+                let id = self.lists.len();
+                self.lists.push(items);
+                Ok(Flow::Val(Value::List(id)))
+            }
+            "fs_create_dir" | "fs_create_dir_all" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let (r, declared): (_, &[&str]) = if name == "fs_create_dir" {
+                    (
+                        std::fs::create_dir(&path),
+                        &["exists", "not_found", "denied", "io"],
+                    )
+                } else {
+                    (std::fs::create_dir_all(&path), &["denied", "io"])
+                };
+                match r {
+                    Err(e) => Ok(tag(&errtag(&e, declared))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            "fs_remove_dir" | "fs_remove_dir_all" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let r = if name == "fs_remove_dir" {
+                    std::fs::remove_dir(&path)
+                } else {
+                    std::fs::remove_dir_all(&path)
+                };
+                match r {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // -------------------------------- s90 (#51): rename --
+            "fs_rename" => {
+                let (Some(from), Some(to)) = (str_arg(0), str_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::rename(&from, &to) {
+                    Err(e) => Ok(tag(&errtag(
+                        &e,
+                        &["not_found", "denied", "cross_device", "exists", "io"],
+                    ))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // ------------------------------ s90 (#51): metadata --
+            "fs_is_file" | "fs_is_dir" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                // TOTAL like `fs_exists`: an unreadable path is
+                // neither, and never a row.
+                let md = std::fs::metadata(&path);
+                let yes = md
+                    .map(|m| {
+                        if name == "fs_is_file" {
+                            m.is_file()
+                        } else {
+                            m.is_dir()
+                        }
+                    })
+                    .unwrap_or(false);
+                Ok(Flow::Val(Value::Bool(yes)))
+            }
+            "fs_size" | "fs_modified_ms" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let md = match std::fs::metadata(&path) {
+                    Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(m) => m,
+                };
+                let v = if name == "fs_size" {
+                    i64::try_from(md.len()).ok()
+                } else {
+                    md.modified().ok().and_then(unix_ms)
+                };
+                match v {
+                    Some(n) => Ok(Flow::Val(Value::Int(n))),
+                    None => Ok(tag("io")),
+                }
+            }
             _ => self.refuse("this io/fs builtin", span),
         }
+    }
+
+    /// Is `fd` a live handle in the machine's table? A closed or
+    /// forged one is the `io` row, never a trap.
+    fn fd_open(&self, fd: i64) -> bool {
+        usize::try_from(fd)
+            .ok()
+            .and_then(|i| self.files.get(i))
+            .is_some_and(Option::is_some)
+    }
+
+    /// A `List[int]` argument as bytes. `None` is a call shape sema
+    /// rules out; `Some(Err(()))` is an element that is not a byte —
+    /// the `invalid` row, and the same refusal `str_from_utf8` makes
+    /// with a different name on it (writing is not decoding).
+    fn bytes_of(&self, v: Option<&Value>) -> Option<Result<Vec<u8>, ()>> {
+        let Some(Value::List(id)) = v else {
+            return None;
+        };
+        let mut out = Vec::with_capacity(self.lists[*id].len());
+        for e in &self.lists[*id] {
+            let Value::Int(n) = e else { return None };
+            match u8::try_from(*n) {
+                Ok(b) => out.push(b),
+                Err(_) => return Some(Err(())),
+            }
+        }
+        Some(Ok(out))
+    }
+
+    /// Bytes as a fresh `List[int]` value.
+    fn byte_list_value(&mut self, bytes: &[u8]) -> Value {
+        let items: Vec<Value> = bytes.iter().map(|&b| Value::Int(i64::from(b))).collect();
+        let id = self.lists.len();
+        self.lists.push(items);
+        Value::List(id)
     }
 
     /// The s39 net builtin tier (checked lane): REAL blocking TCP over
@@ -3322,6 +3593,23 @@ impl<'t> Machine<'t> {
                 Ok(p) => match p.to_str() {
                     // A non-UTF-8 cwd is unreachable through the str
                     // tier: `io`, same coarsening rule as fs.
+                    None => Ok(tag("io")),
+                    Some(s) => {
+                        self.charge_mem(s.len() as u64)?;
+                        Ok(Flow::Val(Value::Str(s.to_string())))
+                    }
+                },
+            },
+            // s90/#69: the running executable's path — `os_cwd`'s
+            // shape, and the reason std.process's rig can spawn
+            // ITSELF instead of hunting for a host-universal binary.
+            // In the CHECKED lane the running executable is the test
+            // host, not the wolf program; that is the same asymmetry
+            // `env_args` already carries and it is what makes the
+            // answer spawnable on both lanes.
+            "os_exe" => match std::env::current_exe() {
+                Err(_) => Ok(tag("io")),
+                Ok(p) => match p.to_str() {
                     None => Ok(tag("io")),
                     Some(s) => {
                         self.charge_mem(s.len() as u64)?;
@@ -4076,7 +4364,13 @@ impl<'t> Machine<'t> {
             // comptime sandbox is the one place these are refused) and
             // maps `io::ErrorKind` onto each builtin's declared tags.
             "read_line" | "fs_read_text" | "fs_write_text" | "fs_open" | "fs_create"
-            | "fs_read" | "fs_write" | "fs_close" | "fs_remove" | "fs_exists" => {
+            | "fs_read" | "fs_write" | "fs_close" | "fs_remove" | "fs_exists"
+            // The s90 additions (#51/#52): bytes, directories,
+            // metadata, rename, and the moded open.
+            | "fs_open_mode" | "fs_read_bytes" | "fs_write_bytes" | "fs_read_chunk"
+            | "fs_write_chunk" | "fs_read_dir" | "fs_create_dir" | "fs_create_dir_all"
+            | "fs_remove_dir" | "fs_remove_dir_all" | "fs_rename" | "fs_is_file"
+            | "fs_is_dir" | "fs_size" | "fs_modified_ms" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -4112,9 +4406,10 @@ impl<'t> Machine<'t> {
             // host operation (json is pure computation), errors are
             // the declared D30 rows, and the comptime sandbox is the
             // one refusal site.
-            "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exit" | "os_spawn"
-            | "os_wait" | "os_kill" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms"
-            | "json_valid" | "json_get" | "json_type" | "json_len" | "str_from_utf8" => {
+            "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_exit"
+            | "os_spawn" | "os_wait" | "os_kill" | "time_now_ms" | "time_unix_ms"
+            | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
+            | "str_from_utf8" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
