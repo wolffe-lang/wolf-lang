@@ -23,9 +23,9 @@
 use std::collections::HashMap;
 
 use wolf_ast::{
-    Arg, AssignStmt, BinExpr, Block, CallExpr, ConstDecl, ExprStmt, FieldInit, FnDecl, IfExpr,
-    LetDecl, MemberExpr, ParenExpr, PathExpr, PrefixExpr, StringExpr, StructLit, SyntaxKind,
-    TupleExpr, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
+    Arg, AssignStmt, BinExpr, Block, BracketApply, CallExpr, ConstDecl, ExprStmt, FieldInit,
+    FnDecl, IfExpr, LetDecl, MemberExpr, ParenExpr, PathExpr, PrefixExpr, StringExpr, StructLit,
+    SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
 };
 use wolf_span::Span;
 
@@ -1713,6 +1713,26 @@ impl<'a> Engine<'a> {
                 construct: "an unresolved callee at comptime",
             });
         }
+        // `List[int]()`, `Pool[Node]()`, `channel[int]()` — a container
+        // constructor spells as a `BracketApply` head, so it never
+        // reached the `PathExpr` arm above and used to fall out of the
+        // bottom as "calling through this callee", a message naming
+        // nothing the author wrote (wolf-lang#101, wolf-std F-0077).
+        // The engine's value arena is hash-consed and immutable
+        // (`ctfe::value`): it has scalars, `str`, tuples and comptime
+        // slices, and no container with identity. Say so, so a package
+        // author learns which subset they left rather than bisecting
+        // for it.
+        if callee.kind == SyntaxKind::BracketApply
+            && let Some(b) = BracketApply::cast(callee)
+            && let Some(head) = b.callee()
+            && let Some(t) = PathExpr::cast(head).and_then(|p| p.ident())
+        {
+            let name = self.text(file, t.span);
+            if let Some(construct) = Self::container_gap(&name) {
+                return Err(FaultKind::EngineGap { construct });
+            }
+        }
         if callee.kind == SyntaxKind::MemberExpr
             && let Some(m) = MemberExpr::cast(callee)
         {
@@ -1733,6 +1753,31 @@ impl<'a> Engine<'a> {
         }
         Err(FaultKind::EngineGap {
             construct: "calling through this callee at comptime",
+        })
+    }
+
+    /// The named engine gap for a prelude container constructor
+    /// (wolf-lang#101). `None` for every other bracket-applied head —
+    /// those keep the generic message, which is honest for them.
+    fn container_gap(name: &str) -> Option<&'static str> {
+        Some(match name {
+            "List" => {
+                "`List` construction at comptime (the engine's values are \
+                 hash-consed and immutable — scalars, `str`, tuples and \
+                 comptime slices; no container with identity yet, so a \
+                 builtin whose argument is a `List` is unreachable here \
+                 whatever the D33 sandbox says about it)"
+            }
+            "Pool" => {
+                "`Pool` construction at comptime (the engine models no \
+                 container with identity — see `List`)"
+            }
+            "channel" => {
+                "`channel` construction at comptime (channels are a runtime \
+                 concurrency surface; comptime evaluation is single-threaded \
+                 and hermetic)"
+            }
+            _ => return None,
         })
     }
 
