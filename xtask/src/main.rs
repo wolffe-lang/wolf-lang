@@ -543,14 +543,21 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// is a deliberate, reviewed statement that the differential now sees
 /// less than it did, and it needs the reason written next to it.
 ///
-/// s82 baseline, measured at the sprint's HEAD over 261 non-member
+/// s82 baseline, measured at that sprint's HEAD over 261 non-member
 /// entries: checked 130, native 125, release 115, union 145, all-three
-/// 110. The union is 15 above the best single lane — that gap IS the
+/// 110. The union is above the best single lane — that gap IS the
 /// non-nesting wolf-lang#90 reported, and it is why no single-lane
 /// count may stand in for the coverage of the differential.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 130), ("native", 125), ("release", 115)];
-const UNION_FLOOR: usize = 145;
-const ALL_THREE_FLOOR: usize = 110;
+///
+/// Ratcheted once at the close of the s88/s89/s90 wave, over 271
+/// entries, from integrated trunk rather than from any one lane: a
+/// floor raised inside a branch breaks the next branch to merge for a
+/// reason that is not its fault. The lanes are still not nested (union
+/// 153, all three 118), which is the property the gate exists to keep
+/// visible.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 138), ("native", 133), ("release", 123)];
+const UNION_FLOOR: usize = 153;
+const ALL_THREE_FLOOR: usize = 118;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
