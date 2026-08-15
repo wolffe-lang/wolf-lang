@@ -324,6 +324,67 @@ fn words_lines_split_bytes() {
     );
 }
 
+/// s89 (wolf-lang#85): the checked tier modelled two of s77's seven
+/// byte-view consuming positions — iteration and `.len` — and stopped
+/// at `mem` for the other five, which are exactly the ones an indexed
+/// byte algorithm wants. The gap was never the view: it was the
+/// TEMPORARY, since indexing rooted itself in a frame local and a
+/// temporary has none. All seven run here now, and the element read is
+/// the same walk (and the same bounds trap) a place receiver takes.
+#[test]
+fn the_byte_view_query_family_runs_on_a_temporary() {
+    assert_exit(
+        "fn main() -> !int {\n\
+         let s = \"wolf é\"\n\
+         let idx = s.bytes()[5]\n\
+         let get = s.bytes().get(6) else 0 - 1\n\
+         let first = s.bytes().first() else 0 - 1\n\
+         let last = s.bytes().last() else 0 - 1\n\
+         let count = s.bytes().count()\n\
+         let empty = s.bytes().is_empty()\n\
+         let len = s.bytes().len\n\
+         var walked = 0\n\
+         for b in s.bytes() { walked = walked + b }\n\
+         let ok = idx == 195 && get == 169 && first == 119 && last == 169\n\
+         let ok2 = count == 7 && !empty && len == 7 && walked == 836\n\
+         if ok && ok2 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// The temporary the fix reaches is any List rvalue, not only a byte
+/// view — a call result indexes and queries exactly as a binding does.
+#[test]
+fn a_list_returned_from_a_call_indexes_as_a_temporary() {
+    assert_exit(
+        "fn mk() -> List[int] {\n\
+         var xs = List[int]()\n\
+         (mut xs).push(7)\n\
+         (mut xs).push(9)\n\
+         xs\n\
+         }\n\
+         fn main() -> !int {\n\
+         if mk()[1] == 9 && mk().count() == 2 && (mk().first() else 0) == 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// An out-of-range index on a temporary traps where a place receiver
+/// traps — the element read shares one walk, so it shares one fault.
+#[test]
+fn indexing_a_byte_view_out_of_range_traps() {
+    assert_trap(
+        "fn main() -> !int {\n\
+         let s = \"wolf\"\n\
+         let b = s.bytes()[9]\n\
+         b\n\
+         }\n",
+        "bounds",
+    );
+}
+
 // -------------------------------------------------- [mem.str.order] --
 
 #[test]
