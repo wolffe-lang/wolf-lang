@@ -1,0 +1,17 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1015]: these bytes are LENT to `keep` for the call, but `keep` keeps them past it
+ --> mem:///main.lu:4:21
+  |
+1 | fn keep(bs: List[int]) -> List[int] { bs }
+  |         -- `bs` is declared here
+  |                                       -- `bs` outlives the call here
+...
+4 |     let held = keep(s.bytes())
+  |                     ^^^^^^^^^ a byte view of the string's own storage, not a copy
+  |
+  = note: bind the bytes first — `let bs = s.bytes()` materializes a `List[int]` the callee may
+    own, and passing `bs` costs exactly what it cost before views crossed calls. A LENT view
+    costs nothing and lasts only for the call.

@@ -129,6 +129,7 @@ use wolf_sema::types::{TyId, TyKind, TypeTable};
 use wolf_sema::{BodyRef, BodyResult, NotYet, Package, Typecheck, TypedBody};
 use wolf_span::Span;
 
+pub mod byteview;
 pub mod cfg;
 mod excl;
 pub mod facts;
@@ -173,10 +174,16 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     // ([mem.shared.rc.2], E1006) — checked over the signature tables
     // before any body runs.
     shared::check(&tc.sigs, &mut out.diagnostics, &mut out.not_yet);
+    // s89: the byte-view lend verdicts, computed once over the package's
+    // signatures and bodies. `wolf_wir::lower` reads the same table to
+    // decide which call sites may pass a view instead of a copy — one
+    // authority, so the diagnostic and the lowering cannot disagree.
+    let lender = byteview::Lender::new(pkg, &tc.sigs);
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
         };
+        byteview::check_body(&lender, pkg, tb, &outcome.body, &mut out.diagnostics);
         match lower_body(pkg, &tc.sigs, tb, &outcome.body) {
             None => {}
             Some(Err(nyc)) => out.not_yet.push(nyc),
