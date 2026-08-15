@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 1213..1222 path=scan
+FnDecl 1223..1356 name=fwd body=Block
+FnDecl 1358..1491 name=rev body=Block
+FnDecl 1493..1625 name=hop body=Block
+FnDecl 1627..1736 name=rest body=Block
+FnDecl 1738..1791 name=binder body=Block
+FnDecl 1793..2036 name=main body=Block

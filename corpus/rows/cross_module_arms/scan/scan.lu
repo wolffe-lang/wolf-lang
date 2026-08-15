@@ -1,0 +1,23 @@
+//! member: true
+//! conforms: err.rows
+//!
+//! The far side of the module boundary: one sealed three-tag row,
+//! raised by number so a caller can ask for each tag in turn.
+
+/// Raises `syntax`, `deep` or `overflow` by `k`.
+pub fn miss(k: int) -> int ! {deep, overflow, syntax} {
+    if k == 0 {
+        return syntax
+    }
+    if k == 1 {
+        return deep
+    }
+    overflow
+}
+
+/// The same row, one hop further out: `?` re-raises whatever `miss` did,
+/// so the tag the handler sees has crossed two module frames.
+pub fn hop(k: int) -> int ! {deep, overflow, syntax} {
+    let v = miss(k)?
+    v
+}

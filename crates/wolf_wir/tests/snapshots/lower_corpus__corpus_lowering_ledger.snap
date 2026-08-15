@@ -192,6 +192,7 @@ resolve/same_name/main.lu: lowers
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_match_tags.lu: lowers

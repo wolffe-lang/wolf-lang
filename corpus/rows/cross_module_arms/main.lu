@@ -1,0 +1,67 @@
+//! check: run(exit=0, stdout="fwd: 10 20 30\nrev: 10 20 30\nhop: 10 20 30\nrest: 99 20 99\nbinder: 77")
+//! phase: run
+//! conforms: err.rows, err.union, err.propagate
+//! warns: W0602
+//!
+//! wolf-interp#29 / wolf-std F-0079, and the boundary `rows/propagate`
+//! does not cross: a handler's `match` arms over a row raised in an
+//! IMPORTED module. `handler_match_tags.lu` proves the arms
+//! discriminate when the row is raised in the entry file; every
+//! cross-module handler in the corpus until now took `else |_|`, so
+//! nothing here would have noticed a handler that read its arms and
+//! then took the first one regardless. lupin did exactly that, and
+//! answered 10 to all three tags with a straight face.
+//!
+//! `fwd` and `rev` are the same three arms in opposite orders: a
+//! first-arm catch-all makes `rev` print the reverse of `fwd`, so the
+//! pair separates "dispatch works" from "one tag happened to be
+//! right". `hop` sends the tag through a second frame on the far side.
+//! `rest` and `binder` are the counterweight — a lowercase name the row
+//! does NOT declare still binds, on both sides of the boundary, or the
+//! fix for the miss would have eaten every handler binder in wolf.
+
+use scan
+
+fn fwd(k: int) -> int {
+    scan.miss(k) else |e| match e {
+        syntax => 10,
+        deep => 20,
+        overflow => 30,
+    }
+}
+
+fn rev(k: int) -> int {
+    scan.miss(k) else |e| match e {
+        overflow => 30,
+        deep => 20,
+        syntax => 10,
+    }
+}
+
+fn hop(k: int) -> int {
+    scan.hop(k) else |e| match e {
+        syntax => 10,
+        deep => 20,
+        overflow => 30,
+    }
+}
+
+fn rest(k: int) -> int {
+    scan.miss(k) else |e| match e {
+        deep => 20,
+        other => 99,
+    }
+}
+
+fn binder() -> int {
+    scan.miss(0) else |err| 77
+}
+
+fn main() -> !int {
+    print("fwd: {fwd(0)} {fwd(1)} {fwd(2)}")
+    print("rev: {rev(0)} {rev(1)} {rev(2)}")
+    print("hop: {hop(0)} {hop(1)} {hop(2)}")
+    print("rest: {rest(0)} {rest(1)} {rest(2)}")
+    print("binder: {binder()}")
+    0
+}

@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 225..381 name=miss pub body=Block
+FnDecl 520..603 name=hop pub body=Block
