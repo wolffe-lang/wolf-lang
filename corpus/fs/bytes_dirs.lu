@@ -1,0 +1,64 @@
+//! check: run(exit=0, stdout="text refused | 4 bytes | first=128\nentries: Alpha.txt bin.dat log.txt sub\nlog=one|two size=7\nis_dir=true is_file=true moved=true\ncleaned=true")
+//! phase: run
+//! conforms: err.union, err.propagate
+//!
+//! fs v1 (s90, wolf-lang#51/#52): the file surface beyond text —
+//! byte io, a moded (appending) open, a SORTED directory listing,
+//! recursive create/remove, metadata, and a rename that moves an
+//! entry without reading it. Both lanes execute this against the real
+//! filesystem (`wolf_rt::fs` mirrors the checked `io_fs_builtin` call
+//! for call), so the cross-lane sha is the parity claim.
+//!
+//! Idempotent by construction: every write truncates or is preceded
+//! by one, and the tree is removed at the end — a corpus program runs
+//! twice per conform pass (once per lane) against one real directory.
+//!
+//! The listing order is a PROMISE, not luck: `fs_read_dir` sorts, so
+//! this expected stdout is the same on ext4, APFS and NTFS.
+
+fn main() -> !int {
+    let root = "target/s90-corpus"
+    let bin = "target/s90-corpus/bin.dat"
+    let moved = "target/s90-corpus/moved.dat"
+    let log = "target/s90-corpus/log.txt"
+
+    fs_create_dir_all("target/s90-corpus/sub")?
+    fs_write_text("target/s90-corpus/Alpha.txt", "a")?
+
+    // Bytes: a file no text reader can hold.
+    var b = List[int]()
+    (mut b).push(128)
+    (mut b).push(0)
+    (mut b).push(255)
+    (mut b).push(65)
+    fs_write_bytes(bin, b)?
+    let refused = fs_read_text(bin) else |_| "text refused"
+    let back = fs_read_bytes(bin)?
+    print("{refused} | {back.len} bytes | first={back[0]}")
+
+    // Append: two opens, no read of what was already there.
+    fs_write_text(log, "")?
+    let a = fs_open_mode(log, 2)?
+    fs_write(a, "one|")?
+    fs_close(a)?
+    let a2 = fs_open_mode(log, 2)?
+    fs_write(a2, "two")?
+    fs_close(a2)?
+
+    // A listing, sorted, of names.
+    let names = fs_read_dir(root)?
+    var line = "entries:"
+    for n in names {
+        line = "{line} {n}"
+    }
+    print(line)
+    print("log={fs_read_text(log)?} size={fs_size(log)?}")
+
+    // Metadata, and a move that carries the un-decodable bytes.
+    fs_rename(bin, moved)?
+    print("is_dir={fs_is_dir(root)} is_file={fs_is_file(log)} moved={fs_is_file(moved)}")
+
+    fs_remove_dir_all(root)?
+    print("cleaned={!fs_exists(root)}")
+    0
+}

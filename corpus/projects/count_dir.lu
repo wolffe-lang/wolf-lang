@@ -1,0 +1,43 @@
+//! check: run(exit=0, stdout="a.txt 3\nb.txt 2\nc.txt 4\ntotal 9 words in 3 files")
+//! phase: run
+//! conforms: str.views, err.union, err.propagate
+//!
+//! The book's P1 guided project, the version that could not be
+//! written before s90 (wolf-lang#51): count the words in the files OF
+//! A DIRECTORY. `count.lu` counts one named file because nothing in
+//! the language enumerated a directory; `fs_read_dir` closes that,
+//! and the listing is SORTED, which is what makes this program's
+//! output the same on every machine that runs it.
+//!
+//! Both lanes execute it. Idempotent: the fixture is rebuilt with
+//! truncating writes and removed at the end.
+
+fn count_words(text: str) -> int {
+    var n = 0
+    for _ in text.words() {
+        n += 1
+    }
+    n
+}
+
+fn main() -> !int {
+    let dir = "target/s90-count-dir"
+    fs_create_dir_all(dir)?
+    fs_write_text("target/s90-count-dir/a.txt", "the wolf runs")?
+    fs_write_text("target/s90-count-dir/b.txt", "at dusk")?
+    fs_write_text("target/s90-count-dir/c.txt", "and the pack follows")?
+
+    var total = 0
+    var files = 0
+    for name in fs_read_dir(dir)? {
+        let text = fs_read_text("{dir}/{name}")?
+        let n = count_words(text)
+        print("{name} {n}")
+        total += n
+        files += 1
+    }
+    print("total {total} words in {files} files")
+
+    fs_remove_dir_all(dir)?
+    0
+}
