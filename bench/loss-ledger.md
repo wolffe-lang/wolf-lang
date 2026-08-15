@@ -660,6 +660,82 @@ row, per D43. Depth is counted rather than assumed to be one, and every
 interpolation hole is evaluated before the first byte is written, so no trap
 can strand a half-buffered line.
 
+## s45 — what PGO is worth on this suite
+
+Three full `--runs=7` measurements on 2026-08-14, same host, clang 22.1.8,
+release runtime. `perf` and `llvm-profdata` unavailable as before. **Train
+and measure are different inputs and are named separately:** the lane
+trains at `ops_wolf/8` sweeps and is measured at the full `ops_wolf`,
+mirroring the clang PGO lane. That separation is weak — the suite's only
+input knob is the sweep count, so both inputs run the same code paths at
+different trip counts, which is the direction that FLATTERS PGO. Every
+number below is an upper bound, and it is read through the kernel's layout
+floor (protocol §4: a win inside the floor is a TIE).
+
+**Run 1 was a different compiler**, and its story is the finding. It ran
+with the profile-driven inline bonus at 64 WIR instructions. Result:
+`word_count`'s hot 155-instruction `count_words` inlined into `main`, both
+of the program's records went stale (2/2 matched before the pass, 0/2
+after), the `!prof` channel fell silent on exactly the code the profile was
+collected for, and the kernel measured **−28.67%**. `alias_daxpy` read
+−5.92% against a 2.14% floor. Two losses outside their floors, no
+reproducible win. That is a PGO-caused regression, and the contract's
+acceptance says fix or neutralize it: it is neutralized. The profile's
+mid-end consumers (inline budget, cluster affinity) ship at **neutral
+defaults** in `Thresholds`, implemented and tested but off, because a
+record is keyed by the post-mid-end body hash and **any mid-end knob that
+acts on hotness destroys the record of every body it changes**. What ships
+live is the channel that does not move the bodies: measured `!prof` branch
+weights through s41.
+
+Runs 2 and 3 measure that compiler. `pgo_speedup` = median(L0) default /
+median(L0) profiled; `> 1` is a PGO win.
+
+| kernel | run 2 | run 3 | verdict |
+|---|---|---|---|
+| `alias_daxpy` | +0.77% (floor 4.65%) | −6.49% (floor 15.28%) | TIE, TIE |
+| `a2_stencil1d` | +2.67% (floor 2.16%) | −3.35% (floor 7.88%) | WIN then TIE — **does not replicate** |
+| `a5_hoist_call` | +5.44% (floor 7.64%) | +3.25% (floor 9.40%) | TIE, TIE |
+| `list_alloc` | −2.26% (floor 6.82%) | +3.45% (floor 4.17%) | TIE, TIE |
+| `b3_churn` | +1.34% (floor 7.48%) | +3.14% (floor 7.60%) | TIE, TIE |
+| `aos_dot` | +0.00% (floor 15.38%) | −0.50% (floor 3.84%) | TIE, TIE |
+| `c2_ecs_sweep` | −0.84% (floor 9.86%) | +2.59% (floor 10.71%) | TIE, TIE |
+| **`word_count`** | **+57.14% (floor 6.55%)** | **+57.14% (floor 3.03%)** | **WIN, replicated exactly** |
+| `d1_utf8_validate` | +31.82% (floor 5.66%) | +6.02% (floor 17.47%) | WIN then TIE — **does not replicate** |
+| `d2_substr_search` | +0.00% (floor 6.25%) | −10.61% (floor 46.83%) | TIE, TIE |
+| `e1_sum_reduce` | +0.00% (floor 3.60%) | +5.32% (floor 79.52%) | TIE, TIE |
+| `e2_checksum` | +0.93% (floor 4.13%) | −0.51% (floor 3.58%) | TIE, TIE |
+| `e3_index_arith` | −1.03% (floor 7.63%) | +6.25% (floor 8.18%) | TIE, TIE |
+
+**The finding: one reproducible win, and it is in family D.** `word_count`
+gives +57.14% in both runs — the same figure twice, on a kernel whose
+reading is quantised by a 4.76% clock tick, with the two runs' floors
+differing by 2x. Everything else is inside its floor. Two kernels
+(`a2_stencil1d`, `d1_utf8_validate`) cleared their floor in one run and not
+the other, which is what a floor is for: **a single-run win that does not
+replicate is not a win.** No kernel regresses outside its floor in either
+run, so the contract's ">2% regression is a heuristic bug" clause is
+satisfied at these settings.
+
+Read the floors themselves with suspicion: they range 2–47% across runs of
+the same kernel on this host, so they are measuring host noise as well as
+layout. M2 is decided on the dedicated runner and this is not it.
+
+### Open, for the closeout
+
+- **The keying tension is real and unresolved.** Post-mid-end content-hash
+  keying (D8/s43, locked, and right for staleness) makes profile-guided
+  mid-end transformation self-invalidating. Two exits exist and neither is
+  a heuristic tweak: per-EDGE counters (so weights survive a body change
+  the way block counts do not), or a second, pre-mid-end key carried
+  alongside the D8 one. Both are container-visible and want a version bump.
+- **Block counts are not edge counts.** The emitter only weights branches
+  whose successors have a single predecessor, where the two coincide; a
+  join reached from several places carries the sum and is left unweighted.
+  That silently drops the channel on the most interesting shapes.
+- **The train/measure separation wants a second input per kernel**, not a
+  smaller sweep count of the same one.
+
 ## Kernels the contract names that are not implemented
 
 `a3-stencil2d`, `a4-matvec`, `b1-tree-build-walk`, `b2-json-dom`,

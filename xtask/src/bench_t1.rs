@@ -421,7 +421,91 @@ fn build_lanes(k: &Kernel, dir: &Path, bin_dir: &Path, rt: &Runtime) -> Option<V
     if let Some(p) = build_pgo(k, dir, bin_dir) {
         out.push(p);
     }
+    if let Some(p) = build_wolf_pgo(k, dir, bin_dir, rt) {
+        out.push(p);
+    }
     Some(out)
+}
+
+/// The wolf PGO lane (s45), **UNGATED and never part of the M2 gate**.
+///
+/// The sprint's never-required posture is a contract about the GATE:
+/// every s44 number was achieved without PGO and stays that way, so
+/// this lane is published beside the gated figure exactly as the
+/// scrutiny lanes are, and `bench gate` never reads it. If it ever
+/// becomes load-bearing for M2, that is a regression in the default
+/// pipeline and gets triaged as one.
+///
+/// **Train on one input, measure on another.** The lane trains at
+/// `ops/8` sweeps and is measured at the full `ops`, mirroring the
+/// clang PGO lane exactly so the two are comparable. Say plainly what
+/// that is and is not: the suite's only input knob is the sweep count,
+/// so the training and measurement inputs exercise the same code paths
+/// at different trip counts. That is a weaker separation than a
+/// genuinely different workload would be, and it is the direction that
+/// FLATTERS PGO — a profile trained on the shape it is measured on is
+/// the best case. The number this lane reports is therefore an upper
+/// bound on what PGO buys here, not an estimate of it. Giving the
+/// kernels a second, differently-shaped input is the fix and it is a
+/// kernel-authoring job, not a harness one.
+fn build_wolf_pgo(k: &Kernel, dir: &Path, bin_dir: &Path, rt: &Runtime) -> Option<Built> {
+    let s = |p: &Path| p.to_str().expect("utf8 path").to_string();
+    let instr = bin_dir.join(format!("{}_wolf_pgo_gen", k.name));
+    let use_bin = bin_dir.join(format!("{}_wolf_pgo", k.name));
+    let wprof = bin_dir.join(format!("{}.wprof", k.name));
+    let _ = std::fs::remove_file(&wprof);
+    if !rt.build_ok(&[
+        "build",
+        &s(&dir.join("kernel.lu")),
+        "-o",
+        &s(&instr),
+        "--release",
+        "--no-cache",
+        &format!("--profile-gen={}", s(bin_dir)),
+    ]) {
+        eprintln!("t1: {}: the wolf PGO lane could not instrument", k.name);
+        return None;
+    }
+    // THE TRAINING RUN. A short one: enough to see the hot loop, not
+    // enough to double the suite's wall time.
+    let train_ops = (k.ops_wolf / 8).max(1);
+    let ok = Command::new(&instr)
+        .arg(train_ops.to_string())
+        .env("WOLF_PROFILE_FILE", &wprof)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !ok || !wprof.is_file() {
+        eprintln!("t1: {}: the training run wrote no profile", k.name);
+        return None;
+    }
+    if !rt.build_ok(&[
+        "build",
+        &s(&dir.join("kernel.lu")),
+        "-o",
+        &s(&use_bin),
+        "--release",
+        "--no-cache",
+        &format!("--profile={}", s(&wprof)),
+    ]) {
+        eprintln!(
+            "t1: {}: the wolf PGO lane could not consume its profile",
+            k.name
+        );
+        return None;
+    }
+    Some(Built {
+        lane: "wolf_pgo",
+        bin: use_bin,
+        ops: k.ops_wolf,
+        config: format!(
+            "wolf build --release --profile= (trained on ops/8 = {train_ops}, measured at {}) \
+             (clang {}) [{}]",
+            k.ops_wolf,
+            clang_version(),
+            rt.label
+        ),
+    })
 }
 
 /// The PGO'd clang lane: instrument, run once on the real workload, merge,
@@ -854,6 +938,56 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
                 "checked / wrapping - 1",
                 &[],
             ));
+        }
+        // The PGO delta (s45), UNGATED. Reported as a speedup of the
+        // profiled build over the default one — `> 1` means PGO helped
+        // — and reported WITH the two things that decide whether it
+        // means anything: the layout-noise floor (a win inside the
+        // floor is a TIE regardless of MAD, §4 of the protocol) and the
+        // clock quantum. A delta the floor swallows is a finding, not a
+        // disappointment: it says the default pipeline already had the
+        // win, which is exactly the never-required posture holding.
+        if let (Some(w), Some(p)) = (med("wolf"), med("wolf_pgo")) {
+            let speedup = w / p;
+            let q = quantum("wolf")
+                .into_iter()
+                .chain(quantum("wolf_pgo"))
+                .fold(f64::NAN, f64::max);
+            let verdict = floor.map(|f| t1::score(p, w, Some(f)));
+            let mut extra: Vec<(&str, serde_json::Value)> = vec![
+                ("clock_quantum_frac", serde_json::json!(q)),
+                (
+                    "readable",
+                    serde_json::json!(t1::delta_is_readable(speedup - 1.0, q)),
+                ),
+                ("floor", serde_json::json!(floor)),
+                ("train_ops", serde_json::json!((k.ops_wolf / 8).max(1))),
+                ("measure_ops", serde_json::json!(k.ops_wolf)),
+            ];
+            if let Some(v) = &verdict {
+                extra.push(("verdict", serde_json::json!(v.label())));
+            }
+            records.push(rec(
+                k,
+                "wolf",
+                "pgo_speedup",
+                speedup,
+                "ratio",
+                commit,
+                "median(L0) default / median(L0) profiled; trained on ops/8, measured at ops",
+                &extra,
+            ));
+            eprintln!(
+                "  pgo      {:<18} {:+.2}%  (floor {:.2}%, one clock tick {:.2}%){}",
+                k.name,
+                (speedup - 1.0) * 100.0,
+                floor.unwrap_or(f64::NAN) * 100.0,
+                q * 100.0,
+                match &verdict {
+                    Some(v) => format!("  -> {}", v.label()),
+                    None => String::new(),
+                }
+            );
         }
         // The sentinel: what the bonus channel is worth on this kernel.
         // Reported WITH its resolution (#84): the delta is only a result
