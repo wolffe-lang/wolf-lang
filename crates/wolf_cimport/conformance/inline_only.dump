@@ -1,0 +1,25 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: inline_only.h
+file 0: inline_only.h
+
+types (4):
+  #0 int bits=32 signed spelling=int
+  #1 fn((#0)) -> #0
+  #2 int bits=32 unsigned spelling=int
+  #3 fn((#2, #2)) -> #2
+
+decls (3):
+  fn clamp : unsigned int(unsigned int, unsigned int) [internal] inline-only refused(inline-without-shim) -> extern-only @inline_only.h:4:1
+  fn ordinary : int(int) [external] ok @inline_only.h:5:1
+  fn twice : int(int) [internal] inline-only refused(inline-without-shim) -> extern-only @inline_only.h:3:1
+
+macros (0):
+
+summary: 1 imported, 2 refused
+refused:
+  clamp: inline-without-shim -> extern-only
+  twice: inline-without-shim -> extern-only

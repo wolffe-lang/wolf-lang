@@ -1,0 +1,24 @@
+[package]
+name = "wolf_cimport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# The C header importer INTERFACE (s46, D17). This crate holds the
+# artifact model, its serialization, the worker process contract and
+# the cache — never a C frontend and never libclang: the worker is a
+# separate executable, discovered at run time (see `worker`).
+
+[[bin]]
+name = "wolf-cimport-worker"
+path = "src/bin/worker.rs"
+
+[dependencies]
+wolf_span.workspace = true
+wolf_diag.workspace = true
+blake3.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

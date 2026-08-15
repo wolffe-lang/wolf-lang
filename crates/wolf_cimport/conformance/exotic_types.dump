@@ -1,0 +1,25 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: exotic_types.h
+file 0: exotic_types.h
+
+types (4):
+  #0 int bits=32 signed spelling=int
+  #1 refused <complex-type>
+  #2 refused <atomic-type>
+  #3 fn((#0)) -> #0
+
+decls (3):
+  fn fine : int(int) [external] ok @exotic_types.h:5:1
+  fn uses_atomic : <refused: atomic-type> [external] refused(atomic-type) -> error-on-use @exotic_types.h:4:1
+  fn uses_complex : <refused: complex-type> [external] refused(complex-type) -> error-on-use @exotic_types.h:3:1
+
+macros (0):
+
+summary: 1 imported, 2 refused
+refused:
+  uses_atomic: atomic-type -> error-on-use
+  uses_complex: complex-type -> error-on-use

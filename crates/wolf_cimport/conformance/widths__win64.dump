@@ -1,0 +1,29 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-pc-windows-msvc
+  ptr=64 align=64 short=16 int=32 long=32 longlong=64 size_t=64 wchar=16u
+  char=signed endian=little
+headers: widths__win64.h
+file 0: widths__win64.h
+
+types (6):
+  #0 record#0 struct widths
+  #1 int bits=32 signed spelling=long
+  #2 int bits=32 unsigned spelling=int
+  #3 fn((#1)) -> #1
+  #4 int bits=32 unsigned spelling=long
+  #5 fn((#4)) -> #4
+
+records (1):
+  record#0 struct widths size=8 align=4
+    l : #1 @byte 0
+    bits : #2 @bit 32 width 5
+
+decls (3):
+  fn unsigned_width : unsigned long(unsigned long) [external] ok @widths__win64.h:9:1
+  fn width_of : long(long) [external] ok @widths__win64.h:8:1
+  tag widths : record#0 [none] ok @widths__win64.h:3:1
+
+macros (0):
+
+summary: 3 imported, 0 refused

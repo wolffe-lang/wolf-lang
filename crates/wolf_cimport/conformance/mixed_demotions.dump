@@ -1,0 +1,35 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: mixed_demotions.h
+file 0: mixed_demotions.h
+
+types (6):
+  #0 int bits=32 signed spelling=int
+  #1 fn((#0)) -> #0
+  #2 refused <long-double>
+  #3 record#0 union tagless
+  #4 float bits=32
+  #5 refused <unprototyped-function>
+
+records (1):
+  record#0 union tagless size=4 align=4 opaque
+    i : #0 @byte 0
+    f : #4 @byte 0
+
+decls (5):
+  fn ancient_style : <refused: unprototyped-function> [external] refused(unprototyped-function) -> extern-only @mixed_demotions.h:7:1
+  fn cursed_middle : <refused: long-double> [external] refused(long-double) -> error-on-use @mixed_demotions.h:5:1
+  fn good_after : int(int) [external] ok @mixed_demotions.h:8:1
+  fn good_before : int(int) [external] ok @mixed_demotions.h:4:1
+  tag tagless : record#0 [none] refused(union-active-member) -> opaque @mixed_demotions.h:6:1
+
+macros (0):
+
+summary: 2 imported, 3 refused
+refused:
+  ancient_style: unprototyped-function -> extern-only
+  cursed_middle: long-double -> error-on-use
+  tagless: union-active-member -> opaque

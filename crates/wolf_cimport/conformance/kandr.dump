@@ -1,0 +1,24 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: kandr.h
+file 0: kandr.h
+
+types (4):
+  #0 int bits=32 signed spelling=int
+  #1 refused <unprototyped-function>
+  #2 fn(()) -> #0
+  #3 fn((#0, #0)) -> #0
+
+decls (3):
+  fn ancient : <refused: unprototyped-function> [external] refused(unprototyped-function) -> extern-only @kandr.h:3:1
+  fn modern : int(void) [external] ok @kandr.h:4:1
+  fn prototyped : int(int, int) [external] ok @kandr.h:5:1
+
+macros (0):
+
+summary: 2 imported, 1 refused
+refused:
+  ancient: unprototyped-function -> extern-only
