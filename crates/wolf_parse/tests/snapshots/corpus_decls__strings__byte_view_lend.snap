@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1291..1387 name=total body=Block
+FnDecl 1389..1556 name=probe body=Block
+FnDecl 1558..1606 name=relay body=Block
+FnDecl 1608..1840 name=starts body=Block
+FnDecl 1842..1889 name=whole body=Block
+FnDecl 1891..2366 name=main body=Block

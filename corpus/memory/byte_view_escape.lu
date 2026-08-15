@@ -1,0 +1,35 @@
+//! check: fail(E1015)
+//! phase: typecheck
+//! conforms: mem.str.view.lend
+//!
+//! s89's soundness guard (wolf-lang#86). `s.bytes()` in an argument
+//! position LENDS the string's own storage — that is what makes the
+//! call free — and a lend that outlives the call it was scoped to is a
+//! dangling `{ptr, len}`, the fast version of no answer at all.
+//!
+//! `keep` returns its parameter, so the bytes would leave with it.
+//! Keeping that out is the checker's job and this is the witness that
+//! it does it: the error lands on the LEND, names the use that would
+//! outlive it, and prescribes the one-word fix — bind the bytes first
+//! (`let bs = s.bytes()`), because a `let` materializes and the bound
+//! list is an ordinary value the callee may own.
+//!
+//! The rule is deliberately narrow. A callee whose use of the parameter
+//! this analysis cannot classify is NOT an error: the caller
+//! materializes for it, exactly as every caller did before views
+//! crossed calls. Only a provable escape is refused, so the diagnostic
+//! never stands between a program and a meaning it already had.
+//!
+//! Its sibling `corpus/strings/byte_view_lend.lu` is the accepting
+//! half: the same call shape, with callees that only read.
+
+fn keep(bs: List[int]) -> List[int] {
+    bs
+}
+
+fn main() -> !int {
+    let s = "wolf"
+    let held = keep(s.bytes())     // ERROR E1015: the lend outlives the call
+    print("{held.len}")
+    0
+}
