@@ -561,6 +561,133 @@ fn a_named_bytes_result_still_materializes() {
     );
 }
 
+/// s89 acceptance (wolf-lang#86): a view crosses a CALL. The argument
+/// position joins s77's seven, so a callee that only reads its
+/// `List[int]` parameter is cloned once against the `{ptr, len}` shape
+/// and the caller hands it the string's own storage — no
+/// `__wolf_rt_str_bytes`, no eight heap bytes per input byte.
+///
+/// The allocation witness is the count of materializing calls, which is
+/// exactly one per byte list the program actually builds.
+#[test]
+fn a_lent_byte_view_crosses_a_call_without_allocating() {
+    let out = dump(
+        "fn total(bs: List[int]) -> int {\n\
+         \x20   var n = 0\n\
+         \x20   for b in bs { n = n + b }\n\
+         \x20   n + bs.len + bs[0]\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   total(\"wolf\".bytes()) - 563\n\
+         }\n",
+    );
+    assert!(
+        !out.contains("call @__wolf_rt_str_bytes"),
+        "a lent view allocates nothing: {out}"
+    );
+    assert!(
+        out.contains("call @total.bytesview.1"),
+        "the call names the view clone: {out}"
+    );
+    let clone = out
+        .split("fn @total.bytesview.1")
+        .nth(1)
+        .expect("clone lowered")
+        .split("\nfn ")
+        .next()
+        .expect("body");
+    for alloc in ["region.alloc", "stack.alloc", "region.new", "call "] {
+        assert!(
+            !clone.contains(alloc),
+            "the clone allocates nothing and calls nothing ({alloc}): {clone}"
+        );
+    }
+    assert!(clone.contains("load.i8"), "byte loads, not header loads");
+}
+
+/// s89: a view crosses TWO parameters at once, and the same callee
+/// under the same mask is cloned exactly once however many call sites
+/// ask for it (the worklist's `done` set).
+#[test]
+fn two_lent_views_share_one_clone() {
+    let out = dump(
+        "fn starts(bs: List[int], p: List[int]) -> bool {\n\
+         \x20   if p.len > bs.len { return false }\n\
+         \x20   var i = 0\n\
+         \x20   while i < p.len {\n\
+         \x20       if bs[i] != p[i] { return false }\n\
+         \x20       i = i + 1\n\
+         \x20   }\n\
+         \x20   true\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   let a = starts(\"wolf\".bytes(), \"wo\".bytes())\n\
+         \x20   let b = starts(\"wolf\".bytes(), \"lf\".bytes())\n\
+         \x20   if a && !b { 0 } else { 1 }\n\
+         }\n",
+    );
+    assert!(
+        !out.contains("call @__wolf_rt_str_bytes"),
+        "both operands are views: {out}"
+    );
+    assert_eq!(
+        out.matches("fn @starts.bytesview.3").count(),
+        1,
+        "one clone for both call sites: {out}"
+    );
+    assert_eq!(
+        out.matches("call @starts.bytesview.3").count(),
+        2,
+        "both call sites reach it: {out}"
+    );
+}
+
+/// s89: a lent view RE-LENT onward stays a view the whole way down —
+/// the clone's own call site sees a `BytesView` binding, not a header,
+/// so no materialization sneaks in at the hop.
+#[test]
+fn a_lent_view_relends_without_materializing() {
+    let out = dump(
+        "fn inner(bs: List[int]) -> int { bs.len + bs[0] }\n\
+         fn outer(bs: List[int]) -> int { inner(bs) }\n\
+         fn main() -> !int {\n\
+         \x20   outer(\"wolf\".bytes()) - 123\n\
+         }\n",
+    );
+    assert!(
+        !out.contains("call @__wolf_rt_str_bytes"),
+        "the hop keeps the view: {out}"
+    );
+    assert!(
+        out.contains("call @inner.bytesview.1"),
+        "the inner call is specialized too: {out}"
+    );
+}
+
+/// s89: a callee outside the read surface still materializes, bit for
+/// bit as before — `Opaque` is not a refusal, it is the old behaviour.
+/// `str_from_utf8` is a builtin that consumes a real list, so the view
+/// stops at the boundary rather than crossing it.
+#[test]
+fn an_unmodelled_callee_still_materializes() {
+    let out = dump(
+        "fn decode(bs: List[int]) -> str {\n\
+         \x20   str_from_utf8(bs) else \"REFUSED\"\n\
+         }\n\
+         fn main() -> !int {\n\
+         \x20   decode(\"wolf\".bytes()).len - 4\n\
+         }\n",
+    );
+    assert!(
+        out.contains("call @__wolf_rt_str_bytes"),
+        "an unmodelled use materializes: {out}"
+    );
+    assert!(
+        !out.contains("bytesview"),
+        "and no clone is emitted for it: {out}"
+    );
+}
+
 /// #72 (s74): `block_order` is the walk order a single-pass backend
 /// needs — every reachable definition before every use of it. The
 /// `select`-in-a-loop shape is the one that broke the assumption that

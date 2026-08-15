@@ -1124,6 +1124,73 @@ fn iterate_then_mutate_stays_silent() {
     );
 }
 
+// ------------------------------------------------------------ E1015 ----
+
+#[test]
+fn e1015_lent_view_returned() {
+    // s89 (#86): `s.bytes()` in an argument position LENDS the string's
+    // own storage, and a callee that returns the parameter keeps it
+    // past the call the lend is scoped to.
+    snap(
+        "e1015_lent_view_returned",
+        "fn keep(bs: List[int]) -> List[int] { bs }\n\
+         fn main() -> !int {\n    \
+             let s = \"wolf\"\n    \
+             let held = keep(s.bytes())\n    \
+             held.len - 4\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1015_lent_view_relent_into_an_escape() {
+    // The escape is transitive: `relay` only passes the view on, and
+    // the function it passes it to is the one that keeps it. The
+    // diagnostic names the call site that lent, not the hop.
+    snap(
+        "e1015_lent_view_relent",
+        "fn keep(bs: List[int]) -> List[int] { bs }\n\
+         fn relay(bs: List[int]) -> List[int] { keep(bs) }\n\
+         fn main() -> !int {\n    \
+             let s = \"wolf\"\n    \
+             relay(s.bytes()).len - 4\n\
+         }\n",
+    );
+}
+
+#[test]
+fn a_read_only_lend_stays_silent() {
+    // The seven consuming positions are the whole rule: a callee that
+    // only reads gets the view, and nothing is reported.
+    snap(
+        "clean_byte_view_lend",
+        "fn total(bs: List[int]) -> int {\n    \
+             var n = 0\n    \
+             for b in bs { n = n + b }\n    \
+             n + bs.len + bs.count() + bs[0]\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let s = \"wolf\"\n    \
+             total(s.bytes()) - 567\n\
+         }\n",
+    );
+}
+
+#[test]
+fn a_bound_bytes_list_is_not_a_lend() {
+    // The fix ladder: `let` materializes, so the same callee that
+    // E1015 refuses a view for takes the bound list without a word.
+    snap(
+        "clean_bound_bytes_list",
+        "fn keep(bs: List[int]) -> List[int] { bs }\n\
+         fn main() -> !int {\n    \
+             let s = \"wolf\"\n    \
+             let bs = s.bytes()\n    \
+             keep(bs).len - 4\n\
+         }\n",
+    );
+}
+
 #[test]
 fn nested_read_iteration_stays_silent() {
     // Two read claims on one container coexist: read never excludes

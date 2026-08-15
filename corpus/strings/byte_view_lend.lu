@@ -1,0 +1,78 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.str.view.lend, mem.str.view, str.views
+//!
+//! s89 — a byte view CROSSES A CALL (wolf-lang#86). s77 made
+//! `s.bytes()` the receiver's own `{ptr, len}` and lowered it in place
+//! wherever it was consumed; an ARGUMENT was one of the positions it
+//! did not reach, so a library whose functions take their bytes as a
+//! parameter — every one of std.bytes' nine — paid a heap copy per
+//! call for bytes it only ever read.
+//!
+//! The argument position is now a LEND (`[mem.str.view.lend]`): the
+//! callee gets the string's own two words, may read them for the call,
+//! and may not keep them. Natively `total(s.bytes())` emits no
+//! `__wolf_rt_str_bytes` at all — the shape is pinned in `wolf_wir`'s
+//! `lower_shapes` suite; what this file pins is that every lane still
+//! answers the same, which is the only thing that makes the lend an
+//! optimization rather than a second language.
+//!
+//! The four shapes below are the whole rule: a lend that iterates, a
+//! lend that indexes and queries, a lend RE-LENT one hop further (the
+//! view stays a view all the way down), and a callee that only reads
+//! two views at once. `whole` is the way IN and still materializes — a
+//! function that RETURNS a list must own it.
+
+fn total(bs: List[int]) -> int {
+    var n = 0
+    for b in bs {
+        n = n + b
+    }
+    n
+}
+
+fn probe(bs: List[int], i: int) -> int {
+    if bs.is_empty() {
+        return 0 - 1
+    }
+    bs[i] + bs.len + bs.count() + (bs.first() else 0) + (bs.last() else 0)
+}
+
+fn relay(bs: List[int]) -> int {
+    total(bs)
+}
+
+fn starts(bs: List[int], p: List[int]) -> bool {
+    if p.len > bs.len {
+        return false
+    }
+    var i = 0
+    while i < p.len {
+        if bs[i] != p[i] {
+            return false
+        }
+        i = i + 1
+    }
+    true
+}
+
+fn whole(s: str) -> List[int] {
+    s.bytes()
+}
+
+fn main() -> !int {
+    let s = "wolf é"
+    let sum = total(s.bytes())
+    let empty = total("".bytes())
+    let q = probe(s.bytes(), 5)
+    let hop = relay(s.bytes())
+    let sw = starts(s.bytes(), "wo".bytes())
+    let no = starts(s.bytes(), "of".bytes())
+    let owned = whole(s)
+    print("{sum} {empty} {q} {hop} {sw} {no} {owned.len}")
+    if sum == 836 && empty == 0 && q == 497 && hop == 836 && sw && !no && owned.len == 7 {
+        0
+    } else {
+        1
+    }
+}

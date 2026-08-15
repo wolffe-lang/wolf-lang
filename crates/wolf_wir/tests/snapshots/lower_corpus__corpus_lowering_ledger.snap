@@ -119,6 +119,7 @@ lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
+memory/byte_view_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/checked_unsigned.lu: lowers
 memory/defer_order.lu: lowers
 memory/div_zero.lu: lowers
@@ -212,6 +213,7 @@ rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
+strings/byte_view_lend.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/empty_needle.lu: lowers
 strings/equality_lanes.lu: lowers

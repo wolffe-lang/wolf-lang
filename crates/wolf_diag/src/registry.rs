@@ -1309,6 +1309,21 @@ and work on this function's own duplicate: `var local = copy p` gives
 a value it owns outright.
 "#);
 
+code!(E1015, "a lent byte view cannot outlive the call", r#"
+`s.bytes()` in an argument position LENDS the string's own bytes: the
+callee reads `{ptr, len}` pointing straight at the caller's storage,
+which is why the call costs nothing at all rather than one heap copy
+per byte ([mem.str.view.lend]). The deal is the same one a region
+makes — the callee may read the bytes for the call's duration, and may
+not keep them — and this callee keeps them: it returns the parameter,
+stores it away, or hands it on somewhere this analysis cannot follow
+the bytes back from. Bind the bytes to a name first: `let bs =
+s.bytes()` materializes a `List[int]` the callee may own, and passing
+`bs` behaves exactly as it did before views existed. Keep the lend
+where it belongs — for the callees that only read — and the copy where
+the value has to survive.
+"#);
+
 // ------------------------------------------------------------------------
 // E11xx — the concurrency family (spec/03, D14). The static half of
 // the conc-safety contract: dangerous sharing shapes are rejected at

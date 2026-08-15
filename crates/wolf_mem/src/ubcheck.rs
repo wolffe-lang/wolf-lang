@@ -1925,6 +1925,37 @@ impl<'t> Machine<'t> {
                     let v = self.read_place(&place, e.span)?;
                     return Ok(Flow::Val(v));
                 }
+                // s89 (#85): the receiver is not a place — `s.bytes()[i]`,
+                // `mk()[i]`. `place_of` roots an index in a frame local
+                // and a temporary has none, but the ELEMENT read never
+                // needed one: `walk_read` takes a plain value, so the
+                // same `PStep::ListIdx` walk (and the same bounds trap)
+                // runs over the evaluated receiver. This is the
+                // indexing half of s77's byte view, which the checked
+                // tier could not reach before.
+                if let Some(recv) = b.callee()
+                    && matches!(self.expr_ty(recv.span), Some(TyKind::List(_)))
+                {
+                    let base = val!(self.eval(recv));
+                    let Some(ix) = b
+                        .args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .find_map(Arg::value)
+                    else {
+                        return self.refuse("an index without an operand", e.span);
+                    };
+                    let isp = ix.span;
+                    let Value::Int(i) = val!(self.eval(ix)) else {
+                        return self.refuse("indexing a List with a non-int", e.span);
+                    };
+                    let step = [PStep::ListIdx {
+                        index: i,
+                        span: isp,
+                    }];
+                    let v = self.walk_read(base, &step, e.span)?;
+                    return Ok(Flow::Val(v));
+                }
                 self.refuse("indexing outside the modelled surface", e.span)
             }
             SyntaxKind::Block => {
@@ -4651,12 +4682,38 @@ impl<'t> Machine<'t> {
         // Container/cell builtins by receiver type.
         match recv_ty {
             Some(TyKind::List(_)) => {
-                let Some(place) = self.place_of(recv)? else {
-                    return self.refuse("List method on a temporary", e.span);
+                // s89 (#85): the receiver may be a PLACE or a
+                // TEMPORARY. A place reads without moving (`read_place`
+                // — `xs.len` must not consume `xs`); a temporary is
+                // evaluated on the spot, which is what makes the four
+                // query positions of s77's byte view — `count`,
+                // `is_empty`, `get`, `first`/`last` on `s.bytes()` —
+                // reachable here at all. The refusal that used to
+                // stand in this spot said "List method on a temporary",
+                // a place-model sentence that never mentioned views;
+                // what is left of it below names the real rule.
+                let recv_place = self.place_of(recv)?;
+                let recv_val = match &recv_place {
+                    Some(place) => self.read_place(place, recv.span)?,
+                    None => val!(self.eval(recv)),
                 };
-                let Value::List(id) = self.read_place(&place, recv.span)? else {
+                let Value::List(id) = recv_val else {
                     return self.refuse("List method on a non-list", e.span);
                 };
+                // The mutators need a place, and this is the rule
+                // rather than a modelling gap: a temporary list is
+                // observable only through the expression that made it,
+                // so `push`/`pop`/`clear` on one would write storage no
+                // later read can reach. On the byte view specifically
+                // there is no write path at all (s77: a str's bytes are
+                // immutable, a literal's live in rodata), which is why
+                // `wolf_wir` refuses the same three spellings.
+                if matches!(method, "push" | "pop" | "clear") && recv_place.is_none() {
+                    return self.refuse(
+                        "mutating a temporary List (a `bytes()` view is read-only)",
+                        e.span,
+                    );
+                }
                 match method {
                     "push" => {
                         for a in args.into_iter().flat_map(|l| l.args()) {

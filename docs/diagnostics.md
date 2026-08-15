@@ -1353,6 +1353,23 @@ a value it owns outright.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
+## E1015 — a lent byte view cannot outlive the call
+
+`s.bytes()` in an argument position LENDS the string's own bytes: the
+callee reads `{ptr, len}` pointing straight at the caller's storage,
+which is why the call costs nothing at all rather than one heap copy
+per byte ([mem.str.view.lend]). The deal is the same one a region
+makes — the callee may read the bytes for the call's duration, and may
+not keep them — and this callee keeps them: it returns the parameter,
+stores it away, or hands it on somewhere this analysis cannot follow
+the bytes back from. Bind the bytes to a name first: `let bs =
+s.bytes()` materializes a `List[int]` the callee may own, and passing
+`bs` behaves exactly as it did before views existed. Keep the lend
+where it belongs — for the callees that only read — and the copy where
+the value has to survive.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__byte_view_escape.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1015_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1015_lent_view_returned.snap
+
 ## E1101 — a task may not mutate state it captured from the enclosing function
 
 A spawned task's closure captures by value: `Copy` data copies, `imm`
