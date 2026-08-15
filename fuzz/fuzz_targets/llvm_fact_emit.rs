@@ -35,6 +35,10 @@ fn emit(m: &wolf_wir::Module, strip_facts: bool) -> String {
     let mut backend =
         wolf_codegen_llvm::LlvmBackend::with_options(wolf_codegen_llvm::EmitOptions {
             strip_facts,
+            // This target fuzzes the FACT channel; profile weights are a
+            // separate channel with its own lane, and leaving them on
+            // would make the strip differential compare two things.
+            branch_weights: None,
         })
         .expect("backend");
     for (id, f) in m.funcs.iter() {
