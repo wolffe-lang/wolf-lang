@@ -120,6 +120,14 @@ fn ci() -> ExitCode {
             ],
         ),
         ("test", &["test", "--workspace"]),
+        // `fuzz/` is deliberately NOT a workspace member (it needs
+        // nightly to *build*), so `--workspace` never type-checks it and
+        // a field added to a shared struct stayed green here and went
+        // red on CI. Checking costs seconds and needs only stable.
+        (
+            "fuzz-check",
+            &["check", "--manifest-path", "fuzz/Cargo.toml"],
+        ),
         ("deps-check", &["xtask", "deps-check"]),
         ("corpus", &["xtask", "corpus"]),
         ("abi-check", &["xtask", "abi-check"]),
