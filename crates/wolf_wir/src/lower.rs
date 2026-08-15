@@ -5036,6 +5036,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_close"
                 | "fs_remove"
                 | "fs_exists"
+                // The s90 surface (#51/#52) lands on BOTH lanes in the
+                // sprint that introduces it: a std.fs that can only
+                // list a directory under the checked executor is not a
+                // std.fs.
+                | "fs_open_mode"
+                | "fs_read_bytes"
+                | "fs_write_bytes"
+                | "fs_read_chunk"
+                | "fs_write_chunk"
+                | "fs_read_dir"
+                | "fs_create_dir"
+                | "fs_create_dir_all"
+                | "fs_remove_dir"
+                | "fs_remove_dir_all"
+                | "fs_rename"
+                | "fs_is_file"
+                | "fs_is_dir"
+                | "fs_size"
+                | "fs_modified_ms"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -5069,6 +5088,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "env_set"
                 | "env_vars"
                 | "os_cwd"
+                | "os_exe"
                 | "os_exit"
                 | "time_now_ms"
                 | "time_unix_ms"
@@ -5629,6 +5649,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// mirroring the checked executor's `errtag`: `not_found`/`denied`
     /// coarsen to `io` when the row does not declare them; `utf8`/`eof`
     /// pass through.
+    ///
+    /// s90 adds three codes. `exists` (7) and `cross_device` (8) come
+    /// out of `io::ErrorKind` like `not_found`/`denied`, so they take
+    /// the SAME coarsening — that is what keeps the eu ABI's tag
+    /// coarsening checked-parity as #40 established it. `invalid` (6)
+    /// does not coarsen: it is never an `ErrorKind`, it is a caller
+    /// mistake the runtime decides itself (a mode outside the set, a
+    /// `List[int]` element that is not a byte), and only the builtins
+    /// that declare it can produce it.
     fn fs_code_tag(&mut self, code: Value, declared: &[String]) -> Value {
         let io_id = self.b.module.tag_id("io");
         let merge = self.b.create_block();
@@ -5638,6 +5667,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (2, "denied", true),
             (4, "utf8", false),
             (5, "eof", false),
+            (6, "invalid", false),
+            (7, "exists", true),
+            (8, "cross_device", true),
         ]
         .into_iter()
         .map(|(c, name, coarsen)| {
@@ -6531,6 +6563,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .expect("rc");
                 Ok(Flow::Val(Some(self.nonzero(rc))))
             }
+            // s90: the total predicates — `exists` finally says WHAT
+            // exists. One shim, `want` selecting file/dir.
+            "fs_is_file" | "fs_is_dir" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let want = self.b.iconst(types::I64, i64::from(name == "fs_is_dir"));
+                let rc = self
+                    .rt_call("__wolf_rt_fs_is", &[p, l, want], Some(types::I64))
+                    .expect("rc");
+                Ok(Flow::Val(Some(self.nonzero(rc))))
+            }
             "fs_read_text" | "read_line" | "fs_read" => {
                 let (region, slot) = self.rt_slot(16);
                 let rc = match name {
@@ -6576,7 +6619,75 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            "fs_write_text" | "fs_write" | "fs_close" | "fs_remove" => {
+            // s90: a list result (`List[int]` bytes, `List[str]` names)
+            // or a single word (size, timestamp) rides an out slot the
+            // same way a str pair does. The list-minting calls go
+            // through `rt_call_foreign` — the shim allocates into the
+            // container regions, so no `data`/`len` the caller loaded
+            // may survive it.
+            "fs_read_bytes" | "fs_read_chunk" | "fs_read_dir" => {
+                let (region, slot) = self.rt_slot(8);
+                let (sym, args): (&'static str, Vec<Value>) = match name {
+                    "fs_read_chunk" => {
+                        let fd = arg(0)?;
+                        let max = arg(1)?;
+                        ("__wolf_rt_fs_read_chunk", vec![fd, max])
+                    }
+                    _ => {
+                        let s = arg(0)?;
+                        let (p, l) = self.str_parts(s);
+                        let sym = if name == "fs_read_bytes" {
+                            "__wolf_rt_fs_read_bytes"
+                        } else {
+                            "__wolf_rt_fs_read_dir"
+                        };
+                        (sym, vec![p, l])
+                    }
+                };
+                let rc = self
+                    .rt_call_foreign(sym, &args, Some((slot, region)), Some(types::I64))
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "fs_size" | "fs_modified_ms" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let which = self
+                    .b
+                    .iconst(types::I64, i64::from(name == "fs_modified_ms"));
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_fs_stat",
+                        &[p, l, which],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "fs_write_text" | "fs_write" | "fs_close" | "fs_remove" | "fs_write_bytes"
+            | "fs_write_chunk" | "fs_create_dir" | "fs_create_dir_all" | "fs_remove_dir"
+            | "fs_remove_dir_all" | "fs_rename" => {
                 let rc = match name {
                     "fs_write_text" => {
                         let path = arg(0)?;
@@ -6599,6 +6710,53 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let fd = arg(0)?;
                         self.rt_call("__wolf_rt_fs_close", &[fd], Some(types::I64))
                     }
+                    // s90 byte writes: the `List[int]` argument is one
+                    // header pointer, and the shim READS the caller's
+                    // buffer — `rt_call_foreign`, like `str_from_utf8`.
+                    "fs_write_bytes" => {
+                        let path = arg(0)?;
+                        let hdr = arg(1)?;
+                        let (pp, pl) = self.str_parts(path);
+                        self.rt_call_foreign(
+                            "__wolf_rt_fs_write_bytes",
+                            &[pp, pl, hdr],
+                            None,
+                            Some(types::I64),
+                        )
+                    }
+                    "fs_write_chunk" => {
+                        let fd = arg(0)?;
+                        let hdr = arg(1)?;
+                        self.rt_call_foreign(
+                            "__wolf_rt_fs_write_chunk",
+                            &[fd, hdr],
+                            None,
+                            Some(types::I64),
+                        )
+                    }
+                    "fs_create_dir" | "fs_create_dir_all" => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let all = self
+                            .b
+                            .iconst(types::I64, i64::from(name == "fs_create_dir_all"));
+                        self.rt_call("__wolf_rt_fs_create_dir", &[pp, pl, all], Some(types::I64))
+                    }
+                    "fs_remove_dir" | "fs_remove_dir_all" => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let all = self
+                            .b
+                            .iconst(types::I64, i64::from(name == "fs_remove_dir_all"));
+                        self.rt_call("__wolf_rt_fs_remove_dir", &[pp, pl, all], Some(types::I64))
+                    }
+                    "fs_rename" => {
+                        let from = arg(0)?;
+                        let to = arg(1)?;
+                        let (fp, fl) = self.str_parts(from);
+                        let (tp, tl) = self.str_parts(to);
+                        self.rt_call("__wolf_rt_fs_rename", &[fp, fl, tp, tl], Some(types::I64))
+                    }
                     _ => {
                         let path = arg(0)?;
                         let (pp, pl) = self.str_parts(path);
@@ -6613,12 +6771,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     self.eu_join(eu, hit, |_| Ok(None), |z| Ok(z.fs_code_tag(rc, &declared)))?;
                 Ok(Flow::Val(Some(out)))
             }
-            "fs_open" | "fs_create" => {
+            // s90/#52: one moded open under three spellings.
+            // `fs_open`/`fs_create` pass the mode constants they
+            // always meant (0 read, 1 write+truncate); `fs_open_mode`
+            // passes the caller's, and the runtime answers an unknown
+            // one with `-invalid` before touching the filesystem.
+            "fs_open" | "fs_create" | "fs_open_mode" => {
                 let path = arg(0)?;
                 let (pp, pl) = self.str_parts(path);
-                let create = self.b.iconst(types::I64, i64::from(name == "fs_create"));
+                let mode = match name {
+                    "fs_open_mode" => arg(1)?,
+                    _ => self.b.iconst(types::I64, i64::from(name == "fs_create")),
+                };
                 let rc = self
-                    .rt_call("__wolf_rt_fs_open", &[pp, pl, create], Some(types::I64))
+                    .rt_call("__wolf_rt_fs_open", &[pp, pl, mode], Some(types::I64))
                     .expect("rc");
                 let z = self.b.iconst(types::I64, 0);
                 let hit = self
@@ -6846,10 +7012,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            "os_cwd" => {
+            "os_cwd" | "os_exe" => {
+                let sym = if name == "os_cwd" {
+                    "__wolf_rt_os_cwd"
+                } else {
+                    "__wolf_rt_os_exe"
+                };
                 let (region, slot) = self.rt_slot(16);
                 let rc = self
-                    .rt_call_slot("__wolf_rt_os_cwd", &[], slot, region, Some(types::I64))
+                    .rt_call_slot(sym, &[], slot, region, Some(types::I64))
                     .expect("rc");
                 let z = self.b.iconst(types::I64, 0);
                 let hit = self

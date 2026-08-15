@@ -17,17 +17,10 @@
 //!
 //! Error codes per entry (lowering maps them to row tags):
 //! `env_get`: 0 ok, 1 missing, 2 utf8. `env_set`: 0 ok, 1 invalid.
-//! `os_cwd`: 0 ok, 1 io.
+//! `os_cwd`, `os_exe` (s90/#69): 0 ok, 1 io.
 
+use crate::list::push_str;
 use crate::str::{ambient_copy, view, write_pair};
-
-/// Copy `s` into the ambient region and push it as a `{ptr, len}`
-/// element of the 16-byte-element list at `hdr`.
-fn push_str(hdr: *mut crate::list::ListHdr, s: &str) {
-    let p = ambient_copy(s.as_bytes());
-    let pair = [p as i64, s.len() as i64];
-    crate::list::push_raw(hdr, pair.as_ptr().cast());
-}
 
 /// `env_args() -> List[str]` — the program's arguments, program name
 /// dropped (argv[0] is the binary's path, not the program's input).
@@ -126,6 +119,30 @@ pub unsafe extern "C" fn __wolf_rt_os_cwd(out: i64) -> i64 {
     }
 }
 
+/// `os_exe() -> str ! {io}` (s90, wolf-lang#69) — the RUNNING
+/// executable's path. Portable on every tier-1 target through
+/// `std::env::current_exe` (procfs on linux, `_NSGetExecutablePath` on
+/// macOS, `GetModuleFileNameW` on windows); a non-UTF-8 or
+/// unrepresentable answer is `io`, the same coarsening `os_cwd` uses.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_exe(out: i64) -> i64 {
+    match std::env::current_exe() {
+        Err(_) => 1,
+        Ok(p) => match p.to_str() {
+            None => 1,
+            Some(s) => {
+                let cp = ambient_copy(s.as_bytes());
+                unsafe { write_pair(out, cp as i64, s.len() as i64) };
+                0
+            }
+        },
+    }
+}
+
 /// `os_exit(code)` — immediate termination, code masked to the
 /// process range exactly as the checked lane masks it
 /// (`rem_euclid(256)`); defers do NOT run (the documented contract).
@@ -188,5 +205,18 @@ mod tests {
         let mut out = [0i64; 2];
         assert_eq!(unsafe { __wolf_rt_os_cwd(out.as_mut_ptr() as i64) }, 0);
         assert!(out[1] > 0);
+    }
+
+    /// #69: the path must name a file that EXISTS — a rig that spawns
+    /// itself as its own child needs a spawnable answer, not a label.
+    #[test]
+    fn exe_is_an_existing_path() {
+        let mut out = [0i64; 2];
+        assert_eq!(unsafe { __wolf_rt_os_exe(out.as_mut_ptr() as i64) }, 0);
+        let p = unsafe { view(out[0], out[1]) };
+        assert!(
+            std::path::Path::new(p).is_file(),
+            "os_exe names a file: {p}"
+        );
     }
 }

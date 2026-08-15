@@ -57,6 +57,7 @@ faults/overflow_interp_operand.lu: lowers
 faults/repeat_negative.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 ffi.lu: not mem-clean (pre-wir rungs own it)
+fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
 fs/roundtrip.lu: lowers
 grammar/bang_errunion.lu: lowers
@@ -178,6 +179,7 @@ os/spawn_rows.lu: refused — process builtins in native lowering (checked lane 
 overflow.lu: lowers
 procs.lu: lowers
 projects/count.lu: lowers
+projects/count_dir.lu: lowers
 projects/rpn.lu: lowers
 projects/wordtree.lu: lowers
 regions.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)

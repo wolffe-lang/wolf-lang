@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 83] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 94] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -130,6 +130,21 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 83] = [
     ("__wolf_rt_fs_close", 1, true),
     ("__wolf_rt_fs_remove", 2, true),
     ("__wolf_rt_fs_exists", 2, true),
+    // s90 (#51/#52): bytes, directories, metadata, rename. List
+    // results and single-word results ride caller out slots exactly
+    // like str pairs do; `List[int]` arguments arrive as one header
+    // pointer. `fs_open`'s third parameter is now a MODE, not a
+    // create flag — same arity, wider meaning.
+    ("__wolf_rt_fs_read_bytes", 3, true),
+    ("__wolf_rt_fs_write_bytes", 3, true),
+    ("__wolf_rt_fs_read_chunk", 3, true),
+    ("__wolf_rt_fs_write_chunk", 2, true),
+    ("__wolf_rt_fs_read_dir", 3, true),
+    ("__wolf_rt_fs_create_dir", 3, true),
+    ("__wolf_rt_fs_remove_dir", 3, true),
+    ("__wolf_rt_fs_is", 3, true),
+    ("__wolf_rt_fs_stat", 4, true),
+    ("__wolf_rt_fs_rename", 4, true),
     ("__wolf_rt_read_line", 1, true),
     // The s40 os/env/time families (wolf_rt::{os,time}): same shape
     // discipline — pointers/lens/codes as i64, str results through
@@ -141,6 +156,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 83] = [
     ("__wolf_rt_env_set", 4, true),
     ("__wolf_rt_env_vars", 0, true),
     ("__wolf_rt_os_cwd", 1, true),
+    // s90 (#69): the running executable's path — the rig that spawns
+    // ITSELF as its child.
+    ("__wolf_rt_os_exe", 1, true),
     ("__wolf_rt_os_exit", 1, false),
     ("__wolf_rt_time_now_ms", 0, true),
     ("__wolf_rt_time_unix_ms", 0, true),

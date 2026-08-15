@@ -60,6 +60,30 @@ pub const PRELUDE: &[&str] = &[
     "fs_close",
     "fs_remove",
     "fs_exists",
+    // the s90 additions (wolf-lang#51/#52): the same `fs` capability,
+    // the same D30 rows. `fs_open_mode` gives the family the open
+    // MODE it never had (so `append_text` appends instead of
+    // read-concat-writing); the `_bytes`/`_chunk` pairs make
+    // `copy_file`/`move_file` byte operations; `fs_read_dir` is the
+    // listing std shipped without; `fs_rename` promises the move but
+    // NOT atomicity (see `wolf_rt::fs`), and the create/metadata
+    // entries let a writer make the directory it is about to write
+    // into and ask WHAT exists.
+    "fs_open_mode",
+    "fs_read_bytes",
+    "fs_write_bytes",
+    "fs_read_chunk",
+    "fs_write_chunk",
+    "fs_read_dir",
+    "fs_create_dir",
+    "fs_create_dir_all",
+    "fs_remove_dir",
+    "fs_remove_dir_all",
+    "fs_rename",
+    "fs_is_file",
+    "fs_is_dir",
+    "fs_size",
+    "fs_modified_ms",
     // the net builtin tier (s39, blocking TCP v0 on the checked lane;
     // D30 rows {refused, timeout, closed, io}; I13: all tagged `net`
     // in the sandbox table). std.net (stdc02+) DELEGATES to these —
@@ -83,6 +107,11 @@ pub const PRELUDE: &[&str] = &[
     "env_set",
     "env_vars",
     "os_cwd",
+    // s90 (wolf-lang#69): the running executable's path. `env`-tagged
+    // with `os_cwd` — it READS process context and changes nothing —
+    // even though its reason to exist is std.process's rig, which
+    // spawns the test binary as its own child.
+    "os_exe",
     "os_exit",
     "os_spawn",
     "os_wait",

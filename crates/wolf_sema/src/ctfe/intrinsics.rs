@@ -134,8 +134,16 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // capability in this table (I13's tagging discipline — the
         // enforcement/audit UX is s40+s51, the no-untagged-syscall
         // rule starts here).
+        // (s90 adds the bytes/directory/metadata/rename entries and
+        // the moded open: same capability, same categorical comptime
+        // refusal — a wider fs surface must not become a wider
+        // comptime surface.)
         "read_text" | "fs_read_text" | "fs_write_text" | "fs_open" | "fs_create" | "fs_read"
-        | "fs_write" | "fs_close" | "fs_remove" | "fs_exists" => SandboxCategory::Fs,
+        | "fs_write" | "fs_close" | "fs_remove" | "fs_exists" | "fs_open_mode"
+        | "fs_read_bytes" | "fs_write_bytes" | "fs_read_chunk" | "fs_write_chunk"
+        | "fs_read_dir" | "fs_create_dir" | "fs_create_dir_all" | "fs_remove_dir"
+        | "fs_remove_dir_all" | "fs_rename" | "fs_is_file" | "fs_is_dir" | "fs_size"
+        | "fs_modified_ms" => SandboxCategory::Fs,
         // The s39 net builtin tier: every entry point carries the
         // `net` capability (I13), and the whole family is refused at
         // comptime categorically — sockets are the loudest D33 case.
@@ -146,7 +154,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // (`os_cwd` — machine state that differs per host); `exec`
         // covers child processes AND process control (`os_exit` would
         // terminate the compiler).
-        "env_var" | "env_get" | "env_set" | "env_args" | "env_vars" | "os_cwd" => {
+        // (s90/#69 adds `os_exe` here rather than under `exec`: it
+        // READS process context like `os_cwd` and starts nothing. The
+        // program it names still needs `exec` to be spawned.)
+        "env_var" | "env_get" | "env_set" | "env_args" | "env_vars" | "os_cwd" | "os_exe" => {
             SandboxCategory::Env
         }
         "os_spawn" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,

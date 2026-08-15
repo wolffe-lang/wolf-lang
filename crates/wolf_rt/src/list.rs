@@ -113,6 +113,22 @@ pub(crate) fn push_raw(hdr: *mut ListHdr, elem_ptr: *const u8) {
     }
 }
 
+/// Push one `int` element onto an 8-byte-element list.
+pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
+    let cell = [v];
+    push_raw(hdr, cell.as_ptr().cast());
+}
+
+/// Copy `s` into the ambient region and push it as a `{ptr, len}`
+/// element of a 16-byte-element list — the `List[str]` builder every
+/// list-returning builtin shares (`env_args`, `env_vars`,
+/// `fs_read_dir`).
+pub(crate) fn push_str(hdr: *mut ListHdr, s: &str) {
+    let p = crate::str::ambient_copy(s.as_bytes());
+    let pair = [p as i64, s.len() as i64];
+    push_raw(hdr, pair.as_ptr().cast());
+}
+
 /// `List[T]()` — a fresh empty list of `elem_size`-byte elements.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_list_new(elem_size: i64) -> i64 {

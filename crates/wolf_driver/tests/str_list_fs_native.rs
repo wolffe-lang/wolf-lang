@@ -283,6 +283,198 @@ fn main() -> !int {
     );
 }
 
+// ------------------- s90 / #51 + #52: bytes, dirs, modes, rename --
+
+#[test]
+fn the_s90_fs_surface_agrees_across_lanes() {
+    // Everything #51 and #52 asked for, in one program, on both
+    // lanes: a moded (appending) open, byte io over a file no text
+    // reader can hold, a sorted listing, recursive create/remove,
+    // metadata, and a rename that never reads the bytes it moves.
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s90_fs_data");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let src = format!(
+        r#"
+fn main() -> !int {{
+    let root = "{p}"
+    let nest = "{p}/tree/deep"
+    let bin = "{p}/bin.dat"
+    let moved = "{p}/moved.dat"
+    let log = "{p}/log.txt"
+    fs_create_dir_all(nest)?
+    fs_write_text("{p}/zebra.txt", "z")?
+    fs_write_text("{p}/Alpha.txt", "a")?
+    // Mode 1 truncates, so the two lanes append to the same
+    // starting point (the fixture directory is shared, on purpose:
+    // both lanes must see one real filesystem).
+    fs_write_text(log, "")?
+
+    var b = List[int]()
+    (mut b).push(128)
+    (mut b).push(0)
+    (mut b).push(255)
+    (mut b).push(65)
+    fs_write_bytes(bin, b)?
+    let refused = fs_read_text(bin) else |_| "text refused"
+    let back = fs_read_bytes(bin)?
+    print("{{refused}} n={{back.len}} {{back[0]}} {{back[2]}} size={{fs_size(bin)?}}")
+
+    fs_rename(bin, moved)?
+    print("moved={{fs_is_file(moved)}} src={{fs_exists(bin)}}")
+    let fd = fs_open_mode(moved, 0)?
+    let head = fs_read_chunk(fd, 2)?
+    let tail = fs_read_chunk(fd, 64)?
+    fs_close(fd)?
+    print("head={{head.len}}:{{head[0]}} tail={{tail.len}}:{{tail[1]}}")
+
+    let a = fs_open_mode(log, 2)?
+    fs_write(a, "one\n")?
+    fs_close(a)?
+    let a2 = fs_open_mode(log, 2)?
+    fs_write(a2, "two\n")?
+    fs_close(a2)?
+    print("appended={{fs_read_text(log)?.trim()}} bytes={{fs_size(log)?}}")
+
+    let names = fs_read_dir(root)?
+    for n in names {{
+        print("entry {{n}}")
+    }}
+    print("dirs={{fs_is_dir(nest)}} files={{fs_is_file(log)}} count={{names.len}}")
+
+    let bad = fs_open_mode(log, 77) else |_| 0 - 1
+    let raced = fs_open_mode(log, 4) else |_| 0 - 2
+    print("bad={{bad}} raced={{raced}}")
+
+    fs_remove_dir_all("{p}/tree")?
+    print("unmade={{!fs_exists(nest)}}")
+    0
+}}
+"#,
+        p = dir.display()
+    );
+    parity(
+        "s90_fs_surface",
+        &src,
+        "exit(0)",
+        "text refused n=4 128 255 size=4\n\
+         moved=true src=false\n\
+         head=2:128 tail=2:65\n\
+         appended=one\ntwo bytes=8\n\
+         entry Alpha.txt\n\
+         entry log.txt\n\
+         entry moved.dat\n\
+         entry tree\n\
+         entry zebra.txt\n\
+         dirs=true files=true count=5\n\
+         bad=-1 raced=-2\n\
+         unmade=true\n",
+    );
+}
+
+#[test]
+fn the_s90_rows_carry_the_same_tags_on_both_lanes() {
+    // Tag IDENTITY, not just failure: `?` out of `main` prints the
+    // tag's name, so a lane that coarsened differently would show it
+    // here. `invalid` is s90's new never-coarsened tag; `exists` and
+    // `cross_device` ride the ErrorKind coarsening the checked lane
+    // established, so `exists` proves the coarsening still agrees.
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s90_fs_rows");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let file = dir.join("f.bin");
+    std::fs::write(&file, b"x").expect("fixture");
+    for (case, body, tag) in [
+        (
+            "s90_row_invalid_mode",
+            format!("let fd = fs_open_mode(\"{p}\", 42)?", p = file.display()),
+            "invalid",
+        ),
+        (
+            "s90_row_invalid_byte",
+            format!(
+                "var b = List[int]()\n    (mut b).push(300)\n    fs_write_bytes(\"{p}\", b)?",
+                p = file.display()
+            ),
+            "invalid",
+        ),
+        (
+            "s90_row_exists",
+            format!("fs_create_dir(\"{p}\")?", p = dir.display()),
+            "exists",
+        ),
+        (
+            "s90_row_dir_not_found",
+            format!("let ns = fs_read_dir(\"{p}/nope\")?", p = dir.display()),
+            "not_found",
+        ),
+        (
+            "s90_row_chunk_eof",
+            format!(
+                "let fd = fs_open_mode(\"{p}\", 0)?\n    \
+                 let first = fs_read_chunk(fd, 64)?\n    \
+                 let second = fs_read_chunk(fd, 64)?",
+                p = file.display()
+            ),
+            "eof",
+        ),
+    ] {
+        let src = format!("\nfn main() -> !int {{\n    {body}\n    0\n}}\n");
+        parity(case, &src, "exit(1)", &format!("error: {tag}\n"));
+    }
+}
+
+/// A closed handle is `io` on both lanes even at `max = 0`. This is
+/// the divergence s90 found in #40's `fs_read`: the native shim
+/// answered the size question first (`ok("")`) and the checked
+/// executor answered the handle question first (`io`), so a program
+/// that read zero bytes from a closed file disagreed with itself
+/// across the lanes. Both now check the handle first; `fs_read_chunk`
+/// was written to match.
+#[test]
+fn a_closed_handle_is_io_at_zero_length_on_both_lanes() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s90_zero_read");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let file = dir.join("z.txt");
+    std::fs::write(&file, b"z").expect("fixture");
+    let src = format!(
+        r#"
+fn main() -> !int {{
+    let p = "{p}"
+    let fd = fs_open(p)?
+    fs_close(fd)?
+    let text = fs_read(fd, 0) else |_| "text io"
+    let bytes = fs_read_chunk(fd, 0) else |_| List[int]()
+    print("{{text}} bytes={{bytes.len}}")
+    0
+}}
+"#,
+        p = file.display()
+    );
+    parity("s90_zero_read", &src, "exit(0)", "text io bytes=0\n");
+}
+
+#[test]
+fn os_exe_agrees_across_lanes() {
+    // #69. The two lanes name DIFFERENT binaries (the checked lane's
+    // executable is the test host), so the observable that can agree
+    // is the property the rig needs: a non-empty path naming a real
+    // file, i.e. something spawnable.
+    parity(
+        "s90_os_exe",
+        r#"
+fn main() -> !int {
+    let exe = os_exe()?
+    print("file={fs_is_file(exe)} empty={exe.len == 0}")
+    0
+}
+"#,
+        "exit(0)",
+        "file=true empty=false\n",
+    );
+}
+
 // ------------------------- s81 / #58: the validating byte source --
 
 #[test]
@@ -380,10 +572,11 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     // 78 at s40/s73; s75 adds the D43 line brackets; s76 the
     // ambient-region enter/leave pair; s81 the validating byte source
-    // (`str_from_utf8`, wolf-lang#58).
+    // (`str_from_utf8`, wolf-lang#58); s90 the ten fs entries of
+    // #51/#52 plus `os_exe` (#69).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        83,
+        94,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

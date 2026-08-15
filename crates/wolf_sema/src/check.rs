@@ -5658,6 +5658,119 @@ impl<'a> Checker<'a> {
                 rowed(self, unit, &["not_found", "denied", "io"]),
             ),
             "fs_exists" => (vec![str_], bool_),
+            // The s90 fs surface (wolf-lang#51/#52). Four themes, one
+            // rule: anything a tier-1 platform cannot promise is a
+            // declared ROW, never a doc comment and never a `#[cfg]`.
+            //
+            // MODES. `fs_open_mode(path, mode)` is the moded open the
+            // family never had — 0 read, 1 write (create+truncate),
+            // 2 append (create), 3 read-write (create, no truncate),
+            // 4 create-new (exclusive). A mode outside that set is
+            // `invalid`, decided before the filesystem is touched;
+            // mode 4 losing the race is `exists`. `fs_open`/
+            // `fs_create` remain the 1-argument spellings of modes 0
+            // and 1, so every #40 call site is untouched — and
+            // `std.fs.append_text` stops reading the file it appends
+            // to (#52's whole complaint).
+            "fs_open_mode" => (
+                vec![str_, int_],
+                rowed(
+                    self,
+                    int_,
+                    &["not_found", "denied", "exists", "invalid", "io"],
+                ),
+            ),
+            // BYTES. `List[int]` is the byte carrier s77's `bytes()`
+            // and s81's `str_from_utf8` already established. No `utf8`
+            // row anywhere here: a file holding a lone `0x80` is data,
+            // and refusing to carry it was exactly what made
+            // `copy_file`/`move_file` text operations. `invalid` is a
+            // list element that is not a byte (outside `0..=255`) —
+            // the write's spelling of s81's refusal, since writing is
+            // not decoding.
+            "fs_read_bytes" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![str_],
+                    rowed(self, list_int, &["not_found", "denied", "io"]),
+                )
+            }
+            "fs_write_bytes" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![str_, list_int],
+                    rowed(self, unit, &["not_found", "denied", "invalid", "io"]),
+                )
+            }
+            "fs_read_chunk" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (vec![int_, int_], rowed(self, list_int, &["eof", "io"]))
+            }
+            "fs_write_chunk" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (vec![int_, list_int], rowed(self, unit, &["invalid", "io"]))
+            }
+            // DIRECTORIES. `fs_read_dir` hands back entry NAMES,
+            // SORTED — the decision is `wolf_rt::fs`'s doc and the
+            // reason is that filesystem order differs per filesystem,
+            // so an unsorted listing makes every test written against
+            // it machine-dependent. `utf8` is a name this `str` tier
+            // cannot represent: failing the listing beats silently
+            // dropping the entry, because a dropped entry makes
+            // `read_dir` lie.
+            "fs_read_dir" => {
+                let list_str = self.lo.table.intern(TyKind::List(str_));
+                (
+                    vec![str_],
+                    rowed(self, list_str, &["not_found", "denied", "utf8", "io"]),
+                )
+            }
+            "fs_create_dir" => (
+                vec![str_],
+                rowed(self, unit, &["exists", "not_found", "denied", "io"]),
+            ),
+            // The recursive form is idempotent (an existing directory
+            // is not an error), which is why it carries no `exists`.
+            "fs_create_dir_all" => (vec![str_], rowed(self, unit, &["denied", "io"])),
+            // A non-empty directory is `io`: the platforms spell the
+            // errno differently and the caller's response is the same
+            // either way (taxonomy rule 3).
+            "fs_remove_dir" | "fs_remove_dir_all" => (
+                vec![str_],
+                rowed(self, unit, &["not_found", "denied", "io"]),
+            ),
+            // RENAME. Named `fs_rename` and NOT `fs_rename_atomic`,
+            // deliberately: POSIX replaces a destination atomically
+            // and windows does not promise to, so the atomic spelling
+            // would be a promise broken on a tier-1 target. What this
+            // one claims is the effect — the entry moves, without its
+            // bytes being read. `cross_device` is the universal
+            // divergence (EXDEV / ERROR_NOT_SAME_DEVICE) and is a row
+            // so `std.fs.move_file` can fall back to
+            // `read_bytes`+`write_bytes`+`remove`. The atomicity the
+            // language DOES promise everywhere is `fs_open_mode`'s
+            // mode 4.
+            "fs_rename" => (
+                vec![str_, str_],
+                rowed(
+                    self,
+                    unit,
+                    &["not_found", "denied", "cross_device", "exists", "io"],
+                ),
+            ),
+            // METADATA. The predicates are TOTAL like `fs_exists` (a
+            // missing path is not a file and not a directory), so
+            // `exists` can finally say WHAT exists. `fs_modified_ms`
+            // is the `time_unix_ms` unit — milliseconds from the epoch,
+            // negative before it — so the two compare without a
+            // conversion. A host that cannot report a time is `io`;
+            // there is no `unsupported` tag because there is no
+            // different response to it.
+            "fs_is_file" | "fs_is_dir" => (vec![str_], bool_),
+            "fs_size" | "fs_modified_ms" => (
+                vec![str_],
+                rowed(self, int_, &["not_found", "denied", "io"]),
+            ),
             // The s39 net builtin tier (blocking TCP v0): the row
             // vocabulary is {refused, timeout, closed, io} — `closed`
             // is the peer's finish (the socket `eof`), `timeout` is
@@ -5687,7 +5800,11 @@ impl<'a> Checker<'a> {
             }
             "env_get" => (vec![str_], rowed(self, str_, &["missing", "utf8"])),
             "env_set" => (vec![str_, str_], rowed(self, unit, &["invalid"])),
-            "os_cwd" => (Vec::new(), rowed(self, str_, &["io"])),
+            // `os_exe` (s90, #69) is `os_cwd`'s shape: a process-context
+            // read whose one failure — no path, or one this str tier
+            // cannot hold — is `io`. It exists so std.process's rig can
+            // spawn ITSELF and finally witness a child's exit code.
+            "os_cwd" | "os_exe" => (Vec::new(), rowed(self, str_, &["io"])),
             // `os_exit` types unit and never returns (the checked
             // machine stops with the code; native calls the runtime
             // exit) — a `never` result is the std facade's refinement.

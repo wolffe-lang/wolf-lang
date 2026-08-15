@@ -215,6 +215,16 @@ pub(crate) unsafe fn write_pair(out: i64, ptr: i64, len: i64) {
     }
 }
 
+/// Write one machine word through an out slot (the single-value
+/// twin of [`write_pair`]: a list header, a size, a timestamp).
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+pub(crate) unsafe fn write_word(out: i64, v: i64) {
+    unsafe { (out as *mut i64).write(v) };
+}
+
 /// Materialize `s` in the ambient region and write its pair.
 unsafe fn write_owned(out: i64, s: &str) {
     let p = ambient_copy(s.as_bytes());
