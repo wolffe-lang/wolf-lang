@@ -442,11 +442,23 @@ mod tests {
             )
             .expect("writes");
 
-        // Asking as c15's frontend must miss, and therefore try to find
-        // a worker (which is absent here) rather than return the
-        // bootstrap worker's answer.
-        let e = import(&req, &cache, None, Some("wolf-c-frontend 1")).expect_err("must miss");
-        assert!(matches!(e, ImportError::NoWorker { .. }), "{e:?}");
+        // Asking as c15's frontend must miss, and therefore go to a
+        // worker rather than return the bootstrap worker's answer.
+        //
+        // What happens after the miss is not this test's business and is
+        // not the same on every platform: on Windows cargo puts the
+        // build directory on PATH (that is where Windows looks for
+        // dylibs, where Unix uses LD_LIBRARY_PATH), so the worker this
+        // workspace just built IS discoverable and the import proceeds
+        // to a real answer. Assert the property instead of the weather:
+        // whatever comes back, it did not come from the other worker's
+        // cache entry.
+        match import(&req, &cache, None, Some("wolf-c-frontend 1")) {
+            Err(ImportError::NoWorker { .. }) => {}
+            Err(ImportError::Worker(_) | ImportError::Spawn { .. }) => {}
+            Err(other) => panic!("unexpected error: {other:?}"),
+            Ok(got) => assert!(!got.from_cache, "served another worker's cache entry"),
+        }
 
         std::fs::remove_dir_all(&dir).expect("cleans up");
     }
