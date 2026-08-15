@@ -1,0 +1,24 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: aarch64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32u
+  char=unsigned endian=little
+headers: widths__arm64.h
+file 0: widths__arm64.h
+
+types (6):
+  #0 int bits=8 unsigned spelling=char
+  #1 ptr -> #0 (const)
+  #2 fn((#1)) -> #0
+  #3 int bits=8 signed spelling=char
+  #4 fn((#3)) -> #3
+  #5 fn((#0)) -> #0
+
+decls (3):
+  fn explicit_signed : char(char) [external] ok @widths__arm64.h:4:1
+  fn explicit_unsigned : unsigned char(unsigned char) [external] ok @widths__arm64.h:5:1
+  fn first_char : unsigned char(const unsigned char *) [external] ok @widths__arm64.h:3:1
+
+macros (0):
+
+summary: 3 imported, 0 refused

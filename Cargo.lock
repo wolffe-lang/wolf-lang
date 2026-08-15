@@ -1098,6 +1098,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wolf_cimport"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "insta",
+ "wolf_diag",
+ "wolf_span",
+]
+
+[[package]]
 name = "wolf_codegen_clif"
 version = "0.1.0"
 dependencies = [
@@ -1152,6 +1162,7 @@ dependencies = [
  "serde_json",
  "wolf_ast",
  "wolf_backend",
+ "wolf_cimport",
  "wolf_codegen_clif",
  "wolf_codegen_llvm",
  "wolf_diag",
@@ -1234,6 +1245,7 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "insta",
+ "wolf_cimport",
  "wolf_diag",
  "wolf_lex",
  "wolf_span",

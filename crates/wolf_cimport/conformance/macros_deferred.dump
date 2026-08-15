@@ -1,0 +1,24 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: macros_deferred.h
+file 0: macros_deferred.h
+
+types (0):
+
+decls (0):
+
+macros (4):
+  function BLOCK(x) tokens[{ use ( x ) ; }] refused(macro-expands-to-statement) -> error-on-use @macros_deferred.h:6:9
+  function CONTAINER_OF(ptr, member) tokens[( ( typeof ( member ) * ) ( ptr ) )] refused(macro-type-argument) -> error-on-use @macros_deferred.h:3:9
+  function GLUE(a, b) tokens[a ## b] refused(macro-token-pasting) -> error-on-use @macros_deferred.h:4:9
+  function PICK(x) tokens[_Generic ( ( x ) , int : 1 , default : 0 )] refused(macro-generic-dispatch) -> error-on-use @macros_deferred.h:5:9
+
+summary: 0 imported, 4 refused
+refused:
+  BLOCK: macro-expands-to-statement -> error-on-use
+  CONTAINER_OF: macro-type-argument -> error-on-use
+  GLUE: macro-token-pasting -> error-on-use
+  PICK: macro-generic-dispatch -> error-on-use

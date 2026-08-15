@@ -16,9 +16,7 @@ use crate::lock::Lock;
 use crate::manifest::Cap;
 use crate::project::Project;
 
-/// Which capability a std facade module carries (the import-graph half
-/// of I13 enforcement; `ffi`/`unsafe`/`comptime` come from the
-/// compiler's own analysis — the s22 audit surface — not from imports).
+/// Which capability a std facade module carries.
 pub fn std_module_cap(first_seg_after_std: &str) -> Option<Cap> {
     match first_seg_after_std {
         "net" => Some(Cap::Net),
@@ -26,6 +24,33 @@ pub fn std_module_cap(first_seg_after_std: &str) -> Option<Cap> {
         "env" => Some(Cap::Env),
         _ => None,
     }
+}
+
+/// The import target a `import c "header"` declaration contributes to
+/// the capability graph (s46, c10).
+pub const C_IMPORT_TARGET: &str = "import c";
+
+/// Which capability an import target carries.
+///
+/// `std.net`/`std.fs`/`std.env` come from the facade. **`import c`
+/// carries `ffi`**: imported C is the obvious hole in a capability
+/// manifest — a header can declare anything, and calling into it leaves
+/// wolf's world entirely — so opening one is a declared act, visible to
+/// every consumer running `wolf audit`.
+///
+/// What this deliberately does *not* do is decide that an imported
+/// declaration also carries `exec`, `net` or `fs`. Inferring that from
+/// a C name (`system`, `socket`, `open`) would be a heuristic wearing a
+/// guarantee's clothes, and the s46 contract does not say what a
+/// declaration carries. `ffi` is the honest floor: it says "this
+/// package left the sandbox", which is true, checkable, and diffable.
+/// The finer question is recorded for the c10 closeout.
+pub fn import_cap(target: &str) -> Option<Cap> {
+    if target == C_IMPORT_TARGET {
+        return Some(Cap::Ffi);
+    }
+    let rest = target.strip_prefix("std.")?;
+    std_module_cap(rest.split('.').next().unwrap_or(""))
 }
 
 /// Render the capability tree, root-first, box-drawn, deterministic.
@@ -147,11 +172,7 @@ pub fn capability_check(
         let first = module.split('.').next().unwrap_or("");
         let owner = by_alias.get(first).copied().unwrap_or(0);
         for target in imports {
-            let Some(rest) = target.strip_prefix("std.") else {
-                continue;
-            };
-            let seg = rest.split('.').next().unwrap_or("");
-            let Some(cap) = std_module_cap(seg) else {
+            let Some(cap) = import_cap(target) else {
                 continue;
             };
             if project.pkgs[owner].caps.contains(&cap) {

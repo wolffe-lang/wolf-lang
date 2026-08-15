@@ -5536,9 +5536,18 @@ impl<'a> Checker<'a> {
             "memset" => (vec![u8p, int_, uint_], u8p),
             "memcpy" => (vec![u8p, u8p, uint_], u8p),
             _ => {
+                // s46 built the importer interface (`wolf c-import`,
+                // `wolf_cimport`) and the artifact these shapes will
+                // come from; what is still hardcoded here is *which*
+                // artifact the `c` namespace resolves against, which is
+                // the plumbing s46 hands to its successor. Until that
+                // lands the refusal stays honest rather than guessing a
+                // signature — an imported C call typed by hope is a
+                // miscompile, not a nicety.
                 return Err(NotYet {
-                    construct: "imported C beyond the modelled intrinsic set (the \
-                                header importer)",
+                    construct: "imported C beyond the modelled intrinsic set (run \
+                                `wolf c-import --dump` to see what the importer \
+                                makes of the header)",
                     span: e.span,
                 });
             }

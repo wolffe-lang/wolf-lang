@@ -1,0 +1,35 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: bitfields.h
+file 0: bitfields.h
+
+types (7):
+  #0 record#0 struct flags
+  #1 int bits=32 unsigned spelling=int
+  #2 record#1 struct mixed
+  #3 int bits=8 unsigned spelling=char
+  #4 void
+  #5 ptr -> #0
+  #6 fn((#5)) -> #4
+
+records (2):
+  record#0 struct flags size=4 align=4
+    first : #1 @bit 0 width 1
+    second : #1 @bit 1 width 3
+    rest : #1 @bit 4 width 28
+  record#1 struct mixed size=4 align=4
+    tag : #3 @byte 0
+    lo : #1 @bit 8 width 4
+    hi : #1 @bit 12 width 4
+
+decls (3):
+  tag flags : record#0 [none] ok @bitfields.h:2:1
+  tag mixed : record#1 [none] ok @bitfields.h:8:1
+  fn take_flags : void(record#0 *) [external] ok @bitfields.h:14:1
+
+macros (0):
+
+summary: 3 imported, 0 refused

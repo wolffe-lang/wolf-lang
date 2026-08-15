@@ -1,0 +1,20 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: internal_linkage.h
+file 0: internal_linkage.h
+
+types (2):
+  #0 int bits=32 signed spelling=int
+  #1 fn((#0)) -> #0
+
+decls (3):
+  fn helper : int(int) [internal] ok @internal_linkage.h:3:1
+  fn public_entry : int(int) [external] ok @internal_linkage.h:5:1
+  object shared_counter : int [external] ok @internal_linkage.h:4:1
+
+macros (0):
+
+summary: 3 imported, 0 refused

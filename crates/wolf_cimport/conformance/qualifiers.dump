@@ -1,0 +1,30 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: qualifiers.h
+file 0: qualifiers.h
+
+types (12):
+  #0 int bits=32 signed spelling=int
+  #1 int bits=32 unsigned spelling=int
+  #2 ptr -> #1 (volatile)
+  #3 fn((#2)) -> #0
+  #4 int bits=8 signed spelling=char
+  #5 ptr -> #4 (const)
+  #6 fn((#5, #5)) -> #0
+  #7 void
+  #8 ptr -> #4 (restrict)
+  #9 ptr -> #4 (const restrict)
+  #10 int bits=64 unsigned spelling=size_t
+  #11 fn((#8, #9, #10)) -> #7
+
+decls (3):
+  fn compare : int(const char *, const char *) [external] ok @qualifiers.h:4:1
+  fn fast_copy : void(restrict char *, const restrict char *, size_t) [external] ok @qualifiers.h:5:1
+  fn read_reg : int(volatile unsigned int *) [external] ok @qualifiers.h:3:1
+
+macros (0):
+
+summary: 3 imported, 0 refused

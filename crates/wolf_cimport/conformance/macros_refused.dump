@@ -1,0 +1,24 @@
+c-import artifact format 1
+importer: wolf-cimport-reference 1
+target: x86_64-unknown-linux-gnu
+  ptr=64 align=64 short=16 int=32 long=64 longlong=64 size_t=64 wchar=32
+  char=signed endian=little
+headers: macros_refused.h
+file 0: macros_refused.h
+
+types (0):
+
+decls (0):
+
+macros (4):
+  object FRAGMENT tokens[) + 1] refused(macro-unbalanced) -> error-on-use @macros_refused.h:3:9
+  object GUARD tokens[] refused(macro-not-constant) -> error-on-use @macros_refused.h:4:9
+  object REFERS_UNKNOWN tokens[( nowhere_declared + 1 )] refused(macro-references-unknown:nowhere_declared) -> error-on-use @macros_refused.h:5:9
+  object STATEMENT tokens[do { side_effect ( ) ; } while ( 0 )] refused(macro-expands-to-statement) -> error-on-use @macros_refused.h:2:9
+
+summary: 0 imported, 4 refused
+refused:
+  FRAGMENT: macro-unbalanced -> error-on-use
+  GUARD: macro-not-constant -> error-on-use
+  REFERS_UNKNOWN: macro-references-unknown(nowhere_declared) -> error-on-use
+  STATEMENT: macro-expands-to-statement -> error-on-use

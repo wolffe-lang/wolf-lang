@@ -34,12 +34,23 @@ fn main() -> ExitCode {
             assert!(
                 run_ok(
                     "cargo",
-                    &["build", "--release", "-p", "wolf_driver", "-p", "wolf_rt"]
+                    &[
+                        "build",
+                        "--release",
+                        "-p",
+                        "wolf_driver",
+                        "-p",
+                        "wolf_rt",
+                        "-p",
+                        "wolf_cimport"
+                    ]
                 ),
                 "release build failed"
             );
             std::fs::create_dir_all(&dest).expect("create install dir");
-            for f in ["wolf", "libwolf_rt.a"] {
+            // The importer worker installs beside `wolf`, which is
+            // exactly where `wolf` looks for it (s46).
+            for f in ["wolf", "libwolf_rt.a", "wolf-cimport-worker"] {
                 let from = std::path::Path::new("target/release").join(f);
                 let to = dest.join(f);
                 // unlink first: a running `wolf lsp` holds the old inode
@@ -49,7 +60,10 @@ fn main() -> ExitCode {
                 std::fs::copy(&from, &to)
                     .unwrap_or_else(|e| panic!("copy {f} -> {}: {e}", to.display()));
             }
-            println!("install: wolf + libwolf_rt.a -> {}", dest.display());
+            println!(
+                "install: wolf + libwolf_rt.a + wolf-cimport-worker -> {}",
+                dest.display()
+            );
             ExitCode::SUCCESS
         }
         Some("bench") => bench_cmd(&args[1..]),
@@ -2726,10 +2740,12 @@ fn differ_cmd(args: &[String]) -> ExitCode {
 fn dist() -> ExitCode {
     let host = rustc_host_triple();
     let version = env!("CARGO_PKG_VERSION");
-    // Two artifacts, always: `wolf` cannot link a program without
+    // Three artifacts, always: `wolf` cannot link a program without
     // `libwolf_rt.a` beside it. Shipping the binary alone is the exact
     // failure `cargo xtask install` exists to prevent, and v0.1.0's
-    // first tarballs shipped that way (#62).
+    // first tarballs shipped that way (#62). The third is the C
+    // importer worker (s46): the compiler locates it *next to itself*,
+    // so an archive without it is one where `import c` cannot work.
     if !run_ok(
         "cargo",
         &[
@@ -2739,6 +2755,8 @@ fn dist() -> ExitCode {
             "wolf_driver",
             "-p",
             "wolf_rt",
+            "-p",
+            "wolf_cimport",
             "--quiet",
         ],
     ) {
@@ -2762,6 +2780,19 @@ fn dist() -> ExitCode {
         return ExitCode::FAILURE;
     }
     std::fs::copy(&rt, stage.join("libwolf_rt.a")).expect("stage runtime lib");
+    // The C importer worker rides along: `wolf` finds it beside itself,
+    // and never links it (s46, D33).
+    let worker_exe = if host.contains("windows") {
+        "wolf-cimport-worker.exe"
+    } else {
+        "wolf-cimport-worker"
+    };
+    let worker = Path::new("target/release").join(worker_exe);
+    if !worker.exists() {
+        eprintln!("dist: {worker_exe} missing — `import c` would not work from this archive");
+        return ExitCode::FAILURE;
+    }
+    std::fs::copy(&worker, stage.join(worker_exe)).expect("stage importer worker");
     // Flatten: the archive is a flat directory, so a nested source path
     // stages under its file name (copying to stage/crates/... panicked
     // on the missing parents — dist only runs on tags, so nothing caught
@@ -2994,13 +3025,23 @@ fn deps_check() -> ExitCode {
             "wolf_doc",
             Some(&["wolf_span", "wolf_diag", "wolf_sema", "wolf_query"][..]),
         ),
+        // The C header importer INTERFACE (s46, c10): the artifact,
+        // its serialization, the worker process contract and the
+        // cache. It must NEVER link a C frontend — the worker is a
+        // separate executable the compiler locates at run time (D17's
+        // swappable-importer requirement, and the only way libclang can
+        // exist in this story without a build script inside the
+        // compiler, D33). Its whole third-party surface is blake3.
+        ("wolf_cimport", Some(&["wolf_span", "wolf_diag"][..])),
         // The package manager (s51): formats + resolution only — it
         // lexes manifests with the compiler's own lexer (one grammar,
         // D33) and never sees sema; the driver wires resolution into
-        // module loading, not this crate.
+        // module loading, not this crate. It reaches wolf_cimport for
+        // the `c: { }` recipe type: the manifest declares C
+        // dependencies, and the importer owns what a declaration means.
         (
             "wolf_pkg",
-            Some(&["wolf_span", "wolf_diag", "wolf_lex"][..]),
+            Some(&["wolf_span", "wolf_diag", "wolf_lex", "wolf_cimport"][..]),
         ),
         // wolf_rt links into user programs: dependency-thin by law (D15).
         ("wolf_rt", Some(&["wolf_span"][..])),

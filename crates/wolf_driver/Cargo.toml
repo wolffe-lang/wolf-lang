@@ -28,6 +28,7 @@ wolf_rt.workspace = true
 wolf_query.workspace = true
 wolf_lsp.workspace = true
 wolf_pkg.workspace = true
+wolf_cimport.workspace = true
 # s53: the documentation generator behind `wolf doc`, and blake3 for the
 # script-mode build key (already the workspace's hash — wolf_pkg's
 # content addresses and this key are the same function).
