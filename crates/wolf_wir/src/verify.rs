@@ -16,7 +16,7 @@
 use crate::entity::EntityRef;
 use crate::facts::{DerefSize, FactKind, Just, Theorem};
 use crate::ir::{Aux, Block, BlockCall, FuncId, Function, Inst, Module, Value, ValueDef};
-use crate::ops::{ForeignRole, Opcode};
+use crate::ops::{ForeignRole, IntCc, Opcode};
 use crate::print::{Canon, canonicalize, print_function, render_fact, render_inst, successors};
 use crate::types::TypeData;
 use std::collections::HashMap;
@@ -480,8 +480,20 @@ impl<'a> Verifier<'a> {
             }
             Opcode::Icmp => {
                 self.expect_counts(inst, 2, 1)?;
-                if !int(args[0]) || !int(args[1]) {
-                    return Err(self.type_err(inst, "icmp needs integer operands"));
+                // s88 (wolf-lang#100): `bool` operands are admitted for
+                // the EQUALITY conditions only. A `bool` is an i8-shaped
+                // flag with two inhabitants, so `eq`/`ne` are exactly as
+                // meaningful as on `i8`; an ORDER on it would be a claim
+                // the surface never makes (`<` on `bool` does not
+                // typecheck), so the verifier refuses to represent one.
+                let bool_op = |v: Value| self.f.value_ty(v) == crate::types::BOOL;
+                let equality = matches!(data.aux, Aux::IntCc(IntCc::Eq | IntCc::Ne));
+                let both_bool = bool_op(args[0]) && bool_op(args[1]);
+                if both_bool && !equality {
+                    return Err(self.type_err(inst, "icmp on bool operands must be `eq` or `ne`"));
+                }
+                if !both_bool && (!int(args[0]) || !int(args[1])) {
+                    return Err(self.type_err(inst, "icmp needs integer or bool operands"));
                 }
                 if self.f.value_ty(args[0]) != self.f.value_ty(args[1]) {
                     return Err(self.type_err(inst, "icmp operands must share a type"));

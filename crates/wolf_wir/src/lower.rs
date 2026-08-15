@@ -4413,9 +4413,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     };
                     return Ok(Flow::Val(Some(self.str_cmp_inline(ap, al, bp, bl, cc))));
                 }
+                // s88 (wolf-lang#100): `bool` equality is one `icmp` on
+                // the i8-shaped flag — nothing about comparing two
+                // one-bit values needs a wider gate than the integers
+                // already get. Ordering never arrives here: typecheck
+                // refuses `<`/`>`/`<=`/`>=` on `bool` (the relational
+                // arm of `synth_bin` unifies against a numeric probe),
+                // so the arm below is the honest floor, not a policy.
+                if ty == types::BOOL {
+                    let cc = match op {
+                        SyntaxKind::EqEq => IntCc::Eq,
+                        SyntaxKind::NotEq => IntCc::Ne,
+                        _ => return Err(refuse("ordering comparison on `bool`", e.span)),
+                    };
+                    return Ok(Flow::Val(Some(
+                        self.b
+                            .ins(Opcode::Icmp, &[a, bv], &[types::BOOL], Aux::IntCc(cc))
+                            .one(),
+                    )));
+                }
                 if !types_is_int(ty) {
                     return Err(refuse(
-                        "comparison outside integers/floats (str/enum compares, c06/std)",
+                        "comparison outside integers, floats, `bool` and `str` \
+                         (enum compares, c06/std)",
                         e.span,
                     ));
                 }

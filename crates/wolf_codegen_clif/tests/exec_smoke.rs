@@ -283,6 +283,37 @@ fn exit_code_flows_through_shim() {
     assert_eq!(code, 42);
 }
 
+/// s88 (wolf-lang#103): `fn main()` — no result at all — is an entry
+/// the shim builds around. It is called for its effects and the
+/// process gets a 0, which is what the checked rung and lupin already
+/// did; the native rung used to refuse it at `wir`.
+#[test]
+fn no_result_main_exits_zero() {
+    let Some((code, _)) = run_wir("nomain", "fn @main() {\nb0:\n  ret\n}\n") else {
+        return;
+    };
+    assert_eq!(code, 0);
+}
+
+/// An entry the shim genuinely cannot build around is still refused —
+/// and the refusal speaks the SURFACE's type names, never `i64`.
+#[test]
+fn unsupported_entry_signature_names_surface_types() {
+    let mut module =
+        wolf_wir::parse_module("fn @main() -> f64 {\nb0:\n  %0 = fconst.f64 0x0\n  ret %0\n}\n")
+            .expect("wir parses");
+    let err = add_entry_shim(&mut module).expect_err("f64 entry is not buildable");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("`fn main()`") && msg.contains("`fn main() -> !int`"),
+        "the refusal must name the spellings a programmer can write: {msg}"
+    );
+    assert!(
+        !msg.contains("i64"),
+        "`i64` is not a surface type — the message must not name one: {msg}"
+    );
+}
+
 /// eu-main (s29): an error-union `main` returning ok exits with the
 /// payload; returning an error reports `error: <tag name>` on stdout
 /// and exits 1 (D30's documented process behavior — never a trap,

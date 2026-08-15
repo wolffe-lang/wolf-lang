@@ -431,17 +431,35 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
         ));
     };
     let entry_sig = entry.sig;
+    // The message speaks the SURFACE's type names (`int`, `!int`), not
+    // the WIR's (`i64`, `!i64`) — a refusal naming types the programmer
+    // cannot write is the compiler talking to itself (wolf-lang#103,
+    // the discipline #39 asks for elsewhere).
     let refuse = |sd: &wolf_wir::ir::SigData| {
         Err(BackendError::Unsupported(format!(
-            "entry signature is not `() -> i64` or `() -> !i64` (found {} param(s), \
-             {} result(s))",
+            "entry signature is not `fn main()`, `fn main() -> int` or \
+             `fn main() -> !int` (found {} param(s), {} result(s))",
             sd.params.len(),
             sd.results.len()
         )))
     };
     let sd = m.sigs[entry_sig].clone();
-    if !sd.params.is_empty() || sd.results.len() != 1 {
+    if !sd.params.is_empty() || sd.results.len() > 1 {
         return refuse(&sd);
+    }
+    // s88 (wolf-lang#103): `fn main()` — no return at all — is the form
+    // a newcomer writes first and the one every other lane already runs
+    // (the checked rung and lupin both print and exit 0). The shim calls
+    // it for its effects and hands the process a 0.
+    if sd.results.is_empty() {
+        let shim_sig = m.make_sig(vec![], vec![types::I32]);
+        let mut f = Function::new("__wolf_main_shim", shim_sig);
+        let b0 = f.make_block(&[]);
+        let callee = f.import_func("main", entry_sig);
+        f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
+        let (_, z) = f.append_inst(b0, Opcode::Iconst, &[], &[types::I32], Aux::Int(0));
+        f.append_inst(b0, Opcode::Ret, &[z[0]], &[], Aux::None);
+        return Ok(m.add_func(f));
     }
     let res_ty = sd.results[0];
     let eu_ok = match m.types.get(res_ty).clone() {

@@ -445,3 +445,44 @@ fn data_addr_missing_declaration() {
     let err = verify_module(&m).expect_err("verifier must reject");
     assert_eq!(err.class, ErrClass::Type, "{}", err.msg);
 }
+
+/// s88 (wolf-lang#100): `icmp` admits `bool` operands for the EQUALITY
+/// conditions — a `bool` is an i8-shaped flag with two inhabitants, so
+/// `eq`/`ne` mean exactly what they mean on `i8`.
+#[test]
+fn icmp_on_bools_is_accepted_for_equality() {
+    for cc in ["eq", "ne"] {
+        let src = format!(
+            "fn @f(bool, bool) -> i64 {{\nb0(%a: bool, %b: bool):\n  \
+             %c = icmp.{cc} %a, %b\n  br %c, b1, b1\nb1:\n  \
+             %z = iconst.i64 0\n  ret %z\n}}\n"
+        );
+        let m = wolf_wir::parse_module(&src).unwrap_or_else(|e| panic!("must parse: {e}"));
+        verify_module(&m).unwrap_or_else(|e| panic!("icmp.{cc} on bools must verify: {}", e.msg));
+    }
+}
+
+/// ...and refuses to represent an ORDER on them. `<` on `bool` is not a
+/// surface expression, so an ordered compare in WIR would be a claim no
+/// program made.
+#[test]
+fn icmp_on_bools_rejects_ordering() {
+    expect_reject(
+        "fn @f(bool, bool) -> i64 {\nb0(%a: bool, %b: bool):\n  \
+         %c = icmp.slt %a, %b\n  br %c, b1, b1\nb1:\n  \
+         %z = iconst.i64 0\n  ret %z\n}\n",
+        ErrClass::Type,
+    );
+}
+
+/// The mixed shape stays rejected: comparing a `bool` against an `i64`
+/// is not a compare, it is a bug upstream.
+#[test]
+fn icmp_mixing_bool_and_int_is_rejected() {
+    expect_reject(
+        "fn @f(bool, i64) -> i64 {\nb0(%a: bool, %b: i64):\n  \
+         %c = icmp.eq %a, %b\n  br %c, b1, b1\nb1:\n  \
+         %z = iconst.i64 0\n  ret %z\n}\n",
+        ErrClass::Type,
+    );
+}
