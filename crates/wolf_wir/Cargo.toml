@@ -15,11 +15,16 @@ rust-version.workspace = true
 wolf_span.workspace = true
 wolf_ast.workspace = true
 wolf_sema.workspace = true
+# s89: the byte-view LEND analysis (`wolf_mem::byteview`) is the memory
+# checker's, and lowering is its second consumer — the same verdict
+# decides the E1015 diagnostic and whether a call site may pass a view
+# instead of a copy. One authority, two readers; the alternative was
+# two whitelists that could drift apart into unsoundness.
+wolf_mem.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
 # The golden-corpus and determinism gates lower only mem-clean files,
 # so the tests and the bench example (not the library) run the memory
 # checker and filter diagnostics by severity.
-wolf_mem.workspace = true
 wolf_diag.workspace = true

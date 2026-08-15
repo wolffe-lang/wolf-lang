@@ -595,6 +595,29 @@ the inputs that would have decided it either way.)
   non-iterating position is still an allocation — but the LIST is,
   never the strings inside it.
 
+- `[mem.str.view.lend]` `s.bytes()` in an **argument position** is a
+  LEND, not a copy: the callee receives the receiver's own
+  `{ptr, len}`, and the call allocates nothing. Which positions
+  materialize is therefore a rule of the language and not a property of
+  a compiler: `s.bytes()` yields a view when it is *consumed on the
+  spot* — iterated, indexed, asked for `len`/`count`/`is_empty`/`get`/
+  `first`/`last`, or **passed as an argument to a function that only
+  does those things with it** — and materializes a `List[int]` in every
+  other position, `let` bindings and returns included. The lend's deal
+  is the region checker's, one scale down: the callee may READ the
+  bytes for the call's duration and may not keep them, the caller's
+  string stays borrowed across the call (a `str` is immutable at every
+  tier, so nothing may change under the callee), and a lend the callee
+  would make outlive the call is refused (E1015) rather than silently
+  copied. The refusal names the fix: binding first (`let bs =
+  s.bytes()`) materializes, and the bound list may be passed, kept and
+  returned like any other value. A callee whose use of the parameter
+  falls outside the read set is not an error — the caller materializes
+  for it, exactly as it did before views crossed calls. A byte view has
+  no write path in any position (`[mem.str.get]`'s UTF-8 guarantee
+  survives construction: nothing may forge a `str` by writing one's
+  bytes).
+
 ---
 
 ## Appendix A — `corpus/regions.lu`, clause by clause `[mem.appendix]`

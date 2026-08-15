@@ -50,6 +50,7 @@ use wolf_ast::{
     MatchArm, MatchExpr, ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr,
     SyntaxKind, TryExpr, VarDecl, WhileExpr,
 };
+use wolf_mem::byteview::{Lend, Lender};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::{FnSig, ItemSig, SigTables};
 use wolf_sema::types::{Prim, TyId, TyKind, TypeTable};
@@ -94,13 +95,81 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             }
         }
     }
+    // s89: the byte-view lend verdicts, computed once for the package
+    // and shared with the memory checker's E1015 (`wolf_mem::byteview`
+    // is the single authority — see this crate's Cargo comment).
+    let lender = Lender::new(pkg, &tc.sigs);
+    // s89: free-function bodies by their qualified WIR name, so a view
+    // specialization requested at a call site can find the body to
+    // lower a second time.
+    let mut bodies: HashMap<String, (&TypedBody, &wolf_sema::BodyRef)> = HashMap::new();
+    for outcome in &tc.bodies {
+        let BodyResult::Checked(tb) = &outcome.result else {
+            continue;
+        };
+        if outcome.body.member.is_none() {
+            bodies.insert(
+                qualify(&tc.sigs, outcome.body.module, &outcome.body.name),
+                (tb, &outcome.body),
+            );
+        }
+    }
     let mut sig_cache: HashMap<String, SigId> = HashMap::new();
+    let mut specs: Vec<SpecRequest> = Vec::new();
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
         };
         let body = &outcome.body;
-        match lower_body(pkg, &tc.sigs, tb, body, &fns, &mut module, &mut sig_cache) {
+        match lower_body(
+            pkg,
+            &tc.sigs,
+            tb,
+            body,
+            &fns,
+            &mut module,
+            &mut sig_cache,
+            &lender,
+            0,
+            &mut specs,
+        ) {
+            Ok(Some(s)) => stats.add(s),
+            Ok(None) => {}
+            Err(nyc) => not_yet.push(nyc),
+        }
+    }
+    // s89: the specialization worklist. A view-taking clone may itself
+    // re-lend the view onward, so requests are drained to fixpoint; the
+    // `done` set makes the pass idempotent (N call sites of one callee
+    // under one mask emit ONE clone).
+    let mut done: std::collections::HashSet<(String, u32)> = std::collections::HashSet::new();
+    let mut guard = 0usize;
+    while let Some(req) = specs.pop() {
+        guard += 1;
+        if guard > 4096 {
+            not_yet.push(refuse("a byte-view specialization fixpoint", req.span));
+            break;
+        }
+        if !done.insert((req.name.clone(), req.mask)) {
+            continue;
+        }
+        let Some(&(tb, body)) = bodies.get(&req.name) else {
+            // The callee's body did not check, so there is nothing to
+            // specialize; the call site's own lowering already refused.
+            continue;
+        };
+        match lower_body(
+            pkg,
+            &tc.sigs,
+            tb,
+            body,
+            &fns,
+            &mut module,
+            &mut sig_cache,
+            &lender,
+            req.mask,
+            &mut specs,
+        ) {
             Ok(Some(s)) => stats.add(s),
             Ok(None) => {}
             Err(nyc) => not_yet.push(nyc),
@@ -111,6 +180,22 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
         not_yet,
         stats,
     }
+}
+
+/// s89 — one call site's demand for a byte-view clone of a callee: the
+/// callee's qualified WIR name and the bitmask of parameters that
+/// arrive as `{ptr, len}` views instead of `List` headers.
+struct SpecRequest {
+    name: String,
+    mask: u32,
+    span: Span,
+}
+
+/// The WIR name of a byte-view specialization. The suffix rides the
+/// dotted-name convention the textual format already parses (`@a.b.c`,
+/// the s27 method mangling) so a dump still round-trips.
+fn view_name(base: &str, mask: u32) -> String {
+    format!("{base}.bytesview.{mask}")
 }
 
 /// Lower one checked body. `Ok(None)`: nothing to lower (bodyless
@@ -124,6 +209,9 @@ fn lower_body(
     fns: &HashMap<&str, Vec<(usize, &FnSig)>>,
     module: &mut Module,
     sig_cache: &mut HashMap<String, SigId>,
+    lender: &Lender<'_>,
+    view_mask: u32,
+    specs: &mut Vec<SpecRequest>,
 ) -> R<Option<Stats>> {
     let root = &pkg.files[body.file].parse.root;
     let Some(node) = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl) else {
@@ -209,8 +297,17 @@ fn lower_body(
         // build.
         return Ok(None);
     }
+    // s89: a byte-view clone is the same body under a different
+    // parameter shape — one name, one signature, one entry binding per
+    // masked parameter. The mask reached here only through a call site
+    // whose callee the lend analysis proved `Lendable`.
+    let wir_name = if view_mask == 0 {
+        wir_name
+    } else {
+        view_name(&wir_name, view_mask)
+    };
     // The WIR signature (modes carried; s26 attaches the fact slots).
-    let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, span)?;
+    let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, view_mask, span)?;
     // s73: task bodies queued by spawn sites, synthesized post-pass.
     let mut pending: Vec<PendingTask<'_>> = Vec::new();
     let mut b = FuncBuilder::new(module, wir_name, sig);
@@ -246,9 +343,11 @@ fn lower_body(
         task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
         pending_tasks: &mut pending,
         foreign: None,
+        lender,
+        pending_specs: specs,
         b: &mut b,
     };
-    lowerer.lower_fn(fsig, block)?;
+    lowerer.lower_fn(fsig, block, view_mask)?;
     let mut stats = b.stats;
     let func = b.finish();
     module.add_func(func);
@@ -270,6 +369,8 @@ fn lower_body(
                 module,
                 &task,
                 &mut pending,
+                lender,
+                specs,
             )?);
         }
         build_task_shim(module, &task)?;
@@ -290,6 +391,8 @@ fn lower_task_body<'t>(
     module: &mut Module,
     task: &PendingTask<'t>,
     pending: &mut Vec<PendingTask<'t>>,
+    lender: &'t Lender<'t>,
+    specs: &mut Vec<SpecRequest>,
 ) -> R<Stats> {
     let closure = task.closure.expect("closure task");
     let d = wolf_ast::ClosureExpr::cast(closure).expect("kind");
@@ -323,6 +426,8 @@ fn lower_task_body<'t>(
         task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
         pending_tasks: pending,
         foreign: None,
+        lender,
+        pending_specs: specs,
         b: &mut b,
     };
     // The fallible shape: the body's result is an eu when the closure
@@ -953,22 +1058,46 @@ fn wir_fn_sig(
     sigs: &SigTables,
     name: &str,
     fsig: &FnSig,
+    view_mask: u32,
     span: Span,
 ) -> R<SigId> {
     if let Some(&sig) = cache.get(name) {
         return Ok(sig);
     }
-    let sig = wir_sig_of(module, sigs, fsig, span)?;
+    let sig = wir_sig_of(module, sigs, fsig, view_mask, span)?;
     cache.insert(name.to_string(), sig);
     Ok(sig)
 }
 
 /// The uncached signature build (shared by definitions and call-site
 /// imports so both see the same `mut` → (ptr, token) expansion).
-fn wir_sig_of(module: &mut Module, sigs: &SigTables, fsig: &FnSig, span: Span) -> R<SigId> {
+///
+/// s89: a parameter in `view_mask` arrives as a byte VIEW — the two
+/// words a `str` is — instead of a `List` header, so it expands to
+/// `(ptr, i64)`. Both the definition and the call-site import build
+/// through here with the same mask, which is what keeps the two sides
+/// of a specialized call in agreement.
+fn wir_sig_of(
+    module: &mut Module,
+    sigs: &SigTables,
+    fsig: &FnSig,
+    view_mask: u32,
+    span: Span,
+) -> R<SigId> {
     let mut params = Vec::with_capacity(fsig.params.len());
     let mut next_formal = 0u32;
-    for p in &fsig.params {
+    for (i, p) in fsig.params.iter().enumerate() {
+        if view_mask & (1u32 << i) != 0 {
+            params.push(Param {
+                ty: types::PTR,
+                mode: Mode::Val,
+            });
+            params.push(Param {
+                ty: types::I64,
+                mode: Mode::Val,
+            });
+            continue;
+        }
         let Some(ty) = wir_ty(&mut module.types, &sigs.table, sigs, p.ty, p.span)? else {
             return Err(refuse("unit-typed parameters", p.span));
         };
@@ -1060,6 +1189,14 @@ enum LocalBind {
         handle: Value,
         frozen: bool,
     },
+    /// s89 — a `List[int]` parameter that arrived as a byte VIEW: the
+    /// receiver's own `{ptr, len}`, exactly what `s.bytes()` is at the
+    /// call site. Entry-block values, so they dominate every use; the
+    /// binding is read-only by construction (there is no store path in
+    /// this file that takes one) and every use it can have is one of
+    /// s77's seven consuming positions — the lend analysis proved that
+    /// before the caller was allowed to pass one.
+    BytesView { ptr: Value, len: Value },
     /// A unit-typed binding (no runtime value).
     Unit,
     /// A `when`-body payload rebind (s73, [conc.when.body]): reads and
@@ -1138,6 +1275,15 @@ enum ContinueTo {
     /// A `for` loop's latch, created on first use so a body that
     /// always diverges leaves no unreachable block behind.
     ForLatch(Option<Block>),
+}
+
+/// s89 — where the byte view being consumed comes from.
+#[derive(Clone, Copy)]
+enum ViewSrc<'t> {
+    /// `<str>.bytes()`: the receiver still needs lowering.
+    Recv(&'t GreenNode),
+    /// A parameter lent a view: its two entry words, already in hand.
+    Bound(Value, Value),
 }
 
 /// A `for` head that walks a `str` LAZILY (s84, `[mem.str.view]`):
@@ -1290,6 +1436,11 @@ struct Lowerer<'t, 'b, 'm> {
     /// writes elements. WITHIN each region nothing is claimed: two
     /// lists may share a buffer.
     foreign: Option<(RegionId, RegionId)>,
+    /// s89: the shared byte-view lend verdicts (`wolf_mem::byteview`).
+    lender: &'t Lender<'t>,
+    /// s89: view specializations this body's call sites demanded, drained
+    /// to fixpoint by [`lower_package`].
+    pending_specs: &'b mut Vec<SpecRequest>,
     b: &'b mut FuncBuilder<'m>,
 }
 
@@ -1330,7 +1481,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.expr_tys.get(&span).copied()
     }
 
-    fn lower_fn(&mut self, fsig: &FnSig, block: AstBlock<'t>) -> R<()> {
+    fn lower_fn(&mut self, fsig: &FnSig, block: AstBlock<'t>, view_mask: u32) -> R<()> {
         self.straight_line = !contains_control(block.syntax());
         // The fallible shape (s27): a tagged-row return means every
         // return site produces the eu pair, and the body tail routes
@@ -1355,7 +1506,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.scopes.push(ScopeFrame::default());
         let mut wir_idx = 0usize;
         let mut mut_ptrs: Vec<(Value, TypeId)> = Vec::new();
-        for p in &fsig.params {
+        for (pi, p) in fsig.params.iter().enumerate() {
+            // s89: a lent byte view is two entry words, bound as the
+            // view itself — no header, no allocation, nothing to
+            // materialize on entry.
+            if view_mask & (1u32 << pi) != 0 {
+                let ptr = entry_params[wir_idx];
+                let len = entry_params[wir_idx + 1];
+                wir_idx += 2;
+                self.b.func.add_debug_var(p.name.clone(), ptr, true);
+                self.scopes
+                    .last_mut()
+                    .expect("scope")
+                    .binds
+                    .push((p.name.clone(), LocalBind::BytesView { ptr, len }));
+                continue;
+            }
             let Some(wty) = wir_ty(
                 &mut self.b.module.types,
                 self.sig_table,
@@ -2006,6 +2172,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "region rebinding (c05 identity backlog)",
                 place.span,
             )),
+            // s89: a lent view is read-only — the lend analysis admits
+            // no assignment to the parameter, so reaching here would be
+            // the two halves disagreeing. Refusing keeps that
+            // disagreement an honest `NotYet` rather than a write into
+            // a caller's string.
+            LocalBind::BytesView { .. } => Err(refuse(
+                "assignment to a lent `bytes()` view (a byte view is read-only, s77/s89)",
+                place.span,
+            )),
             LocalBind::Val {
                 var,
                 wrapping,
@@ -2357,6 +2532,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         "first-class region values beyond local bindings (c05)",
                         e.span,
                     )),
+                    // s89: a lent view has no first-class WIR value —
+                    // that is the invariant s77 set and this sprint
+                    // kept. Every position the lend analysis admits is
+                    // handled before the name is read as a value, so
+                    // this arm is the disagreement detector, not a
+                    // path a `Lendable` body can take.
+                    Some(LocalBind::BytesView { .. }) => Err(refuse(
+                        "a lent `bytes()` view in a value position (bind it with `let` \
+                         to materialize, s89)",
+                        e.span,
+                    )),
                     // s73: a `when` payload read — through the held
                     // cell's accessor ([conc.when.body]), narrowed to
                     // the payload's own width.
@@ -2679,8 +2865,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // half of the pair (D25), `l.len` reads the runtime header.
         if m.member().map(|t| self.text(t.span)).as_deref() == Some("len") {
             // s77: `<str>.bytes().len` is the receiver's length half.
-            if let Some(view_recv) = self.bytes_view_recv(base) {
-                let Some((_, n)) = self.lower_bytes_view(view_recv)? else {
+            if let Some(src) = self.view_src(base) {
+                let Some((_, n)) = self.lower_view(src)? else {
                     return Ok(Flow::Diverged);
                 };
                 return Ok(Flow::Val(Some(n)));
@@ -3259,6 +3445,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         span,
                     ));
                 }
+                // s89: a lent view cannot be captured — the capture
+                // outlives the call the lend is scoped to (S-10 copies
+                // captures into the task's environment).
+                Some(LocalBind::BytesView { .. }) => {
+                    return Err(refuse(
+                        "a lent `bytes()` view captured by a task (bind it with `let` \
+                         to materialize, s89)",
+                        span,
+                    ));
+                }
                 Some(LocalBind::Unit) | None => {
                     return Err(refuse("an unresolvable task capture", span));
                 }
@@ -3684,7 +3880,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         // The body: the callee's ordinary lowered function.
         let body_name = qualify(self.sigs, callee_module, &cs.callee);
-        let body_sig = wir_sig_of(self.b.module, self.sigs, callee_sig, e.span)?;
+        let body_sig = wir_sig_of(self.b.module, self.sigs, callee_sig, 0, e.span)?;
         let task_no = self.pending_tasks.len();
         let base = self.b.func.name.clone();
         let shim_name = format!("{base}.task{task_no}.entry");
@@ -5185,13 +5381,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             ));
         }
-        // Arguments under their declared modes. A `mut` argument is
-        // s25's refusal repaid: the local spills to a `stack.alloc`
-        // slot (its own one-slot region — stack provenance, the s19
-        // promotion landing pad), the callee gets (ptr, token), and the
-        // local reloads on return. Re-lending a `mut` PARAMETER passes
-        // its pointer and region straight through — no copy, and the
-        // exclusivity theorem survives the hop.
+        // Arguments under their declared modes.
+        //
+        // s89 (#86): which arguments cross as a byte VIEW rather than a
+        // materialized `List[int]`. Two conditions, both necessary: the
+        // argument is a view here (`s.bytes()`, or a view this function
+        // was itself lent), and the memory checker's lend analysis
+        // proved the callee's parameter `Lendable` — every use inside
+        // one of s77's seven read positions. `Escapes` is E1015 at
+        // `mem` and never reaches lowering; `Opaque` materializes,
+        // bit-for-bit the pre-s89 behaviour.
+        let mut view_mask = 0u32;
+        for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            if i >= 32 || a.mode().is_some() {
+                continue;
+            }
+            if self.view_src(vexpr).is_some() && self.lender.param(callee_sig, i) == Lend::Lendable
+            {
+                view_mask |= 1u32 << i;
+            }
+        }
+        // The `mut` argument is s25's refusal repaid: the local spills
+        // to a `stack.alloc` slot (its own one-slot region — stack
+        // provenance, the s19 promotion landing pad), the callee gets
+        // (ptr, token), and the local reloads on return. Re-lending a
+        // `mut` PARAMETER passes its pointer and region straight
+        // through — no copy, and the exclusivity theorem survives the
+        // hop.
         let mut args = Vec::new();
         let mut formal_regions: HashMap<u32, RegionId> = HashMap::new();
         let mut next_formal = 0u32;
@@ -5200,6 +5417,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
             let mode = cs.params.get(i).and_then(|p| p.mode);
             let Some(vexpr) = Arg::value(a) else { continue };
+            if view_mask & (1u32 << i) != 0 {
+                let src = self.view_src(vexpr).expect("decided above");
+                let Some((ptr, len)) = self.lower_view(src)? else {
+                    return Ok(Flow::Diverged);
+                };
+                args.push(ptr);
+                args.push(len);
+                continue;
+            }
             if mode == Some(ParamMode::Mut) {
                 let formal = next_formal;
                 next_formal += 1;
@@ -5255,11 +5481,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // Import the callee under its module-qualified WIR name (per-
         // function cache; the shared sig build keeps the mut-expansion
         // identical to the definition's).
-        let callee_name = qualify(self.sigs, callee_module, &cs.callee);
+        let base_name = qualify(self.sigs, callee_module, &cs.callee);
+        // s89: a view-taking call names the CLONE, and queues it. The
+        // request is idempotent — `lower_package` emits one clone per
+        // (callee, mask) however many call sites ask for it.
+        let callee_name = if view_mask == 0 {
+            base_name
+        } else {
+            self.pending_specs.push(SpecRequest {
+                name: base_name.clone(),
+                mask: view_mask,
+                span: e.span,
+            });
+            view_name(&base_name, view_mask)
+        };
         let ext = match self.callees.get(&callee_name) {
             Some(&ext) => ext,
             None => {
-                let sig = wir_sig_of(self.b.module, self.sigs, callee_sig, e.span)?;
+                let sig = wir_sig_of(self.b.module, self.sigs, callee_sig, view_mask, e.span)?;
                 let ext = self.b.func.import_func(callee_name.clone(), sig);
                 self.callees.insert(callee_name, ext);
                 ext
@@ -6913,8 +7152,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // s77: `<str>.bytes()[i]` reads the receiver's storage directly
         // — s75's unsigned in-bounds test plus one `load.i8`, with no
         // list to materialize first.
-        if let Some(view_recv) = self.bytes_view_recv(recv) {
-            let Some((base, n)) = self.lower_bytes_view(view_recv)? else {
+        if let Some(src) = self.view_src(recv) {
+            let Some((base, n)) = self.lower_view(src)? else {
                 return Ok(Flow::Diverged);
             };
             let ix = d
@@ -7014,7 +7253,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // write a str's own bytes (rodata, for a literal) and could turn
         // a valid `str` into an invalid one. The refusal is the
         // enforcement; see the byte-view block.
-        if self.bytes_view_recv(recv).is_some() {
+        if self.view_src(recv).is_some() {
             return Err(refuse(
                 "writing through a `bytes()` view (a byte view is read-only, s77)",
                 span,
@@ -7266,6 +7505,37 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Flow::Diverged => return Ok(None),
         };
         Ok(Some(self.str_parts(sv)))
+    }
+
+    /// s89 — where a byte view comes from in the position being lowered:
+    /// the `.bytes()` call itself, or a PARAMETER that was lent one.
+    /// The two are the same two words; the only difference is whether
+    /// the receiver still needs lowering.
+    fn view_src(&self, e: &'t GreenNode) -> Option<ViewSrc<'t>> {
+        if let Some(recv) = self.bytes_view_recv(e) {
+            return Some(ViewSrc::Recv(recv));
+        }
+        let e = if e.kind == SyntaxKind::ParenExpr {
+            ParenExpr::cast(e).and_then(|p| p.expr()).unwrap_or(e)
+        } else {
+            e
+        };
+        if e.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        match self.lookup(&self.text(e.span)) {
+            Some(LocalBind::BytesView { ptr, len }) => Some(ViewSrc::Bound(ptr, len)),
+            _ => None,
+        }
+    }
+
+    /// The `{ptr, len}` of a recognized view. `None` = the receiver
+    /// diverged (see [`Self::lower_bytes_view`]).
+    fn lower_view(&mut self, src: ViewSrc<'t>) -> R<Option<(Value, Value)>> {
+        match src {
+            ViewSrc::Recv(recv) => self.lower_bytes_view(recv),
+            ViewSrc::Bound(ptr, len) => Ok(Some((ptr, len))),
+        }
     }
 
     /// Element `idx` of a byte view: `ptr.off` at stride 1, `load.i8`,
@@ -9208,8 +9478,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 TyKind::List(elem) => {
                     let elem = *elem;
                     // s77: `<str>.bytes().m(…)` answers from the view.
-                    if let Some(view_recv) = self.bytes_view_recv(recv_place) {
-                        let Some((base, n)) = self.lower_bytes_view(view_recv)? else {
+                    if let Some(src) = self.view_src(recv_place) {
+                        let Some((base, n)) = self.lower_view(src)? else {
                             return Ok(Flow::Diverged);
                         };
                         return self.lower_bytes_view_method(d, base, n, &mname, e);
@@ -9368,7 +9638,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let ext = match self.callees.get(&callee_name) {
             Some(&ext) => ext,
             None => {
-                let sig = wir_sig_of(self.b.module, self.sigs, msig, e.span)?;
+                let sig = wir_sig_of(self.b.module, self.sigs, msig, 0, e.span)?;
                 let ext = self.b.func.import_func(callee_name.clone(), sig);
                 self.callees.insert(callee_name, ext);
                 ext
@@ -10422,8 +10692,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s77: `for b in <str>.bytes()` is a counted loop over the
             // receiver's own bytes — the view, never a materialized
             // list.
-            if let Some(view_recv) = self.bytes_view_recv(iter) {
-                let Some((base, n)) = self.lower_bytes_view(view_recv)? else {
+            if let Some(src) = self.view_src(iter) {
+                let Some((base, n)) = self.lower_view(src)? else {
                     return Ok(Flow::Diverged);
                 };
                 return self.lower_for_bytes(d, base, n);

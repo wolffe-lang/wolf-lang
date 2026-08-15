@@ -375,6 +375,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wolf_mem"
+version = "0.1.0"
+dependencies = [
+ "wolf_ast",
+ "wolf_diag",
+ "wolf_sema",
+ "wolf_span",
+]
+
+[[package]]
 name = "wolf_parse"
 version = "0.1.0"
 dependencies = [
@@ -412,6 +422,7 @@ name = "wolf_wir"
 version = "0.1.0"
 dependencies = [
  "wolf_ast",
+ "wolf_mem",
  "wolf_sema",
  "wolf_span",
 ]
