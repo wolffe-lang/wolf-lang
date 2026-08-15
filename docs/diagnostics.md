@@ -1881,7 +1881,7 @@ State the row deliberately and keep it small — one tag per failure a
 caller can act on — and reuse the same spelling at every boundary
 that shares it.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__propagate__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0602_pub_row.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__cross_module_arms__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__propagate__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0602_pub_row.snap
 
 ## W0603 — this row tag's case contradicts its payload
 
