@@ -117,8 +117,9 @@ fn corpus_parse_expectations() {
             }
         }
     }
-    // The ledger: 5 syntax-tier counter-examples exist today
-    // (E0001, E0002, E0006, E0008, E0210); everything else must pass.
-    assert_eq!(fail, 5, "syntax-tier fail-file count drifted");
+    // The ledger: 6 syntax-tier counter-examples exist today
+    // (E0001, E0002, E0006, E0008, E0210, and s88's E0201 bare `..` —
+    // wolf-lang#88); everything else must pass.
+    assert_eq!(fail, 6, "syntax-tier fail-file count drifted");
     assert!(pass > 40, "expected the full corpus, saw {pass} pass files");
 }
