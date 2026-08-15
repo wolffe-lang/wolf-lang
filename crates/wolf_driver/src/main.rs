@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
+mod cimport_cmd;
 mod doc_cmd;
 mod doctest_cmd;
 mod pkg_cmd;
@@ -51,6 +52,9 @@ fn main() {
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("audit-surface") => audit_surface(&args[1..]),
+        // c10: the C header importer (s46). Runs a worker process; the
+        // compiler never links a C frontend.
+        Some("c-import") => cimport_cmd::c_import(&args[1..]),
         Some("fmt") => fmt(&args[1..]),
         Some("lsp") => lsp(&args[1..]),
         // The s51 package verbs (D34: the names are forever).
@@ -71,7 +75,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|interface|audit-surface|conform-run|--explain|--version"
+                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|interface|audit-surface|c-import|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }

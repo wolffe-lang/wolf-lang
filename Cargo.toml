@@ -29,6 +29,7 @@ wolf_fmt = { path = "crates/wolf_fmt" }
 wolf_sema = { path = "crates/wolf_sema" }
 wolf_mem = { path = "crates/wolf_mem" }
 wolf_wir = { path = "crates/wolf_wir" }
+wolf_cimport = { path = "crates/wolf_cimport" }
 wolf_backend = { path = "crates/wolf_backend" }
 wolf_codegen_clif = { path = "crates/wolf_codegen_clif" }
 wolf_codegen_llvm = { path = "crates/wolf_codegen_llvm" }

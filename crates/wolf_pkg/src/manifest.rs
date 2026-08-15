@@ -14,6 +14,8 @@
 
 use std::collections::BTreeSet;
 
+use wolf_cimport::Recipe;
+use wolf_cimport::recipe::Sysroot;
 use wolf_diag::{Diagnostic, codes};
 use wolf_lex::{Keyword, Punct, StrKind, Token, TokenKind};
 use wolf_span::{FileId, Span};
@@ -111,6 +113,11 @@ pub struct Manifest {
     /// `capabilities: [net, fs]` (I13).
     pub caps: Vec<Cap>,
     pub caps_span: Option<Span>,
+    /// `c: { name: { headers: [...] } }` — the declarative C recipes
+    /// (s46, c10). D33's answer to header location: the manifest says
+    /// where, and nothing is executed to find out.
+    pub c: Vec<Recipe>,
+    pub c_span: Option<Span>,
     /// The whole `pkg { … }` block.
     pub span: Span,
     /// The `deps: { … }` map's span, when present (`wolf add` inserts
@@ -518,6 +525,179 @@ fn expect_str(key: &str, v: &Value, diags: &mut Vec<Diagnostic>) -> Option<(Stri
     }
 }
 
+/// Parse the `c: { }` block — the declarative C recipes (s46, c10).
+///
+/// This is D33's answer to "where is `stdlib.h`?". Every other
+/// language's answer is *run something and ask*: a configure script,
+/// `pkg-config`, a `build.rs` that shells out. Wolf declares it here
+/// and the compiler resolves it, so adding a C dependency still never
+/// means arbitrary code runs on the machine doing the build.
+///
+/// Recipes are validated by [`wolf_cimport::Recipe::check`] — absolute
+/// include paths, `..` escapes, response files, plugin flags and
+/// anything else whose effect is "and then run this" are refused here,
+/// at the manifest, rather than on a consumer's machine.
+fn parse_c_recipes(v: &Value, diags: &mut Vec<Diagnostic>) -> Vec<Recipe> {
+    let Value::Map(entries, _) = v else {
+        diags.push(schema_err(
+            v.span(),
+            format!(
+                "`c` takes a map of `name: {{ headers: [\"…\"] }}` recipes, not {}",
+                v.kind_name()
+            ),
+        ));
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for e in entries {
+        let Value::Map(fields, _) = &e.value else {
+            diags.push(schema_err(
+                e.value.span(),
+                format!("the C recipe `{}` takes a map of fields", e.key),
+            ));
+            continue;
+        };
+        let mut r = Recipe {
+            name: e.key.clone(),
+            ..Recipe::default()
+        };
+        let mut span = e.key_span;
+        for f in fields {
+            span = f.key_span;
+            // The recipe's own D33 gate. The manifest-wide check
+            // already refuses `build`/`script`/`hook`; a recipe adds
+            // the C-flavoured ways to ask for the same thing.
+            if wolf_cimport::recipe::FORBIDDEN_RECIPE_KEYS.contains(&f.key.as_str()) {
+                diags.push(
+                    Diagnostic::error(
+                        codes::E1503,
+                        f.key_span,
+                        format!(
+                            "`{}` asks the build to run a program to find a C library \
+                             — wolf has no build scripts, ever",
+                            f.key
+                        ),
+                    )
+                    .with_label("refused unconditionally (D33)")
+                    .with_note(
+                        "a C recipe is data: say where the headers are with \
+                         `headers`, `include` and `define`, and what to link with \
+                         `link`. If a library's location genuinely varies, that is a \
+                         `sysroot: system` decision said out loud, not a script."
+                            .to_string(),
+                    ),
+                );
+                continue;
+            }
+            match f.key.as_str() {
+                "headers" => r.headers = str_list("headers", &f.value, diags),
+                "include" => r.include = str_list("include", &f.value, diags),
+                "cflags" => r.cflags = str_list("cflags", &f.value, diags),
+                "link" => r.link = str_list("link", &f.value, diags),
+                "define" => {
+                    let Value::Map(defs, _) = &f.value else {
+                        diags.push(schema_err(
+                            f.value.span(),
+                            "`define` takes a map of `NAME: \"value\"` entries".to_string(),
+                        ));
+                        continue;
+                    };
+                    for d in defs {
+                        match &d.value {
+                            Value::Str(s, _) => {
+                                r.define.insert(d.key.clone(), s.clone());
+                            }
+                            Value::Int(n, _) => {
+                                r.define.insert(d.key.clone(), n.to_string());
+                            }
+                            other => diags.push(schema_err(
+                                other.span(),
+                                format!(
+                                    "a `define` value is a string or an integer, not {}",
+                                    other.kind_name()
+                                ),
+                            )),
+                        }
+                    }
+                }
+                "sysroot" => {
+                    // A named choice, never a path: `bundled` is the
+                    // per-target header bundle (which is also what makes
+                    // cross-compilation work), `system` is the host's
+                    // own headers, admitted out loud.
+                    let word = match &f.value {
+                        Value::Word(w, _) => Some(w.clone()),
+                        Value::Str(s, _) => Some(s.clone()),
+                        other => {
+                            diags.push(schema_err(
+                                other.span(),
+                                "`sysroot` is `bundled` or `system`".to_string(),
+                            ));
+                            None
+                        }
+                    };
+                    if let Some(w) = word {
+                        match Sysroot::parse(&w) {
+                            Some(s) => r.sysroot = s,
+                            None => diags.push(schema_err(
+                                f.value.span(),
+                                format!(
+                                    "`sysroot` is `bundled` or `system`, not `{w}` — it \
+                                     names a header source, it is not a path to search"
+                                ),
+                            )),
+                        }
+                    }
+                }
+                other => diags.push(schema_err(
+                    f.key_span,
+                    format!(
+                        "unknown C recipe field `{other}` (headers, include, define, \
+                         cflags, link, sysroot)"
+                    ),
+                )),
+            }
+        }
+        // The importer owns what a well-formed recipe is; the manifest
+        // just reports what it says.
+        for err in r.check() {
+            diags.push(
+                schema_err(
+                    span,
+                    format!(
+                        "the C recipe `{}` has a bad `{}` entry `{}`: {}",
+                        err.recipe, err.field, err.value, err.why
+                    ),
+                )
+                .with_note(err.note),
+            );
+        }
+        out.push(r);
+    }
+    out
+}
+
+fn str_list(key: &str, v: &Value, diags: &mut Vec<Diagnostic>) -> Vec<String> {
+    let Value::List(items, _) = v else {
+        diags.push(schema_err(
+            v.span(),
+            format!("`{key}` takes a list of strings, not {}", v.kind_name()),
+        ));
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for it in items {
+        match it {
+            Value::Str(s, _) => out.push(s.clone()),
+            other => diags.push(schema_err(
+                other.span(),
+                format!("`{key}` holds strings, not {}", other.kind_name()),
+            )),
+        }
+    }
+    out
+}
+
 fn parse_deps(key: &str, v: &Value, diags: &mut Vec<Diagnostic>) -> Vec<Dep> {
     let Value::Map(entries, _) = v else {
         diags.push(schema_err(
@@ -707,6 +887,8 @@ pub fn parse_opts(
         bench_deps: Vec::new(),
         caps: Vec::new(),
         caps_span: None,
+        c: Vec::new(),
+        c_span: None,
         span: pkg_span,
         deps_span: None,
     };
@@ -810,7 +992,11 @@ pub fn parse_opts(
             // semantics with their own campaigns (features/c: c10,
             // paths: the ledger filter, min_age: RFC 3923 cooldown,
             // lints/trusted: bridge to the s22/s67 stubs).
-            "features" | "paths" | "min_age" | "c" | "lints" | "trusted" => {}
+            "c" => {
+                m.c = parse_c_recipes(&e.value, &mut diags);
+                m.c_span = Some(e.value.span());
+            }
+            "features" | "paths" | "min_age" | "lints" | "trusted" => {}
             other => {
                 diags.push(schema_err(
                     e.key_span,

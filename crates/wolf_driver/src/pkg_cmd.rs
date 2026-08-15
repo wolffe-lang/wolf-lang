@@ -699,10 +699,20 @@ pub fn capability_diagnostics(project: &Project, pkg: &wolf_sema::Package) -> Ve
         .modules
         .iter()
         .map(|m| {
-            (
-                m.dotted(),
-                m.deps.iter().map(|&d| pkg.modules[d].dotted()).collect(),
-            )
+            let mut targets: Vec<String> =
+                m.deps.iter().map(|&d| pkg.modules[d].dotted()).collect();
+            // `import c "header"` is not a module edge — it binds the
+            // contextual `c` namespace — so it has to be contributed
+            // here or the I13 graph would under-report the one import
+            // that leaves wolf's world entirely (s46).
+            if m.bindings
+                .iter()
+                .flatten()
+                .any(|b| b.target == wolf_sema::graph::BindTarget::CNamespace)
+            {
+                targets.push(wolf_pkg::audit::C_IMPORT_TARGET.to_string());
+            }
+            (m.dotted(), targets)
         })
         .collect();
     wolf_pkg::audit::capability_check(project, &module_imports)
