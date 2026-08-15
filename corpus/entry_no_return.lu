@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="hello, wolf")
+//! phase: run
+//! conforms: gram.item.fn
+//!
+//! `fn main()` with no return type (issue #103). Every other corpus
+//! entry spells `fn main() -> !int`, so the differential never saw the
+//! form a newcomer writes first: lupin and the checked rung ran it and
+//! the native rung recorded `unsupported` at `wir`, because the C-entry
+//! shim demanded exactly one result. Two of three lanes were already
+//! right, so the ruling is that this runs — a `main` that returns
+//! nothing hands the process a 0.
+//!
+//! The refusal for a genuinely-unsupported entry also stopped naming
+//! `i64`/`!i64`, types the surface does not have.
+
+fn main() {
+    print("hello, wolf")
+}

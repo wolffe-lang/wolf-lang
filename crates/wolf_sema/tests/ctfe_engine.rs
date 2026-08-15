@@ -343,6 +343,28 @@ fn main() -> !int { 0 }\n";
     );
 }
 
+/// s88 (wolf-lang#101, wolf-std F-0077): the engine models no
+/// container value, and it now SAYS so. The gap itself stands — a
+/// hash-consed immutable arena has no `List` — but a refusal that
+/// names nothing the author wrote costs a reader a bisect, which is
+/// exactly what F-0077 had to do.
+#[test]
+fn list_construction_at_comptime_is_a_named_gap() {
+    let src = "comptime fn probe() -> int {\n    let b = List[int]()\n    b.len\n}\n\n\
+               fn main() -> !int {\n    const N = probe()\n    if N == 0 { 0 } else { 1 }\n}\n";
+    let res = resolve_one(src);
+    let tc = typecheck_package_with(&res.package, true);
+    let gap = tc
+        .not_yet
+        .first()
+        .unwrap_or_else(|| panic!("a `List` at comptime is still a gap: {:?}", tc.diagnostics));
+    assert!(
+        gap.construct.contains("`List` construction at comptime"),
+        "the refusal must name `List`, not the callee shape: {}",
+        gap.construct
+    );
+}
+
 #[test]
 fn two_arg_assert_passes_at_comptime() {
     // #9: `assert(cond, msg)` — the message rides along; the passing

@@ -1,0 +1,24 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "expected an expression after `..`",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 27,
+            hi: 27,
+        },
+        label: "this range has no endpoint",
+    },
+    secondary: [],
+    notes: [
+        "a range needs at least one endpoint: `a..b`, `a..` or `..b`. A bare `..` is not an expression — to name a whole string or list, use the value itself rather than slicing it ([gram.expr.primary]).",
+    ],
+    suggestions: [],
+}

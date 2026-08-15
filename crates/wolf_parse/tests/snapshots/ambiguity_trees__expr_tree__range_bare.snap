@@ -1,0 +1,80 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 841..935
+  FnDecl 841..934
+    FnKw 841..843 "fn"
+    Ident 844..848 "main"
+    ParamList 848..850
+      LParen 848..849 "("
+      RParen 849..850 ")"
+    RetType 851..858
+      Arrow 851..853 "->"
+      ErrorUnionType 854..858
+        Not 854..855 "!"
+        PathType 855..858
+          Path 855..858
+            Ident 855..858 "int"
+    Block 859..934
+      LBrace 859..860 "{"
+      LetDecl 865..880
+        LetKw 865..868 "let"
+        IdentPat 869..870
+          Ident 869..870 "s"
+        Eq 871..872 "="
+        StringExpr 873..879
+          StrBegin 873..874 "\""
+          StrFragment 874..878 "wolf"
+          StrEnd 878..879 "\""
+        Term 879..880 "\n"
+      LetDecl 884..898
+        LetKw 884..887 "let"
+        IdentPat 888..889
+          Ident 888..889 "t"
+        Eq 890..891 "="
+        BracketApply 892..897
+          PathExpr 892..893
+            Ident 892..893 "s"
+          ArgList 893..897
+            LBracket 893..894 "["
+            Arg 894..896
+              RangeExpr 894..896
+                DotDot 894..896 ".."
+                Missing 896..896 ""
+            RBracket 896..897 "]"
+        Term 897..898 "\n"
+      ExprStmt 902..933
+        IfExpr 902..932
+          IfKw 902..904 "if"
+          BinExpr 905..915
+            MemberExpr 905..910
+              PathExpr 905..906
+                Ident 905..906 "t"
+              Dot 906..907 "."
+              Ident 907..910 "len"
+            EqEq 911..913 "=="
+            LiteralExpr 914..915
+              Int 914..915 "4"
+          Block 916..921
+            LBrace 916..917 "{"
+            ExprStmt 918..919
+              LiteralExpr 918..919
+                Int 918..919 "0"
+            RBrace 920..921 "}"
+          ElseKw 922..926 "else"
+          Block 927..932
+            LBrace 927..928 "{"
+            ExprStmt 929..930
+              LiteralExpr 929..930
+                Int 929..930 "1"
+            RBrace 931..932 "}"
+        Term 932..933 "\n"
+      RBrace 933..934 "}"
+  Term 934..935 "\n"
+  Eof 935..935 ""
+== diagnostics ==
+E0201 [Error] 896..896 expected an expression after `..`
+    label this range has no endpoint
+    note a range needs at least one endpoint: `a..b`, `a..` or `..b`. A bare `..` is not an expression — to name a whole string or list, use the value itself rather than slicing it ([gram.expr.primary]).

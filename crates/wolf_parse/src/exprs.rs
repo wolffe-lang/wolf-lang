@@ -691,6 +691,38 @@ fn maybe_range_end(p: &mut Parser<'_>, ctx: Ctx) {
     }
 }
 
+/// The LEADING-dots alternative of `range_expr` — `('..' | '..=')
+/// r_end` — whose endpoint is NOT optional ([gram.expr.primary]).
+///
+/// Only the *trailing* endpoint may be omitted (`a..`), so `a..`,
+/// `..b` and `a..b` are expressions and a bare `..` is not. That is
+/// deliberate rather than an oversight: `..` already means "and the
+/// rest" one production away (`error_row`'s open-row marker), which is
+/// exactly the ambiguity an unrestricted bare `..` in expression
+/// position would create. wolf-lang#88 — the parser used to admit it,
+/// so `s[..]` ran and `s[..=]` trapped, both outside the grammar.
+fn range_end_required(p: &mut Parser<'_>, ctx: Ctx) {
+    if p.at_punct(Punct::Caret) || at_expr_start(p) {
+        maybe_range_end(p, ctx);
+        return;
+    }
+    p.push_diag(
+        wolf_diag::Diagnostic::error(
+            codes::EXPECTED_TOKEN,
+            p.here(),
+            "expected an expression after `..`",
+        )
+        .with_label("this range has no endpoint")
+        .with_note(
+            "a range needs at least one endpoint: `a..b`, `a..` or `..b`. \
+             A bare `..` is not an expression — to name a whole string or \
+             list, use the value itself rather than slicing it \
+             ([gram.expr.primary]).",
+        ),
+    );
+    p.missing();
+}
+
 /// `'^' or_expr` — an end-relative endpoint (D25, `r_end`).
 fn from_end(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
@@ -820,7 +852,7 @@ fn primary(p: &mut Parser<'_>, ctx: Ctx) -> Option<(CompletedMarker, bool)> {
         TokenKind::Punct(Punct::DotDot | Punct::DotDotEq) => {
             let m = p.start();
             p.bump();
-            maybe_range_end(p, ctx);
+            range_end_required(p, ctx);
             m.complete(p, SyntaxKind::RangeExpr)
         }
         TokenKind::Kw(Keyword::If) => if_expr(p, ctx),

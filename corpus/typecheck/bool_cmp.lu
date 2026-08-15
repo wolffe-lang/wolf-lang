@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="false true true false true true")
+//! phase: run
+//! conforms: arith.cmp.bool
+//!
+//! `==`/`!=` on two `bool`s (issue #100, wolf-std F-0076). The native
+//! rung refused every spelling of this with "comparison outside
+//! integers/floats" for six sprints while the checked rung and lupin
+//! ran all of them: the gate keyed on the WIR value type and `bool` is
+//! not one of `i8/i16/i32/i64`, so a one-bit compare fell out of an
+//! integer test. Nothing in the corpus compared two bools, which is
+//! why nothing caught it — the natural spelling of an agreement test
+//! between two predicates (`p(x) == q(x)`) is the shape that costs a
+//! library its native lane.
+//!
+//! Ordering (`<`, `>`, `<=`, `>=`) on `bool` is NOT admitted and is
+//! not tested here: it is a typecheck error, because `bool` has no
+//! order in the surface.
+
+fn yes() -> bool { true }
+
+fn no() -> bool { false }
+
+fn main() -> !int {
+    let a = true
+    let b = false
+    // The finding's own shape: two predicates must agree.
+    let agree = yes() == (a != b)
+    print("{a == b} {a == true} {yes() == true} {true == false} {yes() != no()} {agree}")
+    if a == b { return 1 }
+    if a != true { return 2 }
+    if no() == yes() { return 3 }
+    0
+}

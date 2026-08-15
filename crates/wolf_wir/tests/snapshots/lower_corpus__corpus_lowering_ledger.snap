@@ -42,6 +42,7 @@ conc/select_two_timeouts.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
 conc/when_nested.lu: not mem-clean (pre-wir rungs own it)
+entry_no_return.lu: lowers
 errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
 faults/assert_msg_holds.lu: lowers
@@ -74,6 +75,7 @@ grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/interp_nested.lu: lowers
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
+grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
@@ -245,6 +247,7 @@ traits/show_bound.lu: refused — trait-impl method lowering (dispatch tables, c
 typecheck/ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
+typecheck/bool_cmp.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
 typecheck/cast_set.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)

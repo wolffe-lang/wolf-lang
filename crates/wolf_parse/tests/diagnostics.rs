@@ -59,6 +59,44 @@ fn e0201_expected_token() {
         codes::EXPECTED_TOKEN,
     );
     snap("e0201_missing_init", "let x\n", codes::EXPECTED_TOKEN);
+    // A bare `..` is outside `[gram.expr.primary]`: both alternatives
+    // require an endpoint, and the parser used to admit it anyway, so
+    // `s[..]` ran and `s[..=]` trapped (wolf-lang#88).
+    snap(
+        "e0201_bare_range",
+        "fn f(s: str) -> str { s[..] }\n",
+        codes::EXPECTED_TOKEN,
+    );
+    snap(
+        "e0201_bare_range_inclusive",
+        "fn f(s: str) -> str { s[..=] }\n",
+        codes::EXPECTED_TOKEN,
+    );
+}
+
+/// The endpoint rule is one-sided: only the TRAILING endpoint is
+/// optional, so `a..`, `..b` and `a..b` all parse clean. Pinned beside
+/// the refusal so a future tightening cannot quietly take them too.
+#[test]
+fn range_forms_with_an_endpoint_parse_clean() {
+    for src in [
+        "fn f(s: str) -> str { s[1..] }\n",
+        "fn f(s: str) -> str { s[..1] }\n",
+        "fn f(s: str) -> str { s[0..1] }\n",
+        "fn f(s: str) -> str { s[..=1] }\n",
+        "fn f(s: str) -> str { s[^2..] }\n",
+        "fn f() -> int { var n = 0\n for i in 0..3 { n += i }\n n }\n",
+    ] {
+        let parse = util::parse(src);
+        assert!(
+            parse
+                .diagnostics
+                .iter()
+                .all(|d| d.severity != wolf_diag::Severity::Error),
+            "{src:?} must parse clean, got {:?}",
+            parse.diagnostics
+        );
+    }
 }
 
 #[test]
