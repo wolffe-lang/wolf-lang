@@ -2421,6 +2421,28 @@ fn native_run(
     outcome
 }
 
+/// Say WHY a rung declined, on stderr — the rich channel the record
+/// deliberately keeps empty.
+///
+/// The `unsupported` verdict is the conservatism ledger: the file's
+/// verdict must not rest on a half-checked run, so the record carries
+/// no partial diagnostics. That is a rule about the RECORD; it was
+/// never a reason for the compiler to say nothing at all. Three
+/// findings asked for this half in a row (wolf-std F-0060, F-0069 and
+/// F-0077 / wolf-lang#101, #47) because an unattributable
+/// `unsupported` costs a reader a bisect to learn which subset they
+/// left. The `--checked` and `--native` rungs already speak here; the
+/// static rungs now speak in the same words, and `xtask lane-coverage`
+/// reads them off stderr for the residue report.
+fn report_refusal(nyc: Option<&wolf_sema::check::NotYet>) {
+    if let Some(nyc) = nyc {
+        eprintln!(
+            "wolf conform-run: unsupported — {} @{}..{}",
+            nyc.construct, nyc.span.lo, nyc.span.hi
+        );
+    }
+}
+
 const PHASES: [&str; 8] = [
     "none",
     "lex",
@@ -2508,6 +2530,7 @@ fn wir_rung(
 ) -> (&'static str, String, Vec<Diagnostic>) {
     let build = wolf_wir::lower_package(pkg, tc);
     if !build.not_yet.is_empty() {
+        report_refusal(build.not_yet.first());
         return ("mem", "unsupported".to_string(), all);
     }
     if let Err(e) = wolf_wir::verify_module(&build.module) {
@@ -2775,6 +2798,7 @@ fn conform_run(args: &[String]) {
                             // fully-checkable file fail here.
                             let tc = wolf_sema::typecheck_package(&res);
                             if !tc.not_yet.is_empty() {
+                                report_refusal(tc.not_yet.first());
                                 ("resolve", "unsupported".to_string(), all)
                             } else {
                                 let mut all = all;
@@ -2796,6 +2820,7 @@ fn conform_run(args: &[String]) {
                                     // memory errors are withheld.
                                     let mem = wolf_mem::check_package(&res.package, &tc);
                                     if !mem.not_yet.is_empty() {
+                                        report_refusal(mem.not_yet.first());
                                         ("typecheck", "unsupported".to_string(), all)
                                     } else {
                                         let mut all = all;
