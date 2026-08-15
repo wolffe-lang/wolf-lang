@@ -93,6 +93,7 @@ pub mod ops;
 pub mod parse;
 pub mod peephole_rules;
 pub mod print;
+pub mod profile;
 pub mod types;
 pub mod verify;
 
@@ -107,6 +108,7 @@ pub use lower::{Build, lower_package};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
 pub use print::{block_order, print_module, print_selected};
+pub use profile::{Profile, ProfileError, WPROF_VERSION};
 pub use types::{RegionId, TypeData, TypeId, TypeInterner};
 pub use verify::{
     ErrClass, Invalidation, PassCtx, VerifyError, run_pass, verify_function, verify_module,

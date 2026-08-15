@@ -48,6 +48,7 @@ mod coalesce;
 mod compact;
 pub mod dedup;
 mod inline;
+pub mod instrument;
 mod licm;
 mod memopt;
 mod rangeopt;
@@ -62,7 +63,7 @@ use crate::types::TypeInterner;
 use crate::verify::{ErrClass, Invalidation, PassCtx, VerifyError, verify_function, verify_module};
 
 pub use rangeopt::HOT_LOOP_NOTE;
-pub use wp::{WholeProgram, WpStats, member_ids, optimize_whole_program, owner};
+pub use wp::{WholeProgram, WpStats, branch_weights, member_ids, optimize_whole_program, owner};
 
 /// The ONE tunable table (target 2 + amendment 4): every heuristic
 /// threshold the mid-end consults, in one place, adjusted by s44's
@@ -102,6 +103,49 @@ pub struct Thresholds {
     pub import_max: u32,
     /// Whole-program: total imported WIR instructions per cluster.
     pub import_budget: u32,
+    // ---- PGO (s45) -----------------------------------------------
+    //
+    // Three knobs, all in the ONE table with everything else, and all
+    // **neutral by default**. That is an evidence-led setting, not
+    // timidity, and the evidence is worth stating where the numbers
+    // are:
+    //
+    // A profile record is keyed by the POST-mid-end content hash of
+    // the body (D8/s43, locked). So any knob here that changes a body
+    // destroys that body's own record: the body the profile described
+    // no longer exists, and the block counts that would have become
+    // LLVM branch weights go with it. Measured on the T1 suite at s45:
+    // with `inline_hot_bonus = 64`, `word_count`'s hot 155-instruction
+    // `count_words` inlined into `main` and BOTH of the program's
+    // records went stale, so a profile that matched 2/2 before the
+    // pass matched 0/2 after it and the `!prof` channel was silent on
+    // exactly the code it was collected for. No kernel showed a
+    // reproducible win to pay for that, and two read as losses outside
+    // their floors.
+    //
+    // So at v1 PGO's live channel is the one that does NOT move the
+    // bodies — measured branch weights through s41 — and these three
+    // ship neutral. They are implemented, tested and tunable, because
+    // the fix is a keying or edge-counter change rather than a
+    // heuristic one, and the closeout should be able to revisit them
+    // without rebuilding the machinery.
+    /// The normalized `hot=` rank ([`summary::HOTNESS_SCALE`]) at or
+    /// above which a callee counts as HOT. A rank, so it is
+    /// workload-independent.
+    pub hot_rank: u32,
+    /// Extra callee-size budget, in WIR instructions, at a hot callee.
+    /// **0 = neutral (default)**: the inliner takes the s42 decision
+    /// verbatim whatever the profile says.
+    pub inline_hot_bonus: u32,
+    /// Budget REMOVED at a PROVEN-COLD callee (`hot=0`: a record
+    /// exists and the body never ran). **0 = neutral (default).** A
+    /// callee with no record is unknown, not cold, and this never
+    /// applies to it.
+    pub inline_cold_penalty: u32,
+    /// Cluster-affinity multiplier for an edge whose callee is hot —
+    /// the "hot caller/callee pairs weighted into the same cluster"
+    /// knob. **1 = neutral (default).**
+    pub cluster_hot_boost: u32,
 }
 
 impl Default for Thresholds {
@@ -121,6 +165,10 @@ impl Default for Thresholds {
             cluster_max: 8,
             import_max: 96,
             import_budget: 512,
+            hot_rank: 100,
+            inline_hot_bonus: 0,
+            inline_cold_penalty: 0,
+            cluster_hot_boost: 1,
         }
     }
 }
@@ -131,6 +179,13 @@ pub struct Options {
     pub thresholds: Thresholds,
     /// Verify (and fact-audit) after every pass, not just at the end.
     pub verify_each: bool,
+    /// The profile to consume, if the build was given one (s45,
+    /// `wolf build --release --profile=<f.wprof>`). **`None` is the
+    /// default and the normal case** (D4: PGO is integrated, optional
+    /// and NEVER required — a build without a profile is a build, not
+    /// a degraded build). A profile that matches nothing produces a
+    /// byte-identical result to `None`.
+    pub profile: Option<crate::profile::Profile>,
 }
 
 impl Default for Options {
@@ -139,6 +194,7 @@ impl Default for Options {
             thresholds: Thresholds::default(),
             verify_each: cfg!(debug_assertions)
                 || std::env::var("WOLF_VERIFY_EACH_PASS").as_deref() == Ok("1"),
+            profile: None,
         }
     }
 }

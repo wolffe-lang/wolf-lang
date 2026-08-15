@@ -10,10 +10,19 @@
 //! 1. **Affinity** — hot caller/callee pairs belong together, so no
 //!    inlining win is lost to the partition in the first place.
 //!    Agglomeration walks call edges by descending weight
-//!    (`sites × (1 + loop depth)`) and fuses their groups while the
-//!    fused group stays under the target size. This is the
-//!    min-cut-flavored half: the heaviest edges are the ones the
-//!    partition must not cut.
+//!    ([`edge_weight`]) and fuses their groups while the fused group
+//!    stays under the target size. This is the min-cut-flavored half:
+//!    the heaviest edges are the ones the partition must not cut.
+//!
+//!    Without a profile the weight is the static estimate
+//!    `sites × (1 + loop depth)`. With one (s45), an edge into a body
+//!    the profile says is hot is multiplied by
+//!    `Thresholds::cluster_hot_boost` — "hot" being the reserved
+//!    `hot=` slot the summary now carries. An edge whose callee the
+//!    profile does not name is left at its static weight, so a stale
+//!    or partial profile can only ADD information to the partition,
+//!    never subtract it, and an entirely unprofiled build partitions
+//!    exactly as it did before s45.
 //! 2. **Balance** — groups are then bin-packed into the cluster count
 //!    by descending size into the currently-lightest bin, so summed
 //!    WIR size is even and the parallel codegen phase has no straggler.
@@ -107,7 +116,7 @@ pub fn partition(summary: &ProgramSummary, th: &Thresholds) -> Vec<Cluster> {
             if let Some(&j) = idx.get(c.callee.as_str())
                 && i != j
             {
-                edges.push((c.sites * (1 + c.depth), i, j));
+                edges.push((edge_weight(c, summary.funcs[j].hotness, th), i, j));
             }
         }
     }
@@ -176,6 +185,21 @@ pub fn partition(summary: &ProgramSummary, th: &Thresholds) -> Vec<Cluster> {
         })
         .filter(|c| !c.members.is_empty())
         .collect()
+}
+
+/// One call edge's partition weight. `callee_hot` is the callee's
+/// `hot=` slot: `None` (unknown, the default and the no-profile case)
+/// leaves the static estimate untouched.
+///
+/// Saturating throughout: weights only order edges, so a saturated one
+/// is still "as heavy as anything gets", and no workload length can
+/// make the partition wrap.
+fn edge_weight(c: &super::summary::CallEdge, callee_hot: Option<u32>, th: &Thresholds) -> u32 {
+    let base = c.sites.saturating_mul(1 + c.depth);
+    match callee_hot {
+        Some(h) if h >= th.hot_rank => base.saturating_mul(th.cluster_hot_boost.max(1)),
+        _ => base,
+    }
 }
 
 fn find(uf: &mut [usize], mut x: usize) -> usize {
@@ -268,7 +292,11 @@ pub fn decide_imports(clusters: &[Cluster], s: &ProgramSummary, th: &Thresholds)
                     if !importable(callee, th) {
                         continue;
                     }
-                    *cand.entry(callee.name.as_str()).or_insert(0) += e.sites * (1 + e.depth);
+                    // Same weight the partition used, so the import
+                    // ranking and the partition agree about what "hot"
+                    // means instead of each having its own opinion.
+                    *cand.entry(callee.name.as_str()).or_insert(0) +=
+                        edge_weight(e, callee.hotness, th);
                 }
             }
             // Highest benefit first; ties by name. Spend the budget.

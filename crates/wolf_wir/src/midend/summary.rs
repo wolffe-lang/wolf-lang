@@ -41,9 +41,21 @@
 //!   up to local names only; see [`super::dedup::body_hash`]).
 //! - `facts` — the D2 fact digest: counts per fact kind, in the fixed
 //!   order region/noalias/range/deref/frozen.
-//! - `hot` — s45's hotness hint slot. Always `-` at v1: PGO is s45's
-//!   sprint, and the field is reserved so profile data can arrive
-//!   without a format bump.
+//! - `hot` — the hotness hint. **s43 reserved this slot and s45 fills
+//!   it; the format did not change to accommodate it, which is the
+//!   whole point of having reserved it.** `-` means *unknown* (no
+//!   profile, or a profile with no record for this body) and is the
+//!   default in every build. A number is a **normalized 0..=1000
+//!   hotness rank**: `1000 × this body's peak block count ÷ the
+//!   hottest peak block count in the program`, integer arithmetic, ties
+//!   included. It is deliberately relative and bounded rather than a
+//!   raw count: the summary index is folded into the release cluster
+//!   cache key, and a raw count would make the key depend on how long
+//!   the training run happened to be. `hot=0` is *proven cold* (a
+//!   record exists and the body never executed) and is real
+//!   information; `hot=-` is *unknown* and must never be treated as
+//!   cold — that is what keeps a stale profile from degrading a build
+//!   below the no-profile one. See [`apply_profile`].
 //! - `calls` — outgoing edges to MODULE functions (external `decl`
 //!   callees, including every `__wolf_rt_*` seam, are not edges; they
 //!   are opaque by construction). The three fields after `@` are the
@@ -204,7 +216,9 @@ pub struct FuncSummary {
     pub flags: Flags,
     pub body_hash: String,
     pub facts: FactDigest,
-    /// s45's slot: `None` at v1 (see the module docs).
+    /// The `hot=` slot: `None` = unknown (no profile / no record),
+    /// `Some(0..=1000)` = normalized hotness rank. See the module docs
+    /// and [`apply_profile`].
     pub hotness: Option<u32>,
     pub calls: Vec<CallEdge>,
     /// RESERVED (D42): always empty at v1.
@@ -277,6 +291,56 @@ impl ProgramSummary {
             .ok()
             .map(|i| &self.funcs[i])
     }
+}
+
+/// The top of the normalized hotness scale (`hot=1000` is the hottest
+/// body in the program). A rank, not a count — see the module docs.
+pub const HOTNESS_SCALE: u32 = 1000;
+
+/// Fill the reserved `hot=` slot from a `.wprof` (s45), and score how
+/// much of the profile applied.
+///
+/// Matching is by **content hash and nothing else** — a record applies
+/// to a body iff it names that body's D8 hash. Consequences, all of
+/// them intended:
+///
+/// - a record for a body this build does not contain is STALE: it is
+///   dropped, silently as far as the summary is concerned and with one
+///   counted summary line as far as the driver is concerned. It can
+///   never be applied to the wrong body, because the only thing that
+///   could match it is a body with the same hash, which is the same
+///   body;
+/// - a body with no record keeps `hot=-` (unknown), NOT `hot=0`. A
+///   half-stale profile therefore leaves the un-matched half of the
+///   program exactly as the no-profile build would have it, instead of
+///   marking it cold and pessimizing it;
+/// - a fully stale profile changes no field of the index, so the
+///   summary digest, the cluster keys, and the emitted binary are
+///   byte-identical to a no-profile build.
+///
+/// The scale is taken over the peak BLOCK count, not the entry count:
+/// a function called once around a million-iteration loop is hot, and
+/// entry counts say it is not.
+pub fn apply_profile(
+    s: &mut ProgramSummary,
+    profile: &crate::profile::Profile,
+) -> crate::profile::Coverage {
+    let cov = crate::profile::coverage(profile, s.funcs.iter().map(|f| f.body_hash.as_str()));
+    let peak = |f: &FuncSummary| profile.get(&f.body_hash).map(|r| r.peak());
+    let top = s.funcs.iter().filter_map(peak).max().unwrap_or(0);
+    for f in &mut s.funcs {
+        let Some(p) = profile.get(&f.body_hash).map(|r| r.peak()) else {
+            continue; // unknown stays unknown
+        };
+        f.hotness = Some(if top == 0 {
+            0
+        } else {
+            // Integer, deterministic, saturating: no floats anywhere
+            // near a value that rides a cache key.
+            ((u128::from(p) * u128::from(HOTNESS_SCALE)) / u128::from(top)) as u32
+        });
+    }
+    cov
 }
 
 /// Summarize every function in `m` (target 4's module phase).

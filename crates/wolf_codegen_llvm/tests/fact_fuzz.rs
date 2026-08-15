@@ -64,11 +64,25 @@ fn differential_lane(tag: &str, module: wolf_wir::Module, midend: bool) -> bool 
     let mut first_ir = String::new();
     for (phase, mut m) in lanes {
         let shim = add_plain_entry_shim(&mut m);
-        let Some(ir_on) = module_ir(&m, Some(shim), EmitOptions { strip_facts: false }) else {
+        let Some(ir_on) = module_ir(
+            &m,
+            Some(shim),
+            EmitOptions {
+                strip_facts: false,
+                ..EmitOptions::default()
+            },
+        ) else {
             return false;
         };
-        let ir_off =
-            module_ir(&m, Some(shim), EmitOptions { strip_facts: true }).expect("strip lane emits");
+        let ir_off = module_ir(
+            &m,
+            Some(shim),
+            EmitOptions {
+                strip_facts: true,
+                ..EmitOptions::default()
+            },
+        )
+        .expect("strip lane emits");
         if first_ir.is_empty() {
             first_ir = ir_on.clone();
         }

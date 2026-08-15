@@ -41,9 +41,41 @@ fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
 | `flags` | Fixed letter order, `-` where absent: `E` exported (D19 C membrane), `M` program entry, `T` effect-token parameters, `S` single-block body, `R` recursive (reaches itself), `K` carries a task seam, `A` address-taken (`func.addr`). |
 | `hash` | D8 content hash of the NORMALIZED body — equivalence up to local names only (I11). See below. |
 | `facts` | D2 fact digest: counts per kind, in the fixed order region/noalias/range/deref/frozen. |
-| `hot` | s45's hotness hint. **Always `-` at v1** (reserved). |
+| `hot` | Hotness hint. `-` = **unknown** (no profile, or no record for this body) — the default in every build. Otherwise a normalized **0..=1000 rank**. Reserved by s43, filled by s45 **without a format bump**; see below. |
 | `calls` | Outgoing edges to MODULE functions, sorted by callee. External `decl` callees — including every `__wolf_rt_*` seam — are not edges: they are opaque by construction. The three fields after `@` are the deepest loop depth of any site, the site count, and the constant-argument count, i.e. exactly the inputs the inliner's budget consults, so import decisions are makeable from summaries alone. |
 | `impls` | **Reserved (D42). Always `[]` at v1.** See below. |
+
+### The `hot` slot, filled (s45)
+
+s43 froze this format with a `hot=` slot in it so profile data could
+arrive without a bump. s45 fills that slot — **and adds no field beside
+it**, which is what having reserved it was for. The line shape, field
+order, and `SUMMARY_FORMAT_VERSION` are unchanged; a consumer written
+against s43 reads an s45 index correctly.
+
+- `hot=-` — **unknown**. No profile was supplied, or the supplied one
+  has no record for this body. This is the value in every default
+  build, and it must never be read as "cold": treating unknown as cold
+  is what would let a stale or partial profile pessimize a build below
+  the no-profile one.
+- `hot=<0..=1000>` — a **rank**: `1000 × this body's peak block count ÷
+  the hottest peak block count in the program`, integer arithmetic.
+  `hot=0` is *proven cold* — a record exists and the body never ran —
+  and is real information the inliner acts on.
+
+The rank is relative and bounded on purpose. This index's digest rides
+the release cluster cache key, and a raw execution count would make
+that key depend on how long the training run happened to be; two
+training runs of the same shape and different lengths produce the same
+index. The scale is over the **peak block** count rather than the entry
+count, because a function called once around a million-iteration loop
+is hot and its entry count says otherwise.
+
+Producer: `wolf_wir::midend::summary::apply_profile`, matching by
+content hash against a `.wprof` (`wolf_wir/wprof-format.md`).
+Consumers: the cluster partition and import ranking
+(`Thresholds::cluster_hot_boost`) and the inliner's budget
+(`Thresholds::hot_rank` / `inline_hot_bonus` / `inline_cold_max`).
 
 ### The reserved `impls` slot (D42)
 

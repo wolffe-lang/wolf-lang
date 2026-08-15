@@ -34,7 +34,7 @@
 //! s42 behaviour verbatim (every module function), which is what the
 //! plain [`super::optimize_module`] pipeline still passes.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::entity::EntityRef;
 use crate::facts::{FactKind, Just};
@@ -59,6 +59,19 @@ pub(crate) struct Scope<'a> {
     pub imported: Option<&'a BTreeSet<String>>,
     /// Home modules, for the cross-module counter.
     pub homes: Option<&'a Homes>,
+    /// PGO (s45): callee name → normalized `hot=` rank, for the bodies
+    /// a profile matched. **Absence is unknown, not cold**: a name
+    /// missing from this map (or a `None` map, the default) takes the
+    /// unprofiled budget exactly, which is what makes a stale or
+    /// partial profile incapable of pessimizing a build below the
+    /// no-profile one.
+    ///
+    /// Function granularity, deliberately: per-SITE hotness would need
+    /// the caller's own record, and the caller's body — hence its
+    /// hash — is what inlining is in the middle of changing. The block
+    /// counts do reach LLVM as branch weights, where the body is final
+    /// and the match is exact.
+    pub hot: Option<&'a BTreeMap<String, u32>>,
 }
 
 impl Scope<'_> {
@@ -69,6 +82,11 @@ impl Scope<'_> {
 
     fn allows(&self, name: &str) -> bool {
         self.allow.is_none_or(|a| a.contains(name))
+    }
+
+    /// The callee's hotness rank, or `None` for "unknown".
+    fn hotness(&self, name: &str) -> Option<u32> {
+        self.hot?.get(name).copied()
     }
 }
 
@@ -188,8 +206,19 @@ pub(crate) fn run(
             if !scope.allows(name) {
                 continue; // outside this run's cluster/module horizon
             }
+            let hot = scope.hotness(name);
             let callee = &m.funcs[cid];
-            if decide(m, callee, caller, inst, &loops, b, site_count[&cid], th) {
+            if decide(
+                m,
+                callee,
+                caller,
+                inst,
+                &loops,
+                b,
+                site_count[&cid],
+                th,
+                hot,
+            ) {
                 accepted.push((b, inst, cid));
             }
         }
@@ -322,6 +351,11 @@ fn position_of(f: &Function, b: Block, inst: Inst) -> usize {
 }
 
 /// The size/benefit decision, every knob from the table.
+///
+/// `hot` is the callee's normalized hotness rank when a profile
+/// matched its body, `None` when it did not. The unprofiled path
+/// (`None`) is the s42 decision verbatim, character for character —
+/// that equality is what the never-required posture means in code.
 #[allow(clippy::too_many_arguments)]
 fn decide(
     m: &Module,
@@ -332,6 +366,7 @@ fn decide(
     site_block: Block,
     module_sites: u32,
     th: &Thresholds,
+    hot: Option<u32>,
 ) -> bool {
     let size: usize = callee
         .layout
@@ -370,6 +405,17 @@ fn decide(
         + (const_args + read_params) * th.inline_const_arg_bonus;
     if module_sites == 1 {
         budget = budget.max(th.inline_single_use);
+    }
+    // PGO (s45), both directions neutral by default — see the note on
+    // [`Thresholds`]. `hot == None` is UNKNOWN and takes neither arm,
+    // which is what keeps a partial profile from pessimizing the half
+    // it does not cover.
+    match hot {
+        // PROVEN cold: a record exists and this body never executed,
+        // so inlining it spends code size on an untaken path.
+        Some(0) => budget = budget.saturating_sub(th.inline_cold_penalty),
+        Some(h) if h >= th.hot_rank => budget += th.inline_hot_bonus,
+        _ => {}
     }
     size <= budget
 }

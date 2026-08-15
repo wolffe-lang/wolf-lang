@@ -129,8 +129,17 @@ enum ScopeClass {
     Foreign(ForeignRole),
 }
 
+/// Per-function block execution counts from a `.wprof`, positional
+/// over [`wolf_wir::block_order`], keyed by WIR function name (s45).
+///
+/// Built by `wolf_wir::midend::branch_weights` against the FINAL
+/// module, so a name is present only when this build's body for it
+/// hashes to a profile record — the counts therefore describe these
+/// blocks, one for one, or they are not here at all.
+pub type BranchWeights = std::sync::Arc<BTreeMap<String, Vec<u64>>>;
+
 /// How the emitter treats the proven-fact channels.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
     /// Emit NO optimizer-feeding facts: no `!alias.scope`/`!noalias`,
     /// no `!invariant.load`, no `!range`, no `!prof` weights, no
@@ -139,6 +148,13 @@ pub struct EmitOptions {
     /// (`sret`/`byval`) stay — they are calling convention, not facts.
     /// This is the fuzz rig's control lane.
     pub strip_facts: bool,
+    /// PGO (s45): measured block counts, so LLVM's block placement and
+    /// register allocator see the same hotness wolf's own mid-end
+    /// does. `None` — no profile — is the default and the normal case,
+    /// and produces byte-identical IR to a pre-s45 build. Also
+    /// silenced by `strip_facts`, since `!prof` is a fact channel like
+    /// any other (the s79 sentinel prices it).
+    pub branch_weights: Option<BranchWeights>,
 }
 
 /// Trap codes shared with `wolf_rt` (the single authority — see the
@@ -176,6 +192,9 @@ pub(crate) struct ModuleCx {
     pub meta: Vec<String>,
     /// The cold-branch `!prof` node, minted on first use.
     prof_cold: Option<usize>,
+    /// Measured `!prof` nodes, interned by their (then, else) weights
+    /// so a module with one hot loop shape carries one node.
+    prof_weights: BTreeMap<(u32, u32), usize>,
 }
 
 impl ModuleCx {
@@ -188,6 +207,7 @@ impl ModuleCx {
             intrinsics: BTreeSet::new(),
             meta: Vec::new(),
             prof_cold: None,
+            prof_weights: BTreeMap::new(),
         }
     }
 
@@ -206,6 +226,67 @@ impl ModuleCx {
         self.prof_cold = Some(id);
         id
     }
+
+    /// A measured `!prof` node for a two-way branch (s45).
+    ///
+    /// LLVM's weights are relative i32s, and a training run's counts
+    /// are u64s with no bound, so the pair is rescaled into
+    /// `1..=PROF_WEIGHT_SCALE` preserving their ratio. Both weights
+    /// are at least 1: a zero weight tells LLVM an edge is
+    /// unreachable, which is a claim a profile is not entitled to make
+    /// — "this arm did not run on the training input" is not "this arm
+    /// cannot run", and the difference is a miscompile.
+    fn prof_measured(&mut self, then: u64, other: u64) -> usize {
+        let (t, e) = scale_weights(then, other);
+        if let Some(&id) = self.prof_weights.get(&(t, e)) {
+            return id;
+        }
+        let id = self.meta_node(format!("!{{!\"branch_weights\", i32 {t}, i32 {e}}}"));
+        self.prof_weights.insert((t, e), id);
+        id
+    }
+}
+
+/// Blocks with exactly one predecessor — the blocks whose execution
+/// count is also the count of the single arc into them. The entry
+/// block is excluded: its "predecessor" is the caller.
+fn single_pred_blocks(f: &WFunction) -> HashSet<WBlock> {
+    let mut preds: BTreeMap<WBlock, u32> = BTreeMap::new();
+    for &b in &f.layout {
+        for &inst in &f.blocks[b].insts {
+            match f.insts[inst].aux {
+                Aux::Jump(e) => *preds.entry(e.block).or_insert(0) += 1,
+                Aux::Br(t, e) => {
+                    *preds.entry(t.block).or_insert(0) += 1;
+                    *preds.entry(e.block).or_insert(0) += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+    preds
+        .into_iter()
+        .filter(|&(_, n)| n == 1)
+        .map(|(b, _)| b)
+        .collect()
+}
+
+/// The top of the rescaled `!prof` weight range.
+const PROF_WEIGHT_SCALE: u64 = 100_000;
+
+/// Rescale a measured count pair into `1..=PROF_WEIGHT_SCALE`,
+/// preserving the ratio and never producing a zero. Pure and integral,
+/// so the emitted IR is a function of the profile and nothing else.
+fn scale_weights(then: u64, other: u64) -> (u32, u32) {
+    let top = then.max(other);
+    if top == 0 {
+        return (1, 1); // both arms unmeasured: say nothing
+    }
+    let scale = |c: u64| -> u32 {
+        let v = (u128::from(c) * u128::from(PROF_WEIGHT_SCALE)) / u128::from(top);
+        (v as u64).max(1) as u32
+    };
+    (scale(then), scale(other))
 }
 
 fn ice(msg: impl Into<String>) -> BackendError {
@@ -486,6 +567,10 @@ pub(crate) struct Fx<'a> {
     /// Interned `!noalias` lists for call sites, keyed by scope-id set:
     /// one node per distinct set keeps the metadata small and the
     /// output byte-stable.
+    /// PGO (s45): measured execution count per WIR block, when a
+    /// profile record matched this body. Empty otherwise — and empty
+    /// means "say nothing to LLVM", never "say zero".
+    bcount: HashMap<WBlock, u64>,
     call_noalias: BTreeMap<Vec<usize>, usize>,
     /// Entry sret pointers, in aggregate-result order.
     sret: Vec<String>,
@@ -504,8 +589,42 @@ pub(crate) fn emit_function(
     defined: &HashSet<String>,
 ) -> Result<String, BackendError> {
     let conv = if f.export { Conv::C } else { Conv::Wolf };
-    let opts = cx.opts;
+    let opts = cx.opts.clone();
     let si = sig_info(m, f.sig, conv, &opts);
+    // PGO block counts for THIS body, positional over the canonical
+    // order. Silenced by `strip_facts` with every other fact channel.
+    //
+    // Only blocks with EXACTLY ONE predecessor are kept, because only
+    // for those is the block count also the EDGE count — and an edge
+    // count is what `!prof` means. A join reached from several places
+    // carries the sum of all of them, and handing that to LLVM as the
+    // weight of one incoming arc overstates that arc by however much
+    // the others contributed. The profile is instrumented per block,
+    // not per edge (edge counters are the sprint's next rung, not this
+    // one), so the honest move is to say nothing where the block count
+    // is not the edge count.
+    let bcount: HashMap<WBlock, u64> = match (&opts.branch_weights, opts.strip_facts) {
+        (Some(w), false) => match w.get(&f.name) {
+            Some(counts) => {
+                let order = wolf_wir::block_order(f);
+                // Length equality is checked where the map is built;
+                // re-check here so a hand-constructed map cannot shift
+                // a body's weights by one.
+                if counts.len() == order.len() {
+                    let single = single_pred_blocks(f);
+                    order
+                        .into_iter()
+                        .zip(counts.iter().copied())
+                        .filter(|(b, _)| single.contains(b))
+                        .collect()
+                } else {
+                    HashMap::new()
+                }
+            }
+            None => HashMap::new(),
+        },
+        _ => HashMap::new(),
+    };
     let mut fx = Fx {
         cx,
         m,
@@ -533,6 +652,7 @@ pub(crate) fn emit_function(
         } else {
             wolf_wir::midend::exhaustive_regions(m, f)
         },
+        bcount,
         call_noalias: BTreeMap::new(),
         sret: Vec::new(),
         reachable: HashSet::new(),
@@ -1794,8 +1914,22 @@ impl<'a> Fx<'a> {
                 let err_arc = !self.cx.opts.strip_facts
                     && matches!(self.f.values[args[0]].def,
                         ValueDef::Result(i, _) if self.f.insts[i].op == Opcode::EuIsErr);
+                // Semantic coldness outranks a measured weight: an
+                // error arc is cold because of what it MEANS, and a
+                // training run that happened to take it often does not
+                // make the error path the expected one.
+                let measured = (!err_arc)
+                    .then(|| {
+                        Some((
+                            self.bcount.get(&t.block).copied()?,
+                            self.bcount.get(&e.block).copied()?,
+                        ))
+                    })
+                    .flatten();
                 let prof = if err_arc {
                     format!(", !prof !{}", self.cx.prof_cold_first())
+                } else if let Some((ct, ce)) = measured {
+                    format!(", !prof !{}", self.cx.prof_measured(ct, ce))
                 } else {
                     String::new()
                 };

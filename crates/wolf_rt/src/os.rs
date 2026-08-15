@@ -131,6 +131,10 @@ pub unsafe extern "C" fn __wolf_rt_os_cwd(out: i64) -> i64 {
 /// (`rem_euclid(256)`); defers do NOT run (the documented contract).
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_exit(code: i64) -> ! {
+    // `main` never returns through here, so the compiler's dump before
+    // `ret` cannot fire; this is the s45 counterpart. No-op in a
+    // normal build.
+    crate::prof::dump_on_exit();
     std::process::exit(code.rem_euclid(256) as i32)
 }
 
