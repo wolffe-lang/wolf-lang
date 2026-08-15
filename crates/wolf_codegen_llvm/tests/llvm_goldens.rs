@@ -316,7 +316,14 @@ fn no_unwinding_constructs_ever() {
 #[test]
 fn strip_lane_is_stripped() {
     for (name, m) in all_modules() {
-        let Some(ir) = module_ir(&m, None, EmitOptions { strip_facts: true }) else {
+        let Some(ir) = module_ir(
+            &m,
+            None,
+            EmitOptions {
+                strip_facts: true,
+                ..EmitOptions::default()
+            },
+        ) else {
             return;
         };
         for fact in [

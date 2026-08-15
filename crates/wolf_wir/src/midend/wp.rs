@@ -33,6 +33,29 @@
 //! determinism note. The phase is a pure function of the lowered
 //! module plus the home map.
 //!
+//! # Where a profile enters (s45)
+//!
+//! At step 3 and again at step 6, and nowhere else. Both are the
+//! points at which a summary index exists, and a summary index is the
+//! only thing a `.wprof` can be matched against: records are keyed by
+//! the D8 body hash, and the summary is where that hash lives.
+//!
+//! - **Step 3** fills the reserved `hot=` slot, and the clusterer, the
+//!   import decision and the cross-cluster inline round read it.
+//! - **Step 6** fills it again on the re-summarized index, so the
+//!   PUBLISHED index — the one `--codegen-report` prints, the one c12
+//!   reads, the one the cluster cache key folds — carries the hotness
+//!   of the bodies the backend will actually see.
+//!
+//! The module phase (step 1) runs unprofiled by construction: its
+//! inlining is what turns the pre-mid-end bodies into the ones the
+//! profile names, so at step 1 there is nothing to match yet. Bodies
+//! the cross-cluster round then changes get a fresh hash and lose
+//! their step-3 record at step 6 — which is stale-record handling
+//! working exactly as designed, not a gap: leaf bodies, the ones an
+//! inliner most wants hotness for, are the ones the round does not
+//! change.
+//!
 //! Conc conservatism across the new boundary: s42's passes are
 //! conservative because calls are opaque (nothing sinks, forwards, or
 //! coalesces across a call on the same region chain; a region whose
@@ -76,6 +99,10 @@ pub struct WpStats {
     /// The frozen summary index's digest — what the cache keys fold.
     pub summary_digest: String,
     pub summary_version: u32,
+    /// How much of the supplied `.wprof` applied to this build (s45).
+    /// `None` when no profile was supplied — the normal case, and the
+    /// one that must look and behave exactly like s43's.
+    pub profile: Option<crate::profile::Coverage>,
 }
 
 impl std::fmt::Display for WpStats {
@@ -105,7 +132,11 @@ impl std::fmt::Display for WpStats {
             },
             self.summary_version,
             &self.summary_digest[..16.min(self.summary_digest.len())]
-        )
+        )?;
+        if let Some(c) = &self.profile {
+            write!(f, "\n  profile: {c}")?;
+        }
+        Ok(())
     }
 }
 
@@ -143,6 +174,7 @@ pub fn optimize_whole_program(
             allow: Some(&peers),
             imported: None,
             homes: Some(homes),
+            hot: None, // step 1 runs unprofiled — see the module docs
         };
         optimize_one(m, fid, ve, th, &mut stats, scope)?;
     }
@@ -151,7 +183,15 @@ pub fn optimize_whole_program(
     let dstats = dedup::dedup(m);
 
     // ---- 3./4. summaries, clusters, imports ----------------------------
-    let summary = super::summary::summarize(m, homes);
+    let mut summary = super::summary::summarize(m, homes);
+    // The profile enters here, by content hash. With no profile this is
+    // skipped entirely and every `hot=` stays `-`, so everything below
+    // is the s43 pipeline unchanged.
+    let early_coverage = opts
+        .profile
+        .as_ref()
+        .map(|p| super::summary::apply_profile(&mut summary, p));
+    let hot = hot_map(&summary);
     let clusters = cluster::partition(&summary, th);
     let clusters = cluster::decide_imports(&clusters, &summary, th);
     let imports: usize = clusters.iter().map(|c| c.imports.len()).sum();
@@ -172,6 +212,7 @@ pub fn optimize_whole_program(
                 allow: Some(&visible),
                 imported: Some(&imported),
                 homes: Some(homes),
+                hot: hot.as_ref(),
             };
             optimize_one(m, fid, ve, th, &mut stats, scope)?;
         }
@@ -181,7 +222,23 @@ pub fn optimize_whole_program(
     dead_function_elim(m, &mut stats);
     stats.insts_after = count_insts(m);
     verify_module(m)?;
-    let summary = super::summary::summarize(m, homes);
+    let mut summary = super::summary::summarize(m, homes);
+    // Re-match against the FINAL bodies: the published index's `hot=`
+    // describes what the backend will see, and the coverage reported
+    // here is the number `wolf profile show` and the driver's stale
+    // warning are about.
+    // The reported coverage is the UNION of the two matches, never the
+    // second alone: a record that drove a decision at step 3 applied,
+    // even if the decision it drove then changed the body out from
+    // under it. Saying otherwise would let a build claim to be the
+    // no-profile build when it is not.
+    let coverage = opts.profile.as_ref().map(|p| {
+        let late = super::summary::apply_profile(&mut summary, p);
+        match early_coverage {
+            Some(early) => early.union(late),
+            None => late,
+        }
+    });
     let clusters = cluster::rekey(&clusters, &summary);
     let stats = WpStats {
         summary_digest: summary.digest(),
@@ -191,12 +248,56 @@ pub fn optimize_whole_program(
         imports,
         dedup: dstats,
         opt: stats,
+        profile: coverage,
     };
     Ok(WholeProgram {
         summary,
         clusters,
         stats,
     })
+}
+
+/// Name → hotness rank, for the bodies a profile matched. `None` when
+/// nothing matched at all, which makes the inliner's profiled and
+/// unprofiled paths the same code path rather than merely equivalent
+/// ones.
+fn hot_map(s: &ProgramSummary) -> Option<std::collections::BTreeMap<String, u32>> {
+    let m: std::collections::BTreeMap<String, u32> = s
+        .funcs
+        .iter()
+        .filter_map(|f| f.hotness.map(|h| (f.name.clone(), h)))
+        .collect();
+    (!m.is_empty()).then_some(m)
+}
+
+/// Per-function block counts for the bodies `profile` matches in `m`,
+/// keyed by FUNCTION NAME and positional over
+/// [`crate::print::block_order`] — the branch-weight channel s41 hands
+/// to LLVM (`!prof`), and the only place the block-level half of a
+/// profile is consumed.
+///
+/// Taken against the FINAL module, so the hash match is exact: a name
+/// appears here only if this build's body for it hashes to a record's
+/// key, in which case the record's counts describe this body's blocks
+/// one for one.
+pub fn branch_weights(
+    m: &Module,
+    profile: &crate::profile::Profile,
+) -> std::collections::BTreeMap<String, Vec<u64>> {
+    let mut out = std::collections::BTreeMap::new();
+    for (_, f) in m.funcs.iter() {
+        let Some(r) = profile.get(&dedup::body_hash(m, f)) else {
+            continue;
+        };
+        if r.blocks.len() != crate::print::block_order(f).len() {
+            // The hash fixes the block structure, so this cannot
+            // happen against an honest file; refuse the record rather
+            // than emit weights against a shape we cannot justify.
+            continue;
+        }
+        out.insert(f.name.clone(), r.blocks.clone());
+    }
+    out
 }
 
 /// The cluster a function belongs to, by name — the driver's lookup

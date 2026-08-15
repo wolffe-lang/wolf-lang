@@ -106,6 +106,10 @@ pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
     let mut err = std::io::stderr().lock();
     let _ = writeln!(err, "wolf-trap: {}", trap_kind_name(kind));
     let _ = err.flush();
+    // The fault path dumps too (s45): the counters up to the trap are
+    // exactly the execution that happened, and a program that traps is
+    // the one you most want a profile of. No-op in a normal build.
+    crate::prof::dump_on_exit();
     std::process::exit(TRAP_EXIT_CODE)
 }
 
@@ -137,6 +141,7 @@ pub extern "C" fn __wolf_rt_main_err(tag: i64, len: i64, w0: i64, w1: i64, w2: i
         let _ = writeln!(out, "error: {name}");
     }
     let _ = out.flush();
+    crate::prof::dump_on_exit();
     std::process::exit(1)
 }
 

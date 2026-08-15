@@ -64,6 +64,8 @@ yet"). s33's M2 evidence is therefore blocked, not pending.
 
 - wolf: `wolf build kernel.lu -o bin --release`. **No per-kernel flags, no
   PGO** (D4: measurements are on default whole-program release builds).
+  s45 adds a `wolf_pgo` lane; it is **ungated** and sits beside the gated
+  figure with the other scrutiny lanes — see §6a.
   Internally that is WIR → s42 mid-end → s43 whole-program → LLVM IR →
   `clang -x ir -c -O2 -fPIC`. The `-O2` is the backend's own hardcoded
   level, not a benchmark choice.
@@ -232,6 +234,37 @@ which is the first time this lane has been able to say anything at all —
 and what it says, on a shared host, is that the run-to-run spread (5–9
 points) is bigger than the bonus. The bucket is no longer the limit; the
 machine is. See `bench/loss-ledger.md`.
+
+## 6a. The wolf PGO lane (s45) — ungated, and deliberately so
+
+`wolf build --release --profile-gen` → run on a **training** input →
+`wolf build --release --profile=<f.wprof>` → measure on a **different**
+input. Published per kernel as `pgo_speedup` (`> 1` means the profiled
+build was faster), with its layout floor, its clock quantum and its
+tie/win verdict beside it. `bench gate` never reads it.
+
+**It never gates, by contract.** D4 makes PGO integrated, optional and
+never required; every s44 gate number was achieved without it and stays
+that way. This lane is evidence for bs08 and s64, and a canary: if PGO
+ever becomes load-bearing for M2, that is a regression in the default
+pipeline and gets triaged as one, not celebrated as a PGO win.
+
+**Train and measure are named, and the separation is weak — say so.**
+The lane trains at `ops/8` sweeps and measures at the full `ops`,
+mirroring the clang PGO lane so the two are comparable. But the suite's
+only input knob is the sweep count, so the training and measurement
+inputs run *the same code paths at different trip counts*. That is the
+direction that flatters PGO: a profile trained on the shape it is
+measured on is the best case, and the classic way to make PGO look
+wonderful is to train and measure on one workload. **The number this
+lane reports is an upper bound on what PGO buys here, not an estimate
+of it.** Giving each kernel a second, differently-shaped input is the
+fix; it is kernel-authoring work, not harness work, and it is open.
+
+**Read it through the floor.** §4's rule applies unchanged: a win
+smaller than the kernel's layout-noise floor is a TIE regardless of
+MAD. A PGO delta the floor swallows is a finding — it says the default
+pipeline already had the win — and is reported as such.
 
 ## 7. What gates, and what only reports (D5)
 

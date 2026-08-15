@@ -102,7 +102,7 @@ use wolf_backend::{
 };
 use wolf_wir::ir::{FuncId, Function, Module as WirModule, SigId};
 
-pub use emit::EmitOptions;
+pub use emit::{BranchWeights, EmitOptions};
 
 /// Minimum `clang` major this backend accepts — the one pinned place
 /// (bump policy in the crate docs).

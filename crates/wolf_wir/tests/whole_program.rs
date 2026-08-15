@@ -34,6 +34,7 @@ fn tiny_clusters() -> Options {
             cluster_target_size: 3,
             ..Thresholds::default()
         },
+        ..Options::default()
     }
 }
 
@@ -341,6 +342,7 @@ fn module_phase_does_not_inline_across_modules() {
             import_budget: 0,
             ..Thresholds::default()
         },
+        ..Options::default()
     };
     let wp = optimize_whole_program(&mut m, &two_module_homes(), &o).expect("green");
     assert_eq!(wp.stats.imports, 0, "no import budget, no import");

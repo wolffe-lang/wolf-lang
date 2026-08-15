@@ -20,6 +20,7 @@ mod cimport_cmd;
 mod doc_cmd;
 mod doctest_cmd;
 mod pkg_cmd;
+mod profile_cmd;
 mod script_cmd;
 mod test_cmd;
 
@@ -67,6 +68,7 @@ fn main() {
         // s53: documentation and the script-mode cache.
         Some("doc") => doc_cmd::doc(&args[1..]),
         Some("cache") => script_cmd::cache(&args[1..]),
+        Some("profile") => profile_cmd::profile(&args[1..]),
         Some("init") => pkg_cmd::init(&args[1..]),
         // D34: the single binary grows per-campaign; stubs are honest.
         Some(cmd @ ("bench" | "dbg" | "vendor" | "publish")) => {
@@ -75,7 +77,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|interface|audit-surface|c-import|conform-run|--explain|--version"
+                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|profile|interface|audit-surface|c-import|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }
@@ -620,6 +622,15 @@ struct BuildOpts {
     /// a tuning knob — cluster count and size stay compiler-chosen
     /// (s43 non-target: no user-facing knobs at v1).
     codegen_report: bool,
+    /// `--profile-gen[=<dir>]` (s45): build an INSTRUMENTED binary that
+    /// writes a `.wprof` when it exits. The value is the directory the
+    /// profile lands in; `None` means "not instrumented", which is
+    /// every build that does not ask.
+    profile_gen: Option<PathBuf>,
+    /// `--profile=<f.wprof>` (s45): consume a profile. `None` is the
+    /// default and is a NORMAL build — no warning, no nag, no
+    /// degradation (D4: PGO is integrated, optional, never required).
+    profile_use: Option<PathBuf>,
     /// How many diagnostics a report may print before it stops and
     /// counts the rest; `0` prints everything (`--error-limit=N`).
     /// A wall of errors is not more information than a screenful: a
@@ -641,6 +652,8 @@ impl BuildOpts {
             lints: LintLevels::new(),
             report_warnings: false,
             codegen_report: false,
+            profile_gen: None,
+            profile_use: None,
             // The differential/conformance rungs compare whole
             // diagnostic sets: never truncate what a machine reads.
             error_limit: 0,
@@ -922,12 +935,24 @@ fn compile_native(
     let mid_stats = std::env::var("WOLF_MIDEND_STATS").as_deref() == Ok("1");
     let midend_off = std::env::var("WOLF_MIDEND").as_deref() == Ok("0");
     let mut whole: Option<wolf_wir::midend::WholeProgram> = None;
+    // s45: the profile, if one was given. Read BEFORE the mid-end runs
+    // — a `.wprof` this compiler cannot read is a loud build error, not
+    // a silently ignored file. (Not being given one is not an error and
+    // never says anything at all.)
+    let profile = match &opts.profile_use {
+        None => None,
+        Some(p) => Some(load_profile(p)?),
+    };
+    let mut branch_weights: Option<wolf_codegen_llvm::BranchWeights> = None;
     if opts.release && !midend_off {
         let homes = wolf_wir::midend::summary::Homes::from_package(&res.package, &module);
         let wp = wolf_wir::midend::optimize_whole_program(
             &mut module,
             &homes,
-            &wolf_wir::midend::Options::default(),
+            &wolf_wir::midend::Options {
+                profile: profile.clone(),
+                ..wolf_wir::midend::Options::default()
+            },
         )
         .unwrap_or_else(|e| ice(e));
         if mid_stats {
@@ -935,6 +960,59 @@ fn compile_native(
         }
         if opts.codegen_report {
             eprint!("{}", codegen_report(&wp));
+        }
+        // Stale tolerance (s45): ONE summary line, never an error, and
+        // only when something was actually stale. A fully stale profile
+        // produces exactly the no-profile build — the line says so
+        // rather than leaving the user to wonder why PGO did nothing.
+        if let (Some(p), Some(cov)) = (&opts.profile_use, &wp.stats.profile)
+            && cov.stale() > 0
+        {
+            eprintln!(
+                "wolf build: {}: {} of {} profile record(s) no longer match this build and were \
+                 ignored{} — `wolf profile show {}` explains which",
+                p.display(),
+                cov.stale(),
+                cov.records,
+                if cov.fully_stale() {
+                    " (nothing applied: this build is identical to one with no profile)"
+                } else {
+                    ""
+                },
+                p.display()
+            );
+        }
+        // The block-count half of the profile, matched against the
+        // FINAL bodies, on its way to LLVM as `!prof` branch weights.
+        if let Some(p) = &profile {
+            let w = wolf_wir::midend::branch_weights(&module, p);
+            if !w.is_empty() {
+                branch_weights = Some(std::sync::Arc::new(w));
+            }
+        }
+        // Instrumentation is the LAST thing that touches the module:
+        // the record key is the hash of the optimized body, so the
+        // counters go in after that body is final.
+        if let Some(dir) = &opts.profile_gen {
+            let out_path = if dir.as_os_str().is_empty() {
+                wolf_wir::midend::instrument::DEFAULT_PROFILE_FILE.to_string()
+            } else {
+                dir.join(wolf_wir::midend::instrument::DEFAULT_PROFILE_FILE)
+                    .to_string_lossy()
+                    .into_owned()
+            };
+            let st = wolf_wir::midend::instrument::instrument(&mut module, &out_path);
+            if !st.has_entry {
+                eprintln!(
+                    "wolf build: --profile-gen: this module has no entry point, so nothing will \
+                     ever write a profile"
+                );
+            } else if opts.verbose {
+                eprintln!(
+                    "wolf build: instrumented {} function(s), {} counter(s) -> {out_path}",
+                    st.funcs, st.counters
+                );
+            }
         }
         whole = Some(wp);
     } else if std::env::var("WOLF_MIDEND").as_deref() == Ok("1") {
@@ -964,8 +1042,9 @@ fn compile_native(
     // `--emit=llvm-ir` (s41): the release tier's whole-module IR, one
     // inspectable text — every stage inspectable, like `--emit=wir`.
     if opts.emit == Emit::LlvmIr {
-        let mut backend = wolf_codegen_llvm::LlvmBackend::with_options(strip_facts_opts())
-            .map_err(|e| refuse("wir", e))?;
+        let mut backend =
+            wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights.clone()))
+                .map_err(|e| refuse("wir", e))?;
         let all: Vec<wolf_wir::FuncId> = module.funcs.keys().collect();
         wolf_codegen_clif::compile_selected(
             &mut backend,
@@ -1045,8 +1124,29 @@ fn compile_native(
         }
         sha256_hex(acc.as_bytes())
     };
+    // D7: a `.wprof` is a BUILD INPUT, so it keys the build like any
+    // other input. The tag below is the profile file's own content
+    // hash, which means:
+    //   - the same source with a different profile is a different key,
+    //     so a stale object is never reused across a profile change;
+    //   - the same source with the same profile hits the cache, and the
+    //     hit is byte-identical to a cold build (the s43 invariant,
+    //     unchanged);
+    //   - a build with NO profile keys as `-`, exactly as before s45,
+    //     so nothing about the default path moved.
+    // The `.wprof` VERSION rides too: a reader change must invalidate
+    // objects even when the file's bytes did not move.
+    let pgo_comp = match (&opts.profile_gen, &opts.profile_use, &profile) {
+        (Some(_), _, _) => "gen".to_string(),
+        (None, Some(_), Some(p)) => format!(
+            "use/{}/{}",
+            wolf_wir::profile::WPROF_VERSION,
+            &sha256_hex(p.render().as_bytes())[..16]
+        ),
+        _ => "-".to_string(),
+    };
     let env_comp = format!(
-        "wolf {} commit {} abi {} profile {}",
+        "wolf {} commit {} abi {} profile {} pgo {}",
         env!("CARGO_PKG_VERSION"),
         option_env!("WOLF_COMMIT").unwrap_or("unknown"),
         wolf_backend::abi::CONVENTION_VERSION,
@@ -1055,6 +1155,7 @@ fn compile_native(
             (false, true) => "checked",
             (false, false) => "debug",
         },
+        pgo_comp,
     );
     let mut units: Vec<ModUnit> = Vec::new();
     // ---- release: cluster units (s43 target 5) -------------------------
@@ -1182,7 +1283,14 @@ fn compile_native(
 
     // The cache root (`.lu-cache/`, D7): `--no-cache` bypasses reads
     // AND writes — the determinism oracle builds fully fresh.
-    let cache = if opts.no_cache {
+    //
+    // An INSTRUMENTED build never touches the object cache at all
+    // (s45): its objects are not release artifacts, they are a
+    // measuring instrument, and the surest way to keep one out of a
+    // release binary is for it never to be written down. The key would
+    // have kept them apart on its own; not writing them means the
+    // question cannot arise.
+    let cache = if opts.no_cache || opts.profile_gen.is_some() {
         None
     } else {
         opts.cache_root.as_ref().map(|r| r.join(".lu-cache"))
@@ -1254,7 +1362,7 @@ fn compile_native(
             };
             format!("wolf build: {}: compiled ({reason})", u.name)
         });
-        let bytes = compile_unit(&module, u, shim, pkg, opts.release)?;
+        let bytes = compile_unit(&module, u, shim, pkg, opts.release, branch_weights.clone())?;
         if let Some(p) = &obj_file {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -1368,10 +1476,29 @@ fn codegen_report(wp: &wolf_wir::midend::WholeProgram) -> String {
 /// commit is how channel decay (an LLVM bump quietly ignoring us) shows
 /// up as a number instead of as a mystery. Never a supported build
 /// mode; the flag is deliberately an env var, not a CLI switch.
-fn strip_facts_opts() -> wolf_codegen_llvm::EmitOptions {
+/// `branch_weights` is s45's measured `!prof` channel; `None` (no
+/// profile) leaves the IR byte-identical to a pre-s45 build, and
+/// `WOLF_STRIP_FACTS=1` silences it with every other channel — a
+/// measured weight is a fact like any other, and the sentinel prices
+/// it beside them.
+fn emit_opts(
+    branch_weights: Option<wolf_codegen_llvm::BranchWeights>,
+) -> wolf_codegen_llvm::EmitOptions {
     wolf_codegen_llvm::EmitOptions {
         strip_facts: std::env::var("WOLF_STRIP_FACTS").as_deref() == Ok("1"),
+        branch_weights,
     }
+}
+
+/// Read a `.wprof` for `--profile=`. A file the compiler cannot read is
+/// a LOUD build error: silently continuing without it would make "PGO
+/// did nothing" indistinguishable from "the file was a typo", and the
+/// format's own rule is work-or-refuse, never misread.
+fn load_profile(path: &Path) -> Result<wolf_wir::profile::Profile, BuildStop> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| BuildStop::Environment(format!("--profile={}: {e}", path.display())))?;
+    wolf_wir::profile::Profile::parse(&text)
+        .map_err(|e| BuildStop::Environment(format!("--profile={}: {e}", path.display())))
 }
 
 /// Compile one module unit to relocatable object bytes: its own
@@ -1386,6 +1513,7 @@ fn compile_unit(
     shim: wolf_wir::FuncId,
     pkg: &wolf_sema::Package,
     release: bool,
+    branch_weights: Option<wolf_codegen_llvm::BranchWeights>,
 ) -> Result<Vec<u8>, BuildStop> {
     let refuse = |e: wolf_backend::BackendError| match e {
         wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused {
@@ -1398,7 +1526,10 @@ fn compile_unit(
         }
     };
     let mut backend: Box<dyn wolf_backend::Backend> = if release {
-        Box::new(wolf_codegen_llvm::LlvmBackend::with_options(strip_facts_opts()).map_err(refuse)?)
+        Box::new(
+            wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights))
+                .map_err(refuse)?,
+        )
     } else {
         Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?)
     };
@@ -1580,6 +1711,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         eprintln!(
             "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache] \
              [--verbose] [--checked] [--release] [--codegen-report] \
+             [--profile-gen[=<dir>]] [--profile=<file.wprof>] \
              [--std-root <dir>] \
              [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings] \
              [--error-limit=N]{}",
@@ -1610,6 +1742,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         lints: LintLevels::new(),
         report_warnings: true,
         codegen_report: false,
+        profile_gen: None,
+        profile_use: None,
         error_limit: DEFAULT_ERROR_LIMIT,
     };
     let mut prog_args: Vec<String> = Vec::new();
@@ -1690,6 +1824,25 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         } else if a == "--codegen-report" {
             // s43: dump the summary index + cluster/import decisions.
             opts.codegen_report = true;
+        } else if a == "--profile-gen" {
+            // s45: instrument, dumping `default.wprof` in the CWD.
+            opts.profile_gen = Some(PathBuf::new());
+        } else if let Some(v) = a.strip_prefix("--profile-gen=") {
+            if v.is_empty() {
+                fail("--profile-gen=<dir> needs a directory (or pass bare --profile-gen)");
+            }
+            opts.profile_gen = Some(PathBuf::from(v));
+        } else if let Some(v) = a.strip_prefix("--profile=") {
+            if v.is_empty() {
+                fail("--profile=<file.wprof> needs a path");
+            }
+            opts.profile_use = Some(PathBuf::from(v));
+        } else if a == "--profile" {
+            i += 1;
+            match args.get(i) {
+                Some(v) => opts.profile_use = Some(PathBuf::from(v)),
+                None => fail("--profile needs a path to a .wprof"),
+            }
         } else if a == "--locked" {
             script.locked = true;
         } else if a == "--update" {
@@ -1708,6 +1861,20 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     let Some(file) = file else { usage() };
     if opts.emit == Emit::LlvmIr && !opts.release {
         fail("--emit=llvm-ir is the release tier's IR; pass --release");
+    }
+    // Both PGO flags are release-tier surface: the consumers are the
+    // s42 inliner, the s43 clusterer and the LLVM tier's block
+    // placement, none of which the debug tier runs. Saying so is
+    // better than silently instrumenting a build that will never use
+    // the result.
+    if opts.profile_gen.is_some() && !opts.release {
+        fail("--profile-gen is a release-tier build; pass --release");
+    }
+    if opts.profile_use.is_some() && !opts.release {
+        fail("--profile= is consumed by the release tier; pass --release");
+    }
+    if opts.profile_gen.is_some() && opts.profile_use.is_some() {
+        fail("--profile-gen and --profile are the two halves of PGO, not one build");
     }
     if !Path::new(&file).is_file() {
         fail(&format!("no such file: {file}"));

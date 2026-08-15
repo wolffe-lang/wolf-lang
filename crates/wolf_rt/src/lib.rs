@@ -12,6 +12,10 @@ pub mod list;
 pub mod native;
 pub mod net;
 pub mod os;
+// Profile counters (s45). Present in the archive always, referenced
+// only by `--profile-gen` builds — `--gc-sections` drops them from
+// every other binary, so the never-required posture costs nothing.
+pub mod prof;
 pub mod quarantine;
 // The io reactor (s35) shares the task layer's platform posture:
 // epoll first (this campaign's floor); the kqueue/IOCP port sprints
