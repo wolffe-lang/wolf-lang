@@ -2042,3 +2042,9 @@ against this package's names and never warn. Documentation carries the
 same covenant as tests: it is verified, or it is not trusted.
 
 Fixtures: crates/wolf_doc/tests/snapshots/generator__w1501_broken_intra_doc_link.snap
+
+## Forward pins
+
+Codes the corpus pins that this compiler does not emit yet. Each one is an intention recorded against a construct that is not implemented — the behaviour we mean to have, not behaviour we enforce today. They are not part of the count above.
+
+- `E1003` — corpus/memory/borrow_escape.lu (not implemented: borrow expressions)

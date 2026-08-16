@@ -1,7 +1,7 @@
 //! Repo automation (`cargo xtask <command>`). CI-shaped: pure, exit-code
 //! driven — the s02 CI workflows are thin wrappers over these commands.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::time::Instant;
@@ -338,6 +338,10 @@ fn corpus_cmd() -> ExitCode {
     // Runs through the differential protocol so xtask stays independent of
     // compiler crates. A stub driver (verdict `unsupported`) skips checks.
     let mut executed = false;
+    // The two halves of the rejection ledger, counted from what the
+    // compiler DID rather than from what the headers claim (s91).
+    let mut rules = 0u32;
+    let mut forward_pins = 0u32;
     if run_ok(
         "cargo",
         &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
@@ -373,6 +377,53 @@ fn corpus_cmd() -> ExitCode {
             // `unsupported` with a real phase_reached still carries phase
             // evidence: everything through phase_reached completed clean.
             executed = true;
+            // The forward-pin ledger (s91). A `check: fail(CODE)` file
+            // is a claim that the compiler ENFORCES a rule. When the
+            // compiler declines the file instead, the claim is an
+            // intention, and it must say so — otherwise it is counted
+            // as a rule by everything downstream, in the direction that
+            // flatters us. Checked both ways so the marker cannot rot:
+            // a pin that has since landed drops its `forward:` line in
+            // the same commit that makes the rejection real.
+            if matches!(d.check, Some(corpus::Check::Fail(_))) {
+                if verdict == "unsupported" && d.forward.is_none() {
+                    let why = String::from_utf8_lossy(&out.stderr)
+                        .lines()
+                        .find_map(|l| l.split_once("unsupported — ").map(|(_, w)| w.to_string()))
+                        .unwrap_or_else(|| format!("declined at {reached}"));
+                    eprintln!(
+                        "corpus: {}: pins a rejection the compiler cannot make — it declines this \
+                         file ({why}). That is an intention, not a rule: say so with \
+                         `//! forward: <what is missing>`",
+                        f.display(),
+                    );
+                    bad += 1;
+                } else if verdict != "unsupported"
+                    && let Some(reason) = &d.forward
+                {
+                    eprintln!(
+                        "corpus: {}: `//! forward: {reason}` says this is not implemented, but the \
+                         compiler answers `{verdict}` — the pin landed; drop the `forward:` line \
+                         and let it count as a rule",
+                        f.display(),
+                    );
+                    bad += 1;
+                }
+                if verdict.starts_with("fail(") {
+                    rules += 1;
+                } else if d.forward.is_some() {
+                    forward_pins += 1;
+                }
+            } else if let Some(reason) = &d.forward
+                && verdict != "unsupported"
+            {
+                eprintln!(
+                    "corpus: {}: `//! forward: {reason}` says this is not implemented, but the \
+                     compiler answers `{verdict}` — drop the stale marker",
+                    f.display(),
+                );
+                bad += 1;
+            }
             let reached_rank = corpus::phase_rank(reached).unwrap_or(0);
             // deepest phase that SUCCEEDS: reached on pass/run-verdicts,
             // one before reached on fail (reached = the phase that failed)
@@ -476,6 +527,16 @@ fn corpus_cmd() -> ExitCode {
             " — phase execution pending a non-stub driver"
         }
     );
+    // Both numbers, never one corrected number (s91). A forward pin is
+    // not a subtraction to be quietly applied to the rule count: it is
+    // its own quantity, and a reader who is told only "N rules" cannot
+    // tell whether the corpus grew a rule or grew an intention.
+    if executed {
+        eprintln!(
+            "corpus: fail-pin ledger: {rules} rule(s) the compiler enforces, \
+             {forward_pins} forward pin(s) it does not implement yet"
+        );
+    }
     if bad > 0 {
         ExitCode::FAILURE
     } else {
@@ -611,8 +672,19 @@ fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, String>
 /// are computed from the records on every run, never declared in a list
 /// somebody has to remember to update: that is the whole reason the
 /// number cannot rot into folklore between differentials.
-fn residue_class(obs: &BTreeMap<&str, LaneObs>) -> String {
+///
+/// `forward` is the one class a header participates in (s91): a file
+/// whose `check:` pins a rejection the compiler cannot make yet is
+/// refused, not rejected, and its own header says which construct is
+/// missing. The declaration cannot rot either — `xtask corpus` fails if
+/// the marker outlives the refusal it describes — and without it the
+/// entry sits in `refused@…` beside genuine scope gaps while every
+/// count downstream reads its `fail(…)` pin as an enforced rule.
+fn residue_class(obs: &BTreeMap<&str, LaneObs>, forward: bool) -> String {
     let lanes: Vec<&LaneObs> = COMPARED_LANES.iter().filter_map(|l| obs.get(l)).collect();
+    if forward && lanes.iter().all(|o| o.verdict == "unsupported") {
+        return "forward".to_string();
+    }
     if lanes.iter().all(|o| o.verdict.starts_with("fail(")) {
         // Rejected by every lane: a NEGATIVE entry. It IS compared — at
         // its rejection rung, under [proto.cmp.rung] — so it is not a
@@ -664,12 +736,21 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
     collect_wolf_files(Path::new("corpus"), &mut files);
     files.sort();
     // Members compile through their module's entry file (s12), so they
-    // are not entries and must not sit in the denominator.
+    // are not entries and must not sit in the denominator. The same
+    // pass collects the forward pins (s91) — entries whose `check:`
+    // records an intention rather than a rule the compiler enforces.
+    let mut forward: BTreeSet<String> = BTreeSet::new();
     files.retain(|f| {
-        !std::fs::read_to_string(f)
+        let Some(d) = std::fs::read_to_string(f)
             .ok()
             .and_then(|s| corpus::parse_directives(&s).ok())
-            .is_some_and(|d| d.member)
+        else {
+            return true;
+        };
+        if d.forward.is_some() {
+            forward.insert(f.display().to_string());
+        }
+        !d.member
     });
 
     let mut cov = xtask::protocol::Coverage::default();
@@ -728,15 +809,37 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
 
     // The residue, by class. `rejected` entries are compared at their
     // rejection rung and are NOT counted as a coverage failure; the
-    // `refused` ones are the honest gap.
+    // `refused` ones are the honest gap; `forward` entries pin a
+    // rejection that does not exist yet and are neither.
     let mut by_class: BTreeMap<String, Vec<&String>> = BTreeMap::new();
     for f in &uncovered {
         let Some(obs) = per_file.get(f) else { continue };
-        by_class.entry(residue_class(obs)).or_default().push(f);
+        by_class
+            .entry(residue_class(obs, forward.contains(f.as_str())))
+            .or_default()
+            .push(f);
     }
     for (class, fs) in &by_class {
         eprintln!("lane-coverage:   residue `{class}`: {}", fs.len());
+        if class == "forward" {
+            // Named, not just counted: the whole point of the class is
+            // that a reader can see which file is an intention.
+            for f in fs {
+                eprintln!("lane-coverage:     forward pin: {f}");
+            }
+        }
     }
+    // Both numbers, never one corrected number. `rejected` is what
+    // every compared lane really refuses to compile — the rules; a
+    // forward pin looks identical from outside the compiler (a
+    // `fail(CODE)` header no lane executes) and is not one, so folding
+    // the two together miscounts in the direction that flatters us.
+    eprintln!(
+        "lane-coverage:   static rejections: {} rule(s) every lane enforces, {} forward pin(s) \
+         no lane can make yet",
+        by_class.get("rejected").map_or(0, Vec::len),
+        by_class.get("forward").map_or(0, Vec::len),
+    );
     if json {
         for f in &uncovered {
             let Some(obs) = per_file.get(f) else { continue };
@@ -758,7 +861,10 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
             println!(
                 "{}",
                 serde_json::json!({
-                    "file": f, "class": residue_class(obs), "lanes": lanes,
+                    "file": f,
+                    "class": residue_class(obs, forward.contains(f.as_str())),
+                    "forward": forward.contains(f.as_str()),
+                    "lanes": lanes,
                 })
             );
         }
@@ -1920,6 +2026,60 @@ fn diag_catalog(check: bool) -> ExitCode {
             }
         ));
     }
+    // The corpus half of the gate (s91). Everything above runs one way
+    // — registry to page — which is why a corpus file could pin a code
+    // that existed nowhere and leave the gate green. A pinned code is a
+    // dependency on the compiler's behaviour, so it must be a code the
+    // compiler can emit, or a forward pin that admits it is not one.
+    let documented: BTreeSet<String> = entries.iter().map(|(c, _, _)| c.clone()).collect();
+    let mut corpus_files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut corpus_files);
+    corpus_files.sort();
+    let mut pins: Vec<corpus::Pin> = Vec::new();
+    for f in &corpus_files {
+        let Ok(src) = std::fs::read_to_string(f) else {
+            continue;
+        };
+        let Ok(d) = corpus::parse_directives(&src) else {
+            continue; // `xtask corpus` owns the parse errors; do not double-report
+        };
+        for code in d.pinned_codes() {
+            pins.push(corpus::Pin {
+                code: code.to_string(),
+                file: f.display().to_string(),
+                forward: d.forward.clone(),
+            });
+        }
+    }
+    let (forward_pins, unbacked) = corpus::audit_pins(&pins, &documented);
+    for pin in &unbacked {
+        eprintln!(
+            "diag-catalog: {}: pins `{}`, which no diagnostic emits and no catalog entry \
+             describes — register the code, or mark the file `//! forward: <what is missing>` \
+             if it pins behaviour that is not implemented yet",
+            pin.file, pin.code,
+        );
+        bad += 1;
+    }
+    // Published, not merely tolerated: a code the corpus depends on and
+    // the compiler cannot produce is something a reader of the catalog
+    // is entitled to find there, under its own heading, saying so.
+    if !forward_pins.is_empty() {
+        body.push_str(
+            "\n## Forward pins\n\nCodes the corpus pins that this compiler does not emit \
+             yet. Each one is an intention recorded against a construct that is not \
+             implemented — the behaviour we mean to have, not behaviour we enforce today. \
+             They are not part of the count above.\n\n",
+        );
+        for pin in &forward_pins {
+            body.push_str(&format!(
+                "- `{}` — {} (not implemented: {})\n",
+                pin.code,
+                pin.file,
+                pin.forward.as_deref().unwrap_or(""),
+            ));
+        }
+    }
     if bad > 0 {
         return ExitCode::FAILURE;
     }
@@ -1955,8 +2115,15 @@ fn diag_catalog(check: bool) -> ExitCode {
             return ExitCode::FAILURE;
         }
         eprintln!(
-            "diag-catalog: {} codes ({warn_count} warnings), all with fixtures, catalogs in sync",
-            entries.len()
+            "diag-catalog: {} codes ({warn_count} warnings), all with fixtures, catalogs in sync; \
+             the corpus pins {} of them, plus {} forward pin(s) on codes nothing emits yet",
+            entries.len(),
+            pins.iter()
+                .map(|p| &p.code)
+                .filter(|c| documented.contains(*c))
+                .collect::<BTreeSet<_>>()
+                .len(),
+            forward_pins.len(),
         );
     } else {
         std::fs::create_dir_all("docs").expect("mkdir docs");
@@ -2606,6 +2773,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     let mut completeness = 0u32;
     let mut agreements = 0u32;
     let mut unsupported = 0u32;
+    let mut forward_pins = 0u32;
     // Coverage of THIS lane pairing ([proto.cmp.coverage], s82): how
     // many entries each side executed at the run rung, and how many
     // both did — the only files this invocation could compare
@@ -2616,13 +2784,17 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     let mut entries = 0u32;
     let (mut a_run, mut b_run, mut both_run) = (0u32, 0u32, 0u32);
     for f in &files {
-        let is_member = std::fs::read_to_string(f)
+        let directives = std::fs::read_to_string(f)
             .ok()
-            .and_then(|src| corpus::parse_directives(&src).ok())
-            .is_some_and(|d| d.member);
-        if is_member {
+            .and_then(|src| corpus::parse_directives(&src).ok());
+        if directives.as_ref().is_some_and(|d| d.member) {
             continue; // compiled through its module's entry file (s12)
         }
+        // A forward pin (s91) enters the conservatism ledger honestly —
+        // A declines a construct it has not implemented — but it is not
+        // the same fact as a rule one side enforces and the other does
+        // not, so the ledger publishes it as its own number.
+        let forward = directives.is_some_and(|d| d.forward.is_some());
         let (ra, rb) = match (conform_run(&cmd_a, f, true), conform_run(&cmd_b, f, false)) {
             (Ok(a), Ok(b)) => (a, b),
             (Err(e), _) | (_, Err(e)) => {
@@ -2651,6 +2823,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
             || rb["verdict"] == serde_json::json!("unsupported")
         {
             unsupported += 1;
+            forward_pins += u32::from(forward);
         }
         let va = ra["verdict"].as_str().unwrap_or("");
         let vb = rb["verdict"].as_str().unwrap_or("");
@@ -2718,20 +2891,23 @@ fn differ_cmd(args: &[String]) -> ExitCode {
     }
     if triage {
         eprintln!(
-            "differ: {} file(s) — {} agreement(s), {} completeness note(s), {} SOUNDNESS finding(s), {} unsupported; {} hard divergence(s)",
+            "differ: {} file(s) — {} agreement(s), {} completeness note(s), {} SOUNDNESS finding(s), {} unsupported ({} forward pin(s)); {} hard divergence(s)",
             files.len(),
             agreements,
             completeness,
             soundness,
             unsupported,
+            forward_pins,
             divergences,
         );
     } else {
         eprintln!(
-            "differ: {} file(s), {} divergence(s), {} in conservatism ledger (unsupported)",
+            "differ: {} file(s), {} divergence(s), {} in conservatism ledger \
+             (unsupported), {} of them forward pin(s)",
             files.len(),
             divergences,
-            unsupported
+            unsupported,
+            forward_pins,
         );
     }
     eprintln!(

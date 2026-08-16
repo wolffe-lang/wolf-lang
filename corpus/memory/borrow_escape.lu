@@ -1,8 +1,16 @@
 //! check: fail(E1003)
 //! phase: resolve
 //! conforms: mem.tier0.borrow.1
+//! forward: borrow expressions
 //! Local borrows never outlive their function activation: sending one
 //! into a channel (heap-tier storage) is rejected.
+//!
+//! A FORWARD PIN, not a rule the compiler enforces: `&x` does not
+//! compile at all yet, so wolfgang declines this file at resolve
+//! instead of rejecting it, and E1003 is a code nothing emits. The
+//! header records the behaviour we intend; drop the `forward:` line in
+//! the commit that makes the rejection real, and the corpus gate will
+//! tell you if you forget.
 
 fn main() -> !int {
     let ch = channel[int](1)
