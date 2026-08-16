@@ -1,0 +1,24 @@
+---
+source: xtask/tests/directive_snapshots.rs
+expression: "xtask::corpus::parse_directives(src)"
+---
+Ok(
+    Directives {
+        check: Some(
+            Fail(
+                "E1003",
+            ),
+        ),
+        phase: Some(
+            "resolve",
+        ),
+        conforms: [
+            "mem.tier0.borrow.1",
+        ],
+        warns: [],
+        member: false,
+        forward: Some(
+            "borrow expressions",
+        ),
+    },
+)

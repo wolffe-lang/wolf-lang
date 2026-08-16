@@ -7,10 +7,12 @@
 //! //! phase: none|lex|parse|resolve|typecheck|mem|wir|run
 //! //! conforms: mem.region.freeze, err.row.union
 //! //! warns: E0802, W1301
+//! //! forward: borrow expressions are not implemented
 //! ```
 //!
 //! Non-directive `//!` lines are prose and ignored. The directive language
-//! stays tiny — extend only under review (s01; `warns:` added by s67).
+//! stays tiny — extend only under review (s01; `warns:` added by s67,
+//! `forward:` by s91).
 //!
 //! `warns:` is the warning ledger (s67): the exact set of warning codes
 //! this file is expected to fire. A file without the directive must run
@@ -18,6 +20,20 @@
 //! `cargo xtask corpus` — and a file *with* it must fire exactly the
 //! declared codes (a reviewed-allow is a visible header, never a silent
 //! suppression).
+//!
+//! `forward:` is the intention marker (s91). Its value names the
+//! unimplemented construct the compiler stops on, and it declares that
+//! this file's `check:` pins behaviour wolfgang does not implement yet:
+//! the file is an *intention*, not an enforced rule, and every count
+//! that separates the two reads this directive. It is load-bearing in
+//! both directions, enforced by `cargo xtask corpus` — a `fail(CODE)`
+//! file the compiler declines must carry it, and a file carrying it
+//! that the compiler no longer declines is a stale marker over a pin
+//! that has landed. `cargo xtask diag-catalog --check` reads it too:
+//! it is the only way a corpus file may pin a code the catalog has
+//! never heard of.
+
+use std::collections::BTreeSet;
 
 /// Canonical phase ladder (s06). Order matters: later phases include earlier.
 pub const PHASES: [&str; 8] = [
@@ -94,6 +110,25 @@ pub struct Directives {
     /// is compiled through its entry file, never conform-run directly
     /// (s12: directory = module).
     pub member: bool,
+    /// `forward: <reason>` — this file's `check:` pins behaviour that is
+    /// not implemented yet, and the reason names the construct the
+    /// compiler stops on (s91). An intention, not an enforced rule; the
+    /// counts keep the two apart on the strength of this field.
+    pub forward: Option<String>,
+}
+
+impl Directives {
+    /// Every diagnostic code this header pins: the `check: fail(CODE)`
+    /// rejection first, then each `warns:` code. What a reader of the
+    /// corpus is entitled to look up in the catalog.
+    pub fn pinned_codes(&self) -> Vec<&str> {
+        let mut out = Vec::new();
+        if let Some(Check::Fail(code)) = &self.check {
+            out.push(code.as_str());
+        }
+        out.extend(self.warns.iter().map(String::as_str));
+        out
+    }
 }
 
 /// Parse the leading `//!` block of `src`. Errors are human-readable and
@@ -150,6 +185,18 @@ pub fn parse_directives(src: &str) -> Result<Directives, String> {
             }
             d.warns.sort();
             d.warns.dedup();
+        } else if let Some(v) = rest.strip_prefix("forward:") {
+            let v = v.trim();
+            if v.is_empty() {
+                return Err(format!(
+                    "line {lineno}: `forward:` needs a reason — name the construct that is not \
+                     implemented yet"
+                ));
+            }
+            if d.forward.is_some() {
+                return Err(format!("line {lineno}: duplicate `forward:` directive"));
+            }
+            d.forward = Some(v.to_string());
         } else if let Some(v) = rest.strip_prefix("member:") {
             match v.trim() {
                 "true" => d.member = true,
@@ -269,6 +316,49 @@ pub fn phase_rank(phase: &str) -> Option<usize> {
     PHASES.iter().position(|p| *p == phase)
 }
 
+/// One diagnostic code a corpus file pins, carrying the forward-pin
+/// marking of the file that pins it (s91).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pin {
+    pub code: String,
+    pub file: String,
+    pub forward: Option<String>,
+}
+
+/// The corpus half of the catalog gate (s91): a code the corpus pins
+/// must be one the compiler can emit, or a declared forward pin.
+///
+/// The catalog gate used to run in one direction only — registry to
+/// docs — so a corpus file could depend on a code that existed nowhere
+/// and the gate stayed green. It did: from the day it was written,
+/// `fail(E1003)` was pinned against a code no catalog entry described
+/// and no code path produced, and every count that read the corpus
+/// treated it as a rule the compiler enforces.
+///
+/// Returns `(forward, unbacked)`: `forward` is the pins on undocumented
+/// codes whose file says, in its header, that this is behaviour we
+/// intend rather than behaviour we enforce — publishable, and honest;
+/// `unbacked` is the pins on undocumented codes that claim nothing, and
+/// each one is a gate failure.
+pub fn audit_pins<'a>(
+    pins: &'a [Pin],
+    documented: &BTreeSet<String>,
+) -> (Vec<&'a Pin>, Vec<&'a Pin>) {
+    let mut forward = Vec::new();
+    let mut unbacked = Vec::new();
+    for pin in pins {
+        if documented.contains(&pin.code) {
+            continue;
+        }
+        if pin.forward.is_some() {
+            forward.push(pin);
+        } else {
+            unbacked.push(pin);
+        }
+    }
+    (forward, unbacked)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,6 +427,97 @@ mod tests {
         assert!(parse_directives("//! warns: W13xx\n").is_err());
         let d = parse_directives("//! phase: mem\n").unwrap();
         assert!(d.warns.is_empty());
+    }
+
+    #[test]
+    fn forward_directive_carries_a_reason() {
+        let d = parse_directives(
+            "//! check: fail(E1003)\n//! phase: resolve\n//! forward: borrow expressions\n",
+        )
+        .unwrap();
+        assert_eq!(d.forward.as_deref(), Some("borrow expressions"));
+        // A marker with nothing behind it teaches a reader nothing.
+        assert!(parse_directives("//! forward:\n").is_err());
+        assert!(parse_directives("//! forward: a\n//! forward: b\n").is_err());
+        // Absence is the default: an ordinary rule is not an intention.
+        let d = parse_directives("//! check: fail(E0401)\n//! phase: typecheck\n").unwrap();
+        assert!(d.forward.is_none());
+    }
+
+    #[test]
+    fn pinned_codes_are_the_check_then_the_warns() {
+        let d = parse_directives("//! check: fail(E1003)\n//! warns: W1301, E0802\n").unwrap();
+        assert_eq!(d.pinned_codes(), vec!["E1003", "E0802", "W1301"]);
+        let d = parse_directives("//! check: pass\n//! phase: run\n").unwrap();
+        assert!(d.pinned_codes().is_empty());
+    }
+
+    /// The gate should have failed the day `borrow_escape.lu` was
+    /// written. This is that day, reconstructed: the file as it stood,
+    /// against a catalog that has never heard of E1003.
+    #[test]
+    fn an_unmarked_pin_on_a_phantom_code_fails_the_gate() {
+        let documented: BTreeSet<String> = ["E1001", "E1002", "E1004"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let as_written = parse_directives(
+            "//! check: fail(E1003)\n//! phase: resolve\n//! conforms: mem.tier0.borrow.1\n",
+        )
+        .unwrap();
+        let pins: Vec<Pin> = as_written
+            .pinned_codes()
+            .into_iter()
+            .map(|code| Pin {
+                code: code.to_string(),
+                file: "corpus/memory/borrow_escape.lu".into(),
+                forward: as_written.forward.clone(),
+            })
+            .collect();
+        let (forward, unbacked) = audit_pins(&pins, &documented);
+        assert!(forward.is_empty());
+        assert_eq!(unbacked.len(), 1, "E1003 is pinned and nothing emits it");
+        assert_eq!(unbacked[0].code, "E1003");
+
+        // Marked as the intention it is, the same pin passes — and is
+        // published as a forward pin rather than counted as a rule.
+        let marked = parse_directives(
+            "//! check: fail(E1003)\n//! phase: resolve\n//! forward: borrow expressions\n",
+        )
+        .unwrap();
+        let pins: Vec<Pin> = marked
+            .pinned_codes()
+            .into_iter()
+            .map(|code| Pin {
+                code: code.to_string(),
+                file: "corpus/memory/borrow_escape.lu".into(),
+                forward: marked.forward.clone(),
+            })
+            .collect();
+        let (forward, unbacked) = audit_pins(&pins, &documented);
+        assert!(unbacked.is_empty());
+        assert_eq!(forward.len(), 1);
+        assert_eq!(forward[0].forward.as_deref(), Some("borrow expressions"));
+    }
+
+    #[test]
+    fn a_documented_code_needs_no_marking() {
+        let documented: BTreeSet<String> =
+            ["E1001", "W1301"].into_iter().map(String::from).collect();
+        let pins = vec![
+            Pin {
+                code: "E1001".into(),
+                file: "corpus/memory/use_after_move.lu".into(),
+                forward: None,
+            },
+            Pin {
+                code: "W1301".into(),
+                file: "corpus/lints/unused.lu".into(),
+                forward: None,
+            },
+        ];
+        let (forward, unbacked) = audit_pins(&pins, &documented);
+        assert!(forward.is_empty() && unbacked.is_empty());
     }
 
     #[test]
