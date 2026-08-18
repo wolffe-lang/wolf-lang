@@ -222,6 +222,12 @@ impl<'a> Parser<'a> {
     }
 
     /// Is the current token a declaration start (sync point)?
+    /// How many diagnostics have been reported so far — recovery uses
+    /// it to notice that a sub-parse just failed.
+    pub(crate) fn diag_count(&self) -> usize {
+        self.diags.len()
+    }
+
     /// Does a line break sit between these two offsets?
     pub(crate) fn crosses_line(&self, from: u32, to: u32) -> bool {
         let (from, to) = (from as usize, (to as usize).min(self.src.len()));

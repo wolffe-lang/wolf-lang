@@ -560,10 +560,22 @@ fn error_row(p: &mut Parser<'_>) {
             TokenKind::Ident => {
                 let e = p.start();
                 path(p, "error tag");
+                let before_payload = p.diag_count();
                 if p.at_punct(Punct::LParen) {
                     paren_type_list(p);
                 }
                 e.complete(p, SyntaxKind::RowEntry);
+                // `tag(types)` is also the shape of a call statement, so
+                // the escape above cannot see that this `{` opened a
+                // function body: `print("before")` is a perfectly good
+                // row entry until its payload turns out to be a string
+                // rather than a type. That failure is the signal. One
+                // report, then escape (D22) — parsing on read a whole
+                // body as a row and charged a diagnostic per statement.
+                if p.diag_count() > before_payload {
+                    unclosed(p, opener, "{");
+                    break;
+                }
             }
             _ => {
                 p.arg_list_error(p.current_span(), "expected an error-row entry");
