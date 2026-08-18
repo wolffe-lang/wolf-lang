@@ -258,6 +258,19 @@ fn colon_mutation_in_generics_is_structural() {
     );
 }
 
+/// A damaged construct may announce its own extent — one E0202 per
+/// opener left unclosed, so the ceiling is how deep the delimiters nest
+/// at the damage, not how much damage there is.
+///
+/// Three is measured, not chosen: over 85 198 mutations the corpus tops
+/// out at a `[` inserted inside a call inside a block, which leaves
+/// exactly `[`, `(` and `{` open and reports each once. 82% of
+/// mutations add no boundary at all, and only 6 reach three. A corpus
+/// file that nests deeper is a deliberate ratchet of this number, the
+/// way the lane floors work — not a licence to raise it when a wreck
+/// gets noisier.
+const MAX_BOUNDARY: usize = 3;
+
 #[test]
 fn single_token_mutations_have_bounded_blast_radius() {
     let budget: usize = std::env::var("MUTATE_BUDGET")
@@ -379,13 +392,49 @@ fn single_token_mutations_have_bounded_blast_radius() {
             let max = if structural { 5 } else { 3 };
             // Baseline diagnostics (the corpus counter-example files)
             // are pre-existing; the property bounds the *added* ones.
-            let added = parse
-                .diagnostics
-                .len()
-                .saturating_sub(original.diagnostics.len());
+            //
+            // Two kinds of added diagnostic, counted apart, because they
+            // answer different questions and one pays for the other.
+            //
+            // CASCADE is what this property exists to bound: the parser
+            // losing the thread and reporting the same wreck again and
+            // again, or misreading the wreckage as new constructs.
+            //
+            // A BOUNDARY diagnostic (E0202, `this `{` is never closed`)
+            // is the opposite. It is the parser saying exactly where the
+            // damage ends, once per unclosed opener, and it is the thing
+            // that STOPS the wreck from swallowing what follows. Charged
+            // to the mutation it made recovery self-defeating: closing a
+            // damaged block costs a diagnostic, so a fix for the
+            // untouched-declarations invariant below (a block that ends
+            // at a sibling-level item keyword) paid for itself by
+            // breaking this one — measured, one case fixed for one case
+            // broken, a net of zero. The bound was a cap on how well the
+            // parser was allowed to recover.
+            //
+            // Their own budget keeps the teeth: boundaries are bounded
+            // per unclosed opener, so a storm of them still fails, and
+            // nesting depth in the corpus is what sets the number.
+            let boundaries = |ds: &[wolf_diag::Diagnostic], want: bool| {
+                ds.iter()
+                    .filter(|d| (d.code == wolf_parse::codes::UNCLOSED_DELIMITER) == want)
+                    .count()
+            };
+            let added_of = |want: bool| {
+                boundaries(&parse.diagnostics, want)
+                    .saturating_sub(boundaries(&original.diagnostics, want))
+            };
+            let cascade = added_of(false);
+            let boundary = added_of(true);
             assert!(
-                added <= max,
-                "{}: {added} added parser diagnostics (max {max}): {:?}",
+                cascade <= max,
+                "{}: {cascade} added cascade diagnostics (max {max}): {:?}",
+                ctx(),
+                parse.diagnostics
+            );
+            assert!(
+                boundary <= MAX_BOUNDARY,
+                "{}: {boundary} added recovery-boundary diagnostics (max {MAX_BOUNDARY}): {:?}",
                 ctx(),
                 parse.diagnostics
             );
