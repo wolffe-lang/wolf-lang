@@ -555,8 +555,16 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// reason that is not its fault. The lanes are still not nested (union
 /// 153, all three 118), which is the property the gate exists to keep
 /// visible.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 138), ("native", 133), ("release", 123)];
-const UNION_FLOOR: usize = 153;
+/// Ratcheted again by s86, over 272 entries: the release lane goes
+/// 123 → 134 in one step, because its last conc refusal (`func.addr`,
+/// the compiled task entry) was the only thing keeping eleven
+/// spawn-bearing programs off that lane. native +1 is s86's own new
+/// corpus entry. `all-three` does NOT move: the CHECKED lane still
+/// refuses structured concurrency by name (C1, deferred), so the two
+/// native lanes and the checked lane remain un-nested — which is
+/// exactly the fact this gate exists to keep visible.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 138), ("native", 134), ("release", 134)];
+const UNION_FLOOR: usize = 154;
 const ALL_THREE_FLOOR: usize = 118;
 
 /// One lane's observation of one corpus entry.
