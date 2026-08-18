@@ -1453,14 +1453,27 @@ impl<'a> Fx<'a> {
         let args = self.args_of(inst);
         let results = self.results_of(inst);
         match op {
-            // s73's conc lowering targets the debug tier first; the
-            // release tier refuses task-entry addresses by name until
-            // c09 picks up conc kernels (the macro corpus needs them —
-            // s44's problem, not silently this backend's).
+            // s86: the compiled task-entry pointer. A module function's
+            // address is a link-time constant exactly like `data.addr`'s
+            // — the symbol itself is the `ptr` operand, so there is
+            // nothing to materialize and GVN may dedup it freely. The
+            // callee must live in THIS object's subset (the task shim
+            // always does: lowering synthesizes it into the same
+            // module); anything else is an honest refusal, the same
+            // line the debug tier draws.
             Opcode::FuncAddr => {
-                return Err(nyi(
-                    "func.addr (native conc task entries) — the release tier                      does not lower concurrency yet",
-                ));
+                let Aux::Callee(ef) = data.aux else {
+                    return Err(ice("func.addr without callee"));
+                };
+                let callee = self.f.ext_funcs[ef].name.clone();
+                let Some(entry) = self.funcs.get(&callee) else {
+                    return Err(nyi(format!(
+                        "func.addr of `@{callee}` outside this object's subset"
+                    )));
+                };
+                let symbol = entry.symbol.clone();
+                self.vals
+                    .insert(results[0], Repr::Scalar(format!("@\"{symbol}\"")));
             }
             Opcode::Iconst => {
                 let Aux::Int(n) = data.aux else {
