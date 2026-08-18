@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="204\n")
+//! phase: run
+//! conforms: conc.task.spawn, conc.task.scope, conc.task.join, conc.chan.buf
+//! The shape every reader writes second (s86): a loop that spawns N
+//! tasks, each closing over the loop's own binding. Until s86 it was
+//! an honest refusal — `spawn inside a loop (env-slot lifetime)` —
+//! because the capture record was a FRAME SLOT, and one slot cannot
+//! serve eight live tasks: every task would have read the last
+//! iteration's `i` and the total would be 8*64 = 512, not 204.
+//!
+//! The fix is the contract's own words: the record is allocated in
+//! the SCOPE's region, so each iteration bump-allocates its own, and
+//! the arena frees wholesale after the join — which is exactly the
+//! order that makes it safe, since no task can still be reading when
+//! the join has already returned.
+//!
+//! The total is order-independent on purpose: the schedule may
+//! interleave the eight tasks any way it likes and the witness still
+//! reads the same, so this file pins the CAPTURE, never the schedule.
+
+fn main() -> !int {
+    var total = 0
+    scope s {
+        let ch = channel[int](16)
+        for i in 1..=8 {
+            s.spawn(fn() { ch.send(i * i) })
+        }
+        for k in 1..=8 { total += ch.recv()? }
+    }
+    print("{total}")
+    if total == 204 { 0 } else { 1 }
+}
