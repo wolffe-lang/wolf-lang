@@ -1,4 +1,4 @@
-//! s73 acceptance — native concurrency, end to end.
+//! s73 + s86 acceptance — native concurrency, end to end, both tiers.
 //!
 //! The conc corpus tier's run files execute NATIVELY (wir → Cranelift
 //! → cc → the s32–s36 runtime) at the exit/stdout expectations the
@@ -9,6 +9,18 @@
 //! native-vs-pinned, plus verdict STABILITY under `--seed`
 //! ([sched.stable]'s CI property: same seed ⇒ same verdict and
 //! stdout; different seeds ⇒ same VERDICT for these fixtures).
+//!
+//! s86 adds three things and one boundary:
+//! - the RELEASE tier (wir → LLVM -O2 → clang) runs the same files at
+//!   the same verdicts. Until s86 it refused `func.addr` — the
+//!   compiled task-entry pointer — and that single opcode took every
+//!   spawn-bearing program off the tier;
+//! - a spawn UNDER A LOOP compiles, each reach getting its own capture
+//!   record from the scope's arena;
+//! - X12's ten-run seed stability is asserted on both tiers.
+//!
+//! The boundary: a PROC spawned in a loop still refuses, by name, and
+//! a test holds it there — s87 owns that half.
 //!
 //! Off-target the whole file compiles away (native codegen is
 //! linux/x86-64 only at this tier).
@@ -38,12 +50,22 @@ fn native(file: &str, seed: Option<u64>) -> Option<Obs> {
 /// is the debug-tier override the driver reads; the release tier runs
 /// it unconditionally). The optimizer must be behaviorally invisible.
 fn native_opt(file: &str, seed: Option<u64>, midend: bool) -> Option<Obs> {
+    native_tier(file, seed, midend, false)
+}
+
+/// As [`native_opt`], on either tier: `--native` alone is the Cranelift
+/// debug tier, `--native --release` the LLVM one (s86 — before it, the
+/// release tier refused every conc program by name at `func.addr`).
+fn native_tier(file: &str, seed: Option<u64>, midend: bool, release: bool) -> Option<Obs> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut cmd = Command::new(wolf());
     cmd.arg("conform-run")
         .arg(root.join(file))
         .arg("--native")
         .arg("--json");
+    if release {
+        cmd.arg("--release");
+    }
     if midend {
         cmd.env("WOLF_MIDEND", "1");
     }
@@ -227,6 +249,201 @@ fn linked_procs_share_fate() {
 fn the_kitchen_sink_procs_file_runs() {
     ensure_rt_staticlib();
     pinned("corpus/procs.lu", "exit(0)", "");
+}
+
+// ---- s86: a spawn under a loop ---------------------------------------
+
+/// The fan-out shape, and the reason it was refused until s86.
+///
+/// The capture record used to be a frame slot. One slot, eight tasks:
+/// each would have read whatever the LAST iteration stored, and the
+/// witness would total 8 * 8^2 = 512. It totals 204 — the sum of the
+/// squares — so every task got captures of its own. The total is
+/// order-independent, so this asserts the CAPTURE, not the schedule.
+#[test]
+fn a_spawn_under_a_loop_gives_every_task_its_own_captures() {
+    ensure_rt_staticlib();
+    pinned("corpus/conc/spawn_fanout_loop.lu", "exit(0)", "204\n");
+}
+
+/// The arena is per SCOPE, so the shape survives the mid-end: region
+/// promotion must not sink a record that escapes into the runtime, and
+/// bump fusion must not merge two iterations' records into one.
+#[test]
+fn the_mid_end_does_not_merge_two_iterations_capture_records() {
+    ensure_rt_staticlib();
+    for seed in [1u64, 5, 9] {
+        let Some(plain) = native_opt("corpus/conc/spawn_fanout_loop.lu", Some(seed), false) else {
+            return;
+        };
+        let opt =
+            native_opt("corpus/conc/spawn_fanout_loop.lu", Some(seed), true).expect("environment");
+        assert_eq!(plain.verdict, "exit(0)", "seed {seed}: plain verdict");
+        assert_eq!(opt.verdict, plain.verdict, "seed {seed}: mid-end verdict");
+        assert_eq!(opt.stdout, plain.stdout, "seed {seed}: mid-end stdout");
+        assert_eq!(opt.stdout, "204\n", "seed {seed}: the captures held");
+    }
+}
+
+/// The other side of the same line: a PROC spawned in a loop still
+/// refuses, and refuses BY NAME.
+///
+/// s86's answer for tasks is the scope's arena, and a proc has no
+/// scope — it is a failure domain under the root supervisor, which
+/// outlives every extent at the spawn site. So the refusal stands and
+/// says why, on both native tiers. s87 owns the answer; this test is
+/// what makes "s87 still owns it" a fact rather than a plan.
+#[test]
+fn a_proc_spawned_in_a_loop_still_refuses_by_name() {
+    ensure_rt_staticlib();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for release in [false, true] {
+        let mut cmd = Command::new(wolf());
+        cmd.arg("conform-run")
+            .arg(root.join("corpus/conc/proc_spawn_loop.lu"))
+            .arg("--native")
+            .arg("--json");
+        if release {
+            cmd.arg("--release");
+        }
+        let out = cmd.output().expect("wolf runs");
+        if out.status.code() == Some(2) {
+            eprintln!("SKIP: environment cannot run the native lane");
+            return;
+        }
+        let rec: serde_json::Value =
+            serde_json::from_slice(&out.stdout).expect("observation record parses");
+        assert_eq!(
+            rec["verdict"].as_str(),
+            Some("unsupported"),
+            "release={release}: a proc spawn in a loop must not compile"
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("a proc spawned in a loop"),
+            "release={release}: the refusal must NAME the construct: {stderr}"
+        );
+        assert!(
+            stderr.contains("s87"),
+            "release={release}: and name its owner: {stderr}"
+        );
+    }
+}
+
+// ---- s86: the RELEASE tier runs concurrency ---------------------------
+
+/// Every conc run-file, on the LLVM tier, at the verdict the debug
+/// tier pins.
+///
+/// This is the sprint's headline: before s86 the release tier refused
+/// `func.addr` — the compiled task-entry pointer — which took every
+/// program containing a `spawn` with it. `conform-run --native
+/// --release` recorded `phase_reached: wir, verdict: unsupported`,
+/// which is exactly the symptom #104 reported (it read it as the whole
+/// native story; it was the release half of it).
+#[test]
+fn the_release_tier_runs_the_conc_corpus() {
+    ensure_rt_staticlib();
+    let cases = [
+        ("corpus/conc/message_passing.lu", "exit(0)", ""),
+        ("corpus/conc/freeze_publish.lu", "exit(0)", ""),
+        ("corpus/conc/cancel_sibling.lu", "exit(0)", ""),
+        ("corpus/conc/when_multi.lu", "exit(0)", ""),
+        ("corpus/conc/select_seeded.lu", "exit(0)", ""),
+        ("corpus/conc/select_two_timeouts.lu", "exit(0)", ""),
+        ("corpus/conc/select_single_arm_loop.lu", "exit(0)", ""),
+        ("corpus/conc/spawn_fanout_loop.lu", "exit(0)", "204\n"),
+        (
+            "corpus/conc/chan_drain_after_inclusive_loop.lu",
+            "exit(0)",
+            "3 12\n",
+        ),
+        ("corpus/procs.lu", "exit(0)", ""),
+    ];
+    let mut ran = 0;
+    for (file, verdict, stdout) in cases {
+        let Some(o) = native_tier(file, Some(3), false, true) else {
+            return; // no clang / no cc / no staticlib (loud)
+        };
+        assert_eq!(o.verdict, verdict, "{file}: release-tier verdict");
+        assert_eq!(o.stdout, stdout, "{file}: release-tier stdout");
+        ran += 1;
+    }
+    assert_eq!(ran, 10, "every release-tier conc case ran");
+}
+
+/// D14's signature distinction, on the release tier too.
+///
+/// The kill path skips defers and bulk-frees regions; the cancel path
+/// runs them. c07 pinned the ORDER with runtime tests; s73 pinned it
+/// natively on the debug tier; this pins it on the tier that actually
+/// optimizes, where a mis-sunk defer or a hoisted free would show up
+/// as the other file's stdout.
+#[test]
+fn the_defer_law_holds_on_the_release_tier() {
+    ensure_rt_staticlib();
+    let Some(killed) = native_tier("corpus/conc/proc_kill_defers.lu", Some(1), false, true) else {
+        return;
+    };
+    assert_eq!(killed.verdict, "exit(0)");
+    assert_eq!(
+        killed.stdout, "released",
+        "a KILLED proc's defers must not run — only the owner's release"
+    );
+    let cancelled = native_tier("corpus/conc/proc_cancel_defers.lu", Some(1), false, true)
+        .expect("environment");
+    assert_eq!(cancelled.verdict, "exit(0)");
+    assert_eq!(
+        cancelled.stdout, "defer-ran\nreleased",
+        "a CANCELLED proc runs its defers, and before the reason lands"
+    );
+    let linked =
+        native_tier("corpus/conc/proc_link.lu", Some(1), false, true).expect("environment");
+    assert_eq!(linked.stdout, "both-down", "linked procs share fate");
+}
+
+// ---- s86: X12 determinism, ten runs -----------------------------------
+
+/// X12's promise, stated as the sprint contract states it: the same
+/// program, the same seed, the same output — ten runs.
+///
+/// Run on BOTH tiers, because determinism that only holds where the
+/// optimizer is off is not a language property. The programs chosen
+/// spawn, send, receive and select, so the scheduler makes real
+/// decisions in every one of them.
+#[test]
+fn the_same_seed_gives_the_same_output_ten_times() {
+    ensure_rt_staticlib();
+    let files = [
+        "corpus/conc/spawn_fanout_loop.lu",
+        "corpus/conc/select_seeded.lu",
+        "corpus/conc/message_passing.lu",
+        "corpus/procs.lu",
+    ];
+    for release in [false, true] {
+        for file in files {
+            let Some(first) = native_tier(file, Some(1234), false, release) else {
+                return;
+            };
+            assert!(first.seeded, "{file}: the record must report seeded=true");
+            for run in 1..10 {
+                let again = native_tier(file, Some(1234), false, release).expect("environment");
+                assert_eq!(
+                    again.verdict, first.verdict,
+                    "{file} (release={release}) run {run}: verdict drifted under one seed"
+                );
+                assert_eq!(
+                    again.stdout, first.stdout,
+                    "{file} (release={release}) run {run}: stdout drifted under one seed"
+                );
+            }
+            eprintln!(
+                "X12: {file} (release={release}) — 10 runs at seed 1234, \
+                 verdict {} stdout {:?}",
+                first.verdict, first.stdout
+            );
+        }
+    }
 }
 
 // ---- the dogfood witness (X12 end to end) ----------------------------
