@@ -34,6 +34,18 @@ AAPCS64, win64, Apple arm64 deltas).
   pads** anywhere in wolf code (D30/Perceus precondition, s04
   `[mem.shared.drop]`): every control transfer is a call, return,
   branch, or trap.
+- `[abi.native.taskenv]` A spawned task's captures cross to the
+  runtime as ONE pointer to a **capture record** whose layout is
+  `wolf-abi-0` internal, paired with a task-entry function that reads
+  it (`[conc.task.spawn]`). The record's storage is charged to the
+  spawning `scope`, and the scope may not release it before
+  `[conc.task.join]` completes — so the record is live for at least as
+  long as the task is. Where the storage comes from is an
+  implementation choice (a caller frame slot suffices for a spawn site
+  reached once; a site under a loop needs one record per reach, and
+  the scope's own arena is the natural home); *that* it outlives the
+  join is contract. Nothing here is a stability promise —
+  `[abi.native.unstable]` governs.
 
 ## §2 C membranes `[abi.c]`
 
