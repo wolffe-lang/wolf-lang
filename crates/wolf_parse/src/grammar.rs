@@ -668,7 +668,12 @@ fn hopeless_item_header(p: &Parser<'_>) -> bool {
 
 pub(crate) fn type_item(p: &mut Parser<'_>, m: Marker) {
     p.bump(); // `type`
-    if hopeless_item_header(p) {
+    // A `{` is recoverable for `struct`/`enum`/`trait` — a brace block
+    // IS their body, so only the name is missing. A type alias has no
+    // brace form (`type N = T`), so `type {` is hopeless, and parsing on
+    // reported it three times at the same `{`: the missing name, then
+    // the missing type after the absent `=`. Report once instead.
+    if hopeless_item_header(p) || p.at_punct(Punct::LBrace) {
         p.toplevel_error(p.here(), "expected a type name");
         p.missing();
         m.complete(p, SyntaxKind::ErrorNode);
