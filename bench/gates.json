@@ -5,8 +5,10 @@
     "contract_target": 0.5,
     "contract_target_met": false,
     "why_not_a_hard_gate": "The contract (#70 metric 1) budgets the LLVM IR handed to LLVM at <= 50% of the naive s41 lowering. Measured at s44: 57.7% over the corpus, 87.5% over the 13 hot kernels; re-measured at s79: 58.2% over the corpus (n=107) and 86.8% over the kernels, i.e. unmoved across four sprints. Asserting 0.50 today would make every commit red without telling anyone anything new, so the gate is a RATCHET at the measured value plus slack, and the shortfall is reported as an open item (see bench/loss-ledger.md, gap G1). Tighten the ceiling whenever the mid-end earns it; the contract target stays recorded here so nobody forgets what it was.",
+    "corpus_ceiling_history": "0.600 (s79, n=107) -> 0.630 (s86, n=132). The move is a POPULATION change, not a mid-end regression, and the split is recorded so it cannot be mistaken for one: the 14 conc programs that s86's `func.addr` lowering made compilable on Tier-R entered this measurement for the first time and sit at geomean 0.900 (nothing to fold — those bodies are opaque `__wolf_rt_*` calls), while the other 117 run-phase entries are still 0.582, unchanged. Anyone tempted to read this ceiling as slack should check the non-conc number first; `conc/proc_link.lu` at 1.385 is the one entry where the mid-end makes a body BIGGER, and it is filed in bench/loss-ledger.md under family F.",
     "kernel_geomean_ceiling": 0.9,
-    "corpus_geomean_ceiling": 0.6
+    "corpus_geomean_ceiling": 0.63,
+    "corpus_geomean_nonconc_reference": 0.582
   },
 
   "vectorization_witnesses": {
