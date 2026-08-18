@@ -36,9 +36,11 @@ conc/message_passing.lu: lowers
 conc/proc_cancel_defers.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
+conc/proc_spawn_loop.lu: refused — a proc spawned in a loop (its env outlives every extent here — s87)
 conc/select_seeded.lu: lowers
 conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
+conc/spawn_fanout_loop.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
 conc/when_nested.lu: not mem-clean (pre-wir rungs own it)

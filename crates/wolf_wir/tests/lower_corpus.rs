@@ -314,6 +314,17 @@ fn golden_conc_select_two_timeouts() {
     golden("conc/select_two_timeouts.lu");
 }
 
+/// s86's shape: a spawn under a loop. The golden is where the capture
+/// record's HOME is visible — a `region.alloc` inside the loop body
+/// off a `region.new` the scope minted, with the matching
+/// `region.free` after `__wolf_rt_scope_join_free` on every exit edge.
+/// A `stack.alloc` here would be the pre-s86 bug (one buffer, N tasks)
+/// and this diff is where it would show up.
+#[test]
+fn golden_conc_spawn_fanout_loop() {
+    golden("conc/spawn_fanout_loop.lu");
+}
+
 // ------------------------------------------------- the whole corpus ----
 
 /// Which files lower today. Snapshot-pinned: every advance or retreat

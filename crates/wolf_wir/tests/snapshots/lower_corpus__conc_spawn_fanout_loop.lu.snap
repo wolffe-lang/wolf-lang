@@ -1,0 +1,170 @@
+---
+source: crates/wolf_wir/tests/lower_corpus.rs
+expression: out
+---
+decl @__wolf_rt_chan_new(i64) -> ptr
+decl @__wolf_rt_chan_recv(ptr, ptr, mem.r0) -> i32
+decl @__wolf_rt_chan_send(ptr, i64) -> i32
+decl @__wolf_rt_print_begin()
+decl @__wolf_rt_print_end(i64)
+decl @__wolf_rt_print_i64(i64)
+decl @__wolf_rt_print_str(ptr, i64)
+decl @__wolf_rt_scope_join_free(ptr) -> i64
+decl @__wolf_rt_scope_new(ptr, i64) -> ptr
+decl @__wolf_rt_scope_spawn(ptr, ptr, ptr, ptr, i64, mem.r0)
+decl @__wolf_rt_task_killed() -> i8
+decl @main.task0(ptr, i64)
+decl @main.task0.entry(mut ptr, mem.r0) -> i64
+data @str.0 = "s"
+data @str.1 = "main.task0.entry"
+data @str.2 = "\n"
+
+fn @main() -> eu{i64} {
+  fact deref %11 16 : op
+  fact deref %24 8 : op
+  fact region %11 r0 : op
+  fact region %24 r1 : op
+b0:
+  %0 = iconst.i64 0
+  %1 = data.addr @str.0
+  %2 = iconst.i64 1
+  %3 = call @__wolf_rt_scope_new(%1, %2)
+  %4: ptr, %5: mem.r0 = region.new
+  %6 = iconst.i64 16
+  %7 = call @__wolf_rt_chan_new(%6)
+  %8 = iconst.i64 8
+  jmp b1(%2, %5)
+b1(%9: i64, %10: mem.r0):
+  %11: ptr, %12: mem.r0 = region.alloc %4, %6, %10
+  %13 = store.ptr %7, %11, %12
+  %14 = ptr.off %11, %8, 1
+  %15 = store.i64 %9, %14, %13
+  %16 = func.addr @main.task0.entry()
+  %17 = data.addr @str.1
+  %18 = call @__wolf_rt_scope_spawn(%3, %16, %11, %17, %6, %15)
+  jmp b2
+b2:
+  %19 = icmp.eq %9, %8
+  br %19, b3, b22
+b3:
+  %20 = iconst.i32 1
+  %21 = iconst.i32 8
+  jmp b4(%20, %0)
+b4(%22: i32, %23: i64):
+  %24: ptr, %25: mem.r1 = stack.alloc %8
+  %26, %27 = call @__wolf_rt_chan_recv(%7, %24, %25)
+  %28 = iconst.i32 0
+  %29 = icmp.eq %26, %28
+  br %29, b5, b6
+b5:
+  %30 = load.i64 %24, %27
+  %31: eu{i64} = eu.make.ok %30
+  jmp b11(%31)
+b6:
+  %32 = icmp.eq %26, %20
+  br %32, b7, b8
+b7:
+  %33: eu{i64} = eu.make.err %2
+  jmp b11(%33)
+b8:
+  %34 = call @__wolf_rt_task_killed()
+  %35 = iconst.i8 0
+  %36 = icmp.ne %34, %35
+  br %36, b9, b10
+b9:
+  %37 = iconst.i64 2
+  %38: eu{i64} = eu.make.err %37
+  ret %38
+b10:
+  %39 = iconst.i64 2
+  %40: eu{i64} = eu.make.err %39
+  jmp b11(%40)
+b11(%41: eu{i64}):
+  %42: bool = eu.is_err %41
+  br %42, b12, b13
+b12:
+  %43 = call @__wolf_rt_scope_join_free(%3)
+  region.free %4, %18
+  ret %41
+b13:
+  %44: i64 = eu.ok %41
+  %45 = iadd.chk %23, %44
+  jmp b14
+b14:
+  %46 = icmp.eq %22, %21
+  br %46, b15, b21
+b15:
+  %47 = call @__wolf_rt_scope_join_free(%3)
+  region.free %4, %18
+  %48 = icmp.ne %47, %0
+  br %48, b16, b17
+b16:
+  %49: eu{i64} = eu.make.err %47
+  ret %49
+b17:
+  call @__wolf_rt_print_begin()
+  call @__wolf_rt_print_i64(%45)
+  %50 = data.addr @str.2
+  call @__wolf_rt_print_str(%50, %2)
+  call @__wolf_rt_print_end(%2)
+  %51 = iconst.i64 204
+  %52 = icmp.eq %45, %51
+  br %52, b18, b19
+b18:
+  %53: eu{i64} = eu.make.ok %0
+  jmp b20(%53)
+b19:
+  %54: eu{i64} = eu.make.ok %2
+  jmp b20(%54)
+b20(%55: eu{i64}):
+  ret %55
+b21:
+  %56 = iadd.chk %22, %20
+  jmp b4(%56, %45)
+b22:
+  %57 = iadd.chk %9, %2
+  jmp b1(%57, %18)
+}
+
+fn @main.task0(ptr, i64) {
+b0(%0: ptr, %1: i64):
+  %2 = imul.chk %1, %1
+  %3 = call @__wolf_rt_chan_send(%0, %2)
+  %4 = iconst.i32 2
+  %5 = icmp.eq %3, %4
+  br %5, b1, b4
+b1:
+  %6 = call @__wolf_rt_task_killed()
+  %7 = iconst.i8 0
+  %8 = icmp.ne %6, %7
+  br %8, b2, b3
+b2:
+  ret
+b3:
+  jmp b4
+b4:
+  ret
+}
+
+fn @main.task0.entry(mut ptr, mem.r0) -> i64 {
+b0(%0: ptr, %1: mem.r0):
+  %2 = load.ptr %0, %1
+  %3 = iconst.i64 8
+  %4 = ptr.off %0, %3, 1
+  %5 = load.i64 %4, %1
+  call @main.task0(%2, %5)
+  %6 = iconst.i64 0
+  %7 = call @__wolf_rt_task_killed()
+  %8 = iconst.i8 0
+  %9 = icmp.ne %7, %8
+  br %9, b1, b2
+b1:
+  %10 = iconst.i64 -2
+  ret %10
+b2:
+  %11 = iconst.i64 2
+  %12 = bconst false
+  jmp b3
+b3:
+  ret %6
+}
