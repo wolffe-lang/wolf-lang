@@ -169,34 +169,6 @@ fn trail_end(n: &GreenNode) -> u32 {
     }
 }
 
-/// End of the last *non-terminator* token (with trailing trivia) — the
-/// position statement-gap measurement starts from, so the terminating
-/// newline (the `Term` token) counts as part of the gap.
-fn code_end(n: &GreenNode) -> u32 {
-    fn walk(n: &GreenNode) -> Option<u32> {
-        for c in n.children.iter().rev() {
-            match c {
-                Child::Token(t) if t.kind == K::Term || t.kind == K::Missing => {
-                    // Keep any comment attached to the `;` itself.
-                    if let Some(s) = t.trailing.last() {
-                        return Some(s.hi);
-                    }
-                }
-                Child::Token(t) => {
-                    return Some(t.trailing.last().map_or(t.span.hi, |s| s.hi));
-                }
-                Child::Node(m) => {
-                    if let Some(e) = walk(m) {
-                        return Some(e);
-                    }
-                }
-            }
-        }
-        None
-    }
-    walk(n).unwrap_or(n.span.hi)
-}
-
 /// Does this subtree contain parse damage, not counting the interiors
 /// of nested blocks (those repair themselves at their own level)?
 fn shallow_error(n: &GreenNode) -> bool {
@@ -419,6 +391,42 @@ fn pair_space(prev: K, next: K) -> bool {
 impl<'a> Fmt<'a> {
     fn slice(&self, span: Span) -> &'a [u8] {
         &self.src[span.lo as usize..span.hi as usize]
+    }
+
+    /// End of the last *non-terminator* token (with trailing trivia) —
+    /// the position statement-gap measurement starts from, so the
+    /// terminating newline (the `Term` token) counts as part of the gap.
+    fn code_end(&self, n: &GreenNode) -> u32 {
+        fn walk(f: &Fmt<'_>, n: &GreenNode) -> Option<u32> {
+            for c in n.children.iter().rev() {
+                match c {
+                    Child::Token(t) if t.kind == K::Term || t.kind == K::Missing => {
+                        // Keep a COMMENT attached to the `;` itself, but
+                        // never plain whitespace: formatting deletes the
+                        // whitespace, so anchoring on it made the gap
+                        // depend on bytes the next pass removes. A `;`
+                        // with a trailing tab anchored *after* the `;`
+                        // while the same `;` without one skipped back
+                        // past it, and the two passes then measured
+                        // different gaps — one blank line apart.
+                        if let Some(s) = t.trailing.iter().rev().find(|s| is_comment(f.slice(**s)))
+                        {
+                            return Some(s.hi);
+                        }
+                    }
+                    Child::Token(t) => {
+                        return Some(t.trailing.last().map_or(t.span.hi, |s| s.hi));
+                    }
+                    Child::Node(m) => {
+                        if let Some(e) = walk(f, m) {
+                            return Some(e);
+                        }
+                    }
+                }
+            }
+            None
+        }
+        walk(self, n).unwrap_or(n.span.hi)
     }
 
     fn newlines_between(&self, lo: u32, hi: u32) -> usize {
@@ -761,7 +769,7 @@ impl<'a> Fmt<'a> {
                     // own terminating newline counts as part of it.
                     // From `trail_end` it ate one newline per pass —
                     // two blank lines became one, then none.
-                    let prev = ordered.last().map(|(n, _)| code_end(n)).or(header_end);
+                    let prev = ordered.last().map(|(n, _)| self.code_end(n)).or(header_end);
                     if let Some(prev) = prev {
                         // Preserve blank (capped) before the tail
                         // comments, measured from the first comment the
@@ -930,7 +938,7 @@ impl<'a> Fmt<'a> {
                         bodies.push(Doc::Concat(Vec::new()));
                         let _ = j;
                     }
-                    prev_end = code_end(stmts[end]);
+                    prev_end = self.code_end(stmts[end]);
                     i = end + 1;
                     continue;
                 }
@@ -940,7 +948,7 @@ impl<'a> Fmt<'a> {
                     .contains(&(stmts[i].span.lo, stmts[i].span.hi))
                 {
                     bodies.push(Doc::Concat(Vec::new()));
-                    prev_end = code_end(stmts[i]);
+                    prev_end = self.code_end(stmts[i]);
                     i += 1;
                     // The separator before a dropped stmt is dropped
                     // too.
@@ -950,7 +958,7 @@ impl<'a> Fmt<'a> {
                 }
                 self.stmt(stmts[i], &mut d);
                 bodies.push(Doc::Concat(d));
-                prev_end = code_end(stmts[i]);
+                prev_end = self.code_end(stmts[i]);
                 i += 1;
             }
         }
@@ -1013,7 +1021,10 @@ impl<'a> Fmt<'a> {
                     .iter()
                     .find(|s| is_comment(self.slice(**s)))
                     .map(|s| s.lo);
-                let prev = stmts.last().map(|s| code_end(s)).unwrap_or(lbrace.span.hi);
+                let prev = stmts
+                    .last()
+                    .map(|s| self.code_end(s))
+                    .unwrap_or(lbrace.span.hi);
                 inner.push(if first_lo.is_some_and(|lo| self.blank_between(prev, lo)) {
                     Doc::Blankline
                 } else {
@@ -2072,7 +2083,7 @@ impl<'a> Fmt<'a> {
             } else {
                 self.arm(arm, &mut inner);
             }
-            prev_end = code_end(arm);
+            prev_end = self.code_end(arm);
         }
         out.push(Doc::Indent(inner));
         out.push(Doc::Hardline);
@@ -2473,14 +2484,14 @@ impl<'a> Fmt<'a> {
                     end += 1;
                 }
                 inner.push(self.verbatim(lead_start(members[start]), trail_end(members[end])));
-                prev_end = code_end(members[end]);
+                prev_end = self.code_end(members[end]);
                 i = end + 1;
                 continue;
             }
             let mut d = Vec::new();
             self.stmt(members[i], &mut d);
             inner.push(Doc::Concat(d));
-            prev_end = code_end(members[i]);
+            prev_end = self.code_end(members[i]);
             i += 1;
         }
         if let Some(c) = close {
