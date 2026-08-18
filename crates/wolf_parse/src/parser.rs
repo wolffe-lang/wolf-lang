@@ -222,6 +222,31 @@ impl<'a> Parser<'a> {
     }
 
     /// Is the current token a declaration start (sync point)?
+    /// Does a line break sit between these two offsets?
+    pub(crate) fn crosses_line(&self, from: u32, to: u32) -> bool {
+        let (from, to) = (from as usize, (to as usize).min(self.src.len()));
+        from < to && self.src[from..to].contains(&b'\n')
+    }
+
+    /// A keyword that only ever opens a TOP-LEVEL item. `let`/`var`/
+    /// `const` are excluded: they are ordinary statements inside a
+    /// block, so they say nothing about where the block ends.
+    pub(crate) fn at_toplevel_decl_start(&self) -> bool {
+        matches!(
+            self.current(),
+            TokenKind::Kw(
+                Keyword::Fn
+                    | Keyword::Struct
+                    | Keyword::Enum
+                    | Keyword::Trait
+                    | Keyword::Impl
+                    | Keyword::Use
+                    | Keyword::Import
+                    | Keyword::Extern
+            )
+        )
+    }
+
     pub(crate) fn at_decl_start(&self) -> bool {
         match self.current() {
             TokenKind::PoundBracket => true,

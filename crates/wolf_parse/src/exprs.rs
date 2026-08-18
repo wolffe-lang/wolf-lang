@@ -539,11 +539,29 @@ fn expr_bp_inner(p: &mut Parser<'_>, min_bp: u8, ctx: Ctx) -> Option<CompletedMa
             }
             TokenKind::Punct(Punct::Dot) => {
                 let m = lhs.precede(p);
+                let dot_hi = p.current_span().hi;
                 p.bump(); // `.`
                 // member ::= IDENT | INT | reserved_kw — member position
                 // is keyword-transparent (`.take(n)`, `s.spawn(…)`).
                 let is_ident = p.at(TokenKind::Ident);
+                // ...but not across a line break, and not for a keyword
+                // that only ever opens a top-level item. A `.` at end of
+                // line suppresses terminator insertion so `x\n.f()`
+                // chains, and a damaged `}` therefore let the `.` reach
+                // over a blank line and swallow the `fn` beginning the
+                // NEXT declaration — the rest of the file became one
+                // member access. Same-line keyword members still parse.
+                let steals_item =
+                    p.at_toplevel_decl_start() && p.crosses_line(dot_hi, p.current_span().lo);
                 match p.current() {
+                    _ if steals_item => {
+                        p.error(
+                            codes::EXPECTED_TOKEN,
+                            p.here(),
+                            "expected a member name after `.`",
+                        );
+                        p.missing();
+                    }
                     TokenKind::Ident | TokenKind::Int | TokenKind::Kw(_) => p.bump(),
                     _ => {
                         p.error(
