@@ -1239,6 +1239,18 @@ struct ScopeFrame<'t> {
     /// edge crossing it ([conc.task.join]); the fall-through exit
     /// clears this and re-raises the tag itself.
     conc_scope: Option<Value>,
+    /// s86: this task scope owns an ENV ARENA — the region capture
+    /// records are bump-allocated in when a spawn sits under a loop
+    /// (a frame slot would be one buffer shared by every iteration).
+    /// It is the same handle as [`ScopeFrame::region`]; the field
+    /// exists so `pack_task_env` can find the *task* scope's arena
+    /// without mistaking an enclosing `region { }` for it.
+    task_env: Option<(RegionId, Value)>,
+    /// s86: the loop-stack depth when this task scope opened. A spawn
+    /// needs the arena exactly when it runs at a GREATER depth — one
+    /// frame slot cannot serve two live tasks, and a loop is the only
+    /// way to reach the same spawn site twice before the join.
+    loops_at_open: usize,
 }
 
 /// Strip a `move`/`copy` prefix off an argument expression.
@@ -3136,7 +3148,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 },
             ));
         }
-        self.scopes.last_mut().expect("scope").conc_scope = Some(handle);
+        {
+            let depth = self.loops.len();
+            let f = self.scopes.last_mut().expect("scope");
+            f.conc_scope = Some(handle);
+            f.loops_at_open = depth;
+        }
+        // s86: the scope's ENV ARENA, minted only when the body spawns
+        // from inside a loop. It rides `ScopeFrame::region`, so the X4
+        // cleanup chain frees it on every early-exit edge — and the
+        // chain already orders the join AHEAD of the free, which is
+        // the whole safety argument: no task can still be reading a
+        // capture record when its arena dies.
+        if spawns_under_a_loop(self.src, body.syntax()) {
+            let (r, h) = self.b.ins_region_new();
+            let f = self.scopes.last_mut().expect("scope");
+            f.region = Some((r, h));
+            f.task_env = Some((r, h));
+        }
         let out = self.lower_block(body, want);
         let flow = match out {
             Ok(f) => f,
@@ -3148,7 +3177,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // Fall-through: join here, then re-raise a failing child's
         // tag into the enclosing row ([conc.task.fail] — the same
         // width discipline as `?`; sema checked it at the spawn).
-        self.scopes.last_mut().expect("scope").conc_scope = None;
+        let env_arena = {
+            let f = self.scopes.last_mut().expect("scope");
+            f.conc_scope = None;
+            f.task_env = None;
+            f.region.take()
+        };
         self.scopes.pop();
         if matches!(flow, Flow::Diverged) {
             return Ok(Flow::Diverged);
@@ -3156,6 +3190,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let tag = self
             .rt_call("__wolf_rt_scope_join_free", &[handle], Some(types::I64))
             .expect("join tag");
+        // Joined: every child is finished, so the arena its capture
+        // records live in is dead. Freed HERE — ahead of the re-raise
+        // fork — so both the failing and the clean edge free it once.
+        if let Some((r, h)) = env_arena {
+            self.b.ins_region_free(r, h);
+        }
         let z = self.b.iconst(types::I64, 0);
         let failed = self
             .b
@@ -3268,12 +3308,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         recv: &'t GreenNode,
         e: &'t GreenNode,
     ) -> R<Flow> {
-        if !self.loops.is_empty() {
-            return Err(refuse(
-                "spawn inside a loop (env-slot lifetime, c05 follow-up)",
-                e.span,
-            ));
-        }
         let scope_h = flow_val!(self.lower_expr(recv));
         let Some(scope_h) = scope_h else {
             return Err(refuse("a spawn without a scope handle", recv.span));
@@ -3295,7 +3329,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .get(&e.span)
             .map(|cs| cs.iter().map(|c| (c.name.clone(), c.ty)).collect())
             .unwrap_or_default();
-        let (env, env_region, layout) = self.pack_task_env(&caps, e.span)?;
+        let arena = self.task_env_arena(recv, e.span)?;
+        let (env, env_region, layout) = self.pack_task_env(&caps, arena, e.span)?;
         let task_no = self.pending_tasks.len();
         let base = self.b.func.name.clone();
         let body_name = format!("{base}.task{task_no}");
@@ -3399,12 +3434,61 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
-    /// Evaluate + pack values into a fresh stack env slot; returns
+    /// Where THIS spawn's capture record must live (s86).
+    ///
+    /// `Ok(None)` — a frame slot is sound: the spawn site is reached at
+    /// most once before the scope joins, and the join dominates the
+    /// frame's death. `Ok(Some(arena))` — the site sits under a loop
+    /// opened after its scope, so every reach needs its own record.
+    /// `Err` — it sits under such a loop and the owning scope has no
+    /// arena, which happens only when the receiver is not the scope
+    /// frame we are standing in (a spawn into an ENCLOSING scope from
+    /// inside a nested one). Refused by name; never guessed.
+    fn task_env_arena(&self, recv: &'t GreenNode, span: Span) -> R<Option<(RegionId, Value)>> {
+        // By NAME, not by handle value: inside a loop the handle reads
+        // back as a block parameter, so `Value` identity is not the
+        // scope's identity — the binding is.
+        let owner = if recv.kind == SyntaxKind::PathExpr {
+            let name = self.text(recv.span);
+            self.scopes
+                .iter()
+                .rev()
+                .find(|f| f.conc_scope.is_some() && f.binds.iter().any(|(n, _)| *n == name))
+        } else {
+            None
+        };
+        let Some(owner) = owner else {
+            // The handle came from somewhere other than a named scope
+            // frame in this function (a scope value passed in, say).
+            // Sound only outside a loop.
+            return if self.loops.is_empty() {
+                Ok(None)
+            } else {
+                Err(refuse(
+                    "a task spawned in a loop through a scope handle this function did not open",
+                    span,
+                ))
+            };
+        };
+        if self.loops.len() <= owner.loops_at_open {
+            return Ok(None);
+        }
+        match owner.task_env {
+            Some(a) => Ok(Some(a)),
+            None => Err(refuse(
+                "a task spawned in a loop into an enclosing scope (its arena is not in scope)",
+                span,
+            )),
+        }
+    }
+
+    /// Evaluate + pack values into a fresh env record; returns
     /// (env ptr, its region, (wir types, offsets)).
     #[allow(clippy::type_complexity)]
     fn pack_task_env(
         &mut self,
         caps: &[(String, TyId)],
+        arena: Option<(RegionId, Value)>,
         span: Span,
     ) -> R<(Value, RegionId, (Vec<TypeId>, Vec<u64>))> {
         let mut wtys = Vec::with_capacity(caps.len());
@@ -3428,7 +3512,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             offs.push(size);
             size += sz.next_multiple_of(8);
         }
-        let (region, slot) = self.rt_slot(size.max(8));
+        // s86: where the capture record lives. A frame slot when the
+        // spawn is straight-line (the scope joins before the frame
+        // dies); the task scope's arena when it sits under a loop, so
+        // every iteration hands its task a record of its own.
+        let (region, slot) = match arena {
+            Some((r, h)) => {
+                let n = self.b.iconst(types::I64, size.max(8) as i64);
+                let p = self.b.ins_region_alloc(r, h, n);
+                self.b
+                    .func
+                    .add_fact(FactData::new(FactKind::Region(p, r), Just::DefOp));
+                self.b.func.add_fact(FactData::new(
+                    FactKind::Deref(p, DerefSize::Const(size.max(8))),
+                    Just::DefOp,
+                ));
+                (r, p)
+            }
+            None => self.rt_slot(size.max(8)),
+        };
         for (i, (name, _)) in caps.iter().enumerate() {
             let v = match self.lookup(name) {
                 Some(LocalBind::Val { var, .. }) => self.b.use_var(var),
@@ -3811,9 +3913,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// (already-lowered) named callee, and spawn under the root
     /// supervisor with the three-outcome return protocol.
     fn lower_proc_spawn(&mut self, e: &'t GreenNode) -> R<Flow> {
+        // s86 gave TASK spawn a per-reach capture record (the scope's
+        // arena — a scope is the extent that bounds one). A proc has no
+        // such extent: it outlives its spawner by design, under the
+        // ROOT supervisor, so nothing here is entitled to free its env.
+        // Naming that as the reason rather than reusing the task
+        // wording, since the task wording is no longer true.
         if !self.loops.is_empty() {
             return Err(refuse(
-                "spawn inside a loop (env-slot lifetime, c05 follow-up)",
+                "a proc spawned in a loop (its env outlives every extent here — s87)",
                 e.span,
             ));
         }
@@ -11349,6 +11457,69 @@ fn int_bits(t: TypeId) -> Option<u32> {
         types::I64 => Some(64),
         _ => None,
     }
+}
+
+/// Is this call a task spawn — `<expr>.spawn(fn() { … })`?
+///
+/// A syntactic test on purpose: it runs before any lowering, so no
+/// type is available. It over-approximates in exactly one direction
+/// (some other `spawn` method taking a closure), and the cost of a
+/// false positive is one unused arena, never a wrong program.
+fn is_task_spawn_call(src: &[u8], n: &GreenNode) -> bool {
+    if n.kind != SyntaxKind::CallExpr {
+        return false;
+    }
+    let Some(d) = CallExpr::cast(n) else {
+        return false;
+    };
+    let Some(callee) = d.callee() else {
+        return false;
+    };
+    let Some(member) = wolf_ast::MemberExpr::cast(callee).and_then(|m| m.member()) else {
+        return false;
+    };
+    let lo = member.span.lo as usize;
+    let hi = member.span.hi as usize;
+    if src.get(lo..hi) != Some(b"spawn") {
+        return false;
+    }
+    d.args()
+        .into_iter()
+        .flat_map(|l| l.args())
+        .filter_map(Arg::value)
+        .any(|a| a.kind == SyntaxKind::ClosureExpr)
+}
+
+/// Does this scope body spawn a task from inside a loop?
+///
+/// The question decides where the capture records live (s86). Outside
+/// a loop a spawn's env is a frame slot: the scope joins before the
+/// frame dies, so the task's pointer is live for exactly as long as
+/// the task is. Inside a loop that reasoning fails — one slot, N
+/// tasks, all of them reading the last iteration's captures — so the
+/// scope grows an arena and each iteration bump-allocates its own
+/// record (contract target 2: "a capture record allocated in the
+/// scope's region").
+///
+/// The scan does NOT stop at a nested `scope { }`: a spawn there may
+/// still name THIS scope's handle, and the receiver decides which
+/// arena it allocates in, not the lexical nesting. Over-minting costs
+/// one unused arena; under-minting costs a refusal at the spawn.
+fn spawns_under_a_loop(src: &[u8], body: &GreenNode) -> bool {
+    fn any_spawn(src: &[u8], n: &GreenNode) -> bool {
+        is_task_spawn_call(src, n) || n.nodes().any(|c| any_spawn(src, c))
+    }
+    fn walk(src: &[u8], n: &GreenNode) -> bool {
+        if matches!(
+            n.kind,
+            SyntaxKind::WhileExpr | SyntaxKind::LoopExpr | SyntaxKind::ForExpr
+        ) && any_spawn(src, n)
+        {
+            return true;
+        }
+        n.nodes().any(|c| walk(src, c))
+    }
+    walk(src, body)
 }
 
 /// Does this subtree contain any construct that forces new blocks?

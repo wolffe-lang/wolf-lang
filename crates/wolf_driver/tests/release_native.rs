@@ -138,10 +138,13 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
         };
         checked += 1;
         // [proto.record.unsupported]'s law applies between tiers too: a
-        // named refusal on either side is conservatism, never divergence
-        // (s73 runs conc on the debug tier while the release tier refuses
-        // it by name until c09 lowers task entries). Both-execute-and-
-        // differ is the only divergence.
+        // named refusal on either side is conservatism, never divergence.
+        // s86 emptied this bucket: the release tier's last standing
+        // refusal was `func.addr`, which took every conc program with
+        // it, and lowering it left NOTHING here that only one tier can
+        // run. The branch stays because the law does, not because it
+        // currently fires. Both-execute-and-differ is the only
+        // divergence.
         if release.0 == "unsupported" || debug.0 == "unsupported" {
             conservatism += 1;
             continue;
@@ -164,9 +167,12 @@ fn release_tier_matches_debug_tier_on_the_corpus() {
     // ratchets to 113 — the corpus grew again, and four `phase: wir`
     // headers that both native tiers had been executing all along were
     // advanced to `phase: run`, which is how they entered this set.
+    // s86 ratchets to 132, which is EVERY run-phase entry: the release
+    // tier's conc refusal is gone, so the compared set and the checked
+    // set are now the same set.
     assert!(
-        compared >= 113,
-        "the two tiers must stay compared on at least 113 files \
+        compared >= 132,
+        "the two tiers must stay compared on at least 132 files \
          (compared {compared} of {checked}; {conservatism} refused) — \
          if a refusal grew legitimately, raise the floor deliberately"
     );

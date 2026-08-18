@@ -788,8 +788,45 @@ measure their own theses and are the first thing to add. The string- and
 allocation-shaped ones (`b1`, `b2`, `d4`) should wait for G2 and G5, for the
 same reason the others waited for G1.
 
-## Family F cannot be measured at all
+## Family F — UNBLOCKED at s86 (was: cannot be measured at all)
 
-Unchanged. The release tier refuses `Opcode::FuncAddr`, so no wolf task,
-channel or proc program compiles through Tier-R. s33's expectation of M2
-evidence from this suite is blocked, not pending.
+Through s85 this section read: "the release tier refuses
+`Opcode::FuncAddr`, so no wolf task, channel or proc program compiles
+through Tier-R. s33's expectation of M2 evidence from this suite is
+blocked, not pending."
+
+s86 lowered `func.addr` (a module function's address is a link-time
+constant, exactly like `data.addr`), and the block is gone: every conc
+corpus file now compiles and runs through Tier-R at the debug tier's
+verdict and stdout. Family F kernels are writable. They are still not
+WRITTEN — that is the next sprint's work, not this one's — but the
+reason they were absent no longer exists.
+
+**First measurement, and it is not flattering.** With the release tier
+able to compile them, the 14 conc corpus programs entered the
+IR-volume gate's population for the first time, and they measure
+**geomean 0.900** of naive lowering against **0.582** for the other
+117 run-phase entries (measured 2026-08-16 with the gate's own
+`--emit=llvm-ir` on/off procedure). The mid-end barely shrinks a
+scheduler-bound body, which is unsurprising — those bodies are mostly
+opaque `__wolf_rt_*` calls with nothing to fold — but two entries are
+worth naming:
+
+| file | ratio | note |
+|------|-------|------|
+| `conc/proc_link.lu` | **1.385** | the mid-end makes it BIGGER |
+| `conc/proc_kill_defers.lu` | 1.008 | net-neutral |
+| the other 12 | 0.815–1.000 | no measurable win |
+
+`proc_link` growing by 38% is a real finding and a new open item: a
+pass (inlining is the first suspect, since the synthesized task bodies
+are small and single-caller) is expanding a body the mid-end cannot
+then re-shrink. Classification **(a)** — the facts exist, the pass
+policy is wrong for this shape. It costs nothing today because Tier-R
+conc has no benchmark riding on it yet; it will cost something the
+moment family F is written, which is the argument for writing it.
+
+The corpus IR-volume ratchet moved 0.600 → 0.630 for this population
+change, with both sub-geomeans recorded in `bench/gates.json` so the
+gate cannot be read as having gotten weaker for the code it was
+already watching: the non-conc population is 0.582, unchanged.

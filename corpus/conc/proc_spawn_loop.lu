@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: conc.proc.root, conc.task.root
+//! The s86/s87 boundary, made checkable instead of asserted in prose.
+//!
+//! s86 taught TASK spawn to run under a loop: a task belongs to a
+//! `scope`, the scope is an extent, and the extent owns an arena the
+//! per-iteration capture record lives in (`spawn_fanout_loop.lu` is
+//! the witness). A PROC has no such extent — it is a failure domain
+//! under the ROOT supervisor and outlives its spawner by design, so
+//! nothing at the spawn site is entitled to free its environment.
+//!
+//! So this file stops at `mem` with a NAMED refusal — "a proc spawned
+//! in a loop (its env outlives every extent here — s87)" — and the
+//! header records where the surface ends. When s87 gives procs their
+//! own answer, this header advances to `run` in the same commit, and
+//! the diff is the sprint's evidence.
+
+fn worker(n: int) -> int { n }
+
+fn main() -> !int {
+    var seen = 0
+    for i in 1..=3 {
+        let w = spawn proc worker(i)
+        seen += 1
+    }
+    if seen == 3 { 0 } else { 1 }
+}

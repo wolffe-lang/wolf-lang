@@ -75,6 +75,40 @@ fn llvm_region_infer_tree_transform() {
     }
 }
 
+/// s86: concurrency on the release tier.
+///
+/// `func.addr` is the compiled task entry's address, and until s86 it
+/// was this backend's last standing refusal — it took every program
+/// containing a `spawn` with it, so `conform-run --native --release`
+/// recorded `unsupported` at `wir` for the whole conc corpus. It
+/// lowers as a link-time constant, exactly like `data.addr`: the
+/// symbol IS the `ptr` operand, so no instruction is emitted for it.
+/// The fixture is the spawn-under-a-loop shape, so the golden also
+/// shows the per-iteration capture record (`region.alloc` inside the
+/// loop) reaching `__wolf_rt_scope_spawn`.
+#[test]
+fn llvm_task_env_loop() {
+    if let Some(t) = ir_of_fixture("task_env_loop") {
+        // The address handed to the runtime must be the very symbol
+        // this module defines — a `declare`d stand-in would link, run,
+        // and call the wrong body.
+        let sym = t
+            .lines()
+            .find_map(|l| l.strip_prefix("define internal i64 @"))
+            .and_then(|l| l.split_once('(').map(|(s, _)| s.trim().to_string()))
+            .expect("the task entry is defined in this module");
+        let spawn = t
+            .lines()
+            .find(|l| l.contains("@\"__wolf_rt_scope_spawn\"("))
+            .expect("the spawn call is emitted");
+        assert!(
+            spawn.contains(&format!("ptr @{sym},")),
+            "func.addr must pass the DEFINED symbol {sym}: {spawn}"
+        );
+        insta::assert_snapshot!("llvm_task_env_loop", t);
+    }
+}
+
 // ---- per-fact goldens ------------------------------------------------------
 
 /// `mut`/`read` param modes + deref/noalias/frozen theorem facts →
