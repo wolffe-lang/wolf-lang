@@ -5,8 +5,9 @@
 //! [`Lend::Lendable`] is what makes `wolf_wir::lower` hand a callee the
 //! caller's `{ptr, len}` instead of a copy, so its whitelist is the
 //! thing that must never grow by accident. `Opaque` is the pre-s89
-//! behaviour (materialize) and is always safe; `Escapes` is E1015 and
-//! only ever improves a diagnostic. These tests pin the boundary from
+//! behaviour (materialize) and is always safe; `Escapes` materializes
+//! too and is W1004 (s92 — E1015 refused it through s91), so it only
+//! ever improves a diagnostic. These tests pin the boundary from
 //! both sides: the seven read positions of s77's lowering comment on
 //! one side, and the shapes that must NOT be lendable on the other.
 
@@ -170,7 +171,7 @@ fn two_parameters_lend_independently() {
     opaque(src, "f", 2);
 }
 
-// --------------------------------------------- provable escapes (E1015) ----
+// --------------------------------------------- provable escapes (W1004) ----
 
 #[test]
 fn returning_the_parameter_escapes() {
@@ -301,4 +302,57 @@ fn the_len_field_is_the_only_field_a_view_has() {
     // outside the modelled surface and materializes rather than
     // guessing.
     lendable("fn f(bs: List[int]) -> int { bs.len }\n", "f", 0);
+}
+
+// ---------------------------------------- the nine std.bytes functions ----
+
+/// s89 measured "eight of nine `std.bytes` functions stop copying" —
+/// every function that takes a `List[int]` is `Lendable` except
+/// `to_str`, which hands its bytes to the `str_from_utf8` builtin and
+/// so is `Opaque` (materializes). That number lived only in the s89
+/// merge message; s92 changes what an `Escapes` verdict DOES and must
+/// prove the verdicts themselves did not move, so it is a fixture now.
+/// The bodies are `std/bytes/bytes.lu` at the sc12 pin (02c1e88), doc
+/// comments stripped, embedded so this test does not depend on a
+/// sibling checkout — if std's bodies change, THIS file stays what s89
+/// measured, and a new measurement is a new fixture with its own date.
+#[test]
+fn eight_of_nine_std_bytes_functions_lend() {
+    let src = include_str!("fixtures/std_bytes_at_s89.lu");
+    let takes_bytes = [
+        "len",
+        "is_empty",
+        "at",
+        "slice",
+        "find",
+        "starts_with",
+        "ends_with",
+        "to_str",
+        "is_utf8",
+    ];
+    let mut lent = Vec::new();
+    let mut copied = Vec::new();
+    for name in takes_bytes {
+        match lend(src, name, 0) {
+            Lend::Lendable => lent.push(name),
+            Lend::Opaque => copied.push(name),
+            Lend::Escapes(_) => panic!("{name}: no std.bytes function keeps its parameter"),
+        }
+    }
+    assert_eq!(lent.len(), 8, "eight lend: {lent:?}, copied: {copied:?}");
+    assert_eq!(
+        copied,
+        ["to_str"],
+        "to_str is the one that materializes (a builtin takes it)"
+    );
+    // `find`, `starts_with`, `ends_with` take a SECOND `List[int]`;
+    // those lend too — the count above is per function, this is per
+    // parameter, and s89 claimed the former.
+    for name in ["find", "starts_with", "ends_with"] {
+        assert_eq!(
+            lend(src, name, 1),
+            Lend::Lendable,
+            "{name}'s second list lends"
+        );
+    }
 }
