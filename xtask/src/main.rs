@@ -624,9 +624,18 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// refuses structured concurrency by name (C1, deferred), so the two
 /// native lanes and the checked lane remain un-nested — which is
 /// exactly the fact this gate exists to keep visible.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 138), ("native", 134), ("release", 134)];
-const UNION_FLOOR: usize = 154;
-const ALL_THREE_FLOOR: usize = 118;
+/// Ratcheted by s92, over 273 entries: every number moves by exactly
+/// one, and `all-three` moves for the first time since it was set. One
+/// file did it — `memory/byte_view_escape.lu` was `fail(E1015)`, a
+/// refusal every lane agreed on, and is now a run every lane agrees on
+/// (the lend degrades to a copy and warns W1004). A file that was
+/// refused everywhere and now runs everywhere is the one shape that
+/// raises the intersection, so +1 on `all-three` is not a floor
+/// getting looser; it is a rule the compiler stopped enforcing because
+/// the program had a meaning all along.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 139), ("native", 135), ("release", 135)];
+const UNION_FLOOR: usize = 155;
+const ALL_THREE_FLOOR: usize = 119;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
