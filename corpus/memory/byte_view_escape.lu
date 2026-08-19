@@ -1,27 +1,34 @@
-//! check: fail(E1015)
-//! phase: typecheck
-//! conforms: mem.str.view.lend
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.str.view.lend, diag.sev.warn
+//! warns: W1004
 //!
-//! s89's soundness guard (wolf-lang#86). `s.bytes()` in an argument
-//! position LENDS the string's own storage — that is what makes the
-//! call free — and a lend that outlives the call it was scoped to is a
-//! dangling `{ptr, len}`, the fast version of no answer at all.
+//! s89's soundness guard (wolf-lang#86), turned around by s92 (#107).
+//! `s.bytes()` in an argument position offers the string's own storage
+//! as a LEND — that is what makes the call free — and a lend that
+//! outlives the call it was scoped to would be a dangling `{ptr, len}`.
 //!
 //! `keep` returns its parameter, so the bytes would leave with it.
-//! Keeping that out is the checker's job and this is the witness that
-//! it does it: the error lands on the LEND, names the use that would
-//! outlive it, and prescribes the one-word fix — bind the bytes first
-//! (`let bs = s.bytes()`), because a `let` materializes and the bound
-//! list is an ordinary value the callee may own.
+//! Through s91 the checker REFUSED this (E1015). But the compiler had a
+//! safe compilation the whole time — materialize the bytes into a
+//! `List[int]` at the call, bit-for-bit what every call did before views
+//! crossed calls, and exactly what it already does for a callee whose
+//! use it cannot classify. Refusing a program with a safe compilation
+//! is not this language's style (#108: E1015 was the only rule in the
+//! static-conservatism class doing so), so now the bytes are copied and
+//! the compiler says so once, as W1004: it lands on the LEND, names the
+//! use that outlives it, and prescribes the one-word fix — bind first
+//! (`let bs = s.bytes()`) — for anyone who wanted the copy said out
+//! loud, and names the callee as the thing to change for anyone who
+//! wanted the lend.
 //!
-//! The rule is deliberately narrow. A callee whose use of the parameter
-//! this analysis cannot classify is NOT an error: the caller
-//! materializes for it, exactly as every caller did before views
-//! crossed calls. Only a provable escape is refused, so the diagnostic
-//! never stands between a program and a meaning it already had.
+//! This is a better witness than the refusal was: it proves the
+//! fallback WORKS (the program runs and prints `4`) rather than that
+//! the checker fires. Both implementations run it now — lupin always
+//! did — so the file stops being a divergence at all.
 //!
-//! Its sibling `corpus/strings/byte_view_lend.lu` is the accepting
-//! half: the same call shape, with callees that only read.
+//! Its sibling `corpus/strings/byte_view_lend.lu` is the free half: the
+//! same call shape, with callees that only read, and no warning.
 
 fn keep(bs: List[int]) -> List[int] {
     bs
@@ -29,7 +36,7 @@ fn keep(bs: List[int]) -> List[int] {
 
 fn main() -> !int {
     let s = "wolf"
-    let held = keep(s.bytes())     // ERROR E1015: the lend outlives the call
+    let held = keep(s.bytes())     // WARNING W1004: kept past the call, so copied
     print("{held.len}")
     0
 }

@@ -121,7 +121,7 @@ lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
-memory/byte_view_escape.lu: not mem-clean (pre-wir rungs own it)
+memory/byte_view_escape.lu: lowers
 memory/checked_unsigned.lu: lowers
 memory/defer_order.lu: lowers
 memory/div_zero.lu: lowers
