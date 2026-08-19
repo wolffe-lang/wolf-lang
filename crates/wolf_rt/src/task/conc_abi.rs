@@ -66,14 +66,26 @@ pub extern "C" fn __wolf_rt_task_killed() -> i8 {
 /// any other value → `error(tag)`. (The frozen s34 entry keeps its
 /// two-outcome contract for the surfaces that froze against it.)
 ///
+/// The env is COPIED here and owned by the proc (s87,
+/// `[abi.native.procenv]`). A task's capture record is charged to its
+/// `scope`, which joins before the record dies; a proc has no such
+/// extent — it is a failure domain under the root supervisor and
+/// outlives its spawner by design — so nothing at the spawn site is
+/// entitled to keep the record alive, and the only frame that can own
+/// it is the proc's own. The copy is `env_len` bytes; it lives until
+/// the body returns. `env_len == 0` spawns with a null env (a body
+/// that takes no arguments).
+///
 /// # Safety
 ///
-/// `entry` must be callable with `env` (which moves — D14); `name`
-/// must address `name_len` readable bytes when non-null.
+/// `env` must address `env_len` readable bytes when `env_len > 0`;
+/// `entry` must be callable with a pointer to a copy of those bytes;
+/// `name` must address `name_len` readable bytes when non-null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_proc_spawn_outcome(
     entry: unsafe extern "C" fn(*mut c_void) -> i64,
-    env: *mut c_void,
+    env: *const c_void,
+    env_len: i64,
     name: *const u8,
     name_len: i64,
 ) -> u64 {
@@ -83,16 +95,34 @@ pub unsafe extern "C" fn __wolf_rt_proc_spawn_outcome(
     } else {
         name
     };
-    let env = pool::SendPtr(env);
+    // The proc's own copy of its environment. Read at the spawn site,
+    // before this returns, so the caller's slot may be reused the
+    // instant it has the id back — a spawn under a loop is sound.
+    let owned: Box<[u8]> = if env_len > 0 && !env.is_null() {
+        // SAFETY: caller contract — `env` addresses `env_len` bytes.
+        unsafe { std::slice::from_raw_parts(env.cast::<u8>(), env_len as usize) }.into()
+    } else {
+        Box::new([])
+    };
     spawn_proc(&name, move |_| {
-        let moved_env = env;
+        // The copy moves into the proc task with the closure and is
+        // dropped when the body returns — no registry, no global
+        // (D15); the proc frame is the owner.
+        let mut owned = owned;
+        let env_ptr: *mut c_void = if owned.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            owned.as_mut_ptr().cast()
+        };
         // C ABI frames below: suppress the kill-teardown unwind for
         // their whole extent (`[conc.cancel.c]`); the compiled body
         // carries its own teardown branch.
         let tag = pool::suppress_kill_unwind(|| {
-            // SAFETY: caller contract — lowered proc body + moved env.
-            unsafe { entry(moved_env.0) }
+            // SAFETY: caller contract — lowered proc body + the proc's
+            // own copy of its env.
+            unsafe { entry(env_ptr) }
         });
+        drop(owned);
         match tag {
             0 => ProcOutcome::Value(0),
             CANCEL_TAG => ProcOutcome::Cancelled,
@@ -158,11 +188,71 @@ mod tests {
         ] {
             // SAFETY: entry points used per their documented contract.
             let id = unsafe {
-                __wolf_rt_proc_spawn_outcome(body, std::ptr::null_mut(), b"t".as_ptr(), 1)
+                __wolf_rt_proc_spawn_outcome(body, std::ptr::null(), 0, b"t".as_ptr(), 1)
             };
             let m = monitor(id).expect("fresh proc");
             let got = ProcExit::decode(m.recv().expect("one delivery"));
             assert_eq!(got, want);
+        }
+    }
+
+    /// The proc owns its env (s87, `[abi.native.procenv]`): the
+    /// spawner's bytes may be overwritten the instant the id is back,
+    /// and every proc still reads the values it was spawned with.
+    ///
+    /// Deterministic in both directions, not a race that usually
+    /// passes: each body WAITS on a gate before it reads its env, the
+    /// test clobbers the slot, then opens the gate. A pass-through
+    /// runtime (the pre-s87 shape) reads the clobbered slot every
+    /// time; the copying runtime reads its own bytes every time. Three
+    /// spawns through ONE slot — the shape of `spawn proc` in a loop.
+    #[test]
+    fn proc_env_is_copied_at_spawn() {
+        static GATE: AtomicUsize = AtomicUsize::new(0);
+        unsafe extern "C" fn body(env: *mut c_void) -> i64 {
+            while GATE.load(SeqCst) == 0 {
+                std::thread::yield_now();
+            }
+            // The env word comes back as the "error tag" so the
+            // monitor can observe it.
+            // SAFETY: env addresses one i64 (the proc's copy).
+            unsafe { *env.cast::<i64>() }
+        }
+        // The one slot every proc is spawned from. Written and
+        // overwritten through a raw pointer — the reads happen in the
+        // proc bodies (or, under a pass-through runtime, would), which
+        // the compiler cannot see.
+        let mut slot: i64 = 0;
+        let slot_p: *mut i64 = &mut slot;
+        let mut ids = Vec::new();
+        for want in [11i64, 22, 33] {
+            // SAFETY: slot_p addresses a live i64 for the whole test.
+            unsafe { std::ptr::write_volatile(slot_p, want) };
+            // SAFETY: slot is one readable i64.
+            let id = unsafe {
+                __wolf_rt_proc_spawn_outcome(
+                    body,
+                    slot_p.cast_const().cast(),
+                    8,
+                    b"env".as_ptr(),
+                    3,
+                )
+            };
+            ids.push((id, want));
+        }
+        // Every proc is spawned and parked at the gate; clobber the
+        // one slot they were all spawned from, THEN let them read.
+        // SAFETY: as above.
+        unsafe { std::ptr::write_volatile(slot_p, -1) };
+        GATE.store(1, SeqCst);
+        for (id, want) in ids {
+            let m = monitor(id).expect("fresh proc");
+            let got = ProcExit::decode(m.recv().expect("one delivery"));
+            assert_eq!(
+                got,
+                ProcExit::Error { tag: want },
+                "the proc read the slot's LATER value — the env was not copied"
+            );
         }
     }
 

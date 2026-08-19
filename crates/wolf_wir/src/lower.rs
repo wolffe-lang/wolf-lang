@@ -4241,19 +4241,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// arguments into an env, synthesize the entry shim over the
     /// (already-lowered) named callee, and spawn under the root
     /// supervisor with the three-outcome return protocol.
+    ///
+    /// The env is a frame slot here and the PROC'S OWN COPY after the
+    /// spawn returns (`[abi.native.procenv]`, s87). s86 gave a task's
+    /// capture record a home the task's `scope` owns and joins before
+    /// freeing; a proc has no such extent — it is a failure domain
+    /// under the root supervisor and outlives its spawner by design —
+    /// so no extent at this site is entitled to keep the record alive,
+    /// and the runtime copies it into the proc's frame before handing
+    /// the id back. That is why a spawn under a loop is sound with ONE
+    /// slot per site: the slot is free for reuse the instant the call
+    /// returns. (Until s87 this refused "a proc spawned in a loop";
+    /// `corpus/conc/proc_spawn_loop.lu` is the witness that it runs.)
     fn lower_proc_spawn(&mut self, e: &'t GreenNode) -> R<Flow> {
-        // s86 gave TASK spawn a per-reach capture record (the scope's
-        // arena — a scope is the extent that bounds one). A proc has no
-        // such extent: it outlives its spawner by design, under the
-        // ROOT supervisor, so nothing here is entitled to free its env.
-        // Naming that as the reason rather than reusing the task
-        // wording, since the task wording is no longer true.
-        if !self.loops.is_empty() {
-            return Err(refuse(
-                "a proc spawned in a loop (its env outlives every extent here — s87)",
-                e.span,
-            ));
-        }
         let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
         let Some(cs) = self.calls.get(&e.span).copied() else {
             return Err(refuse("a proc spawn without a call record", e.span));
@@ -4345,10 +4345,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let shim_ext = self.rt_like_import(&shim_name, shim_sig);
         let entry = self.b.ins_func_addr(shim_ext);
         let (np, nl) = self.name_bytes(&cs.callee);
+        // The byte count the runtime copies: the packed size, which
+        // is zero for an argument-less body (the slot is still minted
+        // at 8 bytes; the runtime copies nothing and passes null).
+        let env_len = self.b.iconst(types::I64, size as i64);
         let id = self
             .call_with_slot_token(
                 "__wolf_rt_proc_spawn_outcome",
-                &[entry, env, np, nl],
+                &[entry, env, env_len, np, nl],
                 env_region,
                 Some(types::I64),
             )
