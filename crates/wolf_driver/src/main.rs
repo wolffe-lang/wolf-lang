@@ -2552,8 +2552,15 @@ fn wir_rung(
     if zstats {
         let s = build.stats;
         eprintln!(
-            "wir-build: insts={} fold={} identity={} gvn={} forward={}",
-            s.insts, s.fold, s.identity, s.gvn, s.forward
+            "wir-build: insts={} fold={} identity={} gvn={} forward={} \
+             instantiations_seen={} instantiations_lowered={}",
+            s.insts,
+            s.fold,
+            s.identity,
+            s.gvn,
+            s.forward,
+            s.instantiations_seen,
+            s.instantiations_lowered
         );
     }
     if phase == Some("wir") {

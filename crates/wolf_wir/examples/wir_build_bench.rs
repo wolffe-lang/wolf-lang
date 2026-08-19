@@ -9,6 +9,7 @@
 //! ```text
 //! {"wir_insts_per_sec": 123456.7, "wir_insts": 42,
 //!  "wir_fold_hits": 3, "wir_identity_hits": 1, "wir_gvn_hits": 2,
+//!  "wir_instantiations_seen": 3, "wir_instantiations_lowered": 2,
 //!  "wir_forward_hits": 0}
 //! ```
 //!
@@ -112,7 +113,14 @@ fn main() {
     println!(
         "{{\"wir_insts_per_sec\": {ips:.1}, \"wir_insts\": {}, \
          \"wir_fold_hits\": {}, \"wir_identity_hits\": {}, \
-         \"wir_gvn_hits\": {}, \"wir_forward_hits\": {}}}",
-        totals.insts, totals.fold, totals.identity, totals.gvn, totals.forward
+         \"wir_gvn_hits\": {}, \"wir_forward_hits\": {}, \
+         \"wir_instantiations_seen\": {}, \"wir_instantiations_lowered\": {}}}",
+        totals.insts,
+        totals.fold,
+        totals.identity,
+        totals.gvn,
+        totals.forward,
+        totals.instantiations_seen,
+        totals.instantiations_lowered
     );
 }

@@ -1589,6 +1589,11 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
                     ("wir_identity_hits", "hits"),
                     ("wir_gvn_hits", "hits"),
                     ("wir_forward_hits", "hits"),
+                    // s93 (D8's health metric): instantiation requests
+                    // vs. bodies lowered. Worklist idempotence only
+                    // until s94 dedups — see bench/gates.json.
+                    ("wir_instantiations_seen", "instantiations"),
+                    ("wir_instantiations_lowered", "bodies"),
                 ] {
                     if let Some(x) = v[metric].as_f64() {
                         records.push(record(

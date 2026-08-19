@@ -64,6 +64,15 @@ pub struct Stats {
     pub gvn: u64,
     /// Store→load forwards through the token chain.
     pub forward: u64,
+    /// s93 (D8's health metric, s43 T3): monomorphic instantiation
+    /// requests a call site pushed — every `(callee, substitution)`
+    /// demand, before the worklist deduplicates them.
+    pub instantiations_seen: u64,
+    /// s93: distinct instantiations the worklist actually lowered. Until
+    /// s94's WIR-level dedup lands, `seen / lowered` measures worklist
+    /// idempotence only (N sites, one body); it is NOT yet a D8 dedup
+    /// ratio, and `bench/gates.json` says so in its own text.
+    pub instantiations_lowered: u64,
 }
 
 impl Stats {
@@ -73,6 +82,8 @@ impl Stats {
         self.identity += other.identity;
         self.gvn += other.gvn;
         self.forward += other.forward;
+        self.instantiations_seen += other.instantiations_seen;
+        self.instantiations_lowered += other.instantiations_lowered;
     }
 }
 

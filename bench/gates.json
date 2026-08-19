@@ -23,5 +23,11 @@
       "e2_checksum":      { "wolf_min": 0, "c_naive_min": 0 },
       "e3_index_arith":   { "wolf_min": 0, "c_naive_min": 1 }
     }
+  },
+  "instantiations": {
+    "note": "s93 (D8's health metric, s43 T3's last bullet): `wir_instantiations_seen` is every (generic callee, substitution) demand a call site pushed onto the worklist; `wir_instantiations_lowered` is the distinct bodies the drain emitted. Measured over the corpus at s93: seen 7, lowered 6 — generics/first_of_list 1/1, generics/two_instances 3/2 (two integer-typed sites of `pick` collapse onto `pick.mono.i32`), and one instance each in traits/adapter_distinct, assoc_rewrite and show_bound that lowered as far as their c06 dispatch gap. rows/hof_tail and comptime/norm_linear push NOTHING: an earlier c06 refusal in the same body (a fn value as an argument; a type outside WIR) aborts before their generic call is reached.",
+    "not_yet_a_dedup_ratio": "This is WORKLIST IDEMPOTENCE only — N call sites of one callee under one key emit one body. It is NOT the D8 dedup ratio (instantiations that are layout-identical after the mid-end collapsing to one representative); s94 adds `unique` and the ratio then reads seen/unique. Until s94 lands, do not read `seen/lowered` as anything but 'the drain does not emit duplicates'. Population-note discipline as for corpus_ceiling_history: a move in these numbers is a corpus change unless a commit says otherwise.",
+    "seen_at_s93": 7,
+    "lowered_at_s93": 6
   }
 }
