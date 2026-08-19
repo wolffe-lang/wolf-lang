@@ -1,0 +1,22 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.primary
+//!
+//! A bare `..` is not an expression (issue #88, lupin DIV-2026-018).
+//! `[gram.expr.primary]` gives two alternatives and neither admits it:
+//! `r_end (('..' | '..=') r_end?)?` makes only the TRAILING endpoint
+//! optional, and `('..' | '..=') r_end` requires the leading dots to
+//! be followed by one. So `a..`, `..b` and `a..b` are expressions and
+//! `..` is not — deliberately, because `..` already means "and the
+//! rest" one production away (`error_row`'s open-row marker).
+//!
+//! The parser admitted it anyway, so `s[..]` reached `run` and printed
+//! an answer while `s[..=]` trapped — an accept-set divergence against
+//! an interpreter that was reading the grammar correctly. No corpus
+//! file used the spelling, so nothing pinned it either way.
+
+fn main() -> !int {
+    let s = "wolf"
+    let t = s[..]
+    if t.len == 4 { 0 } else { 1 }
+}

@@ -1,0 +1,14 @@
+//! check: pass
+//! phase: run
+//! conforms: gram.amb.fmtcolon, gram.lex.str
+//! Nested strings inside interpolations need NO escapes (mode stack);
+//! `{{` and `}}` are literal braces.
+
+fn main() -> !int {
+    let n = 3
+    print("{"#".repeat(n)}")       // nested plain string in normal mode
+    print("{{not interpolated}}")  // prints {not interpolated}
+    let inner = "x"
+    print("{ "wrap-{inner}-wrap" }")  // one nesting level of f-string
+    0
+}
