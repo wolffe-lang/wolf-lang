@@ -116,6 +116,7 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
     }
     let mut sig_cache: HashMap<String, SigId> = HashMap::new();
     let mut specs: Vec<SpecRequest> = Vec::new();
+    let plain = SpecKey::view(0);
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
@@ -130,7 +131,8 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             &mut module,
             &mut sig_cache,
             &lender,
-            0,
+            &plain,
+            &[],
             &mut specs,
         ) {
             Ok(Some(s)) => stats.add(s),
@@ -138,26 +140,60 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             Err(nyc) => not_yet.push(nyc),
         }
     }
-    // s89: the specialization worklist. A view-taking clone may itself
-    // re-lend the view onward, so requests are drained to fixpoint; the
-    // `done` set makes the pass idempotent (N call sites of one callee
-    // under one mask emit ONE clone).
-    let mut done: std::collections::HashSet<(String, u32)> = std::collections::HashSet::new();
+    // The specialization worklist (s89, generalized by s93). A view-
+    // taking clone may re-lend its view onward, and a monomorphic
+    // instance may call another generic — so requests drain to
+    // fixpoint; the `done` set makes the pass idempotent (N call sites
+    // of one callee under one key emit ONE body). The 4096 guard is
+    // s89's, and it is also the bound on polymorphic recursion (`f[T]`
+    // calling `f[List[T]]` never reaches a fixpoint): hitting it is a
+    // named refusal, not a hang.
+    //
+    // Reachability-driven exactly as s43 T2 said: only the (callee,
+    // key) pairs some call site named are here. An uncalled generic
+    // contributes no WIR — D8's release-tier rule, and `comptime fn`'s
+    // precedent in `lower_body`.
+    let mut done: std::collections::HashSet<(String, SpecKey)> = std::collections::HashSet::new();
+    let mut named: HashMap<String, SpecKey> = HashMap::new();
     let mut guard = 0usize;
     while let Some(req) = specs.pop() {
         guard += 1;
         if guard > 4096 {
-            not_yet.push(refuse("a byte-view specialization fixpoint", req.span));
+            not_yet.push(refuse(
+                if req.key.subst.is_empty() {
+                    "a byte-view specialization fixpoint"
+                } else {
+                    "a monomorphization fixpoint (polymorphic recursion)"
+                },
+                req.span,
+            ));
             break;
         }
-        if !done.insert((req.name.clone(), req.mask)) {
+        stats.instantiations_seen += u64::from(!req.key.subst.is_empty());
+        if !done.insert((req.name.clone(), req.key.clone())) {
             continue;
         }
+        // Two distinct keys must not share a mangled name (the name
+        // squeeze in `mono_segment` can fold punctuation-only
+        // differences); refuse by name rather than emit two bodies
+        // under one symbol.
+        let full = spec_name(&req.name, &req.key);
+        if let Some(prev) = named.get(&full)
+            && *prev != req.key
+        {
+            not_yet.push(refuse(
+                "two instantiations whose bindings mangle to one name",
+                req.span,
+            ));
+            continue;
+        }
+        named.insert(full, req.key.clone());
         let Some(&(tb, body)) = bodies.get(&req.name) else {
             // The callee's body did not check, so there is nothing to
             // specialize; the call site's own lowering already refused.
             continue;
         };
+        stats.instantiations_lowered += u64::from(!req.key.subst.is_empty());
         match lower_body(
             pkg,
             &tc.sigs,
@@ -167,7 +203,8 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             &mut module,
             &mut sig_cache,
             &lender,
-            req.mask,
+            &req.key,
+            &req.bindings,
             &mut specs,
         ) {
             Ok(Some(s)) => stats.add(s),
@@ -182,20 +219,235 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
     }
 }
 
-/// s89 — one call site's demand for a byte-view clone of a callee: the
-/// callee's qualified WIR name and the bitmask of parameters that
-/// arrive as `{ptr, len}` views instead of `List` headers.
+/// What one specialization of a body is keyed on (s89 + s93).
+///
+/// s89: `mask` — the bitmask of parameters that arrive as `{ptr, len}`
+/// byte views instead of `List` headers. s93: `subst` — the callee's
+/// generic parameters bound to concrete types, in declaration order,
+/// spelled canonically so the key (and the mangled name) is the same
+/// however the call site wrote them. A mask-only key is exactly the
+/// s89 request; a substitution-only key is one monomorphic instance;
+/// both together is a byte-view clone OF an instance, and the drain
+/// treats them uniformly — one worklist, not two.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct SpecKey {
+    mask: u32,
+    /// (rigid name, canonical spelling of its binding). The spelling
+    /// rather than a `TyId` because ids are per-table and this key
+    /// crosses tables; the spelling is what the name carries anyway.
+    subst: Vec<(String, String)>,
+}
+
+impl SpecKey {
+    fn view(mask: u32) -> SpecKey {
+        SpecKey {
+            mask,
+            subst: Vec::new(),
+        }
+    }
+    fn is_plain(&self) -> bool {
+        self.mask == 0 && self.subst.is_empty()
+    }
+}
+
+/// One call site's demand for a specialization of a callee (s89: a
+/// byte-view clone; s93: a monomorphic instance; or both): the callee's
+/// qualified WIR name, the key, and — for a substitution — the bindings
+/// the substitution actually applies (the key holds their spelling).
 struct SpecRequest {
     name: String,
-    mask: u32,
+    key: SpecKey,
+    /// (rigid name, binding), table-independent — see [`Bound`]. Empty
+    /// for a mask-only key.
+    bindings: Vec<(String, Bound)>,
     span: Span,
 }
 
-/// The WIR name of a byte-view specialization. The suffix rides the
-/// dotted-name convention the textual format already parses (`@a.b.c`,
-/// the s27 method mangling) so a dump still round-trips.
-fn view_name(base: &str, mask: u32) -> String {
-    format!("{base}.bytesview.{mask}")
+/// The WIR name of a specialization. The suffixes ride the dotted-name
+/// convention the textual format already parses (`@a.b.c`, the s27
+/// method mangling) so a dump still round-trips. `base.bytesview.M` is
+/// byte-for-byte the s89 spelling for a mask-only key, so every s89
+/// snapshot is unchanged; a substitution appends `.mono.<spelling>`,
+/// one segment per parameter, spelled the way [`mono_spelling`] does.
+fn spec_name(base: &str, key: &SpecKey) -> String {
+    let mut n = base.to_string();
+    if key.mask != 0 {
+        n.push_str(&format!(".bytesview.{}", key.mask));
+    }
+    for (_, sp) in &key.subst {
+        n.push_str(".mono.");
+        n.push_str(&mono_segment(sp));
+    }
+    n
+}
+
+/// The canonical spelling of a type binding: sema's own renderer. This
+/// is what the KEY holds, so two bindings are the same instance exactly
+/// when sema would print them the same way.
+fn mono_spelling(table: &TypeTable, ty: TyId) -> String {
+    wolf_sema::types::render(table, ty, &|_| Err("_"))
+}
+
+/// A type binding that has left its table (s93). Sema's `TyId`s are
+/// per-table (each body has its own interner, the signatures another),
+/// and a call site's binding — `T ↦ List[int]` — was interned in the
+/// CALLER's body table, which the worklist drain never sees; the drain
+/// re-lowers the CALLEE's body against clones of the callee's tables.
+/// So a binding crosses as an owned structural tree, frozen from the
+/// site's table and thawed into whichever table needs it. `Rigid` and
+/// `Var` freeze as themselves: a Var cannot appear in a defaulted site
+/// type, and a Rigid in a binding is an unbound parameter that
+/// `wir_ty` refuses by name once thawed.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Bound {
+    Leaf(TyKind),
+    Wrapping(Box<Bound>),
+    Tuple(Vec<Bound>),
+    Fn(Vec<Bound>, Box<Bound>),
+    ErrUnion(Box<Bound>, Box<Bound>),
+    Row {
+        tags: Vec<(String, Vec<Bound>)>,
+        tail: Option<Box<Bound>>,
+    },
+    Range(Box<Bound>),
+    Ptr(Box<Bound>),
+}
+
+fn freeze(table: &TypeTable, ty: TyId) -> Bound {
+    match table.kind(ty).clone() {
+        TyKind::Wrapping(t) => Bound::Wrapping(Box::new(freeze(table, t))),
+        TyKind::Tuple(ts) => Bound::Tuple(ts.into_iter().map(|t| freeze(table, t)).collect()),
+        TyKind::Fn(ps, r) => Bound::Fn(
+            ps.into_iter().map(|t| freeze(table, t)).collect(),
+            Box::new(freeze(table, r)),
+        ),
+        TyKind::ErrUnion(a, b) => {
+            Bound::ErrUnion(Box::new(freeze(table, a)), Box::new(freeze(table, b)))
+        }
+        TyKind::Row { tags, tail } => Bound::Row {
+            tags: tags
+                .into_iter()
+                .map(|(n, ps)| (n, ps.into_iter().map(|t| freeze(table, t)).collect()))
+                .collect(),
+            tail: tail.map(|t| Box::new(freeze(table, t))),
+        },
+        TyKind::Range(t) => Bound::Range(Box::new(freeze(table, t))),
+        TyKind::Ptr(t) => Bound::Ptr(Box::new(freeze(table, t))),
+        leaf => Bound::Leaf(leaf),
+    }
+}
+
+fn thaw(b: &Bound, into: &mut TypeTable) -> TyId {
+    let k = match b {
+        Bound::Leaf(k) => k.clone(),
+        Bound::Wrapping(t) => TyKind::Wrapping(thaw(t, into)),
+        Bound::Tuple(ts) => TyKind::Tuple(ts.iter().map(|t| thaw(t, into)).collect()),
+        Bound::Fn(ps, r) => TyKind::Fn(ps.iter().map(|t| thaw(t, into)).collect(), thaw(r, into)),
+        Bound::ErrUnion(a, b) => TyKind::ErrUnion(thaw(a, into), thaw(b, into)),
+        Bound::Row { tags, tail } => {
+            let tags = tags
+                .iter()
+                .map(|(n, ps)| (n.clone(), ps.iter().map(|t| thaw(t, into)).collect()))
+                .collect();
+            let tail = tail.as_ref().map(|t| thaw(t, into));
+            // Rows intern through the table's canonicalizing ctor so a
+            // thawed row equals a checker-minted one.
+            return into.row(tags, tail);
+        }
+        Bound::Range(t) => TyKind::Range(thaw(t, into)),
+        Bound::Ptr(t) => TyKind::Ptr(thaw(t, into)),
+    };
+    into.intern(k)
+}
+
+/// One monomorphic instance's view of a checked body (s93): the
+/// signature and body tables cloned (append-only interners — every id
+/// the checker minted stays valid in the clone with the same kind) with
+/// the bindings thawed into them and applied through `subst` to the
+/// signature and to every expression/local type the lowerer will read.
+/// A `Rigid` therefore never reaches `wir_ty`; if one does, the
+/// substitution left a parameter unbound and `wir_ty` names it.
+struct Instance {
+    sig_tbl: TypeTable,
+    fsig: FnSig,
+    body_tbl: TypeTable,
+    exprs: Vec<(Span, TyId)>,
+    locals: Vec<(String, Span, TyId)>,
+}
+
+impl Instance {
+    fn build(
+        sigs: &SigTables,
+        fsig: &FnSig,
+        tb: &TypedBody,
+        bindings: &[(String, Bound)],
+    ) -> Instance {
+        let mut st = sigs.table.clone();
+        let map: std::collections::BTreeMap<String, TyId> = bindings
+            .iter()
+            .map(|(n, b)| (n.clone(), thaw(b, &mut st)))
+            .collect();
+        let mut f = fsig.clone();
+        for p in &mut f.params {
+            p.ty = wolf_sema::types::subst(&mut st, p.ty, &map);
+        }
+        f.ret = wolf_sema::types::subst(&mut st, f.ret, &map);
+        // The body's own table holds the same rigids under the same
+        // names (the checker checked the archetype once); the same
+        // trees thaw HERE. `subst` is total — a name the map lacks
+        // passes through as a Rigid, and `wir_ty` refuses it by name.
+        let mut bt = tb.table.clone();
+        let bmap: std::collections::BTreeMap<String, TyId> = bindings
+            .iter()
+            .map(|(n, b)| (n.clone(), thaw(b, &mut bt)))
+            .collect();
+        let exprs = tb
+            .exprs
+            .iter()
+            .map(|(sp, t)| (*sp, wolf_sema::types::subst(&mut bt, *t, &bmap)))
+            .collect();
+        let locals = tb
+            .locals
+            .iter()
+            .map(|(n, sp, t)| (n.clone(), *sp, wolf_sema::types::subst(&mut bt, *t, &bmap)))
+            .collect();
+        Instance {
+            sig_tbl: st,
+            fsig: f,
+            body_tbl: bt,
+            exprs,
+            locals,
+        }
+    }
+}
+
+/// The spelling as one dotted-name SEGMENT for the mangled name. WIR
+/// names are `[A-Za-z0-9_]+` segments joined by `.` (`parse.rs:
+/// is_ident_cont`), so every other character becomes `_` and runs
+/// collapse: `List[int]` → `List_int`, `(int, str)` → `int_str`,
+/// `fn(int) -> int` → `fn_int_int`. Two bindings that differ only in
+/// punctuation would share a name; the KEY still tells them apart (it
+/// holds the raw spelling), and the drain in [`lower_package`] refuses
+/// by name when two distinct keys mangle to one function name — a
+/// visible refusal, never two bodies under one symbol.
+fn mono_segment(spelling: &str) -> String {
+    let mut out = String::with_capacity(spelling.len());
+    let mut sep = false;
+    for c in spelling.chars() {
+        if c.is_ascii_alphanumeric() {
+            if sep && !out.is_empty() {
+                out.push('_');
+            }
+            sep = false;
+            out.push(c);
+        } else if c == '_' {
+            sep = false;
+            out.push('_');
+        } else {
+            sep = true;
+        }
+    }
+    out
 }
 
 /// Lower one checked body. `Ok(None)`: nothing to lower (bodyless
@@ -210,9 +462,11 @@ fn lower_body(
     module: &mut Module,
     sig_cache: &mut HashMap<String, SigId>,
     lender: &Lender<'_>,
-    view_mask: u32,
+    key: &SpecKey,
+    bindings: &[(String, Bound)],
     specs: &mut Vec<SpecRequest>,
 ) -> R<Option<Stats>> {
+    let view_mask = key.mask;
     let root = &pkg.files[body.file].parse.root;
     let Some(node) = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl) else {
         return Ok(None);
@@ -287,8 +541,20 @@ fn lower_body(
     let Some(block) = d.body() else {
         return Ok(None);
     };
-    if !fsig.generics.is_empty() {
-        return Err(refuse("generic-function lowering (monomorphization)", span));
+    // s93: a generic body lowers only as an INSTANCE — the worklist
+    // hands one in as a substitution. Reached with none (the plain pass
+    // over `tc.bodies`), the ARCHETYPE has nothing to lower: its
+    // instances are the WIR, and an uncalled generic contributes none
+    // at all — D8's release-tier rule, and exactly the shape of
+    // `comptime fn` just below. Not a refusal: a refusal here would
+    // mark every file that so much as declares a generic `refused` in
+    // the ledger however cleanly its instances lowered, and the ledger
+    // must record what did not lower, not what was never meant to.
+    // What CAN still refuse by name is a call site that cannot bind a
+    // parameter, and an instance whose body reaches a type the
+    // substitution did not close — both below, both named.
+    if !fsig.generics.is_empty() && bindings.is_empty() {
+        return Ok(None);
     }
     if fsig.comptime {
         // A `comptime fn` is CTFE's alone (D29): its call sites fold
@@ -297,17 +563,36 @@ fn lower_body(
         // build.
         return Ok(None);
     }
+    // s93: under a substitution, lower the body's INSTANCE — see
+    // [`Instance`] for what is cloned and why a `Rigid` never reaches
+    // `wir_ty`.
+    let inst: Instance;
+    let (sig_tbl, fsig, body_tbl, exprs, locals) = if bindings.is_empty() {
+        (&sigs.table, fsig, &tb.table, &tb.exprs[..], &tb.locals[..])
+    } else {
+        inst = Instance::build(sigs, fsig, tb, bindings);
+        (
+            &inst.sig_tbl,
+            &inst.fsig,
+            &inst.body_tbl,
+            &inst.exprs[..],
+            &inst.locals[..],
+        )
+    };
     // s89: a byte-view clone is the same body under a different
     // parameter shape — one name, one signature, one entry binding per
     // masked parameter. The mask reached here only through a call site
-    // whose callee the lend analysis proved `Lendable`.
-    let wir_name = if view_mask == 0 {
+    // whose callee the lend analysis proved `Lendable`. s93: an instance
+    // is the same body under a substitution; the name carries both.
+    let wir_name = if key.is_plain() {
         wir_name
     } else {
-        view_name(&wir_name, view_mask)
+        spec_name(&wir_name, key)
     };
     // The WIR signature (modes carried; s26 attaches the fact slots).
-    let sig = wir_fn_sig(module, sig_cache, sigs, &wir_name, fsig, view_mask, span)?;
+    let sig = wir_fn_sig(
+        module, sig_cache, sig_tbl, sigs, &wir_name, fsig, view_mask, span,
+    )?;
     // s73: task bodies queued by spawn sites, synthesized post-pass.
     let mut pending: Vec<PendingTask<'_>> = Vec::new();
     let mut b = FuncBuilder::new(module, wir_name, sig);
@@ -318,13 +603,13 @@ fn lower_body(
     b.set_span(fsig.name_span.lo, fsig.name_span.hi);
     let mut lowerer = Lowerer {
         src: &pkg.files[body.file].raw.src,
-        table: &tb.table,
-        sig_table: &sigs.table,
+        table: body_tbl,
+        sig_table: sig_tbl,
         sigs,
         calls: tb.calls.iter().map(|(s, c)| (*s, c)).collect(),
         folds: tb.comptime_folds.iter().map(|(s, f)| (*s, f)).collect(),
-        expr_tys: tb.exprs.iter().map(|(s, t)| (*s, *t)).collect(),
-        local_tys: tb.locals.iter().map(|(_, s, t)| (*s, *t)).collect(),
+        expr_tys: exprs.iter().map(|(s, t)| (*s, *t)).collect(),
+        local_tys: locals.iter().map(|(_, s, t)| (*s, *t)).collect(),
         casts: tb
             .casts
             .iter()
@@ -655,6 +940,16 @@ fn refuse(construct: &'static str, span: Span) -> NotYet {
     NotYet { construct, span }
 }
 
+/// A refusal whose reason names something only known at lowering time
+/// (s93: the rigid an instantiation left unbound). `NotYet.construct`
+/// is `&'static str` by design — the ledger keys on it — so the text is
+/// leaked. This is a cold, error-only path: one allocation per refusal
+/// the ledger will print, never per lowered instruction.
+fn refuse_named(text: String, span: Span) -> NotYet {
+    let leaked: &'static str = Box::leak(text.into_boxed_str());
+    refuse(leaked, span)
+}
+
 /// The two `wolf_rt::list::ListHdr` field offsets compiled code
 /// addresses directly (s75). The header is `#[repr(C)] { data: *mut
 /// u8, len: i64, cap: i64, elem: i64 }`, and these offsets are part
@@ -915,6 +1210,33 @@ fn wir_ty_depth(
         // them (deref, index, arithmetic, casts) keep their s26
         // refusals at the expression sites.
         TyKind::Ptr(_) => Ok(Some(types::PTR)),
+        // s93: a rigid here is a generic parameter no substitution
+        // bound. It never happens for an instance the worklist built
+        // (every rigid is bound or the call site refused), so this is
+        // the archetype itself reaching a type query — name the
+        // parameter rather than the shape.
+        TyKind::Rigid(name) => Err(refuse_named(
+            format!("a generic parameter `{name}` outside any instantiation"),
+            span,
+        )),
+        // s93: an associated-type projection whose base the substitution
+        // made concrete (`T.Item` under `T ↦ int`) normalizes through the
+        // impl's rewrite rules — which need the impl instantiated, and
+        // that is s94's generic-impl work under c06's dispatch tables.
+        // Name it, so the ledger says what is missing rather than "a
+        // type".
+        TyKind::Proj(_, name) => Err(refuse_named(
+            format!("an associated-type projection `.{name}` (needs the impl instantiated)"),
+            span,
+        )),
+        // A user generic nominal reaches lowering as an opaque token —
+        // sema does not elaborate it (`sig.rs: generic_instantiations_
+        // stay_opaque` pins exactly that); there is nothing to
+        // substitute into. s94 T3 is the sema change. Name the token.
+        TyKind::Unsupported(spelling) => Err(refuse_named(
+            format!("a generic nominal `{spelling}` (not yet elaborated by the checker)"),
+            span,
+        )),
         _ => Err(refuse("this type in WIR lowering", span)),
     }
 }
@@ -1052,9 +1374,11 @@ fn row_is_empty(table: &TypeTable, row: TyId) -> bool {
 /// Call sites bind formals to actual regions (the caller's spill
 /// slots); the verifier substitutes consistently. Only scalar `mut`
 /// params lower today (aggregate field addressing needs c06 layout).
+#[allow(clippy::too_many_arguments)]
 fn wir_fn_sig(
     module: &mut Module,
     cache: &mut HashMap<String, SigId>,
+    table: &TypeTable,
     sigs: &SigTables,
     name: &str,
     fsig: &FnSig,
@@ -1064,7 +1388,7 @@ fn wir_fn_sig(
     if let Some(&sig) = cache.get(name) {
         return Ok(sig);
     }
-    let sig = wir_sig_of(module, sigs, fsig, view_mask, span)?;
+    let sig = wir_sig_of(module, table, sigs, fsig, view_mask, span)?;
     cache.insert(name.to_string(), sig);
     Ok(sig)
 }
@@ -1077,8 +1401,13 @@ fn wir_fn_sig(
 /// `(ptr, i64)`. Both the definition and the call-site import build
 /// through here with the same mask, which is what keeps the two sides
 /// of a specialized call in agreement.
+/// `table` is the table `fsig`'s ids live in: `sigs.table` for a plain
+/// or byte-view build, the substituted clone for a monomorphic
+/// instance (s93) — a superset of `sigs.table`, so nominal field ids
+/// resolved through `sigs` stay valid either way.
 fn wir_sig_of(
     module: &mut Module,
+    table: &TypeTable,
     sigs: &SigTables,
     fsig: &FnSig,
     view_mask: u32,
@@ -1098,7 +1427,7 @@ fn wir_sig_of(
             });
             continue;
         }
-        let Some(ty) = wir_ty(&mut module.types, &sigs.table, sigs, p.ty, p.span)? else {
+        let Some(ty) = wir_ty(&mut module.types, table, sigs, p.ty, p.span)? else {
             return Err(refuse("unit-typed parameters", p.span));
         };
         match p.mode {
@@ -1131,7 +1460,7 @@ fn wir_sig_of(
             }
         }
     }
-    let results = match wir_ty(&mut module.types, &sigs.table, sigs, fsig.ret, span)? {
+    let results = match wir_ty(&mut module.types, table, sigs, fsig.ret, span)? {
         Some(t) => vec![t],
         None => vec![],
     };
@@ -3988,7 +4317,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         // The body: the callee's ordinary lowered function.
         let body_name = qualify(self.sigs, callee_module, &cs.callee);
-        let body_sig = wir_sig_of(self.b.module, self.sigs, callee_sig, 0, e.span)?;
+        let body_sig = wir_sig_of(
+            self.b.module,
+            self.sig_table,
+            self.sigs,
+            callee_sig,
+            0,
+            e.span,
+        )?;
         let task_no = self.pending_tasks.len();
         let base = self.b.func.name.clone();
         let shim_name = format!("{base}.task{task_no}.entry");
@@ -5518,9 +5854,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
         };
-        if !callee_sig.generics.is_empty() {
-            return Err(refuse("generic-function calls (monomorphization)", e.span));
-        }
+        // s93: a generic callee is called as an INSTANCE. Bind each of
+        // its parameters from what the checker already decided at this
+        // site — the argument expressions' final types against the
+        // declared parameter types, and the call's own type against
+        // the declared return — then lower the call against the
+        // instance's substituted signature. Every rigid must bind; one
+        // the site never constrains (used only in a position the
+        // checker defaulted away) refuses by name.
+        let bindings: Vec<(String, Bound)> = if callee_sig.generics.is_empty() {
+            Vec::new()
+        } else {
+            self.bind_generics(callee_sig, d, e)?
+        };
         if callee_sig.comptime {
             // Folded sites returned above (s71); reaching here means
             // the evaluated value has no scalar/str runtime shape yet.
@@ -5631,23 +5977,64 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // function cache; the shared sig build keeps the mut-expansion
         // identical to the definition's).
         let base_name = qualify(self.sigs, callee_module, &cs.callee);
-        // s89: a view-taking call names the CLONE, and queues it. The
-        // request is idempotent — `lower_package` emits one clone per
-        // (callee, mask) however many call sites ask for it.
-        let callee_name = if view_mask == 0 {
+        // A specialized call names the CLONE/INSTANCE, and queues it.
+        // The request is idempotent — `lower_package` emits one body per
+        // (callee, key) however many call sites ask for it (s89 for the
+        // mask, s93 for the substitution; one worklist).
+        let key = SpecKey {
+            mask: view_mask,
+            subst: bindings
+                .iter()
+                .map(|(n, b)| {
+                    // Spell through a scratch table: the tree is
+                    // table-free, and the spelling must be the same
+                    // wherever it is thawed.
+                    let mut scratch = TypeTable::new();
+                    let t = thaw(b, &mut scratch);
+                    (n.clone(), mono_spelling(&scratch, t))
+                })
+                .collect(),
+        };
+        let callee_name = if key.is_plain() {
             base_name
         } else {
+            let full = spec_name(&base_name, &key);
             self.pending_specs.push(SpecRequest {
-                name: base_name.clone(),
-                mask: view_mask,
+                name: base_name,
+                key,
+                bindings: bindings.clone(),
                 span: e.span,
             });
-            view_name(&base_name, view_mask)
+            full
         };
         let ext = match self.callees.get(&callee_name) {
             Some(&ext) => ext,
             None => {
-                let sig = wir_sig_of(self.b.module, self.sigs, callee_sig, view_mask, e.span)?;
+                // The import's signature must be the INSTANCE's, built
+                // from the same substituted table the definition will
+                // build from, so both sides of the call agree.
+                let sig = if bindings.is_empty() {
+                    wir_sig_of(
+                        self.b.module,
+                        self.sig_table,
+                        self.sigs,
+                        callee_sig,
+                        view_mask,
+                        e.span,
+                    )?
+                } else {
+                    let mut st = self.sig_table.clone();
+                    let map: std::collections::BTreeMap<String, TyId> = bindings
+                        .iter()
+                        .map(|(n, b)| (n.clone(), thaw(b, &mut st)))
+                        .collect();
+                    let mut f = callee_sig.clone();
+                    for p in &mut f.params {
+                        p.ty = wolf_sema::types::subst(&mut st, p.ty, &map);
+                    }
+                    f.ret = wolf_sema::types::subst(&mut st, f.ret, &map);
+                    wir_sig_of(self.b.module, &st, self.sigs, &f, view_mask, e.span)?
+                };
                 let ext = self.b.func.import_func(callee_name.clone(), sig);
                 self.callees.insert(callee_name, ext);
                 ext
@@ -5656,6 +6043,160 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let results = self.b.ins_call_regions(ext, &args, &formal_regions);
         self.run_writebacks(writebacks)?;
         Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// s93: recover a generic callee's bindings at one call site from
+    /// what the checker already decided — each argument expression's
+    /// final type against the declared parameter type, and the call
+    /// expression's own type against the declared return. The walk is
+    /// structural over the two tables (declared types live in the
+    /// signature table, site types in this body's table); a `Rigid` on
+    /// the declared side binds to the site type, frozen; a second
+    /// sighting of the same rigid must freeze identically. Anything
+    /// left unbound is a refusal BY NAME: dictionary passing is not a
+    /// fallback here, and no `<error>` reaches WIR.
+    ///
+    /// Deliberately not sema's unifier: at a checked call the bindings
+    /// are already ground (`TypedBody.exprs` holds defaulted types), so
+    /// a one-way structural match is all there is to do.
+    fn bind_generics(
+        &self,
+        callee_sig: &FnSig,
+        d: CallExpr<'t>,
+        e: &'t GreenNode,
+    ) -> R<Vec<(String, Bound)>> {
+        let mut map: std::collections::BTreeMap<String, Bound> = std::collections::BTreeMap::new();
+        let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+        for (i, p) in callee_sig.params.iter().enumerate() {
+            let Some(a) = args.get(i) else { break };
+            let Some(vexpr) = Arg::value(*a) else {
+                continue;
+            };
+            let Some(site) = self.expr_sema_ty(vexpr.span) else {
+                continue;
+            };
+            self.match_binding(p.ty, site, &mut map, e.span)?;
+        }
+        if let Some(site_ret) = self.expr_sema_ty(e.span) {
+            self.match_binding(callee_sig.ret, site_ret, &mut map, e.span)?;
+        }
+        let mut out = Vec::with_capacity(callee_sig.generics.len());
+        for g in &callee_sig.generics {
+            let Some(b) = map.remove(&g.name) else {
+                return Err(refuse_named(
+                    format!(
+                        "an instantiation with an unbound parameter (`{}` is not fixed by this call)",
+                        g.name
+                    ),
+                    e.span,
+                ));
+            };
+            out.push((g.name.clone(), b));
+        }
+        Ok(out)
+    }
+
+    /// One structural step of [`bind_generics`]: `decl` in the
+    /// signature table against `site` in this body's table.
+    fn match_binding(
+        &self,
+        decl: TyId,
+        site: TyId,
+        map: &mut std::collections::BTreeMap<String, Bound>,
+        span: Span,
+    ) -> R<()> {
+        let dk = self.sig_table.kind(decl).clone();
+        if let TyKind::Rigid(name) = dk {
+            let b = freeze(self.table, site);
+            match map.get(&name) {
+                None => {
+                    map.insert(name, b);
+                }
+                Some(prev) if *prev == b => {}
+                Some(_) => {
+                    return Err(refuse_named(
+                        format!("an instantiation binding `{name}` two ways at one call"),
+                        span,
+                    ));
+                }
+            }
+            return Ok(());
+        }
+        let sk = self.table.kind(site).clone();
+        match (dk, sk) {
+            (TyKind::Wrapping(a), TyKind::Wrapping(b))
+            | (TyKind::Range(a), TyKind::Range(b))
+            | (TyKind::Ptr(a), TyKind::Ptr(b)) => self.match_binding(a, b, map, span),
+            (TyKind::Tuple(xs), TyKind::Tuple(ys)) if xs.len() == ys.len() => {
+                for (a, b) in xs.into_iter().zip(ys) {
+                    self.match_binding(a, b, map, span)?;
+                }
+                Ok(())
+            }
+            (TyKind::Fn(xs, xr), TyKind::Fn(ys, yr)) if xs.len() == ys.len() => {
+                for (a, b) in xs.into_iter().zip(ys) {
+                    self.match_binding(a, b, map, span)?;
+                }
+                self.match_binding(xr, yr, map, span)
+            }
+            (TyKind::ErrUnion(a, ar), TyKind::ErrUnion(b, br)) => {
+                self.match_binding(a, b, map, span)?;
+                self.match_binding(ar, br, map, span)
+            }
+            // A declared row with a rigid tail against a site row: the
+            // tail binds to whatever the site row has beyond the
+            // declared tags — `subst`'s row-merge arm is the inverse.
+            (
+                TyKind::Row {
+                    tags: dtags,
+                    tail: Some(dtail),
+                },
+                TyKind::Row {
+                    tags: stags,
+                    tail: stail,
+                },
+            ) if matches!(self.sig_table.kind(dtail), TyKind::Rigid(_)) => {
+                for (dn, dps) in &dtags {
+                    if let Some((_, sps)) = stags.iter().find(|(n, _)| n == dn) {
+                        for (a, b) in dps.iter().zip(sps) {
+                            self.match_binding(*a, *b, map, span)?;
+                        }
+                    }
+                }
+                let rest: Vec<(String, Vec<TyId>)> = stags
+                    .into_iter()
+                    .filter(|(n, _)| !dtags.iter().any(|(dn, _)| dn == n))
+                    .collect();
+                // The tail's binding is the site's residual row (its own
+                // tail carried), frozen from this body's table.
+                let residual = Bound::Row {
+                    tags: rest
+                        .into_iter()
+                        .map(|(n, ps)| (n, ps.into_iter().map(|t| freeze(self.table, t)).collect()))
+                        .collect(),
+                    tail: stail.map(|t| Box::new(freeze(self.table, t))),
+                };
+                let TyKind::Rigid(name) = self.sig_table.kind(dtail).clone() else {
+                    unreachable!("guarded")
+                };
+                match map.get(&name) {
+                    None => {
+                        map.insert(name, residual);
+                    }
+                    Some(prev) if *prev == residual => {}
+                    Some(_) => {
+                        return Err(refuse_named(
+                            format!("an instantiation binding row `{name}` two ways at one call"),
+                            span,
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            // Ground on both sides, or shapes the site cannot inform:
+            // nothing to bind here.
+            _ => Ok(()),
+        }
     }
 
     /// A call through the `c.` membrane (s29): the is04-modelled five
@@ -9938,7 +10479,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let ext = match self.callees.get(&callee_name) {
             Some(&ext) => ext,
             None => {
-                let sig = wir_sig_of(self.b.module, self.sigs, msig, 0, e.span)?;
+                let sig = wir_sig_of(self.b.module, self.sig_table, self.sigs, msig, 0, e.span)?;
                 let ext = self.b.func.import_func(callee_name.clone(), sig);
                 self.callees.insert(callee_name, ext);
                 ext

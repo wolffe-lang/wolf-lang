@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="3 4 r\n")
+//! phase: run
+//! conforms: generics.mono, generics.mono.dedup-key
+//!
+//! One archetype, two instances, and the worklist's idempotence: `pick`
+//! is called at the integer literals' type twice and at `str` once, so
+//! the WIR holds exactly two bodies — `pick.mono.i32` and
+//! `pick.mono.str` — however many sites asked. The key is the binding's
+//! canonical spelling, so the two integer sites name the same instance.
+//! (`instantiations_seen` is 3 here and `instantiations_lowered` is 2:
+//! the health metric's first non-trivial reading, and NOT yet a dedup
+//! ratio — s94 owns that.)
+
+fn pick[T](a: T, b: T, first: bool) -> T {
+    if first { a } else { b }
+}
+
+fn main() -> !int {
+    let x = pick(3, 4, true)
+    let y = pick(3, 4, false)
+    let s = pick("l", "r", false)
+    print("{x} {y} {s}")
+    if x == 3 && y == 4 && s == "r" { 0 } else { 1 }
+}
