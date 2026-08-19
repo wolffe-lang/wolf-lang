@@ -9,7 +9,7 @@ comptime/derive_eq.lu: refused — trait-impl method lowering (dispatch tables, 
 comptime/fold_reaches_lane.lu: lowers
 comptime/fuel_loop.lu: not mem-clean (pre-wir rungs own it)
 comptime/heap_flood.lu: not mem-clean (pre-wir rungs own it)
-comptime/norm_linear.lu: refused — generic-function lowering (monomorphization); generic-function lowering (monomorphization); this type in WIR lowering
+comptime/norm_linear.lu: refused — a generic nominal `Buf[2 + 2]` (not yet elaborated by the checker)
 comptime/norm_witness.lu: not mem-clean (pre-wir rungs own it)
 comptime/overflow_i32.lu: not mem-clean (pre-wir rungs own it)
 comptime/reflect_fields.lu: refused — trait-impl method lowering (dispatch tables, c06)
@@ -63,6 +63,8 @@ ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
 fs/roundtrip.lu: lowers
+generics/first_of_list.lu: lowers
+generics/two_instances.lu: lowers
 grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
 grammar/brackets_generic_call.lu: not mem-clean (pre-wir rungs own it)
@@ -201,7 +203,7 @@ rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_match_tags.lu: lowers
-rows/hof_tail.lu: refused — generic-function lowering (monomorphization); generic-function calls (monomorphization)
+rows/hof_tail.lu: refused — module-item reads (globals, c06)
 rows/inferred_private.lu: refused — module-item reads (globals, c06)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
@@ -234,8 +236,8 @@ strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 test/conc_schedules_test.lu: lowers
 time/monotonic.lu: lowers
-traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
-traits/assoc_rewrite.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
+traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+traits/assoc_rewrite.lu: refused — trait-impl method lowering (dispatch tables, c06); an associated-type projection `.Item` (needs the impl instantiated); an associated-type projection `.Item` (needs the impl instantiated)
 traits/call_unmet_bound.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_orphan/main.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_overlap.lu: not mem-clean (pre-wir rungs own it)
@@ -247,7 +249,7 @@ traits/dyn_self_position.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_arith.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_eq.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_missing_bound.lu: not mem-clean (pre-wir rungs own it)
-traits/show_bound.lu: refused — trait-impl method lowering (dispatch tables, c06); generic-function lowering (monomorphization); generic-function calls (monomorphization)
+traits/show_bound.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
 typecheck/ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
