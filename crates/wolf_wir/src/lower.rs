@@ -96,7 +96,7 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
         }
     }
     // s89: the byte-view lend verdicts, computed once for the package
-    // and shared with the memory checker's E1015 (`wolf_mem::byteview`
+    // and shared with the memory checker's W1004 (`wolf_mem::byteview`
     // is the single authority — see this crate's Cargo comment).
     let lender = Lender::new(pkg, &tc.sigs);
     // s89: free-function bodies by their qualified WIR name, so a view
@@ -5536,9 +5536,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // argument is a view here (`s.bytes()`, or a view this function
         // was itself lent), and the memory checker's lend analysis
         // proved the callee's parameter `Lendable` — every use inside
-        // one of s77's seven read positions. `Escapes` is E1015 at
-        // `mem` and never reaches lowering; `Opaque` materializes,
-        // bit-for-bit the pre-s89 behaviour.
+        // one of s77's seven read positions. `Opaque` AND `Escapes`
+        // materialize, bit-for-bit the pre-s89 behaviour — an escape
+        // is W1004 at `mem` (s92; E1015 refused it through s91) and
+        // reaches lowering as an ordinary by-value argument.
         let mut view_mask = 0u32;
         for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
             let Some(vexpr) = Arg::value(a) else { continue };
