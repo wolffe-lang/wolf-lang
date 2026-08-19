@@ -18,6 +18,7 @@
     "abi.native.layout": "04-abi.md",
     "abi.native.niche": "04-abi.md",
     "abi.native.nounwind": "04-abi.md",
+    "abi.native.procenv": "04-abi.md",
     "abi.native.taskenv": "04-abi.md",
     "abi.native.unstable": "04-abi.md",
     "conc.cancel": "03-concurrency.md",
