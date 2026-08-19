@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: conc.proc.root, conc.task.root
 //! The s86/s87 boundary, made checkable instead of asserted in prose.
 //!
@@ -10,11 +10,15 @@
 //! under the ROOT supervisor and outlives its spawner by design, so
 //! nothing at the spawn site is entitled to free its environment.
 //!
-//! So this file stops at `mem` with a NAMED refusal — "a proc spawned
-//! in a loop (its env outlives every extent here — s87)" — and the
-//! header records where the surface ends. When s87 gives procs their
-//! own answer, this header advances to `run` in the same commit, and
-//! the diff is the sprint's evidence.
+//! s87's answer ([abi.native.procenv]): the runtime COPIES the
+//! argument record before the spawn returns, and the proc's own frame
+//! owns the copy until its body returns. One record slot per site is
+//! then sound under a loop — the slot is free the instant the id is
+//! back. This header advanced from `mem` to `run` in the commit that
+//! shipped that; the diff is the sprint's evidence. (The per-proc
+//! value check lives in wolf_rt's `proc_env_is_copied_at_spawn`: a
+//! proc's only outputs are its exit class and stdout, so the copy is
+//! pinned where a body can be gated and observed.)
 
 fn worker(n: int) -> int { n }
 

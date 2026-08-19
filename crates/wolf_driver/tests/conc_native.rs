@@ -285,49 +285,31 @@ fn the_mid_end_does_not_merge_two_iterations_capture_records() {
     }
 }
 
-/// The other side of the same line: a PROC spawned in a loop still
-/// refuses, and refuses BY NAME.
+/// The other side of the same line, closed by s87: a PROC spawned in a
+/// loop RUNS, on both native tiers.
 ///
-/// s86's answer for tasks is the scope's arena, and a proc has no
-/// scope — it is a failure domain under the root supervisor, which
-/// outlives every extent at the spawn site. So the refusal stands and
-/// says why, on both native tiers. s87 owns the answer; this test is
-/// what makes "s87 still owns it" a fact rather than a plan.
+/// s86's answer for tasks is the scope's arena; a proc has no scope.
+/// s87's answer is the runtime's: `__wolf_rt_proc_spawn_outcome`
+/// copies the argument record before it returns
+/// (`[abi.native.procenv]`), so one frame slot per site is sound under
+/// a loop — the slot is free the instant the id is back. Until s87
+/// this test asserted the refusal and its owner; now it asserts the
+/// run, seed-stable, the way every other conc witness does. (The
+/// per-proc VALUE check is `wolf_rt`'s `proc_env_is_copied_at_spawn`,
+/// where a body can be gated; a proc's only outputs are its exit class
+/// and stdout.)
 #[test]
-fn a_proc_spawned_in_a_loop_still_refuses_by_name() {
+fn a_proc_spawned_in_a_loop_runs_on_both_tiers() {
     ensure_rt_staticlib();
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for release in [false, true] {
-        let mut cmd = Command::new(wolf());
-        cmd.arg("conform-run")
-            .arg(root.join("corpus/conc/proc_spawn_loop.lu"))
-            .arg("--native")
-            .arg("--json");
-        if release {
-            cmd.arg("--release");
-        }
-        let out = cmd.output().expect("wolf runs");
-        if out.status.code() == Some(2) {
-            eprintln!("SKIP: environment cannot run the native lane");
-            return;
-        }
-        let rec: serde_json::Value =
-            serde_json::from_slice(&out.stdout).expect("observation record parses");
-        assert_eq!(
-            rec["verdict"].as_str(),
-            Some("unsupported"),
-            "release={release}: a proc spawn in a loop must not compile"
-        );
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        assert!(
-            stderr.contains("a proc spawned in a loop"),
-            "release={release}: the refusal must NAME the construct: {stderr}"
-        );
-        assert!(
-            stderr.contains("s87"),
-            "release={release}: and name its owner: {stderr}"
-        );
-    }
+    pinned("corpus/conc/proc_spawn_loop.lu", "exit(0)", "");
+    let Some(rel) = native_tier("corpus/conc/proc_spawn_loop.lu", Some(1), false, true) else {
+        return;
+    };
+    assert_eq!(
+        rel.verdict, "exit(0)",
+        "release tier: a proc spawn in a loop runs"
+    );
+    assert_eq!(rel.stdout, "", "release tier: no output");
 }
 
 // ---- s86: the RELEASE tier runs concurrency ---------------------------
@@ -359,6 +341,8 @@ fn the_release_tier_runs_the_conc_corpus() {
             "3 12\n",
         ),
         ("corpus/procs.lu", "exit(0)", ""),
+        // s87: the proc under a loop.
+        ("corpus/conc/proc_spawn_loop.lu", "exit(0)", ""),
     ];
     let mut ran = 0;
     for (file, verdict, stdout) in cases {
@@ -369,7 +353,7 @@ fn the_release_tier_runs_the_conc_corpus() {
         assert_eq!(o.stdout, stdout, "{file}: release-tier stdout");
         ran += 1;
     }
-    assert_eq!(ran, 10, "every release-tier conc case ran");
+    assert_eq!(ran, 11, "every release-tier conc case ran");
 }
 
 /// D14's signature distinction, on the release tier too.
@@ -419,6 +403,12 @@ fn the_same_seed_gives_the_same_output_ten_times() {
         "corpus/conc/select_seeded.lu",
         "corpus/conc/message_passing.lu",
         "corpus/procs.lu",
+        // s87's acceptance, stated as the contract states it: a killed
+        // proc's defers and frees in c07's pinned order, natively, TEN
+        // runs — and the cancel twin, and the proc under a loop.
+        "corpus/conc/proc_kill_defers.lu",
+        "corpus/conc/proc_cancel_defers.lu",
+        "corpus/conc/proc_spawn_loop.lu",
     ];
     for release in [false, true] {
         for file in files {

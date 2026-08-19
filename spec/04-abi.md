@@ -46,6 +46,19 @@ AAPCS64, win64, Apple arm64 deltas).
   the scope's own arena is the natural home); *that* it outlives the
   join is contract. Nothing here is a stability promise —
   `[abi.native.unstable]` governs.
+- `[abi.native.procenv]` A proc's arguments cross to the runtime as
+  ONE pointer to an argument record of the same internal shape, paired
+  with a proc-entry function that reads it (`[conc.task.root]`), plus
+  the record's byte length — and the runtime **copies** the record
+  before the spawn returns. A proc has no extent at its spawn site
+  that outlives it: it is a failure domain under the root supervisor
+  (`[conc.proc.model]`) and by design outlives the frame that spawned
+  it, so the only owner that can keep its record alive is the proc's
+  own frame. The copy is charged to the proc and lives until its body
+  returns; the spawner's storage is free for reuse the instant it has
+  the proc id back, which is what makes `spawn proc` under a loop
+  sound with one record slot per site. Same stability status as the
+  task record: `[abi.native.unstable]` governs.
 
 ## §2 C membranes `[abi.c]`
 

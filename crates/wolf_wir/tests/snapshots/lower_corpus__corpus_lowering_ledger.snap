@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 355
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -36,7 +37,7 @@ conc/message_passing.lu: lowers
 conc/proc_cancel_defers.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
-conc/proc_spawn_loop.lu: refused — a proc spawned in a loop (its env outlives every extent here — s87)
+conc/proc_spawn_loop.lu: lowers
 conc/select_seeded.lu: lowers
 conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers

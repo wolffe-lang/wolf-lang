@@ -184,7 +184,7 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 94] = [
     ("__wolf_rt_when_acquire", 2, true),
     ("__wolf_rt_when_release", 2, false),
     ("__wolf_rt_region_adopt", 1, true),
-    ("__wolf_rt_proc_spawn_outcome", 4, true),
+    ("__wolf_rt_proc_spawn_outcome", 5, true),
     ("__wolf_rt_proc_monitor", 1, true),
     ("__wolf_rt_proc_kill", 1, false),
     ("__wolf_rt_proc_cancel", 1, false),
