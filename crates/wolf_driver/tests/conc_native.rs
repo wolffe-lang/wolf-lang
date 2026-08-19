@@ -341,6 +341,8 @@ fn the_release_tier_runs_the_conc_corpus() {
             "3 12\n",
         ),
         ("corpus/procs.lu", "exit(0)", ""),
+        // s87: the proc under a loop.
+        ("corpus/conc/proc_spawn_loop.lu", "exit(0)", ""),
     ];
     let mut ran = 0;
     for (file, verdict, stdout) in cases {
@@ -351,7 +353,7 @@ fn the_release_tier_runs_the_conc_corpus() {
         assert_eq!(o.stdout, stdout, "{file}: release-tier stdout");
         ran += 1;
     }
-    assert_eq!(ran, 10, "every release-tier conc case ran");
+    assert_eq!(ran, 11, "every release-tier conc case ran");
 }
 
 /// D14's signature distinction, on the release tier too.
@@ -401,6 +403,12 @@ fn the_same_seed_gives_the_same_output_ten_times() {
         "corpus/conc/select_seeded.lu",
         "corpus/conc/message_passing.lu",
         "corpus/procs.lu",
+        // s87's acceptance, stated as the contract states it: a killed
+        // proc's defers and frees in c07's pinned order, natively, TEN
+        // runs — and the cancel twin, and the proc under a loop.
+        "corpus/conc/proc_kill_defers.lu",
+        "corpus/conc/proc_cancel_defers.lu",
+        "corpus/conc/proc_spawn_loop.lu",
     ];
     for release in [false, true] {
         for file in files {
