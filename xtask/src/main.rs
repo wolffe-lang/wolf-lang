@@ -645,8 +645,18 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// is s94's unelaborated generic nominal), so native/release did not
 /// gain a single old file. The s93 contract expected `rows/hof_tail`
 /// to be the +1; it is not, and the ledger says why.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 141), ("native", 137), ("release", 137)];
-const UNION_FLOOR: usize = 157;
+/// Ratcheted by s87, over 275 entries: native and release +1, union
+/// +1, checked and `all-three` unchanged. One pre-existing file moved
+/// — `conc/proc_spawn_loop.lu`, refused since s86 as "a proc spawned
+/// in a loop (its env outlives every extent here — s87)", now runs on
+/// both native tiers because the runtime copies a proc's argument
+/// record before the spawn returns (`[abi.native.procenv]`). The
+/// checked lane still refuses structured concurrency by name (C1,
+/// deferred), so `all-three` does not move: the last "concurrency"
+/// refusal on the native lanes is gone, and the lanes stay un-nested
+/// for the reason this gate exists to show.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 141), ("native", 138), ("release", 138)];
+const UNION_FLOOR: usize = 158;
 const ALL_THREE_FLOOR: usize = 121;
 
 /// One lane's observation of one corpus entry.
