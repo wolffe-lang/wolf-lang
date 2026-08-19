@@ -1353,22 +1353,29 @@ a value it owns outright.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
-## E1015 — a lent byte view cannot outlive the call
+## E1015 — RETIRED — an escaping byte-view lend now copies and warns W1004
 
-`s.bytes()` in an argument position LENDS the string's own bytes: the
-callee reads `{ptr, len}` pointing straight at the caller's storage,
-which is why the call costs nothing at all rather than one heap copy
-per byte ([mem.str.view.lend]). The deal is the same one a region
-makes — the callee may read the bytes for the call's duration, and may
-not keep them — and this callee keeps them: it returns the parameter,
-stores it away, or hands it on somewhere this analysis cannot follow
-the bytes back from. Bind the bytes to a name first: `let bs =
-s.bytes()` materializes a `List[int]` the callee may own, and passing
-`bs` behaves exactly as it did before views existed. Keep the lend
-where it belongs — for the callees that only read — and the copy where
-the value has to survive.
+This code is retired and the compiler no longer emits it; the number is
+kept so a reader who meets `E1015` in an old log or an old lesson finds
+this page and not a hole. A retired number is never reused.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__byte_view_escape.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1015_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1015_lent_view_returned.snap
+For a while, `s.bytes()` lent into a call whose callee kept the bytes
+past the call (returned the parameter, stored it, handed it on) was
+REFUSED with this code. The refusal was correct about the lend — a lent
+`{ptr, len}` that outlives its call is a dangling pointer — and wrong
+about the response: the compiler had a safe compilation for exactly
+this program the whole time (materialize the bytes into a `List[int]`
+at the call, bit-for-bit what every call did before views crossed
+calls), and this was the only refusal in the language standing between
+a program and a meaning it already had.
+
+Now the same shape compiles by copying and says so once, as W1004: the
+lend degrades to a copy, the fix is unchanged (`let bs = s.bytes()`
+first, if the copy was not what you meant), and the only thing the
+program loses is the zero-cost lend it could not have kept anyway. See
+W1004 and [mem.str.view.lend].
+
+Fixtures: crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_returned.snap
 
 ## E1101 — a task may not mutate state it captured from the enclosing function
 
@@ -1977,6 +1984,32 @@ the read default (copying what it returns), or make the consumption
 real by transforming the value before it leaves.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__take_returned.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1003_take_returned.snap
+
+## W1004 — a byte view lent here is kept by the callee, so the bytes are copied instead
+
+`s.bytes()` in an argument position offers the string's own bytes as a
+LEND: the callee reads `{ptr, len}` pointing straight at the caller's
+storage, and the call costs nothing at all rather than one heap copy
+per byte ([mem.str.view.lend]). A lend lasts exactly the call. This
+callee keeps the parameter past the call — returns it, stores it, or
+hands it on to somewhere the bytes cannot be followed back from — so a
+lend would be a dangling pointer, and the compiler did what every call
+did before views crossed calls: it materialized the bytes into a
+`List[int]` at the call site and passed that. The program means what
+it meant; it paid one copy the lend was meant to save.
+
+If the copy is what you wanted, say so and silence the warning: `let bs
+= s.bytes()` binds a materialized list the callee may own, and passing
+`bs` costs exactly what this call already costs. If the copy is NOT
+what you wanted, the callee is the thing to change — a callee that only
+reads its parameter lends for free. The one shape that is never on
+offer is a kept lend: there is no way to spell "keep these bytes and do
+not copy them", because that spelling has no meaning that is not a
+dangling `{ptr, len}`.
+
+Formerly E1015, retired when the refusal became this warning.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__byte_view_escape.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_returned.snap
 
 ## W1101 — this write stays inside the task
 
