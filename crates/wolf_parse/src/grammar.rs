@@ -42,7 +42,23 @@ pub(crate) fn source_file(p: &mut Parser<'_>) {
 /// One item: `attribute* visibility? bare_item`. `in_body` is true when
 /// parsing members of a `trait`/`impl` body, where a `}` at depth zero
 /// closes the enclosing item and must stop recovery.
+/// Parse one declaration, with every recovery inside it floored at the
+/// column the declaration starts in.
+///
+/// A `{` shields recovery because nested items are legal in braces; a
+/// `{` that is never closed shields it all the way to `Eof`, and the
+/// skip then walks over the NEXT declaration and swallows it whole —
+/// no re-parenting, no nodes, the file silently loses its shape. The
+/// floor says what indentation already says: a declaration starting at
+/// or left of this column is a sibling, and recovery stops before it.
 pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
+    let saved = p.item_floor;
+    p.item_floor = Some(p.line_indent(p.current_span().lo));
+    item_inner(p, in_body);
+    p.item_floor = saved;
+}
+
+fn item_inner(p: &mut Parser<'_>, in_body: bool) {
     // An unambiguous *item* keyword ends any stray-line E0203 fold.
     // `let`/`var`/`const` deliberately do not: a function body spilled
     // to the top level (its `{` lost) interleaves bindings with

@@ -79,6 +79,10 @@ pub(crate) struct Parser<'a> {
     /// always report. Also set by unclosed-delimiter and
     /// truncated-construct reports — the escape *is* the line's error.
     suppressed_miss_reported: bool,
+    /// Indent of the declaration currently being parsed. Recovery may
+    /// skip anything nested deeper, but never a declaration starting at
+    /// or left of this column — see [`skip_until_from`].
+    pub(crate) item_floor: Option<u32>,
     /// One broken argument list reports once per line region — nested
     /// lists dragged into the same wreck stay silent (D22 containment).
     /// Cleared whenever a real terminator is consumed.
@@ -141,6 +145,7 @@ impl<'a> Parser<'a> {
             depth: 0,
             frames: Vec::new(),
             suppressed_miss_reported: false,
+            item_floor: None,
             arg_error_reported: false,
             toplevel_error_reported: false,
             arm_error_reported: false,
@@ -226,6 +231,20 @@ impl<'a> Parser<'a> {
     /// it to notice that a sub-parse just failed.
     pub(crate) fn diag_count(&self) -> usize {
         self.diags.len()
+    }
+
+    /// Leading-whitespace width of the line containing `off`.
+    pub(crate) fn line_indent(&self, off: u32) -> u32 {
+        let off = off as usize;
+        let start = self.src[..off.min(self.src.len())]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |i| i + 1);
+        let mut n = start;
+        while n < self.src.len() && matches!(self.src[n], b' ' | b'\t') {
+            n += 1;
+        }
+        (n - start) as u32
     }
 
     /// Does a line break sit between these two offsets?
@@ -527,6 +546,32 @@ impl<'a> Parser<'a> {
         stop_at_rbrace: bool,
         stop: impl Fn(TokenKind) -> bool,
     ) -> usize {
+        self.skip_until_from(stop_at_rbrace, None, stop)
+    }
+
+    /// [`skip_until`] with a *sibling floor*: an indent at or below
+    /// which a declaration keyword ends recovery **whatever the depth**.
+    ///
+    /// A `{` shields, because nested items are legal in braces — but a
+    /// `{` that is never closed shields all the way to `Eof`, and the
+    /// D22 break that exists to protect the next declaration is exactly
+    /// what gets disabled. One mutated brace in `traits/show_bound.lu`
+    /// swallowed two whole functions this way: they produced no nodes
+    /// at all, and the parser had already said `this `{` is never
+    /// closed` while recovery skipped straight past it.
+    ///
+    /// The floor is the indent of the construct being recovered. An
+    /// item keyword no deeper than that opened a sibling, not a nested
+    /// item, so a brace nest claiming to contain it is not plausible
+    /// and the shield does not apply. Passing `None` keeps the old
+    /// behaviour for sites where indentation says nothing.
+    pub(crate) fn skip_until_from(
+        &mut self,
+        stop_at_rbrace: bool,
+        sibling_floor: Option<u32>,
+        stop: impl Fn(TokenKind) -> bool,
+    ) -> usize {
+        let sibling_floor = sibling_floor.or(self.item_floor);
         let from = self.current_span();
         let mut skipped = 0usize;
         let mut depth = 0usize;
@@ -544,6 +589,14 @@ impl<'a> Parser<'a> {
             // interpolation — recovery must never eat its way out of a
             // string (the interpolation's own recovery owns it).
             if depth == 0 && matches!(k, TokenKind::InterpClose | TokenKind::FormatSpecBegin) {
+                break;
+            }
+            // Depth-independent: a sibling-level item keyword ends
+            // recovery even inside a brace that claims to contain it.
+            if let (Some(floor), TokenKind::Kw(kw)) = (sibling_floor, k)
+                && is_decl_keyword(kw)
+                && self.line_indent(self.current_span().lo) <= floor
+            {
                 break;
             }
             if shield == 0 {
@@ -601,6 +654,20 @@ impl<'a> Parser<'a> {
             match self.current() {
                 TokenKind::Eof => break,
                 TokenKind::InterpClose if depth == 0 => break,
+                // An interpolation that reaches a sibling declaration
+                // was never closed, and scanning on ate the rest of the
+                // file: in `typecheck/trait_default.lu` a `)` mutated
+                // to `match` sent this loop over a struct and an impl,
+                // which then existed as no nodes at all. Same floor the
+                // rest of recovery uses.
+                TokenKind::Kw(kw)
+                    if is_decl_keyword(kw)
+                        && self
+                            .item_floor
+                            .is_some_and(|f| self.line_indent(self.current_span().lo) <= f) =>
+                {
+                    break;
+                }
                 // Nested strings *and* nested interpolations (format
                 // specs re-nest: `{v:>{w}}`) shield their closers.
                 TokenKind::StrBegin(_) | TokenKind::InterpOpen => depth += 1,
@@ -628,8 +695,18 @@ impl<'a> Parser<'a> {
         stop_at_rbrace: bool,
         stop: impl Fn(TokenKind) -> bool,
     ) -> bool {
+        self.recover_until_from(stop_at_rbrace, None, stop)
+    }
+
+    /// [`recover_until`] with a sibling floor — see [`skip_until_from`].
+    pub(crate) fn recover_until_from(
+        &mut self,
+        stop_at_rbrace: bool,
+        sibling_floor: Option<u32>,
+        stop: impl Fn(TokenKind) -> bool,
+    ) -> bool {
         let m = self.start();
-        let skipped = self.skip_until(stop_at_rbrace, stop);
+        let skipped = self.skip_until_from(stop_at_rbrace, sibling_floor, stop);
         if skipped > 0 {
             m.complete(self, SyntaxKind::ErrorNode);
             true
