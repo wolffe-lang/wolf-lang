@@ -357,6 +357,30 @@ could reasonably keep using the value, the signature is wrong — take
 the read default (copying what it returns), or make the consumption
 real by transforming the value before it leaves.
 
+## W1004 — a byte view lent here is kept by the callee, so the bytes are copied instead
+
+`s.bytes()` in an argument position offers the string's own bytes as a
+LEND: the callee reads `{ptr, len}` pointing straight at the caller's
+storage, and the call costs nothing at all rather than one heap copy
+per byte ([mem.str.view.lend]). A lend lasts exactly the call. This
+callee keeps the parameter past the call — returns it, stores it, or
+hands it on to somewhere the bytes cannot be followed back from — so a
+lend would be a dangling pointer, and the compiler did what every call
+did before views crossed calls: it materialized the bytes into a
+`List[int]` at the call site and passed that. The program means what
+it meant; it paid one copy the lend was meant to save.
+
+If the copy is what you wanted, say so and silence the warning: `let bs
+= s.bytes()` binds a materialized list the callee may own, and passing
+`bs` costs exactly what this call already costs. If the copy is NOT
+what you wanted, the callee is the thing to change — a callee that only
+reads its parameter lends for free. The one shape that is never on
+offer is a kept lend: there is no way to spell "keep these bytes and do
+not copy them", because that spelling has no meaning that is not a
+dangling `{ptr, len}`.
+
+Formerly E1015, retired when the refusal became this warning.
+
 ## W1101 — this write stays inside the task
 
 The closure given to `spawn` assigns to a name captured from the

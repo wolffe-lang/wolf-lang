@@ -17,7 +17,7 @@ wolf_ast.workspace = true
 wolf_sema.workspace = true
 # s89: the byte-view LEND analysis (`wolf_mem::byteview`) is the memory
 # checker's, and lowering is its second consumer — the same verdict
-# decides the E1015 diagnostic and whether a call site may pass a view
+# decides the W1004 diagnostic and whether a call site may pass a view
 # instead of a copy. One authority, two readers; the alternative was
 # two whitelists that could drift apart into unsoundness.
 wolf_mem.workspace = true

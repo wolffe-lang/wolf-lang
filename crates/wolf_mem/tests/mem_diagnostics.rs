@@ -1124,15 +1124,17 @@ fn iterate_then_mutate_stays_silent() {
     );
 }
 
-// ------------------------------------------------------------ E1015 ----
+// ------------------------------------------------------------ W1004 ----
 
 #[test]
-fn e1015_lent_view_returned() {
+fn w1004_lent_view_returned() {
     // s89 (#86): `s.bytes()` in an argument position LENDS the string's
     // own storage, and a callee that returns the parameter keeps it
-    // past the call the lend is scoped to.
+    // past the call the lend is scoped to. s92: the bytes are copied
+    // and the program compiles; the diagnostic says the copy happened
+    // and where the escape is (E1015 refused this through s91).
     snap(
-        "e1015_lent_view_returned",
+        "w1004_lent_view_returned",
         "fn keep(bs: List[int]) -> List[int] { bs }\n\
          fn main() -> !int {\n    \
              let s = \"wolf\"\n    \
@@ -1143,12 +1145,12 @@ fn e1015_lent_view_returned() {
 }
 
 #[test]
-fn e1015_lent_view_relent_into_an_escape() {
+fn w1004_lent_view_relent_into_an_escape() {
     // The escape is transitive: `relay` only passes the view on, and
     // the function it passes it to is the one that keeps it. The
     // diagnostic names the call site that lent, not the hop.
     snap(
-        "e1015_lent_view_relent",
+        "w1004_lent_view_relent",
         "fn keep(bs: List[int]) -> List[int] { bs }\n\
          fn relay(bs: List[int]) -> List[int] { keep(bs) }\n\
          fn main() -> !int {\n    \
@@ -1179,7 +1181,7 @@ fn a_read_only_lend_stays_silent() {
 #[test]
 fn a_bound_bytes_list_is_not_a_lend() {
     // The fix ladder: `let` materializes, so the same callee that
-    // E1015 refuses a view for takes the bound list without a word.
+    // W1004 reports a copy for takes the bound list without a word.
     snap(
         "clean_bound_bytes_list",
         "fn keep(bs: List[int]) -> List[int] { bs }\n\

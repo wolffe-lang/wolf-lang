@@ -27,8 +27,10 @@
 //! which is bit-for-bit the pre-s89 behaviour and therefore always
 //! sound. [`Lend::Escapes`] is the subset of "not lendable" where the
 //! body PROVABLY makes the value outlive the call (it is returned, or
-//! assigned away, or handed on `take`/`mut`); that one is E1015, and it
-//! exists so the refusal teaches instead of silently costing a copy.
+//! assigned away, or handed on `take`/`mut`); that one materializes
+//! too and is W1004, so the copy the analysis PROVED necessary is said
+//! once instead of silently costing (s92; through s91 it was E1015, a
+//! refusal).
 //!
 //! Misclassifying an escape as opaque is a missed diagnostic, never
 //! unsafety: soundness rests entirely on `Lendable`'s whitelist.
@@ -38,7 +40,7 @@
 //! A lend the callee wants to keep is spelled by binding first — `let
 //! bs = s.bytes()` materializes (a `let` is not a lend position, and
 //! s77's comment already said so), and the bound list may then be
-//! passed anywhere. That is the E1015 note.
+//! passed anywhere. That is the W1004 note.
 
 use std::collections::HashMap;
 
@@ -228,18 +230,22 @@ impl<'a> Lender<'a> {
     }
 }
 
-// ------------------------------------------------- E1015, the refusal ----
+// ---------------------------------------------- W1004, the degraded lend ----
 
 /// Walk one checked body's call sites and report every byte view lent
 /// to a parameter the callee makes outlive the call ([mem.str.view.lend],
-/// E1015).
+/// W1004).
 ///
 /// Only PROVABLE escapes are reported. A parameter this analysis cannot
 /// classify materializes at the call site instead, which is what the
-/// language did before views crossed calls at all — so the diagnostic
-/// never stands between a program and a meaning it already had, it only
-/// names the one shape whose meaning would have to be a dangling
-/// `{ptr, len}`.
+/// language did before views crossed calls at all — and since s92 an
+/// escape materializes too. The lowering never lends anything but a
+/// `Lendable` parameter (`wolf_wir::lower`, the `view_mask`), so both
+/// `Opaque` and `Escapes` compile by the pre-s89 copy; the difference
+/// is that an escape is the one case the analysis has PROVED the copy
+/// was needed, so it says so, once, and names the fix. Through s91 this
+/// was E1015, a refusal; #107/#108 ruled that refusing a program with a
+/// safe compilation is not this language's style.
 pub fn check_body(
     lender: &Lender<'_>,
     pkg: &Package,
@@ -300,7 +306,7 @@ fn walk_calls(
                 continue;
             }
             if let Lend::Escapes(keep) = lender.param(sig, i) {
-                diags.push(e1015(&cs.callee, sig, i, v.span, keep));
+                diags.push(w1004(&cs.callee, sig, i, v.span, keep));
             }
         }
     }
@@ -309,29 +315,32 @@ fn walk_calls(
     }
 }
 
-fn e1015(callee: &str, sig: &FnSig, ix: usize, lend: Span, keep: Span) -> wolf_diag::Diagnostic {
+fn w1004(callee: &str, sig: &FnSig, ix: usize, lend: Span, keep: Span) -> wolf_diag::Diagnostic {
     let pname = sig
         .params
         .get(ix)
         .map(|p| p.name.clone())
         .unwrap_or_else(|| format!("#{ix}"));
-    let mut d = wolf_diag::Diagnostic::error(
-        wolf_diag::codes::E1015,
+    let mut d = wolf_diag::Diagnostic::warning(
+        wolf_diag::codes::W1004,
         lend,
         format!(
-            "these bytes are LENT to `{callee}` for the call, but `{callee}` keeps them \
-             past it"
+            "these bytes were offered to `{callee}` as a LEND, but `{callee}` keeps them past \
+             the call — so they were copied instead"
         ),
     )
-    .with_label("a byte view of the string's own storage, not a copy")
+    .with_label("a byte view of the string's own storage; materialized to a `List[int]` here")
     .with_secondary(keep, format!("`{pname}` outlives the call here"));
     if let Some(p) = sig.params.get(ix) {
         d = d.with_secondary(p.span, format!("`{pname}` is declared here"));
     }
     d.with_note(
-        "bind the bytes first — `let bs = s.bytes()` materializes a `List[int]` the \
-         callee may own, and passing `bs` costs exactly what it cost before views \
-         crossed calls. A LENT view costs nothing and lasts only for the call."
+        "the program means what it meant; it paid one copy the lend was meant to save. If \
+         the copy is what you wanted, bind the bytes first — `let bs = s.bytes()` — and \
+         pass `bs`; that costs exactly what this call costs and says so. If it is not, the \
+         callee is the thing to change: a callee that only reads its parameter lends for \
+         free. A LENT view costs nothing and lasts only for the call. (This shape was \
+         refused as E1015 before the copy became the answer; that code is retired.)"
             .to_string(),
     )
 }
