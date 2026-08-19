@@ -633,9 +633,21 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// raises the intersection, so +1 on `all-three` is not a floor
 /// getting looser; it is a rule the compiler stopped enforcing because
 /// the program had a meaning all along.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 139), ("native", 135), ("release", 135)];
-const UNION_FLOOR: usize = 155;
-const ALL_THREE_FLOOR: usize = 119;
+/// Ratcheted by s93, over 275 entries: every number moves by exactly
+/// two, and all two are NEW files — `generics/first_of_list.lu` (the
+/// #105 program) and `generics/two_instances.lu`, the first corpus
+/// entries that call a generic free function with concrete arguments
+/// and run. They run on every lane, so `all-three` moves with them; a
+/// POPULATION change, not a lane learning something. No pre-existing
+/// file moved lanes: the five that refused for monomorphization lost
+/// that reason and kept their real next one (four are c06 — dispatch
+/// tables, a fn value as an argument — and `comptime/norm_linear.lu`
+/// is s94's unelaborated generic nominal), so native/release did not
+/// gain a single old file. The s93 contract expected `rows/hof_tail`
+/// to be the +1; it is not, and the ledger says why.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 141), ("native", 137), ("release", 137)];
+const UNION_FLOOR: usize = 157;
+const ALL_THREE_FLOOR: usize = 121;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
