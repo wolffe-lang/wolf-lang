@@ -1072,6 +1072,18 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
     /// Receive one exit reason from a monitor channel, decoded.
+    /// Bounded wait for a condition another thread makes true. Tests
+    /// that used to sample once after a sleep were the load-flaky
+    /// ones (#50): a red gate must mean a red pin, so this WAITS for
+    /// the event and fails, naming it, only when it never arrives.
+    fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !cond() {
+            assert!(Instant::now() < deadline, "{what} never happened");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    }
+
     fn recv_reason(m: &Arc<Chan>) -> ProcExit {
         ProcExit::decode(m.recv().expect("monitor delivers"))
     }
@@ -1145,21 +1157,17 @@ mod tests {
         let (count, bytes) = *probed.lock().unwrap();
         assert_eq!(count, 3);
         assert!(bytes >= 3 * 4096, "ledger bytes: {bytes}");
-        // Crash path is deliver-then-free: poll briefly for the free.
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
+        // Crash path is deliver-then-free: THIS proc's ledger empties
+        // after delivery, so wait for it. `ledger_live` is process-
+        // global and a parallel sibling can hold regions, so the
+        // global check is "back to at most baseline", waited for.
+        wait_until("this proc's regions being freed", || {
+            proc_ledger(w) == (0, 0)
+        });
+        wait_until("the global ledger returning to baseline", || {
             let (c, b) = ledger_live();
-            if (c, b) == (base_count, base_bytes) {
-                break;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "ledger did not return to baseline: {:?}",
-                ledger_live()
-            );
-            std::thread::sleep(Duration::from_millis(2));
-        }
-        assert_eq!(proc_ledger(w), (0, 0));
+            c <= base_count && b <= base_bytes
+        });
     }
 
     /// THE defer law, kill half (`[conc.proc.kill]`,
@@ -1196,10 +1204,17 @@ mod tests {
         let m = monitor(w).unwrap();
         kill(w).unwrap();
         assert_eq!(recv_reason(&m), ProcExit::Killed);
-        // Kill order is free-then-deliver: by delivery the ledger is
-        // already back to baseline — no polling needed.
-        assert_eq!(ledger_live().0, base_count);
+        // Kill order is free-then-deliver: by delivery THIS proc's
+        // ledger is already empty — that is the ordering under test,
+        // and it needs no wait.
         assert_eq!(proc_ledger(w), (0, 0));
+        // `ledger_live` is process-global. Under a parallel `cargo
+        // test` a sibling test's proc may hold a region at this
+        // instant, so the global count is not a same-instant
+        // assertion (#50: this line was the flaky one). Wait for it.
+        wait_until("the global ledger returning to baseline", || {
+            ledger_live().0 <= base_count
+        });
         assert!(
             !defer_ran.load(SeqCst),
             "user code ran after the kill ([conc.proc.kill]: defers do not run)"
