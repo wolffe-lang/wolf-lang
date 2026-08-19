@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="7\n")
+//! phase: run
+//! conforms: generics.mono, generics.brackets
+//!
+//! The #105 program, and s93's acceptance witness: a generic free
+//! function called with concrete types compiles natively as an
+//! INSTANCE. `first[T]` is checked once as an archetype; the call
+//! `first(a)` binds `T ↦ int` from what the checker already decided at
+//! the site, and the WIR carries `first.mono.int` — the archetype
+//! itself contributes no WIR (D8: instances are the WIR). lupin
+//! prints the same `7`; the differential holds both to it.
+
+fn first[T](xs: List[T]) -> T ! {none} {
+    xs.get(0)
+}
+
+fn main() -> !int {
+    var a = List[int]()
+    (mut a).push(7)
+    let v = first(a)?
+    print("{v}")
+    if v == 7 { 0 } else { 1 }
+}
