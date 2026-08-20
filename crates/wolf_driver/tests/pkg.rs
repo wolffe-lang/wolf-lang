@@ -545,3 +545,176 @@ fn diamond_with_two_majors_resolves_and_sum_is_byte_stable() {
         assert_eq!(stdout(&out), "11 21 32\n");
     }
 }
+
+// --------------------------------------------------------- s51: publish ----
+
+/// The transparency-log round trip (acceptance + the X7 gate): publish
+/// into a static log; a fresh consumer verifies inclusion under the
+/// signed head; a tampered tree with the correct name fails loudly;
+/// and the SAME client verification passes against a mock-registry
+/// layout — dumb files at a different path, which is exactly the c15
+/// transport change and nothing else.
+#[test]
+fn publish_log_round_trip_and_tamper_fails() {
+    if !git_available() {
+        eprintln!("SKIP publish: no git on PATH");
+        return;
+    }
+    let dir = stage("pkg_publish", "dogfood");
+    let store = dir.join("store");
+    let logd = dir.join("static-log");
+    let keyf = dir.join("log.key");
+    std::fs::write(&keyf, "ab".repeat(32)).expect("key");
+
+    // The util package publishes: name must be scoped, so rewrite it.
+    let util = dir.join("util");
+    std::fs::write(
+        util.join("wolf.pkg"),
+        "pkg {\n    name:    \"acme/util\",\n    version: \"0.2.0\",\n}\n",
+    )
+    .expect("scoped manifest");
+    let out = run_wolf(
+        &dir,
+        &[
+            "publish",
+            "--dir",
+            "util",
+            "--log",
+            logd.to_str().unwrap(),
+            "--key",
+            keyf.to_str().unwrap(),
+        ],
+        &[],
+    );
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    assert!(logd.join("log").is_file() && logd.join("log.head").is_file());
+
+    // Append-only: republishing the same version is refused.
+    let out = run_wolf(
+        &dir,
+        &[
+            "publish",
+            "--dir",
+            "util",
+            "--log",
+            logd.to_str().unwrap(),
+            "--key",
+            keyf.to_str().unwrap(),
+        ],
+        &[],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("immutable"), "{}", stderr(&out));
+
+    // A fresh consumer fetches the same tree from git and verifies it
+    // against the log (WOLF_LOG + WOLF_LOG_KEY).
+    let repo = dir.join("util-repo");
+    copy_tree(&util, &repo);
+    git_in(&repo, &["init", "--quiet"]);
+    git_in(&repo, &["add", "."]);
+    git_in(&repo, &["commit", "--quiet", "-m", "published util"]);
+    git_in(&repo, &["tag", "v0.2.0"]);
+    let url = format!("file://{}", repo.display());
+    let app = dir.join("app");
+    std::fs::remove_file(app.join("wolf.pkg")).expect("fresh app");
+    let env: &[(&str, &str)] = &[
+        ("WOLF_STORE", store.to_str().unwrap()),
+        ("WOLF_LOG", logd.to_str().unwrap()),
+        ("WOLF_LOG_KEY", &"ab".repeat(32)),
+    ];
+    let out = run_wolf(
+        &dir,
+        &[
+            "add", "util", "--git", &url, "--tag", "v0.2.0", "--dir", "app",
+        ],
+        env,
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "verified add failed:\n{}",
+        stderr(&out)
+    );
+
+    // The mock-registry transport: the SAME dumb files at a different
+    // path, the SAME client code — verification still passes.
+    let mock = dir.join("mock-registry").join("v1").join("acme");
+    std::fs::create_dir_all(&mock).expect("mock layout");
+    std::fs::copy(logd.join("log"), mock.join("log")).expect("serve log");
+    std::fs::copy(logd.join("log.head"), mock.join("log.head")).expect("serve head");
+    let out = run_wolf(
+        &dir,
+        &["update", "--dir", "app"],
+        &[
+            ("WOLF_STORE", store.to_str().unwrap()),
+            ("WOLF_LOG", mock.to_str().unwrap()),
+            ("WOLF_LOG_KEY", &"ab".repeat(32)),
+        ],
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "mock-registry verify failed:\n{}",
+        stderr(&out)
+    );
+
+    // Tamper: same name@version, different bits. Republish under a new
+    // patch version whose repo tree differs from what gets tagged —
+    // simplest honest tamper: edit the repo AFTER tagging a new
+    // version the log never saw matching these bits.
+    std::fs::write(
+        repo.join("wolf.pkg"),
+        "pkg {\n    name:    \"acme/util\",\n    version: \"0.3.0\",\n}\n",
+    )
+    .expect("bump");
+    let mut body = std::fs::read_to_string(repo.join("util.lu")).expect("body");
+    body = body.replace("2 * x + 1", "666 * x");
+    std::fs::write(repo.join("util.lu"), body).expect("evil body");
+    git_in(&repo, &["add", "."]);
+    git_in(&repo, &["commit", "--quiet", "-m", "evil 0.3.0"]);
+    git_in(&repo, &["tag", "v0.3.0"]);
+    // Publish an honest 0.3.0 from the ORIGINAL tree (what the author
+    // meant to ship): bump the local util manifest only.
+    std::fs::write(
+        util.join("wolf.pkg"),
+        "pkg {\n    name:    \"acme/util\",\n    version: \"0.3.0\",\n}\n",
+    )
+    .expect("honest bump");
+    let out = run_wolf(
+        &dir,
+        &[
+            "publish",
+            "--dir",
+            "util",
+            "--log",
+            logd.to_str().unwrap(),
+            "--key",
+            keyf.to_str().unwrap(),
+        ],
+        &[],
+    );
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    // The consumer upgrades to 0.3.0 and gets the EVIL tree from git:
+    // the log records the honest one — refused, named, nothing written.
+    let out = run_wolf(&dir, &["rm", "util", "--dir", "app"], env);
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    let out = run_wolf(
+        &dir,
+        &[
+            "add", "util", "--git", &url, "--tag", "v0.3.0", "--dir", "app",
+        ],
+        env,
+    );
+    assert_eq!(out.status.code(), Some(1), "tampered add passed?!");
+    let err = stderr(&out);
+    assert!(
+        err.contains("not the published bits"),
+        "wrong failure:\n{err}"
+    );
+    assert!(
+        !app.join("wolf.sum").exists() || {
+            let s = std::fs::read_to_string(app.join("wolf.sum")).unwrap();
+            !s.contains("0.3.0")
+        }
+    );
+}

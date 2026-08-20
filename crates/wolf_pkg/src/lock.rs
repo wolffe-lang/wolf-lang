@@ -157,6 +157,12 @@ fn collect(
             if name == ".git" || name == ".lu-cache" || name == ".hg" || name == ".svn" {
                 continue;
             }
+            // A consumer's vendor mirror is consumer state, never
+            // package identity (s51: `wolf vendor` writes it, `wolf
+            // publish` must not hash it).
+            if name == "vendor" {
+                continue;
+            }
             collect(root, &path, out)?;
         } else if is_identity_file(&path) {
             let rel = path

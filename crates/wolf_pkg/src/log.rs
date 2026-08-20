@@ -473,6 +473,98 @@ pub fn head_path(log_file: &Path) -> std::path::PathBuf {
     log_file.with_file_name(name)
 }
 
+// ------------------------------------------------------ client verify --
+
+/// Verify a project's store-backed packages against a static log
+/// (v1 transport: `<dir>/log` + `<dir>/log.head`, dumb files —
+/// servable from object storage; the c15 registry changes only how
+/// these bytes are fetched, which is the X7 gate).
+///
+/// Opt-in and strict where it applies: a package ABSENT from the log
+/// is not an error (unpublished things exist); a package PRESENT must
+/// match its record's tree hash AND carry a valid inclusion proof
+/// under the head — and the head must verify under `key` when one is
+/// given. A log file without a head is refused: an unheaded log
+/// proves nothing.
+pub fn verify_project_against_log(
+    project: &crate::project::Project,
+    log_dir: &Path,
+    key: Option<&[u8; 32]>,
+) -> Vec<String> {
+    let mut errs = Vec::new();
+    let log_file = log_dir.join("log");
+    let lines = match read_records(&log_file) {
+        Ok(l) => l,
+        Err(e) => return vec![e],
+    };
+    if lines.is_empty() {
+        return errs;
+    }
+    let head = match std::fs::read_to_string(head_path(&log_file)) {
+        Ok(t) => match TreeHead::parse(&t) {
+            Ok(h) => h,
+            Err(e) => return vec![format!("{}: {e}", head_path(&log_file).display())],
+        },
+        Err(e) => {
+            return vec![format!(
+                "the log has records but no head ({}: {e}) — an unheaded log proves nothing",
+                head_path(&log_file).display()
+            )];
+        }
+    };
+    if let Some(k) = key
+        && let Err(e) = head.verify_sig(k)
+    {
+        return vec![e];
+    }
+    if head.size > lines.len() {
+        return vec![format!(
+            "the head signs {} record(s) but the log holds {} — a truncated mirror",
+            head.size,
+            lines.len()
+        )];
+    }
+    for p in project.pkgs.iter().skip(1) {
+        if p.hash.is_none() || p.is_std {
+            continue;
+        }
+        let key_str = format!("{}@{}", p.name, p.version);
+        let Some((idx, line)) = lines
+            .iter()
+            .enumerate()
+            .take(head.size)
+            .find(|(_, l)| l.starts_with(&format!("{key_str} ")))
+        else {
+            continue; // unpublished: the log has nothing to say
+        };
+        let rec = match LogRecord::parse(line) {
+            Ok(r) => r,
+            Err(e) => {
+                errs.push(format!("log record for `{key_str}`: {e}"));
+                continue;
+            }
+        };
+        if Some(&rec.tree) != p.hash.as_ref() {
+            errs.push(format!(
+                "`{key_str}`: the fetched tree hashes {}, but the transparency log                  records {} — the bits are not the published bits",
+                p.hash.as_deref().unwrap_or("?"),
+                rec.tree
+            ));
+            continue;
+        }
+        let head_lines: Vec<String> = lines[..head.size].to_vec();
+        match inclusion_proof(&head_lines, idx) {
+            Ok(proof) => {
+                if let Err(e) = verify_inclusion(line, idx, head.size, &proof, &head.root) {
+                    errs.push(format!("`{key_str}`: {e}"));
+                }
+            }
+            Err(e) => errs.push(format!("`{key_str}`: {e}")),
+        }
+    }
+    errs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
