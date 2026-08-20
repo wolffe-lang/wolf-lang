@@ -749,9 +749,17 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// deferred), so `all-three` does not move: the last "concurrency"
 /// refusal on the native lanes is gone, and the lanes stay un-nested
 /// for the reason this gate exists to show.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 141), ("native", 138), ("release", 138)];
-const UNION_FLOOR: usize = 158;
-const ALL_THREE_FLOOR: usize = 121;
+/// Ratcheted by s94 over 279 entries: +4 on every lane and on
+/// `all-three` — the four `corpus/generics/` witnesses (a generic
+/// struct, a generic impl/method, a two-level raise, hundred_shapes)
+/// run EVERYWHERE, because the checker is one implementation and
+/// generic-nominal support landed in it, not in a lowering. The s94
+/// contract predicted a flat `all-three`; it moves for the same
+/// reason s93's did — a population change, not a checked-lane
+/// semantics change — and the count says exactly what entered.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 142), ("release", 142)];
+const UNION_FLOOR: usize = 162;
+const ALL_THREE_FLOOR: usize = 125;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
