@@ -1604,10 +1604,10 @@ project refuses to build against (a known-bad release, a license
 problem, an advisory). Resolution reached one of them. Exclusion is a
 top-level-exclusive power (the build's root decides, dependencies
 advise); the fix is a `replace:` entry pointing somewhere acceptable,
-or upstream moving off the excluded version. At v0 transport there is
-no version list to fall back over, so the exclusion is a refusal, not
-a silent downgrade; registry-side pick-the-next-minimum arrives with
-the hosted transport (c15).
+or upstream moving off the excluded version. There is no version list
+to fall back over today, so the exclusion is a refusal, not a silent
+downgrade; once a registry serves version lists, resolution will pick
+the next acceptable minimum instead.
 "#);
 
 // ------------------------------------------------------------------------

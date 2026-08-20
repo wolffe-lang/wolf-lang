@@ -552,8 +552,7 @@ pub fn verify_project_against_log(
             ));
             continue;
         }
-        let head_lines: Vec<String> = lines[..head.size].to_vec();
-        match inclusion_proof(&head_lines, idx) {
+        match inclusion_proof(&lines[..head.size], idx) {
             Ok(proof) => {
                 if let Err(e) = verify_inclusion(line, idx, head.size, &proof, &head.root) {
                     errs.push(format!("`{key_str}`: {e}"));
@@ -622,7 +621,7 @@ mod tests {
             let ls = lines(n);
             let new_root = tree_root(&ls);
             for m in 1..=n {
-                let old_root = tree_root(&ls[..m].to_vec());
+                let old_root = tree_root(&ls[..m]);
                 let proof = consistency_proof(&ls, m).unwrap();
                 verify_consistency(m, n, &old_root, &new_root, &proof).unwrap();
                 // A fork: an old head over DIFFERENT first m records.

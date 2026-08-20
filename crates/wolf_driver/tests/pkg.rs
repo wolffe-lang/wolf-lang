@@ -511,7 +511,7 @@ fn diamond_with_two_majors_resolves_and_sum_is_byte_stable() {
         .expect("leg manifest");
         std::fs::write(
             d.join(format!("{leg}.lu")),
-            format!("use util\n\npub fn go(x: int) -> int {{\n    util.twist(x)\n}}\n"),
+            "use util\n\npub fn go(x: int) -> int {\n    util.twist(x)\n}\n",
         )
         .expect("leg body");
     }
@@ -717,4 +717,28 @@ fn publish_log_round_trip_and_tamper_fails() {
             !s.contains("0.3.0")
         }
     );
+}
+
+/// `[pkg.manifest.fmt]`: a manifest round-trips through the formatter
+/// as an identity — validated with the manifest parser, bytes
+/// untouched — and a broken one fails fmt rather than getting mangled
+/// through the program grammar.
+#[test]
+fn manifest_round_trips_through_fmt_as_identity() {
+    let dir = stage("pkg_fmt", "dogfood");
+    let manifest = dir.join("app").join("wolf.pkg");
+    let before = std::fs::read(&manifest).expect("fixture manifest");
+    let out = run_wolf(&dir, &["fmt", manifest.to_str().unwrap()], &[]);
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    assert_eq!(
+        std::fs::read(&manifest).expect("after"),
+        before,
+        "fmt rewrote a manifest"
+    );
+    let out = run_wolf(&dir, &["fmt", "--check", manifest.to_str().unwrap()], &[]);
+    assert_eq!(out.status.code(), Some(0), "check mode:\n{}", stderr(&out));
+    std::fs::write(&manifest, "pkg {\n    deps: 7,\n}\n").expect("break it");
+    let out = run_wolf(&dir, &["fmt", manifest.to_str().unwrap()], &[]);
+    assert_eq!(out.status.code(), Some(1), "broken manifest passed fmt");
+    assert!(stderr(&out).contains("E1502"), "{}", stderr(&out));
 }

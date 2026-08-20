@@ -199,6 +199,30 @@ fn fmt(args: &[String]) {
         };
         let id = sm.intern(f);
         sources.add(id, display.clone(), &src);
+        // A manifest is wolf-literal DATA, not a program: `wolf fmt`
+        // validates it with the manifest parser and leaves the bytes
+        // alone (identity round-trip — s51). A canonical manifest
+        // style would have to reprint from the typed Manifest, which
+        // is lossy over comments and carried-but-inert keys; until a
+        // lossless literal-CST formatter exists, honesty beats
+        // mangling a manifest through the program grammar.
+        if f.file_name().is_some_and(|n| n == "wolf.pkg") {
+            let text = String::from_utf8_lossy(&src);
+            let (_, diags) = wolf_pkg::manifest::parse(id, &text);
+            let errors: Vec<&Diagnostic> = diags
+                .iter()
+                .filter(|d| d.severity == wolf_diag::Severity::Error)
+                .collect();
+            if !errors.is_empty() {
+                let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+                for d in &errors {
+                    reporter.report(d);
+                }
+                eprint!("{}", reporter.take_output());
+                failed = true;
+            }
+            continue;
+        }
         let out = wolf_fmt::format_source(id, &src);
         // `--check` asks one question — is the file canonical? — so a
         // file with syntax errors whose formattable parts are already
