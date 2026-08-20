@@ -160,6 +160,22 @@ fn lower_package_impl(
                 qualify(&tc.sigs, outcome.body.module, &outcome.body.name),
                 (tb, &outcome.body),
             );
+        } else if let Some(mi) = outcome.body.member {
+            // s94: method bodies join the worklist's map under the
+            // mangled `Type.method` name, so a generic method's
+            // instance can find its checked body the way a free fn's
+            // does. Trait impls stay out — their bodies are c06's.
+            if let Some(imp) = tc
+                .sigs
+                .impls
+                .iter()
+                .find(|i| i.file == outcome.body.file && i.decl == outcome.body.decl)
+                && imp.trait_ref.is_none()
+                && let Some(m) = imp.methods.iter().find(|m| m.member == mi)
+                && let TyKind::Nominal { name: tyname, .. } = tc.sigs.table.kind(imp.self_ty)
+            {
+                bodies.insert(format!("{tyname}.{}", m.name), (tb, &outcome.body));
+            }
         }
     }
     let mut sig_cache: HashMap<String, SigId> = HashMap::new();
@@ -413,11 +429,27 @@ enum Bound {
     },
     Range(Box<Bound>),
     Ptr(Box<Bound>),
+    /// s94: containers and applied nominals cross tables structurally
+    /// — a `List(TyId)` leaf would smuggle a per-table id.
+    List(Box<Bound>),
+    Pool(Box<Bound>),
+    Nominal {
+        module: u32,
+        name: String,
+        args: Vec<Bound>,
+    },
 }
 
 fn freeze(table: &TypeTable, ty: TyId) -> Bound {
     match table.kind(ty).clone() {
         TyKind::Wrapping(t) => Bound::Wrapping(Box::new(freeze(table, t))),
+        TyKind::List(t) => Bound::List(Box::new(freeze(table, t))),
+        TyKind::Pool(t) => Bound::Pool(Box::new(freeze(table, t))),
+        TyKind::Nominal { module, name, args } if !args.is_empty() => Bound::Nominal {
+            module,
+            name,
+            args: args.into_iter().map(|t| freeze(table, t)).collect(),
+        },
         TyKind::Tuple(ts) => Bound::Tuple(ts.into_iter().map(|t| freeze(table, t)).collect()),
         TyKind::Fn(ps, r) => Bound::Fn(
             ps.into_iter().map(|t| freeze(table, t)).collect(),
@@ -458,6 +490,13 @@ fn thaw(b: &Bound, into: &mut TypeTable) -> TyId {
         }
         Bound::Range(t) => TyKind::Range(thaw(t, into)),
         Bound::Ptr(t) => TyKind::Ptr(thaw(t, into)),
+        Bound::List(t) => TyKind::List(thaw(t, into)),
+        Bound::Pool(t) => TyKind::Pool(thaw(t, into)),
+        Bound::Nominal { module, name, args } => TyKind::Nominal {
+            module: *module,
+            name: name.clone(),
+            args: args.iter().map(|t| thaw(t, into)).collect(),
+        },
     };
     into.intern(k)
 }
@@ -549,6 +588,14 @@ fn mono_segment(spelling: &str) -> String {
             sep = true;
         }
     }
+    if out.is_empty() {
+        // s94: a spelling with no identifier characters at all — the
+        // empty row `{}` is the one that arises (a tail bound to
+        // "nothing more") — must still be a parseable name segment,
+        // or the dump's dotted name ends in `.` and does not
+        // round-trip.
+        out.push_str("empty");
+    }
     out
 }
 
@@ -621,8 +668,12 @@ fn lower_body(
                     span,
                 ));
             }
-            if !imp.generics.is_empty() {
-                return Err(refuse("generic-impl lowering (monomorphization)", span));
+            if !imp.generics.is_empty() && bindings.is_empty() {
+                // s94: a generic impl's method archetype contributes
+                // no WIR — its instances are the WIR, exactly the
+                // free-fn rule below. The worklist hands an instance
+                // in with bindings covering the impl's rigids.
+                return Ok(None);
             }
             let Some(m) = imp.methods.iter().find(|m| m.member == mi) else {
                 return Ok(None);
@@ -1182,6 +1233,28 @@ fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
 /// table). Unsigned prims ride the same-width scalar — signedness is
 /// an op property, not a type property (the s26 op-set decision,
 /// recorded in [`crate::ops`]).
+/// A rigid-binding frame for layout (s94): one hop of generic-nominal
+/// application. `Pair[T, int]`'s fields lower with a frame binding
+/// `K ↦ (args' table, T's id)`; frames STACK, so an applied nominal in
+/// a field position (`Outer[T] { inner: Pair[T, int] }`) resolves the
+/// inner `T` through its parent. No interning: a rigid resolves by
+/// hopping to the argument's own table and continuing there.
+struct RigidFrame<'x> {
+    names: &'x [String],
+    table: &'x TypeTable,
+    args: &'x [TyId],
+    parent: Option<&'x RigidFrame<'x>>,
+}
+
+impl<'x> RigidFrame<'x> {
+    fn lookup(&self, name: &str) -> Option<(&'x TypeTable, TyId, Option<&'x RigidFrame<'x>>)> {
+        if let Some(i) = self.names.iter().position(|n| n == name) {
+            return Some((self.table, self.args[i], self.parent));
+        }
+        self.parent.and_then(|p| p.lookup(name))
+    }
+}
+
 fn wir_ty(
     it: &mut types::TypeInterner,
     table: &TypeTable,
@@ -1200,7 +1273,23 @@ fn wir_ty_depth(
     span: Span,
     depth: u32,
 ) -> R<Option<TypeId>> {
+    wir_ty_frame(it, table, sigs, id, span, depth, None)
+}
+
+fn wir_ty_frame(
+    it: &mut types::TypeInterner,
+    table: &TypeTable,
+    sigs: &SigTables,
+    id: TyId,
+    span: Span,
+    depth: u32,
+    frame: Option<&RigidFrame<'_>>,
+) -> R<Option<TypeId>> {
     if depth > 32 {
+        // The cap is also the recursive-generic-nominal stop
+        // (`Node[T] { next: Node[T] }` by value is infinite-size; a
+        // cycle-safe layout needs indirection the language does not
+        // spell yet).
         return Err(refuse("deeply nested aggregate types", span));
     }
     match table.kind(id) {
@@ -1219,19 +1308,21 @@ fn wir_ty_depth(
             Prim::Str => Ok(Some(str_ty(it))),
             Prim::Byte => Err(refuse("byte lowering (runtime byte views, c08)", span)),
         },
-        TyKind::Wrapping(inner) => match wir_ty_depth(it, table, sigs, *inner, span, depth + 1)? {
-            Some(t) if types_is_int(t) => Ok(Some(t)),
-            _ => Err(refuse("wrapping over a non-integer type", span)),
-        },
-        TyKind::Distinct(inner) => wir_ty_depth(it, table, sigs, *inner, span, depth + 1),
+        TyKind::Wrapping(inner) => {
+            match wir_ty_frame(it, table, sigs, *inner, span, depth + 1, frame)? {
+                Some(t) if types_is_int(t) => Ok(Some(t)),
+                _ => Err(refuse("wrapping over a non-integer type", span)),
+            }
+        }
+        TyKind::Distinct(inner) => wir_ty_frame(it, table, sigs, *inner, span, depth + 1, frame),
         TyKind::ErrUnion(ok, row) => {
             if row_is_empty(table, *row) {
-                wir_ty_depth(it, table, sigs, *ok, span, depth + 1)
+                wir_ty_frame(it, table, sigs, *ok, span, depth + 1, frame)
             } else {
                 // A fallible type with tags: the eu pair (s27). The ok
                 // half maps as usual; the row's payloads unify into
                 // positional slots.
-                let okw = wir_ty_depth(it, table, sigs, *ok, span, depth + 1)?;
+                let okw = wir_ty_frame(it, table, sigs, *ok, span, depth + 1, frame)?;
                 let slots = row_slot_tys(it, table, sigs, *row, span, depth)?;
                 Ok(Some(it.eu(okw, slots)))
             }
@@ -1250,19 +1341,19 @@ fn wir_ty_depth(
                 Ok(Some(it.intern(types::TypeData::Agg(fields))))
             }
         }
-        TyKind::Nominal { module, name } => {
+        TyKind::Nominal { module, name, args } => {
             // Adapter types are scalars in disguise (layout identity);
             // struct nominals are by-value aggregates (s26); enums are
             // tag scalars or tag+slots aggregates (s27). Field/variant
             // types live in the SIGNATURE table.
             match sigs.get(*module as usize, name) {
                 Some(ItemSig::Distinct { base, .. }) => {
-                    wir_ty_depth(it, &sigs.table, sigs, *base, span, depth + 1)
+                    wir_ty_frame(it, &sigs.table, sigs, *base, span, depth + 1, frame)
                 }
                 Some(ItemSig::Struct(ss)) if !ss.generic => {
                     let mut fields = Vec::with_capacity(ss.fields.len());
                     for f in &ss.fields {
-                        match wir_ty_depth(it, &sigs.table, sigs, f.ty, span, depth + 1)? {
+                        match wir_ty_frame(it, &sigs.table, sigs, f.ty, span, depth + 1, frame)? {
                             Some(t) => fields.push(t),
                             None => {
                                 return Err(refuse("unit-typed struct fields", span));
@@ -1274,18 +1365,68 @@ fn wir_ty_depth(
                     }
                     Ok(Some(it.intern(types::TypeData::Agg(fields))))
                 }
+                // s94: an APPLIED generic struct — `Pair[int, str]` —
+                // lays out its fields under a rigid frame binding the
+                // declaration's parameters to the application's
+                // arguments (which live in the CURRENT table). Frames
+                // stack, so `Outer[T] { inner: Pair[T, int] }` resolves
+                // the inner `T` through the outer application. The
+                // layout memo is the interner itself: identical field
+                // lists intern to one `Agg`.
+                Some(ItemSig::Struct(ss)) if ss.generics.len() == args.len() => {
+                    let inner = RigidFrame {
+                        names: &ss.generics,
+                        table,
+                        args,
+                        parent: frame,
+                    };
+                    let mut fields = Vec::with_capacity(ss.fields.len());
+                    for f in &ss.fields {
+                        match wir_ty_frame(
+                            it,
+                            &sigs.table,
+                            sigs,
+                            f.ty,
+                            span,
+                            depth + 1,
+                            Some(&inner),
+                        )? {
+                            Some(t) => fields.push(t),
+                            None => {
+                                return Err(refuse("unit-typed struct fields", span));
+                            }
+                        }
+                    }
+                    if fields.is_empty() {
+                        return Ok(None);
+                    }
+                    Ok(Some(it.intern(types::TypeData::Agg(fields))))
+                }
                 Some(ItemSig::Enum {
-                    generic: false,
+                    generic,
+                    generics,
                     variants,
                     ..
-                }) => {
+                }) if !*generic || generics.len() == args.len() => {
+                    // s94: an applied generic enum lays out its
+                    // payload slots under the same rigid frame as
+                    // struct fields; a bare generic enum still falls
+                    // through to the named refusal.
+                    let inner = RigidFrame {
+                        names: generics,
+                        table,
+                        args,
+                        parent: frame,
+                    };
+                    let frame = if *generic { Some(&inner) } else { frame };
                     // Enum values: the variant tag (declaration index,
                     // i64) alone when payload-free, else tag + the
                     // position-unified payload slots.
                     let mut slots: Vec<TypeId> = Vec::new();
                     for v in variants {
                         for (i, &p) in v.payload.iter().enumerate() {
-                            let Some(w) = wir_ty_depth(it, &sigs.table, sigs, p, span, depth + 1)?
+                            let Some(w) =
+                                wir_ty_frame(it, &sigs.table, sigs, p, span, depth + 1, frame)?
                             else {
                                 return Err(refuse("unit-typed enum payloads", span));
                             };
@@ -1316,7 +1457,7 @@ fn wir_ty_depth(
         TyKind::Tuple(elems) => {
             let mut fields = Vec::with_capacity(elems.len());
             for &e in &elems.clone() {
-                match wir_ty_depth(it, table, sigs, e, span, depth + 1)? {
+                match wir_ty_frame(it, table, sigs, e, span, depth + 1, frame)? {
                     Some(t) => fields.push(t),
                     None => return Err(refuse("unit-typed tuple elements", span)),
                 }
@@ -1353,14 +1494,21 @@ fn wir_ty_depth(
         // refusals at the expression sites.
         TyKind::Ptr(_) => Ok(Some(types::PTR)),
         // s93: a rigid here is a generic parameter no substitution
-        // bound. It never happens for an instance the worklist built
-        // (every rigid is bound or the call site refused), so this is
-        // the archetype itself reaching a type query — name the
-        // parameter rather than the shape.
-        TyKind::Rigid(name) => Err(refuse_named(
-            format!("a generic parameter `{name}` outside any instantiation"),
-            span,
-        )),
+        // bound — unless a rigid FRAME binds it (s94: a generic
+        // nominal's field under an application). Resolution hops to
+        // the argument's own table and continues under the parent
+        // frame; only an unbound rigid refuses, named.
+        TyKind::Rigid(name) => {
+            if let Some(f) = frame
+                && let Some((atable, aid, parent)) = f.lookup(name)
+            {
+                return wir_ty_frame(it, atable, sigs, aid, span, depth + 1, parent);
+            }
+            Err(refuse_named(
+                format!("a generic parameter `{name}` outside any instantiation"),
+                span,
+            ))
+        }
         // s93: an associated-type projection whose base the substitution
         // made concrete (`T.Item` under `T ↦ int`) normalizes through the
         // impl's rewrite rules — which need the impl instantiated, and
@@ -1371,12 +1519,15 @@ fn wir_ty_depth(
             format!("an associated-type projection `.{name}` (needs the impl instantiated)"),
             span,
         )),
-        // A user generic nominal reaches lowering as an opaque token —
-        // sema does not elaborate it (`sig.rs: generic_instantiations_
-        // stay_opaque` pins exactly that); there is nothing to
-        // substitute into. s94 T3 is the sema change. Name the token.
+        // s94 elaborated applied generic nominals, so what still
+        // reaches lowering as an opaque token is the residue the
+        // checker leaves by design: const-generic VALUE arguments
+        // (`Buf[2 + 2]` — values have no home in the type table yet)
+        // and generic aliases. Name the token and the reason.
         TyKind::Unsupported(spelling) => Err(refuse_named(
-            format!("a generic nominal `{spelling}` (not yet elaborated by the checker)"),
+            format!(
+                "a generic application left opaque by the checker (`{spelling}`: const-generic values and generic aliases do not elaborate yet)"
+            ),
             span,
         )),
         _ => Err(refuse("this type in WIR lowering", span)),
@@ -2971,7 +3122,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         loop {
             match table.kind(ty) {
-                TyKind::Nominal { module, name } => match self.sigs.get(*module as usize, name) {
+                TyKind::Nominal { module, name, .. } => match self.sigs.get(*module as usize, name)
+                {
                     Some(ItemSig::Struct(ss)) => {
                         let Some(idx) = ss.fields.iter().position(|f| f.name == mname) else {
                             return Err(refuse("a member the struct does not declare", span));
@@ -3245,7 +3397,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 _ => break,
             }
         }
-        let TyKind::Nominal { module, name } = table.kind(ty) else {
+        let TyKind::Nominal { module, name, .. } = table.kind(ty) else {
             return Err(refuse("struct literals of this type (c06)", e.span));
         };
         let Some(ItemSig::Struct(ss)) = self.sigs.get(*module as usize, name) else {
@@ -6262,6 +6414,62 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(out)
     }
 
+    /// [`bind_generics`] for a method call (s94): the receiver's
+    /// site type binds the IMPL's rigids (its declared type is the
+    /// impl self type — `Pair[K, V]` — so a `Pair[int, str]` receiver
+    /// binds both), the argument types bind the method's own, and the
+    /// call's recorded type binds through the return. Every rigid of
+    /// both scopes must bind, or the site refuses naming the one that
+    /// did not.
+    fn bind_method_generics(
+        &self,
+        imp: &wolf_sema::traits::ImplDef,
+        msig: &FnSig,
+        d: CallExpr<'t>,
+        e: &'t GreenNode,
+    ) -> R<Vec<(String, Bound)>> {
+        let mut map: std::collections::BTreeMap<String, Bound> = std::collections::BTreeMap::new();
+        // Receiver: the callee is `base.method`, and params[0] is the
+        // declared receiver.
+        if let Some(base) = d
+            .callee()
+            .and_then(wolf_ast::MemberExpr::cast)
+            .and_then(|m| m.base())
+            && let Some(p0) = msig.params.first()
+            && let Some(site) = self.expr_sema_ty(base.span)
+        {
+            self.match_binding(p0.ty, site, &mut map, e.span)?;
+        }
+        let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+        for (i, p) in msig.params.iter().skip(1).enumerate() {
+            let Some(a) = args.get(i) else { break };
+            let Some(vexpr) = Arg::value(*a) else {
+                continue;
+            };
+            let Some(site) = self.expr_sema_ty(vexpr.span) else {
+                continue;
+            };
+            self.match_binding(p.ty, site, &mut map, e.span)?;
+        }
+        if let Some(site_ret) = self.expr_sema_ty(e.span) {
+            self.match_binding(msig.ret, site_ret, &mut map, e.span)?;
+        }
+        let mut out = Vec::with_capacity(imp.generics.len() + msig.generics.len());
+        for g in imp.generics.iter().chain(msig.generics.iter()) {
+            let Some(b) = map.remove(&g.name) else {
+                return Err(refuse_named(
+                    format!(
+                        "an instantiation with an unbound parameter (`{}` is not fixed by this call)",
+                        g.name
+                    ),
+                    e.span,
+                ));
+            };
+            out.push((g.name.clone(), b));
+        }
+        Ok(out)
+    }
+
     /// One structural step of [`bind_generics`]: `decl` in the
     /// signature table against `site` in this body's table.
     fn match_binding(
@@ -6292,7 +6500,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         match (dk, sk) {
             (TyKind::Wrapping(a), TyKind::Wrapping(b))
             | (TyKind::Range(a), TyKind::Range(b))
+            | (TyKind::List(a), TyKind::List(b))
+            | (TyKind::Pool(a), TyKind::Pool(b))
             | (TyKind::Ptr(a), TyKind::Ptr(b)) => self.match_binding(a, b, map, span),
+            // s94: an applied nominal matches argument-wise — a
+            // `Pair[K, V]` receiver declaration against a
+            // `Pair[int, str]` site binds both rigids.
+            (
+                TyKind::Nominal {
+                    module: dm,
+                    name: dn,
+                    args: da,
+                },
+                TyKind::Nominal {
+                    module: sm,
+                    name: sn,
+                    args: sa,
+                },
+            ) if dm == sm && dn == sn && da.len() == sa.len() => {
+                for (a, b) in da.into_iter().zip(sa) {
+                    self.match_binding(a, b, map, span)?;
+                }
+                Ok(())
+            }
             (TyKind::Tuple(xs), TyKind::Tuple(ys)) if xs.len() == ys.len() => {
                 for (a, b) in xs.into_iter().zip(ys) {
                     self.match_binding(a, b, map, span)?;
@@ -10399,7 +10629,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             ));
         }
-        let TyKind::Nominal { module, name } = self.table.kind(ty) else {
+        let TyKind::Nominal { module, name, .. } = self.table.kind(ty) else {
             return Err(refuse("constructing a non-enum type", e.span));
         };
         let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(*module as usize, name) else {
@@ -10511,8 +10741,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 _ => {}
             }
         }
-        // The method's signature, from the unique inherent impl.
-        let msig: &FnSig = self
+        // The method's signature, from the unique inherent impl —
+        // and the impl itself (s94: a generic impl's rigids bind from
+        // the receiver at this site).
+        let (imp, msig): (&wolf_sema::traits::ImplDef, &FnSig) = self
             .sigs
             .impls
             .iter()
@@ -10527,12 +10759,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 i.methods
                     .iter()
                     .find(|mm| &mm.name == method)
-                    .map(|mm| &mm.sig)
+                    .map(|mm| (i, &mm.sig))
             })
             .ok_or_else(|| refuse("a method call without an elaborated impl", e.span))?;
-        if !msig.generics.is_empty() {
-            return Err(refuse("generic-method calls (monomorphization)", e.span));
-        }
+        // s94: a generic impl or a generic method is called as an
+        // INSTANCE, the s93 free-fn rule — bind every rigid (the
+        // impl's from the receiver's arguments, the method's own from
+        // the argument types), push the demand, call the instance.
+        let bindings: Vec<(String, Bound)> = if imp.generics.is_empty() && msig.generics.is_empty()
+        {
+            Vec::new()
+        } else {
+            self.bind_method_generics(imp, msig, d, e)?
+        };
         if msig.comptime {
             // Comptime method sites are not registered fold sites
             // (the s16 pass folds `CallExpr` spans only) — an honest
@@ -10640,12 +10879,52 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         // The WIR callee is the mangled `Type.method` — sema's callee
         // label may be the bare method name, and bare names collide
-        // across types.
-        let callee_name = format!("{ty}.{method}");
+        // across types. Under a substitution (s94) the callee is the
+        // INSTANCE: the s93 free-fn push, on the same worklist.
+        let base_name = format!("{ty}.{method}");
+        let callee_name = if bindings.is_empty() {
+            base_name
+        } else {
+            let key = SpecKey {
+                mask: 0,
+                subst: bindings
+                    .iter()
+                    .map(|(n, b)| {
+                        let mut scratch = TypeTable::new();
+                        let t = thaw(b, &mut scratch);
+                        (n.clone(), mono_spelling(&scratch, t))
+                    })
+                    .collect(),
+            };
+            let full = spec_name(&base_name, &key);
+            self.pending_specs.push(SpecRequest {
+                name: base_name,
+                key,
+                bindings: bindings.clone(),
+                span: e.span,
+            });
+            full
+        };
         let ext = match self.callees.get(&callee_name) {
             Some(&ext) => ext,
             None => {
-                let sig = wir_sig_of(self.b.module, self.sig_table, self.sigs, msig, 0, e.span)?;
+                let sig = if bindings.is_empty() {
+                    wir_sig_of(self.b.module, self.sig_table, self.sigs, msig, 0, e.span)?
+                } else {
+                    // The import's signature is the instance's — the
+                    // same substituted view the definition builds.
+                    let mut st = self.sig_table.clone();
+                    let map: std::collections::BTreeMap<String, TyId> = bindings
+                        .iter()
+                        .map(|(n, b)| (n.clone(), thaw(b, &mut st)))
+                        .collect();
+                    let mut f = msig.clone();
+                    for p in &mut f.params {
+                        p.ty = wolf_sema::types::subst(&mut st, p.ty, &map);
+                    }
+                    f.ret = wolf_sema::types::subst(&mut st, f.ret, &map);
+                    wir_sig_of(self.b.module, &st, self.sigs, &f, 0, e.span)?
+                };
                 let ext = self.b.func.import_func(callee_name.clone(), sig);
                 self.callees.insert(callee_name, ext);
                 ext
@@ -11058,7 +11337,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         match self.table.kind(ty) {
-            TyKind::Nominal { module, name } => match self.sigs.get(*module as usize, name) {
+            TyKind::Nominal { module, name, .. } => match self.sigs.get(*module as usize, name) {
                 Some(ItemSig::Enum { variants, .. }) => Ok(MatchDomain::Enum(
                     variants
                         .iter()

@@ -114,7 +114,7 @@ fn collect(
         return;
     }
     match sigs.table.kind(ty) {
-        TyKind::Nominal { module, name } => edges.push(Edge {
+        TyKind::Nominal { module, name, .. } => edges.push(Edge {
             from: from.clone(),
             to: (*module as usize, name.clone()),
             via_shared,

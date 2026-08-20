@@ -749,9 +749,17 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// deferred), so `all-three` does not move: the last "concurrency"
 /// refusal on the native lanes is gone, and the lanes stay un-nested
 /// for the reason this gate exists to show.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 141), ("native", 138), ("release", 138)];
-const UNION_FLOOR: usize = 158;
-const ALL_THREE_FLOOR: usize = 121;
+/// Ratcheted by s94 over 279 entries: +4 on every lane and on
+/// `all-three` — the four `corpus/generics/` witnesses (a generic
+/// struct, a generic impl/method, a two-level raise, hundred_shapes)
+/// run EVERYWHERE, because the checker is one implementation and
+/// generic-nominal support landed in it, not in a lowering. The s94
+/// contract predicted a flat `all-three`; it moves for the same
+/// reason s93's did — a population change, not a checked-lane
+/// semantics change — and the count says exactly what entered.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 142), ("release", 142)];
+const UNION_FLOOR: usize = 162;
+const ALL_THREE_FLOOR: usize = 125;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -1705,11 +1713,13 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
                     ("wir_identity_hits", "hits"),
                     ("wir_gvn_hits", "hits"),
                     ("wir_forward_hits", "hits"),
-                    // s93 (D8's health metric): instantiation requests
-                    // vs. bodies lowered. Worklist idempotence only
-                    // until s94 dedups — see bench/gates.json.
+                    // The D8 health metric (s93 + s94): instantiation
+                    // requests, bodies lowered, and distinct content-
+                    // hash classes post-mid-end — seen/unique is the
+                    // dedup ratio. See bench/gates.json.
                     ("wir_instantiations_seen", "instantiations"),
                     ("wir_instantiations_lowered", "bodies"),
+                    ("wir_instantiations_unique", "bodies"),
                 ] {
                     if let Some(x) = v[metric].as_f64() {
                         records.push(record(

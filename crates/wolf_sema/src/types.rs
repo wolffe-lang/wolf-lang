@@ -203,6 +203,13 @@ pub enum TyKind {
     Nominal {
         module: u32,
         name: String,
+        /// Type arguments, in declaration order (s94): empty for a
+        /// non-generic nominal, one `TyId` per parameter for an
+        /// elaborated application (`Map[str, int]`). Const-generic
+        /// arguments do not land here — they stay opaque
+        /// ([`TyKind::Unsupported`]) until value arguments exist in
+        /// the table.
+        args: Vec<TyId>,
     },
     /// A rigid (universal) type variable — a generic item's parameter
     /// inside its own body. Unifies only with itself; the s14 trait
@@ -494,7 +501,14 @@ pub fn render(
         TyKind::InferredRow { .. } => "{..inferred}".to_string(),
         TyKind::OpenTail => "..".to_string(),
         TyKind::Range(t) => format!("range[{}]", render(table, *t, resolve)),
-        TyKind::Nominal { name, .. } => name.clone(),
+        TyKind::Nominal { name, args, .. } => {
+            if args.is_empty() {
+                name.clone()
+            } else {
+                let parts: Vec<String> = args.iter().map(|t| render(table, *t, resolve)).collect();
+                format!("{name}[{}]", parts.join(", "))
+            }
+        }
         TyKind::Rigid(name) => name.clone(),
         TyKind::Var(v) => match resolve(*v) {
             Ok(t) => render(table, t, resolve),
@@ -633,6 +647,14 @@ pub fn subst(
 ) -> TyId {
     match table.kind(ty).clone() {
         TyKind::Rigid(name) => map.get(&name).copied().unwrap_or(ty),
+        TyKind::Nominal { module, name, args } if !args.is_empty() => {
+            let sargs: Vec<TyId> = args.into_iter().map(|a| subst(table, a, map)).collect();
+            table.intern(TyKind::Nominal {
+                module,
+                name,
+                args: sargs,
+            })
+        }
         TyKind::Wrapping(t) => {
             let s = subst(table, t, map);
             table.intern(TyKind::Wrapping(s))

@@ -196,7 +196,7 @@ pub fn ty_to_ct(table: &TypeTable, ty: TyId) -> CtType {
         TyKind::Prim(p) => CtType::Prim(*p),
         TyKind::TypeTy => CtType::TypeTy,
         TyKind::Tuple(ts) => CtType::Tuple(ts.iter().map(|&t| ty_to_ct(table, t)).collect()),
-        TyKind::Nominal { module, name } => CtType::Nominal {
+        TyKind::Nominal { module, name, args } if args.is_empty() => CtType::Nominal {
             module: *module,
             name: name.clone(),
         },
@@ -302,7 +302,11 @@ impl<'a> Engine<'a> {
         let ty = match ct {
             CtType::Prim(p) => table.prim(p),
             CtType::Unit => table.unit(),
-            CtType::Nominal { module, name } => table.intern(TyKind::Nominal { module, name }),
+            CtType::Nominal { module, name } => table.intern(TyKind::Nominal {
+                module,
+                name,
+                args: Vec::new(),
+            }),
             // Synthesized/opaque types have empty impl sets today.
             _ => {
                 let v = self.arena.bool_(false);
@@ -445,9 +449,14 @@ impl<'a> Engine<'a> {
             let self_kind = self.sigs.table.kind(imp.self_ty);
             let hit = match (ct, self_kind) {
                 (CtType::Prim(p), TyKind::Prim(q)) => p == q,
-                (CtType::Nominal { module, name }, TyKind::Nominal { module: m, name: n }) => {
-                    *module == *m && name == n
-                }
+                (
+                    CtType::Nominal { module, name },
+                    TyKind::Nominal {
+                        module: m,
+                        name: n,
+                        args,
+                    },
+                ) => *module == *m && name == n && args.is_empty(),
                 _ => false,
             };
             if hit && !names.contains(&tr.name) {

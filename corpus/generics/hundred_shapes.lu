@@ -1,0 +1,144 @@
+//! check: run(exit=0, stdout="ok\n")
+//! phase: run
+//! conforms: generics.mono, generics.mono.dedup
+//!
+//! s43 T3's 100-instantiation snapshot, as a corpus file (s94): ONE
+//! generic fn, ONE HUNDRED call sites, ONE layout. Ten distinct
+//! element types make ten distinct instantiation KEYS (the worklist
+//! is spelled-key idempotent, so a hundred sites demand only ten
+//! bodies), and every instance's body is `ptr -> ptr` — a List value
+//! is one pointer whatever its element — so the D8 post-mid-end
+//! content hash folds all ten to ONE representative. seen 100,
+//! lowered 10, unique 1: the three numbers the health metric tracks,
+//! pinned by `wolf_wir/tests/dedup_instances.rs` over exactly this
+//! file (the per-file ledger says `lowers`; the unique count is a
+//! whole-module fact a per-file line cannot carry).
+
+struct W0 { v: int }
+
+struct W1 { v: int }
+
+struct W2 { v: int }
+
+struct W3 { v: int }
+
+struct W4 { v: int }
+
+struct W5 { v: int }
+
+struct W6 { v: int }
+
+struct W7 { v: int }
+
+struct W8 { v: int }
+
+struct W9 { v: int }
+
+fn keep[T](xs: List[T]) -> List[T] {
+    xs
+}
+
+fn main() -> !int {
+    let x0_0 = keep(List[W0]())
+    let x0_1 = keep(List[W1]())
+    let x0_2 = keep(List[W2]())
+    let x0_3 = keep(List[W3]())
+    let x0_4 = keep(List[W4]())
+    let x0_5 = keep(List[W5]())
+    let x0_6 = keep(List[W6]())
+    let x0_7 = keep(List[W7]())
+    let x0_8 = keep(List[W8]())
+    let x0_9 = keep(List[W9]())
+    let x1_0 = keep(List[W0]())
+    let x1_1 = keep(List[W1]())
+    let x1_2 = keep(List[W2]())
+    let x1_3 = keep(List[W3]())
+    let x1_4 = keep(List[W4]())
+    let x1_5 = keep(List[W5]())
+    let x1_6 = keep(List[W6]())
+    let x1_7 = keep(List[W7]())
+    let x1_8 = keep(List[W8]())
+    let x1_9 = keep(List[W9]())
+    let x2_0 = keep(List[W0]())
+    let x2_1 = keep(List[W1]())
+    let x2_2 = keep(List[W2]())
+    let x2_3 = keep(List[W3]())
+    let x2_4 = keep(List[W4]())
+    let x2_5 = keep(List[W5]())
+    let x2_6 = keep(List[W6]())
+    let x2_7 = keep(List[W7]())
+    let x2_8 = keep(List[W8]())
+    let x2_9 = keep(List[W9]())
+    let x3_0 = keep(List[W0]())
+    let x3_1 = keep(List[W1]())
+    let x3_2 = keep(List[W2]())
+    let x3_3 = keep(List[W3]())
+    let x3_4 = keep(List[W4]())
+    let x3_5 = keep(List[W5]())
+    let x3_6 = keep(List[W6]())
+    let x3_7 = keep(List[W7]())
+    let x3_8 = keep(List[W8]())
+    let x3_9 = keep(List[W9]())
+    let x4_0 = keep(List[W0]())
+    let x4_1 = keep(List[W1]())
+    let x4_2 = keep(List[W2]())
+    let x4_3 = keep(List[W3]())
+    let x4_4 = keep(List[W4]())
+    let x4_5 = keep(List[W5]())
+    let x4_6 = keep(List[W6]())
+    let x4_7 = keep(List[W7]())
+    let x4_8 = keep(List[W8]())
+    let x4_9 = keep(List[W9]())
+    let x5_0 = keep(List[W0]())
+    let x5_1 = keep(List[W1]())
+    let x5_2 = keep(List[W2]())
+    let x5_3 = keep(List[W3]())
+    let x5_4 = keep(List[W4]())
+    let x5_5 = keep(List[W5]())
+    let x5_6 = keep(List[W6]())
+    let x5_7 = keep(List[W7]())
+    let x5_8 = keep(List[W8]())
+    let x5_9 = keep(List[W9]())
+    let x6_0 = keep(List[W0]())
+    let x6_1 = keep(List[W1]())
+    let x6_2 = keep(List[W2]())
+    let x6_3 = keep(List[W3]())
+    let x6_4 = keep(List[W4]())
+    let x6_5 = keep(List[W5]())
+    let x6_6 = keep(List[W6]())
+    let x6_7 = keep(List[W7]())
+    let x6_8 = keep(List[W8]())
+    let x6_9 = keep(List[W9]())
+    let x7_0 = keep(List[W0]())
+    let x7_1 = keep(List[W1]())
+    let x7_2 = keep(List[W2]())
+    let x7_3 = keep(List[W3]())
+    let x7_4 = keep(List[W4]())
+    let x7_5 = keep(List[W5]())
+    let x7_6 = keep(List[W6]())
+    let x7_7 = keep(List[W7]())
+    let x7_8 = keep(List[W8]())
+    let x7_9 = keep(List[W9]())
+    let x8_0 = keep(List[W0]())
+    let x8_1 = keep(List[W1]())
+    let x8_2 = keep(List[W2]())
+    let x8_3 = keep(List[W3]())
+    let x8_4 = keep(List[W4]())
+    let x8_5 = keep(List[W5]())
+    let x8_6 = keep(List[W6]())
+    let x8_7 = keep(List[W7]())
+    let x8_8 = keep(List[W8]())
+    let x8_9 = keep(List[W9]())
+    let x9_0 = keep(List[W0]())
+    let x9_1 = keep(List[W1]())
+    let x9_2 = keep(List[W2]())
+    let x9_3 = keep(List[W3]())
+    let x9_4 = keep(List[W4]())
+    let x9_5 = keep(List[W5]())
+    let x9_6 = keep(List[W6]())
+    let x9_7 = keep(List[W7]())
+    let x9_8 = keep(List[W8]())
+    let x9_9 = keep(List[W9]())
+    print("ok")
+    0
+}

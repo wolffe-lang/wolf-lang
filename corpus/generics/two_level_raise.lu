@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="42 7 9\n")
+//! phase: run
+//! conforms: generics.mono, generics.row-tail, err.rows
+//!
+//! s94's third acceptance witness: a raise through TWO generic
+//! levels. `step[E]` raises a concrete tag under a polymorphic tail;
+//! `wrap[E]` propagates it, tail still open. A concrete caller pins
+//! the tail — `pinned` to the empty row, `widened` to `{odd}` — and
+//! the worklist entry for `step`'s instance is pushed from INSIDE
+//! `wrap`'s instantiation, so the substitution composes: the
+//! instance's expression types are already substituted when the
+//! inner call binds. rows/hof_tail.lu holds one level (and is c06-
+//! blocked on its fn value); this is the second.
+
+fn step[E](n: int) -> int ! {TooBig(int), E} {
+    if n > 100 { return TooBig(n) }
+    n * 2
+}
+
+fn wrap[E](n: int) -> int ! {TooBig(int), E} {
+    step(n)?
+}
+
+fn pinned(n: int) -> int ! {TooBig(int)} {
+    wrap(n)?
+}
+
+fn widened(n: int) -> int ! {TooBig(int), odd} {
+    if n == 3 { return odd }
+    wrap(n)?
+}
+
+fn main() -> !int {
+    let a = pinned(21) else 1
+    let b = pinned(200) else 7
+    let c = widened(3) else 9
+    print("{a} {b} {c}")
+    0
+}

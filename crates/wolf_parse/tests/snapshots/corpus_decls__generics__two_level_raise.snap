@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 707..801 name=step body=Block
+FnDecl 803..864 name=wrap body=Block
+FnDecl 866..923 name=pinned body=Block
+FnDecl 925..1017 name=widened body=Block
+FnDecl 1019..1162 name=main body=Block

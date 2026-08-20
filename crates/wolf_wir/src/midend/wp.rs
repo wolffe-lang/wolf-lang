@@ -91,6 +91,10 @@ pub struct WpStats {
     /// The s42 counters, accumulated over every phase.
     pub opt: OptStats,
     pub dedup: DedupStats,
+    /// s94: distinct content-hash classes among `.mono.` instances at
+    /// the dedup point (`None` when the program has no instances) —
+    /// `instantiations_seen / lowered / unique` is the D8 ratio.
+    pub instantiations_unique: Option<usize>,
     /// Distinct source modules seen in the home map.
     pub modules: usize,
     pub clusters: usize,
@@ -180,6 +184,10 @@ pub fn optimize_whole_program(
     }
 
     // ---- 2. dedup (D8) -------------------------------------------------
+    // s94: the health metric's third number, measured at the exact
+    // point D8 names — post module-phase, pre merge — so it is the
+    // count the dedup pass itself is about to fold to.
+    let instantiations_unique = dedup::instantiations_unique(m);
     let dstats = dedup::dedup(m);
 
     // ---- 3./4. summaries, clusters, imports ----------------------------
@@ -247,6 +255,7 @@ pub fn optimize_whole_program(
         clusters: clusters.len(),
         imports,
         dedup: dstats,
+        instantiations_unique,
         opt: stats,
         profile: coverage,
     };
