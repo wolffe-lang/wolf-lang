@@ -8536,7 +8536,6 @@ impl<'a> Checker<'a> {
             && let Some(ItemSig::Enum {
                 variants,
                 generic: false,
-                generics: _,
                 ..
             }) = self.sigs.get(module as usize, &name)
         {
