@@ -404,8 +404,39 @@ fn build_impl(
             (tr, st)
         }
         None => {
-            // Inherent impl: the path is the subject type.
+            // Inherent impl: the path is the subject type. s94: the
+            // bracket list after it (`impl[K, V] Pair[K, V]`) is the
+            // SUBJECT's argument list — the same direct-child slot a
+            // trait impl uses for trait arguments — and an applied
+            // generic subject elaborates to `Nominal { args }` so
+            // `Self` inside the impl carries the rigids.
             let st = subject_type(lower, module, file, &gnames, &segs, path.syntax());
+            let st = match (lower.table.kind(st).clone(), &arg_list) {
+                (
+                    TyKind::Nominal {
+                        module: nm,
+                        name: nn,
+                        args,
+                    },
+                    Some(al),
+                ) if args.is_empty() => {
+                    let applied: Vec<TyId> = al
+                        .args()
+                        .filter(|a| wolf_ast::is_type_kind(a.kind))
+                        .map(|a| lower.lower_type(module, file, &gnames, a))
+                        .collect();
+                    if applied.is_empty() {
+                        st
+                    } else {
+                        lower.table.intern(TyKind::Nominal {
+                            module: nm,
+                            name: nn,
+                            args: applied,
+                        })
+                    }
+                }
+                _ => st,
+            };
             (None, st)
         }
     };

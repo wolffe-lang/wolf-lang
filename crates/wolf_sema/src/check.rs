@@ -6714,10 +6714,20 @@ impl<'a> Checker<'a> {
                 .find(|mm| mm.name == mname && mm.has_self)
                 .cloned()
                 .expect("found above");
+            // s94: the dispatch record carries the type's HEAD name —
+            // `Pair`, not `Pair[int, str]` — because the record is the
+            // lowering's impl-lookup key and the instance's arguments
+            // travel through the recorded expression types instead.
+            // Non-nominal receivers keep their rendering (builtins
+            // never reach a user impl).
+            let head = match self.kind_of(recv_ty) {
+                TyKind::Nominal { name, .. } => name,
+                _ => self.show(recv_ty),
+            };
             self.dispatch.push((
                 e.span,
                 Dispatch::Inherent {
-                    ty: self.show(recv_ty),
+                    ty: head,
                     method: mname.to_string(),
                 },
             ));
