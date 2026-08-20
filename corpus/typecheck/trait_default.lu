@@ -1,5 +1,5 @@
 //! check: run(exit=0, stdout="hi wolf")
-//! phase: mem
+//! phase: wir
 //! conforms: ty.trait.default-body
 //!
 //! Trait default bodies check once against the trait's own archetype

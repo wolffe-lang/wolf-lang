@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: wir
 //! conforms: ty.method.order, ty.trait.qualified-call
 //!
 //! The fixed resolution order (s17, D27): the type's own impl wins
