@@ -717,3 +717,67 @@ pub fn capability_diagnostics(project: &Project, pkg: &wolf_sema::Package) -> Ve
         .collect();
     wolf_pkg::audit::capability_check(project, &module_imports)
 }
+
+// ------------------------------------------------------------- vendor ----
+
+/// Portable recursive copy (tier-1 includes windows: no symlink
+/// tricks, no permission bits beyond what create/write give).
+fn copy_tree_portable(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("create {}: {e}", to.display()))?;
+    let rd = std::fs::read_dir(from).map_err(|e| format!("read {}: {e}", from.display()))?;
+    for entry in rd {
+        let entry = entry.map_err(|e| format!("read {}: {e}", from.display()))?;
+        let src = entry.path();
+        let dst = to.join(entry.file_name());
+        if src.is_dir() {
+            copy_tree_portable(&src, &dst)?;
+        } else {
+            std::fs::copy(&src, &dst).map_err(|e| format!("copy {}: {e}", src.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// `wolf vendor [--dir DIR]` — write the store-backed slice of the
+/// resolution into `vendor/wolf/<multihash>/`, a store-layout mirror
+/// the next build prefers automatically. Every guarantee carries
+/// over because the vendor tree IS a store: hashes re-derive on use
+/// (E1506), so a tampered vendor tree fails exactly like a tampered
+/// store — mirrors are untrusted by construction.
+pub fn vendor(args: &[String]) {
+    let (args, dir) = take_dir(args, "vendor");
+    if !args.is_empty() {
+        eprintln!("usage: wolf vendor [--dir DIR]");
+        std::process::exit(2);
+    }
+    require_manifest(&dir, "vendor");
+    let opts = ResolveOpts {
+        lock: read_lock(&dir, "vendor"),
+        fetch_unpinned: false,
+        refresh: false,
+        store: None,
+        offline: false,
+    };
+    let project = resolve_or_die(&dir, &opts, "vendor");
+    let vend = wolf_pkg::project::vendor_dir(&dir);
+    let mut wrote = 0usize;
+    for p in &project.pkgs[1..] {
+        let Some(hash) = &p.hash else { continue };
+        let dst = wolf_pkg::source::store_path(&vend, hash);
+        if dst.is_dir() {
+            println!("wolf vendor: {} {} (already vendored)", p.alias, hash);
+            continue;
+        }
+        if let Err(e) = copy_tree_portable(&p.root, &dst) {
+            eprintln!("wolf vendor: {e}");
+            std::process::exit(1);
+        }
+        println!("wolf vendor: {} {} -> {}", p.alias, hash, dst.display());
+        wrote += 1;
+    }
+    if wrote == 0 && !vend.is_dir() {
+        println!(
+            "wolf vendor: nothing store-backed to vendor (path dependencies travel with the tree)"
+        );
+    }
+}

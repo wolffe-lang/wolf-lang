@@ -356,3 +356,192 @@ fn git_dep_pins_and_tamper_fails_e1506() {
     assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
     assert!(stderr(&out).contains("E1506"), "{}", stderr(&out));
 }
+
+// ---------------------------------------------------------- s51: vendor ----
+
+/// Run git in `repo` with fixture identity; panic loudly on failure.
+fn git_in(repo: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "user.email=fixture@example.org",
+        ])
+        .args(args)
+        .current_dir(repo)
+        .output()
+        .expect("git runs");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// `wolf vendor` writes a store-mirror the next build PREFERS: with
+/// the user store emptied and the git URL gone, the build still runs —
+/// and a tampered vendor tree fails E1506 exactly like a tampered
+/// store (mirrors are untrusted by construction).
+#[test]
+fn vendor_builds_offline_and_vendor_tamper_fails_e1506() {
+    if !git_available() {
+        eprintln!("SKIP vendor: no git on PATH");
+        return;
+    }
+    let dir = stage("pkg_vendor", "dogfood");
+    let store = dir.join("store");
+    let store_env: &[(&str, &str)] = &[("WOLF_STORE", store.to_str().unwrap())];
+    let repo = dir.join("util-repo");
+    copy_tree(&dir.join("util"), &repo);
+    git_in(&repo, &["init", "--quiet"]);
+    git_in(&repo, &["add", "."]);
+    git_in(&repo, &["commit", "--quiet", "-m", "util fixture"]);
+    git_in(&repo, &["tag", "v0.2.0"]);
+    let url = format!("file://{}", repo.display());
+
+    let app = dir.join("app");
+    std::fs::remove_file(app.join("wolf.pkg")).expect("fresh app");
+    let out = run_wolf(
+        &dir,
+        &[
+            "add", "gutil", "--git", &url, "--tag", "v0.2.0", "--dir", "app",
+        ],
+        store_env,
+    );
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    std::fs::write(
+        app.join("main.lu"),
+        "use gutil\n\nfn main() -> !int {\n    let t = gutil.twist(20)\n    print(\"{t}\")\n    0\n}\n",
+    )
+    .expect("main");
+
+    // Vendor, then take BOTH the store and the URL away.
+    let out = run_wolf(&dir, &["vendor", "--dir", "app"], store_env);
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    assert!(
+        app.join("vendor").join("wolf").is_dir(),
+        "vendor tree written"
+    );
+    std::fs::remove_dir_all(&store).expect("empty the store");
+    std::fs::remove_dir_all(&repo).expect("unreachable url");
+    let out = run_wolf(&dir, &["run", "app/main.lu"], store_env);
+    if !env_skip(&out, "vendor-built") {
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "offline vendor build failed:\n{}",
+            stderr(&out)
+        );
+        assert_eq!(stdout(&out), "41\n");
+    }
+
+    // Tamper the vendor tree: the next build re-derives and refuses.
+    let sum = std::fs::read_to_string(app.join("wolf.sum")).expect("ledger");
+    let hash = sum
+        .lines()
+        .find(|l| l.starts_with("gutil"))
+        .and_then(|l| l.split_whitespace().nth(2))
+        .expect("hash field")
+        .trim_start_matches("b3:");
+    let victim = app.join("vendor").join("wolf").join(hash).join("util.lu");
+    let mut code = std::fs::read_to_string(&victim).expect("vendor tree");
+    code = code.replace("2 * x + 1", "0 * x");
+    std::fs::write(&victim, code).expect("tamper");
+    let out = run_wolf(&dir, &["build", "app/main.lu"], store_env);
+    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    assert!(stderr(&out).contains("E1506"), "{}", stderr(&out));
+}
+
+/// The acceptance diamond: b and c share util@v1 (one node), the app
+/// itself holds the v2 major beside it (two entries, two majors
+/// coexisting), and the ledger is byte-stable across a re-resolution.
+#[test]
+fn diamond_with_two_majors_resolves_and_sum_is_byte_stable() {
+    if !git_available() {
+        eprintln!("SKIP diamond: no git on PATH");
+        return;
+    }
+    let dir = stage("pkg_diamond", "dogfood");
+    let store = dir.join("store");
+    let store_env: &[(&str, &str)] = &[("WOLF_STORE", store.to_str().unwrap())];
+    let repo = dir.join("util-repo");
+    std::fs::create_dir_all(&repo).expect("repo dir");
+    std::fs::write(
+        repo.join("wolf.pkg"),
+        "pkg {\n    name:    \"acme/util\",\n    version: \"1.0.0\",\n}\n",
+    )
+    .expect("v1 manifest");
+    std::fs::write(
+        repo.join("util.lu"),
+        "pub fn twist(x: int) -> int {\n    x + 1\n}\n",
+    )
+    .expect("v1 body");
+    git_in(&repo, &["init", "--quiet"]);
+    git_in(&repo, &["add", "."]);
+    git_in(&repo, &["commit", "--quiet", "-m", "v1"]);
+    git_in(&repo, &["tag", "v1.0.0"]);
+    std::fs::write(
+        repo.join("wolf.pkg"),
+        "pkg {\n    name:    \"acme/util\",\n    version: \"2.0.0\",\n}\n",
+    )
+    .expect("v2 manifest");
+    std::fs::write(
+        repo.join("util.lu"),
+        "pub fn twist(x: int) -> int {\n    x + 2\n}\n",
+    )
+    .expect("v2 body");
+    git_in(&repo, &["add", "."]);
+    git_in(&repo, &["commit", "--quiet", "-m", "v2"]);
+    git_in(&repo, &["tag", "v2.0.0"]);
+    let url = format!("file://{}", repo.display());
+
+    let app = dir.join("app");
+    std::fs::remove_file(app.join("wolf.pkg")).expect("fresh app");
+    std::fs::remove_dir_all(dir.join("util")).expect("fixture util unused");
+    for leg in ["b", "c"] {
+        let d = app.join(leg);
+        std::fs::create_dir_all(&d).expect("leg dir");
+        std::fs::write(
+            d.join("wolf.pkg"),
+            format!(
+                "pkg {{\n    name:    \"acme/{leg}\",\n    version: \"0.1.0\",\n\n    deps: {{\n        util: {{ git: \"{url}\", tag: \"v1.0.0\" }},\n    }},\n}}\n"
+            ),
+        )
+        .expect("leg manifest");
+        std::fs::write(
+            d.join(format!("{leg}.lu")),
+            format!("use util\n\npub fn go(x: int) -> int {{\n    util.twist(x)\n}}\n"),
+        )
+        .expect("leg body");
+    }
+    std::fs::write(
+        app.join("wolf.pkg"),
+        format!(
+            "pkg {{\n    name:    \"demo/app\",\n    version: \"0.1.0\",\n\n    deps: {{\n        b:      {{ path: \"b\" }},\n        c:      {{ path: \"c\" }},\n        utilv2: {{ git: \"{url}\", tag: \"v2.0.0\" }},\n    }},\n}}\n"
+        ),
+    )
+    .expect("app manifest");
+    std::fs::write(
+        app.join("main.lu"),
+        "use b\nuse c\nuse utilv2\n\nfn main() -> !int {\n    let one = b.go(10)\n    let two = c.go(20)\n    let three = utilv2.twist(30)\n    print(\"{one} {two} {three}\")\n    0\n}\n",
+    )
+    .expect("main");
+
+    // `wolf update` fetches + writes the ledger; run twice, compare bytes.
+    let out = run_wolf(&dir, &["update", "--dir", "app"], store_env);
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    let sum1 = std::fs::read_to_string(app.join("wolf.sum")).expect("ledger");
+    assert!(sum1.contains("util 1.0.0"), "{sum1}");
+    assert!(sum1.contains("utilv2 2.0.0"), "{sum1}");
+    let out = run_wolf(&dir, &["update", "--dir", "app"], store_env);
+    assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    let sum2 = std::fs::read_to_string(app.join("wolf.sum")).expect("ledger");
+    assert_eq!(sum1, sum2, "wolf.sum is not byte-stable");
+
+    let out = run_wolf(&dir, &["run", "app/main.lu"], store_env);
+    if !env_skip(&out, "diamond-built") {
+        assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+        assert_eq!(stdout(&out), "11 21 32\n");
+    }
+}

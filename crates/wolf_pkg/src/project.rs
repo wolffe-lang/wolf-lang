@@ -117,6 +117,15 @@ pub struct ResolveOpts {
     pub offline: bool,
 }
 
+/// The vendor tree a build prefers when present: a store-layout mirror
+/// (`vendor/wolf/<multihash>/`) under the project root, written by
+/// `wolf vendor`. Because it IS a store, every existing guarantee
+/// applies unchanged — in particular the E1506 re-hash on every use,
+/// which is what makes mirrors untrusted by construction.
+pub fn vendor_dir(root: &Path) -> PathBuf {
+    root.join("vendor").join("wolf")
+}
+
 fn e1505(span: Span, msg: impl Into<String>) -> Diagnostic {
     Diagnostic::error(codes::E1505, span, msg)
 }
@@ -327,7 +336,18 @@ fn resolve_dep(
                 });
                 return None;
             }
-            let store = match opts.store.clone().map(Ok).unwrap_or_else(source::store_dir) {
+            // Store choice: an explicit override wins (tests, hermetic
+            // tooling); else a vendor tree under the PROJECT root when
+            // one exists (offline-by-construction builds); else the
+            // user store.
+            let vendored = vendor_dir(&project.pkgs[0].root);
+            let store = match opts
+                .store
+                .clone()
+                .or_else(|| vendored.is_dir().then_some(vendored))
+                .map(Ok)
+                .unwrap_or_else(source::store_dir)
+            {
                 Ok(s) => s,
                 Err(e) => {
                     project.diagnostics.push(e1505(dep.span, e));

@@ -71,13 +71,14 @@ fn main() {
         Some("profile") => profile_cmd::profile(&args[1..]),
         Some("init") => pkg_cmd::init(&args[1..]),
         // D34: the single binary grows per-campaign; stubs are honest.
-        Some(cmd @ ("bench" | "dbg" | "vendor" | "publish")) => {
+        Some("vendor") => pkg_cmd::vendor(&args[1..]),
+        Some(cmd @ ("bench" | "dbg" | "publish")) => {
             eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
             std::process::exit(2);
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|profile|interface|audit-surface|c-import|conform-run|--explain|--version"
+                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|vendor|cache|profile|interface|audit-surface|c-import|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }
