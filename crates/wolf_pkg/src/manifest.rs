@@ -123,6 +123,26 @@ pub struct Manifest {
     /// The `deps: { … }` map's span, when present (`wolf add` inserts
     /// just before its closing brace).
     pub deps_span: Option<Span>,
+    /// `replace: { alias: { source } }` — top-level-exclusive (vgo):
+    /// the ROOT manifest's replacements override any dep entry with
+    /// that alias, wherever it is declared. Parsed everywhere, applied
+    /// only from the root; a non-root manifest carrying one gets a
+    /// warning at resolution.
+    pub replace: Vec<Dep>,
+    /// `exclude: [ "name@version", … ]` — top-level-exclusive (vgo):
+    /// a resolved package matching an entry is refused (E1510). At v0
+    /// transport there is no version list to fall back over, so the
+    /// exclusion is a hard refusal naming the excluder; MVS-side
+    /// skip-and-pick-next arrives with the registry transport (c15).
+    pub exclude: Vec<Excluded>,
+}
+
+/// One `exclude:` entry.
+#[derive(Clone, Debug)]
+pub struct Excluded {
+    pub name: String,
+    pub version: Version,
+    pub span: Span,
 }
 
 /// Keys that ask for code to run on the host at build/fetch time.
@@ -505,7 +525,8 @@ fn schema_err(span: Span, msg: impl Into<String>) -> Diagnostic {
     Diagnostic::error(codes::E1502, span, msg).with_note(
         "the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, \
          `fingerprint`, `deps`, `test`, `bench`, `features`, `capabilities`, \
-         `paths`, `min_age`, `c`, `lints`, `trusted`. Dependency sources: \
+         `paths`, `min_age`, `c`, `lints`, `trusted`, `replace`, `exclude` \
+         (the last two are top-level-exclusive). Dependency sources: \
          `{ path: \"…\" }`, `{ git: \"…\", tag: \"…\" }`, or \
          `{ pkg: \"owner/name\", major: N, min: \"X.Y.Z\" }`."
             .to_string(),
@@ -891,6 +912,8 @@ pub fn parse_opts(
         c_span: None,
         span: pkg_span,
         deps_span: None,
+        replace: Vec::new(),
+        exclude: Vec::new(),
     };
     for e in &entries {
         match e.key.as_str() {
@@ -995,6 +1018,43 @@ pub fn parse_opts(
             "c" => {
                 m.c = parse_c_recipes(&e.value, &mut diags);
                 m.c_span = Some(e.value.span());
+            }
+            "replace" => {
+                m.replace = parse_deps("replace", &e.value, &mut diags);
+            }
+            "exclude" => {
+                let Value::List(items, _) = &e.value else {
+                    diags.push(schema_err(
+                        e.value.span(),
+                        "`exclude` takes a list of \"name@version\" strings".to_string(),
+                    ));
+                    continue;
+                };
+                for it in items {
+                    let Value::Str(txt, sp) = it else {
+                        diags.push(schema_err(
+                            it.span(),
+                            format!("exclusions are strings, not {}", it.kind_name()),
+                        ));
+                        continue;
+                    };
+                    let Some((name, ver)) = txt.split_once('@') else {
+                        diags.push(schema_err(*sp, format!("`{txt}` is not `name@version`")));
+                        continue;
+                    };
+                    let Some(version) = Version::parse(ver) else {
+                        diags.push(schema_err(
+                            *sp,
+                            format!("`{ver}` is not a version (dotted numerics)"),
+                        ));
+                        continue;
+                    };
+                    m.exclude.push(Excluded {
+                        name: name.to_string(),
+                        version,
+                        span: *sp,
+                    });
+                }
             }
             "features" | "paths" | "min_age" | "lints" | "trusted" => {}
             other => {

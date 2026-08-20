@@ -147,3 +147,100 @@ fn frontmatter_drift_under_locked_is_e1508() {
     reporter.report(&d);
     insta::assert_snapshot!("e1508_frontmatter_drift", reporter.take_output());
 }
+
+// ------------------------------------------------------ s51 T2: vgo powers --
+
+/// `exclude` refuses a resolved version, E1510 — and the diagnostic is
+/// this code's reviewed artifact (diag-catalog fixture rule).
+#[test]
+fn excluded_version_refused_e1510() {
+    let dir = tmpdir("e1510_exclude");
+    std::fs::create_dir_all(dir.join("dep")).unwrap();
+    std::fs::write(
+        dir.join("dep/wolf.pkg"),
+        "pkg {\n    name:    \"acme/util\",\n    version: \"0.2.0\",\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("wolf.pkg"),
+        "pkg {\n    name:    \"demo/app\",\n    version: \"0.1.0\",\n\n    exclude: [\"acme/util@0.2.0\"],\n\n    deps: {\n        util: { path: \"dep\" },\n    },\n}\n",
+    )
+    .unwrap();
+    let mut sm = wolf_span::SourceMap::new();
+    let project = resolve_project(&dir, &mut sm, &opts(None));
+    assert!(project.has_errors());
+    assert!(
+        project.dep_roots.is_empty(),
+        "excluded package still resolved"
+    );
+    insta::assert_snapshot!("e1510_excluded_version", render(&project));
+}
+
+/// `replace` redirects an alias wherever it is declared — the
+/// local-fork workflow: a transitive dep's entry is overridden by the
+/// root, and the replacement's own manifest wins.
+#[test]
+fn root_replace_overrides_a_transitive_dep() {
+    let dir = tmpdir("replace_transitive");
+    for (p, name, extra_deps) in [
+        (
+            "mid",
+            "acme/mid",
+            ",\n\n    deps: {\n        util: { git: \"https://nowhere.invalid/util\", tag: \"v9\" },\n    }",
+        ),
+        ("fork", "acme/util-fork", ""),
+    ] {
+        std::fs::create_dir_all(dir.join(p)).unwrap();
+        std::fs::write(
+            dir.join(p).join("wolf.pkg"),
+            format!("pkg {{\n    name:    \"{name}\",\n    version: \"0.1.0\"{extra_deps},\n}}\n"),
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        dir.join("wolf.pkg"),
+        "pkg {\n    name:    \"demo/app\",\n    version: \"0.1.0\",\n\n    replace: {\n        util: { path: \"fork\" },\n    },\n\n    deps: {\n        mid: { path: \"mid\" },\n    },\n}\n",
+    )
+    .unwrap();
+    let mut sm = wolf_span::SourceMap::new();
+    let project = resolve_project(&dir, &mut sm, &opts(None));
+    // The git URL is unreachable garbage: only the replacement makes
+    // this resolve at all, which is the proof it applied transitively.
+    assert!(!project.has_errors(), "{:?}", project.diagnostics);
+    let util = project
+        .pkgs
+        .iter()
+        .find(|p| p.alias == "util")
+        .expect("resolved");
+    assert_eq!(util.name, "acme/util-fork");
+}
+
+/// A DEPENDENCY carrying replace/exclude: parsed, ignored, warned —
+/// the powers are top-level-exclusive (vgo).
+#[test]
+fn dependency_replace_is_ignored_with_a_warning() {
+    let dir = tmpdir("replace_nonroot");
+    std::fs::create_dir_all(dir.join("mid")).unwrap();
+    std::fs::write(
+        dir.join("mid/wolf.pkg"),
+        "pkg {\n    name:    \"acme/mid\",\n    version: \"0.1.0\",\n\n    exclude: [\"acme/anything@1.0.0\"],\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("wolf.pkg"),
+        "pkg {\n    name:    \"demo/app\",\n    version: \"0.1.0\",\n\n    deps: {\n        mid: { path: \"mid\" },\n    },\n}\n",
+    )
+    .unwrap();
+    let mut sm = wolf_span::SourceMap::new();
+    let project = resolve_project(&dir, &mut sm, &opts(None));
+    assert!(!project.has_errors(), "{:?}", project.diagnostics);
+    assert!(
+        project
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == wolf_diag::Severity::Warning
+                && d.message.contains("top-level powers")),
+        "no exclusivity warning: {:?}",
+        project.diagnostics
+    );
+}

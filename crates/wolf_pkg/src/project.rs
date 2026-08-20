@@ -189,6 +189,24 @@ fn resolve_with_root(
         is_std: false,
     });
 
+    // Top-level-exclusive powers (vgo): the ROOT manifest's `replace`
+    // entries override any dep entry with that alias wherever it is
+    // declared (path replacements are anchored at the root, so they
+    // are absolutized here); its `exclude` list refuses matching
+    // resolved versions. Non-root manifests carrying either get a
+    // warning below — parsed, never applied.
+    let mut replace: BTreeMap<String, crate::manifest::DepSource> = BTreeMap::new();
+    for r in &root_manifest.replace {
+        let src = match &r.source {
+            DepSource::Path { path } => DepSource::Path {
+                path: root_dir.join(path).to_string_lossy().into_owned(),
+            },
+            other => other.clone(),
+        };
+        replace.insert(r.alias.clone(), src);
+    }
+    let exclude = root_manifest.exclude.clone();
+
     // BFS over dependency declarations. Each work item: (consumer
     // package index, its manifest) — path deps resolve relative to the
     // consumer's root.
@@ -198,6 +216,23 @@ fn resolve_with_root(
     by_root.insert(canon(root_dir), 0);
 
     while let Some((consumer, m)) = work.pop() {
+        if consumer != 0 && (!m.replace.is_empty() || !m.exclude.is_empty()) {
+            project.diagnostics.push(
+                Diagnostic::warning(
+                    codes::E1502,
+                    m.span,
+                    "`replace`/`exclude` are top-level powers — this manifest is a \
+                     dependency here, so they are parsed and ignored"
+                        .to_string(),
+                )
+                .with_note(
+                    "the consuming project's own wolf.pkg is the only place a \
+                     replacement or exclusion applies (vgo rule: the build's root \
+                     decides, dependencies advise)."
+                        .to_string(),
+                ),
+            );
+        }
         for dep in &m.deps {
             let node = resolve_dep(
                 consumer,
@@ -207,6 +242,8 @@ fn resolve_with_root(
                 opts,
                 &mut by_root,
                 &mut work,
+                &replace,
+                &exclude,
             );
             if let Some(node) = node
                 && !project.pkgs[consumer].deps.contains(&node)
@@ -258,9 +295,16 @@ fn resolve_dep(
     opts: &ResolveOpts,
     by_root: &mut BTreeMap<PathBuf, usize>,
     work: &mut Vec<(usize, Manifest)>,
+    replace: &BTreeMap<String, DepSource>,
+    exclude: &[crate::manifest::Excluded],
 ) -> Option<usize> {
     let consumer_root = project.pkgs[consumer].root.clone();
-    let (dir, hash) = match &dep.source {
+    // The root's `replace` wins over any entry with this alias —
+    // exactly vgo's rule, and the local-fork workflow: point an alias
+    // at a path while a fix is upstream. Replacement paths were
+    // absolutized at capture, so the consumer-relative join is inert.
+    let source = replace.get(&dep.alias).unwrap_or(&dep.source);
+    let (dir, hash) = match source {
         DepSource::Path { path } => (consumer_root.join(path), None),
         DepSource::Git { url, tag } => {
             let pinned = opts
@@ -428,6 +472,27 @@ fn resolve_dep(
             is_std: false,
         },
     };
+    for ex in exclude {
+        if ex.name == node.name && ex.version.to_string() == node.version {
+            project.diagnostics.push(
+                Diagnostic::error(
+                    codes::E1510,
+                    dep.span,
+                    format!(
+                        "`{}@{}` is excluded by this project's manifest",
+                        node.name, node.version
+                    ),
+                )
+                .with_note(
+                    "a `replace:` entry can point the alias somewhere acceptable; \
+                     at v0 there is no version list to fall back over, so an \
+                     exclusion refuses rather than silently downgrading."
+                        .to_string(),
+                ),
+            );
+            return None;
+        }
+    }
     project.pkgs.push(node);
     by_root.insert(dir_canon, i);
     project.dep_roots.insert(dep.alias.clone(), dir);
