@@ -1,19 +1,18 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 355
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
 comptime/budget_zero.lu: not mem-clean (pre-wir rungs own it)
 comptime/depth_spiral.lu: not mem-clean (pre-wir rungs own it)
-comptime/derive_eq.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+comptime/derive_eq.lu: lowers
 comptime/fold_reaches_lane.lu: lowers
 comptime/fuel_loop.lu: not mem-clean (pre-wir rungs own it)
 comptime/heap_flood.lu: not mem-clean (pre-wir rungs own it)
 comptime/norm_linear.lu: refused — a generic application left opaque by the checker (`Buf[2 + 2]`: const-generic values and generic aliases do not elaborate yet)
 comptime/norm_witness.lu: not mem-clean (pre-wir rungs own it)
 comptime/overflow_i32.lu: not mem-clean (pre-wir rungs own it)
-comptime/reflect_fields.lu: refused — trait-impl method lowering (dispatch tables, c06)
+comptime/reflect_fields.lu: lowers
 comptime/runtime_arg.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_clock.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_env.lu: not mem-clean (pre-wir rungs own it)
@@ -146,7 +145,7 @@ memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
-memory/prov_holy_grail.lu: refused — this type in WIR lowering; closure lowering outside `spawn` (fn values, c05)
+memory/prov_holy_grail.lu: refused — indirect calls through fn values (c05); closure lowering outside `spawn` (fn values, c05)
 memory/prov_two_phase.lu: lowers
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
@@ -203,13 +202,13 @@ resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
-rows/coarsen.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_match_tags.lu: lowers
-rows/hof_tail.lu: refused — module-item reads (globals, c06)
-rows/inferred_private.lu: refused — module-item reads (globals, c06)
+rows/hof_tail.lu: refused — indirect calls through fn values (c05); indirect calls through fn values (c05)
+rows/inferred_private.lu: refused — indirect calls through fn values (c05)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
@@ -241,20 +240,20 @@ strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 test/conc_schedules_test.lu: lowers
 time/monotonic.lu: lowers
-traits/adapter_distinct/main.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
-traits/assoc_rewrite.lu: refused — trait-impl method lowering (dispatch tables, c06); an associated-type projection `.Item` (needs the impl instantiated); an associated-type projection `.Item` (needs the impl instantiated)
+traits/adapter_distinct/main.lu: lowers
+traits/assoc_rewrite.lu: lowers
 traits/call_unmet_bound.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_orphan/main.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_overlap.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_uncovered.lu: not mem-clean (pre-wir rungs own it)
 traits/dyn_assoc_escape.lu: not mem-clean (pre-wir rungs own it)
 traits/dyn_generic_method.lu: not mem-clean (pre-wir rungs own it)
-traits/dyn_ok.lu: refused — trait-impl method lowering (dispatch tables, c06); this type in WIR lowering
+traits/dyn_ok.lu: refused — this type in WIR lowering
 traits/dyn_self_position.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_arith.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_eq.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_missing_bound.lu: not mem-clean (pre-wir rungs own it)
-traits/show_bound.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+traits/show_bound.lu: lowers
 typecheck/ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
@@ -274,11 +273,11 @@ typecheck/match_narrow_scrutinee.lu: lowers
 typecheck/match_str_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
-typecheck/method_inherent.lu: refused — trait-impl method lowering (dispatch tables, c06); calls into unresolvable bodies
+typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
-typecheck/trait_default.lu: refused — trait default-body lowering (dispatch tables, c06); trait-impl method lowering (dispatch tables, c06); trait-method call lowering (dispatch tables, c06)
+typecheck/trait_default.lu: lowers
 wordcount.lu: not mem-clean (pre-wir rungs own it)

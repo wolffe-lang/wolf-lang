@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: wir
 //! conforms: err.rows, err.rows.coarsen
 //!
 //! Deliberate coarsening (many tags → one) is an explicit trait impl

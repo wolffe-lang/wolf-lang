@@ -749,17 +749,19 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// deferred), so `all-three` does not move: the last "concurrency"
 /// refusal on the native lanes is gone, and the lanes stay un-nested
 /// for the reason this gate exists to show.
-/// Ratcheted by s94 over 279 entries: +4 on every lane and on
-/// `all-three` — the four `corpus/generics/` witnesses (a generic
-/// struct, a generic impl/method, a two-level raise, hundred_shapes)
-/// run EVERYWHERE, because the checker is one implementation and
-/// generic-nominal support landed in it, not in a lowering. The s94
-/// contract predicted a flat `all-three`; it moves for the same
-/// reason s93's did — a population change, not a checked-lane
-/// semantics change — and the count says exactly what entered.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 142), ("release", 142)];
-const UNION_FLOOR: usize = 162;
-const ALL_THREE_FLOOR: usize = 125;
+/// Ratcheted by s95 over 279 entries: native/release +8 — eight files
+/// whose only native blocker was static trait dispatch (the c06
+/// deferral) now run; checked +0 — the checked rung still refuses
+/// impl-bearing modules by name (#12), which is why `all-three` moves
+/// only +2 (derive-shaped movers with no impl in the entry surface).
+/// The s95 contract guessed all-three would not move; two files
+/// measured otherwise, and the union (+6) is the honest sum: the two
+/// lanes that gained overlap the checked lane on two entries only.
+/// (History: s94 145/142/142 — the four `corpus/generics/` witnesses,
+/// +4 every lane.)
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 150), ("release", 150)];
+const UNION_FLOOR: usize = 168;
+const ALL_THREE_FLOOR: usize = 127;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

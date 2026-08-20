@@ -4,7 +4,7 @@ expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..40 "//! check: run(exit=0, stdout=\"hi wo…"
     lead  Whitespace 40..41 "\n"
-    lead  InnerDocComment 41..55 "//! phase: mem"
+    lead  InnerDocComment 41..55 "//! phase: wir"
     lead  Whitespace 55..56 "\n"
     lead  InnerDocComment 56..91 "//! conforms: ty.trait.default-body"
     lead  Whitespace 91..92 "\n"

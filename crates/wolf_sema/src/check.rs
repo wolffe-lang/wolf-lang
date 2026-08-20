@@ -5434,6 +5434,20 @@ impl<'a> Checker<'a> {
                 c_call: false,
             },
         ));
+        // s95: the dispatch record — the same record method-call sites
+        // get, so lowering reads the trait identity instead of
+        // re-deriving it from the callee string (the s18 rule). `Self`
+        // solves from the arguments; at an archetype site it lands on
+        // a rigid, and the INSTANCE's argument types name the impl.
+        self.dispatch.push((
+            e.span,
+            Dispatch::Trait {
+                module: tr.module,
+                name: tr.name.clone(),
+                method: mname.to_string(),
+                dyn_call: false,
+            },
+        ));
         // Blame span for the Self obligation: the argument that pins
         // `Self` (call-site errors point at the argument, D28).
         let mut self_blame = callee_span;

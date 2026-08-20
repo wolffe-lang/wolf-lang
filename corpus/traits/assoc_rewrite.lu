@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: mem
+//! phase: wir
 //! conforms: ty.trait.assoc.rewrite
 //!
 //! Associated types are outputs (RFC 0195): the impl binds `Item`,
