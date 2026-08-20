@@ -384,12 +384,22 @@ pub fn unify(
             TyKind::Nominal {
                 module: ma,
                 name: na,
+                args: xa,
             },
             TyKind::Nominal {
                 module: mb,
                 name: nb,
+                args: xb,
             },
-        ) if ma == mb && na == nb => Ok(()),
+        ) if ma == mb && na == nb && xa.len() == xb.len() => {
+            // s94: an applied nominal unifies argument-wise — `Pair[int, U]`
+            // against `Pair[int, str]` binds `U`. Same-head different-arity
+            // falls through to the mismatch report below.
+            for (x, y) in xa.iter().zip(xb.iter()) {
+                unify(table, store, *x, *y)?;
+            }
+            Ok(())
+        }
         // Opaque forms (generic instantiations with possible
         // const-generic arguments): identical renderings are equal;
         // differing renderings go through const-expression

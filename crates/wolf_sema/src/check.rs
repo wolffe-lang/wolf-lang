@@ -851,6 +851,17 @@ fn zonk(table: &mut TypeTable, vars: &VarStore, ty: TyId) -> TyId {
             let z = zonk(table, vars, t);
             table.intern(TyKind::Range(z))
         }
+        // s94: an applied nominal's arguments zonk through — a
+        // `Pair[T, U]` literal solved its parameters by unification
+        // and the recorded type must carry the solutions, not vars.
+        TyKind::Nominal { module, name, args } if !args.is_empty() => {
+            let zargs: Vec<TyId> = args.into_iter().map(|t| zonk(table, vars, t)).collect();
+            table.intern(TyKind::Nominal {
+                module,
+                name,
+                args: zargs,
+            })
+        }
         // The Tier-2 wrappers and the s21 builtin containers zonk
         // through — a `shared T`/`List[T]` whose element carries a
         // solved var must not reach `TypedBody` half-resolved.
@@ -4065,7 +4076,7 @@ impl<'a> Checker<'a> {
 
     /// The recorded base of an adapter type (`type X = distinct B`).
     fn distinct_base(&self, ty: TyId) -> Option<TyId> {
-        if let TyKind::Nominal { module, name } = self.lo.table.kind(ty)
+        if let TyKind::Nominal { module, name, .. } = self.lo.table.kind(ty)
             && let Some(ItemSig::Distinct { base, .. }) = self.sigs.get(*module as usize, name)
         {
             return Some(*base);
@@ -6357,6 +6368,7 @@ impl<'a> Checker<'a> {
                 generic,
                 variants,
                 name_span,
+                ..
             }) => {
                 if generic {
                     return Err(NotYet {
@@ -6445,12 +6457,14 @@ impl<'a> Checker<'a> {
                 Ok(Some(self.lo.table.intern(TyKind::Nominal {
                     module: module as u32,
                     name: tyname,
+                    args: Vec::new(),
                 })))
             }
             Some(ItemSig::Struct(_) | ItemSig::Distinct { .. }) => {
                 let self_ty = self.lo.table.intern(TyKind::Nominal {
                     module: module as u32,
                     name: tyname.clone(),
+                    args: Vec::new(),
                 });
                 // An inherent associated function (no `self`).
                 if let Some(idx) = self.find_inherent_impl(self_ty, &mname, false) {
@@ -6801,7 +6815,7 @@ impl<'a> Checker<'a> {
                 // A callable field? `p.f(x)` calls through the field's
                 // type — fields and methods share no namespace magic,
                 // but the classic typo deserves the right answer.
-                if let TyKind::Nominal { module, name } = self.kind_of(recv_ty)
+                if let TyKind::Nominal { module, name, .. } = self.kind_of(recv_ty)
                     && let Some(ItemSig::Struct(s)) = self.sigs.get(module as usize, &name).cloned()
                     && let Some(f) = s.fields.iter().find(|f| f.name == mname)
                 {
@@ -7318,7 +7332,7 @@ impl<'a> Checker<'a> {
                 }
             }
         }
-        if let TyKind::Nominal { module, name } = self.kind_of(recv_ty)
+        if let TyKind::Nominal { module, name, .. } = self.kind_of(recv_ty)
             && let Some(ItemSig::Struct(s)) = self.sigs.get(module as usize, &name)
         {
             for f in &s.fields {
@@ -7424,6 +7438,7 @@ impl<'a> Checker<'a> {
                 generic,
                 variants,
                 name_span,
+                ..
             }) = self.sigs.get(module, &tyname).cloned()
         {
             let Some(member) = d.member() else {
@@ -7440,6 +7455,7 @@ impl<'a> Checker<'a> {
                 Some(v) if v.payload.is_empty() => Ok(self.lo.table.intern(TyKind::Nominal {
                     module: module as u32,
                     name: tyname,
+                    args: Vec::new(),
                 })),
                 Some(v) => {
                     self.diags.push(
@@ -7515,18 +7531,34 @@ impl<'a> Checker<'a> {
             return Ok(self.error_ty());
         };
         match self.kind_of(base_ty) {
-            TyKind::Nominal { module, name } => {
+            TyKind::Nominal { module, name, args } => {
                 match self.sigs.get(module as usize, &name).cloned() {
                     Some(ItemSig::Struct(s)) => {
-                        if s.generic {
+                        if s.generic && args.len() != s.generics.len() {
+                            // A bare (unapplied) use of a generic
+                            // struct — nothing to substitute.
                             return Err(NotYet {
                                 construct: "fields of a generic struct (generic data)",
                                 span: e.span,
                             });
                         }
+                        // s94: field types under the receiver's
+                        // arguments — `Pair[int, str].a` is `int`.
+                        let inst = |me: &mut Self, t: TyId| -> TyId {
+                            if s.generics.is_empty() {
+                                return t;
+                            }
+                            let map: std::collections::BTreeMap<String, TyId> = s
+                                .generics
+                                .iter()
+                                .cloned()
+                                .zip(args.iter().copied())
+                                .collect();
+                            crate::types::subst(&mut me.lo.table, t, &map)
+                        };
                         let mname = self.text(member.span);
-                        match s.fields.iter().find(|f| f.name == mname) {
-                            Some(f) => Ok(f.ty),
+                        match s.fields.iter().find(|f| f.name == mname).cloned() {
+                            Some(f) => Ok(inst(self, f.ty)),
                             None => {
                                 // The field/method crossover classic:
                                 // `p.len` when `len` is a method.
@@ -7621,7 +7653,7 @@ impl<'a> Checker<'a> {
             // ([mem.shared.rc.4]: RC is unobservable; the cell adds no
             // member namespace of its own).
             TyKind::Shared(inner) => match self.kind_of(inner) {
-                TyKind::Nominal { module, name } => {
+                TyKind::Nominal { module, name, .. } => {
                     match self.sigs.get(module as usize, &name).cloned() {
                         Some(ItemSig::Struct(s)) if !s.generic => {
                             let mname = self.text(member.span);
@@ -7824,12 +7856,22 @@ impl<'a> Checker<'a> {
                 span: path.span,
             });
         };
-        if sig.generic {
-            return Err(NotYet {
-                construct: "a generic struct literal (generic data)",
-                span: e.span,
-            });
-        }
+        // s94: a generic struct literal instantiates the s14 way —
+        // one fresh existential per parameter, solved by the field
+        // initializers (argument-driven; nothing else drives it). The
+        // literal's type carries the solved arguments.
+        let inst_map: std::collections::BTreeMap<String, TyId> = sig
+            .generics
+            .iter()
+            .map(|g| (g.clone(), self.fresh(NumKind::Any, e.span)))
+            .collect();
+        let field_ty = |me: &mut Self, t: TyId| -> TyId {
+            if inst_map.is_empty() {
+                t
+            } else {
+                crate::types::subst(&mut me.lo.table, t, &inst_map)
+            }
+        };
         let mut seen: Vec<String> = Vec::new();
         for init in d.fields() {
             let Some(nt) = FieldInit::name(init) else {
@@ -7856,10 +7898,11 @@ impl<'a> Checker<'a> {
                 }
                 continue;
             };
+            let fty = field_ty(self, field.ty);
             match init.value() {
                 Some(v) => {
                     let exp = Expect {
-                        ty: field.ty,
+                        ty: fty,
                         reason: Reason::StructField(fname.clone()),
                         because: Some(field.span),
                     };
@@ -7869,7 +7912,7 @@ impl<'a> Checker<'a> {
                     // Shorthand `{ x }`: the local of the same name.
                     let ty = self.lookup_local(&fname).unwrap_or_else(|| self.error_ty());
                     let exp = Expect {
-                        ty: field.ty,
+                        ty: fty,
                         reason: Reason::StructField(fname.clone()),
                         because: Some(field.span),
                     };
@@ -7903,9 +7946,11 @@ impl<'a> Checker<'a> {
                 .with_note("every field is written explicitly — wolf has no defaults yet."),
             );
         }
+        let args: Vec<TyId> = sig.generics.iter().map(|g| inst_map[g]).collect();
         Ok(self.lo.table.intern(TyKind::Nominal {
             module: module as u32,
             name,
+            args,
         }))
     }
 
@@ -8477,10 +8522,11 @@ impl<'a> Checker<'a> {
     /// The scrutinee's enum variants, if it is a (non-generic) enum:
     /// (name, payload types, declaration span).
     fn scrut_variants(&self, ty: TyId) -> Option<Vec<(String, Vec<TyId>, Span)>> {
-        if let TyKind::Nominal { module, name } = self.kind_of(ty)
+        if let TyKind::Nominal { module, name, .. } = self.kind_of(ty)
             && let Some(ItemSig::Enum {
                 variants,
                 generic: false,
+                generics: _,
                 ..
             }) = self.sigs.get(module as usize, &name)
         {

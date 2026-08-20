@@ -127,6 +127,12 @@ pub struct FieldSig {
 #[derive(Debug, Clone)]
 pub struct StructSig {
     pub generic: bool,
+    /// Generic parameter names, in declaration order (s94). The
+    /// rigid names the field types were elaborated under; an applied
+    /// `Nominal { args }` substitutes positionally against these.
+    /// (Bounds on data-type parameters are not elaborated anywhere
+    /// yet; when they are, this becomes `Vec<GenericSig>`.)
+    pub generics: Vec<String>,
     pub fields: Vec<FieldSig>,
     pub name_span: Span,
 }
@@ -163,6 +169,8 @@ pub enum ItemSig {
     /// exhaustiveness both read `variants`.
     Enum {
         generic: bool,
+        /// As [`StructSig::generics`] (s94).
+        generics: Vec<String>,
         name_span: Span,
         variants: Vec<VariantSig>,
     },
@@ -330,6 +338,7 @@ impl<'a> Lower<'a> {
                     .collect();
                 ItemSig::Struct(StructSig {
                     generic: !generics.is_empty(),
+                    generics,
                     fields,
                     name_span: item.name_span,
                 })
@@ -341,6 +350,7 @@ impl<'a> Lower<'a> {
                     .unwrap_or_default();
                 ItemSig::Enum {
                     generic: !generics.is_empty(),
+                    generics,
                     name_span: item.name_span,
                     variants,
                 }
@@ -382,6 +392,7 @@ impl<'a> Lower<'a> {
                             .collect();
                         ItemSig::Struct(StructSig {
                             generic,
+                            generics,
                             fields,
                             name_span: item.name_span,
                         })
@@ -401,6 +412,7 @@ impl<'a> Lower<'a> {
                             .unwrap_or_default();
                         ItemSig::Enum {
                             generic,
+                            generics,
                             name_span: item.name_span,
                             variants,
                         }
@@ -1048,6 +1060,17 @@ impl<'a> Lower<'a> {
         match target {
             TypeHead::Item { module: tm, name } => {
                 if has_args {
+                    // s94: an APPLIED user nominal (`Map[str, int]`)
+                    // elaborates to `Nominal { args }` when every
+                    // argument is a type and the arity matches the
+                    // declaration. Anything else — const-generic
+                    // value arguments (`Buf[2 + 2]`), arity errors,
+                    // generic aliases — stays opaque, exactly the
+                    // pre-s94 rendering, so nothing downstream
+                    // changes for the shapes s94 does not claim.
+                    if let Some(t) = self.applied_item_type(tm, &name, module, file, generics, &d) {
+                        return t;
+                    }
                     return self.opaque(file, node);
                 }
                 self.named_item_type(tm, &name, file, node)
@@ -1134,6 +1157,7 @@ impl<'a> Lower<'a> {
             SyntaxKind::StructDecl | SyntaxKind::EnumDecl => self.table.intern(TyKind::Nominal {
                 module: module as u32,
                 name: name.to_string(),
+                args: Vec::new(),
             }),
             SyntaxKind::TypeDecl => {
                 let d = TypeDecl::cast(inode).expect("kind");
@@ -1145,6 +1169,7 @@ impl<'a> Lower<'a> {
                         self.table.intern(TyKind::Nominal {
                             module: module as u32,
                             name: name.to_string(),
+                            args: Vec::new(),
                         })
                     }
                     // An adapter (`type X = distinct T`) is a nominal
@@ -1153,6 +1178,7 @@ impl<'a> Lower<'a> {
                         self.table.intern(TyKind::Nominal {
                             module: module as u32,
                             name: name.to_string(),
+                            args: Vec::new(),
                         })
                     }
                     Some(def) if !generic => {
@@ -1172,6 +1198,54 @@ impl<'a> Lower<'a> {
             }
             _ => self.opaque(file, node),
         }
+    }
+
+    /// s94: elaborate `Name[args…]` against a generic struct/enum
+    /// declaration. `None` means "not a shape s94 elaborates" — the
+    /// caller falls back to the opaque rendering.
+    #[allow(clippy::too_many_arguments)]
+    fn applied_item_type(
+        &mut self,
+        tm: usize,
+        name: &str,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        d: &PathType<'_>,
+    ) -> Option<TyId> {
+        let item = self.pkg.tables[tm].get(name)?;
+        let inode = item_node(self.pkg, item);
+        // Struct/enum declarations and `type X[…] = struct/enum` defs;
+        // generic aliases and everything else keep the opaque path.
+        let is_adt = match inode.kind {
+            SyntaxKind::StructDecl | SyntaxKind::EnumDecl => true,
+            SyntaxKind::TypeDecl => TypeDecl::cast(inode)
+                .and_then(|td| td.def())
+                .is_some_and(|def| matches!(def.kind, SyntaxKind::StructDef | SyntaxKind::EnumDef)),
+            _ => false,
+        };
+        if !is_adt {
+            return None;
+        }
+        let params = generic_names(self, item.file, inode);
+        if params.is_empty() {
+            return None;
+        }
+        let arg_nodes: Vec<&GreenNode> = d.args().into_iter().flat_map(|a| a.args()).collect();
+        // Every argument must BE a type: a value argument (`Buf[2 + 2]`)
+        // is const-generic surface, which has no home in the table yet.
+        if arg_nodes.len() != params.len() || !arg_nodes.iter().all(|a| is_type_kind(a.kind)) {
+            return None;
+        }
+        let args: Vec<TyId> = arg_nodes
+            .iter()
+            .map(|a| self.lower_type(module, file, generics, a))
+            .collect();
+        Some(self.table.intern(TyKind::Nominal {
+            module: tm as u32,
+            name: name.to_string(),
+            args,
+        }))
     }
 
     /// The opaque fallback: keep the source rendering (whitespace
@@ -1331,21 +1405,60 @@ mod tests {
     }
 
     #[test]
-    fn generic_instantiations_stay_opaque() {
-        // `Map[..]` (any non-builtin generic head) stays an opaque
-        // token; `List[int]`/`Pool[T]` became typed builtins in s21.
+    fn generic_instantiations_elaborate() {
+        // s94 (the reversal of the s21-era pin): an applied DECLARED
+        // generic nominal elaborates to `Nominal { args }` — two args,
+        // both typed. An UNDECLARED head still goes opaque (resolution
+        // owns that report), and a const-generic application (`Buf[2 +
+        // 2]`) stays opaque until value arguments exist in the table.
         let p = pkg(&[(
             &[],
             "main.lu",
-            "struct Big { data: Map[str, int] }\nfn main() -> !int { 0 }\n",
+            "struct Map[K, V] { key: K, val: V }\n\
+             struct Big { data: Map[str, int] }\n\
+             struct Buf[N: type] { len: int }\n\
+             struct Holds { b: Buf[2 + 2] }\n\
+             struct Bare { m: Mip[str, int] }\n\
+             fn main() -> !int { 0 }\n",
         )]);
         let sigs = build_sigs(&p);
         let ItemSig::Struct(s) = sigs.get(0, "Big").expect("Big") else {
             panic!("struct sig")
         };
+        let TyKind::Nominal { name, args, .. } = sigs.table.kind(s.fields[0].ty) else {
+            panic!(
+                "Map[str, int] should elaborate, got {:?}",
+                sigs.table.kind(s.fields[0].ty)
+            )
+        };
+        assert_eq!(name, "Map");
+        assert_eq!(args.len(), 2);
+        assert!(matches!(sigs.table.kind(args[0]), TyKind::Prim(Prim::Str)));
+        assert!(matches!(sigs.table.kind(args[1]), TyKind::Prim(p) if p.is_integer()));
+        // The Map declaration itself carries its parameter names.
+        let ItemSig::Struct(m) = sigs.get(0, "Map").expect("Map") else {
+            panic!("Map sig")
+        };
+        assert_eq!(m.generics, vec!["K".to_string(), "V".to_string()]);
         assert!(matches!(
-            sigs.table.kind(s.fields[0].ty),
-            TyKind::Unsupported(t) if t == "Map[str, int]"
+            sigs.table.kind(m.fields[0].ty),
+            TyKind::Rigid(r) if r == "K"
+        ));
+        // Const-generic application: opaque, exactly as before s94.
+        let ItemSig::Struct(h) = sigs.get(0, "Holds").expect("Holds") else {
+            panic!("Holds sig")
+        };
+        assert!(matches!(
+            sigs.table.kind(h.fields[0].ty),
+            TyKind::Unsupported(t) if t == "Buf[2 + 2]"
+        ));
+        // Undeclared head: opaque.
+        let ItemSig::Struct(b) = sigs.get(0, "Bare").expect("Bare") else {
+            panic!("Bare sig")
+        };
+        assert!(matches!(
+            sigs.table.kind(b.fields[0].ty),
+            TyKind::Unsupported(t) if t == "Mip[str, int]"
         ));
     }
 

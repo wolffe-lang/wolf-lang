@@ -227,7 +227,10 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
         TyKind::Unit => dst.unit(),
         TyKind::Prim(p) => dst.prim(p),
         TyKind::Rigid(n) => dst.intern(TyKind::Rigid(n)),
-        TyKind::Nominal { module, name } => dst.intern(TyKind::Nominal { module, name }),
+        TyKind::Nominal { module, name, args } => {
+            let args = args.into_iter().map(|a| transfer(src, dst, a)).collect();
+            dst.intern(TyKind::Nominal { module, name, args })
+        }
         TyKind::Dyn { module, name } => dst.intern(TyKind::Dyn { module, name }),
         TyKind::RegionTy => dst.intern(TyKind::RegionTy),
         TyKind::TypeTy => dst.intern(TyKind::TypeTy),

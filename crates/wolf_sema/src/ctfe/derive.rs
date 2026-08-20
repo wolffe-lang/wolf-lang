@@ -81,6 +81,7 @@ pub fn derive_eq(
     let self_ty = table.intern(TyKind::Nominal {
         module: module as u32,
         name: type_name.to_string(),
+        args: Vec::new(),
     });
     let bool_ = table.prim(Prim::Bool);
     let sig = FnSig {
