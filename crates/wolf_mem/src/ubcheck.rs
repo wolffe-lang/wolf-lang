@@ -2242,12 +2242,14 @@ impl<'t> Machine<'t> {
         }
         match ctx.tb.table.kind(id) {
             TyKind::Row { tags, .. } => Some(tags.iter().map(|(n, _)| n.clone()).collect()),
-            TyKind::Nominal { module, name } => match self.tc.sigs.get(*module as usize, name) {
-                Some(ItemSig::Enum { variants, .. }) => {
-                    Some(variants.iter().map(|v| v.name.clone()).collect())
+            TyKind::Nominal { module, name, .. } => {
+                match self.tc.sigs.get(*module as usize, name) {
+                    Some(ItemSig::Enum { variants, .. }) => {
+                        Some(variants.iter().map(|v| v.name.clone()).collect())
+                    }
+                    _ => None,
                 }
-                _ => None,
-            },
+            }
             _ => None,
         }
     }

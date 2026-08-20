@@ -96,6 +96,40 @@ impl Val {
     }
 }
 
+/// Does this signature-table type mention a generic parameter
+/// anywhere (s94)? Fields that do — beyond the bare-parameter case —
+/// need substitution this module's immutable view cannot intern, so
+/// their struct answers opaquely and the walk refuses by name.
+fn mentions_rigid(table: &TypeTable, ty: TyId) -> bool {
+    match table.kind(ty) {
+        TyKind::Rigid(_) => true,
+        TyKind::Wrapping(t)
+        | TyKind::Range(t)
+        | TyKind::Ptr(t)
+        | TyKind::Shared(t)
+        | TyKind::Handle(t)
+        | TyKind::Weak(t)
+        | TyKind::Distinct(t)
+        | TyKind::List(t)
+        | TyKind::Pool(t)
+        | TyKind::Chan(t)
+        | TyKind::Mutex(t) => mentions_rigid(table, *t),
+        TyKind::Tuple(ts) => ts.iter().any(|t| mentions_rigid(table, *t)),
+        TyKind::Fn(ps, r) => {
+            ps.iter().any(|t| mentions_rigid(table, *t)) || mentions_rigid(table, *r)
+        }
+        TyKind::ErrUnion(a, b) => mentions_rigid(table, *a) || mentions_rigid(table, *b),
+        TyKind::Row { tags, tail } => {
+            tags.iter()
+                .any(|(_, ps)| ps.iter().any(|t| mentions_rigid(table, *t)))
+                || tail.is_some_and(|t| mentions_rigid(table, t))
+        }
+        TyKind::Nominal { args, .. } => args.iter().any(|t| mentions_rigid(table, *t)),
+        TyKind::Proj(t, _) => mentions_rigid(table, *t),
+        _ => false,
+    }
+}
+
 /// A type reference that knows its interner: sema keeps signature
 /// types in [`SigTables::table`] and body types in the body's own
 /// table, and place typing crosses between them at `Nominal` fields.
@@ -1169,23 +1203,46 @@ impl<'t> Lowerer<'t> {
     /// member typing.
     fn fields_of(&self, t: Ty<'t>) -> Option<Vec<(String, Ty<'t>)>> {
         match t.kind() {
-            TyKind::Nominal { module, name } => match self.sigs.get(*module as usize, name)? {
-                ItemSig::Struct(ss) => Some(
-                    ss.fields
-                        .iter()
-                        .map(|f| {
-                            (
-                                f.name.clone(),
-                                Ty {
+            TyKind::Nominal { module, name, args } => {
+                match self.sigs.get(*module as usize, name)? {
+                    ItemSig::Struct(ss) => {
+                        // s94: an applied generic struct's fields answer
+                        // with the ARGUMENT type where the declaration
+                        // wrote the bare parameter (`v: T` under `Box[
+                        // List[int]]` is the List — region content the
+                        // walks must see, copyness the moves must see).
+                        // A field mentioning a parameter inside a
+                        // compound type would need interning this
+                        // immutable view cannot do: the whole struct
+                        // answers `None`, and the member walk's own
+                        // refusal names the place. A bare generic use
+                        // (arity mismatch) also answers `None`.
+                        if ss.generic && args.len() != ss.generics.len() {
+                            return None;
+                        }
+                        let mut out = Vec::with_capacity(ss.fields.len());
+                        for f in &ss.fields {
+                            let fty = match self.sigs.table.kind(f.ty) {
+                                TyKind::Rigid(r) => {
+                                    let i = ss.generics.iter().position(|g| g == r)?;
+                                    Ty {
+                                        table: t.table,
+                                        id: args[i],
+                                    }
+                                }
+                                _ if mentions_rigid(&self.sigs.table, f.ty) => return None,
+                                _ => Ty {
                                     table: &self.sigs.table,
                                     id: f.ty,
                                 },
-                            )
-                        })
-                        .collect(),
-                ),
-                _ => None,
-            },
+                            };
+                            out.push((f.name.clone(), fty));
+                        }
+                        Some(out)
+                    }
+                    _ => None,
+                }
+            }
             TyKind::Tuple(elems) => Some(
                 elems
                     .iter()
