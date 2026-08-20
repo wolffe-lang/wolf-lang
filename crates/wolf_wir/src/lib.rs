@@ -104,7 +104,7 @@ pub use ir::{
     Aux, Block, BlockCall, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst, InstData, Mode,
     Module, Param, SigData, SigId, Value, ValueData, ValueDef,
 };
-pub use lower::{Build, lower_package};
+pub use lower::{Build, SurveyReason, lower_package, lower_package_survey};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
 pub use print::{block_order, print_module, print_selected};

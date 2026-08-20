@@ -77,11 +77,59 @@ pub struct Build {
     pub stats: Stats,
 }
 
+/// One reason collected by the survey lens ([`lower_package_survey`]).
+///
+/// ORDER MATTERS: reasons appear in lowering order — the source order
+/// of the failure points within a body. The first reason of a body is
+/// exactly what fail-fast lowering refuses with; it is reliable.
+/// Everything after it was collected by SKIPPING the failed statement
+/// and lowering on, so a later reason may be follow-on noise (a name
+/// the skipped statement would have bound, a value it would have
+/// produced). `follow_on` marks those: they are leads, not verdicts.
+#[derive(Debug, Clone)]
+pub struct SurveyReason {
+    pub construct: &'static str,
+    pub span: Span,
+    /// The qualified name of the body the reason was found in (the
+    /// spec name, for a worklist instance).
+    pub fn_name: String,
+    /// Not the first reason in its body — possibly noise from a
+    /// skipped statement rather than an independent gap.
+    pub follow_on: bool,
+}
+
 /// Lower every checked body of a package. `tc` must come from
 /// [`wolf_sema::typecheck_package`] over the same `pkg`; callers gate
 /// on `tc.not_yet`/`mem` cleanliness for the rung verdict — this
 /// function lowers whatever is lowerable and refuses the rest.
 pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
+    lower_package_impl(pkg, tc, None)
+}
+
+/// [`lower_package`] with the survey lens on (the c19 closeout's
+/// lesson made a tool): a refusal names the FIRST reason a body
+/// stops, not the only one, so contract acceptance written against
+/// the ledger can be written against a mask. Survey mode catches a
+/// refusal at the statement that raised it, records it, skips the
+/// statement, and lowers on — collecting what fail-fast masks.
+///
+/// A lens, never a gate. The returned [`Build`] is bit-for-bit what
+/// [`lower_package`] returns — same `not_yet`, same module — because
+/// a surveyed body's verdict is pinned to its first reason and its
+/// (garbage) function is never added. Survey output is not
+/// snapshotted anywhere; `wolf conform-run --dump=peel` prints it and
+/// `cargo xtask peel` drives that over the corpus.
+pub fn lower_package_survey(pkg: &Package, tc: &Typecheck) -> (Build, Vec<SurveyReason>) {
+    let mut reasons = Vec::new();
+    let build = lower_package_impl(pkg, tc, Some(&mut reasons));
+    (build, reasons)
+}
+
+fn lower_package_impl(
+    pkg: &Package,
+    tc: &Typecheck,
+    mut survey: Option<&mut Vec<SurveyReason>>,
+) -> Build {
     let mut module = Module::new();
     let mut not_yet = Vec::new();
     let mut stats = Stats::default();
@@ -122,7 +170,9 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             continue;
         };
         let body = &outcome.body;
-        match lower_body(
+        let mut peeled: Vec<NotYet> = Vec::new();
+        let sink = survey.is_some().then_some(&mut peeled);
+        let r = lower_body(
             pkg,
             &tc.sigs,
             tb,
@@ -134,7 +184,27 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             &plain,
             &[],
             &mut specs,
-        ) {
+            sink,
+        );
+        if let Some(out) = survey.as_deref_mut() {
+            // A pre-body refusal never reaches the statement catch;
+            // record it so the survey is a superset of the ledger.
+            if peeled.is_empty()
+                && let Err(ref nyc) = r
+            {
+                peeled.push(nyc.clone());
+            }
+            let fname = qualify(&tc.sigs, body.module, &body.name);
+            for (i, n) in peeled.iter().enumerate() {
+                out.push(SurveyReason {
+                    construct: n.construct,
+                    span: n.span,
+                    fn_name: fname.clone(),
+                    follow_on: i > 0,
+                });
+            }
+        }
+        match r {
             Ok(Some(s)) => stats.add(s),
             Ok(None) => {}
             Err(nyc) => not_yet.push(nyc),
@@ -159,14 +229,20 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
     while let Some(req) = specs.pop() {
         guard += 1;
         if guard > 4096 {
-            not_yet.push(refuse(
-                if req.key.subst.is_empty() {
-                    "a byte-view specialization fixpoint"
-                } else {
-                    "a monomorphization fixpoint (polymorphic recursion)"
-                },
-                req.span,
-            ));
+            let construct = if req.key.subst.is_empty() {
+                "a byte-view specialization fixpoint"
+            } else {
+                "a monomorphization fixpoint (polymorphic recursion)"
+            };
+            not_yet.push(refuse(construct, req.span));
+            if let Some(out) = survey.as_deref_mut() {
+                out.push(SurveyReason {
+                    construct,
+                    span: req.span,
+                    fn_name: req.name.clone(),
+                    follow_on: false,
+                });
+            }
             break;
         }
         stats.instantiations_seen += u64::from(!req.key.subst.is_empty());
@@ -181,10 +257,16 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
         if let Some(prev) = named.get(&full)
             && *prev != req.key
         {
-            not_yet.push(refuse(
-                "two instantiations whose bindings mangle to one name",
-                req.span,
-            ));
+            let construct = "two instantiations whose bindings mangle to one name";
+            not_yet.push(refuse(construct, req.span));
+            if let Some(out) = survey.as_deref_mut() {
+                out.push(SurveyReason {
+                    construct,
+                    span: req.span,
+                    fn_name: req.name.clone(),
+                    follow_on: false,
+                });
+            }
             continue;
         }
         named.insert(full, req.key.clone());
@@ -194,7 +276,9 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             continue;
         };
         stats.instantiations_lowered += u64::from(!req.key.subst.is_empty());
-        match lower_body(
+        let mut peeled: Vec<NotYet> = Vec::new();
+        let sink = survey.is_some().then_some(&mut peeled);
+        let r = lower_body(
             pkg,
             &tc.sigs,
             tb,
@@ -206,7 +290,25 @@ pub fn lower_package(pkg: &Package, tc: &Typecheck) -> Build {
             &req.key,
             &req.bindings,
             &mut specs,
-        ) {
+            sink,
+        );
+        if let Some(out) = survey.as_deref_mut() {
+            if peeled.is_empty()
+                && let Err(ref nyc) = r
+            {
+                peeled.push(nyc.clone());
+            }
+            let fname = spec_name(&req.name, &req.key);
+            for (i, n) in peeled.iter().enumerate() {
+                out.push(SurveyReason {
+                    construct: n.construct,
+                    span: n.span,
+                    fn_name: fname.clone(),
+                    follow_on: i > 0,
+                });
+            }
+        }
+        match r {
             Ok(Some(s)) => stats.add(s),
             Ok(None) => {}
             Err(nyc) => not_yet.push(nyc),
@@ -465,6 +567,7 @@ fn lower_body(
     key: &SpecKey,
     bindings: &[(String, Bound)],
     specs: &mut Vec<SpecRequest>,
+    mut survey: Option<&mut Vec<NotYet>>,
 ) -> R<Option<Stats>> {
     let view_mask = key.mask;
     let root = &pkg.files[body.file].parse.root;
@@ -630,9 +733,22 @@ fn lower_body(
         foreign: None,
         lender,
         pending_specs: specs,
+        survey: survey.as_deref_mut(),
         b: &mut b,
     };
-    lowerer.lower_fn(fsig, block, view_mask)?;
+    match lowerer.lower_fn(fsig, block, view_mask) {
+        Ok(()) => {}
+        Err(e) => return Err(body_verdict(survey.as_deref_mut(), e)),
+    }
+    // Survey: statements refused but the lens lowered on. The function
+    // is not real WIR, so it is never added; the verdict is pinned to
+    // the FIRST reason — exactly what fail-fast returns — so the
+    // survey [`Build`] is bit-for-bit the fail-fast one.
+    if let Some(sink) = survey.as_deref()
+        && let Some(first) = sink.first()
+    {
+        return Err(first.clone());
+    }
     let mut stats = b.stats;
     let func = b.finish();
     module.add_func(func);
@@ -642,10 +758,13 @@ fn lower_body(
     while let Some(task) = pending.pop() {
         guard += 1;
         if guard > 256 {
-            return Err(refuse("deeply nested task spawns", span));
+            return Err(body_verdict(
+                survey.as_deref_mut(),
+                refuse("deeply nested task spawns", span),
+            ));
         }
         if task.closure.is_some() {
-            stats.add(lower_task_body(
+            match lower_task_body(
                 pkg,
                 sigs,
                 tb,
@@ -656,11 +775,32 @@ fn lower_body(
                 &mut pending,
                 lender,
                 specs,
-            )?);
+                survey.as_deref_mut(),
+            ) {
+                Ok(s) => stats.add(s),
+                Err(e) => return Err(body_verdict(survey.as_deref_mut(), e)),
+            }
         }
-        build_task_shim(module, &task)?;
+        if let Err(e) = build_task_shim(module, &task) {
+            return Err(body_verdict(survey.as_deref_mut(), e));
+        }
     }
     Ok(Some(stats))
+}
+
+/// Survey-aware error exit for [`lower_body`]'s post-statement stages
+/// (prologue, signature, defers, the task drain): fail-fast returns
+/// the error as-is; the survey records it and pins the body's verdict
+/// to its first collected reason, which is what fail-fast would have
+/// refused with.
+fn body_verdict(survey: Option<&mut Vec<NotYet>>, e: NotYet) -> NotYet {
+    match survey {
+        None => e,
+        Some(sink) => {
+            sink.push(e);
+            sink[0].clone()
+        }
+    }
 }
 
 /// Lower one queued closure task body (s73): an ordinary function
@@ -678,6 +818,7 @@ fn lower_task_body<'t>(
     pending: &mut Vec<PendingTask<'t>>,
     lender: &'t Lender<'t>,
     specs: &mut Vec<SpecRequest>,
+    survey: Option<&mut Vec<NotYet>>,
 ) -> R<Stats> {
     let closure = task.closure.expect("closure task");
     let d = wolf_ast::ClosureExpr::cast(closure).expect("kind");
@@ -713,6 +854,7 @@ fn lower_task_body<'t>(
         foreign: None,
         lender,
         pending_specs: specs,
+        survey,
         b: &mut b,
     };
     // The fallible shape: the body's result is an eu when the closure
@@ -1782,6 +1924,10 @@ struct Lowerer<'t, 'b, 'm> {
     /// s89: view specializations this body's call sites demanded, drained
     /// to fixpoint by [`lower_package`].
     pending_specs: &'b mut Vec<SpecRequest>,
+    /// The survey lens ([`lower_package_survey`]): when on, a
+    /// statement-level refusal is recorded here and lowering continues
+    /// with the next statement instead of aborting the body.
+    survey: Option<&'b mut Vec<NotYet>>,
     b: &'b mut FuncBuilder<'m>,
 }
 
@@ -1998,6 +2144,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let mut out: Option<Value> = None;
         for stmt in block.statements() {
+            let scopes_depth = self.scopes.len();
+            let loops_depth = self.loops.len();
+            let saved_visible = self.visible;
             let flow = self.lower_stmt(stmt, last_value, &mut out);
             match flow {
                 Ok(Flow::Val(_)) => {}
@@ -2006,6 +2155,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     return Ok(Flow::Diverged);
                 }
                 Err(e) => {
+                    // The survey lens: record the reason, restore the
+                    // frame stacks the failed statement may have left
+                    // half-pushed, and lower ON — the next statement's
+                    // reason is what fail-fast masks. The function is
+                    // garbage from here (skipped values, dangling
+                    // blocks); [`lower_body`] never adds it.
+                    if let Some(sink) = self.survey.as_deref_mut() {
+                        sink.push(e);
+                        self.scopes.truncate(scopes_depth);
+                        self.loops.truncate(loops_depth);
+                        self.visible = saved_visible;
+                        continue;
+                    }
                     self.scopes.pop();
                     return Err(e);
                 }
