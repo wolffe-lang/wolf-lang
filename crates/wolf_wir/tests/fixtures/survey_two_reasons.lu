@@ -1,0 +1,24 @@
+//! The survey lens's own witness (NOT a corpus file — never in the
+//! ledger): one function, two INDEPENDENT refusal-provoking
+//! statements. Fail-fast refuses at the first and masks the second;
+//! the survey collects both, in source order, with a clean statement
+//! lowered between them to prove the lens continued.
+
+fn half(n: int) -> int {
+    n / 2
+}
+
+fn dbl(n: int) -> int {
+    n * 2
+}
+
+fn apply1(f: fn(int) -> int) -> int {
+    f(1)
+}
+
+fn main() -> !int {
+    let a = apply1(half)
+    print("between")
+    let b = apply1(dbl)
+    if a + b == 0 { 1 } else { 0 }
+}
