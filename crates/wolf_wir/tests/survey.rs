@@ -138,9 +138,9 @@ fn corpus_root() -> PathBuf {
 fn survey_is_a_superset_and_changes_nothing_on_refusing_corpus_files() {
     for name in [
         "rows/hof_tail.lu",
-        "traits/assoc_rewrite.lu",
-        "traits/show_bound.lu",
-        "traits/adapter_distinct/main.lu",
+        "traits/dyn_ok.lu",
+        "memory/prov_holy_grail.lu",
+        "rows/inferred_private.lu",
         "comptime/norm_linear.lu",
     ] {
         let (build, _) = both(&corpus_root().join(name));

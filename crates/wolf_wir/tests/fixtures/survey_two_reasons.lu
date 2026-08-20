@@ -3,22 +3,17 @@
 //! statements. Fail-fast refuses at the first and masks the second;
 //! the survey collects both, in source order, with a clean statement
 //! lowered between them to prove the lens continued.
+//!
+//! The refusing construct is a module-STATE read (`var` item — a
+//! `let` would constant-fold at the use site): the c06 residue s95
+//! left named, after fn-value reads started lowering (the fixture's
+//! previous construct — updated with the sprint).
 
-fn half(n: int) -> int {
-    n / 2
-}
-
-fn dbl(n: int) -> int {
-    n * 2
-}
-
-fn apply1(f: fn(int) -> int) -> int {
-    f(1)
-}
+var base: int = 1
 
 fn main() -> !int {
-    let a = apply1(half)
+    let a = base
     print("between")
-    let b = apply1(dbl)
+    let b = base
     if a + b == 0 { 1 } else { 0 }
 }

@@ -164,17 +164,45 @@ fn lower_package_impl(
             // s94: method bodies join the worklist's map under the
             // mangled `Type.method` name, so a generic method's
             // instance can find its checked body the way a free fn's
-            // does. Trait impls stay out — their bodies are c06's.
+            // does. s95: trait-impl methods join under
+            // `Type.Trait.method`, and a trait's DEFAULT body joins
+            // under the trait's own `Trait.method` — one entry per
+            // method; the key's `Self` segment tells instances apart.
             if let Some(imp) = tc
                 .sigs
                 .impls
                 .iter()
                 .find(|i| i.file == outcome.body.file && i.decl == outcome.body.decl)
-                && imp.trait_ref.is_none()
-                && let Some(m) = imp.methods.iter().find(|m| m.member == mi)
-                && let TyKind::Nominal { name: tyname, .. } = tc.sigs.table.kind(imp.self_ty)
             {
-                bodies.insert(format!("{tyname}.{}", m.name), (tb, &outcome.body));
+                if let Some(m) = imp.methods.iter().find(|m| m.member == mi)
+                    && let TyKind::Nominal { name: tyname, .. } = tc.sigs.table.kind(imp.self_ty)
+                {
+                    let key = match &imp.trait_ref {
+                        Some(tr) => format!("{tyname}.{}.{}", tr.name, m.name),
+                        None => format!("{tyname}.{}", m.name),
+                    };
+                    bodies.insert(key, (tb, &outcome.body));
+                }
+            } else {
+                let root = &pkg.files[outcome.body.file].parse.root;
+                if let Some(node) = root
+                    .nodes()
+                    .filter(|n| n.kind.is_item())
+                    .nth(outcome.body.decl)
+                    && node.kind == SyntaxKind::TraitDecl
+                    && let Some(tname) = wolf_ast::TraitDecl::cast(node).and_then(|t| t.name())
+                    && let Some(mnode) = node.nodes().filter(|n| n.kind.is_item()).nth(mi)
+                    && mnode.kind == SyntaxKind::FnDecl
+                    && let Some(mtok) = wolf_ast::FnDecl::cast(mnode).and_then(|d| d.name())
+                {
+                    let src = &pkg.files[outcome.body.file].raw.src;
+                    let tname = String::from_utf8_lossy(
+                        &src[tname.span.lo as usize..tname.span.hi as usize],
+                    );
+                    let mname =
+                        String::from_utf8_lossy(&src[mtok.span.lo as usize..mtok.span.hi as usize]);
+                    bodies.insert(format!("{tname}.{mname}"), (tb, &outcome.body));
+                }
             }
         }
     }
@@ -368,6 +396,10 @@ impl SpecKey {
     }
 }
 
+/// A resolved static trait route (s95): the callee's base name, its
+/// signature, and the bindings the instance applies.
+type TraitRoute<'t> = (String, &'t FnSig, Vec<(String, Bound)>);
+
 /// One call site's demand for a specialization of a callee (s89: a
 /// byte-view clone; s93: a monomorphic instance; or both): the callee's
 /// qualified WIR name, the key, and — for a substitution — the bindings
@@ -438,6 +470,32 @@ enum Bound {
         name: String,
         args: Vec<Bound>,
     },
+}
+
+/// Does this declared type mention the trait receiver rigid `Self`?
+/// (The qualified-call route uses it to find the impl-naming argument.)
+fn mentions_self(table: &TypeTable, ty: TyId) -> bool {
+    match table.kind(ty) {
+        TyKind::Rigid(n) => n == "Self",
+        TyKind::Proj(b, _) | TyKind::Wrapping(b) | TyKind::Distinct(b) | TyKind::Ptr(b) => {
+            mentions_self(table, *b)
+        }
+        TyKind::List(t) | TyKind::Range(t) | TyKind::Chan(t) | TyKind::Mutex(t) => {
+            mentions_self(table, *t)
+        }
+        TyKind::Tuple(ts) => ts.iter().any(|t| mentions_self(table, *t)),
+        TyKind::Fn(ps, r) => {
+            ps.iter().any(|t| mentions_self(table, *t)) || mentions_self(table, *r)
+        }
+        TyKind::ErrUnion(ok, row) => mentions_self(table, *ok) || mentions_self(table, *row),
+        TyKind::Row { tags, tail } => {
+            tags.iter()
+                .any(|(_, ps)| ps.iter().any(|t| mentions_self(table, *t)))
+                || tail.is_some_and(|t| mentions_self(table, t))
+        }
+        TyKind::Nominal { args, .. } => args.iter().any(|t| mentions_self(table, *t)),
+        _ => false,
+    }
 }
 
 fn freeze(table: &TypeTable, ty: TyId) -> Bound {
@@ -646,48 +704,110 @@ fn lower_body(
             (node, fsig, qualify(sigs, body.module, &body.name))
         }
         Some(mi) => {
-            if node.kind != SyntaxKind::ImplDecl {
-                // Trait default bodies check against the trait's own
-                // archetype; they lower per impl once dispatch tables
-                // land.
-                return Err(refuse(
-                    "trait default-body lowering (dispatch tables, c06)",
-                    span,
-                ));
-            }
-            let Some(imp) = sigs
-                .impls
-                .iter()
-                .find(|i| i.file == body.file && i.decl == body.decl)
-            else {
+            if node.kind == SyntaxKind::TraitDecl {
+                // s95: a trait DEFAULT body. Checked once against the
+                // trait's own archetype (`Self` rigid); it lowers only
+                // as an INSTANCE — `Self ↦ subject` — demanded by a
+                // call site whose impl does not override the method.
+                // The plain pass has no subject: archetype rule, no
+                // WIR (the s93 shape).
+                if bindings.is_empty() {
+                    return Ok(None);
+                }
+                let Some(tname) = wolf_ast::TraitDecl::cast(node)
+                    .and_then(|t| t.name())
+                    .map(|t| {
+                        String::from_utf8_lossy(
+                            &pkg.files[body.file].raw.src[t.span.lo as usize..t.span.hi as usize],
+                        )
+                        .into_owned()
+                    })
+                else {
+                    return Ok(None);
+                };
+                let tr = wolf_sema::traits::TraitRef {
+                    module: body.module,
+                    name: tname,
+                };
+                let Some(td) = sigs.traits.get(&tr) else {
+                    return Ok(None);
+                };
+                let Some(mnode) = node.nodes().filter(|n| n.kind.is_item()).nth(mi) else {
+                    return Ok(None);
+                };
+                if mnode.kind != SyntaxKind::FnDecl {
+                    return Ok(None);
+                }
+                let d = wolf_ast::FnDecl::cast(mnode).expect("kind");
+                let Some(mname_tok) = d.name() else {
+                    return Ok(None);
+                };
+                let mname = String::from_utf8_lossy(
+                    &pkg.files[body.file].raw.src
+                        [mname_tok.span.lo as usize..mname_tok.span.hi as usize],
+                )
+                .into_owned();
+                let Some(tm) = td.method(&mname) else {
+                    return Ok(None);
+                };
+                // The base name is the TRAIT's — `Greeter.greet` — and
+                // the key's `Self` segment names the subject:
+                // `Greeter.greet.mono.P`. One spelling: a default body
+                // is the trait's body monomorphized over `Self`.
+                (mnode, &tm.sig, format!("{}.{mname}", tr.name))
+            } else if node.kind == SyntaxKind::ImplDecl {
+                let Some(imp) = sigs
+                    .impls
+                    .iter()
+                    .find(|i| i.file == body.file && i.decl == body.decl)
+                else {
+                    return Ok(None);
+                };
+                if !imp.generics.is_empty() && bindings.is_empty() {
+                    // s94: a generic impl's method archetype contributes
+                    // no WIR — its instances are the WIR, exactly the
+                    // free-fn rule below. The worklist hands an instance
+                    // in with bindings covering the impl's rigids.
+                    return Ok(None);
+                }
+                let Some(m) = imp.methods.iter().find(|m| m.member == mi) else {
+                    return Ok(None);
+                };
+                let TyKind::Nominal { name: tyname, .. } = sigs.table.kind(imp.self_ty) else {
+                    return Err(refuse("methods on non-nominal self types", span));
+                };
+                let Some(mnode) = node.nodes().filter(|n| n.kind.is_item()).nth(mi) else {
+                    return Ok(None);
+                };
+                if mnode.kind != SyntaxKind::FnDecl {
+                    return Ok(None); // associated consts have no body to lower
+                }
+                // s95: a trait-impl method lowers like an inherent one;
+                // trait-ness is name mangling only — `Point.Show.show`
+                // (the s96 vtable slot name, too). A coherence-REJECTED
+                // program can reach here with two impls of one trait
+                // for one type; two bodies under one symbol is worse
+                // than a named refusal (E0506 already owns the file).
+                let wname = match &imp.trait_ref {
+                    Some(tr) => format!("{tyname}.{}.{}", tr.name, m.name),
+                    None => format!("{tyname}.{}", m.name),
+                };
+                if let Some(tr) = &imp.trait_ref
+                    && bindings.is_empty()
+                    && module.funcs.values().any(|f| f.name == wname)
+                {
+                    return Err(refuse_named(
+                        format!(
+                            "a second impl of `{}` for `{tyname}` (coherence rejected this program)",
+                            tr.name
+                        ),
+                        span,
+                    ));
+                }
+                (mnode, &m.sig, wname)
+            } else {
                 return Ok(None);
-            };
-            if imp.trait_ref.is_some() {
-                return Err(refuse(
-                    "trait-impl method lowering (dispatch tables, c06)",
-                    span,
-                ));
             }
-            if !imp.generics.is_empty() && bindings.is_empty() {
-                // s94: a generic impl's method archetype contributes
-                // no WIR — its instances are the WIR, exactly the
-                // free-fn rule below. The worklist hands an instance
-                // in with bindings covering the impl's rigids.
-                return Ok(None);
-            }
-            let Some(m) = imp.methods.iter().find(|m| m.member == mi) else {
-                return Ok(None);
-            };
-            let TyKind::Nominal { name: tyname, .. } = sigs.table.kind(imp.self_ty) else {
-                return Err(refuse("methods on non-nominal self types", span));
-            };
-            let Some(mnode) = node.nodes().filter(|n| n.kind.is_item()).nth(mi) else {
-                return Ok(None);
-            };
-            if mnode.kind != SyntaxKind::FnDecl {
-                return Ok(None); // associated consts have no body to lower
-            }
-            (mnode, &m.sig, format!("{tyname}.{}", m.name))
         }
     };
     let span = fn_node.span;
@@ -1493,6 +1613,10 @@ fn wir_ty_frame(
         // them (deref, index, arithmetic, casts) keep their s26
         // refusals at the expression sites.
         TyKind::Ptr(_) => Ok(Some(types::PTR)),
+        // s95: a fn-typed VALUE is one code pointer — `func.addr` puts
+        // it there, and the call through it is its own construct (the
+        // c05 refusal at the call site, until an indirect call lands).
+        TyKind::Fn(_, _) => Ok(Some(types::PTR)),
         // s93: a rigid here is a generic parameter no substitution
         // bound — unless a rigid FRAME binds it (s94: a generic
         // nominal's field under an application). Resolution hops to
@@ -1515,10 +1639,51 @@ fn wir_ty_frame(
         // that is s94's generic-impl work under c06's dispatch tables.
         // Name it, so the ledger says what is missing rather than "a
         // type".
-        TyKind::Proj(_, name) => Err(refuse_named(
-            format!("an associated-type projection `.{name}` (needs the impl instantiated)"),
-            span,
-        )),
+        // s95: a projection whose base IS concrete normalizes through
+        // the coherence-unique impl's rewrite rules right here — the
+        // rule's target lives in the signature table, so resolution
+        // hops tables exactly as the rigid FRAME arm does. What still
+        // refuses: a base no impl covers (the message below), a
+        // GENERIC impl's rule (its target mentions rigids the base's
+        // arguments would have to bind — named), and an assoc name two
+        // impls both rewrite (coherence allows it across traits).
+        TyKind::Proj(base, name) => {
+            if let TyKind::Nominal { name: head, .. } = table.kind(*base) {
+                let mut hits = sigs.impls.iter().filter(|i| {
+                    i.rewrites.contains_key(name)
+                        && matches!(
+                            sigs.table.kind(i.self_ty),
+                            TyKind::Nominal { name: h, .. } if h == head
+                        )
+                });
+                match (hits.next(), hits.next()) {
+                    (Some(i), None) => {
+                        if !i.generics.is_empty() {
+                            return Err(refuse_named(
+                                format!(
+                                    "an associated type on a generic impl (`.{name}` binds \
+                                     through the instantiation)"
+                                ),
+                                span,
+                            ));
+                        }
+                        let target = i.rewrites[name];
+                        return wir_ty_frame(it, &sigs.table, sigs, target, span, depth + 1, None);
+                    }
+                    (Some(_), Some(_)) => {
+                        return Err(refuse_named(
+                            format!("an associated type two impls rewrite (`.{name}`)"),
+                            span,
+                        ));
+                    }
+                    (None, _) => {}
+                }
+            }
+            Err(refuse_named(
+                format!("an associated-type projection `.{name}` (needs the impl instantiated)"),
+                span,
+            ))
+        }
         // s94 elaborated applied generic nominals, so what still
         // reaches lowering as an opaque token is the residue the
         // checker leaves by design: const-generic VALUE arguments
@@ -3223,7 +3388,63 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             let tag = self.b.iconst(types::I64, id);
                             return Ok(Flow::Val(Some(self.b.ins_eu_make_err(eu, tag, &[]))));
                         }
-                        Err(refuse("module-item reads (globals, c06)", e.span))
+                        // s95: a module-level FN read as a VALUE —
+                        // `func.addr` (s86 built the emission for task
+                        // entries; a bare fn name in value position is
+                        // the same pointer). What still refuses here
+                        // is actual module STATE — `let`/`var` items —
+                        // and the message now says so.
+                        if let Some(cands) = self.fns.get(name.as_str()) {
+                            let (fmodule, fsig) = match cands.as_slice() {
+                                [one] => *one,
+                                _ => {
+                                    return Err(refuse_named(
+                                        format!(
+                                            "a same-named function read without a unique \
+                                             declaration locus (`{name}`)"
+                                        ),
+                                        e.span,
+                                    ));
+                                }
+                            };
+                            if !fsig.generics.is_empty() {
+                                return Err(refuse_named(
+                                    format!(
+                                        "a generic function as a value (`{name}` has no \
+                                         instantiation at the read)"
+                                    ),
+                                    e.span,
+                                ));
+                            }
+                            if fsig.comptime {
+                                return Err(refuse_named(
+                                    format!("a comptime fn as a runtime value (`{name}`)"),
+                                    e.span,
+                                ));
+                            }
+                            let qname = qualify(self.sigs, fmodule, &name);
+                            let ext = match self.callees.get(&qname) {
+                                Some(&ext) => ext,
+                                None => {
+                                    let sig = wir_sig_of(
+                                        self.b.module,
+                                        self.sig_table,
+                                        self.sigs,
+                                        fsig,
+                                        0,
+                                        e.span,
+                                    )?;
+                                    let ext = self.b.func.import_func(qname.clone(), sig);
+                                    self.callees.insert(qname, ext);
+                                    ext
+                                }
+                            };
+                            return Ok(Flow::Val(Some(self.b.ins_func_addr(ext))));
+                        }
+                        Err(refuse(
+                            "module-item reads (mutable module state, c06)",
+                            e.span,
+                        ))
                     }
                 }
             }
@@ -6145,6 +6366,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if cs.has_self {
             return self.lower_method_call(d, cs, e);
         }
+        // s95: a qualified `Trait.method(v)` carries the same dispatch
+        // record a method call does (the checker writes it; s18 says
+        // read, never re-derive). Without the record this path falls
+        // through to the free-fn map and refuses there, as before.
+        if let Some(&disp) = self.dispatch.get(&e.span)
+            && let Dispatch::Trait {
+                module,
+                name,
+                method,
+                dyn_call,
+            } = disp
+        {
+            if *dyn_call {
+                return Err(refuse("dyn-method calls (vtables, s96)", e.span));
+            }
+            return self.lower_qualified_trait_call(d, cs, *module, name, method, e);
+        }
         if cs.decl_span.is_none() {
             return Err(refuse("indirect calls through fn values (c05)", e.span));
         }
@@ -6421,6 +6659,300 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// call's recorded type binds through the return. Every rigid of
     /// both scopes must bind, or the site refuses naming the one that
     /// did not.
+    /// s95: a qualified `Trait.method(args)` — no receiver expression,
+    /// the `Self`-pinning ARGUMENT names the impl. Same routing as the
+    /// method-call form; the arguments marshal as ordinary values (a
+    /// `mut` parameter through this surface refuses by name until a
+    /// witness needs it).
+    fn lower_qualified_trait_call(
+        &mut self,
+        d: CallExpr<'t>,
+        cs: &CallSig,
+        tmodule: usize,
+        tname: &'t str,
+        method: &'t str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let tr = wolf_sema::traits::TraitRef {
+            module: tmodule,
+            name: tname.to_string(),
+        };
+        let Some(td) = self.sigs.traits.get(&tr) else {
+            return Err(refuse("a qualified call on an unelaborated trait", e.span));
+        };
+        let Some(tm) = td.method(method) else {
+            return Err(refuse("a qualified call on an undeclared method", e.span));
+        };
+        let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+        // The Self-pinning argument: the first whose DECLARED type
+        // mentions `Self` (sema blamed the same argument, D28).
+        let mut head: Option<String> = None;
+        for (i, p) in tm.sig.params.iter().enumerate() {
+            if !mentions_self(self.sig_table, p.ty) {
+                continue;
+            }
+            if let Some(a) = args.get(i)
+                && let Some(vexpr) = Arg::value(*a)
+                && let Some(site) = self.expr_sema_ty(vexpr.span)
+                && let TyKind::Nominal { name, .. } = self.table.kind(self.strip_sema(site)).clone()
+            {
+                head = Some(name);
+            }
+            break;
+        }
+        let Some(head) = head else {
+            return Err(refuse_named(
+                format!("a `{tname}.{method}` call whose `Self` argument is not nominal"),
+                e.span,
+            ));
+        };
+        let imp = self
+            .sigs
+            .impls
+            .iter()
+            .find(|i| {
+                i.trait_ref.as_ref() == Some(&tr)
+                    && matches!(
+                        self.sig_table.kind(i.self_ty),
+                        TyKind::Nominal { name, .. } if name == &head
+                    )
+            })
+            .ok_or_else(|| {
+                refuse_named(
+                    format!("a `{tname}` call without a coherent impl for `{head}`"),
+                    e.span,
+                )
+            })?;
+        let (base_name, msig): (String, &FnSig) =
+            match imp.methods.iter().find(|mm| mm.name == *method) {
+                Some(m) => (format!("{head}.{tname}.{method}"), &m.sig),
+                None => (format!("{tname}.{method}"), &tm.sig),
+            };
+        let overridden = !std::ptr::eq(msig, &tm.sig as *const _);
+        // Bindings: the impl route needs its rigids (and the method's);
+        // the default route needs `Self` (and the method's).
+        let required: Vec<String> = if overridden {
+            imp.generics
+                .iter()
+                .chain(msig.generics.iter())
+                .map(|g| g.name.clone())
+                .collect()
+        } else {
+            std::iter::once("Self".to_string())
+                .chain(msig.generics.iter().map(|g| g.name.clone()))
+                .collect()
+        };
+        let mut map: std::collections::BTreeMap<String, Bound> = std::collections::BTreeMap::new();
+        for (i, p) in msig.params.iter().enumerate() {
+            if let Some(a) = args.get(i)
+                && let Some(vexpr) = Arg::value(*a)
+                && let Some(site) = self.expr_sema_ty(vexpr.span)
+            {
+                self.match_binding(p.ty, site, &mut map, e.span)?;
+            }
+        }
+        if let Some(site_ret) = self.expr_sema_ty(e.span) {
+            self.match_binding(msig.ret, site_ret, &mut map, e.span)?;
+        }
+        let mut bindings: Vec<(String, Bound)> = Vec::with_capacity(required.len());
+        for name in &required {
+            let Some(b) = map.remove(name.as_str()) else {
+                return Err(refuse_named(
+                    format!(
+                        "an instantiation with an unbound parameter (`{name}` is not fixed by this call)"
+                    ),
+                    e.span,
+                ));
+            };
+            bindings.push((name.clone(), b));
+        }
+        if msig.comptime {
+            return Err(refuse(
+                "comptime method calls (D29 CTFE owns these)",
+                e.span,
+            ));
+        }
+        // Arguments: ordinary values, declared modes read/take only.
+        for p in &msig.params {
+            if matches!(p.mode, Some(ParamMode::Mut)) {
+                return Err(refuse_named(
+                    format!("a `mut` parameter through a qualified `{tname}.{method}` call"),
+                    e.span,
+                ));
+            }
+        }
+        let _ = cs;
+        let mut vals = Vec::new();
+        for a in &args {
+            let Some(vexpr) = Arg::value(*a) else {
+                continue;
+            };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            vals.push(v);
+        }
+        let callee_name = if bindings.is_empty() {
+            base_name
+        } else {
+            let key = SpecKey {
+                mask: 0,
+                subst: bindings
+                    .iter()
+                    .map(|(n, b)| {
+                        let mut scratch = TypeTable::new();
+                        let t = thaw(b, &mut scratch);
+                        (n.clone(), mono_spelling(&scratch, t))
+                    })
+                    .collect(),
+            };
+            let full = spec_name(&base_name, &key);
+            self.pending_specs.push(SpecRequest {
+                name: base_name,
+                key,
+                bindings: bindings.clone(),
+                span: e.span,
+            });
+            full
+        };
+        let ext = match self.callees.get(&callee_name) {
+            Some(&ext) => ext,
+            None => {
+                let sig = if bindings.is_empty() {
+                    wir_sig_of(self.b.module, self.sig_table, self.sigs, msig, 0, e.span)?
+                } else {
+                    let mut st = self.sig_table.clone();
+                    let map: std::collections::BTreeMap<String, TyId> = bindings
+                        .iter()
+                        .map(|(n, b)| (n.clone(), thaw(b, &mut st)))
+                        .collect();
+                    let mut f = msig.clone();
+                    for p in &mut f.params {
+                        p.ty = wolf_sema::types::subst(&mut st, p.ty, &map);
+                    }
+                    f.ret = wolf_sema::types::subst(&mut st, f.ret, &map);
+                    wir_sig_of(self.b.module, &st, self.sigs, &f, 0, e.span)?
+                };
+                let ext = self.b.func.import_func(callee_name.clone(), sig);
+                self.callees.insert(callee_name, ext);
+                ext
+            }
+        };
+        let results = self.b.ins_call_regions(ext, &vals, &HashMap::new());
+        Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// s95: resolve a STATIC trait-method call — the record names the
+    /// trait, the receiver's head names the impl (coherence made it
+    /// unique), and the route yields the callee's base name, signature
+    /// and bindings. An overridden method is the impl's, mangled
+    /// `Type.Trait.method`; a defaulted one is the trait's own body as
+    /// an instance, `Trait.method` + a `Self` binding in the key.
+    fn route_trait_static(
+        &self,
+        tmodule: usize,
+        tname: &'t str,
+        method: &'t str,
+        head: &str,
+        d: CallExpr<'t>,
+        e: &'t GreenNode,
+    ) -> R<TraitRoute<'t>> {
+        let tr = wolf_sema::traits::TraitRef {
+            module: tmodule,
+            name: tname.to_string(),
+        };
+        let imp = self
+            .sigs
+            .impls
+            .iter()
+            .find(|i| {
+                i.trait_ref.as_ref() == Some(&tr)
+                    && matches!(
+                        self.sig_table.kind(i.self_ty),
+                        TyKind::Nominal { name, .. } if name == head
+                    )
+            })
+            .ok_or_else(|| {
+                refuse_named(
+                    format!("a `{tname}` call without a coherent impl for `{head}`"),
+                    e.span,
+                )
+            })?;
+        if let Some(m) = imp.methods.iter().find(|mm| mm.name == *method) {
+            let bindings = if imp.generics.is_empty() && m.sig.generics.is_empty() {
+                Vec::new()
+            } else {
+                self.bind_method_generics(imp, &m.sig, d, e)?
+            };
+            return Ok((format!("{head}.{tname}.{method}"), &m.sig, bindings));
+        }
+        // Defaulted: the trait's body, `Self ↦ subject`. The body
+        // mentions `Self` (and the method's own rigids) only — the
+        // impl's rigids never appear in it, so they are not bound.
+        let tm = self
+            .sigs
+            .traits
+            .get(&tr)
+            .and_then(|td| td.method(method))
+            .ok_or_else(|| {
+                refuse_named(
+                    format!("a `{tname}.{method}` call without a declared method"),
+                    e.span,
+                )
+            })?;
+        let bindings = self.bind_trait_default(&tm.sig, d, e)?;
+        Ok((format!("{tname}.{method}"), &tm.sig, bindings))
+    }
+
+    /// The default-body binder: `Self` from the receiver (or the
+    /// Self-mentioning argument), the method's own rigids from the
+    /// argument types — [`Self::bind_method_generics`]'s shape with
+    /// `Self` in the required set.
+    fn bind_trait_default(
+        &self,
+        msig: &FnSig,
+        d: CallExpr<'t>,
+        e: &'t GreenNode,
+    ) -> R<Vec<(String, Bound)>> {
+        let mut map: std::collections::BTreeMap<String, Bound> = std::collections::BTreeMap::new();
+        if let Some(base) = d
+            .callee()
+            .and_then(wolf_ast::MemberExpr::cast)
+            .and_then(|m| m.base())
+            && let Some(p0) = msig.params.first()
+            && let Some(site) = self.expr_sema_ty(base.span)
+        {
+            self.match_binding(p0.ty, site, &mut map, e.span)?;
+        }
+        let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+        for (i, p) in msig.params.iter().skip(1).enumerate() {
+            let Some(a) = args.get(i) else { break };
+            let Some(vexpr) = Arg::value(*a) else {
+                continue;
+            };
+            let Some(site) = self.expr_sema_ty(vexpr.span) else {
+                continue;
+            };
+            self.match_binding(p.ty, site, &mut map, e.span)?;
+        }
+        if let Some(site_ret) = self.expr_sema_ty(e.span) {
+            self.match_binding(msig.ret, site_ret, &mut map, e.span)?;
+        }
+        let mut out = Vec::with_capacity(1 + msig.generics.len());
+        for name in std::iter::once("Self").chain(msig.generics.iter().map(|g| g.name.as_str())) {
+            let Some(b) = map.remove(name) else {
+                return Err(refuse_named(
+                    format!(
+                        "an instantiation with an unbound parameter (`{name}` is not fixed by this call)"
+                    ),
+                    e.span,
+                ));
+            };
+            out.push((name.to_string(), b));
+        }
+        Ok(out)
+    }
+
     fn bind_method_generics(
         &self,
         imp: &wolf_sema::traits::ImplDef,
@@ -10684,12 +11216,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(disp) = self.dispatch.get(&e.span).copied() else {
             return Err(refuse("a method call without a dispatch record", e.span));
         };
-        let Dispatch::Inherent { ty, method } = disp else {
-            return Err(refuse(
-                "trait-method call lowering (dispatch tables, c06)",
-                e.span,
-            ));
-        };
+        // s95: static trait dispatch routes through the record the
+        // checker already wrote — never re-derived (s18). `dyn` stays
+        // s96's: a witness-table call has no static callee to name.
+        if let Dispatch::Trait { dyn_call: true, .. } = disp {
+            return Err(refuse("dyn-method calls (vtables, s96)", e.span));
+        }
         // The receiver place: `recv.m(…)` / `(mut recv).m(…)`.
         let Some(callee) = d.callee() else {
             return Err(refuse("a method call without a callee", e.span));
@@ -10741,36 +11273,67 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 _ => {}
             }
         }
-        // The method's signature, from the unique inherent impl —
-        // and the impl itself (s94: a generic impl's rigids bind from
-        // the receiver at this site).
-        let (imp, msig): (&wolf_sema::traits::ImplDef, &FnSig) = self
-            .sigs
-            .impls
-            .iter()
-            .filter(|i| i.trait_ref.is_none())
-            .find_map(|i| {
-                let TyKind::Nominal { name, .. } = self.sig_table.kind(i.self_ty) else {
-                    return None;
-                };
-                if name != ty {
-                    return None;
-                }
-                i.methods
+        // The route: inherent methods through the type's own impl
+        // (s27/s94); trait methods through the coherence-unique impl
+        // the record names (s95) — overridden methods lower per impl,
+        // a method the impl does not override runs the trait's DEFAULT
+        // body as an instance (`Self ↦ subject`).
+        let (base_name, msig, bindings): (String, &FnSig, Vec<(String, Bound)>) = match disp {
+            Dispatch::Inherent { ty, method } => {
+                // The method's signature, from the unique inherent impl
+                // — and the impl itself (s94: a generic impl's rigids
+                // bind from the receiver at this site).
+                let (imp, msig): (&wolf_sema::traits::ImplDef, &FnSig) = self
+                    .sigs
+                    .impls
                     .iter()
-                    .find(|mm| &mm.name == method)
-                    .map(|mm| (i, &mm.sig))
-            })
-            .ok_or_else(|| refuse("a method call without an elaborated impl", e.span))?;
-        // s94: a generic impl or a generic method is called as an
-        // INSTANCE, the s93 free-fn rule — bind every rigid (the
-        // impl's from the receiver's arguments, the method's own from
-        // the argument types), push the demand, call the instance.
-        let bindings: Vec<(String, Bound)> = if imp.generics.is_empty() && msig.generics.is_empty()
-        {
-            Vec::new()
-        } else {
-            self.bind_method_generics(imp, msig, d, e)?
+                    .filter(|i| i.trait_ref.is_none())
+                    .find_map(|i| {
+                        let TyKind::Nominal { name, .. } = self.sig_table.kind(i.self_ty) else {
+                            return None;
+                        };
+                        if name != ty {
+                            return None;
+                        }
+                        i.methods
+                            .iter()
+                            .find(|mm| &mm.name == method)
+                            .map(|mm| (i, &mm.sig))
+                    })
+                    .ok_or_else(|| refuse("a method call without an elaborated impl", e.span))?;
+                // s94: a generic impl or a generic method is called as
+                // an INSTANCE, the s93 free-fn rule — bind every rigid,
+                // push the demand, call the instance.
+                let bindings: Vec<(String, Bound)> =
+                    if imp.generics.is_empty() && msig.generics.is_empty() {
+                        Vec::new()
+                    } else {
+                        self.bind_method_generics(imp, msig, d, e)?
+                    };
+                (format!("{ty}.{method}"), msig, bindings)
+            }
+            Dispatch::Trait {
+                module,
+                name,
+                method,
+                ..
+            } => {
+                let Some(recv_ty) = self.expr_sema_ty(recv_place.span) else {
+                    return Err(refuse(
+                        "a trait method call without a typed receiver",
+                        e.span,
+                    ));
+                };
+                let TyKind::Nominal { name: head, .. } =
+                    self.table.kind(self.strip_sema(recv_ty)).clone()
+                else {
+                    return Err(refuse_named(
+                        format!("a `{name}` method on a non-nominal receiver"),
+                        e.span,
+                    ));
+                };
+                self.route_trait_static(*module, name, method, &head, d, e)?
+            }
         };
         if msig.comptime {
             // Comptime method sites are not registered fold sites
@@ -10877,11 +11440,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ));
             }
         }
-        // The WIR callee is the mangled `Type.method` — sema's callee
-        // label may be the bare method name, and bare names collide
-        // across types. Under a substitution (s94) the callee is the
+        // The WIR callee is the mangled name the route chose — sema's
+        // callee label may be the bare method name, and bare names
+        // collide across types. Under a substitution the callee is the
         // INSTANCE: the s93 free-fn push, on the same worklist.
-        let base_name = format!("{ty}.{method}");
         let callee_name = if bindings.is_empty() {
             base_name
         } else {
