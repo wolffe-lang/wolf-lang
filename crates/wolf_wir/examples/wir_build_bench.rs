@@ -92,11 +92,22 @@ fn main() {
         }
         inputs.push((res, tc));
     }
-    // Warm-up + counter capture.
+    // Warm-up + counter capture. The unique-instance count (s94, the
+    // D8 ratio's denominator) hashes post-mid-end, per D8.
     let mut totals = wolf_wir::Stats::default();
+    let mut unique_total = 0usize;
     for (res, tc) in &inputs {
-        let build = wolf_wir::lower_package(&res.package, tc);
+        let mut build = wolf_wir::lower_package(&res.package, tc);
         totals.add(build.stats);
+        let homes = wolf_wir::midend::summary::Homes::from_package(&res.package, &build.module);
+        if let Ok(wp) = wolf_wir::midend::optimize_whole_program(
+            &mut build.module,
+            &homes,
+            &wolf_wir::midend::Options::default(),
+        ) && let Some(u) = wp.stats.instantiations_unique
+        {
+            unique_total += u;
+        }
     }
     // Timed passes.
     const ITERS: usize = 40;
@@ -114,13 +125,15 @@ fn main() {
         "{{\"wir_insts_per_sec\": {ips:.1}, \"wir_insts\": {}, \
          \"wir_fold_hits\": {}, \"wir_identity_hits\": {}, \
          \"wir_gvn_hits\": {}, \"wir_forward_hits\": {}, \
-         \"wir_instantiations_seen\": {}, \"wir_instantiations_lowered\": {}}}",
+         \"wir_instantiations_seen\": {}, \"wir_instantiations_lowered\": {}, \
+         \"wir_instantiations_unique\": {}}}",
         totals.insts,
         totals.fold,
         totals.identity,
         totals.gvn,
         totals.forward,
         totals.instantiations_seen,
-        totals.instantiations_lowered
+        totals.instantiations_lowered,
+        unique_total
     );
 }

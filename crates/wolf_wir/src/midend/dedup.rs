@@ -192,3 +192,20 @@ fn retarget(f: &mut Function, rename: &BTreeMap<String, String>) -> usize {
     }
     sites
 }
+
+/// The D8 health metric's third number (s94): distinct content-hash
+/// classes among the module's monomorphic INSTANCES (`.mono.` bodies),
+/// hashed post-mid-end — call after the pipeline, not before, or the
+/// type-dependent differences have not folded yet. `None` when the
+/// module holds no instances.
+pub fn instantiations_unique(m: &Module) -> Option<usize> {
+    let mut classes = std::collections::BTreeSet::new();
+    let mut any = false;
+    for (_, f) in m.funcs.iter() {
+        if f.name.contains(".mono.") {
+            any = true;
+            classes.insert(body_hash(m, f));
+        }
+    }
+    any.then_some(classes.len())
+}

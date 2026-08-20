@@ -1,6 +1,5 @@
 {
   "note": "s44's DETERMINISTIC gates — the only bench numbers allowed to fail a PR (D5). Everything wall-derived (ns/op, speedups, geomeans, the X3 delta, the sentinel delta, LLVM's wall share) is report-only and lives in the nightly report JSON. `cargo xtask bench-gates` recomputes these and fails on regression.",
-
   "ir_volume": {
     "contract_target": 0.5,
     "contract_target_met": false,
@@ -10,23 +9,53 @@
     "corpus_geomean_ceiling": 0.63,
     "corpus_geomean_nonconc_reference": 0.582
   },
-
   "vectorization_witnesses": {
     "note": "report 10 delta 2. Deterministic, so it gates: a loop that stops vectorizing fails here before wall time moves on the current machine. `wolf` counts remarks from `clang -x ir -O2` on the module the backend actually emits; `c_naive` from `clang -O3` on ref.c. A wolf count of 0 across the board was the s44 finding, not the s44 target — the floors were recorded so the first kernel that started vectorizing would be visible. s75 is that moment: `alias_daxpy` vectorizes now that element access is `ptr.off` + `load` instead of a runtime call, and its floor ratchets to 1. s85 is the second: `e1_sum_reduce` vectorizes because its overflow check is GONE — proven away by the trip-scaled accumulator bound, not switched off — which is the falsifiable form of D44's claim that the check was the only thing stopping LoopVectorize. Its floor ratchets to 1, so a range analysis that regresses fails here rather than in a nightly wall number. The rest stay at 0 with a reason each, in bench/loss-ledger.md: `aos_dot` is a float reduction LLVM will not reassociate, `a2_stencil1d` still carries a bounds guard the relational analysis cannot discharge (`i <u out.len` against a loop guarded by `src.len - 1`, and the program never relates the two lengths, so no closure over the known relations can decide it — it wants a version guard on the invariant PAIR, wolf-lang#98) plus two overflow traps on `int` elements that carry no width bound, `a5_hoist_call` was recorded as 'has a call in the loop by construction' and the s79 audit found that to be false — both lanes fold the callee away (wolf-lang#97).",
     "kernels": {
-      "alias_daxpy":      { "wolf_min": 1, "c_naive_min": 1 },
-      "a2_stencil1d":     { "wolf_min": 0, "c_naive_min": 2 },
-      "a5_hoist_call":    { "wolf_min": 0, "c_naive_min": 1 },
-      "aos_dot":          { "wolf_min": 0, "c_naive_min": 0 },
-      "c2_ecs_sweep":     { "wolf_min": 0, "c_naive_min": 0 },
-      "e1_sum_reduce":    { "wolf_min": 1, "c_naive_min": 1 },
-      "e2_checksum":      { "wolf_min": 0, "c_naive_min": 0 },
-      "e3_index_arith":   { "wolf_min": 0, "c_naive_min": 1 }
+      "alias_daxpy": {
+        "wolf_min": 1,
+        "c_naive_min": 1
+      },
+      "a2_stencil1d": {
+        "wolf_min": 0,
+        "c_naive_min": 2
+      },
+      "a5_hoist_call": {
+        "wolf_min": 0,
+        "c_naive_min": 1
+      },
+      "aos_dot": {
+        "wolf_min": 0,
+        "c_naive_min": 0
+      },
+      "c2_ecs_sweep": {
+        "wolf_min": 0,
+        "c_naive_min": 0
+      },
+      "e1_sum_reduce": {
+        "wolf_min": 1,
+        "c_naive_min": 1
+      },
+      "e2_checksum": {
+        "wolf_min": 0,
+        "c_naive_min": 0
+      },
+      "e3_index_arith": {
+        "wolf_min": 0,
+        "c_naive_min": 1
+      }
     }
   },
   "instantiations": {
-    "note": "s93 (D8's health metric, s43 T3's last bullet): `wir_instantiations_seen` is every (generic callee, substitution) demand a call site pushed onto the worklist; `wir_instantiations_lowered` is the distinct bodies the drain emitted. Measured over the corpus at s93: seen 7, lowered 6 — generics/first_of_list 1/1, generics/two_instances 3/2 (two integer-typed sites of `pick` collapse onto `pick.mono.i32`), and one instance each in traits/adapter_distinct, assoc_rewrite and show_bound that lowered as far as their c06 dispatch gap. rows/hof_tail and comptime/norm_linear push NOTHING: an earlier c06 refusal in the same body (a fn value as an argument; a type outside WIR) aborts before their generic call is reached.",
-    "not_yet_a_dedup_ratio": "This is WORKLIST IDEMPOTENCE only — N call sites of one callee under one key emit one body. It is NOT the D8 dedup ratio (instantiations that are layout-identical after the mid-end collapsing to one representative); s94 adds `unique` and the ratio then reads seen/unique. Until s94 lands, do not read `seen/lowered` as anything but 'the drain does not emit duplicates'. Population-note discipline as for corpus_ceiling_history: a move in these numbers is a corpus change unless a commit says otherwise.",
+    "note": "The D8 health metric (s93 seen/lowered, s94 unique): `wir_instantiations_seen` is every (generic callee, substitution) demand a call site pushed; `wir_instantiations_lowered` is the distinct bodies the drain emitted; `wir_instantiations_unique` is the distinct post-mid-end content-hash classes among `.mono.` instances, measured at optimize_whole_program's own dedup point (wp.rs step 2) — seen/unique is the dedup ratio. Measured over the corpus at s94: seen 114, lowered 23 — generics/hundred_shapes 100/10 (ten element spellings, one hundred sites), generics/two_level_raise 4/4 (two tails compose through two levels), generics/box_method 3/3, generics/two_instances 3/2, generics/first_of_list 1/1, and one instance each in the three traits files that lower as far as their c06 gap. rows/hof_tail and comptime/norm_linear still push nothing (a c06 fn-value read; a const-generic nominal).",
+    "ratio_pin": "UNIQUE is a per-program fact (dedup runs whole-program), so the corpus-wide number is not a sum; the tracked pin is corpus/generics/hundred_shapes.lu at seen 100 / lowered 10 / unique 1 — ten ptr->ptr instances fold to one representative, nine merge — enforced by wolf_wir/tests/dedup_instances.rs. A move in these numbers is a population change or a dedup regression; the population-note discipline of corpus_ceiling_history applies.",
+    "seen_at_s94": 114,
+    "lowered_at_s94": 23,
+    "hundred_shapes_pin": {
+      "seen": 100,
+      "lowered": 10,
+      "unique": 1
+    },
     "seen_at_s93": 7,
     "lowered_at_s93": 6
   }
