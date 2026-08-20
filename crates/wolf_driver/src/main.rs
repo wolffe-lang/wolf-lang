@@ -71,13 +71,15 @@ fn main() {
         Some("profile") => profile_cmd::profile(&args[1..]),
         Some("init") => pkg_cmd::init(&args[1..]),
         // D34: the single binary grows per-campaign; stubs are honest.
-        Some(cmd @ ("bench" | "dbg" | "vendor" | "publish")) => {
+        Some("vendor") => pkg_cmd::vendor(&args[1..]),
+        Some("publish") => pkg_cmd::publish(&args[1..]),
+        Some(cmd @ ("bench" | "dbg")) => {
             eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
             std::process::exit(2);
         }
         _ => {
             eprintln!(
-                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|cache|profile|interface|audit-surface|c-import|conform-run|--explain|--version"
+                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|vendor|publish|cache|profile|interface|audit-surface|c-import|conform-run|--explain|--version"
             );
             std::process::exit(2);
         }
@@ -197,6 +199,30 @@ fn fmt(args: &[String]) {
         };
         let id = sm.intern(f);
         sources.add(id, display.clone(), &src);
+        // A manifest is wolf-literal DATA, not a program: `wolf fmt`
+        // validates it with the manifest parser and leaves the bytes
+        // alone (identity round-trip — s51). A canonical manifest
+        // style would have to reprint from the typed Manifest, which
+        // is lossy over comments and carried-but-inert keys; until a
+        // lossless literal-CST formatter exists, honesty beats
+        // mangling a manifest through the program grammar.
+        if f.file_name().is_some_and(|n| n == "wolf.pkg") {
+            let text = String::from_utf8_lossy(&src);
+            let (_, diags) = wolf_pkg::manifest::parse(id, &text);
+            let errors: Vec<&Diagnostic> = diags
+                .iter()
+                .filter(|d| d.severity == wolf_diag::Severity::Error)
+                .collect();
+            if !errors.is_empty() {
+                let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+                for d in &errors {
+                    reporter.report(d);
+                }
+                eprint!("{}", reporter.take_output());
+                failed = true;
+            }
+            continue;
+        }
         let out = wolf_fmt::format_source(id, &src);
         // `--check` asks one question — is the file canonical? — so a
         // file with syntax errors whose formattable parts are already

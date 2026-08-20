@@ -1,0 +1,12 @@
+---
+source: crates/wolf_pkg/tests/project_diags.rs
+expression: render(&project)
+---
+error[E1510]: `acme/util@0.2.0` is excluded by this project's manifest
+ --> wolf.pkg:8:9
+  |
+8 |         util: { path: "dep" },
+  |         ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: a `replace:` entry can point the alias somewhere acceptable; at v0 there is no version
+    list to fall back over, so an exclusion refuses rather than silently downgrading.

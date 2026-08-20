@@ -1941,6 +1941,7 @@ fn spec_extract(check: bool) -> ExitCode {
         "04-abi.md",
         "05-conformance.md",
         "06-differential-protocol.md",
+        "08-package.md",
     ];
     let bodies: Vec<(String, String)> = names
         .iter()

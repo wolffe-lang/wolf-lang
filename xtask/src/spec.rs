@@ -205,6 +205,7 @@ pub fn link_check(docs: &[(&str, &str)]) -> Vec<String> {
             "abi" => Some("04-abi.md"),
             "conf" => Some("05-conformance.md"),
             "proto" => Some("06-differential-protocol.md"),
+            "pkg" => Some("08-package.md"),
             _ => None, // corpus-tag namespaces (str.*, err.*, …) are s06's
         }
     };
@@ -274,6 +275,7 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
                     | ("abi", "04-abi.md")
                     | ("conf", "05-conformance.md")
                     | ("proto", "06-differential-protocol.md")
+                    | ("pkg", "08-package.md")
             );
             if owns {
                 out.insert(anchor, file.to_string());

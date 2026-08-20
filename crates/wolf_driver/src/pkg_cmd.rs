@@ -438,6 +438,7 @@ pub fn add(args: &[String]) {
         std::process::exit(1);
     }
     report_cap_deltas(&project, &old_lock);
+    verify_log_or_die(&project, "add");
     write_lock(&dir, &project, "add");
     let added = project.pkgs.iter().find(|p| p.alias == alias);
     match added {
@@ -531,6 +532,7 @@ pub fn update(args: &[String]) {
             _ => {}
         }
     }
+    verify_log_or_die(&project, "update");
     write_lock(&dir, &project, "update");
     eprintln!(
         "wolf update: wolf.sum refreshed ({} entr{})",
@@ -716,4 +718,290 @@ pub fn capability_diagnostics(project: &Project, pkg: &wolf_sema::Package) -> Ve
         })
         .collect();
     wolf_pkg::audit::capability_check(project, &module_imports)
+}
+
+/// The static transparency log, when the environment names one:
+/// `WOLF_LOG` is a directory holding `log` + `log.head` (dumb files),
+/// `WOLF_LOG_KEY` an optional 64-hex-char b3k key that must also
+/// verify the head. Client-side verification is transport-agnostic by
+/// construction (X7): c15 changes how these bytes arrive, not what
+/// this function does with them.
+fn log_env(cmd: &str) -> Option<(PathBuf, Option<[u8; 32]>)> {
+    let dir = std::env::var_os("WOLF_LOG").map(PathBuf::from)?;
+    let key = match std::env::var("WOLF_LOG_KEY") {
+        Ok(hexkey) => match parse_key(&hexkey) {
+            Ok(k) => Some(k),
+            Err(e) => {
+                eprintln!("wolf {cmd}: WOLF_LOG_KEY: {e}");
+                std::process::exit(2);
+            }
+        },
+        Err(_) => None,
+    };
+    Some((dir, key))
+}
+
+fn parse_key(hexkey: &str) -> Result<[u8; 32], String> {
+    let hexkey = hexkey.trim();
+    if hexkey.len() != 64 {
+        return Err(format!("a b3k key is 64 hex chars, got {}", hexkey.len()));
+    }
+    let mut key = [0u8; 32];
+    for i in 0..32 {
+        key[i] = u8::from_str_radix(&hexkey[2 * i..2 * i + 2], 16)
+            .map_err(|_| "a b3k key is hex".to_string())?;
+    }
+    Ok(key)
+}
+
+/// Verify against the environment's log, if any; supply-chain
+/// mismatches are fatal BEFORE any ledger write.
+fn verify_log_or_die(project: &Project, cmd: &str) {
+    let Some((dir, key)) = log_env(cmd) else {
+        return;
+    };
+    let errs = wolf_pkg::log::verify_project_against_log(project, &dir, key.as_ref());
+    if !errs.is_empty() {
+        for e in &errs {
+            eprintln!("wolf {cmd}: {e}");
+        }
+        eprintln!("wolf {cmd}: transparency-log verification failed — nothing was written");
+        std::process::exit(1);
+    }
+}
+
+// ------------------------------------------------------------- vendor ----
+
+/// Portable recursive copy (tier-1 includes windows: no symlink
+/// tricks, no permission bits beyond what create/write give).
+fn copy_tree_portable(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("create {}: {e}", to.display()))?;
+    let rd = std::fs::read_dir(from).map_err(|e| format!("read {}: {e}", from.display()))?;
+    for entry in rd {
+        let entry = entry.map_err(|e| format!("read {}: {e}", from.display()))?;
+        let src = entry.path();
+        let dst = to.join(entry.file_name());
+        if src.is_dir() {
+            copy_tree_portable(&src, &dst)?;
+        } else {
+            std::fs::copy(&src, &dst).map_err(|e| format!("copy {}: {e}", src.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// `wolf vendor [--dir DIR]` — write the store-backed slice of the
+/// resolution into `vendor/wolf/<multihash>/`, a store-layout mirror
+/// the next build prefers automatically. Every guarantee carries
+/// over because the vendor tree IS a store: hashes re-derive on use
+/// (E1506), so a tampered vendor tree fails exactly like a tampered
+/// store — mirrors are untrusted by construction.
+pub fn vendor(args: &[String]) {
+    let (args, dir) = take_dir(args, "vendor");
+    if !args.is_empty() {
+        eprintln!("usage: wolf vendor [--dir DIR]");
+        std::process::exit(2);
+    }
+    require_manifest(&dir, "vendor");
+    let opts = ResolveOpts {
+        lock: read_lock(&dir, "vendor"),
+        fetch_unpinned: false,
+        refresh: false,
+        store: None,
+        offline: false,
+    };
+    let project = resolve_or_die(&dir, &opts, "vendor");
+    let vend = wolf_pkg::project::vendor_dir(&dir);
+    let mut wrote = 0usize;
+    for p in &project.pkgs[1..] {
+        let Some(hash) = &p.hash else { continue };
+        let dst = wolf_pkg::source::store_path(&vend, hash);
+        if dst.is_dir() {
+            println!("wolf vendor: {} {} (already vendored)", p.alias, hash);
+            continue;
+        }
+        if let Err(e) = copy_tree_portable(&p.root, &dst) {
+            eprintln!("wolf vendor: {e}");
+            std::process::exit(1);
+        }
+        println!("wolf vendor: {} {} -> {}", p.alias, hash, dst.display());
+        wrote += 1;
+    }
+    if wrote == 0 && !vend.is_dir() {
+        println!(
+            "wolf vendor: nothing store-backed to vendor (path dependencies travel with the tree)"
+        );
+    }
+}
+
+// ------------------------------------------------------------ publish ----
+
+/// `wolf publish [--dir DIR] [--log DIR --key FILE]` — v1: verify the
+/// package (manifest gates, full resolution, the E1504 capability
+/// check), compute the three content addresses, and emit the signed
+/// log record. With `--log`, this IS the static log's maintainer flow:
+/// append + re-head (append-only — a published version is immutable,
+/// even for its author). Without it, the record lands in
+/// `.wolf-publish/` as the submission bundle for a maintainer holding
+/// the key. Self-serve publishing (accounts, 2FA) is registry-launch
+/// material (c15) and changes none of these bytes.
+pub fn publish(args: &[String]) {
+    let (args, dir) = take_dir(args, "publish");
+    let mut log_dir: Option<PathBuf> = None;
+    let mut key_file: Option<PathBuf> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--log" => {
+                i += 1;
+                log_dir = args.get(i).map(PathBuf::from);
+            }
+            "--key" => {
+                i += 1;
+                key_file = args.get(i).map(PathBuf::from);
+            }
+            _ => {
+                eprintln!("usage: wolf publish [--dir DIR] [--log DIR --key FILE]");
+                std::process::exit(2);
+            }
+        }
+        i += 1;
+    }
+    let manifest_text = require_manifest(&dir, "publish");
+    let opts = ResolveOpts {
+        lock: read_lock(&dir, "publish"),
+        fetch_unpinned: false,
+        refresh: false,
+        store: None,
+        offline: false,
+    };
+    let project = resolve_or_die(&dir, &opts, "publish");
+    let root_pkg = &project.pkgs[0];
+    if root_pkg.name.is_empty() || !root_pkg.name.contains('/') {
+        eprintln!(
+            "wolf publish: `{}` is not a scoped owner/pkg name — the log has no flat namespace",
+            root_pkg.name
+        );
+        std::process::exit(1);
+    }
+
+    // Full resolution + the capability gate: publishing an
+    // undeclared-capability package is refused exactly like building
+    // one (I13 — the audit record other people rely on starts true).
+    let mut sm = wolf_span::SourceMap::new();
+    let mut sources = Sources::new();
+    let owned = project_for_build(&dir, &mut sm);
+    let project_ref = owned.as_ref().unwrap_or(&project);
+    for m in &project_ref.manifests {
+        sources.add(m.file, m.display.clone(), m.text.as_bytes());
+    }
+    let mut loader =
+        wolf_sema::DiskLoader::from_dir(&dir, &mut sm).with_std_root(project_ref.std_root.clone());
+    loader = loader.with_dep_roots(project_ref.dep_roots.clone());
+    let res = match wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("wolf publish: {e}");
+            std::process::exit(1);
+        }
+    };
+    for unit in &res.package.files {
+        sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
+    }
+    let mut diags = res.diagnostics.clone();
+    diags.extend(capability_diagnostics(project_ref, &res.package));
+    if diags
+        .iter()
+        .any(|d| d.severity == wolf_diag::Severity::Error)
+    {
+        let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
+        for d in &diags {
+            reporter.report(d);
+        }
+        eprint!("{}", reporter.take_output());
+        eprintln!("wolf publish: the package does not verify; nothing was published");
+        std::process::exit(1);
+    }
+
+    // The three addresses that make the version immutable.
+    let tree = match wolf_pkg::hash_tree(&dir) {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("wolf publish: {e}");
+            std::process::exit(1);
+        }
+    };
+    let ifaces = wolf_sema::build_interfaces(&res.package);
+    let iface_text: String = ifaces.iter().map(wolf_sema::pretty).collect();
+    let record = wolf_pkg::log::LogRecord {
+        key: format!("{}@{}", root_pkg.name, root_pkg.version),
+        tree,
+        manifest: wolf_pkg::log::hash_bytes(manifest_text.as_bytes()),
+        interface: wolf_pkg::log::hash_bytes(iface_text.as_bytes()),
+    };
+
+    match log_dir {
+        Some(logd) => {
+            let Some(key_file) = key_file else {
+                eprintln!("wolf publish: --log needs --key FILE (the b3k head key)");
+                std::process::exit(2);
+            };
+            let key = match std::fs::read_to_string(&key_file)
+                .map_err(|e| format!("read {}: {e}", key_file.display()))
+                .and_then(|t| parse_key(&t))
+            {
+                Ok(k) => k,
+                Err(e) => {
+                    eprintln!("wolf publish: --key: {e}");
+                    std::process::exit(2);
+                }
+            };
+            if let Err(e) = std::fs::create_dir_all(&logd) {
+                eprintln!("wolf publish: create {}: {e}", logd.display());
+                std::process::exit(1);
+            }
+            let log_file = logd.join("log");
+            if let Err(e) = wolf_pkg::log::append(&log_file, &record) {
+                eprintln!("wolf publish: {e}");
+                std::process::exit(1);
+            }
+            let lines = match wolf_pkg::log::read_records(&log_file) {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("wolf publish: {e}");
+                    std::process::exit(1);
+                }
+            };
+            let head = wolf_pkg::log::TreeHead::over(&lines, &key);
+            if let Err(e) = std::fs::write(wolf_pkg::log::head_path(&log_file), head.render()) {
+                eprintln!("wolf publish: write head: {e}");
+                std::process::exit(1);
+            }
+            println!(
+                "wolf publish: {} appended (log size {}, head signed)",
+                record.key, head.size
+            );
+        }
+        None => {
+            let bundle_dir = dir.join(".wolf-publish");
+            if let Err(e) = std::fs::create_dir_all(&bundle_dir) {
+                eprintln!("wolf publish: create {}: {e}", bundle_dir.display());
+                std::process::exit(1);
+            }
+            let fname = format!(
+                "{}.record",
+                record.key.replace('/', "-").replace('@', "-at-")
+            );
+            let path = bundle_dir.join(fname);
+            if let Err(e) = std::fs::write(&path, record.render()) {
+                eprintln!("wolf publish: write {}: {e}", path.display());
+                std::process::exit(1);
+            }
+            print!("{}", record.render());
+            println!(
+                "wolf publish: record written to {} — submit it to your log's maintainer",
+                path.display()
+            );
+        }
+    }
 }
