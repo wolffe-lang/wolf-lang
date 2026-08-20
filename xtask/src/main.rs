@@ -79,13 +79,17 @@ fn main() -> ExitCode {
         Some("diag-catalog") => diag_catalog(args.iter().any(|a| a == "--check")),
         Some("doc-catalog") => doc_catalog(args.iter().any(|a| a == "--check")),
         Some("fmt-lu") => fmt_lu(),
+        Some("peel") => peel_cmd(&args[1..]),
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
             );
             eprintln!(
                 "       cargo xtask lane-coverage [--json]   (the [proto.cmp.coverage] gate)"
+            );
+            eprintln!(
+                "       cargo xtask peel [FILTER] [--all]    (reasons BEHIND the lowering ledger's\n                                             refusals — the contract-author's lens)"
             );
             eprintln!(
                 "       cargo xtask bench --track=<runtime|compile|t1|irvolume> [--runs=N] [--out=FILE]"
@@ -560,6 +564,96 @@ fn corpus_run_entries() -> Vec<PathBuf> {
             .is_some_and(|d| !d.member && d.phase.as_deref() == Some("run"))
     });
     files
+}
+
+/// `cargo xtask peel [FILTER] [--all]` — the survey lens over the
+/// corpus (the c19 closeout's lesson made a tool): for every file the
+/// lowering ledger marks `refused`, print what is BEHIND the fail-fast
+/// reasons. A `behind:` line was collected by skipping the refusing
+/// statement and lowering on, so it may be follow-on noise — the
+/// contract is "the first reason per statement is reliable, the rest
+/// are leads". Quiet for files where the survey adds nothing (--all
+/// prints those too); FILTER substring-matches the path. Never a gate:
+/// output is unsnapshotted, and `ci` does not run it.
+fn peel_cmd(args: &[String]) -> ExitCode {
+    let all = args.iter().any(|a| a == "--all");
+    if let Some(bad) = args.iter().find(|a| a.starts_with("--") && *a != "--all") {
+        eprintln!("peel: unknown flag `{bad}` (flags: --all)");
+        return ExitCode::from(2);
+    }
+    let filter = args.iter().find(|a| !a.starts_with("--"));
+    if !run_ok(
+        "cargo",
+        &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
+    ) {
+        eprintln!("peel: driver build failed");
+        return ExitCode::FAILURE;
+    }
+    let mut files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut files);
+    files.sort();
+    let mut shown = 0u32;
+    let mut behind_total = 0u32;
+    let mut ices = 0u32;
+    for f in &files {
+        let rel = f.display().to_string();
+        if let Some(pat) = filter
+            && !rel.contains(pat.as_str())
+        {
+            continue;
+        }
+        let Ok(src) = std::fs::read_to_string(f) else {
+            continue;
+        };
+        // Member files compile through their module's entry file (s12).
+        if corpus::parse_directives(&src).is_ok_and(|d| d.member) {
+            continue;
+        }
+        let out = Command::new("target/debug/wolf")
+            .arg("conform-run")
+            .arg(f)
+            .arg("--json")
+            .arg("--dump=peel")
+            .output();
+        let Ok(out) = out else { continue };
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if !out.status.success() {
+            // The lens must complete over the whole corpus; a panic
+            // here is a survey bug, and hiding it would let the tool
+            // rot exactly the way the ledger's masking did.
+            eprintln!("peel: {rel}: ICE (exit {:?})", out.status.code());
+            for l in stderr.lines().rev().take(3) {
+                eprintln!("peel:   {l}");
+            }
+            ices += 1;
+            continue;
+        }
+        let ledger: Vec<&str> = stderr
+            .lines()
+            .filter(|l| l.starts_with("peel: ledger: "))
+            .collect();
+        let behind: Vec<&str> = stderr
+            .lines()
+            .filter(|l| l.starts_with("peel: behind: "))
+            .collect();
+        behind_total += behind.len() as u32;
+        if behind.is_empty() && !(all && !ledger.is_empty()) {
+            continue;
+        }
+        shown += 1;
+        eprintln!("peel: {rel}");
+        for l in ledger.iter().chain(behind.iter()) {
+            eprintln!("peel:   {}", l.trim_start_matches("peel: "));
+        }
+    }
+    eprintln!(
+        "peel: {shown} file(s) shown, {behind_total} reason(s) behind the ledger, {ices} ICE(s)"
+    );
+    if ices > 0 {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn collect_wolf_files(dir: &Path, out: &mut Vec<PathBuf>) {
