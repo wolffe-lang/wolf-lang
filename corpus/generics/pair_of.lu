@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="7 seven\ntwo 2\n")
+//! phase: run
+//! conforms: generics.mono, generics.nominal
+//!
+//! s94's first acceptance witness: a generic STRUCT with two
+//! instantiations. `Pair[K, V]` elaborates as a nominal with
+//! arguments (the s21-era opaque-token pin is reversed —
+//! `generic_instantiations_elaborate`); the literal instantiates the
+//! s14 way, one fresh existential per parameter solved by the field
+//! initializers; field access substitutes under the receiver's
+//! arguments, so `p.a` IS an int and copies as one. Layout walks the
+//! declaration's fields under a rigid frame — `Pair[int, str]` is
+//! {i64, {ptr, len}} — and two instantiations are two layouts, not
+//! one opaque token refused at `wir`.
+
+struct Pair[K, V] {
+    a: K,
+    b: V,
+}
+
+fn main() -> !int {
+    let p = Pair { a: 7, b: "seven" }
+    print("{p.a} {p.b}")
+    let q = Pair { a: "two", b: 2 }
+    print("{q.a} {q.b}")
+    0
+}

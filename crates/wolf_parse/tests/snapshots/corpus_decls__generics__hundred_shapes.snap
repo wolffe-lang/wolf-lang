@@ -1,0 +1,16 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 837..857 name=W0 fields=1
+StructDecl 859..879 name=W1 fields=1
+StructDecl 881..901 name=W2 fields=1
+StructDecl 903..923 name=W3 fields=1
+StructDecl 925..945 name=W4 fields=1
+StructDecl 947..967 name=W5 fields=1
+StructDecl 969..989 name=W6 fields=1
+StructDecl 991..1011 name=W7 fields=1
+StructDecl 1013..1033 name=W8 fields=1
+StructDecl 1035..1055 name=W9 fields=1
+FnDecl 1057..1102 name=keep body=Block
+FnDecl 1104..4347 name=main body=Block

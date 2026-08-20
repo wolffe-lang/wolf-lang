@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="41 7 str\n")
+//! phase: run
+//! conforms: generics.mono, generics.impl
+//!
+//! s94's second acceptance witness: generic impls and generic
+//! methods, as instances on the s93 worklist. `impl[K, V] Pair[K, V]`
+//! carries its subject's arguments, so `self.a` inside the impl
+//! substitutes; `first` on a `Pair[int, str]` receiver binds both
+//! impl rigids from the receiver and lowers as `Pair.first.mono…`.
+//! `map[U]` is a generic METHOD on a non-generic impl — the same key
+//! with an empty impl part — and two call sites make two instances
+//! (`int`, `str`). Trait impls stay c06's: this file has none.
+
+struct Pair[K, V] {
+    a: K,
+    b: V,
+}
+
+impl[K, V] Pair[K, V] {
+    fn first(self) -> K {
+        self.a
+    }
+}
+
+struct P {
+    x: int,
+}
+
+impl P {
+    fn map[U](self, u: U) -> U {
+        u
+    }
+}
+
+fn main() -> !int {
+    let p = Pair { a: 41, b: "x" }
+    let q = P { x: 1 }
+    let n = q.map(7)
+    let s = q.map("str")
+    print("{p.first()} {n} {s}")
+    0
+}

@@ -588,6 +588,14 @@ fn mono_segment(spelling: &str) -> String {
             sep = true;
         }
     }
+    if out.is_empty() {
+        // s94: a spelling with no identifier characters at all — the
+        // empty row `{}` is the one that arises (a tail bound to
+        // "nothing more") — must still be a parseable name segment,
+        // or the dump's dotted name ends in `.` and does not
+        // round-trip.
+        out.push_str("empty");
+    }
     out
 }
 
@@ -1511,12 +1519,15 @@ fn wir_ty_frame(
             format!("an associated-type projection `.{name}` (needs the impl instantiated)"),
             span,
         )),
-        // A user generic nominal reaches lowering as an opaque token —
-        // sema does not elaborate it (`sig.rs: generic_instantiations_
-        // stay_opaque` pins exactly that); there is nothing to
-        // substitute into. s94 T3 is the sema change. Name the token.
+        // s94 elaborated applied generic nominals, so what still
+        // reaches lowering as an opaque token is the residue the
+        // checker leaves by design: const-generic VALUE arguments
+        // (`Buf[2 + 2]` — values have no home in the type table yet)
+        // and generic aliases. Name the token and the reason.
         TyKind::Unsupported(spelling) => Err(refuse_named(
-            format!("a generic nominal `{spelling}` (not yet elaborated by the checker)"),
+            format!(
+                "a generic application left opaque by the checker (`{spelling}`: const-generic values and generic aliases do not elaborate yet)"
+            ),
             span,
         )),
         _ => Err(refuse("this type in WIR lowering", span)),
