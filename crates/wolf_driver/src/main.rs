@@ -2676,8 +2676,8 @@ fn conform_run(args: &[String]) {
             continue;
         }
         if let Some(d) = a.strip_prefix("--dump=") {
-            if d != "regions" && d != "cfg" && d != "wir" {
-                eprintln!("wolf conform-run: unknown dump `{d}` (regions, cfg, wir)");
+            if d != "regions" && d != "cfg" && d != "wir" && d != "peel" {
+                eprintln!("wolf conform-run: unknown dump `{d}` (regions, cfg, wir, peel)");
                 std::process::exit(2);
             }
             dump = Some(d.to_string());
@@ -2924,6 +2924,34 @@ fn conform_run(args: &[String]) {
                             "; not lowered: {} @{}..{}\n",
                             nyc.construct, nyc.span.lo, nyc.span.hi
                         ));
+                    }
+                    text
+                }
+                // The survey lens (`cargo xtask peel`): the ledger's
+                // fail-fast reasons plus what they mask. `ledger`
+                // lines are exactly the wir rung's refusals; `behind`
+                // lines were collected by skipping the failed
+                // statement and lowering on, so they may be follow-on
+                // noise — leads for a contract author, never a gate.
+                // Not snapshotted anywhere, by design.
+                "peel" => {
+                    let (build, reasons) = wolf_wir::lower_package_survey(&res.package, &tc);
+                    let mut text = String::new();
+                    for r in &reasons {
+                        if r.follow_on {
+                            text.push_str(&format!(
+                                "peel: behind: {} @{}..{} (fn {}, follow-on possible)\n",
+                                r.construct, r.span.lo, r.span.hi, r.fn_name
+                            ));
+                        } else {
+                            text.push_str(&format!(
+                                "peel: ledger: {} @{}..{} (fn {})\n",
+                                r.construct, r.span.lo, r.span.hi, r.fn_name
+                            ));
+                        }
+                    }
+                    if build.not_yet.is_empty() {
+                        text.push_str("peel: clean\n");
                     }
                     text
                 }
