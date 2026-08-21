@@ -138,12 +138,21 @@ fn midend_off_really_turns_the_midend_off() {
     let (a, b) = (insts(&on), insts(&off));
     assert!(a > 0 && b > 0, "no instructions were counted: {a} vs {b}");
     // The denominator #70's budget is stated against has to be a real
-    // naive lowering. If the hatch stopped working, these would be equal
-    // and the IR-volume metric would quietly report 1.00 forever.
+    // naive lowering. If the hatch stopped working, the two outputs
+    // would be IDENTICAL and the IR-volume metric would quietly report
+    // 1.00 forever — equality is the broken-hatch signature, and it is
+    // what this asserts. Direction is deliberately NOT asserted: since
+    // #98 the mid-end versions bounds-guarded loops, and a versioned
+    // function is legitimately BIGGER than its naive lowering (guards
+    // plus a cloned loop) — the same population fact the loss ledger
+    // records for proc_link. This fixture versions (out[i] under an
+    // invariant out.len), so it exercises exactly that: the second
+    // time this test adapts to a smarter mid-end rather than pinning
+    // the mid-end to an older one's shape (see the SRC note above).
     assert!(
-        b > a,
-        "WOLF_MIDEND=0 produced {b} instruction(s) against the mid-end's {a} — the naive \
-         lowering is not naive, so the IR-volume ratio has no denominator"
+        on != off,
+        "WOLF_MIDEND=0 produced byte-identical IR ({b} instruction(s)) — the hatch did \
+         nothing, so the IR-volume ratio has no denominator"
     );
 }
 
