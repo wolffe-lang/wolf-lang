@@ -426,6 +426,25 @@ compare for short operands, or a route to `memcmp` so LLVM can see and
 specialize it. `d2_substr_search` is its regression test. Filed, not fixed
 here: s77's contract is views, and `==` is not a view.
 
+**d2 re-measured 2026-08-21, and the residual re-locates (the retry's
+0.831x, quiet host).** The prescription above was CASHED between its
+filing and this reading: s81 inlined the equality itself, and the LLVM
+tier's inliner had constant-propagated the literal's length through
+`count_occurrences` and unrolled the scan — the before-binary already
+contained no `str_eq` call and no dynamic-bound loop (objdump, this
+host). Two builder identities landed anyway (agg.get-over-agg.make,
+isub-over-iadd) plus a constant-preferring bound in `str_eq_inline`:
+the dead memcmp branch is no longer EMITTED (d2's optimized IR 242 →
+237) and the constant bound no longer depends on LLVM inlining — the
+clif tier, which never inlines, now gets the unrollable shape too.
+Kernel runtime: **unchanged, 0.696 ns/op before and after** (loaded
+host, ratios only) — measured and said, not hidden. What 0.84x still
+pays, in the after-IR: the `[mem.str.get]` boundary probes (two
+guarded byte loads + masks + ~6 branches per position — semantics,
+not fat) and the `iadd.chk` per position. Both want the same missing
+machinery as #98's traps (element/ASCII facts); d2 joins that family
+and leaves the shim family for good.
+
 **word_count is unchanged, and the cause is now located.** `words()` still
 builds a `List[str]` — one materialization pass over 72 000 word views per
 call — so the kernel measures an allocation, exactly as `bytes()` did. A

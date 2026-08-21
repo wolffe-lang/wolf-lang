@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_shapes.rs
+assertion_line: 1063
 expression: out
 ---
 decl @count({ptr, i64}) -> i64
@@ -205,12 +206,10 @@ b33:
 b34:
   %136 = isub.wrap %75, %7
   %137 = agg.make %14, %136
-  %138 = agg.get %137, 0
-  %139 = agg.get %137, 1
-  %140 = iadd.chk %8, %139
+  %138 = iadd.chk %8, %136
   jmp b35
 b35:
-  jmp b1(%75, %140)
+  jmp b1(%75, %138)
 b36:
   ret %8
 }

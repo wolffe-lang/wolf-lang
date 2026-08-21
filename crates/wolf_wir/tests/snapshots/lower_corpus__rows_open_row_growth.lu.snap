@@ -37,30 +37,28 @@ b1:
   %3: i64 = eu.err %1
   %4: i64 = eu.err %1, 0
   %5 = agg.make %3, %4
-  %6 = agg.get %5, 0
-  %7 = iconst.i64 2
-  %8 = icmp.eq %6, %7
-  br %8, b2, b3
+  %6 = iconst.i64 2
+  %7 = icmp.eq %3, %6
+  br %7, b2, b3
 b2:
-  %9 = agg.get %5, 1
-  jmp b4(%9)
+  jmp b4(%4)
 b3:
-  %10 = iconst.i64 0
-  jmp b4(%10)
-b4(%11: i64):
-  jmp b6(%11)
+  %8 = iconst.i64 0
+  jmp b4(%8)
+b4(%9: i64):
+  jmp b6(%9)
 b5:
-  %12: i64 = eu.ok %1
-  jmp b6(%12)
-b6(%13: i64):
-  %14 = icmp.eq %13, %0
-  br %14, b7, b8
+  %10: i64 = eu.ok %1
+  jmp b6(%10)
+b6(%11: i64):
+  %12 = icmp.eq %11, %0
+  br %12, b7, b8
 b7:
-  %15 = iconst.i64 0
-  jmp b9(%15)
+  %13 = iconst.i64 0
+  jmp b9(%13)
 b8:
-  %16 = iconst.i64 1
-  jmp b9(%16)
-b9(%17: i64):
-  ret %17
+  %14 = iconst.i64 1
+  jmp b9(%14)
+b9(%15: i64):
+  ret %15
 }

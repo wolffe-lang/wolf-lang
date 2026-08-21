@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_shapes.rs
+assertion_line: 1120
 expression: out
 ---
 decl @__wolf_rt_str_find(ptr, i64, ptr, i64, i64) -> i64
@@ -52,13 +53,11 @@ b8(%26: i64):
   %27 = ptr.off %4, %9, 1
   %28 = isub.wrap %26, %9
   %29 = agg.make %27, %28
-  %30 = agg.get %29, 0
-  %31 = agg.get %29, 1
-  %32 = iadd.chk %10, %31
+  %30 = iadd.chk %10, %28
   jmp b9
 b9:
-  %33 = iadd.wrap %12, %6
-  jmp b1(%33, %32)
+  %31 = iadd.wrap %12, %6
+  jmp b1(%31, %30)
 b10:
   ret %10
 }
@@ -71,36 +70,31 @@ b0(%0: {ptr, i64}):
   %4 = data.addr @str.0
   %5 = iconst.i64 1
   %6 = agg.make %4, %5
-  %7 = agg.get %6, 0
-  %8 = agg.get %6, 1
-  %9 = bconst true
-  %10 = bconst false
+  %7 = bconst true
+  %8 = bconst false
   jmp b1(%1, %1)
-b1(%11: i64, %12: i64):
-  %13 = icmp.eq %8, %1
-  br %13, b4(%3, %1, %10), b2
+b1(%9: i64, %10: i64):
+  jmp b2
 b2:
-  %14 = ptr.off %2, %11, 1
-  %15 = isub.wrap %3, %11
-  %16 = call @__wolf_rt_str_find(%14, %15, %7, %8, %1)
-  %17 = icmp.slt %16, %1
-  br %17, b4(%3, %1, %10), b3
+  %11 = ptr.off %2, %9, 1
+  %12 = isub.wrap %3, %9
+  %13 = call @__wolf_rt_str_find(%11, %12, %4, %5, %1)
+  %14 = icmp.slt %13, %1
+  br %14, b4(%3, %1, %8), b3
 b3:
-  %18 = iadd.wrap %11, %16
-  %19 = iadd.wrap %18, %8
-  jmp b4(%18, %19, %9)
-b4(%20: i64, %21: i64, %22: bool):
-  %23 = ptr.off %2, %11, 1
-  %24 = isub.wrap %20, %11
-  %25 = agg.make %23, %24
-  %26 = agg.get %25, 0
-  %27 = agg.get %25, 1
-  %28 = iadd.chk %12, %27
+  %15 = iadd.wrap %9, %13
+  %16 = iadd.wrap %15, %5
+  jmp b4(%15, %16, %7)
+b4(%17: i64, %18: i64, %19: bool):
+  %20 = ptr.off %2, %9, 1
+  %21 = isub.wrap %17, %9
+  %22 = agg.make %20, %21
+  %23 = iadd.chk %10, %21
   jmp b5
 b5:
-  br %22, b1(%21, %28), b6
+  br %19, b1(%18, %23), b6
 b6:
-  ret %28
+  ret %23
 }
 
 fn @main() -> i64 {

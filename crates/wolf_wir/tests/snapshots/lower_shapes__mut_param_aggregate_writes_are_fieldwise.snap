@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_shapes.rs
+assertion_line: 311
 expression: out
 ---
 decl @swap(mut ptr, mem.r0, mut ptr, mem.r1)
@@ -20,22 +21,18 @@ b0(%0: ptr, %1: mem.r0, %2: ptr, %3: mem.r1):
   %10 = ptr.off %2, %5, 1
   %11 = load.i64 %10, %3
   %12 = agg.make %9, %11
-  %13 = agg.get %12, 0
-  %14 = store.ptr %13, %0, %1
-  %15 = agg.get %12, 1
-  %16 = store.i64 %15, %6, %14
-  %17 = agg.get %8, 0
-  %18 = store.ptr %17, %2, %3
-  %19 = agg.get %8, 1
-  %20 = store.i64 %19, %10, %18
+  %13 = store.ptr %9, %0, %1
+  %14 = store.i64 %11, %6, %13
+  %15 = store.ptr %4, %2, %3
+  %16 = store.i64 %7, %10, %15
   ret
 }
 
 fn @main() -> i64 {
-  fact deref %14 16 : op
+  fact deref %12 16 : op
   fact deref %6 16 : op
-  fact noalias %6 %14 : excl.field
-  fact region %14 r1 : op
+  fact noalias %6 %12 : excl.field
+  fact region %12 r1 : op
   fact region %6 r0 : op
 b0:
   %0 = data.addr @str.0
@@ -45,25 +42,21 @@ b0:
   %4 = agg.make %3, %1
   %5 = iconst.i64 16
   %6: ptr, %7: mem.r0 = stack.alloc %5
-  %8 = agg.get %2, 0
-  %9 = store.ptr %8, %6, %7
-  %10 = agg.get %2, 1
-  %11 = iconst.i64 8
-  %12 = ptr.off %6, %11, 1
-  %13 = store.i64 %10, %12, %9
-  %14: ptr, %15: mem.r1 = stack.alloc %5
-  %16 = agg.get %4, 0
-  %17 = store.ptr %16, %14, %15
-  %18 = agg.get %4, 1
-  %19 = ptr.off %14, %11, 1
-  %20 = store.i64 %18, %19, %17
-  %21, %22 = call @swap(%6, %13, %14, %20)
-  %23 = load.ptr %6, %21
-  %24 = load.i64 %12, %21
-  %25 = agg.make %23, %24
-  %26 = load.ptr %14, %22
-  %27 = load.i64 %19, %22
-  %28 = agg.make %26, %27
-  %29 = iconst.i64 0
-  ret %29
+  %8 = store.ptr %0, %6, %7
+  %9 = iconst.i64 8
+  %10 = ptr.off %6, %9, 1
+  %11 = store.i64 %1, %10, %8
+  %12: ptr, %13: mem.r1 = stack.alloc %5
+  %14 = store.ptr %3, %12, %13
+  %15 = ptr.off %12, %9, 1
+  %16 = store.i64 %1, %15, %14
+  %17, %18 = call @swap(%6, %11, %12, %16)
+  %19 = load.ptr %6, %17
+  %20 = load.i64 %10, %17
+  %21 = agg.make %19, %20
+  %22 = load.ptr %12, %18
+  %23 = load.i64 %15, %18
+  %24 = agg.make %22, %23
+  %25 = iconst.i64 0
+  ret %25
 }

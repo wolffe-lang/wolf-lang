@@ -1565,6 +1565,50 @@ impl<'m> FuncBuilder<'m> {
             }
             return None;
         }
+        // `agg.get(agg.make(v0, v1, …), k)` IS `vk` — a pure pair
+        // built and immediately projected carries no information the
+        // ingredient did not. The mid-end cleans this shape too, but
+        // the LOWERING needs it: `str_eq_inline` asks `as_int_const`
+        // of a slice's length at build time, and without this arm the
+        // constant hides one projection deep (`agg.make ptr, 5` →
+        // `agg.get _, 1`).
+        if data.op == Opcode::AggGet
+            && let ValueDef::Result(mi, 0) = self.func.values[args[0]].def
+            && self.func.insts[mi].op == Opcode::AggMake
+            && let Aux::Int(k) = data.aux
+        {
+            let margs = self.func.vpool.get(self.func.insts[mi].args);
+            let out_ty = self.func.values[self.func.vpool.get(data.results)[0]].ty;
+            if let Some(&v) = margs.get(k as usize)
+                && self.func.values[v].ty == out_ty
+            {
+                return Some(Rewritten::Value(v));
+            }
+        }
+        // `isub.wrap(iadd.{chk,wrap}(x, y), x)` IS `y` (and with the
+        // operands the other way round, `x`). Exact for `.chk` — the
+        // add's result being live means it did not trap, so it holds
+        // the mathematical sum — and exact mod 2^bits for `.wrap`,
+        // which is all `.wrap` promises. The shape is a slice length:
+        // `s[i..i + K]` lowers `iadd.chk(i, K)` for the end and
+        // `isub.wrap(end, i)` for the width, and folding the width to
+        // `K` is what lets a downstream `==` see a CONSTANT operand
+        // length (d2_substr_search's hot loop, #98's sibling).
+        if data.op == Opcode::IsubWrap
+            && args.len() == 2
+            && let ValueDef::Result(ai, 0) = self.func.values[args[0]].def
+            && matches!(self.func.insts[ai].op, Opcode::IaddWrap | Opcode::IaddChk)
+        {
+            let aargs = self.func.vpool.get(self.func.insts[ai].args);
+            if aargs.len() == 2 && self.func.values[args[0]].ty == self.func.values[args[1]].ty {
+                if aargs[0] == args[1] {
+                    return Some(Rewritten::Value(aargs[1]));
+                }
+                if aargs[1] == args[1] {
+                    return Some(Rewritten::Value(aargs[0]));
+                }
+            }
+        }
         if data.op == Opcode::Icmp && args.len() == 2 && args[0] == args[1] {
             let Aux::IntCc(cc) = data.aux else {
                 return None;

@@ -19,17 +19,14 @@ b0(%0: ptr, %1: mem.r0):
   %7 = ptr.off %0, %6, 1
   %8 = load.i64 %7, %1
   %9 = agg.make %2, %5, %8
-  %10 = agg.get %9, 0
-  %11 = agg.get %9, 1
-  %12 = iadd.chk %10, %11
-  %13 = store.i64 %12, %0, %1
-  %14 = iconst.i64 0
-  %15 = store.i64 %14, %4, %13
-  %16 = load.i64 %0, %15
-  %17 = load.i64 %7, %15
-  %18 = agg.make %16, %14, %17
-  %19 = agg.get %18, 0
-  ret %19
+  %10 = iadd.chk %2, %5
+  %11 = store.i64 %10, %0, %1
+  %12 = iconst.i64 0
+  %13 = store.i64 %12, %4, %11
+  %14 = load.i64 %0, %13
+  %15 = load.i64 %7, %13
+  %16 = agg.make %14, %12, %15
+  ret %14
 }
 
 fn @V.set_x(mut ptr, mem.r0, i64) {
@@ -62,20 +59,20 @@ b0(%0: {i64, i64, i64}):
 }
 
 fn @main() -> i64 {
-  fact deref %12 8 : op
-  fact deref %16 8 : op
-  fact deref %35 8 : op
-  fact deref %40 8 : op
-  fact deref %59 24 : op
-  fact deref %82 24 : op
-  fact noalias %12 %16 : excl.field
-  fact noalias %35 %40 : excl.field
-  fact region %12 r0 : op
-  fact region %16 r1 : op
-  fact region %35 r2 : op
-  fact region %40 r3 : op
-  fact region %59 r4 : op
-  fact region %82 r5 : op
+  fact deref %10 8 : op
+  fact deref %13 8 : op
+  fact deref %24 8 : op
+  fact deref %27 8 : op
+  fact deref %39 24 : op
+  fact deref %55 24 : op
+  fact noalias %10 %13 : excl.field
+  fact noalias %24 %27 : excl.field
+  fact region %10 r0 : op
+  fact region %13 r1 : op
+  fact region %24 r2 : op
+  fact region %27 r3 : op
+  fact region %39 r4 : op
+  fact region %55 r5 : op
 b0:
   %0 = iconst.i64 1
   %1 = iconst.i64 2
@@ -86,105 +83,69 @@ b0:
   %6 = iconst.i64 6
   %7 = agg.make %4, %5, %6
   %8 = agg.make %3, %7
-  %9 = agg.get %8, 0
-  %10 = agg.get %9, 0
-  %11 = iconst.i64 8
-  %12: ptr, %13: mem.r0 = stack.alloc %11
-  %14 = store.i64 %10, %12, %13
-  %15 = agg.get %9, 1
-  %16: ptr, %17: mem.r1 = stack.alloc %11
-  %18 = store.i64 %15, %16, %17
-  %19, %20 = call @swap_fields(%12, %14, %16, %18)
-  %21 = load.i64 %12, %19
-  %22 = agg.get %9, 2
-  %23 = agg.make %21, %15, %22
-  %24 = agg.get %8, 1
-  %25 = agg.make %23, %24
-  %26 = load.i64 %16, %20
-  %27 = agg.get %25, 0
-  %28 = agg.get %27, 0
-  %29 = agg.get %27, 2
-  %30 = agg.make %28, %26, %29
-  %31 = agg.get %25, 1
-  %32 = agg.make %30, %31
-  %33 = agg.get %32, 0
-  %34 = agg.get %33, 0
-  %35: ptr, %36: mem.r2 = stack.alloc %11
-  %37 = store.i64 %34, %35, %36
-  %38 = agg.get %32, 1
-  %39 = agg.get %38, 0
-  %40: ptr, %41: mem.r3 = stack.alloc %11
-  %42 = store.i64 %39, %40, %41
-  %43, %44 = call @swap_fields(%35, %37, %40, %42)
-  %45 = load.i64 %35, %43
-  %46 = agg.get %33, 1
-  %47 = agg.get %33, 2
-  %48 = agg.make %45, %46, %47
-  %49 = agg.make %48, %38
-  %50 = load.i64 %40, %44
-  %51 = agg.get %49, 0
-  %52 = agg.get %49, 1
-  %53 = agg.get %52, 1
-  %54 = agg.get %52, 2
-  %55 = agg.make %50, %53, %54
-  %56 = agg.make %51, %55
-  %57 = agg.get %56, 0
-  %58 = iconst.i64 24
-  %59: ptr, %60: mem.r4 = stack.alloc %58
-  %61 = agg.get %57, 0
-  %62 = store.i64 %61, %59, %60
-  %63 = agg.get %57, 1
-  %64 = ptr.off %59, %11, 1
-  %65 = store.i64 %63, %64, %62
-  %66 = agg.get %57, 2
-  %67 = iconst.i64 16
-  %68 = ptr.off %59, %67, 1
-  %69 = store.i64 %66, %68, %65
-  %70, %71 = call @V.norm(%59, %69)
-  %72 = load.i64 %59, %71
-  %73 = load.i64 %64, %71
-  %74 = load.i64 %68, %71
-  %75 = agg.make %72, %73, %74
-  %76 = agg.get %56, 1
-  %77 = agg.make %75, %76
-  %78 = agg.get %77, 1
-  %79 = agg.get %78, 0
-  %80 = iadd.chk %70, %79
-  %81 = agg.get %77, 0
-  %82: ptr, %83: mem.r5 = stack.alloc %58
-  %84 = agg.get %81, 0
-  %85 = store.i64 %84, %82, %83
-  %86 = agg.get %81, 1
-  %87 = ptr.off %82, %11, 1
-  %88 = store.i64 %86, %87, %85
-  %89 = agg.get %81, 2
-  %90 = ptr.off %82, %67, 1
-  %91 = store.i64 %89, %90, %88
-  %92 = call @V.set_x(%82, %91, %89)
-  %93 = load.i64 %82, %92
-  %94 = load.i64 %87, %92
-  %95 = load.i64 %90, %92
-  %96 = agg.make %93, %94, %95
-  %97 = agg.make %96, %78
-  %98 = agg.get %97, 0
-  %99 = call @eat(%98)
-  %100 = agg.get %97, 1
-  %101 = agg.get %100, 1
-  %102 = iconst.i64 0
-  %103 = agg.make %102, %102, %102
-  %104 = agg.make %103, %100
-  %105 = agg.get %104, 0
-  %106 = agg.get %105, 0
-  %107 = iadd.chk %106, %80
-  %108 = iadd.chk %107, %99
-  %109 = iadd.chk %108, %101
-  %110 = iconst.i64 18
-  %111 = icmp.eq %109, %110
-  br %111, b1, b2
+  %9 = iconst.i64 8
+  %10: ptr, %11: mem.r0 = stack.alloc %9
+  %12 = store.i64 %0, %10, %11
+  %13: ptr, %14: mem.r1 = stack.alloc %9
+  %15 = store.i64 %1, %13, %14
+  %16, %17 = call @swap_fields(%10, %12, %13, %15)
+  %18 = load.i64 %10, %16
+  %19 = agg.make %18, %1, %2
+  %20 = agg.make %19, %7
+  %21 = load.i64 %13, %17
+  %22 = agg.make %18, %21, %2
+  %23 = agg.make %22, %7
+  %24: ptr, %25: mem.r2 = stack.alloc %9
+  %26 = store.i64 %18, %24, %25
+  %27: ptr, %28: mem.r3 = stack.alloc %9
+  %29 = store.i64 %4, %27, %28
+  %30, %31 = call @swap_fields(%24, %26, %27, %29)
+  %32 = load.i64 %24, %30
+  %33 = agg.make %32, %21, %2
+  %34 = agg.make %33, %7
+  %35 = load.i64 %27, %31
+  %36 = agg.make %35, %5, %6
+  %37 = agg.make %33, %36
+  %38 = iconst.i64 24
+  %39: ptr, %40: mem.r4 = stack.alloc %38
+  %41 = store.i64 %32, %39, %40
+  %42 = ptr.off %39, %9, 1
+  %43 = store.i64 %21, %42, %41
+  %44 = iconst.i64 16
+  %45 = ptr.off %39, %44, 1
+  %46 = store.i64 %2, %45, %43
+  %47, %48 = call @V.norm(%39, %46)
+  %49 = load.i64 %39, %48
+  %50 = load.i64 %42, %48
+  %51 = load.i64 %45, %48
+  %52 = agg.make %49, %50, %51
+  %53 = agg.make %52, %36
+  %54 = iadd.chk %47, %35
+  %55: ptr, %56: mem.r5 = stack.alloc %38
+  %57 = store.i64 %49, %55, %56
+  %58 = ptr.off %55, %9, 1
+  %59 = store.i64 %50, %58, %57
+  %60 = ptr.off %55, %44, 1
+  %61 = store.i64 %51, %60, %59
+  %62 = call @V.set_x(%55, %61, %51)
+  %63 = load.i64 %55, %62
+  %64 = load.i64 %58, %62
+  %65 = load.i64 %60, %62
+  %66 = agg.make %63, %64, %65
+  %67 = agg.make %66, %36
+  %68 = call @eat(%66)
+  %69 = iconst.i64 0
+  %70 = agg.make %69, %69, %69
+  %71 = agg.make %70, %36
+  %72 = iadd.chk %54, %68
+  %73 = iadd.chk %72, %5
+  %74 = iconst.i64 18
+  %75 = icmp.eq %73, %74
+  br %75, b1, b2
 b1:
-  jmp b3(%102)
+  jmp b3(%69)
 b2:
   jmp b3(%0)
-b3(%112: i64):
-  ret %112
+b3(%76: i64):
+  ret %76
 }
