@@ -1173,3 +1173,73 @@ metadata) and nothing licenses cross-iteration window reuse. Backend/
 metadata contract input: an alignment fact for runtime allocations
 (provable in wolf_rt), plus whatever the vectorizer needs to carry
 windows. Diagnosis only, per the lane's directive.
+
+## G10 — s102: loops the machine already won (2026-08-21)
+
+Three residues, one territory, three different endings — and a
+handoff declined with its mechanism named. All numbers loaded-host
+(load 10–19, sibling lanes live), ratios and IR evidence only; run
+five is the campaign's number.
+
+**a5 (was 0.433x ritual): the licensor spends G7's theorem.** A
+function's foreign WRITE SET — the entry params it may store through,
+chain-traced ptr.off + handle-slot + Header hops, Buffer hops
+excluded (element cells can hold borrowed views) — lets licm license
+a foreign load past a call when every write lands through a
+DIFFERENT `excl.mut` param. #91 absorbed exactly this far: the
+signature carries the write set, nothing else propagates. probe's
+len, data-ptr and element loads leave the loop (before-IR: all three
+per iteration; after: preheader), and the guard condition computes
+once. Measured 1.008 ns/op wolf vs 0.979 naive — **1.03x-class,
+TIE-adjacent** (vs 0.433 ritual; vs-rustc 0.234 → 0.57–0.63). What
+remains: the in-loop invariant branch (version_loops refuses
+call-bearing loops — spec/07 schedule points, a stated conservatism
+this sprint does not relax), the bump call itself (rustc inlines it;
+our inliner's budget says no at 21 insts), and one `sadd.chk` whose
+operand is bump's return (the s99 ret channel did not cover it —
+still open).
+
+**e3 (was 0.500x ritual): loop-region CSE, and final-value
+replacement deliberately NOT built.** The kernel's "self-recursive so
+it never inlines" premise died at this trunk (constant-depth unrolls);
+the two identical constant-trip pure loops now MERGE — the second's
+exit values are the first's (loopcse, one merge per visit, equal
+per-loop iconsts admitted, dominance-ordered so versioner fast/slow
+twins can never match). clang runs one loop (exit-value replacement);
+wolf now runs one loop. Measured **1.26x vs naive** (0.054 vs 0.069
+ns/op — both lanes halve per-op cost, the 2× walk counter over one
+executed loop, symmetric). Final-value replacement would have folded
+the loop the benchmark times — the #115 flattering-direction class —
+and stays unbuilt with this sentence as the reason. Witness:
+`corpus/kernels/walk_twice.lu` gates `loops_cse >= 1` through the
+real pipeline; sink parity pinned on the e3 kernel (573696 both).
+
+**d2 (was 0.854x ritual): a proven check is a relation.** Rewriting
+`iadd.chk x, y` to wrap because no overflow is possible makes the
+result exact, so a sign on y's range orders result against x —
+recorded into the block's relation list AT REWRITE TIME, where
+decide_rel already walks. The skeleton's `i <= i+5` sanity branch
+folds (intervals never could: the bound is unknown, the order is
+not); the `i+5 == len` last-position split and the continuation-byte
+masks stay — semantics. Measured **1.04x vs naive** (0.589 vs 0.611
+ns/op). Keyed on the proof, never the opcode: a user `wrapping[T]` op
+mints the same wrap form and establishes nothing (the D44-addendum
+negative is pinned in midend_passes).
+
+**The parked byte-facts patch stays parked.** Its un-park condition —
+a consumer the G8 addendum did not name — did not appear: the
+skeleton fold is relational, not byte-ranged.
+
+**The G9 handoff, declined by name: cross-iteration window carry is
+a FOURTH mechanism, not one of this sprint's three.** The licensor
+hoists loop-INVARIANT loads (same address every iteration); loopcse
+merges whole sequential loops; the relations fold branches. Window
+carry reuses loads whose addresses SHIFT by a stride between
+iterations — loop-carried value rotation through header params (or
+LLVM's LoopLoadElimination, which s101 measured alignment alone does
+not unlock). That is a new pass with its own soundness story
+(rotating a window of values across a backedge under the token
+discipline), unbudgeted here and unnamed in the contract; building
+it at sprint end against no target is the reach the closeouts warn
+about. a2's ~0.76x residue is therefore c24's named remainder, with
+G9's disassembly and this paragraph as its inputs.
