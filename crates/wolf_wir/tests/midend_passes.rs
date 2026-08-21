@@ -1034,3 +1034,142 @@ fn licm_refuses_the_license_for_an_external_callee() {
         "an external callee's writes are unbounded: {stats}"
     );
 }
+
+// ---------------------------------------------- loop-region CSE (s102) --
+
+/// Two identical sequential pure loops: the second merges onto the
+/// first (e3's mechanism at WIR level).
+fn twin_loops_src(second_entry: &str, second_body_op: &str) -> String {
+    format!(
+        "fn @twice(i64) -> i64 {{\n\
+         b0(%0: i64):\n  \
+         %1 = iconst.i64 0\n  \
+         %2 = iconst.i64 8\n  \
+         %3 = iconst.i64 1\n  \
+         jmp b1(%1, %1)\n\
+         b1(%4: i64, %5: i64):\n  \
+         %6 = icmp.slt %4, %0\n  \
+         br %6, b2, b3\n\
+         b2:\n  \
+         %7 = imul.wrap %4, %2\n  \
+         %8 = iadd.wrap %5, %7\n  \
+         %9 = iadd.wrap %4, %3\n  \
+         jmp b1(%9, %8)\n\
+         b3:\n  \
+         jmp b4({second_entry})\n\
+         b4(%10: i64, %11: i64):\n  \
+         %12 = icmp.slt %10, %0\n  \
+         br %12, b5, b6\n\
+         b5:\n  \
+         %13 = {second_body_op} %10, %2\n  \
+         %14 = iadd.wrap %11, %13\n  \
+         %15 = iadd.wrap %10, %3\n  \
+         jmp b4(%15, %14)\n\
+         b6:\n  \
+         %16 = iadd.wrap %5, %11\n  \
+         ret %16\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn loopcse_merges_identical_sequential_loops() {
+    let src = twin_loops_src("%1, %1", "imul.wrap");
+    let (out, stats) = one_pass(&src, "loopcse");
+    assert_eq!(stats.loops_cse, 1, "the twin merges: {stats}\n{out}");
+    insta::assert_snapshot!("loopcse_merged_twins", out);
+}
+
+/// Different body op — no merge, however alike the rest looks.
+#[test]
+fn loopcse_refuses_a_differing_body() {
+    let src = twin_loops_src("%1, %1", "iadd.wrap");
+    let (_, stats) = one_pass(&src, "loopcse");
+    assert_eq!(stats.loops_cse, 0, "different ops never merge: {stats}");
+}
+
+/// Different entry values — no merge (the exit values would differ).
+#[test]
+fn loopcse_refuses_differing_entry_args() {
+    let src = twin_loops_src("%3, %1", "imul.wrap");
+    let (_, stats) = one_pass(&src, "loopcse");
+    assert_eq!(stats.loops_cse, 0, "different entries never merge: {stats}");
+}
+
+/// Branch-arm ALTERNATIVES (the versioner's fast/slow twins) never
+/// merge: neither loop's exit dominates the other's preheader.
+#[test]
+fn loopcse_refuses_versioned_alternatives() {
+    let src = "fn @alt(i64, i64) -> i64 {\n\
+               b0(%0: i64, %1: i64):\n  \
+               %2 = iconst.i64 0\n  \
+               %3 = iconst.i64 8\n  \
+               %4 = iconst.i64 1\n  \
+               %5 = icmp.slt %2, %1\n  \
+               br %5, b1, b4\n\
+               b1:\n  \
+               jmp b2(%2, %2)\n\
+               b2(%6: i64, %7: i64):\n  \
+               %8 = icmp.slt %6, %0\n  \
+               br %8, b3, b7\n\
+               b3:\n  \
+               %9 = imul.wrap %6, %3\n  \
+               %10 = iadd.wrap %7, %9\n  \
+               %11 = iadd.wrap %6, %4\n  \
+               jmp b2(%11, %10)\n\
+               b4:\n  \
+               jmp b5(%2, %2)\n\
+               b5(%12: i64, %13: i64):\n  \
+               %14 = icmp.slt %12, %0\n  \
+               br %14, b6, b8\n\
+               b6:\n  \
+               %15 = imul.wrap %12, %3\n  \
+               %16 = iadd.wrap %13, %15\n  \
+               %17 = iadd.wrap %12, %4\n  \
+               jmp b5(%17, %16)\n\
+               b7:\n  \
+               ret %7\n\
+               b8:\n  \
+               ret %13\n\
+               }\n";
+    let (_, stats) = one_pass(src, "loopcse");
+    assert_eq!(
+        stats.loops_cse, 0,
+        "alternatives in sibling arms never merge: {stats}"
+    );
+}
+
+/// A loop that READS memory never merges: the loads could observe
+/// different bytes on the two executions.
+#[test]
+fn loopcse_refuses_a_loop_that_loads() {
+    let src = "fn @rd(ptr, mem.r0, i64) -> i64 {\n\
+               b0(%0: ptr, %1: mem.r0, %2: i64):\n  \
+               %3 = iconst.i64 0\n  \
+               %4 = iconst.i64 1\n  \
+               jmp b1(%3, %3)\n\
+               b1(%5: i64, %6: i64):\n  \
+               %7 = icmp.slt %5, %2\n  \
+               br %7, b2, b3\n\
+               b2:\n  \
+               %8 = load.i64 %0, %1\n  \
+               %9 = iadd.wrap %6, %8\n  \
+               %10 = iadd.wrap %5, %4\n  \
+               jmp b1(%10, %9)\n\
+               b3:\n  \
+               jmp b4(%3, %3)\n\
+               b4(%11: i64, %12: i64):\n  \
+               %13 = icmp.slt %11, %2\n  \
+               br %13, b5, b6\n\
+               b5:\n  \
+               %14 = load.i64 %0, %1\n  \
+               %15 = iadd.wrap %12, %14\n  \
+               %16 = iadd.wrap %11, %4\n  \
+               jmp b4(%16, %15)\n\
+               b6:\n  \
+               %17 = iadd.wrap %6, %12\n  \
+               ret %17\n\
+               }\n";
+    let (_, stats) = one_pass(src, "loopcse");
+    assert_eq!(stats.loops_cse, 0, "a loading loop never merges: {stats}");
+}

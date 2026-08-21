@@ -51,6 +51,7 @@ mod inline;
 pub mod instrument;
 pub mod interproc;
 mod licm;
+mod loopcse;
 mod memopt;
 mod rangeopt;
 mod simplify;
@@ -246,6 +247,9 @@ pub struct OptStats {
     pub allocs_coalesced: usize,
     pub loads_hoisted: usize,
     pub invariants_hoisted: usize,
+    /// Identical sequential pure loops merged — the second loop's exit
+    /// values become the first's (s102, loop-region CSE).
+    pub loops_cse: usize,
     /// Uncalled, unexported function bodies dropped after inlining.
     pub funcs_removed: usize,
 }
@@ -327,8 +331,8 @@ impl std::fmt::Display for OptStats {
         )?;
         write!(
             f,
-            "  licm: {} load(s), {} invariant op(s) hoisted; {} dead func(s) dropped",
-            self.loads_hoisted, self.invariants_hoisted, self.funcs_removed
+            "  licm: {} load(s), {} invariant op(s) hoisted, {} loop(s) cse'd; {} dead func(s) dropped",
+            self.loads_hoisted, self.invariants_hoisted, self.loops_cse, self.funcs_removed
         )
     }
 }
@@ -506,6 +510,7 @@ fn optimize_one(
         // per shape, not a wall-clock fixpoint).
         rangeopt::revisit(m, fid, ve, th, stats)?;
     }
+    loopcse::run(m, fid, ve, stats)?;
     simplify::run(m, fid, ve, th, stats)?;
     Ok(())
 }
@@ -590,6 +595,7 @@ pub fn run_named_pass(
         "sink" => sink::run(m, func, ve, th, stats),
         "coalesce" => coalesce::run(m, func, ve, th, stats),
         "licm" => licm::run(m, func, ve, stats),
+        "loopcse" => loopcse::run(m, func, ve, stats),
         other => panic!("unknown mid-end pass `{other}`"),
     }
 }

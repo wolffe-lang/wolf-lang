@@ -365,3 +365,20 @@ fn collect_lu(dir: &Path, out: &mut Vec<PathBuf>) {
         }
     }
 }
+
+/// s102's loop-region CSE witness, gated so the merge cannot rot:
+/// `walk_twice.lu` is e3's shape (a constant-depth recursion the
+/// inliner unrolls into two identical sequential pure loops), and the
+/// pipeline must merge the second onto the first. The exit value is
+/// pinned by the fixture's own exit code.
+#[test]
+fn kernel_walk_twice_merges_its_unrolled_loops() {
+    let entry = corpus_root().join("kernels").join("walk_twice.lu");
+    let mut module = lower(&entry).expect("walk_twice reaches the wir rung");
+    let stats = optimize_module(&mut module, &opts()).expect("pipeline green");
+    assert!(
+        stats.loops_cse >= 1,
+        "the unrolled twin loop merges (loops_cse = {}): {stats}",
+        stats.loops_cse
+    );
+}

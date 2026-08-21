@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: arith.checked
+//! s102 loop-region CSE witness: two identical sequential pure loops
+//! — the shape e3_index_arith's constant-depth recursion unrolls to —
+//! and the mid-end merges the second onto the first (loops_cse >= 1,
+//! gated in midend_corpus.rs; the unroll-then-merge end-to-end run is
+//! the e3 kernel itself, measured in the ledger). The exit code pins
+//! the value: Σ i*8 for i<200 = 159200 per walk, doubled and masked
+//! = 318400.
+
+fn main() -> !int {
+    let n = 200
+    var a = 0
+    var i = 0
+    while i < n {
+        a = (a + i * 8) & 1048575
+        i = i + 1
+    }
+    var b = 0
+    var j = 0
+    while j < n {
+        b = (b + j * 8) & 1048575
+        j = j + 1
+    }
+    let got = (a + b) & 1048575
+    if got == 318400 { 0 } else { 1 }
+}
