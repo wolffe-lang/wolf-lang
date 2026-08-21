@@ -1293,7 +1293,8 @@ impl<'a, 'b> Tx<'a, 'b> {
                             .m
                             .data
                             .get(idx as usize)
-                            .ok_or_else(|| ice("data.addr names missing data"))?;
+                            .ok_or_else(|| ice("data.addr names missing data"))?
+                            .clone();
                         // Local read-only bytes; the `_W.` prefix keeps
                         // wolf data out of the C namespace like `_W`
                         // function mangling does.
@@ -1303,7 +1304,22 @@ impl<'a, 'b> Tx<'a, 'b> {
                             .declare_data(&sym, cranelift_module::Linkage::Local, false, false)
                             .map_err(|e| ice(e.to_string()))?;
                         let mut desc = cranelift_module::DataDescription::new();
-                        desc.define(d.bytes.clone().into_boxed_slice());
+                        if d.funcs.is_empty() {
+                            desc.define(d.bytes.clone().into_boxed_slice());
+                        } else {
+                            // s98: a vtable — pointer-sized slots, each
+                            // a function relocation ([abi.native.dyn]).
+                            desc.define_zeroinit(d.funcs.len() * 8);
+                            for (i, fname) in d.funcs.iter().enumerate() {
+                                let Some(entry) = self.funcs.get(fname) else {
+                                    return Err(nyi(format!(
+                                        "a vtable slot `@{fname}` outside this object's subset"
+                                    )));
+                                };
+                                let fref = self.om.declare_func_in_data(entry.fid, &mut desc);
+                                desc.write_function_addr((i * 8) as u32, fref);
+                            }
+                        }
                         self.om
                             .define_data(did, &desc)
                             .map_err(|e| ice(e.to_string()))?;
