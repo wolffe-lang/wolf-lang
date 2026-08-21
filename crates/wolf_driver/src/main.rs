@@ -24,13 +24,31 @@ mod profile_cmd;
 mod script_cmd;
 mod test_cmd;
 
-/// The reference-interpreter pairing (r01 criteria row 7): the lupin
-/// version this wolf release is differentially tested against.
-const LUPIN_PIN_VERSION: &str = "0.1.8";
-/// The wolf-interp commit sha of the pairing. Placeholder until the
-/// integrator stamps it at tag time (tags are the integrator's act);
-/// a release tag never ships with this value unstamped.
-const LUPIN_PIN_SHA: &str = "7886559";
+/// The reference-interpreter pairing (r01 criteria row 7), read from
+/// the one file that defines it. The constants this replaces were
+/// hand-stamped "at tag time" and went three releases stale (#87);
+/// `PAIRING` is updated with the differential ritual, and the pairing
+/// test fails the gauntlet when the sibling lupin disagrees with it.
+const PAIRING: &str = include_str!("../PAIRING");
+
+/// (version, pin) out of [`PAIRING`]. Panics on a malformed file —
+/// a build whose own version output cannot be trusted should not run.
+fn pairing() -> (String, String) {
+    let mut version = None;
+    let mut pin = None;
+    for line in PAIRING.lines() {
+        let line = line.trim();
+        if let Some(v) = line.strip_prefix("lupin-version =") {
+            version = Some(v.trim().to_string());
+        } else if let Some(v) = line.strip_prefix("lupin-pin =") {
+            pin = Some(v.trim().to_string());
+        }
+    }
+    (
+        version.expect("PAIRING names lupin-version"),
+        pin.expect("PAIRING names lupin-pin"),
+    )
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -41,9 +59,8 @@ fn main() {
         // against. LUPIN_PIN_SHA is stamped by the integrator at tag time.
         Some("--version") => {
             println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION"));
-            println!(
-                "paired with lupin {LUPIN_PIN_VERSION} (reference interpreter), pin {LUPIN_PIN_SHA}"
-            );
+            let (lupin_version, lupin_pin) = pairing();
+            println!("paired with lupin {lupin_version} (reference interpreter), pin {lupin_pin}");
         }
         Some("--explain") => explain(&args[1..]),
         Some("build") => build(&args[1..]),
