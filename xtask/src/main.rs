@@ -766,9 +766,20 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// the checked rung still refuses the module-item read that produces
 /// the value (#12), so `all-three` holds at 127 — the first ratchet
 /// whose all-three prediction MEASURED true, stated for the record.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 152), ("release", 152)];
+/// Ratcheted by s96 over 279 entries: native and release +1 —
+/// `traits/dyn_ok.lu` runs, its dispatch lowered to the existing ops
+/// (pair split, slot load, s97's `call.ind`; zero new opcodes).
+/// checked +0 and union +0: the checked lane was ALREADY executing
+/// the file (its refusal only ever lived in WIR), which is exactly
+/// why `all-three` moves +1 — the native tiers joining a file the
+/// checked lane held is the one shape where all-three moves without
+/// union moving. Nothing constructs a dyn value yet (the filed
+/// surface decision), so this is the dispatch chain compiling and
+/// linking, with its execution pinned by the backends' hand-built
+/// vtable fixture.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 153), ("release", 153)];
 const UNION_FLOOR: usize = 170;
-const ALL_THREE_FLOOR: usize = 127;
+const ALL_THREE_FLOOR: usize = 128;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
