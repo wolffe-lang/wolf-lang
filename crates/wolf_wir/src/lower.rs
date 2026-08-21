@@ -876,8 +876,13 @@ fn lower_body(
     // cursor the builder stamps on every appended instruction.
     b.func.src_file = Some(span.file.index() as u32);
     b.set_span(fsig.name_span.lo, fsig.name_span.hi);
+    let module_binds: HashMap<String, usize> =
+        wolf_sema::module_bindings(pkg, body.module, body.file)
+            .into_iter()
+            .collect();
     let mut lowerer = Lowerer {
         src: &pkg.files[body.file].raw.src,
+        module_binds: &module_binds,
         table: body_tbl,
         sig_table: sig_tbl,
         sigs,
@@ -1008,8 +1013,13 @@ fn lower_task_body<'t>(
     let mut b = FuncBuilder::new(module, task.body_name.clone(), task.body_sig);
     b.func.src_file = Some(task.span.file.index() as u32);
     b.set_span(task.span.lo, task.span.hi);
+    let module_binds: HashMap<String, usize> =
+        wolf_sema::module_bindings(pkg, body.module, body.file)
+            .into_iter()
+            .collect();
     let mut lo = Lowerer {
         src: &pkg.files[body.file].raw.src,
+        module_binds: &module_binds,
         table: &tb.table,
         sig_table: &sigs.table,
         sigs,
@@ -2279,6 +2289,12 @@ struct Lowerer<'t, 'b, 'm> {
     local_tys: HashMap<Span, TyId>,
     casts: HashMap<Span, (TyId, TyId, CastKind)>,
     fns: &'t HashMap<&'t str, Vec<(usize, &'t FnSig)>>,
+    /// This body's module-namespace bindings (bound name → package
+    /// module), for the qualified fn-value read (#116): `txt.is_wolf`
+    /// in value position names a module member, and the base has no
+    /// recorded type precisely because sema typed the member THROUGH
+    /// the namespace.
+    module_binds: &'b HashMap<String, usize>,
     /// Method dispatch decisions by call span (s17/s27).
     dispatch: HashMap<Span, &'t Dispatch>,
     /// Per-`match` exhaustiveness facts by span (s17).
@@ -3842,6 +3858,69 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Some(s) => Flow::Val(Some(s)),
                 None => Flow::Diverged,
             });
+        }
+        // #116/#23: a member whose BASE is a namespace, not a value.
+        // The base span has no recorded type precisely because sema
+        // typed the member THROUGH the namespace (synth_member's
+        // module and type-member paths) — so the recorded type of the
+        // WHOLE member expression says what this is:
+        //   module.fn      -> the s95 fn-value read, qualified
+        //   Enum.Variant   -> payload-free construction (the tag)
+        // A base that is a real value always carries a recorded type,
+        // so this branch cannot shadow field extraction.
+        if self.expr_sema_ty(base.span).is_none()
+            && base.kind == SyntaxKind::PathExpr
+            && let Some(bt) = wolf_ast::PathExpr::cast(base).and_then(|pp| pp.ident())
+            && let Some(mtok) = m.member()
+            && let Some(whole) = self.expr_sema_ty(e.span)
+        {
+            let bname = self.text(bt.span);
+            let mname = self.text(mtok.span);
+            if matches!(self.table.kind(whole), TyKind::Fn(..))
+                && let Some(&fmodule) = self.module_binds.get(&bname)
+                && let Some(ItemSig::Fn(fsig)) = self.sigs.get(fmodule, &mname)
+            {
+                if !fsig.generics.is_empty() {
+                    return Err(refuse_named(
+                        format!(
+                            "a generic function as a value (`{bname}.{mname}` has no                              instantiation at the read)"
+                        ),
+                        e.span,
+                    ));
+                }
+                if fsig.comptime {
+                    return Err(refuse_named(
+                        format!("a comptime fn as a runtime value (`{bname}.{mname}`)"),
+                        e.span,
+                    ));
+                }
+                let qname = qualify(self.sigs, fmodule, &mname);
+                let ext = match self.callees.get(&qname) {
+                    Some(&ext) => ext,
+                    None => {
+                        let sig =
+                            wir_sig_of(self.b.module, self.sig_table, self.sigs, fsig, 0, e.span)?;
+                        let ext = self.b.func.import_func(qname.clone(), sig);
+                        self.callees.insert(qname, ext);
+                        ext
+                    }
+                };
+                return Ok(Flow::Val(Some(self.b.ins_func_addr(ext))));
+            }
+            if let TyKind::Nominal { module, name, .. } = self.table.kind(whole).clone()
+                && let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(module as usize, &name)
+                && let Some(index) = variants.iter().position(|v| v.name == mname)
+            {
+                if !variants[index].payload.is_empty() {
+                    return Err(refuse_named(
+                        format!(
+                            "a payload-carrying variant as a bare value                              (`{name}.{mname}` wants its payload applied)"
+                        ),
+                        e.span,
+                    ));
+                }
+                return self.enum_value(whole, index, &[], e.span);
+            }
         }
         let Some(base_sema) = self.expr_sema_ty(base.span) else {
             return Err(refuse("a member access without a recorded type", e.span));
@@ -11808,15 +11887,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
             payloads.push(v);
         }
+        self.enum_value(sema_ty, index, &payloads, e.span)
+    }
+
+    /// The WIR value of an enum variant — shared by call-form
+    /// construction ([`Self::lower_ctor`]) and the bare payload-free
+    /// member form (`Hue.Red`, #23): tag alone for payload-free
+    /// enums, else the aggregate with unfilled slots zeroed.
+    fn enum_value(
+        &mut self,
+        sema_ty: TyId,
+        index: usize,
+        payloads: &[Value],
+        span: Span,
+    ) -> R<Flow> {
         let Some(wty) = wir_ty(
             &mut self.b.module.types,
             self.table,
             self.sigs,
             sema_ty,
-            e.span,
+            span,
         )?
         else {
-            return Err(refuse("a unit-shaped enum", e.span));
+            return Err(refuse("a unit-shaped enum", span));
         };
         let tag = self.b.iconst(types::I64, index as i64);
         if wty == types::I64 {
@@ -11824,12 +11917,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(Some(tag)));
         }
         let types::TypeData::Agg(fields) = self.b.module.types.get(wty).clone() else {
-            return Err(refuse("an enum without an aggregate shape", e.span));
+            return Err(refuse("an enum without an aggregate shape", span));
         };
         let mut parts = vec![tag];
         parts.extend(payloads.iter().copied());
         for &fty in &fields[parts.len()..] {
-            let z = self.zero_of(fty, e.span)?;
+            let z = self.zero_of(fty, span)?;
             parts.push(z);
         }
         Ok(Flow::Val(Some(
