@@ -140,6 +140,15 @@ pub enum Just {
     /// `: op %v` — implied by the op that defines %v (e.g. a deref
     /// citing its allocation).
     Op(Value),
+    /// `: summary.<16 hex>` — proved by the s99 whole-program range
+    /// analysis, against the summary index whose digest starts with
+    /// these 8 bytes. Per-function verification is SHAPE-ONLY for this
+    /// tag (one function cannot see the program); the semantic check
+    /// is [`crate::midend::interproc::reverify`], which re-derives
+    /// every summary-justified fact from the current whole program.
+    /// The digest names the exact index the fixpoint read, so a fact
+    /// is auditable back to its proof even in a bare dump.
+    Summary(u64),
 }
 
 /// A fact: claim + justification + optional span back to the program

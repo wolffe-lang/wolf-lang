@@ -364,6 +364,7 @@ pub(crate) fn render_fact(canon: &Canon, fact: &FactData) -> String {
         Just::Theorem(t) => write!(s, " : {}", t.tag()).unwrap(),
         Just::DefOp => s.push_str(" : op"),
         Just::Op(v) => write!(s, " : op {}", canon.value(v)).unwrap(),
+        Just::Summary(d) => write!(s, " : summary.{d:016x}").unwrap(),
     }
     s
 }

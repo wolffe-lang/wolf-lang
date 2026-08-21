@@ -1662,6 +1662,11 @@ fn parse_fact(
         }
     } else if let Some(t) = Theorem::ALL.iter().find(|t| t.tag() == jkw) {
         Just::Theorem(*t)
+    } else if let Some(hex) = jkw.strip_prefix("summary.") {
+        match u64::from_str_radix(hex, 16) {
+            Ok(d) if hex.len() == 16 => Just::Summary(d),
+            _ => return line.fail("summary justification needs 16 hex digits".to_string()),
+        }
     } else {
         return line.fail(format!("unknown justification `{jkw}`"));
     };
