@@ -630,6 +630,10 @@ impl<'t> Machine<'t> {
     fn ty_concrete_name(&self, span: Span) -> Option<String> {
         match self.expr_ty(span)? {
             TyKind::Nominal { name, .. } => Some(name.clone()),
+            // #119 (D49): a primitive is a dispatch target too —
+            // `impl Ord for int` keys the trait index by the prim's
+            // spelling, the same grammar the lowering mangles with.
+            TyKind::Prim(p) => Some(p.name().to_string()),
             TyKind::Rigid(r) if r == "Self" => self.self_tys.last().cloned().flatten(),
             TyKind::Rigid(r) => self.frame_rigids.last().and_then(|m| m.get(r)).cloned(),
             _ => None,

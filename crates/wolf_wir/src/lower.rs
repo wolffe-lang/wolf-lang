@@ -175,7 +175,7 @@ fn lower_package_impl(
                 .find(|i| i.file == outcome.body.file && i.decl == outcome.body.decl)
             {
                 if let Some(m) = imp.methods.iter().find(|m| m.member == mi)
-                    && let TyKind::Nominal { name: tyname, .. } = tc.sigs.table.kind(imp.self_ty)
+                    && let Some(tyname) = self_ty_key(&tc.sigs.table, imp.self_ty)
                 {
                     let key = match &imp.trait_ref {
                         Some(tr) => format!("{tyname}.{}.{}", tr.name, m.name),
@@ -773,7 +773,7 @@ fn lower_body(
                 let Some(m) = imp.methods.iter().find(|m| m.member == mi) else {
                     return Ok(None);
                 };
-                let TyKind::Nominal { name: tyname, .. } = sigs.table.kind(imp.self_ty) else {
+                let Some(tyname) = self_ty_key(&sigs.table, imp.self_ty) else {
                     return Err(refuse("methods on non-nominal self types", span));
                 };
                 let Some(mnode) = node.nodes().filter(|n| n.kind.is_item()).nth(mi) else {
@@ -1392,6 +1392,17 @@ enum PrintSeg {
 /// the package root (whose dotted path is empty — `main` stays
 /// `main`). The mangled symbol hashes the WIR name, so the full module
 /// path lands in every `_W…$hash` symbol.
+/// The `Self` segment of an impl-method name: a nominal's name, or —
+/// #119, D49 — a primitive's spelling (`int.Ord.cmp`); the bridge's
+/// substrate on builtins uses the same mangling grammar as nominals.
+fn self_ty_key(table: &TypeTable, ty: TyId) -> Option<String> {
+    match table.kind(ty) {
+        TyKind::Nominal { name, .. } => Some(name.clone()),
+        TyKind::Prim(p) => Some(p.name().to_string()),
+        _ => None,
+    }
+}
+
 fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
     match sigs.module_names.get(module).map(String::as_str) {
         Some("") | None => name.to_string(),
@@ -7329,7 +7340,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             if let Some(a) = args.get(i)
                 && let Some(vexpr) = Arg::value(*a)
                 && let Some(site) = self.expr_sema_ty(vexpr.span)
-                && let TyKind::Nominal { name, .. } = self.table.kind(self.strip_sema(site)).clone()
+                && let Some(name) = self_ty_key(self.table, self.strip_sema(site))
             {
                 head = Some(name);
             }
@@ -7347,10 +7358,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .iter()
             .find(|i| {
                 i.trait_ref.as_ref() == Some(&tr)
-                    && matches!(
-                        self.sig_table.kind(i.self_ty),
-                        TyKind::Nominal { name, .. } if name == &head
-                    )
+                    && self_ty_key(self.sig_table, i.self_ty).as_deref() == Some(head.as_str())
             })
             .ok_or_else(|| {
                 refuse_named(
@@ -12062,9 +12070,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         e.span,
                     ));
                 };
-                let TyKind::Nominal { name: head, .. } =
-                    self.table.kind(self.strip_sema(recv_ty)).clone()
-                else {
+                let stripped = self.strip_sema(recv_ty);
+                let Some(head) = self_ty_key(self.table, stripped) else {
                     return Err(refuse_named(
                         format!("a `{name}` method on a non-nominal receiver"),
                         e.span,
