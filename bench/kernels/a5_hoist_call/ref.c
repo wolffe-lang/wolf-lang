@@ -1,45 +1,34 @@
-/* a5-hoist-call (family A), NAIVE C: two loads of the same location on
- * either side of a call that is meant to be opaque.
+/* a5-hoist-call (family A), NAIVE C: loads of src[0] on either side of a
+ * call that stores through a second pointer, where neither pointer's
+ * provenance is provable — both are laundered through volatile globals
+ * (the suite's established escape idiom, b3_churn's `escaped`). The
+ * store may alias src, so clang must reload src[0] and re-store
+ * scratch[0] every iteration. That is what naive C code with pointers
+ * "from somewhere" pays; wolf's `read`/`mut` modes prove the same two
+ * buffers disjoint from the signature alone.
  *
- * ==== s79 baseline audit: THIS KERNEL DOES NOT TEST ITS THESIS ====
+ * ==== #97 redesign (the s79 audit, resolved) ====
  *
- * The kernel's comments used to claim "`opaque` is self-recursive so
- * nothing inlines it away in any lane". Both halves of that are false in
- * the compiled programs, and had been for all five measurements taken of
- * this kernel:
+ * The original callee was a PURE self-recursion and this file's audit
+ * documented the result: clang -O3 solved the closed form, proved the
+ * callee readnone, hoisted both loads, vectorized, and the "opaque
+ * call" survived in neither lane — five measurements of one folded
+ * arithmetic loop against another. Three same-file fixes failed
+ * (run-time depth: solved symbolically; volatile fn pointer: the only
+ * address-taken function was readnone, indirect call provably
+ * harmless; publishing src's address: irrelevant while the callee
+ * touches no memory). The two-translation-unit fix worked (0.219 ->
+ * 1.31 ns/op) and was deliberately backed out: wolf compiles
+ * whole-program, so fixing only the C lane manufactures a wolf win.
  *
- *   - clang -O3 solves the recursion's closed form, proves the callee
- *     touches no memory, HOISTS BOTH LOADS and vectorizes the loop. The
- *     naive binary contains no call and no load from `src` (checked with
- *     objdump), runs 0.177 ns/op, and matches `expert.c` — the lane that
- *     hoists by hand — to within 3%.
- *   - wolf's release tier does exactly the same thing: `probe` and
- *     `opaque` are inlined, the recursion is folded, and the load is
- *     hoisted out of the loop. The wolf binary has no call in its timed
- *     region either.
+ * The resolution is the one #97 prescribed: the callee WRITES MEMORY.
+ * A store the optimizer must respect is opaque in every lane by
+ * construction, and the kernel finally measures its thesis — CSE
+ * across an opaque write, licensed by modes in wolf, forbidden by
+ * may-alias here, asserted by `restrict` in expert.c.
  *
- * So the reported 0.172x was never "wolf reloads where C hoists". It was
- * one folded loop against another: clang's vectorized, wolf's a scalar
- * chain of checked adds.
- *
- * Three same-file fixes were tried and all three failed: a run-time
- * recursion depth (clang solves it symbolically in `depth`), a `volatile`
- * function pointer (the only address-taken function in the module is
- * `readnone`, so the indirect call is still provably harmless), and
- * publishing `src`'s address to a global alias (does not matter while the
- * callee is provably readnone). Moving the callee to its own translation
- * unit DOES restore the call and the reload — measured, 0.219 -> 1.31
- * ns/op — but it cannot be done on the wolf side: wolf compiles
- * whole-program into a single module, has no separate-compilation
- * surface, no `noinline`, and Tier-R refuses `func.addr`, so there is no
- * indirect call either. Fixing only the C lane would hand wolf a win
- * manufactured by unequal work, which is the exact failure this suite
- * exists to prevent.
- *
- * The file is therefore left as it was and the label is corrected
- * instead: today this kernel measures a folded arithmetic loop in both
- * lanes. What it would take to measure CSE-across-calls is written up in
- * bench/loss-ledger.md under G7.
+ * At runtime the two buffers are distinct, so every lane executes the
+ * same arithmetic; only what the compiler may PROVE differs.
  *
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
@@ -47,16 +36,25 @@
 #include <stdlib.h>
 #include <time.h>
 
-static int64_t opaque(int64_t depth, int64_t x) {
-    if (depth <= 0) return x & 1023;
-    return opaque(depth - 1, x + 1) & 1023;
+static int64_t data[2] = {7, 9};
+static int64_t scr[2] = {0, 0};
+
+/* Provenance laundering: the pointers the timed code uses are read out
+ * of volatile globals, so clang cannot prove they address distinct
+ * objects and must honour the may-alias store. */
+static int64_t *volatile data_p = data;
+static int64_t *volatile scr_p = scr;
+
+static int64_t bump(int64_t *dst, int64_t x) {
+    dst[0] = (dst[0] + x) & 1023;
+    return dst[0];
 }
 
-static int64_t probe(const int64_t *src, int64_t n) {
+static int64_t probe(const int64_t *src, int64_t *scratch, int64_t n) {
     int64_t acc = 0;
     for (int64_t i = 0; i < n; i++) {
         int64_t a = src[0];
-        int64_t side = opaque(1, i);
+        int64_t side = bump(scratch, i);
         int64_t b = src[0];
         acc = (acc + a + b + side) & 1048575;
     }
@@ -66,15 +64,17 @@ static int64_t probe(const int64_t *src, int64_t n) {
 int main(int argc, char **argv) {
     int64_t ops = argc > 1 ? (int64_t)strtoull(argv[1], 0, 10) : 2000;
     const int64_t inner = 10000;
-    static int64_t src[2] = {7, 9};
+    const int64_t *src = data_p;
+    int64_t *scratch = scr_p;
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
     int64_t sink = 0;
-    for (int64_t k = 0; k < ops; k++) sink = (sink + probe(src, inner)) & 1048575;
+    for (int64_t k = 0; k < ops; k++)
+        sink = (sink + probe(src, scratch, inner)) & 1048575;
     clock_gettime(CLOCK_MONOTONIC, &t1);
     uint64_t ns = (uint64_t)(t1.tv_sec - t0.tv_sec) * 1000000000ull
                 + (uint64_t)(t1.tv_nsec - t0.tv_nsec);
     printf("{\"ns\":%llu,\"ops\":%lld,\"sink\":%lld}\n",
-           (unsigned long long)ns, (long long)(ops * inner), (long long)sink);
+           (unsigned long long)ns, (long long)ops, (long long)sink);
     return 0;
 }

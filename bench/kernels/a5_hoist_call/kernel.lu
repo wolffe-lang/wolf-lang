@@ -1,11 +1,24 @@
-// a5-hoist-call (family A) — the CSE-across-calls "holy grail" (s42's
-// witness kernel, now scored). `probe` reads the same `read` parameter on
-// both sides of an OPAQUE call. A `read` parameter is immutable for the
-// whole call (spec 02 §7/O2), so the second load may be reused; C's
-// callee could legally have written through a global alias, so naive C
-// must reload. `expert.c` hoists the load by hand.
+// a5-hoist-call (family A) — CSE across an opaque WRITE (the #97
+// redesign; s42's witness thesis, finally measured). `probe` reads
+// `src[0]` on both sides of a call that stores through a DIFFERENT
+// container. A `read` parameter is immutable for the whole call (spec
+// 02 §7/O2) and a `mut` parameter is exclusive, so the c04 mode
+// theorems prove `src` and `scratch` disjoint: wolf may reuse the
+// first load and keep the running scratch value in a register. Naive
+// C's pointers are laundered through volatile globals (ref.c), so the
+// store may alias `src` and clang must reload — and store — every
+// iteration. Expert C writes `restrict` by hand (expert.c).
 //
-// `opaque` is self-recursive so nothing inlines it away in any lane.
+// The s79→#97 history, so nobody reintroduces it: the original callee
+// was a PURE self-recursion, and every lane solved it — clang folded
+// the closed form and vectorized, wolf inlined and hoisted, and the
+// kernel measured one folded arithmetic loop against another (0.16x of
+// nothing). Three same-file fixes failed because a readnone callee is
+// transparent whatever its shape; the opacity has to be a MEMORY WRITE
+// the optimizer must respect. See bench/loss-ledger.md G7.
+//
+// The value chain keeps every store observable: `side` is the running
+// scratch value folded into `acc`, and `acc` reaches the printed sink.
 //
 // Protocol: argv[1]=ops, prints {"ns":..,"ops":..,"sink":..}.
 
@@ -21,17 +34,17 @@ fn ops_arg(fallback: int) -> int {
     if n == 0 { fallback } else { n }
 }
 
-fn opaque(depth: int, x: int) -> int {
-    if depth <= 0 { return x & 1023 }
-    opaque(depth - 1, x + 1) & 1023
+fn bump(mut dst: List[int], x: int) -> int {
+    dst[0] = (dst[0] + x) & 1023
+    dst[0]
 }
 
-fn probe(src: List[int], n: int) -> int {
+fn probe(src: List[int], mut scratch: List[int], n: int) -> int {
     var acc = 0
     var i = 0
     while i < n {
         let a = src[0]
-        let side = opaque(1, i)
+        let side = bump(mut scratch, i)
         let b = src[0]
         acc = (acc + a + b + side) & 1048575
         i = i + 1
@@ -45,11 +58,14 @@ fn main() -> !int {
     var src = List[int]()
     (mut src).push(7)
     (mut src).push(9)
+    var scratch = List[int]()
+    (mut scratch).push(0)
+    (mut scratch).push(0)
     let t0 = time_now_ms()
     var sink = 0
     var k = 0
     while k < ops {
-        sink = (sink + probe(src, inner)) & 1048575
+        sink = (sink + probe(src, mut scratch, inner)) & 1048575
         k = k + 1
     }
     let t1 = time_now_ms()
