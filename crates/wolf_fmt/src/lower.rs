@@ -546,7 +546,13 @@ impl<'a> Fmt<'a> {
     /// Trivia of a token that is itself dropped (`Term`, stripped
     /// commas): comments survive, text does not.
     fn tok_trivia_only(&self, t: &GreenToken, out: &mut Vec<Doc>) {
-        self.lead(t, out);
+        // A dropped token's comments get DANGLING geometry: a break
+        // before each comment, none after — lead()'s final gap-break
+        // anchors on the dropped token's own source position, and the
+        // list then adds its own break, printing a blank line the
+        // reparse (where the comment leads whatever comes next) never
+        // reproduces. One drift per pass, in every dropped-comma shape.
+        self.dangling_lead(t, out);
         self.trail(t, out);
     }
 
@@ -1110,6 +1116,9 @@ impl<'a> Fmt<'a> {
         {
             self.tok_trivia_only(c, &mut inner);
         }
+        if let Some(c) = close {
+            self.dangling_lead(c, &mut inner);
+        }
         g.push(Doc::Indent(inner));
         g.push(if pad { Doc::Line } else { Doc::Softline });
         if let Some(c) = close {
@@ -1127,6 +1136,37 @@ impl<'a> Fmt<'a> {
             g.push(Doc::BreakParent);
         }
         out.push(Doc::Group(g));
+    }
+
+    /// A closer's leading comments, emitted INSIDE the body's indent —
+    /// a comment dangling before `}` belongs to the body, and emitting
+    /// it at the closer's column made its indent depend on which token
+    /// the parser attached it to: leading a comma (inside the list) it
+    /// sat at the body indent, leading the closer (after a pass moved
+    /// it there) it dropped to the closer's — one drift per pass.
+    /// Geometry is fixed at one newline before the first comment and
+    /// blank-aware between comments; the group's own break supplies the
+    /// newline before the closer, so the shape is a render fixed point.
+    /// Marks the spans consumed so the closer's own emission stays bare.
+    fn dangling_lead(&self, t: &GreenToken, out: &mut Vec<Doc>) {
+        let mut prev_end: Option<u32> = None;
+        for s in &t.leading {
+            let bytes = self.slice(*s);
+            if !is_comment(bytes) {
+                continue;
+            }
+            if self.consumed.borrow().contains(&(s.lo, s.hi)) {
+                continue;
+            }
+            match prev_end {
+                Some(pe) if self.blank_between(pe, s.lo) => out.push(Doc::Blankline),
+                Some(_) => out.push(Doc::Hardline),
+                None => out.push(Doc::FreshLine),
+            }
+            out.push(Doc::Text(trim_end(bytes).to_vec()));
+            self.consumed.borrow_mut().insert((s.lo, s.hi));
+            prev_end = Some(s.hi);
+        }
     }
 
     fn subtree_token_has_comment(&self, t: &GreenToken) -> bool {
@@ -2342,11 +2382,11 @@ impl<'a> Fmt<'a> {
         {
             self.tok_trivia_only(c, &mut inner);
         }
+        if let Some(c) = close {
+            self.dangling_lead(c, &mut inner);
+        }
         g.push(Doc::Indent(inner));
         g.push(Doc::Line);
-        if let Some(c) = close {
-            self.lead(c, &mut g);
-        }
         g.push(Doc::text("}"));
         if let Some(c) = close {
             self.trail(c, &mut g);
@@ -2354,6 +2394,7 @@ impl<'a> Fmt<'a> {
         if force
             || fields.iter().any(|f| self.subtree_has_comment(f))
             || commas.iter().any(|c| self.subtree_token_has_comment(c))
+            || self.has_lead_comment_opt(close)
         {
             g.push(Doc::BreakParent);
         }
