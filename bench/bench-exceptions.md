@@ -16,6 +16,49 @@ the win, the measured cost, and the condition under which it is revisited.
 The gate reads this file, so each entry needs the marker line
 `- exception: <kernel-directory-name>` for the kernel to count as excepted.
 
+## Status at s103: still EMPTY — two drafts staged for run five, unspent.
+
+Posture ruled 2026-08-21, delegated to the session recommendation:
+drafted in advance with the evidence attached, to be spent at run five
+rather than improvised at the gate. Neither carries its marker line;
+filing one is a deliberate act at run five, not a default.
+
+> **b3_churn** — checked adds on input-derived values.
+> *Root cause:* the request loop's arithmetic operates on values that
+> arrive from the request itself (`id + j` and the size-mask sums);
+> they lower to `iadd.chk`, and no sound discharge exists — s99's
+> facts rightly cannot bound values the program did not compute (D44
+> second addendum: no range fact without a proof).
+> *Decision that renounced the win:* X3 — checked arithmetic in every
+> profile, release included.
+> *Measured cost:* callgrind A/B against a wrapping-typed variant of
+> the same kernel (same sink): `_Wmain` 844,129 → 678,122 Ir —
+> **83 Ir/request, 19.7% of `_Wmain`, 8.3% of program**. Spending
+> this exception explains ~0.115x → ~0.125x and NO further: the
+> kernel's remaining gap is design cost and midend candidates, both
+> in the ledger's s103 account, and this entry does not cover them.
+> *Revisit condition:* container element facts or an input-range
+> annotation surface ever lets the checks fold (s100-family, HUMAN),
+> or the midend candidates land and the X3 share becomes the majority
+> of what remains.
+
+> **word_count** — `List[str]` materialization in `words()`.
+> *Root cause:* one materialization pass over 72 000 word views per
+> call (ledger, s77 → s103); the lazy path needs an internal-iteration
+> std API (`each_word`-class), writable since sc13's callable tier —
+> wolf-std sc14's work, cross-repo.
+> *Class honesty, recorded rather than papered over:* by this file's
+> own taxonomy this is class (b) — a missing idiom, "a bug to fix,
+> never an exception." The draft exists because the fix is cross-repo
+> and may not land inside c24's window. Spending it therefore requires
+> either sc14 landing first (preferred — the exception then never
+> files) or a HUMAN amendment to the class rule. It is staged so run
+> five's decision is honest, not so the rule bends silently.
+> *Measured cost:* 0.875x at run four; the s79 runtime A/B (12.8x on
+> this kernel) locates the materialization.
+> *Revisit condition:* sc14 lands `each_word`, the kernel adopts the
+> idiomatic API, this entry retires unfiled.
+
 ## Status at s85: still EMPTY — and the one candidate is now withdrawn.
 
 The `e1_sum_reduce` exception drafted below was never filed, on the
