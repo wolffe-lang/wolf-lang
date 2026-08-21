@@ -229,28 +229,60 @@ fn chunk_size(nth: usize, size: usize) -> usize {
     size.max(CHUNK_MIN << nth.min(steps))
 }
 
-/// A raw arena chunk: uninitialized capacity behind a bump cursor.
-pub(crate) type Chunk = Box<[core::mem::MaybeUninit<u8>]>;
+/// One 16-byte, 16-aligned block of chunk capacity. `Chunk` stores
+/// BLOCKS rather than bytes so the box allocation itself carries a
+/// formal `Layout` alignment of [`ALIGN`] — the base guarantee every
+/// 16-grained grant stands on (s101). Before this type the base was
+/// `Box<[MaybeUninit<u8>]>`, formal alignment ONE: the `align 16` the
+/// LLVM tier has claimed on `__wolf_rt_region_alloc` results since
+/// report 10 delta 2 was resting on the host allocator's habit, and
+/// a habit is not a guarantee (the D44-addendum hole class, wearing
+/// an alignment hat).
+#[repr(C, align(16))]
+pub(crate) struct ChunkBlock([core::mem::MaybeUninit<u8>; ALIGN]);
 
-/// A fresh chunk of `cap` bytes, WITHOUT the host allocator zeroing it
-/// (#113: the memset was 6.1% of `b3_churn`'s per-request instructions,
-/// and a bump allocator never needs zeroed memory). The read-before-
-/// write that zeroing papered over cannot happen through the language:
-/// use-of-uninit is E1001 (`wolf_mem::moves`, forward maybe-uninit
-/// dataflow), container access is len-bounded, and ubcheck's L1 tracks
-/// per-byte initialization in its OWN shadow store, never through this
-/// memory. DEBUG builds keep the s76 determinism aid — a latent
+/// A raw arena chunk: uninitialized, 16-ALIGNED capacity behind a bump
+/// cursor. Byte-flavored accessors keep every call site written in
+/// bytes; the block representation is this type's private business.
+pub(crate) struct Chunk(Box<[ChunkBlock]>);
+
+impl Chunk {
+    /// Capacity in bytes.
+    pub(crate) fn len(&self) -> usize {
+        self.0.len() * ALIGN
+    }
+
+    /// Base pointer — 16-aligned by the element type's layout.
+    pub(crate) fn as_mut_ptr(&mut self) -> *mut core::mem::MaybeUninit<u8> {
+        self.0.as_mut_ptr().cast()
+    }
+}
+
+/// A fresh chunk of `cap` bytes (`cap` 16-grained — every caller
+/// rounds; the ladder's rungs and the arenas' minima all are), WITHOUT
+/// the host allocator zeroing it (#113: the memset was 6.1% of
+/// `b3_churn`'s per-request instructions, and a bump allocator never
+/// needs zeroed memory). The read-before-write that zeroing papered
+/// over cannot happen through the language: use-of-uninit is E1001
+/// (`wolf_mem::moves`, forward maybe-uninit dataflow), container
+/// access is len-bounded, and ubcheck's L1 tracks per-byte
+/// initialization in its OWN shadow store, never through this memory.
+/// DEBUG builds keep the s76 determinism aid — a latent
 /// runtime/lowering bug reads a stable 0, not garbage — exactly where
 /// bugs are hunted; the release runtime pays nothing (the D21 posture:
 /// "release builds get the plain arena/pool paths").
 pub(crate) fn new_chunk(cap: usize) -> Chunk {
-    #[allow(unused_mut)]
-    let mut c = Box::new_uninit_slice(cap);
+    debug_assert_eq!(cap % ALIGN, 0, "chunk capacities are 16-grained");
+    // SAFETY: `ChunkBlock` is `MaybeUninit` bytes through and through —
+    // every bit pattern is a valid value, so the init assertion asserts
+    // nothing.
+    let mut c = Chunk(unsafe { Box::new_uninit_slice(cap / ALIGN).assume_init() });
     #[cfg(debug_assertions)]
     // SAFETY: `c` owns `cap` writable bytes.
     unsafe {
         core::ptr::write_bytes(c.as_mut_ptr().cast::<u8>(), 0, cap);
     }
+    debug_assert_eq!(c.as_mut_ptr().addr() % ALIGN, 0);
     c
 }
 
@@ -320,6 +352,10 @@ fn take_chunk(cap: usize) -> Chunk {
             unsafe {
                 core::ptr::write_bytes(c.as_mut_ptr().cast::<u8>(), 0, cap);
             }
+            // The base guarantee holds for POOLED chunks by the same
+            // type-level fact as fresh ones (s101); the assertion pins
+            // reuse to it all the same.
+            debug_assert_eq!(c.as_mut_ptr().addr() % ALIGN, 0);
             c
         }
         None => new_chunk(cap),
@@ -668,6 +704,28 @@ mod tests {
     // runs its tests on parallel threads — so no assertion on it belongs
     // here. Its litmus is `tests/region_containers.rs`, one test alone
     // in its own process, where `before == after` is exact.
+
+    /// s101: the base guarantee is the TYPE's, not the allocator's.
+    /// Under the old `Box<[MaybeUninit<u8>]>` base (formal Layout
+    /// alignment 1) the const half of this test did not exist to
+    /// fail, and the runtime half held only by the host allocator's
+    /// habit; `ChunkBlock`'s `repr(align(16))` is what turns every
+    /// 16-grained grant into a 16-ALIGNED pointer by construction.
+    #[test]
+    fn chunk_bases_are_formally_aligned() {
+        const { assert!(core::mem::align_of::<ChunkBlock>() == ALIGN) };
+        const { assert!(core::mem::size_of::<ChunkBlock>() == ALIGN) };
+        // Live, across every allocation path: fresh ladder rungs, the
+        // oversize exact chunk, and pooled reuse.
+        for cap in [CHUNK_MIN, CHUNK_MIN * 2, CHUNK_MAX, CHUNK_MAX * 3] {
+            let mut c = new_chunk(cap);
+            assert_eq!(c.as_mut_ptr().addr() % ALIGN, 0);
+            assert_eq!(c.len(), cap);
+        }
+        POOLS.with(|p| retire_chunk_into(&mut p.borrow_mut().chunks, new_chunk(CHUNK_MIN)));
+        let mut pooled = take_chunk(CHUNK_MIN);
+        assert_eq!(pooled.as_mut_ptr().addr() % ALIGN, 0);
+    }
 
     #[test]
     fn trap_names_cover_the_vocabulary() {

@@ -1173,3 +1173,40 @@ metadata) and nothing licenses cross-iteration window reuse. Backend/
 metadata contract input: an alignment fact for runtime allocations
 (provable in wolf_rt), plus whatever the vectorizer needs to carry
 windows. Diagnosis only, per the lane's directive.
+
+## G9 — s101: alignment is a fact, and it was not the licensor (2026-08-21)
+
+The guarantee first: the chunk base was `Box<[MaybeUninit<u8>]>` —
+formal `Layout` alignment ONE — so the `align 16` the LLVM tier has
+claimed on `__wolf_rt_region_alloc` results since report 10 delta 2
+was resting on the host allocator's habit. `ChunkBlock`
+(`repr(align(16))`, `wolf_rt/src/native.rs`) makes the base guarantee
+the type's own layout, on every path: fresh ladder rungs, the
+oversize exact chunk, pooled reuse, and str's ambient arena (all
+capacity flows through `new_chunk`; enumerated and asserted in
+`chunk_bases_are_formally_aligned`). The claim shipped in c09; the
+guarantee shipped today.
+
+Then the fact crossed the boundary: a Header-role ptr load whose
+every transitive use is element-address material carries
+`!align !{i64 16}` on its VALUE (`Fx::index_aligned_buffers`,
+use-directed and fail-closed — a vtable slot's `call.ind`-callee use,
+a channel handle's call-argument use, and any branch-edge crossing
+all drop the claim; `llvm_goldens::llvm_align_facts` pins one claim
+and two drops, `align16_min` in the vectorization witnesses pins the
+kernel end-to-end at floor 1, observed 6).
+
+**The measured outcome (target 3, measured-not-mechanism): alignment
+was NOT the 25% licensor.** The fact moved the shape — the stencil
+fn's unaligned vector ops went 14 → 8; the +0x10 window load is now
+`movdqa` and is REUSED into both output vectors; two loads folded
+into `paddq` memory operands — but the loop still performs 5 loads +
+2 stores per 4 outputs, before and after, and the ratio did not move
+(0.781x at load 8–10 vs run four's ritual 0.758x; loaded-host, noise
+band). clang's ~2 aligned loads per 4 outputs come from carrying
+windows ACROSS iterations, which no amount of alignment metadata
+licenses. The residue is named with this disassembly and handed to
+s102's territory: cross-iteration window carry (loop-carried vector
+reuse), the same reuse question its final-value/relational targets
+already own. alias_daxpy 0.955x and list_alloc 6.68x measured
+either way, no movement outside noise (same conditions).

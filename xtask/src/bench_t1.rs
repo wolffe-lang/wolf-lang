@@ -1672,8 +1672,31 @@ pub fn bench_gates() -> ExitCode {
             }
         }
         let ll = dir.join(format!("{}.ll", k.name));
-        if emit(&kdir.join("kernel.lu"), &ll, true).is_some()
-            && let Some(r) = vector_witness(&[
+        if emit(&kdir.join("kernel.lu"), &ll, true).is_some() {
+            // s101 witness: the buffer-pointer alignment fact in the
+            // emitted module (`!align` on the Header-role data-field
+            // load). Deterministic for a given wolf build, so it
+            // gates: the claim silently degrading fails HERE before
+            // any wall number moves. The soundness DROPS (escape into
+            // a call, a branch edge, a call.ind callee) are pinned at
+            // the golden level (`llvm_goldens::llvm_align_facts`,
+            // `llvm_dyn_dispatch`).
+            let amin = expect["align16_min"].as_u64().unwrap_or(0) as usize;
+            if amin > 0 {
+                let text = std::fs::read_to_string(&ll).unwrap_or_default();
+                let got = text.matches("!align").count();
+                eprintln!(
+                    "bench-gates: witness {:<18} align16={got} (floor {amin})",
+                    k.name
+                );
+                if got < amin {
+                    failures.push(format!(
+                        "{}: {got} `!align` buffer-pointer claim(s) in the emitted IR,                          floor is {amin} — the s101 alignment fact degraded",
+                        k.name
+                    ));
+                }
+            }
+            if let Some(r) = vector_witness(&[
                 "-x",
                 "ir",
                 ll.to_str().expect("utf8 path"),
@@ -1683,20 +1706,19 @@ pub fn bench_gates() -> ExitCode {
                 "-c",
                 "-o",
                 "/dev/null",
-            ])
-        {
-            let got = t1::count_vectorized_loops(&r);
-            let min = expect["wolf_min"].as_u64().unwrap_or(0) as usize;
-            eprintln!(
-                "bench-gates: witness {:<18} wolf={got} (floor {min})",
-                k.name
-            );
-            if got < min {
-                failures.push(format!(
-                    "{}: wolf vectorized {got} loop(s), floor is {min} — a loop that used to \
-                     vectorize stopped",
+            ]) {
+                let got = t1::count_vectorized_loops(&r);
+                let min = expect["wolf_min"].as_u64().unwrap_or(0) as usize;
+                eprintln!(
+                    "bench-gates: witness {:<18} wolf={got} (floor {min})",
                     k.name
-                ));
+                );
+                if got < min {
+                    failures.push(format!(
+                        "{}: wolf vectorized {got} loop(s), floor is {min} — a loop that used                          to vectorize stopped",
+                        k.name
+                    ));
+                }
             }
         }
     }

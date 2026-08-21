@@ -1,0 +1,51 @@
+; s101: the buffer-pointer alignment fact, and its drops. A List's
+; element buffer is a 16-grained grant off a chunk base whose
+; 16-alignment is the runtime chunk type's own layout (ChunkBlock,
+; repr(align(16))) — so a Header-role ptr load whose EVERY use is
+; element-address material may claim `!align !{i64 16}` on its value.
+; @sum is that shape. @leaked's load also escapes into a call (the
+; channel-handle shape) and @edge's crosses a branch edge (provenance
+; does not survive a phi) — both fail closed: same load, no claim.
+; The vtable slot load in dyn_dispatch.wir is the third drop (its use
+; is a call.ind callee), pinned by that golden staying byte-stable.
+
+fn @sink(ptr) -> i64 {
+b0(%p: ptr):
+  %z = iconst.i64 0
+  ret %z
+}
+
+fn @sum(ptr) -> i64 {
+b0(%hdr: ptr):
+  %h: mem.r0 = region.foreign 0
+  %b: mem.r1 = region.foreign 1
+  %buf = load.ptr %hdr, %h
+  %e0 = load.i64 %buf, %b
+  %one = iconst.i64 1
+  %p1 = ptr.off %buf, %one, 8
+  %e1 = load.i64 %p1, %b
+  %s = iadd.wrap %e0, %e1
+  ret %s
+}
+
+fn @leaked(ptr) -> i64 {
+b0(%hdr: ptr):
+  %h: mem.r0 = region.foreign 0
+  %b: mem.r1 = region.foreign 1
+  %buf = load.ptr %hdr, %h
+  %e0 = load.i64 %buf, %b
+  %r = call @sink(%buf)
+  %s = iadd.wrap %e0, %r
+  ret %s
+}
+
+fn @edge(ptr) -> i64 {
+b0(%hdr: ptr):
+  %h: mem.r0 = region.foreign 0
+  %b: mem.r1 = region.foreign 1
+  %buf = load.ptr %hdr, %h
+  jmp b1(%buf)
+b1(%p: ptr):
+  %e = load.i64 %p, %b
+  ret %e
+}

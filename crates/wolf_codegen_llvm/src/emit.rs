@@ -113,8 +113,8 @@ use wolf_backend::layout::{self, Layout};
 use wolf_wir::entity::EntityRef;
 use wolf_wir::facts::{DerefSize, FactKind};
 use wolf_wir::ir::{
-    Aux, Block as WBlock, Function as WFunction, Mode, Module as WModule, SigId, Value as WValue,
-    ValueDef,
+    Aux, Block as WBlock, Function as WFunction, Inst as WInst, Mode, Module as WModule, SigId,
+    Value as WValue, ValueDef,
 };
 use wolf_wir::ops::{FloatCc, ForeignRole, IntCc, Opcode, TrapKind};
 use wolf_wir::types::{TypeData, TypeId};
@@ -556,6 +556,13 @@ pub(crate) struct Fx<'a> {
     deref: HashMap<WValue, u64>,
     range: HashMap<WValue, (i128, i128)>,
     frozen: HashSet<WValue>,
+    /// Ptr-typed loads whose result is a provably 16-aligned-or-null
+    /// LIST BUFFER pointer (s101) — `!align !{i64 16}` metadata rides
+    /// the load so the vectorizer knows the BASE alignment of element
+    /// traffic (per-access `align` stays natural: element offsets are
+    /// 8-grained). Membership is use-directed and fail-closed; see
+    /// [`Fx::index_aligned_buffers`].
+    aligned_buf: HashSet<WValue>,
     /// Region index → its `!alias.scope` node id.
     region_scope: BTreeMap<u32, usize>,
     /// Region index → (`!alias.scope` LIST id, `!noalias` LIST id).
@@ -644,6 +651,7 @@ pub(crate) fn emit_function(
         trap_blocks: BTreeMap::new(),
         deref: HashMap::new(),
         range: HashMap::new(),
+        aligned_buf: HashSet::new(),
         frozen: HashSet::new(),
         region_scope: BTreeMap::new(),
         scope_lists: BTreeMap::new(),
@@ -658,6 +666,7 @@ pub(crate) fn emit_function(
         reachable: HashSet::new(),
     };
     fx.index_facts();
+    fx.index_aligned_buffers();
     fx.compute_reachable()?;
     fx.build_scopes();
     fx.run(&si)?;
@@ -688,6 +697,135 @@ impl<'a> Fx<'a> {
                 // attributes and the region scope domains; region
                 // provenance through the scope assignment below.
                 FactKind::Noalias(..) | FactKind::Region(..) => {}
+            }
+        }
+    }
+
+    /// s101: find the loads that produce LIST BUFFER pointers, whose
+    /// values the backend may claim 16-aligned (`ChunkBlock`'s
+    /// `repr(align(16))` base + 16-grained grants — the guarantee is
+    /// the runtime type's, this pass only reads the WIR shape).
+    ///
+    /// The shape, not the wish: a Header-role ptr load is NOT enough —
+    /// the Header token also threads vtable slot loads (function
+    /// pointers) and channel-adopted region handles (8-aligned boxes),
+    /// and a false alignment claim is the D44-addendum hole class. The
+    /// discriminator is USE, fail-closed: claim only when every
+    /// transitive use of the loaded value is element-address material
+    /// (a `ptr.off` base whose result is likewise so-used, or the
+    /// ADDRESS of a Buffer-role load/store), with at least one Buffer
+    /// access actually reached. A vtable fp's use is a `call.ind`
+    /// callee; a channel handle's is a call argument; a value passed
+    /// through a branch edge loses provenance — all disqualify, and
+    /// any shape this pass has never seen disqualifies by default.
+    /// (Str bytes ride the Buffer role too, but str-typed pointers
+    /// load under the BUFFER role — list-element str fields — or from
+    /// plain places, never under Header; the Header key excludes
+    /// them.)
+    fn index_aligned_buffers(&mut self) {
+        if self.cx.opts.strip_facts {
+            return;
+        }
+        // Region index -> foreign role, from the entry-rooted mints.
+        let mut roles: HashMap<u32, ForeignRole> = HashMap::new();
+        for (_, data) in self.f.insts.iter() {
+            if data.op == Opcode::RegionForeign
+                && let Aux::Int(code) = data.aux
+                && let Some(role) = ForeignRole::from_code(code)
+                && let Some(res) = self.f.vpool.get(data.results).first().copied()
+                && let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(res))
+            {
+                roles.insert(r.index() as u32, role);
+            }
+        }
+        if roles.is_empty() {
+            return;
+        }
+        // Every place a value can occur: operand lists and branch-edge
+        // argument lists. A branch-edge use disqualifies (provenance
+        // does not cross a phi), so it must be SEEN, not skipped.
+        let mut uses: HashMap<WValue, Vec<(WInst, usize)>> = HashMap::new();
+        const EDGE_USE: usize = usize::MAX;
+        for (i, data) in self.f.insts.iter() {
+            for (pos, v) in self.f.vpool.get(data.args).into_iter().enumerate() {
+                uses.entry(v).or_default().push((i, pos));
+            }
+            match data.aux {
+                Aux::Jump(bc) => {
+                    for v in self.f.vpool.get(bc.args) {
+                        uses.entry(v).or_default().push((i, EDGE_USE));
+                    }
+                }
+                Aux::Br(t, e) => {
+                    for v in self
+                        .f
+                        .vpool
+                        .get(t.args)
+                        .into_iter()
+                        .chain(self.f.vpool.get(e.args))
+                    {
+                        uses.entry(v).or_default().push((i, EDGE_USE));
+                    }
+                }
+                _ => {}
+            }
+        }
+        // `ok(v)`: every use is element-address material; returns
+        // whether any Buffer access was reached. SSA has no cycles
+        // through `ptr.off`, so plain recursion terminates.
+        fn ok(
+            f: &WFunction,
+            m: &WModule,
+            roles: &HashMap<u32, ForeignRole>,
+            uses: &HashMap<WValue, Vec<(WInst, usize)>>,
+            v: WValue,
+        ) -> Option<bool> {
+            let mut hit = false;
+            for &(u, pos) in uses.get(&v).map(Vec::as_slice).unwrap_or(&[]) {
+                if pos == usize::MAX {
+                    return None; // branch edge: provenance lost
+                }
+                let data = &f.insts[u];
+                let args = f.vpool.get(data.args);
+                let role = |tok: WValue| match m.types.get(f.value_ty(tok)) {
+                    TypeData::Mem(r) => roles.get(&(r.index() as u32)).copied(),
+                    _ => None,
+                };
+                match data.op {
+                    Opcode::Load if pos == 0 && role(args[1]) == Some(ForeignRole::Buffer) => {
+                        hit = true;
+                    }
+                    Opcode::Store if pos == 1 && role(args[2]) == Some(ForeignRole::Buffer) => {
+                        hit = true;
+                    }
+                    Opcode::PtrOff if pos == 0 => {
+                        let r = f.vpool.get(data.results)[0];
+                        hit |= ok(f, m, roles, uses, r)?;
+                    }
+                    _ => return None, // any other use: fail closed
+                }
+            }
+            Some(hit)
+        }
+        for (_, data) in self.f.insts.iter() {
+            if data.op != Opcode::Load {
+                continue;
+            }
+            let args = self.f.vpool.get(data.args);
+            let results = self.f.vpool.get(data.results);
+            if args.len() < 2 || results.is_empty() {
+                continue;
+            }
+            let res = results[0];
+            let is_hdr = match self.m.types.get(self.f.value_ty(args[1])) {
+                TypeData::Mem(r) => roles.get(&(r.index() as u32)) == Some(&ForeignRole::Header),
+                _ => false,
+            };
+            if !is_hdr || !matches!(self.m.types.get(self.f.value_ty(res)), TypeData::Ptr) {
+                continue;
+            }
+            if ok(self.f, self.m, &roles, &uses, res) == Some(true) {
+                self.aligned_buf.insert(res);
             }
         }
     }
@@ -1674,6 +1812,17 @@ impl<'a> Fx<'a> {
                     if self.is_invariant_load(args[0], args[1]) {
                         let id = self.cx.meta_node("!{}".to_string());
                         let _ = write!(meta, ", !invariant.load !{id}");
+                    }
+                    if self.aligned_buf.contains(&results[0]) {
+                        // s101: the loaded value is a list buffer
+                        // pointer — 16-aligned-or-null by the runtime
+                        // chunk type's own layout. Value metadata, not
+                        // access alignment: element offsets are only
+                        // 8-grained, but the BASE fact is what lets
+                        // the vectorizer derive alignment for widened
+                        // accesses.
+                        let id = self.cx.meta_node("!{i64 16}".to_string());
+                        let _ = write!(meta, ", !align !{id}");
                     }
                     let range = self.range_suffix(results[0], ty);
                     let t = self.tmp();
