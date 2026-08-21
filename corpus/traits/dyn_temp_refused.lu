@@ -1,0 +1,39 @@
+//! check: fail(E0810)
+//! phase: resolve
+//! conforms: ty.dyn.unsize.place
+//!
+//! D47's storage rule, refused by name: a TEMPORARY operand of an
+//! `as dyn` cast has no home — the pair's data half points AT the
+//! operand, and a struct literal dies at its expression's end. The
+//! fix the diagnostic names is the rule itself: bind it first, then
+//! cast the binding (`[mem.dyn.unsize]`).
+//!
+//! RECORDED DIVERGENCE (wolf-interp#31, the #30 protocol inverted):
+//! lupin 0.1.12 runs this program to exit 0 — the interpreter's
+//! values have homes by construction, so it is more permissive than
+//! the ruling. The surface is D47's; this pin is the standing
+//! witness until lupin enforces the place rule.
+
+trait Draw {
+    fn draw(self) -> str
+}
+
+struct Dot {
+    x: int,
+}
+
+impl Draw for Dot {
+    fn draw(self) -> str {
+        "dot"
+    }
+}
+
+fn render(d: dyn Draw) -> str {
+    d.draw()
+}
+
+fn main() -> !int {
+    let s = render(Dot { x: 7 } as dyn Draw)   // ERROR E0810: bind it first
+    print("{s}")
+    0
+}

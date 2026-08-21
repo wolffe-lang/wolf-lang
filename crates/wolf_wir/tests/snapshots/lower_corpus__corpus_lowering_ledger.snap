@@ -250,6 +250,7 @@ traits/dyn_assoc_escape.lu: not mem-clean (pre-wir rungs own it)
 traits/dyn_generic_method.lu: not mem-clean (pre-wir rungs own it)
 traits/dyn_ok.lu: lowers
 traits/dyn_self_position.lu: not mem-clean (pre-wir rungs own it)
+traits/dyn_temp_refused.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_arith.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_eq.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_missing_bound.lu: not mem-clean (pre-wir rungs own it)
