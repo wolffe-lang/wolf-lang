@@ -130,8 +130,9 @@ Notes a reader should not have to dig for. `e3_index_arith`'s Rust lane
 folds its workload (9.7e-6 ns/op) and contributes no comparison, as it has
 since s44 — the guard catches it, so the rustc geomeans are over 12
 kernels, not 13. The expert-C column exists for six kernels only.
-`a5_hoist_call`'s numbers are real but they do not measure what the kernel
-is named for (see G7 below). `alias_daxpy` losing 1.7x to `-march=native`
+`a5_hoist_call`'s table row above predates its #97 redesign (2026-08-20)
+and measured a folded loop, not the kernel's thesis; the redesigned
+kernel's numbers live in G7's closing subsection. `alias_daxpy` losing 1.7x to `-march=native`
 while tying naive C is the honest shape of family A on this host: the
 gated lane is the friendliest of the four, every time.
 
@@ -240,9 +241,52 @@ What would actually test the thesis is a kernel where the callee
 **writes** memory the caller must assume it might alias — then wolf's
 `read` mode is the only thing that licenses the hoist, and G7 is exactly
 why wolf would fail it today (containers share one buffer region, so no
-`!noalias` is claimed between two containers). That kernel does not exist
-yet; writing it is the follow-up, and until it does, family A's third
-kernel measures arithmetic. Filed with G7's other backlog item.
+`!noalias` is claimed between two containers). That kernel exists now — the
+closing subsection below.
+
+### #97 closed (2026-08-20): the callee writes memory, and the kernel measures its thesis
+
+The redesign is the one #97 prescribed. `bump` stores through a second
+container (`mut scratch`) between the two `src[0]` loads; naive C's
+pointers are laundered through volatile globals (the b3 escape idiom),
+so the store may alias `src` and clang must reload — and store — every
+iteration; expert C asserts `restrict` over the same laundered
+pointers; rustc's `&`/`&mut` and wolf's `read`/`mut` prove the
+disjointness from the signature. All four lanes agree on the sink, so
+every lane executes the same arithmetic; only what the compiler may
+prove differs. The pre-redesign gate floor `c_naive_min: 1` flips to
+0 deliberately: a naive lane that vectorizes this kernel again has
+optimized the aliasing hazard away and stopped measuring the thesis.
+
+Measured at the redesign (best-of-5 per lane, i7-10870H, **loaded
+host — sibling build lanes running; relative mechanism claims only,
+no geomean update from these numbers**):
+
+| lane | ns/op | vs naive |
+|---|---|---|
+| naive C | 0.616 | 1.000 |
+| expert C (`restrict`) | 0.354 | 1.740 |
+| rustc -O | 0.368 | 1.673 |
+| wolf --release | 1.450 | 0.425 |
+
+Three facts these numbers pin. (1) **The aliasing tax is real and now
+measured**: naive C loses 1.74x to expert C purely for lack of
+provenance, and the disassembly shows the mechanism (load src → store
+scratch → RELOAD src, per iteration). (2) **rustc lands at expert
+parity from types alone** — which is precisely the property wolf
+claims; the kernel now rewards it. (3) **wolf gets the CSE but not
+the rest**: the disassembly shows ONE `src[0]` element load per
+iteration, reordered above the scratch store and used twice — the
+cross-call CSE this section predicted wolf would FAIL is actually
+delivered (the noalias channel reached the element loads) — but the
+load is not hoisted out of the loop, the scratch value is not
+register-promoted, and the loop pays two container-header loads, two
+bounds checks and four `jo` traps per iteration. wolf's 0.42x is
+family A's honest residue (this G7 gap plus checked-arith), where the
+old 0.16x was an artifact.
+
+The s79 audit blocks in `ref.c`/`kernel.lu` are condensed into the
+new headers; the full history stays here.
 
 The original s75 diagnosis, kept because the FACT-side analysis is still
 correct — it is the kernel that was wrong, not the gap:
@@ -540,6 +584,58 @@ and frees, at 7.5. The region create/free pair is not the cost — 16
 request. This is the inlining half of G5 that s76 named, with the
 measurement fog removed: no leak, no elided baseline, no -O0 runtime, and
 a 40x gap that belongs to `push` being an opaque call per element.
+
+### 2026-08-20 — the 40x apportioned: an instruction profile, a control, and one pure waste
+
+Measured after the M2 quiet-host run put `b3_churn` at 0.046x (#89).
+Conditions: i7-10870H, LOADED host (sibling lanes running), so every
+number here is a ratio or an instruction count, not a wall-clock claim.
+Instrument: callgrind over 2 000 requests, plus a no-region control
+variant (the same kernel with `region scratch { }` replaced by a bare
+block, built from scratch — not committed; the shipped kernel is
+unchanged).
+
+**The instruction split, per request (~1 805 Ir total vs C's ~150):**
+
+| where | share | what it is |
+|---|---|---|
+| `__wolf_rt_list_push` self | 20.5% | 16 out-of-line calls, growth branch each |
+| kernel body (`_Wmain`) | 18.4% | loop, reads, checked adds |
+| `__memcpy_avx` | 11.0% | 16 per-element stack-slot copies + 2 growth copies |
+| malloc + free + calloc | 10.9% | `Box<Region>` + chunk vec, 2 allocs + 2 frees per request |
+| `__memset_avx2` | 6.1% | zeroing a 1 KiB chunk for a 264-byte need |
+| `__wolf_rt_region_alloc` + growth | ~5% | bump path + `RawVec` machinery |
+
+**The control confirms s79's call**: dropping the region pair makes the
+kernel 1.65x SLOWER (145 → 240 ns/op same host, ratio stable across
+runs), because ambient chunks ladder toward `CHUNK_MAX` = 1 MiB and
+every new chunk is `vec![0u8; cap]` — zeroed in full. The region pair
+is not the cost; it is the cheaper of the two paths through the same
+heap-backed chunk machinery.
+
+**The kernel's own comment is wrong about the runtime.** "The region
+create/free pair is a pointer bump and a pointer reset" describes the
+design (reports/01 fact 5), not `native.rs`: `region_new` heap-allocates
+a `Box<Region>`, the first `region_alloc` heap-allocates AND ZEROES a
+1 KiB chunk (`vec![0u8; cap]` — the zeroing is an artifact of safe-Rust
+construction; a bump allocator never needs zeroed memory), and
+`region_free` walks and frees every chunk. Per request that is two
+mallocs, two frees, one memset and two atomics before any element
+lands, against naive C's single tcache-hit `malloc(256)`/`free`.
+
+**Fix shapes, ranked by the profile — all out of this diagnosis's
+scope, none of them kernel work:**
+1. *Push stops being a call* (the G5 inlining half, now 31.5% of Ir
+   with its copies): an inline cap-check fast path that calls out only
+   on growth — lowering work, the exact shape G1 took for reads.
+2. *Chunks are pooled, not malloc'd* (~17% of Ir, more of the cycles):
+   a freelist of retired chunks in `wolf_rt`, no `vec![0u8]` zeroing,
+   lazy `Box`. This is what would make the kernel's comment TRUE.
+3. The body's checked adds are family E's item, not B's.
+
+The kernel measures its thesis correctly today; it is the runtime that
+does not yet do what the thesis says. No gates move on this entry — it
+is a diagnosis, not a fix.
 
 ## G3 — checked arithmetic blocks the vectorizer (family E)
 
