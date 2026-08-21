@@ -1079,8 +1079,17 @@ impl<'a> Fmt<'a> {
         inner.push(if pad { Doc::Line } else { Doc::Softline });
         for (i, e) in elems.iter().enumerate() {
             if i > 0 {
-                inner.push(Doc::text(","));
+                // A separator is printed ONLY where the source carries
+                // one. A damaged list (a recovered error node beside a
+                // real element, no comma between them) used to get a
+                // minted "," here; the reparse then read that comma as
+                // evidence of one more (missing) element, and every
+                // pass grew the list by a comma — the formatter must
+                // never invent tokens in a region the parser could not
+                // fully claim. Clean lists always carry their commas,
+                // so this changes nothing outside damage.
                 if let Some(c) = commas.get(i - 1) {
+                    inner.push(Doc::text(","));
                     self.tok_trivia_only(c, &mut inner);
                 }
                 inner.push(Doc::Line);
