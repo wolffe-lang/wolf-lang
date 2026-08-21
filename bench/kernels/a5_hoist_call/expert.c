@@ -1,11 +1,12 @@
-/* a5-hoist-call (family A), EXPERT C: the load hoisted out of the loop by
- * hand — the transform wolf's `read` mode makes legal for the compiler.
+/* a5-hoist-call (family A), EXPERT C: same laundered pointers as ref.c
+ * — the expert starts from the same information-free provenance — but
+ * asserts disjointness by hand with `restrict`, which is exactly the
+ * claim wolf's `read`/`mut` modes prove from the signature. clang may
+ * then hoist the src load and keep the scratch chain in a register:
+ * the transform the kernel is named for, written by a human.
  *
- * s79: clang performs this transform on `ref.c` too (it solves the
- * callee and hoists both loads), so the two lanes compile to the same
- * shape and measure within 3% of each other. This file is kept as the
- * statement of intent; see `ref.c`'s header for the audit and
- * bench/loss-ledger.md G7 for what testing the thesis would require.
+ * (#97 redesign; see ref.c for the history. The pre-redesign expert.c
+ * hand-hoisted a load both compilers were already deleting.)
  *
  * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
 #include <stdint.h>
@@ -13,16 +14,22 @@
 #include <stdlib.h>
 #include <time.h>
 
-static int64_t opaque(int64_t depth, int64_t x) {
-    if (depth <= 0) return x & 1023;
-    return opaque(depth - 1, x + 1) & 1023;
+static int64_t data[2] = {7, 9};
+static int64_t scr[2] = {0, 0};
+static int64_t *volatile data_p = data;
+static int64_t *volatile scr_p = scr;
+
+static int64_t bump(int64_t *restrict dst, int64_t x) {
+    dst[0] = (dst[0] + x) & 1023;
+    return dst[0];
 }
 
-static int64_t probe(const int64_t *restrict src, int64_t n) {
+static int64_t probe(const int64_t *restrict src, int64_t *restrict scratch,
+                     int64_t n) {
     int64_t acc = 0;
     const int64_t hoisted = src[0];
     for (int64_t i = 0; i < n; i++) {
-        int64_t side = opaque(1, i);
+        int64_t side = bump(scratch, i);
         acc = (acc + hoisted + hoisted + side) & 1048575;
     }
     return acc;
@@ -31,15 +38,17 @@ static int64_t probe(const int64_t *restrict src, int64_t n) {
 int main(int argc, char **argv) {
     int64_t ops = argc > 1 ? (int64_t)strtoull(argv[1], 0, 10) : 2000;
     const int64_t inner = 10000;
-    static int64_t src[2] = {7, 9};
+    const int64_t *src = data_p;
+    int64_t *scratch = scr_p;
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
     int64_t sink = 0;
-    for (int64_t k = 0; k < ops; k++) sink = (sink + probe(src, inner)) & 1048575;
+    for (int64_t k = 0; k < ops; k++)
+        sink = (sink + probe(src, scratch, inner)) & 1048575;
     clock_gettime(CLOCK_MONOTONIC, &t1);
     uint64_t ns = (uint64_t)(t1.tv_sec - t0.tv_sec) * 1000000000ull
                 + (uint64_t)(t1.tv_nsec - t0.tv_nsec);
     printf("{\"ns\":%llu,\"ops\":%lld,\"sink\":%lld}\n",
-           (unsigned long long)ns, (long long)(ops * inner), (long long)sink);
+           (unsigned long long)ns, (long long)ops, (long long)sink);
     return 0;
 }
