@@ -30,7 +30,22 @@
  * At runtime the two buffers are distinct, so every lane executes the
  * same arithmetic; only what the compiler may PROVE differs.
  *
- * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
+ * ==== #115 correction (design three = design two, counted right) ====
+ *
+ * The #97 redesign's codegen was verified correct (the disassembly
+ * shows the per-iteration store/reload cycle, ~0.57 ns/iter, and the
+ * laundering runs once, OUTSIDE the timed region) — but this file
+ * reported "ops" as the OUTER count while kernel.lu and ref.rs report
+ * ops*inner. The harness divides ns by the printed field, so the two
+ * C lanes read 10,000x slow and the gate rendered a 4537x "WIN" for
+ * wolf. Two designs failed in opposite directions; neither failure
+ * was the opacity idiom. The rule, now load-bearing in every lane:
+ * "ops" COUNTS INNER ITERATIONS. If the harness ever grows an
+ * ops-parity check across lanes (proposed in #115), this is the line
+ * it protects.
+ *
+ * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..} where
+ * ops in the JSON is argv-ops * inner (per-iteration accounting). */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,6 +90,6 @@ int main(int argc, char **argv) {
     uint64_t ns = (uint64_t)(t1.tv_sec - t0.tv_sec) * 1000000000ull
                 + (uint64_t)(t1.tv_nsec - t0.tv_nsec);
     printf("{\"ns\":%llu,\"ops\":%lld,\"sink\":%lld}\n",
-           (unsigned long long)ns, (long long)ops, (long long)sink);
+           (unsigned long long)ns, (long long)(ops * inner), (long long)sink);
     return 0;
 }

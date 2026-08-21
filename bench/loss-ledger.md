@@ -234,12 +234,12 @@ free movement: none (0.483x, 0.827x — unchanged within noise).
 
 ## G7 — buffer disjointness is a checker theorem nobody spends
 
-> **SUPERSEDED 2026-08-21 (#115):** the closing numbers below predate
-> the quiet-host M2 retry, where the redesigned kernel's C lanes ran
-> ~9,000x slower than measured here (naive 5720 ns/op, expert 3246 —
-> wolf 1.433 and rustc 0.336 both reproduce). The 4040x "WIN" it now
-> renders is an artifact; quote suite numbers ex-a5 until #115 lands a
-> third design. The one trustworthy a5 signal: wolf vs rustc 0.234x.
+> **RESOLVED 2026-08-21 (#115, design three below):** the "~9,000x
+> slower C" was never codegen — it was ops accounting. This warning's
+> own framing was the second wrong diagnosis this kernel produced;
+> the subsection at the end of G7 records all three designs and both
+> failure directions. Suite numbers stop being quoted ex-a5 at the
+> next ritual run.
 
 
 **Classification (a), new at s75, and it is family A's remaining loss.**
@@ -369,6 +369,34 @@ that matter are loaded from a header (G7) — is still consistent with the
 data but is no longer *evidenced* by it. The sentinel's job is to price
 channel decay per commit, and it can only start doing that job on a quiet
 machine. That is now the only thing standing between it and a number.
+
+### Design three (#115): design two, counted right
+
+Two designs failed in opposite directions, and neither failure was the
+opacity idiom:
+
+| design | failure | direction |
+|---|---|---|
+| 1 (pure recursion) | clang solved the closed form; every lane folded — the kernel measured nothing | flattered C |
+| 2 (#97: the callee writes memory, volatile-laundered pointers) | **codegen CORRECT** — the disassembly shows the per-iteration store/reload cycle at ~0.57 ns/iter with the laundering outside the timed region — but the C lanes printed `ops` as the OUTER count while kernel.lu/ref.rs print `ops * inner`; the harness divides ns by the printed field, so both C lanes read 10,000x slow and the gate rendered a 4537x wolf "WIN" | flattered wolf |
+| 3 | design two's kernel, with every lane counting INNER iterations — one line per C file | — |
+
+Corrected numbers (2026-08-21, loaded host — sibling lanes live;
+ratios only; the ritual run is authoritative): naive C 0.584 ns/op,
+expert 0.324, rustc 0.334, wolf 1.292 → **wolf 0.452x vs naive,
+0.259x vs rustc** — the honest class the #97 disassembly predicted
+(cross-call CSE lands; the loop hoist does not; 2 bounds checks + 4
+`jo` traps per iteration). a5 re-enters the suite as a real >10%
+loss with a named mechanism — trading a fake 4537x win for a true
+0.45x loss is the suite getting stronger.
+
+The guard this file cannot provide: the witness system pins remark
+COUNTS, not accounting. Proposed in #115's closure: an ops-parity
+check in the harness — every lane of one kernel, same argv, must
+report the same `ops` field, a structural guard against the entire
+design-two failure class. Until it exists, the rule lives in both C
+files' protocol comments: **"ops" counts inner iterations, in every
+lane.**
 
 ## G2 — HALF-CLOSED at s77: the byte view lands, the compare does not
 

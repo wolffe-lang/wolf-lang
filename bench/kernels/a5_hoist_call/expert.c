@@ -8,7 +8,10 @@
  * (#97 redesign; see ref.c for the history. The pre-redesign expert.c
  * hand-hoisted a load both compilers were already deleting.)
  *
- * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..}. */
+ * Protocol: argv[1]=ops; prints {"ns":..,"ops":..,"sink":..} where
+ * ops in the JSON is argv-ops * inner — per-iteration accounting,
+ * the #115 rule ref.c's audit block records; every lane counts the
+ * same unit or the harness's ns/op division is a lie. */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +52,6 @@ int main(int argc, char **argv) {
     uint64_t ns = (uint64_t)(t1.tv_sec - t0.tv_sec) * 1000000000ull
                 + (uint64_t)(t1.tv_nsec - t0.tv_nsec);
     printf("{\"ns\":%llu,\"ops\":%lld,\"sink\":%lld}\n",
-           (unsigned long long)ns, (long long)ops, (long long)sink);
+           (unsigned long long)ns, (long long)(ops * inner), (long long)sink);
     return 0;
 }
