@@ -147,6 +147,14 @@ pub enum CastKind {
     /// gates it to `unsafe` blocks (E1301) and records the expose
     /// fact.
     Raw,
+    /// s98 (D47) — trait-object construction: `place as dyn Trait`.
+    /// Explicit, never a coercion; the operand must denote a PLACE
+    /// (binding, field, index — a temporary has no home, E0810), and
+    /// the source type must carry the coherence-unique impl of the
+    /// dyn-safe trait (E0811). `wolf_mem` sees the cast as a lend of
+    /// the place; lowering emits the (data, vtable) pair
+    /// (`[abi.native.dyn]`).
+    Unsize,
 }
 
 /// The typed HIR of one body — minimal but real: every recorded
@@ -3991,6 +3999,64 @@ impl<'a> Checker<'a> {
                 }
                 self.vars.rollback(snap);
             }
+        }
+        // s98 (D47): trait-object construction — `place as dyn Trait`.
+        // Explicit, never a coercion (the coercion table's header rule
+        // holds); places only (a temporary has no home in the region
+        // story). Dyn-safety was checked where the `dyn` type was
+        // WRITTEN (E0508/09/10) — reused here, not re-checked.
+        if let TyKind::Dyn { module, name } = tk.clone() {
+            let tr = TraitRef {
+                module: module as usize,
+                name: name.clone(),
+            };
+            // The coherence-unique impl of the trait for the source's
+            // head — the same search dispatch lowers through.
+            let head = match self.kind_of(src_res) {
+                TyKind::Nominal { name: h, .. } => Some(h),
+                _ => None,
+            };
+            let implemented = head.as_ref().is_some_and(|h| {
+                self.sigs.impls.iter().any(|i| {
+                    i.trait_ref.as_ref() == Some(&tr)
+                        && matches!(
+                            self.sigs.table.kind(i.self_ty),
+                            TyKind::Nominal { name: n, .. } if n == h
+                        )
+                })
+            });
+            if !implemented {
+                let shown_s = self.show(src_ty);
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0811,
+                        e.span,
+                        format!("`{shown_s}` does not implement `{name}`"),
+                    )
+                    .with_label("cannot erase to this trait")
+                    .with_note(
+                        "a `dyn` cast erases a concrete type behind the                          coherence-unique impl of its trait; without that                          impl there is no vtable to build. Implement the                          trait for the type, or pass the value as itself.",
+                    ),
+                );
+                return Ok(target);
+            }
+            let place = d.expr().is_some_and(place_shaped);
+            if !place {
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0810,
+                        e.span,
+                        "a temporary has no home — bind it first".to_string(),
+                    )
+                    .with_label("this value would not outlive the cast")
+                    .with_note(format!(
+                        "the dyn pair's data half points AT the operand, so                          the operand must be a place: a binding, a field, or                          an index. Bind it first — `let home = …` — and cast                          the binding: `home as dyn {name}`.",
+                    )),
+                );
+                return Ok(target);
+            }
+            self.casts.push((e.span, src_ty, target, CastKind::Unsize));
+            return Ok(target);
         }
         // Raw-tier pointer bridges (s22, `[mem.prov.expose]`): typing
         // admits them anywhere — the pointer is inert data — and
@@ -9154,4 +9220,27 @@ fn single_ident(pat: &GreenNode, src: &[u8]) -> Option<String> {
         return Some(String::from_utf8_lossy(t.text(src)).into_owned());
     }
     None
+}
+
+/// s98 (D47's storage rule): does this expression SPELL a place — a
+/// binding or module global (path), a field of a place, an index into
+/// a place, possibly parenthesized? Syntactic on purpose: a path that
+/// names a fn item fails the impl check first (E0811 — fn types carry
+/// no trait impls), so what reaches this test is value-shaped, and the
+/// conservative reading (call results, literals, arithmetic are NOT
+/// places) is the ruling's. Deeper place truth — projections through
+/// calls, temporaries a future amendment might home — is recorded for
+/// a D47 addendum, never widened silently.
+fn place_shaped(e: &GreenNode) -> bool {
+    match e.kind {
+        SyntaxKind::ParenExpr => ParenExpr::cast(e)
+            .and_then(|p| p.expr())
+            .is_some_and(place_shaped),
+        SyntaxKind::PathExpr => true,
+        SyntaxKind::MemberExpr => MemberExpr::cast(e)
+            .and_then(|m| m.base())
+            .is_some_and(place_shaped),
+        SyntaxKind::BracketApply => e.nodes().next().is_some_and(place_shaped),
+        _ => false,
+    }
 }

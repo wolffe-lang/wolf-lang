@@ -174,3 +174,39 @@ fn e0004_float_exponent_member() {
         "fn main() -> !int {\n    let x = 1.e5\n    let _ = x\n    0\n}\n",
     );
 }
+
+#[test]
+fn e0810_dyn_cast_of_a_temporary() {
+    // s98 (D47's storage rule): the pair's data half points AT the
+    // operand, so a temporary — here a struct literal — has no home
+    // and the cast refuses, naming the fix (bind it first).
+    snap_one(
+        "e0810_dyn_cast_of_a_temporary",
+        "trait Draw {\n    fn draw(self) -> str\n}\n\
+         struct Dot { x: int }\n\
+         impl Draw for Dot { fn draw(self) -> str { \"dot\" } }\n\
+         fn render(d: dyn Draw) -> str { d.draw() }\n\
+         fn main() -> !int {\n    \
+             let s = render(Dot { x: 7 } as dyn Draw)\n    \
+             print(\"{s}\")\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e0811_dyn_cast_without_an_impl() {
+    // s98: the vtable is built FROM the coherence-unique impl; a type
+    // with no impl of the trait has nothing to erase behind.
+    snap_one(
+        "e0811_dyn_cast_without_an_impl",
+        "trait Draw {\n    fn draw(self) -> str\n}\n\
+         struct Dot { x: int }\n\
+         fn main() -> !int {\n    \
+             let d = Dot { x: 7 }\n    \
+             let o = d as dyn Draw\n    \
+             print(\"{o.draw()}\")\n    \
+             0\n\
+         }\n",
+    );
+}
