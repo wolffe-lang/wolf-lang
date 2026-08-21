@@ -1116,3 +1116,60 @@ discharging checks inside already-versioned loops:
 ceiling — no ratchet move. Compile-time track green with the analysis
 running three times per release build (twice in `summarize`, once for
 minting); if that cost ever shows, fold the three into one pass-through.
+
+### G8 addendum — the residue lane reads the residues (2026-08-21)
+
+Run three (#89) first: the table above's "4 → 3" was the loaded
+reading. On ritual numbers the loss set is FOUR — a2's 1.080x TIE was
+load flattery (0.776/0.757/0.733 stability-checked; this lane measures
+0.755–0.769x locally, matching). What follows is the per-kernel
+mechanism work, disassembly-evidenced; local numbers are LOADED (load
+0.8–6.9 across sessions, interleaved A/B, ratios only).
+
+**e3 (0.492x): the checked-arithmetic story is over; the residue is a
+missing loop optimization.** The release IR's two unrolled `walk`
+loops carry NO checks (plain mul/add/and — the 9 surviving overflow
+ops are all in the argv parse). The binaries showed the real 2x:
+clang's loop body is instruction-identical to wolf's (SSE 2-wide ×4,
+same psllq/paddq shapes) but clang runs it ONCE per `walk(n,1)` —
+the second constant-trip copy is replaced by the constant `0x97580`
+(= Σ8i mod 2^20 for n=100000, verified). Exit-value replacement wins
+a pass-ordering race against vectorization for one copy on clang;
+wolf folds neither. `nsw` on the hot arithmetic tested NEGATIVE under
+opt-20's O3 (the fold is not unlocked by wrap-flag hygiene alone).
+The fix is mid-end machinery wolf does not have: final-value
+replacement for constant-trip pure reductions, or loop-region CSE
+(the two copies are identical pure loops over identical inputs).
+Contract input, not a rangeopt patch.
+
+**d2 (~0.86x): the boundary-probe theory half-dies under objdump.**
+The probes' mask-compare halves are LOAD-FUSED — the probe's `movzbl`
+feeds the first needle compare, so the byte is loaded either way and
+the mask test rides free. An experiment minting byte-range facts from
+provably-ASCII str storage (literal `data.addr` bytes + a
+`__wolf_rt_str_repeat` transfer; 7 facts minted, audited, one probe's
+mask folded) measured **–12% locally, consistently, interleaved** —
+identical work, one instruction SHORTER, a layout lottery — and is
+PARKED (patch preserved with the lane's report), expected value ≈ 0.
+What actually remains per position, wolf vs C's scalar loop (C is
+deliberately not strstr, per protocol.md): the `[mem.str.get]`
+boundary SKELETON — the `i == 0` / `i+5 == len` edge tests, ~4
+instructions + 2 branches C does not pay. Those are RELATIONAL facts
+(`1 <= i`, `i+5 <= len` off the loop guard `i <= last`), the a2
+versioner's own shape — the honest follow-on, in rangeopt territory,
+NOT a byte-fact client. One general precision fix landed en route:
+`band` now bounds by `min(hi(x), mask)` for non-negative operands
+(the probe interval [0,127] vs 128 decides where mask-only [0,192]
+cannot); no in-tree consumer moves today, the unit test pins the rule.
+
+**a2 (~0.76x): post-vectorization, the gap is memory-shape, not
+checks.** Both loops vectorize at SSE 2-wide. clang's stencil body
+carries the overlapping windows in REGISTERS across iterations
+(movdqa, ~2 aligned loads per 4 outputs); wolf's reloads five
+UNALIGNED windows (movdqu ×5 + 2 stores per 4 outputs) — memory-port
+pressure is the 25%. Root: the WIR→LLVM boundary advertises `align 8`
+only (List buffers are allocator-aligned ≥16 in fact, unproven in
+metadata) and nothing licenses cross-iteration window reuse. Backend/
+metadata contract input: an alignment fact for runtime allocations
+(provable in wolf_rt), plus whatever the vectorizer needs to carry
+windows. Diagnosis only, per the lane's directive.

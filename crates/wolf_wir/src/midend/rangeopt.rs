@@ -935,11 +935,30 @@ impl<'a> RangeCx<'a> {
                 ((a.0 - b.1).clamp(tb.0, tb.1), (a.1 - b.0).clamp(tb.0, tb.1))
             }
             Opcode::Band => {
-                // x & mask with a non-negative constant mask.
-                let mask = analysis::const_int(self.f, args[0])
-                    .or_else(|| analysis::const_int(self.f, args[1]));
+                // x & mask with a non-negative constant mask. AND
+                // cannot increase a non-negative operand, so when the
+                // other side's range is known non-negative the result
+                // is bounded by BOTH halves: min(hi(x), mask). This is
+                // what lets a byte proven < 128 decide the UTF-8
+                // continuation probe `(b & 192) != 128` — [0,127]
+                // against 128 is disjoint where [0,192] is not.
+                let (c0, c1) = (
+                    analysis::const_int(self.f, args[0]),
+                    analysis::const_int(self.f, args[1]),
+                );
+                let (mask, other_ix) = match (c0, c1) {
+                    (Some(m), _) => (Some(m), 1),
+                    (_, Some(m)) => (Some(m), 0),
+                    _ => (None, 0),
+                };
                 match mask {
-                    Some(m) if m >= 0 => (0, m as i128),
+                    Some(m) if m >= 0 => {
+                        let hi = ar(self, other_ix)
+                            .filter(|r| r.0 >= 0)
+                            .map(|r| r.1.min(m as i128))
+                            .unwrap_or(m as i128);
+                        (0, hi)
+                    }
                     _ => tb,
                 }
             }
