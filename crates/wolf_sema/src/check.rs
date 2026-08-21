@@ -5336,6 +5336,60 @@ impl<'a> Checker<'a> {
             if self.lookup_local(&name).is_none() && name == "channel" {
                 return self.call_channel_ctor(b, e, d.args());
             }
+            // #111: explicit generic application — `pick[int](xs, 0)`.
+            // The bracket args are TYPES, one per generic parameter in
+            // declaration order; they seed the same instantiation the
+            // arguments would have solved, so this is a spelling, not
+            // a second call mechanism. `[]` stays indexing for every
+            // head that is a value — this arm fires only for a name
+            // that resolves to a generic fn item and is not a local.
+            if self.lookup_local(&name).is_none()
+                && let Some((fmodule, fname)) = self.named_fn_target(&name)
+                && let Some(ItemSig::Fn(sig)) = self.sigs.get(fmodule, &fname).cloned()
+                && !sig.generics.is_empty()
+            {
+                let arg_nodes: Vec<&GreenNode> = b
+                    .args()
+                    .into_iter()
+                    .flat_map(|a| a.args())
+                    .filter_map(Arg::value)
+                    .collect();
+                if arg_nodes.len() != sig.generics.len() {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0812,
+                            callee.span,
+                            format!(
+                                "`{fname}` takes {} type argument(s), not {}",
+                                sig.generics.len(),
+                                arg_nodes.len()
+                            ),
+                        )
+                        .with_label("in this explicit application")
+                        .with_secondary(sig.name_span, "the generics are declared here"),
+                    );
+                    return Ok(self.error_ty());
+                }
+                let mut tys = Vec::with_capacity(arg_nodes.len());
+                for (i, node) in arg_nodes.iter().enumerate() {
+                    let Some(t) = self.type_from_bracket_arg(node) else {
+                        self.diags.push(
+                            Diagnostic::error(
+                                codes::E0812,
+                                node.span,
+                                format!(
+                                    "the argument for `{}` must be a type",
+                                    sig.generics[i].name
+                                ),
+                            )
+                            .with_label("not a type"),
+                        );
+                        return Ok(self.error_ty());
+                    };
+                    tys.push(t);
+                }
+                return self.call_by_sig(&fname, &sig, e, d.args(), Some(&tys));
+            }
         }
         // Otherwise: call through the callee's type (closures, fn-typed
         // locals/fields, higher-order parameters).
@@ -6123,7 +6177,7 @@ impl<'a> Checker<'a> {
         args: Option<ArgList<'_>>,
     ) -> R<TyId> {
         match self.sigs.get(module, name).cloned() {
-            Some(ItemSig::Fn(sig)) => self.call_by_sig(name, &sig, e, args),
+            Some(ItemSig::Fn(sig)) => self.call_by_sig(name, &sig, e, args, None),
             Some(
                 ItemSig::Struct(_)
                 | ItemSig::Enum { .. }
@@ -6174,6 +6228,7 @@ impl<'a> Checker<'a> {
         sig: &FnSig,
         e: &GreenNode,
         args: Option<ArgList<'_>>,
+        explicit: Option<&[TyId]>,
     ) -> R<TyId> {
         // A call to a `comptime fn` from runtime code is a root
         // comptime site: the ctfe pass evaluates it (D29, s16).
@@ -6196,8 +6251,19 @@ impl<'a> Checker<'a> {
         // are checked against the bounds only (never the callee's
         // body — the golden rule made that impossible to need).
         let mut map: BTreeMap<String, TyId> = BTreeMap::new();
-        for g in &sig.generics {
+        for (i, g) in sig.generics.iter().enumerate() {
             let v = self.fresh(NumKind::Any, e.span);
+            // #111: an explicit application (`pick[int](…)`) SEEDS the
+            // existential with the written type, in declaration order.
+            // The arguments then check against the pinned solution and
+            // the bounds see it exactly as an inferred one — a
+            // spelling for the same instantiation, never a second
+            // mechanism.
+            if let Some(tys) = explicit
+                && let Some(&t) = tys.get(i)
+            {
+                let _ = unify(&mut self.lo.table, &mut self.vars, v, t);
+            }
             map.insert(g.name.clone(), v);
         }
         let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
@@ -6568,7 +6634,13 @@ impl<'a> Checker<'a> {
                         .cloned()
                         .expect("found above");
                     let label = format!("{tyname}.{mname}");
-                    return Ok(Some(self.call_by_sig(&label, &method.sig, e, args)?));
+                    return Ok(Some(self.call_by_sig(
+                        &label,
+                        &method.sig,
+                        e,
+                        args,
+                        None,
+                    )?));
                 }
                 if self.find_inherent_impl(self_ty, &mname, true).is_some() {
                     self.diags.push(
