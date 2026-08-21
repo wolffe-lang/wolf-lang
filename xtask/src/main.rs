@@ -793,9 +793,28 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// new `traits/dyn_temp_refused.lu` is `rejected` (E0810 fail-pin,
 /// lupin divergence recorded as wolf-interp#31) and sits outside
 /// every run count.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 144), ("native", 153), ("release", 153)];
+/// Ratcheted by #12 over 280 entries: the checked executor learned
+/// the dispatch family, and the s98 retreat's restoration
+/// (144 → 145 predicted) MEASURED at 144 → **153** — nine files, not
+/// one, because the retreat's file was only the youngest member of
+/// the family the executor refused. Trait dispatch reads the s17
+/// record (impl override, then trait default with `Self` carried
+/// per-frame); qualified calls key the record's own method name (the
+/// dotted callee was the miss); fn VALUES land (`Value::Fn`, the
+/// s95/s97 twin — hof_tail and inferred_private execute); `dyn`
+/// dispatch reads the concrete type the D47 cast stamped on the
+/// value; generic bodies bind their rigids at the call site from the
+/// caller's typed args (the machine's monomorphization). all-three
+/// 127 → **136** — every mover already ran on both native tiers.
+/// union holds 170: the checked lane joined files others held, the
+/// mirror of s96's move. One divergence found and FIXED en route:
+/// the trait-impl index was overwriting the inherent one, so
+/// `d.speak()` answered the trait — ty.method.order's witness
+/// (`method_inherent.lu`) now prints `woof` then `spoken 7`,
+/// byte-identical to lupin.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 153), ("native", 153), ("release", 153)];
 const UNION_FLOOR: usize = 170;
-const ALL_THREE_FLOOR: usize = 127;
+const ALL_THREE_FLOOR: usize = 136;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
