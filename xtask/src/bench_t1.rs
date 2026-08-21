@@ -201,6 +201,12 @@ struct Reading {
     /// result, and that can only be checked against the total.
     ns_total: f64,
     sink: String,
+    /// The work count the lane reported — retained for the parity
+    /// check below. #115's class: a5's C lanes printed the OUTER count
+    /// while every other lane printed ops*inner, under-reporting work
+    /// 10,000x and rendering a 4537x "win". Every lane of one kernel,
+    /// same argv, must report the same ops.
+    ops: f64,
 }
 
 /// Run one lane once under one layout. `None` on any failure — a lane
@@ -237,6 +243,7 @@ fn sample(b: &Built, l: &Layout, setarch: bool) -> Option<Reading> {
     Some(Reading {
         ns_per_op: ns / ops,
         ns_total: ns,
+        ops,
         sink,
     })
 }
@@ -665,14 +672,36 @@ pub fn run(runs: u32, only: Option<&str>, commit: &str) -> Option<Vec<serde_json
         // is worse than no number. This check is the reason every kernel
         // reports a `sink`.
         let mut sinks: Vec<(&str, String)> = Vec::new();
+        let mut ops_seen: Vec<(&str, f64)> = Vec::new();
         for b in &lanes {
             match sample(b, &LAYOUTS[0], setarch) {
-                Some(r) => sinks.push((b.lane, r.sink)),
+                Some(r) => {
+                    ops_seen.push((b.lane, r.ops));
+                    sinks.push((b.lane, r.sink));
+                }
                 None => {
                     eprintln!("t1: {}: lane {} would not run", k.name, b.lane);
                     return None;
                 }
             }
+        }
+        // Work accounting second: same inputs, same WORK COUNT. A lane
+        // that under-reports ops manufactures a per-op speedup out of
+        // arithmetic (#115: a5's C lanes, 10,000x). Exact equality —
+        // ops are integer counts.
+        let (_, ops_ref) = ops_seen[0];
+        let ops_divergent: Vec<String> = ops_seen[1..]
+            .iter()
+            .filter(|(_, o)| *o != ops_ref)
+            .map(|(l, o)| format!("{l}={o}"))
+            .collect();
+        if !ops_divergent.is_empty() {
+            eprintln!(
+                "t1: {}: WORK-ACCOUNTING DIVERGENCE — wolf ops={ops_ref}, {}                  (every lane must report the same ops; ops counts inner                  iterations, in every lane)",
+                k.name,
+                ops_divergent.join(", ")
+            );
+            return None;
         }
         let (_, reference) = &sinks[0];
         let mut divergent = Vec::new();
