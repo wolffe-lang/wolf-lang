@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 365
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -64,6 +65,8 @@ fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
 fs/roundtrip.lu: lowers
 generics/box_method.lu: lowers
+generics/explicit_apply.lu: lowers
+generics/explicit_apply_arity.lu: not mem-clean (pre-wir rungs own it)
 generics/first_of_list.lu: lowers
 generics/hundred_shapes.lu: lowers
 generics/pair_of.lu: lowers
@@ -71,7 +74,7 @@ generics/two_instances.lu: lowers
 generics/two_level_raise.lu: lowers
 grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
-grammar/brackets_generic_call.lu: not mem-clean (pre-wir rungs own it)
+grammar/brackets_generic_call.lu: lowers
 grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
 grammar/else_chain.lu: lowers
@@ -254,6 +257,8 @@ traits/dyn_temp_refused.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_arith.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_eq.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_missing_bound.lu: not mem-clean (pre-wir rungs own it)
+traits/prim_impl.lu: lowers
+traits/prim_impl_orphan/main.lu: not mem-clean (pre-wir rungs own it)
 traits/show_bound.lu: lowers
 typecheck/ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
@@ -264,6 +269,7 @@ typecheck/cast_set.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/field_typo.lu: not mem-clean (pre-wir rungs own it)
 typecheck/float_nan_cmp.lu: lowers
+typecheck/fn_value_import/main.lu: lowers
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
@@ -281,4 +287,5 @@ typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
+typecheck/variant_value/main.lu: lowers
 wordcount.lu: not mem-clean (pre-wir rungs own it)

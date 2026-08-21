@@ -3,5 +3,5 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 assertion_line: 58
 expression: dump
 ---
-FnDecl 386..425 name=first body=Block
-FnDecl 427..664 name=main body=Block
+FnDecl 558..621 name=pick body=Block
+FnDecl 623..746 name=main body=Block

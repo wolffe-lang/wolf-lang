@@ -1,0 +1,15 @@
+//! member: true
+//!
+//! The trait's home module. D49 applies D28's orphan rule to
+//! builtins: a primitive has no home module, so only THIS module —
+//! the trait's — may implement `Marked` for a primitive.
+
+/// A marker trait.
+pub trait Marked {
+    fn mark(x: Self) -> str
+}
+
+/// The trait's own blessed impl-holder: `ext` may implement its own
+/// trait for a primitive — that is exactly what D49 permits and the
+/// importer may not.
+pub fn marker_name() -> str { "Marked" }

@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="yes\n")
+//! phase: run
+//! conforms: ty.fn.value.qualified
+//!
+//! A qualified module fn as a VALUE (#116): `txt.is_wolf` in value
+//! position lowers exactly like the bare-name read s95 built —
+//! func.addr of the qualified callee — and the call through the
+//! value is s97's call.ind. The base has no recorded type on
+//! purpose: sema types the member THROUGH the namespace, and the
+//! lowering now reads the same binding instead of refusing. The
+//! runtime-built argument keeps CTFE from folding the whole call
+//! (measured: a literal argument folds, and the witness would
+//! prove nothing).
+
+use txt
+
+fn main() -> !int {
+    var w = "wo"
+    w = "{w}lf"
+    let f = txt.is_wolf
+    if f(w) { print("yes") } else { return 1 }
+    0
+}

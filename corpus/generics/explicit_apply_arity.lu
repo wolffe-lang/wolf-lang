@@ -1,0 +1,19 @@
+//! check: fail(E0812)
+//! phase: resolve
+//! conforms: generics.apply.explicit
+//!
+//! The explicit form is one type per generic parameter, in
+//! declaration order (#111): `pick` declares one parameter, so two
+//! bracket types are refused by name — E0812 says whose count is
+//! wrong and where the generics are declared.
+
+fn pick[T](xs: List[T], i: int) -> T ! {none} {
+    xs.get(i)
+}
+
+fn main() -> !int {
+    var a = List[int]()
+    (mut a).push(7)
+    let v = pick[int, str](a, 0) else 0
+    if v == 7 { 0 } else { 1 }
+}

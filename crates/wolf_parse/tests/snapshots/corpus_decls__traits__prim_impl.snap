@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+TraitDecl 606..648 name=Text
+  FnDecl 623..647 name=text
+ImplDecl 650..707 path=Text for=int
+  FnDecl 674..705 name=text body=Block
+FnDecl 709..779 name=main body=Block
