@@ -1,0 +1,21 @@
+//! member: true
+//!
+//! The exporting module: the enum, its impl, and a constructor —
+//! the #23 shape, bare variants matched inside the module's OWN
+//! impl and a payload-free variant returned as a bare VALUE.
+
+/// A hue.
+pub enum Hue { Red, Blue }
+
+pub impl Hue {
+    /// The hue's lowercase name.
+    pub fn name(self) -> str {
+        match self {
+            Red => "red",
+            Blue => "blue",
+        }
+    }
+}
+
+/// The favorite hue.
+pub fn favorite() -> Hue { Hue.Red }

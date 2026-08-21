@@ -1126,6 +1126,19 @@ object is used; the checker lends the place to the pair and refuses
 writes that would pull the home out from under it.
 "#);
 
+code!(E0812, "explicit type arguments do not fit the function", r#"
+An explicit generic application (`pick[int](xs, 0)`) supplies one type
+per generic parameter, in declaration order, and each bracket argument
+must be a type. This code fires when the count is wrong or when a
+bracket argument is not a type at all. Write one type per parameter:
+
+    fn pick[T](xs: List[T], i: int) -> T ! {none} { xs.get(i) }
+    let v = pick[int](xs, 0)?
+
+When the arguments alone already pin every parameter, the explicit
+form is optional — `pick(xs, 0)` infers the same instantiation.
+"#);
+
 code!(E0811, "the type does not implement the trait it is cast to", r#"
 `v as dyn Trait` erases a concrete type behind the coherence-unique
 impl of `Trait` for that type — the vtable the object dispatches

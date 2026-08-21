@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+EnumDecl 228..254 name=Hue pub variants=2
+ImplDecl 256..428 path=Hue pub
+  FnDecl 309..426 name=name pub body=Block
+FnDecl 452..488 name=favorite pub body=Block

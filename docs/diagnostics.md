@@ -662,7 +662,7 @@ own module: `type Mine = distinct Theirs` has the same layout, casts
 freely to and from its base, starts with an empty impl set, and you
 may implement anything for it.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__coherence_orphan__main.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0504_orphan.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__coherence_orphan__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__prim_impl_orphan__main.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0504_orphan.snap
 
 ## E0505 — an impl header parameter is not covered by the impl
 
@@ -1177,6 +1177,21 @@ Only nominal types (structs, enums) carry trait impls; primitives,
 functions and other shapes cannot enter a `dyn` today.
 
 Fixtures: crates/wolf_sema/tests/snapshots/method_diagnostics__e0811_dyn_cast_without_an_impl.snap
+
+## E0812 — explicit type arguments do not fit the function
+
+An explicit generic application (`pick[int](xs, 0)`) supplies one type
+per generic parameter, in declaration order, and each bracket argument
+must be a type. This code fires when the count is wrong or when a
+bracket argument is not a type at all. Write one type per parameter:
+
+    fn pick[T](xs: List[T], i: int) -> T ! {none} { xs.get(i) }
+    let v = pick[int](xs, 0)?
+
+When the arguments alone already pin every parameter, the explicit
+form is optional — `pick(xs, 0)` infers the same instantiation.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__generics__explicit_apply_arity.snap
 
 ## E1001 — this value was moved away (or never given one) before this use
 

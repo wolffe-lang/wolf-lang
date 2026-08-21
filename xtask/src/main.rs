@@ -812,9 +812,19 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// `d.speak()` answered the trait — ty.method.order's witness
 /// (`method_inherent.lu`) now prints `woof` then `spoken 7`,
 /// byte-identical to lupin.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 153), ("native", 153), ("release", 153)];
-const UNION_FLOOR: usize = 170;
-const ALL_THREE_FLOOR: usize = 136;
+/// Ratcheted by the front-end lane (#111/#116/#23/#119, 2026-08-21):
+/// five witnesses enter at run — explicit generic application
+/// (`generics/explicit_apply`, plus `grammar/brackets_generic_call`
+/// waking from its resolve pin), a qualified module fn as a value
+/// (`typecheck/fn_value_import`), a payload-free variant as a bare
+/// value across a module boundary (`typecheck/variant_value`), and an
+/// impl on a primitive (`traits/prim_impl`). Native/release take all
+/// five (+5); the checked executor reaches three of them (+3);
+/// all-three follows the checked lane (+3). Counts measured by this
+/// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 156), ("native", 158), ("release", 158)];
+const UNION_FLOOR: usize = 175;
+const ALL_THREE_FLOOR: usize = 139;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

@@ -1,0 +1,10 @@
+//! member: true
+//!
+//! The exporting module: two plain predicates, so the importer can
+//! take one as a VALUE and call the other by name.
+
+/// True when the text is exactly "wolf".
+pub fn is_wolf(s: str) -> bool { s == "wolf" }
+
+/// True when the text is empty.
+pub fn is_empty(s: str) -> bool { s == "" }

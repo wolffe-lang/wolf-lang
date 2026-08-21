@@ -1,7 +1,11 @@
-//! check: pass
-//! phase: resolve
-//! conforms: gram.amb.brackets
-//! Same postfix shape as indexing: `f[int]()` — resolved in sema.
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.amb.brackets, generics.apply.explicit
+//! Same postfix shape as indexing: `f[int]()` — resolved in sema,
+//! and since #111 the explicit application COMPILES: the bracket
+//! types seed the same instantiation the arguments would have
+//! solved, on every lane, beside the indexing this production
+//! shares its grammar with.
 
 fn first[T](xs: List[T]) -> T { xs[0] }
 

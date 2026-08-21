@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="red\n")
+//! phase: run
+//! conforms: ty.enum.variant.value, ty.method.order
+//!
+//! A payload-free variant as a bare VALUE (#23's surviving leg):
+//! `Hue.Red` outside call position is the tag — the same encoding
+//! call-form construction emits — and it crosses a module boundary:
+//! the imported module's own match arms, its impl's method, and the
+//! constructor all execute at the importer. What #23 originally
+//! filed (variant patterns, method dispatch, enum-returning calls)
+//! is witnessed here end to end; the resolver leg the 2026-08-21
+//! sweep described did not reproduce at c9da6d9 — the wall was this
+//! value form, at lowering.
+
+use paint
+
+fn main() -> !int {
+    let h = paint.favorite()
+    print(h.name())
+    0
+}

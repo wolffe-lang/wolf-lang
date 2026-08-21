@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="7\n")
+//! phase: run
+//! conforms: generics.mono, generics.brackets, generics.apply.explicit
+//!
+//! Explicit generic application (#111): `pick[int](a, 0)` spells the
+//! instantiation the arguments would have solved — the bracket types
+//! SEED the same existentials call-site inference uses, so this is a
+//! spelling, not a second mechanism, and the WIR carries the same
+//! `pick.mono.int` either way. The return-position case is the one
+//! inference alone cannot always pin; the explicit form is its
+//! escape hatch.
+
+fn pick[T](xs: List[T], i: int) -> T ! {none} {
+    xs.get(i)
+}
+
+fn main() -> !int {
+    var a = List[int]()
+    (mut a).push(7)
+    let v = pick[int](a, 0) else 0
+    print("{v}")
+    0
+}

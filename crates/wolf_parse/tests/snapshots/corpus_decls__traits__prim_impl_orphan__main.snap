@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+UseDecl 505..520 path=ext.Marked
+ImplDecl 521..580 path=Marked for=int
+  FnDecl 547..578 name=mark body=Block
+FnDecl 582..668 name=main body=Block

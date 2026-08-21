@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+TraitDecl 234..282 name=Marked pub
+  FnDecl 257..281 name=mark
+FnDecl 446..486 name=marker_name pub body=Block

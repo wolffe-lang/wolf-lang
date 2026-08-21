@@ -1,0 +1,21 @@
+//! check: fail(E0504)
+//! phase: resolve
+//! conforms: ty.trait.coherence, ty.impl.prim
+//!
+//! The orphan rule on builtins (#119, D49): a primitive has no home
+//! module, so an impl of an IMPORTED trait for `int` is an orphan —
+//! neither the trait nor the type lives here — and E0504 refuses it
+//! with the adapter escape in the note. The rule needed no new
+//! machinery: `self_home` is None for a prim, so the existing D28
+//! check demands the trait's module, which is exactly D49's ruling.
+
+use ext.Marked
+
+impl Marked for int {
+    fn mark(x: Self) -> str { "m" }
+}
+
+fn main() -> !int {
+    let n: int = 3
+    if Marked.mark(n) == "m" { 0 } else { 1 }
+}

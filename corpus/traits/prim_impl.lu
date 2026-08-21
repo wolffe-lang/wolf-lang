@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="n\n")
+//! phase: run
+//! conforms: ty.trait.qualified-call, ty.impl.prim
+//!
+//! An impl on a primitive (#119, D49's substrate): `impl Text for
+//! int` mangles as `int.Text.text` — the prim's spelling rides the
+//! same grammar nominals use — and the qualified call dispatches
+//! through the coherence-unique impl. The literal leg stays with
+//! D49's implementing campaign: `Text.text(7)` still types the
+//! literal `i32`, so the witness binds through `int` first; literal
+//! type-adoption in impl-bound positions retires that workaround
+//! when the bridge lands.
+
+trait Text {
+    fn text(x: Self) -> str
+}
+
+impl Text for int {
+    fn text(x: Self) -> str { "n" }
+}
+
+fn main() -> !int {
+    let n: int = 7
+    print(Text.text(n))
+    0
+}
