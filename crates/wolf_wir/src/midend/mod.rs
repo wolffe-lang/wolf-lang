@@ -495,7 +495,17 @@ fn optimize_one(
     rangeopt::run(m, fid, ve, th, stats)?;
     sink::run(m, fid, ve, th, stats)?;
     coalesce::run(m, fid, ve, th, stats)?;
-    licm::run(m, fid, ve, stats)?;
+    let hoisted = licm::run(m, fid, ve, stats)?;
+    if hoisted {
+        // A hoisted invariant is exactly what the versioner asks for
+        // (s102): a bounds guard whose condition licm just moved out
+        // of the loop is a versioning candidate rangeopt could not
+        // see on its first visit — the guard's value was defined
+        // in-loop then. One re-visit, only when licm changed
+        // something (D4: the pipeline stays a fixed count of passes
+        // per shape, not a wall-clock fixpoint).
+        rangeopt::revisit(m, fid, ve, th, stats)?;
+    }
     simplify::run(m, fid, ve, th, stats)?;
     Ok(())
 }

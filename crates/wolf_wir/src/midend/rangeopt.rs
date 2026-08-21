@@ -137,11 +137,37 @@ pub(crate) fn run(
     th: &Thresholds,
     stats: &mut OptStats,
 ) -> Result<bool, VerifyError> {
+    run_with_metrics(m, fid, verify_each, th, stats, true)
+}
+
+/// [`run`] as a REVISIT (s102): licm just hoisted something, so a
+/// guard the first visit saw as loop-defined may now be a versioning
+/// candidate. Metrics are NOT recounted — a remaining check re-seen
+/// is not a new check, and the X3 rate's denominator counts each
+/// check once, on the first visit.
+pub(crate) fn revisit(
+    m: &mut Module,
+    fid: FuncId,
+    verify_each: bool,
+    th: &Thresholds,
+    stats: &mut OptStats,
+) -> Result<bool, VerifyError> {
+    run_with_metrics(m, fid, verify_each, th, stats, false)
+}
+
+fn run_with_metrics(
+    m: &mut Module,
+    fid: FuncId,
+    verify_each: bool,
+    th: &Thresholds,
+    stats: &mut OptStats,
+    count_metrics: bool,
+) -> Result<bool, VerifyError> {
     run_managed(m, fid, "rangeopt", verify_each, |f, view, _ctx| {
         let mut changed = false;
         // Round 1: eliminate what the current ranges prove; count the
         // hot-loop candidates while we are at it.
-        let (c, remaining) = eliminate_round(f, view, stats, true);
+        let (c, remaining) = eliminate_round(f, view, stats, count_metrics);
         changed |= c;
         // Demand-driven versioning: only for candidates the direct
         // round could not prove.

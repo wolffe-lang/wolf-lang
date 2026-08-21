@@ -917,3 +917,120 @@ fn pipeline_preserves_entry_facts() {
     assert!(out.contains("fact noalias"), "{out}");
     assert!(out.contains("fact frozen"), "{out}");
 }
+
+// ------------------------------------------------ licm licensor (s102) --
+
+/// The a5 shape, reduced: a loop whose CALL stores only through its
+/// `excl.mut` parameter's object graph, while the loop's loads chain
+/// to a DIFFERENT entry parameter — the c04 disjointness theorem (G7:
+/// "a checker theorem nobody spends") licenses the hoist past both
+/// conservatism rules.
+fn licensor_src(callee_arg: &str, fact_line: &str) -> String {
+    format!(
+        "fn @sink(mut ptr, mem.r0, i64) -> i64 {{\n  \
+         fact deref %0 8 : excl.mut\n\
+         b0(%0: ptr, %1: mem.r0, %2: i64):\n  \
+         %3: mem.r2 = region.foreign 1\n  \
+         %4: mem.r1 = region.foreign 0\n  \
+         %5 = load.ptr %0, %1\n  \
+         %6 = load.ptr %5, %4\n  \
+         %7 = iconst.i64 0\n  \
+         %8 = ptr.off %6, %7, 8\n  \
+         %9 = store.i64 %2, %8, %3\n  \
+         ret %2\n\
+         }}\n\
+         fn @spin(ptr, mut ptr, mem.r0, i64) -> i64 {{\n  \
+         {fact_line}\n\
+         b0(%0: ptr, %1: ptr, %2: mem.r0, %3: i64):\n  \
+         %4: mem.r2 = region.foreign 1\n  \
+         %5: mem.r1 = region.foreign 0\n  \
+         %6 = iconst.i64 0\n  \
+         jmp b1(%6, %2, %6)\n\
+         b1(%7: i64, %8: mem.r0, %9: i64):\n  \
+         %10 = icmp.slt %7, %3\n  \
+         br %10, b2, b3\n\
+         b2:\n  \
+         %11 = load.ptr %0, %5\n  \
+         %12 = ptr.off %11, %6, 8\n  \
+         %13 = load.i64 %12, %4\n  \
+         %14, %15 = call @sink({callee_arg}, %8, %13)\n  \
+         %16 = iadd.wrap %9, %13\n  \
+         %17 = iconst.i64 1\n  \
+         %18 = iadd.wrap %7, %17\n  \
+         jmp b1(%18, %15, %16)\n\
+         b3:\n  \
+         ret %9\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn licm_licenses_a_load_past_a_disjoint_writing_callee() {
+    let src = licensor_src("%1", "fact deref %1 8 : excl.mut");
+    let (out, stats) = one_pass(&src, "licm");
+    assert!(
+        stats.loads_hoisted >= 2,
+        "the data-ptr and element loads hoist past the call: {stats}\n{out}"
+    );
+    insta::assert_snapshot!("licm_licensed_disjoint_callee", out);
+}
+
+/// The negative the theorem demands: the callee writes through the
+/// SAME chain the load reads (no exclusivity proof separates them) —
+/// nothing hoists, however invariant the load looks.
+#[test]
+fn licm_refuses_the_license_on_a_shared_root() {
+    let src = licensor_src("%0", "fact deref %1 8 : excl.mut");
+    let (_, stats) = one_pass(&src, "licm");
+    assert_eq!(
+        stats.loads_hoisted, 0,
+        "a writer through the load's own root licenses nothing: {stats}"
+    );
+}
+
+/// No exclusivity fact, no license: the same disjoint-looking shape
+/// WITHOUT `excl.mut` on the written param keeps blocking (the
+/// D44-addendum rule — no fact, no proof, no hoist).
+#[test]
+fn licm_refuses_the_license_without_the_theorem() {
+    let src = licensor_src("%1", "fact deref %1 8 : frozen.read");
+    let (_, stats) = one_pass(&src, "licm");
+    assert_eq!(
+        stats.loads_hoisted, 0,
+        "no excl.mut fact on the written param, no license: {stats}"
+    );
+}
+
+/// An EXTERNAL callee has no write set — Unknown blocks everything,
+/// exactly as before s102.
+#[test]
+fn licm_refuses_the_license_for_an_external_callee() {
+    let src = "decl @mystery(mut ptr, mem.r0, i64) -> i64\n\
+               fn @spin(ptr, mut ptr, mem.r0, i64) -> i64 {\n  \
+               fact deref %1 8 : excl.mut\n\
+               b0(%0: ptr, %1: ptr, %2: mem.r0, %3: i64):\n  \
+               %4: mem.r2 = region.foreign 1\n  \
+               %5: mem.r1 = region.foreign 0\n  \
+               %6 = iconst.i64 0\n  \
+               jmp b1(%6, %2, %6)\n\
+               b1(%7: i64, %8: mem.r0, %9: i64):\n  \
+               %10 = icmp.slt %7, %3\n  \
+               br %10, b2, b3\n\
+               b2:\n  \
+               %11 = load.ptr %0, %5\n  \
+               %12 = ptr.off %11, %6, 8\n  \
+               %13 = load.i64 %12, %4\n  \
+               %14, %15 = call @mystery(%1, %8, %13)\n  \
+               %16 = iadd.wrap %9, %13\n  \
+               %17 = iconst.i64 1\n  \
+               %18 = iadd.wrap %7, %17\n  \
+               jmp b1(%18, %15, %16)\n\
+               b3:\n  \
+               ret %9\n\
+               }\n";
+    let (_, stats) = one_pass(src, "licm");
+    assert_eq!(
+        stats.loads_hoisted, 0,
+        "an external callee's writes are unbounded: {stats}"
+    );
+}

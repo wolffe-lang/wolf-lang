@@ -121,6 +121,236 @@ pub(crate) fn foreign_roles(f: &Function, view: &ModView) -> HashMap<u32, Foreig
     out
 }
 
+/// A function's foreign WRITE SET (s102, the a5 licensor — #91's
+/// signature-propagation absorbed exactly this far): the set of its
+/// entry parameters it may store foreign storage through, or Unknown.
+///
+/// `Params(p)` is a THEOREM-BACKED claim: every store to foreign
+/// storage anywhere in this function's transitive body (through its
+/// own insts and its known callees) lands through a pointer chain
+/// rooted at one of the listed entry parameters. The chain discipline
+/// is the object graph the c04 mode theorems cover — `ptr.off` hops
+/// plus the header→data-field load (a load whose TOKEN is the foreign
+/// HEADER role): a container's header and buffer are one exclusive
+/// graph under a `mut` mode, which is exactly why E1002 refuses the
+/// same List as `mut` and `read` at one call. An element load is NOT a
+/// chain hop, deliberately: a container of views could launder a
+/// pointer to storage OUTSIDE the graph, and a store through it must
+/// stay Unknown.
+///
+/// Everything unprovable is `Unknown`: external callees (no body in
+/// the module), `call.ind` (no summary edge by design, s97), rc
+/// traffic, stores whose chain does not root at an entry param, and
+/// any op this walker has not classified. The D44-addendum rule is
+/// binding — no fact without a proof — so the default is the blocking
+/// answer, and the negative witnesses pin it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum WriteSet {
+    /// May store foreign storage only through these entry params
+    /// (indices into the entry block's parameter list).
+    Params(Vec<usize>),
+    /// No bounded write set — blocks every license.
+    Unknown,
+}
+
+/// Trace a pointer value to the entry parameter whose object graph it
+/// addresses (the s102 chain discipline above), or `None`.
+pub(crate) fn chain_root(
+    f: &Function,
+    view: &ModView,
+    foreign: &HashMap<u32, ForeignRole>,
+    mut v: Value,
+) -> Option<Value> {
+    let entry = *f.layout.first()?;
+    loop {
+        match f.values[v].def {
+            crate::ir::ValueDef::Param(b, _) => {
+                return if b == entry { Some(v) } else { None };
+            }
+            crate::ir::ValueDef::Result(inst, _) => match f.insts[inst].op {
+                Opcode::PtrOff => v = f.vpool.get(f.insts[inst].args)[0],
+                Opcode::Load => {
+                    // Two hops stay inside the exclusive graph: the
+                    // handle-slot deref (a `mut` param arrives as a
+                    // pointer to the caller's handle cell — a
+                    // NON-foreign region token, the lent slot) and the
+                    // header→data-field load (foreign HEADER role).
+                    // BUFFER-role loads are excluded deliberately:
+                    // element cells are the only cells that can hold
+                    // borrowed outside pointers today (views), and a
+                    // chain through one would launder storage the
+                    // theorem does not cover.
+                    let args = f.vpool.get(f.insts[inst].args);
+                    let &tok = args.get(1)?;
+                    match token_role(f, view, foreign, tok) {
+                        Some(ForeignRole::Header) | None => v = args[0],
+                        Some(ForeignRole::Buffer) => return None,
+                    }
+                }
+                _ => return None,
+            },
+        }
+    }
+}
+
+/// Does `param` (an entry-block parameter value) carry the c04
+/// exclusivity theorem (`fact deref %p N : excl.mut`)?
+pub(crate) fn param_excl_mut(f: &Function, param: Value) -> bool {
+    use crate::facts::{FactKind, Just, Theorem};
+    f.facts.values().any(|fd| {
+        matches!(fd.kind, FactKind::Deref(v, _) if v == param)
+            && fd.just == Just::Theorem(Theorem::ExclMut)
+    })
+}
+
+/// Compute every function's [`WriteSet`], bottom-up over the module's
+/// call graph (cycles and external callees are `Unknown`).
+pub(crate) fn write_sets(m: &Module) -> HashMap<String, WriteSet> {
+    let view = ModView {
+        types: &m.types,
+        sigs: &m.sigs,
+    };
+    let mut out: HashMap<String, WriteSet> = HashMap::new();
+    // Fixpoint by repeated sweeps (bounded by function count): a
+    // callee later in the map order resolves on the next sweep. Names
+    // resolve like the inliner's — by function name.
+    let names: HashMap<&str, &Function> = m.funcs.values().map(|f| (f.name.as_str(), f)).collect();
+    let mut changed = true;
+    let mut rounds = 0usize;
+    while changed && rounds <= m.funcs.len() {
+        changed = false;
+        rounds += 1;
+        for f in m.funcs.values() {
+            if out.contains_key(&f.name) {
+                continue;
+            }
+            match write_set_of(f, &view, &names, &out) {
+                Some(ws) => {
+                    out.insert(f.name.clone(), ws);
+                    changed = true;
+                }
+                None => {} // depends on an unresolved callee: next sweep
+            }
+        }
+    }
+    // Anything unresolved (cycles) is Unknown.
+    for f in m.funcs.values() {
+        out.entry(f.name.clone()).or_insert(WriteSet::Unknown);
+    }
+    out
+}
+
+/// One function's write set given its callees' (None = a callee in
+/// this module is not resolved yet).
+fn write_set_of(
+    f: &Function,
+    view: &ModView,
+    names: &HashMap<&str, &Function>,
+    resolved: &HashMap<String, WriteSet>,
+) -> Option<WriteSet> {
+    let foreign = foreign_roles(f, view);
+    let Some(&entry) = f.layout.first() else {
+        return Some(WriteSet::Params(Vec::new()));
+    };
+    let entry_params: Vec<Value> = f.block_params(entry);
+    let root_index = |root: Value| entry_params.iter().position(|&p| p == root);
+    let mut params: Vec<usize> = Vec::new();
+    for &b in &f.layout {
+        for &inst in &f.blocks[b].insts {
+            let op = f.insts[inst].op;
+            let args = f.vpool.get(f.insts[inst].args);
+            match op {
+                Opcode::Store => {
+                    // Only stores to FOREIGN storage concern callers;
+                    // a store through a local region token stays this
+                    // function's private business.
+                    let Some(&tok) = args.get(2) else {
+                        return Some(WriteSet::Unknown);
+                    };
+                    if token_role(f, view, &foreign, tok).is_none() {
+                        continue;
+                    }
+                    let Some(root) = chain_root(f, view, &foreign, args[1]) else {
+                        return Some(WriteSet::Unknown);
+                    };
+                    let Some(ix) = root_index(root) else {
+                        return Some(WriteSet::Unknown);
+                    };
+                    if !params.contains(&ix) {
+                        params.push(ix);
+                    }
+                }
+                Opcode::Call => {
+                    let crate::ir::Aux::Callee(ef) = f.insts[inst].aux else {
+                        return Some(WriteSet::Unknown);
+                    };
+                    let callee = f.ext_funcs[ef].name.as_str();
+                    if names.get(callee).is_none() {
+                        return Some(WriteSet::Unknown); // external
+                    }
+                    match resolved.get(callee) {
+                        None => return None, // not resolved yet
+                        Some(WriteSet::Unknown) => return Some(WriteSet::Unknown),
+                        Some(WriteSet::Params(cps)) => {
+                            for &ci in cps {
+                                let Some(&arg) = args.get(ci) else {
+                                    return Some(WriteSet::Unknown);
+                                };
+                                let Some(root) = chain_root(f, view, &foreign, arg) else {
+                                    return Some(WriteSet::Unknown);
+                                };
+                                let Some(ix) = root_index(root) else {
+                                    return Some(WriteSet::Unknown);
+                                };
+                                if !params.contains(&ix) {
+                                    params.push(ix);
+                                }
+                            }
+                        }
+                    }
+                }
+                Opcode::CallInd | Opcode::RcDup | Opcode::RcDrop => {
+                    return Some(WriteSet::Unknown);
+                }
+                _ => {
+                    // Pure ops, loads, terminators, traps, and LOCAL
+                    // region management cannot write foreign storage.
+                    // Checked arithmetic TRAPS (diverges) but never
+                    // writes — a trap is a control effect, not a store.
+                    let harmless = super::analysis::is_removable(op)
+                        || matches!(
+                            op,
+                            Opcode::IaddChk
+                                | Opcode::IsubChk
+                                | Opcode::ImulChk
+                                | Opcode::IdivChk
+                                | Opcode::IremChk
+                                | Opcode::UaddChk
+                                | Opcode::UsubChk
+                                | Opcode::UmulChk
+                                | Opcode::UdivChk
+                                | Opcode::UremChk
+                                | Opcode::Jmp
+                                | Opcode::Br
+                                | Opcode::Ret
+                                | Opcode::Trap
+                                | Opcode::RegionNew
+                                | Opcode::RegionAlloc
+                                | Opcode::RegionFree
+                                | Opcode::RegionForeign
+                                | Opcode::StackAlloc
+                        );
+                    if !harmless {
+                        return Some(WriteSet::Unknown);
+                    }
+                }
+            }
+        }
+    }
+    params.sort_unstable();
+    Some(WriteSet::Params(params))
+}
+
 /// Which foreign roles a set of blocks can write WITHOUT versioning any
 /// foreign token those blocks carry (s80). A call writes every role (it
 /// mints its own roots); a store through a foreign token writes that

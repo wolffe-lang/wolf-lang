@@ -50,6 +50,23 @@
 //! Induction-variable simplification beyond the canonical header-
 //! parameter shape is deliberately absent — LLVM's indvars stays
 //! rented (non-target); the wrap rewrites are what unlock it.
+//!
+//! # The license the theorems always offered (s102, #98's a5 half)
+//!
+//! Both conservatisms above answer "could ANYTHING in this loop write
+//! the storage this load reads?" with role- and call-granularity. But
+//! the c04 mode theorems are finer: a callee whose WRITE SET is
+//! provably confined to the object graphs of its `mut` parameters
+//! ([`super::memopt::write_sets`], #91 absorbed exactly this far)
+//! cannot write a load whose chain roots at a DIFFERENT entry
+//! parameter — `mut` is exclusive, which is the theorem G7 records as
+//! "buffer disjointness is a checker theorem nobody spends". So a
+//! foreign-token load with a param-rooted chain is LICENSED past a
+//! call (or a same-role store) when every foreign write in the loop —
+//! direct or through a known callee — lands through a different,
+//! `excl.mut`-backed entry parameter. Anything unprovable (an external
+//! or indirect callee, rc traffic, an unrooted chain) licenses
+//! nothing, and the negative witnesses pin that.
 
 use std::collections::HashSet;
 
@@ -66,6 +83,7 @@ pub(crate) fn run(
     verify_each: bool,
     stats: &mut OptStats,
 ) -> Result<bool, VerifyError> {
+    let wsets = super::memopt::write_sets(m);
     run_managed(m, fid, "licm", verify_each, |f, view, _ctx| {
         let foreign = super::memopt::foreign_roles(f, view);
         let exhaustive = super::memopt::exhaustive_regions(f, view);
@@ -149,6 +167,7 @@ pub(crate) fn run(
                         && let Some(&tok) = args.get(1)
                         && let Some(role) = super::memopt::token_role(f, view, &foreign, tok)
                         && blocked.contains(&role)
+                        && !load_licensed(f, view, &foreign, &l.blocks, inst, &wsets)
                     {
                         continue;
                     }
@@ -157,6 +176,8 @@ pub(crate) fn run(
                         && let Some(&tok) = args.get(1)
                         && let crate::types::TypeData::Mem(r) = view.types.get(f.value_ty(tok))
                         && !exhaustive.contains(&crate::entity::EntityRef::as_u32(*r))
+                        && !(super::memopt::token_role(f, view, &foreign, tok).is_some()
+                            && load_licensed(f, view, &foreign, &l.blocks, inst, &wsets))
                     {
                         continue;
                     }
@@ -190,4 +211,72 @@ pub(crate) fn run(
         }
         changed
     })
+}
+
+/// Is this foreign-token load licensed to hoist past everything in
+/// `blocks` (s102)? True iff the load's address chain roots at an
+/// entry parameter and EVERY foreign write in the blocks — a direct
+/// store or a call with a known write set — lands through a different
+/// entry parameter carrying the `excl.mut` theorem. See the module
+/// doc; the default is No.
+fn load_licensed(
+    f: &crate::ir::Function,
+    view: &super::ModView,
+    foreign: &std::collections::HashMap<u32, crate::ops::ForeignRole>,
+    blocks: &HashSet<Block>,
+    load: Inst,
+    wsets: &std::collections::HashMap<String, super::memopt::WriteSet>,
+) -> bool {
+    let addr = f.vpool.get(f.insts[load].args)[0];
+    let Some(root) = super::memopt::chain_root(f, view, foreign, addr) else {
+        return false;
+    };
+    // One writer check, shared by the store and call arms: the write
+    // chain must root at a DIFFERENT entry param that carries the
+    // exclusivity theorem.
+    let disjoint_writer = |wv: Value| -> bool {
+        match super::memopt::chain_root(f, view, foreign, wv) {
+            Some(wroot) => wroot != root && super::memopt::param_excl_mut(f, wroot),
+            None => false,
+        }
+    };
+    for &b in blocks {
+        for &i in &f.blocks[b].insts {
+            let args = f.vpool.get(f.insts[i].args);
+            match f.insts[i].op {
+                Opcode::Store => {
+                    let Some(&tok) = args.get(2) else {
+                        return false;
+                    };
+                    if super::memopt::token_role(f, view, foreign, tok).is_none() {
+                        continue; // a local-region store: different memory
+                    }
+                    if !disjoint_writer(args[1]) {
+                        return false;
+                    }
+                }
+                Opcode::Call => {
+                    let Aux::Callee(ef) = f.insts[i].aux else {
+                        return false;
+                    };
+                    match wsets.get(f.ext_funcs[ef].name.as_str()) {
+                        Some(super::memopt::WriteSet::Params(ps)) => {
+                            for &pi in ps {
+                                let Some(&arg) = args.get(pi) else {
+                                    return false;
+                                };
+                                if !disjoint_writer(arg) {
+                                    return false;
+                                }
+                            }
+                        }
+                        _ => return false, // external, indirect, unknown
+                    }
+                }
+                Opcode::CallInd | Opcode::RcDup | Opcode::RcDrop => return false,
+                _ => {}
+            }
+        }
+    }
+    true
 }
