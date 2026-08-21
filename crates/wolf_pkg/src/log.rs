@@ -25,6 +25,12 @@
 //! maintainer's key, sufficient to catch mirror tampering for
 //! keyholders and to pin the FORMAT); an asymmetric scheme is a c15
 //! decision and slots into the same field without a format change.
+//!
+//! OPERATOR NOTE (D48): `b3k:` is a MAC, not a public signature —
+//! anyone holding the verify key can also MINT heads. Hand the key
+//! only to parties you would trust to sign, and do not present a v1
+//! head to third parties as a trust root; public verifiability
+//! arrives with c15's asymmetric tag.
 
 use std::path::Path;
 
