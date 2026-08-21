@@ -1173,3 +1173,66 @@ fn loopcse_refuses_a_loop_that_loads() {
     let (_, stats) = one_pass(src, "loopcse");
     assert_eq!(stats.loops_cse, 0, "a loading loop never merges: {stats}");
 }
+
+// ---------------------------------- rewrite relations (s102, d2) --
+
+/// A just-proven `iadd.chk x, 5` IS the relation `sum >= x` — the
+/// branch folder spends it on d2's skeleton shape `x <= x+5`, which
+/// intervals alone cannot decide when the loop bound is unknown.
+/// The guard chain gives x a range ([0, %0] via the entry guard), so
+/// the chk proves; the ule then folds off the recorded relation.
+fn rewrite_relation_src(add_op: &str) -> String {
+    format!(
+        "fn @skel(i64, i64) -> i64 {{\n\
+         b0(%0: i64, %1: i64):\n  \
+         %2 = iconst.i64 0\n  \
+         %3 = iconst.i64 5\n  \
+         %4 = iconst.i64 100000\n  \
+         %5 = icmp.sle %0, %4\n  \
+         br %5, b1, b6\n\
+         b1:\n  \
+         jmp b2(%2, %2)\n\
+         b2(%6: i64, %7: i64):\n  \
+         %8 = icmp.slt %6, %0\n  \
+         br %8, b3, b5\n\
+         b3:\n  \
+         %9 = {add_op} %6, %3\n  \
+         %10 = icmp.ule %6, %9\n  \
+         br %10, b4, b7\n\
+         b4:\n  \
+         %11 = iadd.wrap %7, %9\n  \
+         %12 = iconst.i64 1\n  \
+         %13 = iadd.wrap %6, %12\n  \
+         jmp b2(%13, %11)\n\
+         b5:\n  \
+         ret %7\n\
+         b6:\n  \
+         ret %2\n\
+         b7:\n  \
+         trap.bounds\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn rangeopt_spends_a_proven_check_as_a_relation() {
+    let (out, stats) = one_pass(&rewrite_relation_src("iadd.chk"), "rangeopt");
+    assert!(stats.checks_rewritten >= 1, "the chk proves: {stats}");
+    assert!(
+        !out.contains("br %10") && !out.contains("trap.bounds"),
+        "the skeleton BRANCH folds off the recorded relation (the dead \
+         icmp is simplify's DCE, not rangeopt's):\n{out}"
+    );
+}
+
+/// The D44-addendum negative: a USER wrap op minted the same opcode
+/// and proves nothing — the comparison must NOT fold from a wrap form
+/// no check-elimination established.
+#[test]
+fn rangeopt_never_spends_a_user_wrap_as_a_relation() {
+    let (out, _stats) = one_pass(&rewrite_relation_src("iadd.wrap"), "rangeopt");
+    assert!(
+        out.contains("br %10") && out.contains("trap.bounds"),
+        "a user wrap op establishes no order — the branch stays:\n{out}"
+    );
+}

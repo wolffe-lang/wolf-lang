@@ -1362,6 +1362,54 @@ fn provable(cx: &mut RangeCx, view: &ModView, f: &Function, inst: Inst, b: Block
     }
 }
 
+/// The relation a just-proven check rewrite establishes (s102): with
+/// no overflow possible, `x + y` is EXACT, so a sign on one operand's
+/// range orders the result against the other operand. Recorded into
+/// the block's relation list — the same store the π machinery feeds —
+/// so `decide_rel` folds later same-block/dominated comparisons like
+/// `i <= i + 5` that intervals alone cannot (the bound may be
+/// unknown; the ORDER is not).
+fn record_rewrite_relation(cx: &mut RangeCx, f: &Function, inst: Inst, b: Block) {
+    let op = f.insts[inst].op;
+    let args = f.vpool.get(f.insts[inst].args);
+    let res = f.vpool.get(f.insts[inst].results)[0];
+    let (x, y) = (args[0], args[1]);
+    let mut out: Vec<(IntCc, Value, Value)> = Vec::new();
+    let mut sign_at = |cx: &mut RangeCx, v: Value| -> Option<std::cmp::Ordering> {
+        let r = cx.range_at(v, b)?;
+        if r.0 >= 0 {
+            Some(std::cmp::Ordering::Greater)
+        } else if r.1 <= 0 {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            None
+        }
+    };
+    match op {
+        Opcode::IaddChk | Opcode::UaddChk => {
+            match sign_at(cx, y) {
+                Some(std::cmp::Ordering::Greater) => out.push((IntCc::Sge, res, x)),
+                Some(std::cmp::Ordering::Less) => out.push((IntCc::Sle, res, x)),
+                _ => {}
+            }
+            match sign_at(cx, x) {
+                Some(std::cmp::Ordering::Greater) => out.push((IntCc::Sge, res, y)),
+                Some(std::cmp::Ordering::Less) => out.push((IntCc::Sle, res, y)),
+                _ => {}
+            }
+        }
+        Opcode::IsubChk | Opcode::UsubChk => match sign_at(cx, y) {
+            Some(std::cmp::Ordering::Greater) => out.push((IntCc::Sle, res, x)),
+            Some(std::cmp::Ordering::Less) => out.push((IntCc::Sge, res, x)),
+            _ => {}
+        },
+        _ => {}
+    }
+    if !out.is_empty() {
+        cx.rel.entry(b).or_default().extend(out);
+    }
+}
+
 /// One elimination round. Returns (changed, unproven candidates in
 /// call-free innermost loops → slot for their future clone twin).
 fn eliminate_round(
@@ -1388,6 +1436,16 @@ fn eliminate_round(
                 }
                 if ok {
                     rewrites.push(inst);
+                    // The proof just made is a RELATION the branch
+                    // folder can spend (s102, d2's skeleton): a
+                    // no-overflow `x + y` with `y >= 0` is EXACTLY
+                    // `result >= x` — recorded where later
+                    // comparisons in dominated positions will walk.
+                    // Keyed on the proof, never the opcode: a user's
+                    // `wrapping[T]` op minted the same wrap form and
+                    // proves nothing (the D44-addendum hole; this
+                    // records only what `provable` established).
+                    record_rewrite_relation(&mut cx, f, inst, b);
                     if count_metrics && in_loop {
                         stats.loop_checks_eliminated += 1;
                     }
