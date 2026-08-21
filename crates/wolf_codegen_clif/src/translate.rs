@@ -1354,12 +1354,38 @@ impl<'a, 'b> Tx<'a, 'b> {
                     return Err(ice("func.addr without callee"));
                 };
                 let callee = self.f.ext_funcs[ef].name.clone();
-                let Some(entry) = self.funcs.get(&callee) else {
+                let fr = if let Some(entry) = self.funcs.get(&callee) {
+                    self.om.declare_func_in_func(entry.fid, self.b.func)
+                } else if let Some(target) = self.m.funcs.values().find(|f| f.name == callee) {
+                    // #116: a wolf function OUTSIDE this object's
+                    // subset (s31 per-module objects) — the same
+                    // mangled-symbol import the CALL fallback takes;
+                    // an address is just the import without the call.
+                    let sig = target.sig;
+                    let cc = self.om.isa().default_call_conv();
+                    let si_w = sig_info(self.m, sig, Conv::Wolf, cc);
+                    let symbol = wolf_backend::mangle(self.m, &callee, sig);
+                    let fid = match self.imports.get(callee.as_str()) {
+                        Some(&fid) => fid,
+                        None => {
+                            let fid = self
+                                .om
+                                .declare_function(
+                                    &symbol,
+                                    cranelift_module::Linkage::Import,
+                                    &si_w.clif,
+                                )
+                                .map_err(|e| ice(e.to_string()))?;
+                            self.imports.insert(callee.clone(), fid);
+                            fid
+                        }
+                    };
+                    self.om.declare_func_in_func(fid, self.b.func)
+                } else {
                     return Err(nyi(format!(
                         "func.addr of `@{callee}` outside this object's subset"
                     )));
                 };
-                let fr = self.om.declare_func_in_func(entry.fid, self.b.func);
                 let p = self.b.ins().func_addr(ctypes::I64, fr);
                 self.vals.insert(results[0], Repr::Scalar(p));
             }
