@@ -212,6 +212,14 @@ loop-invariant value", which is what `out.len >= src.len` needs. Both are
 
 ## G7 — buffer disjointness is a checker theorem nobody spends
 
+> **SUPERSEDED 2026-08-21 (#115):** the closing numbers below predate
+> the quiet-host M2 retry, where the redesigned kernel's C lanes ran
+> ~9,000x slower than measured here (naive 5720 ns/op, expert 3246 —
+> wolf 1.433 and rustc 0.336 both reproduce). The 4040x "WIN" it now
+> renders is an artifact; quote suite numbers ex-a5 until #115 lands a
+> third design. The one trustworthy a5 signal: wolf vs rustc 0.234x.
+
+
 **Classification (a), new at s75, and it is family A's remaining loss.**
 
 ### s79 correction: `a5_hoist_call` was never measuring this
