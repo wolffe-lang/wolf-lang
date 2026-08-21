@@ -1314,6 +1314,7 @@ fn refuse_named(text: String, span: Span) -> NotYet {
 /// test pins them against this pair by name.
 const LIST_DATA_OFF: u64 = 0;
 const LIST_LEN_OFF: u64 = 8;
+const LIST_CAP_OFF: u64 = 16;
 
 /// The longest operand `==` on `str` compares INLINE (s81). Above it,
 /// lowering routes to `__wolf_rt_str_eq`, whose body is a `memcmp`.
@@ -8699,6 +8700,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_load(types::I64, addr, r)
     }
 
+    /// `%c = load.i64 %hdr+16` — a `List`'s element capacity.
+    fn list_cap_of(&mut self, hdr: Value) -> Value {
+        let r = self.foreign_hdr_region();
+        let addr = self.field_addr(hdr, LIST_CAP_OFF);
+        self.b.ins_load(types::I64, addr, r)
+    }
+
     /// `store.i64 %n, %hdr+8` — publish a new element count.
     fn list_set_len(&mut self, hdr: Value, n: Value) {
         let r = self.foreign_hdr_region();
@@ -8812,6 +8820,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         match mname {
             // Growth is the one thing the runtime still owns: a push
             // may reallocate, and the arena discipline lives there.
+            // The COMMON case is not growth (#113: sixteen out-of-line
+            // `list_push` calls and their slot spills were 31.5% of
+            // `b3_churn`'s per-request instructions), so the in-bounds
+            // append inlines — the G1 shape, applied to the write
+            // side: load `len`/`cap`, and when there is room, store
+            // the element at `data[len]` through the buffer region and
+            // publish `len + 1` through the header region, exactly the
+            // stores `pop`/`clear` already make in place. Only a full
+            // buffer calls out. The value is lowered BEFORE the length
+            // is read (it may itself push — the `get` discipline), and
+            // a non-tiling element keeps the call-only path: a direct
+            // store claims natural alignment the packed v0 layout
+            // cannot promise there (the `list_stride` rule), while the
+            // slot-spill call copies bytes and promises nothing.
             "push" => {
                 let Some(vx) = arg_exprs.first() else {
                     return Err(refuse("`push` without a value", e.span));
@@ -8821,9 +8843,46 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Flow::Val(None) => return Err(refuse("unit-typed List elements", vx.span)),
                     Flow::Diverged => return Ok(Flow::Diverged),
                 };
+                let align = flat_align(&self.b.module.types, ewty);
+                let tiles = align != 0 && esize % align == 0;
+                if !tiles {
+                    let (region, slot) = self.rt_slot(esize);
+                    self.store_flat(v, slot, region, vx.span)?;
+                    self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
+                    return Ok(Flow::Val(None));
+                }
+                let len = self.list_len_of(hdr);
+                let cap = self.list_cap_of(hdr);
+                let room = self.list_in_bounds(len, cap);
+                let fast_bb = self.b.create_block();
+                let slow_bb = self.b.create_block();
+                let merge = self.b.create_block();
+                self.b.ins_br(room, fast_bb, &[], slow_bb, &[]);
+                self.b.seal_block(fast_bb);
+                self.b.seal_block(slow_bb);
+                self.b.switch_to_block(fast_bb);
+                self.b.gvn_push_scope();
+                let data = self.list_data(hdr);
+                let p = self.list_elem_addr(data, len, esize);
+                let r = self.foreign_buf_region();
+                self.store_flat(v, p, r, vx.span)?;
+                let one = self.b.iconst(types::I64, 1);
+                let len1 = self
+                    .b
+                    .ins(Opcode::IaddWrap, &[len, one], &[types::I64], Aux::None)
+                    .one();
+                self.list_set_len(hdr, len1);
+                self.b.ins_jmp(merge, &[]);
+                self.b.gvn_pop_scope();
+                self.b.switch_to_block(slow_bb);
+                self.b.gvn_push_scope();
                 let (region, slot) = self.rt_slot(esize);
                 self.store_flat(v, slot, region, vx.span)?;
                 self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
+                self.b.ins_jmp(merge, &[]);
+                self.b.gvn_pop_scope();
+                self.b.seal_block(merge);
+                self.b.switch_to_block(merge);
                 Ok(Flow::Val(None))
             }
             // `pop` shrinks in place: publish `len - 1`, then read the

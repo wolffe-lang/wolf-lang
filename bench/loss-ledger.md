@@ -637,6 +637,44 @@ The kernel measures its thesis correctly today; it is the runtime that
 does not yet do what the thesis says. No gates move on this entry — it
 is a diagnosis, not a fix.
 
+### #113 — both fix shapes landed, and the split says they hit
+
+Fixes 1 and 2 above are in (the inline push fast path in lowering; the
+pooled, non-zeroing `MaybeUninit` chunks in `wolf_rt`, with the s76
+determinism aid kept in DEBUG builds by name — see `native::new_chunk`
+— and the same de-zeroing applied to the root arena the control had
+convicted). Conditions: same i7-10870H, LOADED host (load 1.5–2.7,
+sibling session live), best-of-runs, ratios and instruction counts
+only.
+
+| | before | after | |
+|---|---|---|---|
+| `b3_churn` wolf | 141.8 ns/op | **70.9** | 2.0x; **0.047x → 0.094x** vs naive C, now ahead of rustc's 74.8 |
+| `list_alloc` wolf | 9.0 ns/node | **3.83** | 2.35x; the family-thesis WIN goes **2.54x → 6.55x**, closing on rustc 2.54 / expert 2.13 |
+
+Callgrind, 2 000 requests, same protocol as the diagnosis:
+`list_push` self 20.5% → **6.8%** — 14 of 16 pushes never leave
+`_Wmain`; the two growth pushes still call out, as designed.
+`__memcpy` 11.0% → 3.9% (growth copies and slow-path spills only).
+**The malloc+free+calloc rows and the `__memset` row are gone from
+the table**; in their place the pools cost ~3.1% of Ir in TLS
+traffic. `_Wmain` is now 37.6% of the profile (was 18.4%) — the
+kernel body finally dominates its own benchmark.
+
+What is left of the 0.094x: the body's checked adds (family E's
+item, not B's), the bump path and retire walk (`region_alloc` 5.9%,
+`region_free` 3.7%), and the two growth calls. One scrutiny flag,
+recorded not chased: the ungated PGO lane reads b3 at −10.1% against
+an 8.5% floor on this loaded host — re-read it on a quiet host
+before believing it.
+
+En route the fast path caught a latent layout fact: lowering's block
+CREATION order was never execution order (a `region` block pre-creates
+its exit block, so exit code lives in an early-id block), and only the
+printer's RPO re-sort hid it. `Builder::finish` now hands out
+canonical reachable-RPO layout, so the mid-end seam litmus compares
+canonical against canonical — one order everywhere.
+
 ## G3 — checked arithmetic blocks the vectorizer (family E)
 
 **Classification (d) — a deliberate semantic — with an (a) tail.**

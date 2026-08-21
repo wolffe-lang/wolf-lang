@@ -148,7 +148,9 @@ const CHUNK_MIN: usize = 64 * 1024;
 const ALIGN: usize = 16;
 
 struct Arena {
-    chunks: Vec<Box<[u8]>>,
+    /// Raw `MaybeUninit` capacity, same rule as a region's chunks
+    /// (`crate::native::Chunk`): the Rust side never reads these bytes.
+    chunks: Vec<crate::native::Chunk>,
     used: usize,
 }
 
@@ -169,13 +171,18 @@ pub(crate) fn ambient_alloc(size: usize) -> *mut u8 {
     };
     if need_new {
         let cap = size.max(CHUNK_MIN);
-        a.chunks.push(vec![0u8; cap].into_boxed_slice());
+        // #113: no zeroing (the control experiment convicted this path
+        // — ambient chunks zeroed in full made the no-region variant
+        // 1.65x slower than the region pair). Same debug/release split
+        // as `native::new_chunk`, same E1001/L1 reasoning. No pooling:
+        // the root arena never frees.
+        a.chunks.push(crate::native::new_chunk(cap));
         a.used = 0;
     }
     let used = a.used;
     a.used += size;
     let chunk = a.chunks.last_mut().expect("chunk exists");
-    unsafe { chunk.as_mut_ptr().add(used) }
+    unsafe { chunk.as_mut_ptr().cast::<u8>().add(used) }
 }
 
 /// Copy `bytes` into the ambient region, returning the stable pointer.
