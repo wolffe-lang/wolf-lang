@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @__wolf_rt_region_ambient_enter(ptr) -> ptr
@@ -13,15 +12,12 @@ b0:
   %4 = iconst.i64 0
   %5 = call @__wolf_rt_region_ambient_enter(%0)
   %6 = iconst.i64 1
-  %7 = agg.make %6
-  %8 = call @__wolf_rt_region_ambient_enter(%2)
-  %9 = iconst.i64 2
-  %10 = agg.make %9
-  %11 = iconst.i64 3
-  call @__wolf_rt_region_ambient_leave(%8)
-  %12 = agg.make %11
-  %13 = iconst.i64 6
+  %7 = call @__wolf_rt_region_ambient_enter(%2)
+  %8 = iconst.i64 2
+  %9 = iconst.i64 3
+  call @__wolf_rt_region_ambient_leave(%7)
+  %10 = iconst.i64 6
   call @__wolf_rt_region_ambient_leave(%5)
-  %14 = bconst true
+  %11 = bconst true
   ret %4
 }

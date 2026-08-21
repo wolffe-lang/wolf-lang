@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @__wolf_rt_region_ambient_enter(ptr) -> ptr
@@ -13,12 +12,11 @@ b0(%0: i64):
   %1 = iconst.i64 0
   %2: ptr, %3: mem.r0 = region.new
   %4 = call @__wolf_rt_region_ambient_enter(%2)
-  %5 = agg.make %1, %0
-  %6 = iconst.i64 3
-  %7 = imul.chk %0, %6
+  %5 = iconst.i64 3
+  %6 = imul.chk %0, %5
   call @__wolf_rt_region_ambient_leave(%4)
   region.free %2, %3
-  ret %7
+  ret %6
 }
 
 fn @respond({i64, i64}) -> {i64, i64} {

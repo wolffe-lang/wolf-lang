@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @V.norm(mut ptr, mem.r0) -> i64
@@ -18,15 +17,13 @@ b0(%0: ptr, %1: mem.r0):
   %6 = iconst.i64 16
   %7 = ptr.off %0, %6, 1
   %8 = load.i64 %7, %1
-  %9 = agg.make %2, %5, %8
-  %10 = iadd.chk %2, %5
-  %11 = store.i64 %10, %0, %1
-  %12 = iconst.i64 0
-  %13 = store.i64 %12, %4, %11
-  %14 = load.i64 %0, %13
-  %15 = load.i64 %7, %13
-  %16 = agg.make %14, %12, %15
-  ret %14
+  %9 = iadd.chk %2, %5
+  %10 = store.i64 %9, %0, %1
+  %11 = iconst.i64 0
+  %12 = store.i64 %11, %4, %10
+  %13 = load.i64 %0, %12
+  %14 = load.i64 %7, %12
+  ret %13
 }
 
 fn @V.set_x(mut ptr, mem.r0, i64) {
@@ -60,92 +57,76 @@ b0(%0: {i64, i64, i64}):
 
 fn @main() -> i64 {
   fact deref %10 8 : op
-  fact deref %13 8 : op
-  fact deref %24 8 : op
-  fact deref %27 8 : op
-  fact deref %39 24 : op
-  fact deref %55 24 : op
-  fact noalias %10 %13 : excl.field
-  fact noalias %24 %27 : excl.field
-  fact region %10 r0 : op
-  fact region %13 r1 : op
-  fact region %24 r2 : op
-  fact region %27 r3 : op
-  fact region %39 r4 : op
-  fact region %55 r5 : op
+  fact deref %17 8 : op
+  fact deref %20 8 : op
+  fact deref %28 24 : op
+  fact deref %42 24 : op
+  fact deref %7 8 : op
+  fact noalias %17 %20 : excl.field
+  fact noalias %7 %10 : excl.field
+  fact region %10 r1 : op
+  fact region %17 r2 : op
+  fact region %20 r3 : op
+  fact region %28 r4 : op
+  fact region %42 r5 : op
+  fact region %7 r0 : op
 b0:
   %0 = iconst.i64 1
   %1 = iconst.i64 2
   %2 = iconst.i64 3
-  %3 = agg.make %0, %1, %2
-  %4 = iconst.i64 4
-  %5 = iconst.i64 5
-  %6 = iconst.i64 6
-  %7 = agg.make %4, %5, %6
-  %8 = agg.make %3, %7
-  %9 = iconst.i64 8
-  %10: ptr, %11: mem.r0 = stack.alloc %9
-  %12 = store.i64 %0, %10, %11
-  %13: ptr, %14: mem.r1 = stack.alloc %9
-  %15 = store.i64 %1, %13, %14
-  %16, %17 = call @swap_fields(%10, %12, %13, %15)
-  %18 = load.i64 %10, %16
-  %19 = agg.make %18, %1, %2
-  %20 = agg.make %19, %7
-  %21 = load.i64 %13, %17
-  %22 = agg.make %18, %21, %2
-  %23 = agg.make %22, %7
-  %24: ptr, %25: mem.r2 = stack.alloc %9
-  %26 = store.i64 %18, %24, %25
-  %27: ptr, %28: mem.r3 = stack.alloc %9
-  %29 = store.i64 %4, %27, %28
-  %30, %31 = call @swap_fields(%24, %26, %27, %29)
-  %32 = load.i64 %24, %30
-  %33 = agg.make %32, %21, %2
-  %34 = agg.make %33, %7
-  %35 = load.i64 %27, %31
-  %36 = agg.make %35, %5, %6
-  %37 = agg.make %33, %36
-  %38 = iconst.i64 24
-  %39: ptr, %40: mem.r4 = stack.alloc %38
-  %41 = store.i64 %32, %39, %40
-  %42 = ptr.off %39, %9, 1
-  %43 = store.i64 %21, %42, %41
-  %44 = iconst.i64 16
-  %45 = ptr.off %39, %44, 1
-  %46 = store.i64 %2, %45, %43
-  %47, %48 = call @V.norm(%39, %46)
-  %49 = load.i64 %39, %48
-  %50 = load.i64 %42, %48
-  %51 = load.i64 %45, %48
-  %52 = agg.make %49, %50, %51
-  %53 = agg.make %52, %36
-  %54 = iadd.chk %47, %35
-  %55: ptr, %56: mem.r5 = stack.alloc %38
-  %57 = store.i64 %49, %55, %56
-  %58 = ptr.off %55, %9, 1
-  %59 = store.i64 %50, %58, %57
-  %60 = ptr.off %55, %44, 1
-  %61 = store.i64 %51, %60, %59
-  %62 = call @V.set_x(%55, %61, %51)
-  %63 = load.i64 %55, %62
-  %64 = load.i64 %58, %62
-  %65 = load.i64 %60, %62
-  %66 = agg.make %63, %64, %65
-  %67 = agg.make %66, %36
-  %68 = call @eat(%66)
-  %69 = iconst.i64 0
-  %70 = agg.make %69, %69, %69
-  %71 = agg.make %70, %36
-  %72 = iadd.chk %54, %68
-  %73 = iadd.chk %72, %5
-  %74 = iconst.i64 18
-  %75 = icmp.eq %73, %74
-  br %75, b1, b2
+  %3 = iconst.i64 4
+  %4 = iconst.i64 5
+  %5 = iconst.i64 6
+  %6 = iconst.i64 8
+  %7: ptr, %8: mem.r0 = stack.alloc %6
+  %9 = store.i64 %0, %7, %8
+  %10: ptr, %11: mem.r1 = stack.alloc %6
+  %12 = store.i64 %1, %10, %11
+  %13, %14 = call @swap_fields(%7, %9, %10, %12)
+  %15 = load.i64 %7, %13
+  %16 = load.i64 %10, %14
+  %17: ptr, %18: mem.r2 = stack.alloc %6
+  %19 = store.i64 %15, %17, %18
+  %20: ptr, %21: mem.r3 = stack.alloc %6
+  %22 = store.i64 %3, %20, %21
+  %23, %24 = call @swap_fields(%17, %19, %20, %22)
+  %25 = load.i64 %17, %23
+  %26 = load.i64 %20, %24
+  %27 = iconst.i64 24
+  %28: ptr, %29: mem.r4 = stack.alloc %27
+  %30 = store.i64 %25, %28, %29
+  %31 = ptr.off %28, %6, 1
+  %32 = store.i64 %16, %31, %30
+  %33 = iconst.i64 16
+  %34 = ptr.off %28, %33, 1
+  %35 = store.i64 %2, %34, %32
+  %36, %37 = call @V.norm(%28, %35)
+  %38 = load.i64 %28, %37
+  %39 = load.i64 %31, %37
+  %40 = load.i64 %34, %37
+  %41 = iadd.chk %36, %26
+  %42: ptr, %43: mem.r5 = stack.alloc %27
+  %44 = store.i64 %38, %42, %43
+  %45 = ptr.off %42, %6, 1
+  %46 = store.i64 %39, %45, %44
+  %47 = ptr.off %42, %33, 1
+  %48 = store.i64 %40, %47, %46
+  %49 = call @V.set_x(%42, %48, %40)
+  %50 = load.i64 %42, %49
+  %51 = load.i64 %45, %49
+  %52 = load.i64 %47, %49
+  %53 = agg.make %50, %51, %52
+  %54 = call @eat(%53)
+  %55 = iconst.i64 0
+  %56 = iadd.chk %41, %54
+  %57 = iadd.chk %56, %4
+  %58 = iconst.i64 18
+  %59 = icmp.eq %57, %58
+  br %59, b1, b2
 b1:
-  jmp b3(%69)
+  jmp b3(%55)
 b2:
   jmp b3(%0)
-b3(%76: i64):
-  ret %76
+b3(%60: i64):
+  ret %60
 }

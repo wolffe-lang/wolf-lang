@@ -52,12 +52,11 @@ b7:
 b8(%26: i64):
   %27 = ptr.off %4, %9, 1
   %28 = isub.wrap %26, %9
-  %29 = agg.make %27, %28
-  %30 = iadd.chk %10, %28
+  %29 = iadd.chk %10, %28
   jmp b9
 b9:
-  %31 = iadd.wrap %12, %6
-  jmp b1(%31, %30)
+  %30 = iadd.wrap %12, %6
+  jmp b1(%30, %29)
 b10:
   ret %10
 }
@@ -69,32 +68,30 @@ b0(%0: {ptr, i64}):
   %3 = agg.get %0, 1
   %4 = data.addr @str.0
   %5 = iconst.i64 1
-  %6 = agg.make %4, %5
-  %7 = bconst true
-  %8 = bconst false
+  %6 = bconst true
+  %7 = bconst false
   jmp b1(%1, %1)
-b1(%9: i64, %10: i64):
+b1(%8: i64, %9: i64):
   jmp b2
 b2:
-  %11 = ptr.off %2, %9, 1
-  %12 = isub.wrap %3, %9
-  %13 = call @__wolf_rt_str_find(%11, %12, %4, %5, %1)
-  %14 = icmp.slt %13, %1
-  br %14, b4(%3, %1, %8), b3
+  %10 = ptr.off %2, %8, 1
+  %11 = isub.wrap %3, %8
+  %12 = call @__wolf_rt_str_find(%10, %11, %4, %5, %1)
+  %13 = icmp.slt %12, %1
+  br %13, b4(%3, %1, %7), b3
 b3:
-  %15 = iadd.wrap %9, %13
-  %16 = iadd.wrap %15, %5
-  jmp b4(%15, %16, %7)
-b4(%17: i64, %18: i64, %19: bool):
-  %20 = ptr.off %2, %9, 1
-  %21 = isub.wrap %17, %9
-  %22 = agg.make %20, %21
-  %23 = iadd.chk %10, %21
+  %14 = iadd.wrap %8, %12
+  %15 = iadd.wrap %14, %5
+  jmp b4(%14, %15, %6)
+b4(%16: i64, %17: i64, %18: bool):
+  %19 = ptr.off %2, %8, 1
+  %20 = isub.wrap %16, %8
+  %21 = iadd.chk %9, %20
   jmp b5
 b5:
-  br %19, b1(%18, %23), b6
+  br %18, b1(%17, %21), b6
 b6:
-  ret %23
+  ret %21
 }
 
 fn @main() -> i64 {

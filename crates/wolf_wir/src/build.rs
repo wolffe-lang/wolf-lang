@@ -270,6 +270,83 @@ impl<'m> FuncBuilder<'m> {
             );
         }
         let mut f = self.func;
+        // s103: drop the pair constructions nothing reads. The d2
+        // projection identity (`agg.get(agg.make(v…),k)` → `vk`)
+        // leaves the make DEAD whenever every projection folded —
+        // which is every store of a fresh struct literal, since
+        // `store_flat` decomposes fieldwise. The mid-end's DCE cleans
+        // the shape in release; the debug tier runs lowering's output
+        // as built, so the sweep lives here, scoped to the ONE opcode
+        // the identity orphans: `agg.make` is pure, single-result,
+        // and has no trap to lose. Fact subjects count as uses.
+        // Iterated: a dropped make can orphan the make that fed it.
+        {
+            let mut uses: HashMap<Value, usize> = HashMap::new();
+            let blocks: Vec<Block> = f.blocks.keys().collect();
+            for &b in &blocks {
+                for &inst in &f.blocks[b].insts {
+                    for v in f.vpool.get(f.insts[inst].args) {
+                        *uses.entry(v).or_insert(0) += 1;
+                    }
+                    match f.insts[inst].aux {
+                        Aux::Jump(bc) => {
+                            for v in f.vpool.get(bc.args) {
+                                *uses.entry(v).or_insert(0) += 1;
+                            }
+                        }
+                        Aux::Br(t, e) => {
+                            for bc in [t, e] {
+                                for v in f.vpool.get(bc.args) {
+                                    *uses.entry(v).or_insert(0) += 1;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            for (_, fd) in f.facts.iter() {
+                use crate::facts::FactKind as FK;
+                let mut touch = |v: Value| *uses.entry(v).or_insert(0) += 1;
+                match fd.kind {
+                    FK::Noalias(a, b) => {
+                        touch(a);
+                        touch(b);
+                    }
+                    FK::Deref(v, _) | FK::Range(v, _, _) | FK::Region(v, _) | FK::Frozen(v) => {
+                        touch(v)
+                    }
+                }
+            }
+            loop {
+                let mut removed_any = false;
+                for &b in &blocks {
+                    let insts = std::mem::take(&mut f.blocks[b].insts);
+                    let mut kept = Vec::with_capacity(insts.len());
+                    for inst in insts {
+                        let results = f.vpool.get(f.insts[inst].results);
+                        let dead = f.insts[inst].op == Opcode::AggMake
+                            && results
+                                .iter()
+                                .all(|v| uses.get(v).copied().unwrap_or(0) == 0);
+                        if dead {
+                            for v in f.vpool.get(f.insts[inst].args) {
+                                if let Some(c) = uses.get_mut(&v) {
+                                    *c = c.saturating_sub(1);
+                                }
+                            }
+                            removed_any = true;
+                        } else {
+                            kept.push(inst);
+                        }
+                    }
+                    f.blocks[b].insts = kept;
+                }
+                if !removed_any {
+                    break;
+                }
+            }
+        }
         let rpo = crate::print::reachable_rpo(&f);
         let mut in_rpo: std::collections::HashSet<_> = rpo.iter().copied().collect();
         let mut layout = rpo;

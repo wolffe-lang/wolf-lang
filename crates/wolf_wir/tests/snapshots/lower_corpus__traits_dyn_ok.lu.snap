@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @Dot.Draw.draw({i64}) -> {ptr, i64}
@@ -44,49 +43,48 @@ b0(%0: {ptr, ptr}):
 }
 
 fn @main() -> i64 {
-  fact deref %16 8 : op
-  fact deref %5 8 : op
-  fact region %16 r3 : op
-  fact region %5 r0 : op
+  fact deref %15 8 : op
+  fact deref %4 8 : op
+  fact region %15 r3 : op
+  fact region %4 r0 : op
 b0:
   %0: mem.r2 = region.foreign 1
   %1: mem.r1 = region.foreign 0
   %2 = iconst.i64 7
-  %3 = agg.make %2
-  %4 = iconst.i64 8
-  %5: ptr, %6: mem.r0 = stack.alloc %4
-  %7 = store.i64 %2, %5, %6
-  %8 = data.addr @vt.Dot.Draw
-  %9 = agg.make %5, %8
-  %10 = load.ptr %8, %1
-  %11 = call.ind %10(%5) : (ptr) -> {ptr, i64}
+  %3 = iconst.i64 8
+  %4: ptr, %5: mem.r0 = stack.alloc %3
+  %6 = store.i64 %2, %4, %5
+  %7 = data.addr @vt.Dot.Draw
+  %8 = agg.make %4, %7
+  %9 = load.ptr %7, %1
+  %10 = call.ind %9(%4) : (ptr) -> {ptr, i64}
   call @__wolf_rt_print_begin()
-  %12 = agg.get %11, 0
-  %13 = agg.get %11, 1
-  call @__wolf_rt_print_str(%12, %13)
-  %14 = data.addr @str.2
-  %15 = iconst.i64 1
-  call @__wolf_rt_print_str(%14, %15)
-  call @__wolf_rt_print_end(%15)
-  %16: ptr, %17: mem.r3 = stack.alloc %4
-  %18 = store.i64 %2, %16, %17
-  %19 = agg.make %16, %8
-  %20 = call @render(%19)
+  %11 = agg.get %10, 0
+  %12 = agg.get %10, 1
+  call @__wolf_rt_print_str(%11, %12)
+  %13 = data.addr @str.2
+  %14 = iconst.i64 1
+  call @__wolf_rt_print_str(%13, %14)
+  call @__wolf_rt_print_end(%14)
+  %15: ptr, %16: mem.r3 = stack.alloc %3
+  %17 = store.i64 %2, %15, %16
+  %18 = agg.make %15, %7
+  %19 = call @render(%18)
   call @__wolf_rt_print_begin()
-  %21 = agg.get %20, 0
-  %22 = agg.get %20, 1
-  call @__wolf_rt_print_str(%21, %22)
-  call @__wolf_rt_print_str(%14, %15)
-  call @__wolf_rt_print_end(%15)
-  %23 = call @label(%9)
+  %20 = agg.get %19, 0
+  %21 = agg.get %19, 1
+  call @__wolf_rt_print_str(%20, %21)
+  call @__wolf_rt_print_str(%13, %14)
+  call @__wolf_rt_print_end(%14)
+  %22 = call @label(%8)
   call @__wolf_rt_print_begin()
-  %24 = agg.get %23, 0
-  %25 = agg.get %23, 1
-  call @__wolf_rt_print_str(%24, %25)
-  call @__wolf_rt_print_str(%14, %15)
-  call @__wolf_rt_print_end(%15)
-  %26 = iconst.i64 0
-  ret %26
+  %23 = agg.get %22, 0
+  %24 = agg.get %22, 1
+  call @__wolf_rt_print_str(%23, %24)
+  call @__wolf_rt_print_str(%13, %14)
+  call @__wolf_rt_print_end(%14)
+  %25 = iconst.i64 0
+  ret %25
 }
 
 fn @Dot.Draw.draw.dynshim(ptr) -> {ptr, i64} {

@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @P.norm(mut ptr, mem.r0) -> i64
@@ -15,48 +14,44 @@ b0(%0: ptr, %1: mem.r0):
   %6 = iconst.i64 16
   %7 = ptr.off %0, %6, 1
   %8 = load.i64 %7, %1
-  %9 = agg.make %2, %5, %8
-  %10 = iadd.chk %2, %5
-  %11 = store.i64 %10, %0, %1
-  %12 = iconst.i64 0
-  %13 = store.i64 %12, %4, %11
-  %14 = load.i64 %0, %13
-  %15 = load.i64 %7, %13
-  %16 = agg.make %14, %12, %15
-  ret %14
+  %9 = iadd.chk %2, %5
+  %10 = store.i64 %9, %0, %1
+  %11 = iconst.i64 0
+  %12 = store.i64 %11, %4, %10
+  %13 = load.i64 %0, %12
+  %14 = load.i64 %7, %12
+  ret %13
 }
 
 fn @main() -> i64 {
-  fact deref %5 24 : op
-  fact region %5 r0 : op
+  fact deref %4 24 : op
+  fact region %4 r0 : op
 b0:
   %0 = iconst.i64 1
   %1 = iconst.i64 2
   %2 = iconst.i64 39
-  %3 = agg.make %0, %1, %2
-  %4 = iconst.i64 24
-  %5: ptr, %6: mem.r0 = stack.alloc %4
-  %7 = store.i64 %0, %5, %6
-  %8 = iconst.i64 8
-  %9 = ptr.off %5, %8, 1
-  %10 = store.i64 %1, %9, %7
-  %11 = iconst.i64 16
-  %12 = ptr.off %5, %11, 1
-  %13 = store.i64 %2, %12, %10
-  %14, %15 = call @P.norm(%5, %13)
-  %16 = load.i64 %5, %15
-  %17 = load.i64 %9, %15
-  %18 = load.i64 %12, %15
-  %19 = agg.make %16, %17, %18
-  %20 = iadd.chk %14, %18
-  %21 = iconst.i64 42
-  %22 = icmp.eq %20, %21
-  br %22, b1, b2
+  %3 = iconst.i64 24
+  %4: ptr, %5: mem.r0 = stack.alloc %3
+  %6 = store.i64 %0, %4, %5
+  %7 = iconst.i64 8
+  %8 = ptr.off %4, %7, 1
+  %9 = store.i64 %1, %8, %6
+  %10 = iconst.i64 16
+  %11 = ptr.off %4, %10, 1
+  %12 = store.i64 %2, %11, %9
+  %13, %14 = call @P.norm(%4, %12)
+  %15 = load.i64 %4, %14
+  %16 = load.i64 %8, %14
+  %17 = load.i64 %11, %14
+  %18 = iadd.chk %13, %17
+  %19 = iconst.i64 42
+  %20 = icmp.eq %18, %19
+  br %20, b1, b2
 b1:
-  %23 = iconst.i64 0
-  jmp b3(%23)
+  %21 = iconst.i64 0
+  jmp b3(%21)
 b2:
   jmp b3(%0)
-b3(%24: i64):
-  ret %24
+b3(%22: i64):
+  ret %22
 }
