@@ -197,17 +197,21 @@ pub extern "C" fn __wolf_rt_print_bool(v: i8) {
 
 /// First-chunk size, and the base of the geometric chunk ladder below.
 ///
-/// s76 shrank this from 16 KiB. A region's chunks are zero-initialized
-/// (`vec![0u8; cap]` — determinism over speed: a latent
-/// read-before-write in region storage reads a stable 0, not garbage),
-/// so the FIRST chunk is a fixed cost every region pays on its first
-/// allocation. At 16 KiB that cost dominated the whole point of the
-/// thing: once s76 made a scratch region actually hold its container,
-/// `b3_churn` — one region per request, ~430 bytes of it used — paid a
-/// 16 KiB calloc per request and ran 3x SLOWER than the leaking version
-/// it replaced. The ladder is the standard arena answer: start at a
-/// page-ish chunk, double per chunk, cap out, so a small scratch region
-/// is cheap and a large one still allocates O(log n) times.
+/// s76 shrank this from 16 KiB: a region's first chunk is a fixed cost
+/// every region pays on its first allocation, and at 16 KiB that cost
+/// dominated the whole point of the thing — once s76 made a scratch
+/// region actually hold its container, `b3_churn` — one region per
+/// request, ~430 bytes of it used — paid a 16 KiB calloc per request
+/// and ran 3x SLOWER than the leaking version it replaced. The ladder
+/// is the standard arena answer: start at a page-ish chunk, double per
+/// chunk, cap out, so a small scratch region is cheap and a large one
+/// still allocates O(log n) times.
+///
+/// #113 removed the zeroing and the per-cycle heap traffic: chunks are
+/// `MaybeUninit` capacity (a bump allocator never needs zeroed memory)
+/// and retire to a per-thread pool instead of the host allocator — see
+/// [`take_chunk`]/[`retire_chunk`] for where the s76 determinism aid
+/// (debug builds read a stable 0) now lives.
 const CHUNK_MIN: usize = 1024;
 /// Ceiling of the geometric ladder — past this, chunks stay this size
 /// (an allocation larger than the ceiling still gets its own exact
@@ -223,6 +227,110 @@ fn chunk_size(nth: usize, size: usize) -> usize {
     // keeps the shift in range without an overflow dance.
     let steps = (CHUNK_MAX.trailing_zeros() - CHUNK_MIN.trailing_zeros()) as usize;
     size.max(CHUNK_MIN << nth.min(steps))
+}
+
+/// A raw arena chunk: uninitialized capacity behind a bump cursor.
+pub(crate) type Chunk = Box<[core::mem::MaybeUninit<u8>]>;
+
+/// A fresh chunk of `cap` bytes, WITHOUT the host allocator zeroing it
+/// (#113: the memset was 6.1% of `b3_churn`'s per-request instructions,
+/// and a bump allocator never needs zeroed memory). The read-before-
+/// write that zeroing papered over cannot happen through the language:
+/// use-of-uninit is E1001 (`wolf_mem::moves`, forward maybe-uninit
+/// dataflow), container access is len-bounded, and ubcheck's L1 tracks
+/// per-byte initialization in its OWN shadow store, never through this
+/// memory. DEBUG builds keep the s76 determinism aid — a latent
+/// runtime/lowering bug reads a stable 0, not garbage — exactly where
+/// bugs are hunted; the release runtime pays nothing (the D21 posture:
+/// "release builds get the plain arena/pool paths").
+pub(crate) fn new_chunk(cap: usize) -> Chunk {
+    #[allow(unused_mut)]
+    let mut c = Box::new_uninit_slice(cap);
+    #[cfg(debug_assertions)]
+    // SAFETY: `c` owns `cap` writable bytes.
+    unsafe {
+        core::ptr::write_bytes(c.as_mut_ptr().cast::<u8>(), 0, cap);
+    }
+    c
+}
+
+/// Retired ladder chunks awaiting reuse, per thread (#113). A bump
+/// allocator's chunks are interchangeable, so a freed region's chunks
+/// come here instead of going back to the host allocator — `b3_churn`
+/// paid two mallocs, two frees and a memset per request for a design
+/// whose report calls it "a pointer bump and a pointer reset"
+/// (reports/01 fact 5); with the pool warm, a region cycle is exactly
+/// that. Thread-local like [`AMBIENT_REGION`] (zero contention on the
+/// hot path; workers are reused, so pools stay warm); capped so a
+/// burst cannot squat on memory; ladder-sized chunks only, so the
+/// exact-size match below stays a short scan.
+struct ChunkPool {
+    chunks: Vec<Chunk>,
+    bytes: usize,
+}
+
+/// Pool ceiling per thread — two max-ladder chunks. Past it, retired
+/// chunks go back to the host allocator like they always did.
+const POOL_MAX_BYTES: usize = 2 * CHUNK_MAX;
+/// Retired `Region` headers awaiting reuse (their chunk `Vec`s keep
+/// their capacity, so a warm cycle re-mallocs nothing at all).
+const REGION_POOL_MAX: usize = 8;
+
+thread_local! {
+    static CHUNK_POOL: core::cell::RefCell<ChunkPool> =
+        const { core::cell::RefCell::new(ChunkPool { chunks: Vec::new(), bytes: 0 }) };
+    // The Box IS the pooled resource: `region_new` hands out the box's
+    // pointer as the region handle (`Box::into_raw`), so pooling
+    // `Region` by value would re-malloc the very allocation the pool
+    // exists to keep.
+    #[allow(clippy::vec_box)]
+    static REGION_POOL: core::cell::RefCell<Vec<Box<Region>>> =
+        const { core::cell::RefCell::new(Vec::new()) };
+}
+
+/// A chunk of exactly `cap` bytes: pooled when one is waiting, fresh
+/// otherwise. Debug builds zero the pooled path too — reuse must not
+/// be less deterministic than a fresh chunk.
+fn take_chunk(cap: usize) -> Chunk {
+    let pooled = CHUNK_POOL.with(|p| {
+        let mut p = p.borrow_mut();
+        match p.chunks.iter().rposition(|c| c.len() == cap) {
+            Some(i) => {
+                p.bytes -= cap;
+                Some(p.chunks.swap_remove(i))
+            }
+            None => None,
+        }
+    });
+    match pooled {
+        #[allow(unused_mut)]
+        Some(mut c) => {
+            #[cfg(debug_assertions)]
+            // SAFETY: `c` owns `cap` writable bytes.
+            unsafe {
+                core::ptr::write_bytes(c.as_mut_ptr().cast::<u8>(), 0, cap);
+            }
+            c
+        }
+        None => new_chunk(cap),
+    }
+}
+
+/// Retire one chunk: ladder-sized chunks pool (up to the cap), odd
+/// sizes — an oversize allocation's exact chunk — and overflow drop to
+/// the host allocator exactly as before #113.
+fn retire_chunk(c: Chunk) {
+    let n = c.len();
+    if !(n.is_power_of_two() && (CHUNK_MIN..=CHUNK_MAX).contains(&n)) {
+        return;
+    }
+    CHUNK_POOL.with(|p| {
+        let mut p = p.borrow_mut();
+        if p.bytes + n <= POOL_MAX_BYTES {
+            p.bytes += n;
+            p.chunks.push(c);
+        }
+    });
 }
 
 /// The proc-ledger seam (s34, sprint Target 2): when procs exist, the
@@ -351,8 +459,11 @@ pub unsafe extern "C" fn __wolf_rt_region_ambient_leave(prev: *mut core::ffi::c_
 }
 
 struct Region {
-    /// Owned chunks: (base pointer as a boxed allocation, capacity).
-    chunks: Vec<Box<[u8]>>,
+    /// Owned chunks — raw `MaybeUninit` capacity the bump cursor hands
+    /// out. The Rust side never reads these bytes (pointers go to
+    /// compiled code), so nothing here may materialize a `&[u8]` over
+    /// unwritten capacity; `MaybeUninit` is that rule in the type.
+    chunks: Vec<Chunk>,
     /// Bump cursor within the last chunk.
     used: usize,
     /// Total bytes ever bump-allocated (aligned) — the ledger weight.
@@ -364,11 +475,17 @@ struct Region {
 /// `region.new` — a fresh region arena. Returns the opaque handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_region_new() -> *mut core::ffi::c_void {
-    let r = Box::new(Region {
-        chunks: Vec::new(),
-        used: 0,
-        bytes: 0,
-    });
+    // A pooled header was reset at retirement and keeps its chunk
+    // Vec's capacity — a warm region cycle allocates nothing (#113).
+    let r = REGION_POOL
+        .with(|p| p.borrow_mut().pop())
+        .unwrap_or_else(|| {
+            Box::new(Region {
+                chunks: Vec::new(),
+                used: 0,
+                bytes: 0,
+            })
+        });
     let handle: *mut core::ffi::c_void = Box::into_raw(r).cast();
     if let Some(h) = ledger_hooks() {
         (h.on_new)(handle as usize);
@@ -398,12 +515,12 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
     };
     if need_new_chunk {
         let cap = chunk_size(r.chunks.len(), size);
-        r.chunks.push(vec![0u8; cap].into_boxed_slice());
+        r.chunks.push(take_chunk(cap));
         r.used = 0;
         LIVE_REGION_BYTES.fetch_add(cap, std::sync::atomic::Ordering::Relaxed);
     }
     let chunk = r.chunks.last_mut().expect("chunk exists");
-    let p = unsafe { chunk.as_mut_ptr().add(r.used) };
+    let p = unsafe { chunk.as_mut_ptr().cast::<u8>().add(r.used) };
     r.used += size;
     r.bytes += size;
     p
@@ -420,13 +537,27 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
     // SAFETY: caller contract — live handle, dead after this call.
-    let r = unsafe { Box::<Region>::from_raw(handle.cast()) };
+    let mut r = unsafe { Box::<Region>::from_raw(handle.cast()) };
     if let Some(h) = ledger_hooks() {
         (h.on_free)(handle as usize, r.bytes);
     }
     let owned: usize = r.chunks.iter().map(|c| c.len()).sum();
     LIVE_REGION_BYTES.fetch_sub(owned, std::sync::atomic::Ordering::Relaxed);
-    drop(r);
+    // #113: chunks retire to the per-thread pool (the accounting above
+    // moved at exactly the same boundary it always did — LIVE bytes
+    // count regions, never the pool), and the reset header keeps its
+    // Vec capacity for the next region on this thread.
+    for c in r.chunks.drain(..) {
+        retire_chunk(c);
+    }
+    r.used = 0;
+    r.bytes = 0;
+    REGION_POOL.with(|p| {
+        let mut p = p.borrow_mut();
+        if p.len() < REGION_POOL_MAX {
+            p.push(r);
+        }
+    });
 }
 
 /// `sync.freeze` — v0 no-op (freezing is a capability change enforced
