@@ -794,6 +794,67 @@ printer's RPO re-sort hid it. `Builder::finish` now hands out
 canonical reachable-RPO layout, so the mid-end seam litmus compares
 canonical against canonical — one order everywhere.
 
+### s103 — the push account, and what the shapes actually cost
+
+Conditions: same host, LOADED (sibling c24 lanes live); callgrind Ir
+exact, 2 000 requests at the s103 base (c9da6d9); wall ratios not
+quoted.
+
+**The per-iteration account (release asm + WIR, fresh):** the contract's
+"16 pushes straight" premise is FALSE on this trunk — the push is ONE
+site in a 16-trip loop (not unrolled). Hot iteration ≈ 18 Ir: value
+compute 5 (`id+j` + its `jo` + mask), push-proper 10 (len load, cap
+cmp-load, `jae`, ptr load, shl, two payload stores DIRECT into the
+buffer, len inc+store), loop control 3. Every push-proper instruction
+is necessary for a header-coherent push at the lowering level: the
+shape is minimal, and `_Wmain`'s 844,129 Ir reproduces b3r's split
+exactly. **No release-side lowering slimming exists.** The candidates
+the account quantifies for the MIDEND (unclaimed by any c24 sprint,
+named here): loop-carried header promotion (len/cap/ptr in registers,
+one store at exits) ≈ 4 Ir × 16 ≈ 64 Ir/req ≈ 15% of `_Wmain`;
+cap-check versioning by trip count is blocked by the growth ladder
+(cap 0 → 8 → 16: pushes 1 and 9 MUST take the slow path — the check
+is load-bearing 2 of 16 times).
+
+**What lowering DID own:** the d2 projection identity left every
+stored struct literal's `agg.make` dead (both push paths store fields
+directly). Release LLVM DCE'd it — release asm byte-identical before/
+after, verified — but the DEBUG tier runs lowering's output as built.
+A finish-time sweep drops unused `agg.make` only (pure, single-result,
+no trap to lose; fact subjects count as uses): debug-tier b3
+3,384,558 → 3,224,573 Ir (−80 Ir/request, −4.7% whole-program),
+A/B'd against the same base compiler. The naive IR-volume baselines
+shrank with it (b3 249→241 … exclusivity 347→111, opt identical
+everywhere — the gates history carries the full split), so both
+ir-volume ceilings ratcheted as denominator moves, the d2 entry's
+class. Twelve dump snapshots re-pinned,
+each verified op-skeleton-identical modulo the dead makes (dyn_ok's
+call inventory unchanged: 3 `call.ind`, 1 static `Dot.Draw.draw`).
+
+**The X3 share, measured at last (callgrind A/B, checked vs a
+wrapping-typed variant of the same kernel, same sink):** `_Wmain`
+844,129 → 678,122 Ir — checked arithmetic on input-derived values
+costs **83 Ir/request = 19.7% of `_Wmain` = 8.3% of program**. That
+number sizes the drafted exception honestly: spending it moves b3
+~0.115x → ~0.125x, no further. The remaining 8x against naive C is
+the kernel's design cost (a region + List protocol against C's
+malloc-once idiom) plus the midend candidates above.
+
+### Run five, the arithmetic stated before the run (c24 acceptance)
+
+Gate: geomean ≥ 1.000 AND ≤ 3 documented-exception >10% losses,
+thirteen kernels, no exclusions, vs run four's 0.906x. Predictions,
+labeled per the c22 rule: OUT of the loss set — e3 (mechanism, s102
+final-value), a2 (mechanism-conditional, s101 alignment + carry), a5
+(mechanism-conditional, s102 licensor), d2 (measured, out-possible);
+REMAIN with exceptions DRAFTED (bench-exceptions.md, unspent until
+run five): b3 (X3 share measured 8.3% — the drafted endpoint;
+push-shape minimal at lowering, midend candidates unclaimed),
+word_count (std-shaped, sc14's `each_word`; class tension recorded in
+the draft). Geomean movers if mechanisms deliver: e3 +5.5%, a2 +2.2%,
+a5 +5–7%, d2 +0.8% — covering the +10.4% gap roughly twice. Every
+prediction converts to a measured number in the c24 closeout.
+
 ## G3 — checked arithmetic blocks the vectorizer (family E)
 
 **Classification (d) — a deliberate semantic — with an (a) tail.**

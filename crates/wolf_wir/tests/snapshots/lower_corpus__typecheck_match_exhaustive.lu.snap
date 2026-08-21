@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 125
 expression: out
 ---
 decl @brightness({i64, i64, i64, i64}) -> i64
@@ -72,29 +71,28 @@ b0:
 b1:
   %8: i64 = eu.err %6
   %9: i64 = eu.err %6, 0
-  %10 = agg.make %8, %9
-  %11 = icmp.eq %8, %1
-  br %11, b2, b3
+  %10 = icmp.eq %8, %1
+  br %10, b2, b3
 b2:
   jmp b4(%9)
 b3:
-  %12 = iconst.i64 0
-  jmp b4(%12)
-b4(%13: i64):
-  jmp b6(%13)
+  %11 = iconst.i64 0
+  jmp b4(%11)
+b4(%12: i64):
+  jmp b6(%12)
 b5:
-  %14: i64 = eu.ok %6
-  jmp b6(%14)
-b6(%15: i64):
-  %16 = iadd.chk %4, %15
-  %17 = iconst.i64 42
-  %18 = icmp.eq %16, %17
-  br %18, b7, b8
+  %13: i64 = eu.ok %6
+  jmp b6(%13)
+b6(%14: i64):
+  %15 = iadd.chk %4, %14
+  %16 = iconst.i64 42
+  %17 = icmp.eq %15, %16
+  br %17, b7, b8
 b7:
-  %19 = iconst.i64 0
-  jmp b9(%19)
+  %18 = iconst.i64 0
+  jmp b9(%18)
 b8:
   jmp b9(%0)
-b9(%20: i64):
-  ret %20
+b9(%19: i64):
+  ret %19
 }
