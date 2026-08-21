@@ -1013,3 +1013,36 @@ The corpus IR-volume ratchet moved 0.600 → 0.630 for this population
 change, with both sub-geomeans recorded in `bench/gates.json` so the
 gate cannot be read as having gotten weaker for the code it was
 already watching: the non-conc population is 0.582, unchanged.
+
+## G8 — s99: facts the function did not compute (2026-08-21)
+
+The four-kernel convergence (#98's second half, #113's checked-add
+residue, the d2/e3 residuals) got its machinery: a whole-program range
+analysis in the release phase — callee returns, parameter meets over
+call sites, and a container write→read channel keyed by allocation
+site, killed by anything unseen (`import c`, `call.ind`, the C
+membrane, unattributable stores; a `wrapping` value's range is its
+type bounds by evaluation, so the D44-addendum hole class cannot
+re-enter here). Facts mint as `summary.<digest>` naming the index the
+fixpoint read; the audit runs at mint time, against the module the
+proof described — a fact may feed an optimization that folds away its
+own proof's source, and it then persists as a verified entity, the c04
+custody model exactly (found the hard way on `resolve/same_name`).
+
+Measured (this host, LOADED — sibling session live; ratios only,
+best-of-6):
+
+| kernel | before (quiet retry / a2 lane) | after | read |
+|---|---|---|---|
+| `a2_stencil1d` | 0.299x / 0.331x | **1.080x, TIE** (floor 13.2%) | the two element-sum `iadd.chk`s discharge off the pushes' `i & 255` proof, the versioned fast loop VECTORIZES (2 remarks, witness floor 0→1), and family A's thesis finally reads true: modes deliver what naive C only gets from file-scope statics. **Out of the >10% loss set.** |
+| `e3_index_arith` | 0.483x | 0.494x — no movement | post-inline the kernel is ONE function (constant depth unrolls the recursion); its residue is intraprocedural, the loop-versioning backstop's own item, not an interprocedural fact. |
+| `b3_churn` | 0.094x | 0.098x — no movement | the checked adds were the minority share; bump/retire and the growth calls (#113's remaining thirds) are the residue, as predicted. |
+| `d2_substr_search` | 0.827x | 0.861x — noise band | the `[mem.str.get]` boundary probes dominate; the per-position `iadd.chk`'s operand is a byte the *str* channel does not yet feed (lists prove, strs do not — a named residue, not a mystery). |
+
+**The >10% loss count: 4 → 3 (b3, d2, e3) — exactly the documented-
+exception cap.** IR volume: three corpus entries SHRANK (facts
+discharging checks inside already-versioned loops:
+`hot_scale_versioned` 167→139 on-IR), geomean within the standing
+ceiling — no ratchet move. Compile-time track green with the analysis
+running three times per release build (twice in `summarize`, once for
+minting); if that cost ever shows, fold the three into one pass-through.
