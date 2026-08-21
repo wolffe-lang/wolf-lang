@@ -49,6 +49,7 @@ mod compact;
 pub mod dedup;
 mod inline;
 pub mod instrument;
+pub mod interproc;
 mod licm;
 mod memopt;
 mod rangeopt;

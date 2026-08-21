@@ -253,7 +253,7 @@ fn codegen_report_dumps_the_frozen_summary() {
     }
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert!(
-        stderr.contains("summary-format 1"),
+        stderr.contains("summary-format 2"),
         "the frozen format is versioned on the wire:\n{stderr}"
     );
     for line in stderr.lines().filter(|l| l.starts_with("fn ")) {

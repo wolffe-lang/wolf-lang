@@ -1,7 +1,0 @@
----
-source: crates/wolf_wir/tests/whole_program.rs
-expression: redacted
----
-summary-format 1
-fn helper home=a size=2 blocks=1 flags=---S--- hash=<hash> facts=0/0/0/0/0 hot=- calls=[] impls=[]
-fn main home=b size=4 blocks=1 flags=-M-S--- hash=<hash> facts=0/0/0/0/0 hot=- calls=[helper@0/2/0] impls=[]

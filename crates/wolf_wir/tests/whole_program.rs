@@ -72,7 +72,9 @@ fn summary_format_is_frozen() {
     assert_eq!(s.version, SUMMARY_FORMAT_VERSION);
     let text = s.render();
     // The reserved slots (D42 devirt headroom, s45 hotness) print and
-    // stay empty at v1 — that is the whole point of freezing them.
+    // stay empty — that is the whole point of freezing them. v2 (s99)
+    // adds `ret=`/`stores=`: unproven renders as `-`/`[]`, and a
+    // full-type-bounds range IS unproven (normalized at the source).
     assert!(
         text.contains("impls=[]"),
         "devirt headroom present:\n{text}"
@@ -85,7 +87,7 @@ fn summary_format_is_frozen() {
         assert_eq!(f.body_hash.len(), 64, "sha256 hex");
     }
     let redacted = redact_hashes(&text);
-    insta::assert_snapshot!("summary_format_v1", redacted);
+    insta::assert_snapshot!("summary_format_v2", redacted);
 }
 
 /// The digest is a pure function of the rendered index — the property

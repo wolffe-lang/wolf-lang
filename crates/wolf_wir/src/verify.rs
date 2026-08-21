@@ -1584,6 +1584,13 @@ impl<'a> Verifier<'a> {
                     }
                     match fd.just {
                         Just::Theorem(_) => {}
+                        Just::Summary(_) => {
+                            return Err(self.fact_fail(
+                                ErrClass::FactJust,
+                                id,
+                                "summary justifications mint range facts only (s99)",
+                            ));
+                        }
                         Just::DefOp | Just::Op(_) => {
                             let cited = match fd.just {
                                 Just::Op(c) => c,
@@ -1651,6 +1658,14 @@ impl<'a> Verifier<'a> {
                     }
                     match fd.just {
                         Just::Theorem(_) => {}
+                        // s99: proved by the whole-program range
+                        // analysis. One function cannot re-derive a
+                        // whole-program proof, so this check is
+                        // SHAPE-ONLY here (integer subject, non-empty
+                        // — already above); the semantic re-derivation
+                        // is `midend::interproc::reverify`, run under
+                        // `verify_each` in the whole-program phase.
+                        Just::Summary(_) => {}
                         Just::Op(_) => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
@@ -1724,6 +1739,13 @@ impl<'a> Verifier<'a> {
                     }
                     match fd.just {
                         Just::Theorem(Theorem::RegionAlloc) => {}
+                        Just::Summary(_) => {
+                            return Err(self.fact_fail(
+                                ErrClass::FactJust,
+                                id,
+                                "summary justifications mint range facts only (s99)",
+                            ));
+                        }
                         Just::DefOp | Just::Op(_) => {
                             // Op-derived region identity is PROVENANCE,
                             // re-derived structurally: the cited op must

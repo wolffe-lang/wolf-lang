@@ -601,6 +601,9 @@ fn splice(f: &mut Function, view: &super::ModView, plan: &Plan) {
             (FactKind::Region(..), _) => true,
             (FactKind::Deref(..) | FactKind::Frozen(..), Just::DefOp | Just::Op(_)) => true,
             (FactKind::Deref(..) | FactKind::Frozen(..), Just::Theorem(_)) => false,
+            // s99 mints Range only; a summary-justified deref/frozen
+            // has no minting site and no custody story — refuse.
+            (FactKind::Deref(..) | FactKind::Frozen(..), Just::Summary(_)) => false,
         };
         if !keep {
             continue;

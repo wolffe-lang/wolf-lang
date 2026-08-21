@@ -73,6 +73,7 @@ use crate::verify::{VerifyError, verify_module};
 use super::cluster::{self, Cluster};
 use super::dedup::{self, DedupStats};
 use super::inline::Scope;
+use super::interproc;
 use super::summary::{Homes, ProgramSummary, SUMMARY_FORMAT_VERSION};
 use super::{OptStats, Options, count_insts, dead_function_elim, optimize_one};
 
@@ -100,6 +101,10 @@ pub struct WpStats {
     pub clusters: usize,
     /// Bodies imported across cluster boundaries (summary-driven).
     pub imports: usize,
+    /// s99: range facts minted from the whole-program analysis, and
+    /// the functions re-optimized because of them.
+    pub ipr_facts: usize,
+    pub ipr_funcs: usize,
     /// The frozen summary index's digest — what the cache keys fold.
     pub summary_digest: String,
     pub summary_version: u32,
@@ -190,6 +195,56 @@ pub fn optimize_whole_program(
     let instantiations_unique = dedup::instantiations_unique(m);
     let dstats = dedup::dedup(m);
 
+    // ---- 2.5 s99: interprocedural range facts --------------------------
+    // Ranges for values a function did not compute: callee returns,
+    // parameter meets, container element loads. Facts mint under
+    // `Just::Summary(<digest prefix>)` naming the index the fixpoint
+    // read; every touched function re-runs the pipeline so rangeopt
+    // consumes what was proved (the a2 versioner and the check
+    // eliminator are the clients). Runs BEFORE step 3, so every index
+    // this phase publishes — step 3's clustering input and step 6's
+    // published one — describes post-fact bodies: one build's profile
+    // (keyed by body hash, s45) then matches the next build's step-3
+    // index, and the cluster cache key names what the backend sees.
+    // (Placed at 5.5 first; the pgo suite caught the hash split —
+    // a profile recorded against the published index stopped
+    // matching step 3.)
+    let pre_index = super::summary::summarize(m, homes);
+    let digest_prefix = u64::from_str_radix(&pre_index.digest()[..16], 16).unwrap_or(0);
+    let ipr = interproc::analyze(m);
+    let (minted, ipr_facts) = interproc::mint(m, &ipr, digest_prefix);
+    // The audit runs HERE — against the module the fixpoint read and
+    // the mint described — not after the re-opt below: a fact may FEED
+    // an optimization that folds away its own proof's source, and the
+    // fact then persists as a verified entity exactly like a c04
+    // theorem fact (the proof is owned by the mint-time analysis; the
+    // per-function verifier keeps the shape checks forever). See
+    // [`interproc::reverify`]'s doc for the contract.
+    if ve && let Err((fname, msg)) = interproc::reverify(m) {
+        let dump = m
+            .funcs
+            .iter()
+            .find(|(_, f)| f.name == fname)
+            .map(|(id, _)| crate::print::print_selected(m, &[id]))
+            .unwrap_or_default();
+        return Err(VerifyError {
+            class: crate::verify::ErrClass::FactJust,
+            func: fname,
+            msg,
+            dump,
+        });
+    }
+    let none: BTreeSet<String> = BTreeSet::new();
+    for &fid in &minted {
+        let scope = Scope {
+            allow: Some(&none), // facts change ranges, not inlining
+            imported: None,
+            homes: Some(homes),
+            hot: None, // pre-profile, like step 1 (see the module docs)
+        };
+        optimize_one(m, fid, ve, th, &mut stats, scope)?;
+    }
+
     // ---- 3./4. summaries, clusters, imports ----------------------------
     let mut summary = super::summary::summarize(m, homes);
     // The profile enters here, by content hash. With no profile this is
@@ -249,6 +304,8 @@ pub fn optimize_whole_program(
     });
     let clusters = cluster::rekey(&clusters, &summary);
     let stats = WpStats {
+        ipr_facts,
+        ipr_funcs: minted.len(),
         summary_digest: summary.digest(),
         summary_version: SUMMARY_FORMAT_VERSION,
         modules,
