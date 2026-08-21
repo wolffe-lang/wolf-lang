@@ -325,6 +325,16 @@ fn golden_conc_spawn_fanout_loop() {
     golden("conc/spawn_fanout_loop.lu");
 }
 
+/// s96's shape: dyn dispatch, both spellings. The golden is where the
+/// erased chain is visible — `agg.get.0`/`agg.get.1` splitting the
+/// pair, the slot load off the vtable pointer, and `call.ind` with
+/// the erased signature (ptr receiver first). A direct `call` here
+/// would mean someone re-derived a static impl for an erased type.
+#[test]
+fn golden_traits_dyn_ok() {
+    golden("traits/dyn_ok.lu");
+}
+
 // ------------------------------------------------- the whole corpus ----
 
 /// Which files lower today. Snapshot-pinned: every advance or retreat
