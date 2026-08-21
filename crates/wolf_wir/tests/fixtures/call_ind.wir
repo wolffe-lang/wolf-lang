@@ -1,0 +1,19 @@
+; s97 (#112): the indirect call. `func.addr` produces the fn VALUE,
+; `call.ind` calls through it with the sig rendered inline — by-value,
+; token-free, exactly `call` minus the name. `main` exits 42 through
+; the pointer, so the exec tier proves the call really goes indirect.
+
+fn @double(i64) -> i64 {
+b0(%n: i64):
+  %two = iconst.i64 2
+  %r = imul.chk %n, %two
+  ret %r
+}
+
+fn @main() -> i64 {
+b0:
+  %f = func.addr @double()
+  %a = iconst.i64 21
+  %r = call.ind %f(%a) : (i64) -> i64
+  ret %r
+}

@@ -1,0 +1,21 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+assertion_line: 57
+expression: "wolf_wir::print_module(&m)"
+---
+decl @double(i64) -> i64
+
+fn @double(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 2
+  %2 = imul.chk %0, %1
+  ret %2
+}
+
+fn @main() -> i64 {
+b0:
+  %0 = func.addr @double()
+  %1 = iconst.i64 21
+  %2 = call.ind %0(%1) : (i64) -> i64
+  ret %2
+}

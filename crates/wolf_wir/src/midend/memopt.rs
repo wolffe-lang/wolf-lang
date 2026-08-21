@@ -139,7 +139,7 @@ pub(crate) fn blocked_roles<'a>(
     for &b in blocks {
         for &i in &f.blocks[b].insts {
             match f.insts[i].op {
-                Opcode::Call => {
+                Opcode::Call | Opcode::CallInd => {
                     out.extend(ForeignRole::ALL);
                 }
                 Opcode::Store => {
@@ -395,12 +395,10 @@ fn rle_and_forward(
         let loops = analysis::loops(f, &cfg, &doms);
         for l in &loops.loops {
             let roles = blocked_roles(f, view, foreign, l.blocks.iter());
-            let has_call = l.blocks.iter().any(|&b| {
-                f.blocks[b]
-                    .insts
-                    .iter()
-                    .any(|&i| f.insts[i].op == Opcode::Call)
-            });
+            let has_call = l
+                .blocks
+                .iter()
+                .any(|&b| f.blocks[b].insts.iter().any(|&i| f.insts[i].op.is_call()));
             let e = header_kill
                 .entry(l.header)
                 .or_insert((HashSet::new(), false));
@@ -508,7 +506,7 @@ fn rle_and_forward(
                 // - everything else: no token, no effect. That is the
                 //   token discipline's whole dividend and it survives
                 //   intact.
-                Opcode::Call => {
+                Opcode::Call | Opcode::CallInd => {
                     avail.retain(|&(tok, _, _), _| match view.types.get(f.value_ty(tok)) {
                         TypeData::Mem(r) => {
                             exhaustive.contains(&crate::entity::EntityRef::as_u32(*r))
@@ -600,7 +598,7 @@ fn dse_dying_regions(
                         regions.entry(r).or_default().observed = true;
                     }
                 }
-                Opcode::Call => {
+                Opcode::Call | Opcode::CallInd => {
                     for &a in &args {
                         if let Some(r) = region_of(view, f.value_ty(a)) {
                             regions.entry(r).or_default().observed = true;

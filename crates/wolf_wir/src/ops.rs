@@ -349,6 +349,14 @@ pub enum Opcode {
     /// token args are consumed, and a fresh successor token is produced
     /// for each (after the declared results, in param order).
     Call,
+    /// `%res = call.ind %f(%args…) : (…) -> …` — call through a fn
+    /// VALUE (s97, #112): operand 0 is the callee `ptr` (what
+    /// `func.addr` produced), the rest are the arguments, and the
+    /// signature rides in `Aux::Sig`, rendered inline in text. The
+    /// sig is by-value and token-free — fn TYPES carry no modes and
+    /// no region tokens, so an indirect call neither consumes nor
+    /// mints tokens (the verifier enforces it).
+    CallInd,
 
     // ---- terminators (exactly one per block; NO unwind form, D30) ------
     /// `jmp bN(%args…)` — unconditional branch, passing block arguments.
@@ -483,6 +491,16 @@ impl Opcode {
         matches!(self, Opcode::Jmp | Opcode::Br | Opcode::Ret | Opcode::Trap)
     }
 
+    /// True for both call forms — direct (`call`) and indirect
+    /// (`call.ind`). The mid-end's schedule-point/barrier tests key
+    /// on "is this a call", not "is this a NAMED call": an indirect
+    /// callee is at least as opaque as a named one, so every pass
+    /// that treats `call` as a barrier must treat `call.ind` the
+    /// same or it will hoist/sink/coalesce across it unsoundly.
+    pub fn is_call(self) -> bool {
+        matches!(self, Opcode::Call | Opcode::CallInd)
+    }
+
     /// True for mnemonics still reserved (c05): representable in
     /// text, rejected by the verifier until their semantics land.
     pub fn is_reserved(self) -> bool {
@@ -561,6 +579,7 @@ impl Opcode {
             Opcode::DataAddr => "data.addr",
             Opcode::FuncAddr => "func.addr",
             Opcode::Call => "call",
+            Opcode::CallInd => "call.ind",
             Opcode::Jmp => "jmp",
             Opcode::Br => "br",
             Opcode::Ret => "ret",

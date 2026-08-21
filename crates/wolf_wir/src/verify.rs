@@ -730,6 +730,84 @@ impl<'a> Verifier<'a> {
                     }
                 }
             }
+            Opcode::CallInd => {
+                // `call` minus the name (s97): operand 0 is the callee
+                // ptr, the sig rides in Aux::Sig, and the sig is
+                // BY-VALUE TOKEN-FREE — fn types carry no modes and no
+                // region tokens, so there is no formal-region
+                // substitution and no successor minting here at all.
+                let Aux::Sig(sigid) = data.aux else {
+                    return Err(self.type_err(inst, "call.ind without a signature"));
+                };
+                if !self.m.sigs.contains(sigid) {
+                    return Err(self.type_err(inst, "call.ind names a missing signature"));
+                }
+                let sig = &self.m.sigs[sigid];
+                let call_err = |msg: String| {
+                    self.fail(ErrClass::CallSig, format!("{}: {msg}", self.at_inst(inst)))
+                };
+                let Some(&callee) = args.first() else {
+                    return Err(call_err("call.ind needs a callee operand".to_string()));
+                };
+                if self.f.value_ty(callee) != crate::types::PTR {
+                    return Err(call_err(format!(
+                        "call.ind callee must be ptr, got {}",
+                        self.ty(callee)
+                    )));
+                }
+                for (i, p) in sig.params.iter().enumerate() {
+                    if p.mode != crate::ir::Mode::Val {
+                        return Err(call_err(format!(
+                            "call.ind sigs are by-value (param {i} carries a mode; fn types carry none)"
+                        )));
+                    }
+                    if self.m.types.is_token(p.ty) {
+                        return Err(call_err(format!(
+                            "call.ind sigs are token-free (param {i} is a token; fn types carry none)"
+                        )));
+                    }
+                }
+                for &t in &sig.results {
+                    if self.m.types.is_token(t) {
+                        return Err(call_err(
+                            "call.ind sigs are token-free (a result is a token)".to_string(),
+                        ));
+                    }
+                }
+                let cargs = &args[1..];
+                if cargs.len() != sig.params.len() {
+                    return Err(call_err(format!(
+                        "the signature takes {} argument(s), {} passed",
+                        sig.params.len(),
+                        cargs.len()
+                    )));
+                }
+                for (i, (p, &a)) in sig.params.iter().zip(cargs).enumerate() {
+                    if p.ty != self.f.value_ty(a) {
+                        return Err(call_err(format!(
+                            "argument {i} has type {}, the signature wants {}",
+                            self.ty(a),
+                            self.m.types.display(p.ty)
+                        )));
+                    }
+                }
+                if results.len() != sig.results.len() {
+                    return Err(call_err(format!(
+                        "the signature produces {} result(s), {} bound",
+                        sig.results.len(),
+                        results.len()
+                    )));
+                }
+                for (i, (&w, &r)) in sig.results.iter().zip(&results).enumerate() {
+                    if w != self.f.value_ty(r) {
+                        return Err(call_err(format!(
+                            "result {i} has type {}, the signature produces {}",
+                            self.ty(r),
+                            self.m.types.display(w)
+                        )));
+                    }
+                }
+            }
             Opcode::Jmp => {
                 self.expect_counts(inst, 0, 0)?;
                 let Aux::Jump(edge) = data.aux else {

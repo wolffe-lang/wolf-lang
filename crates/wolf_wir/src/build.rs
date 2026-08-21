@@ -1194,6 +1194,30 @@ impl<'m> FuncBuilder<'m> {
         vals[..n_declared].to_vec()
     }
 
+    /// `call.ind %callee(%args…) : sig` (s97, #112): a call through a
+    /// fn VALUE. The sig is by-value and token-free (the verifier
+    /// enforces it — fn types carry no modes and no region tokens), so
+    /// unlike [`Self::ins_call_regions`] there is no token threading:
+    /// no token args consumed, no successors minted. Returns the
+    /// declared result, if the sig declares one.
+    pub fn ins_call_ind(
+        &mut self,
+        callee: Value,
+        sig: crate::ir::SigId,
+        args: &[Value],
+    ) -> Option<Value> {
+        let rtys = self.module.sigs[sig].results.clone();
+        debug_assert!(rtys.len() <= 1, "call.ind sigs carry at most one result");
+        let mut full_args = Vec::with_capacity(1 + args.len());
+        full_args.push(callee);
+        full_args.extend_from_slice(args);
+        let out = self.ins(Opcode::CallInd, &full_args, &rtys, Aux::Sig(sig));
+        let InsOut::Vals(vals) = out else {
+            unreachable!("calls never fold");
+        };
+        vals.first().copied()
+    }
+
     // ------------------------------------------------- terminators ----
 
     /// `jmp target(args…)`. Fills the current block.
@@ -1632,8 +1656,10 @@ impl<'m> FuncBuilder<'m> {
             Aux::Scale(s) => (6, s),
             Aux::Data(idx) => (7, idx as u64),
             // Edge- or callee-carrying ops (and terminators) never
-            // reach here.
-            Aux::Callee(_) | Aux::Jump(_) | Aux::Br(..) | Aux::Trap(_) => return None,
+            // reach here; a `call.ind` is a call — never GVN'd.
+            Aux::Callee(_) | Aux::Sig(_) | Aux::Jump(_) | Aux::Br(..) | Aux::Trap(_) => {
+                return None;
+            }
         };
         Some(GvnKey {
             op: data.op as u16,

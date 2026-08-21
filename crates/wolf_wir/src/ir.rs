@@ -130,6 +130,12 @@ pub enum Aux {
     /// `data.addr` payload: index into [`Module::data`] (s31 — the
     /// str/data story; string literals live in module data).
     Data(u32),
+    /// `call.ind` payload (s97): the callee's signature. In text the
+    /// sig renders INLINE through `render_sig` — full content, modes
+    /// and types, never the raw id — because the D8 hash input is the
+    /// printed form and a `sig3` spelling would be its first
+    /// non-content byte.
+    Sig(SigId),
 }
 
 /// A branch edge: target block plus the arguments passed to its params.

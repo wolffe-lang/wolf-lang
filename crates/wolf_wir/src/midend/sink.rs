@@ -269,7 +269,7 @@ fn no_ambient_allocation(
             continue;
         }
         for &inst in &f.blocks[b].insts {
-            if f.insts[inst].op == Opcode::Call && !ambient.contains(&inst) {
+            if f.insts[inst].op.is_call() && !ambient.contains(&inst) {
                 return false;
             }
         }
