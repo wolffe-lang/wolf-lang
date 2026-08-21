@@ -697,8 +697,23 @@ impl<'a> Fmt<'a> {
                 _ => rest.push(it),
             }
         }
-        uses.sort_by_key(|a| self.use_sort_key(a));
-        imports.sort_by_key(|a| self.import_sort_key(a));
+        // A module-doc comment (`//!`) riding an import pins the whole
+        // group in source order: sorting moved the carrier to the top
+        // of the file, where the reparse read its comment as a HEADER
+        // and applied the header's blank-line rule — a layout the
+        // first pass never produced. A comment must not become a
+        // header by sorting; clean code never docs an import with
+        // `//!`, so ordinary files still sort.
+        let pins_order = |n: &&GreenNode| {
+            first_token(n)
+                .is_some_and(|t| t.leading.iter().any(|s| self.slice(*s).starts_with(b"//!")))
+        };
+        if !uses.iter().any(pins_order) {
+            uses.sort_by_key(|a| self.use_sort_key(a));
+        }
+        if !imports.iter().any(pins_order) {
+            imports.sort_by_key(|a| self.import_sort_key(a));
+        }
 
         let ordered: Vec<(&GreenNode, bool)> = uses
             .iter()
