@@ -235,7 +235,7 @@ pub use graph::{
 pub use interface::{Interface, build_interfaces, decode, encode, item_signature, pretty};
 pub use lints::{AllowScan, scan_allows};
 pub use resolve::{Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_package_with};
-pub use sig::{BoundRef, GenericSig, ItemSig, SigTables, build_sigs};
+pub use sig::{BoundRef, GenericSig, ItemSig, SigTables, build_sigs, module_bindings};
 pub use traits::{DynReport, ImplDef, TraitDef, TraitRef};
 pub use typecheck::{BodyOutcome, Typecheck, typecheck_package, typecheck_package_with};
 pub use types::{MetaTy, Prim, TyId, TyKind, TypeTable};

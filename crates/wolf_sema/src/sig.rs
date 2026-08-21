@@ -260,6 +260,21 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     sigs
 }
 
+/// The module-namespace bindings of `file` within `module`, as
+/// (bound name, package-module index) — the subset a consumer outside
+/// sema (the lowering's qualified fn-value read, #116) can act on.
+/// Item/std/c bindings are deliberately absent: their uses type
+/// through sema's own paths and never reach the namespace fallback.
+pub fn module_bindings(pkg: &Package, module: usize, file: usize) -> Vec<(String, usize)> {
+    bindings_for(pkg, module, file)
+        .iter()
+        .filter_map(|b| match b.target {
+            crate::graph::BindTarget::PkgModule(m) => Some((b.name.clone(), m)),
+            _ => None,
+        })
+        .collect()
+}
+
 /// The import bindings of `file` within `module`.
 pub(crate) fn bindings_for(pkg: &Package, module: usize, file: usize) -> &[Binding] {
     let md = &pkg.modules[module];
