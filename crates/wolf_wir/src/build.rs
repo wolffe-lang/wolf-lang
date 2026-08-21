@@ -73,6 +73,13 @@ pub struct Stats {
     /// idempotence only (N sites, one body); it is NOT yet a D8 dedup
     /// ratio, and `bench/gates.json` says so in its own text.
     pub instantiations_lowered: u64,
+    /// s98: vtable demands — every `as dyn` cast site, before
+    /// content-interning collapses same-(trait, impl) demands.
+    pub vtables_demanded: u64,
+    /// s98: distinct vtables actually emitted into module data. Two
+    /// casts of one (trait, impl) pair emit ONE table (D8's discipline
+    /// applied to the table the way `unique` applies it to bodies).
+    pub vtables_unique: u64,
 }
 
 impl Stats {
@@ -84,6 +91,8 @@ impl Stats {
         self.forward += other.forward;
         self.instantiations_seen += other.instantiations_seen;
         self.instantiations_lowered += other.instantiations_lowered;
+        self.vtables_demanded += other.vtables_demanded;
+        self.vtables_unique += other.vtables_unique;
     }
 }
 

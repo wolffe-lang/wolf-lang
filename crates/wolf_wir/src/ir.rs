@@ -428,6 +428,12 @@ impl Function {
 pub struct DataDecl {
     pub name: String,
     pub bytes: Vec<u8>,
+    /// s98: when non-empty this decl is a VTABLE — pointer-sized slots
+    /// each naming a module function, emitted as relocated fn-pointer
+    /// data by both backends (`bytes` is empty for these). Printed as
+    /// `data @name = fns (@a, @b)`, so the slots ride the D8 hash by
+    /// content like everything else.
+    pub funcs: Vec<String>,
 }
 
 /// A module: the type interner, interned signatures, external decls,
@@ -476,15 +482,36 @@ impl Module {
     /// Content-intern a data blob; returns its index (the `Aux::Data`
     /// payload). Identical byte strings share one declaration.
     pub fn intern_data(&mut self, bytes: &[u8]) -> u32 {
-        if let Some(i) = self.data.iter().position(|d| d.bytes == bytes) {
+        if let Some(i) = self
+            .data
+            .iter()
+            .position(|d| d.bytes == bytes && d.funcs.is_empty())
+        {
             return i as u32;
         }
         let name = format!("str.{}", self.data.len());
         self.data.push(DataDecl {
             name,
             bytes: bytes.to_vec(),
+            funcs: Vec::new(),
         });
         (self.data.len() - 1) as u32
+    }
+
+    /// s98: content-intern a vtable — a named table of fn-pointer
+    /// slots. Two demands with the same slot list share ONE table
+    /// (D8's discipline applied to data); the name is the FIRST
+    /// demand's, so the dump reads `vt.Type.Trait`.
+    pub fn intern_fn_table(&mut self, name_hint: &str, funcs: &[String]) -> (u32, bool) {
+        if let Some(i) = self.data.iter().position(|d| d.funcs == funcs) {
+            return (i as u32, false);
+        }
+        self.data.push(DataDecl {
+            name: name_hint.to_string(),
+            bytes: Vec::new(),
+            funcs: funcs.to_vec(),
+        });
+        ((self.data.len() - 1) as u32, true)
     }
 
     /// Intern an error-tag name; ids start at 1 (0 = ok).
