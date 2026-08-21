@@ -1,0 +1,28 @@
+; s97 (#112): the indirect call. `func.addr` produces the fn VALUE in
+; @main, the value crosses a call boundary as an ordinary ptr param,
+; and @apply1 calls through it with `call.ind` — the sig inline,
+; by-value, token-free, exactly `call` minus the name. This is the
+; hof_tail shape: the callee is a PARAMETER, so neither backend can
+; constant-fold the call back to a symbol. `main` exits 42 through the
+; pointer, so the exec tier proves the call really goes indirect.
+
+fn @double(i64) -> i64 {
+b0(%n: i64):
+  %two = iconst.i64 2
+  %r = imul.chk %n, %two
+  ret %r
+}
+
+fn @apply1(ptr, i64) -> i64 {
+b0(%f: ptr, %n: i64):
+  %r = call.ind %f(%n) : (i64) -> i64
+  ret %r
+}
+
+fn @main() -> i64 {
+b0:
+  %f = func.addr @double()
+  %a = iconst.i64 21
+  %r = call @apply1(%f, %a)
+  ret %r
+}

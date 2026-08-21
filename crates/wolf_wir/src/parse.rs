@@ -969,6 +969,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("data.addr", Opcode::DataAddr),
         ("func.addr", Opcode::FuncAddr),
         ("call", Opcode::Call),
+        ("call.ind", Opcode::CallInd),
         ("jmp", Opcode::Jmp),
         ("br", Opcode::Br),
         ("ret", Opcode::Ret),
@@ -1444,6 +1445,23 @@ fn parse_inst(
                 }
             }
             tys
+        }
+        Opcode::CallInd => {
+            // `call.ind %f(%args…) : (…) -> …` — the callee is a VALUE
+            // and the sig parses back through the same grammar decls
+            // use, re-interned by content (s97).
+            let callee_name = line.val_name()?;
+            let callee = resolve(line, values, func, &callee_name)?;
+            line.expect(Tok::LParen)?;
+            let list = parse_val_list(line, values, func)?;
+            line.expect(Tok::RParen)?;
+            line.expect(Tok::Colon)?;
+            let sig = parse_sig(line, &mut p.module)?;
+            args = Vec::with_capacity(1 + list.len());
+            args.push(callee);
+            args.extend(list);
+            aux = Aux::Sig(sig);
+            p.module.sigs[sig].results.clone()
         }
         Opcode::Jmp => {
             let edge = parse_edge(line, values, blocks, func)?;

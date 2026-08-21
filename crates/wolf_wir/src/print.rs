@@ -298,6 +298,20 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
                 .unwrap_or("?");
             write!(s, " @{name}").unwrap();
         }
+        // `call.ind %f(%args…) : (…) -> …` — the sig rendered INLINE
+        // by content (s97 target 7a): the D8 hash input is this
+        // printed form, and a raw `sigN` here would be its first
+        // non-content byte.
+        Aux::Sig(sig) => {
+            write!(
+                s,
+                " {}({}) : {}",
+                canon.value(args[0]),
+                render_args(canon, &args[1..]),
+                render_sig(m, sig)
+            )
+            .unwrap();
+        }
         Aux::Jump(bc) => {
             write!(s, " {}", render_edge(canon, f, bc)).unwrap();
         }

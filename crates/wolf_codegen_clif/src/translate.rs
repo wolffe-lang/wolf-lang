@@ -228,6 +228,13 @@ pub(crate) enum RSlot {
     Token,
 }
 
+/// Where a call lands: a resolved `FuncRef` (direct) or a callee
+/// VALUE through an imported signature (`call.ind`, s97).
+enum CallTarget {
+    Direct(cranelift_codegen::ir::FuncRef),
+    Indirect(cranelift_codegen::ir::SigRef, CValue),
+}
+
 pub(crate) struct SigInfo {
     pub params: Vec<Slot>,
     pub rets: Vec<RSlot>,
@@ -1317,6 +1324,12 @@ impl<'a, 'b> Tx<'a, 'b> {
                 let callee = self.f.ext_funcs[ef].clone();
                 self.lower_call(&callee.name, callee.sig, &args, &results)?;
             }
+            Opcode::CallInd => {
+                let Aux::Sig(sig) = data.aux else {
+                    return Err(ice("call.ind without a signature"));
+                };
+                self.lower_call_ind(sig, &args, &results)?;
+            }
             Opcode::FuncAddr => {
                 // s73: the compiled task-entry pointer — a module
                 // function's address as an opaque i64/ptr (the same
@@ -1787,6 +1800,43 @@ impl<'a, 'b> Tx<'a, 'b> {
             )));
         };
         let si = sig_info(self.m, sig, conv, cc);
+        self.emit_call_body(CallTarget::Direct(fref), &si, sig, args, results)
+    }
+
+    /// `call.ind` (s97): the callee is a VALUE — always wolf-conv (the
+    /// C membrane is name-based; no fn value can name a `c.*` import,
+    /// the lowerer refuses it upstream) — sharing the direct call's
+    /// argument/result marshaling exactly (target 3's parity clause).
+    fn lower_call_ind(
+        &mut self,
+        sig: SigId,
+        args: &[wolf_wir::ir::Value],
+        results: &[wolf_wir::ir::Value],
+    ) -> Result<(), BackendError> {
+        let cc = self.om.isa().default_call_conv();
+        let si = sig_info(self.m, sig, Conv::Wolf, cc);
+        let callee = self.scalar(args[0])?;
+        let sigref = self.b.import_signature(si.clif.clone());
+        self.emit_call_body(
+            CallTarget::Indirect(sigref, callee),
+            &si,
+            sig,
+            &args[1..],
+            results,
+        )
+    }
+
+    /// The shared back half of both call forms: marshal arguments per
+    /// the ABI plan, emit the call, map declared results and trailing
+    /// successor tokens.
+    fn emit_call_body(
+        &mut self,
+        target: CallTarget,
+        si: &SigInfo,
+        sig: SigId,
+        args: &[wolf_wir::ir::Value],
+        results: &[wolf_wir::ir::Value],
+    ) -> Result<(), BackendError> {
         let mut cargs: Vec<CValue> = Vec::new();
         // Out-slots for memory-class results, in result order. C puts
         // the pointer FIRST in the argument list; wolf trails it.
@@ -1823,7 +1873,12 @@ impl<'a, 'b> Tx<'a, 'b> {
         if !si.sret_first {
             cargs.extend(sret_addrs.iter().copied());
         }
-        let call = self.b.ins().call(fref, &cargs);
+        let call = match target {
+            CallTarget::Direct(fref) => self.b.ins().call(fref, &cargs),
+            CallTarget::Indirect(sigref, callee) => {
+                self.b.ins().call_indirect(sigref, callee, &cargs)
+            }
+        };
         let rvals: Vec<CValue> = self.b.inst_results(call).to_vec();
         // Map declared results, then successor tokens (which trail the
         // declared results in WIR call results).

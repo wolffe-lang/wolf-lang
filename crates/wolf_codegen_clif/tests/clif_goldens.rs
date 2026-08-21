@@ -43,6 +43,13 @@ fn clif_of(fixture: &str) -> Option<String> {
 }
 
 #[test]
+fn clif_call_ind() {
+    if let Some(t) = clif_of("call_ind") {
+        insta::assert_snapshot!("clif_call_ind", t)
+    }
+}
+
+#[test]
 fn clif_overflow() {
     if let Some(t) = clif_of("overflow") {
         insta::assert_snapshot!("clif_overflow", t)

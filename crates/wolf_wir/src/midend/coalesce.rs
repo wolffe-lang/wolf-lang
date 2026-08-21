@@ -61,7 +61,7 @@ pub(crate) fn run(
                 while j < insts.len() {
                     let cand = insts[j];
                     let op = f.insts[cand].op;
-                    if op == Opcode::Call {
+                    if op.is_call() {
                         break; // schedule point — hard barrier
                     }
                     let cargs = f.vpool.get(f.insts[cand].args);

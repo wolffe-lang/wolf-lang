@@ -1,0 +1,39 @@
+---
+source: crates/wolf_codegen_llvm/tests/llvm_goldens.rs
+assertion_line: 53
+expression: t
+---
+; wolf release tier (s41) - WIR -> LLVM IR
+source_filename = "wolf"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+define internal i64 @"_Wdouble$9415802bd82720ca"(i64 %p0) nounwind {
+b0:
+  %t1 = call { i64, i1 } @llvm.smul.with.overflow.i64(i64 %p0, i64 2)
+  %t2 = extractvalue { i64, i1 } %t1, 0
+  %t3 = extractvalue { i64, i1 } %t1, 1
+  br i1 %t3, label %trap1, label %cont4, !prof !0
+cont4:
+  ret i64 %t2
+trap1:
+  call void @__wolf_rt_trap(i32 1)
+  unreachable
+}
+
+define internal i64 @"_Wapply1$04be62dfd50b6927"(ptr %p0, i64 %p1) nounwind {
+b0:
+  %t1 = call i64 %p0(i64 %p1)
+  ret i64 %t1
+}
+
+define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+b0:
+  %t1 = call i64 @"_Wapply1$04be62dfd50b6927"(ptr @"_Wdouble$9415802bd82720ca", i64 21)
+  ret i64 %t1
+}
+
+declare void @__wolf_rt_trap(i32) cold noreturn nounwind
+declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
+
+!0 = !{!"branch_weights", i32 1, i32 2000}

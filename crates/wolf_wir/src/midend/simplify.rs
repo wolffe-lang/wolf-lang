@@ -91,7 +91,8 @@ fn aux_key(f: &Function, aux: Aux) -> Option<AuxKey> {
         // `func.addr` payload: keyed by callee NAME (ExtFunc ids are
         // function-local but names are the identity).
         Aux::Callee(ef) => AuxKey::Callee(f.ext_funcs[ef].name.clone()),
-        Aux::Jump(..) | Aux::Br(..) | Aux::Trap(..) => return None,
+        // A `call.ind` is a call — no value key, never merged.
+        Aux::Sig(..) | Aux::Jump(..) | Aux::Br(..) | Aux::Trap(..) => return None,
     })
 }
 

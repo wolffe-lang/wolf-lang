@@ -6384,7 +6384,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return self.lower_qualified_trait_call(d, cs, *module, name, method, e);
         }
         if cs.decl_span.is_none() {
-            return Err(refuse("indirect calls through fn values (c05)", e.span));
+            return self.lower_indirect_call(d, cs, e);
         }
         // Resolve the callee to its package fn. Names declared in more
         // than one module disambiguate by the declaration locus sema
@@ -6599,6 +6599,72 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let results = self.b.ins_call_regions(ext, &args, &formal_regions);
         self.run_writebacks(writebacks)?;
         Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// s97 (#112): a call whose callee is an EXPRESSION — a fn-typed
+    /// parameter, local, or read module fn. The demand side is s95's
+    /// (the READ already instantiated whatever the value names); this
+    /// site lowers the callee to its ptr, the arguments by value, and
+    /// calls through the value with the sig built from the callee's
+    /// recorded fn TYPE — already substituted in an instance body, so
+    /// a `Rigid` never reaches `wir_ty` here. Fn types carry no modes
+    /// and no region tokens (target 4): the sig is by-value token-free
+    /// by construction, and the eu row rides in the return type, so
+    /// `?`/`else` at this site marshal exactly as at a direct call.
+    fn lower_indirect_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        let Some(callee) = d.callee() else {
+            return Err(refuse("calls outside the resolved surface", e.span));
+        };
+        let Some(fn_ty) = self.expr_sema_ty(callee.span) else {
+            return Err(refuse(
+                "an indirect callee without a recorded type",
+                callee.span,
+            ));
+        };
+        let TyKind::Fn(param_tys, ret_ty) = self.table.kind(fn_ty).clone() else {
+            return Err(refuse(
+                "an indirect callee that is not fn-typed",
+                callee.span,
+            ));
+        };
+        // Belt and suspenders for target 4: sema synthesizes MODELESS
+        // params for fn-typed callees today (`call_by_type`), and s18
+        // rejects call-site `mut`/`take` against them. If either ever
+        // changes, refuse by name rather than guess a convention.
+        if cs.params.iter().any(|p| p.mode.is_some()) {
+            return Err(refuse(
+                "an indirect callee with parameter modes (fn types carry none)",
+                e.span,
+            ));
+        }
+        let Some(fv) = flow_val!(self.lower_expr(callee)) else {
+            return Err(refuse("unit-typed callees", callee.span));
+        };
+        let mut args = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            args.push(v);
+        }
+        let table = self.table;
+        let mut params = Vec::with_capacity(param_tys.len());
+        for &pt in &param_tys {
+            let Some(w) = wir_ty(&mut self.b.module.types, table, self.sigs, pt, e.span)? else {
+                return Err(refuse("unit-typed parameters", e.span));
+            };
+            params.push(Param {
+                ty: w,
+                mode: Mode::Val,
+            });
+        }
+        let results = match wir_ty(&mut self.b.module.types, table, self.sigs, ret_ty, e.span)? {
+            Some(t) => vec![t],
+            None => vec![],
+        };
+        let sig = self.b.module.make_sig(params, results);
+        Ok(Flow::Val(self.b.ins_call_ind(fv, sig, &args)))
     }
 
     /// s93: recover a generic callee's bindings at one call site from

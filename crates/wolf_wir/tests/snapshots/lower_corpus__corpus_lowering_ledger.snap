@@ -145,7 +145,7 @@ memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
-memory/prov_holy_grail.lu: refused — indirect calls through fn values (c05); closure lowering outside `spawn` (fn values, c05)
+memory/prov_holy_grail.lu: refused — closure lowering outside `spawn` (fn values, c05)
 memory/prov_two_phase.lu: lowers
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
@@ -207,8 +207,8 @@ rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_match_tags.lu: lowers
-rows/hof_tail.lu: refused — indirect calls through fn values (c05); indirect calls through fn values (c05)
-rows/inferred_private.lu: refused — indirect calls through fn values (c05)
+rows/hof_tail.lu: lowers
+rows/inferred_private.lu: lowers
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)

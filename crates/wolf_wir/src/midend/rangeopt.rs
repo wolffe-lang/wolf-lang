@@ -1456,12 +1456,10 @@ fn version_loops(
             continue;
         }
         // Call-free (schedule-point conservatism).
-        let has_call = l.blocks.iter().any(|&b| {
-            f.blocks[b]
-                .insts
-                .iter()
-                .any(|&i| f.insts[i].op == Opcode::Call)
-        });
+        let has_call = l
+            .blocks
+            .iter()
+            .any(|&b| f.blocks[b].insts.iter().any(|&i| f.insts[i].op.is_call()));
         if has_call {
             continue;
         }

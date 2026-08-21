@@ -123,12 +123,10 @@ pub(crate) fn run(
             // is a write the loop's outside-defined token never sees —
             // exactly the foreign case, with escape standing in for
             // "the runtime owns it".
-            let body_has_call = l.blocks.iter().any(|&b| {
-                f.blocks[b]
-                    .insts
-                    .iter()
-                    .any(|&i| f.insts[i].op == Opcode::Call)
-            });
+            let body_has_call = l
+                .blocks
+                .iter()
+                .any(|&b| f.blocks[b].insts.iter().any(|&i| f.insts[i].op.is_call()));
             // One sweep per loop: collect hoistable instructions in
             // deterministic block order.
             let mut hoist: Vec<(Block, Inst)> = Vec::new();

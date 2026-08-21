@@ -109,6 +109,17 @@ fn fixture(name: &str) -> String {
     .expect("read fixture")
 }
 
+/// s97 (#112): the indirect call, executed — `func.addr` produces the
+/// pointer, `call.ind` goes through it, and the exit code proves the
+/// callee actually ran (42 = double(21), computed behind the pointer).
+#[test]
+fn call_ind_runs_through_the_pointer() {
+    let Some((code, _)) = run_wir("call_ind", &fixture("call_ind")) else {
+        return;
+    };
+    assert_eq!(code, 42);
+}
+
 /// The contract's acceptance fixture: branches, calls, structs, and
 /// checked arithmetic, through `cc`, exiting correctly.
 #[test]
