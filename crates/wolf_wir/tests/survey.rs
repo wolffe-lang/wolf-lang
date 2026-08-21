@@ -136,11 +136,14 @@ fn corpus_root() -> PathBuf {
 /// c21 contracts were written against.
 #[test]
 fn survey_is_a_superset_and_changes_nothing_on_refusing_corpus_files() {
+    // s97 moved `rows/hof_tail.lu` and `rows/inferred_private.lu` to
+    // `lowers` (the indirect call landed) — replaced here by files
+    // still refusing for other reasons, per this assertion's own note.
     for name in [
-        "rows/hof_tail.lu",
         "traits/dyn_ok.lu",
+        "json/rows.lu",
         "memory/prov_holy_grail.lu",
-        "rows/inferred_private.lu",
+        "memory/handle_stale.lu",
         "comptime/norm_linear.lu",
     ] {
         let (build, _) = both(&corpus_root().join(name));
