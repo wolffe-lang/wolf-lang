@@ -10036,6 +10036,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             self.b.switch_to_block(same_len);
         }
         self.b.gvn_push_scope();
+        // The guard has proved the two lengths equal, so the trip
+        // count and the long test may read EITHER; take the one that
+        // is a build-time constant, right operand first (the interned
+        // literal at every `match` arm). The left arises when a
+        // constant-width slice meets an unknown operand —
+        // `hay[i..i + 5] == needle` — where the width folds to 5 (the
+        // isub-over-iadd identity) and a constant bound is what lets
+        // LLVM unroll the scan into the straight-line compare the s81
+        // A/B measured. With neither constant the right operand
+        // stands, as before.
+        let bl = if self.b.as_int_const(bl).is_none() && self.b.as_int_const(al).is_some() {
+            al
+        } else {
+            bl
+        };
         // The long-operand route ([`STR_EQ_INLINE_MAX`]). The byte loop
         // runs at ~1.45 ns/byte and `memcmp` at ~0.012 (measured, s81:
         // 4 KiB operands, this host, LLVM tier), so past a few dozen
