@@ -54,6 +54,29 @@ fn llvm_call_ind() {
     }
 }
 
+/// s101: the buffer-pointer alignment fact and its drops. @sum's
+/// Header-role ptr load feeds only element addresses, so its VALUE
+/// carries `!align !{i64 16}` (the base fact the vectorizer derives
+/// widened-access alignment from — per-access `align` stays natural).
+/// @leaked (value escapes into a call) and @edge (value crosses a
+/// branch edge) are the SAME load shape with provenance broken — the
+/// claim must drop. The dyn_dispatch golden pins the third drop (a
+/// call.ind callee) by staying byte-stable.
+#[test]
+fn llvm_align_facts() {
+    if let Some(t) = ir_of_fixture("align_facts") {
+        let claims = t.matches("!align").count();
+        // @sum's buffer load and no other — @leaked's and @edge's
+        // identical loads must not carry it.
+        assert_eq!(
+            claims, 1,
+            "exactly one load claims the buffer alignment: {t}"
+        );
+        assert!(t.contains("!{i64 16}"), "the claim is 16: {t}");
+        insta::assert_snapshot!("llvm_align_facts", t);
+    }
+}
+
 /// s96 (`[abi.native.dyn]`): the dyn dispatch chain on the LLVM tier.
 /// Same no-symbol assertion as `llvm_call_ind` — the dispatch call
 /// goes through the slot-loaded VALUE; a `@name` here would mean the
