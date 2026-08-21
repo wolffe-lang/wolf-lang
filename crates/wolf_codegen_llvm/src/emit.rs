@@ -1833,6 +1833,12 @@ impl<'a> Fx<'a> {
                 let callee = self.f.ext_funcs[ef].clone();
                 self.lower_call(&callee.name, callee.sig, &args, &results)?;
             }
+            Opcode::CallInd => {
+                let Aux::Sig(sig) = data.aux else {
+                    return Err(ice("call.ind without a signature"));
+                };
+                self.lower_call_ind(sig, &args, &results)?;
+            }
 
             // ---- the memory story ----
             Opcode::RegionNew => {
@@ -2310,6 +2316,35 @@ impl<'a> Fx<'a> {
         );
         self.ensure_decl(&symbol, decl);
 
+        self.emit_call_body(&format!("@\"{symbol}\""), &si, sig, args, results)
+    }
+
+    /// `call.ind` (s97): the callee is a VALUE, spelled as its LLVM
+    /// operand — always wolf-conv (the C membrane is name-based; no fn
+    /// value can name a `c.*` import, refused upstream) — through the
+    /// direct call's exact marshaling (target 3's parity clause). No
+    /// `declare` is emitted: there is no symbol to declare.
+    fn lower_call_ind(
+        &mut self,
+        sig: SigId,
+        args: &[WValue],
+        results: &[WValue],
+    ) -> Result<(), BackendError> {
+        let si = sig_info(self.m, sig, Conv::Wolf, &self.cx.opts.clone());
+        let callee = self.op(args[0])?;
+        self.emit_call_body(&callee, &si, sig, &args[1..], results)
+    }
+
+    /// The shared back half of both call forms: out-slots, argument
+    /// marshaling per the ABI plan, the call line, result unpacking.
+    fn emit_call_body(
+        &mut self,
+        callee_ll: &str,
+        si: &LSig,
+        sig: SigId,
+        args: &[WValue],
+        results: &[WValue],
+    ) -> Result<(), BackendError> {
         // Out-slots for memory-class results, in result order.
         let rdata = self.m.sigs[sig].results.clone();
         let mut sret_addrs: Vec<String> = Vec::new();
@@ -2353,7 +2388,7 @@ impl<'a> Fx<'a> {
         }
         let ret_ty = si.ret_ty();
         let na = self.call_noalias_suffix(args);
-        let rendered = format!("call {ret_ty} @\"{symbol}\"({}){na}", cargs.join(", "));
+        let rendered = format!("call {ret_ty} {callee_ll}({}){na}", cargs.join(", "));
         let retval = if si.ret_comps.is_empty() {
             self.line(format!("  {rendered}"));
             String::new()

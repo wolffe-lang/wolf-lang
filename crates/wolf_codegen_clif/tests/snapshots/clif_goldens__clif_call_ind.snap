@@ -1,0 +1,46 @@
+---
+source: crates/wolf_codegen_clif/tests/clif_goldens.rs
+assertion_line: 48
+expression: t
+---
+;; @double
+function u0:0(i64) -> i64 system_v {
+    sig0 = (i32) system_v
+    fn0 = u0:3 sig0
+
+block0(v0: i64):
+    v1 = iconst.i64 2
+    v2, v3 = smul_overflow v0, v1  ; v1 = 2
+    brif v3, block1, block2
+
+block2:
+    return v2
+
+block1 cold:
+    v4 = iconst.i32 1
+    call fn0(v4)  ; v4 = 1
+    trap user1
+}
+
+;; @apply1
+function u0:1(i64, i64) -> i64 system_v {
+    sig0 = (i64) -> i64 system_v
+
+block0(v0: i64, v1: i64):
+    v2 = call_indirect sig0, v0(v1)
+    return v2
+}
+
+;; @main
+function u0:2() -> i64 system_v {
+    sig0 = (i64) -> i64 system_v
+    sig1 = (i64, i64) -> i64 system_v
+    fn0 = colocated u0:0 sig0
+    fn1 = colocated u0:1 sig1
+
+block0:
+    v0 = func_addr.i64 fn0
+    v1 = iconst.i64 21
+    v2 = call fn1(v0, v1)  ; v1 = 21
+    return v2
+}

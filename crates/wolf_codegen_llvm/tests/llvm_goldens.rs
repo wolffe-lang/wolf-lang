@@ -33,6 +33,27 @@ fn ir_of_fixture(name: &str) -> Option<String> {
 
 // ---- per-fixture goldens (mirror the debug tier's clif_goldens) -----------
 
+/// s97 (#112): the indirect call — `func.addr` yields the defined
+/// symbol as a ptr operand, and the call line goes through the VALUE
+/// (`call i64 %0(...)`), not an `@name`. Provenance note (target 7b):
+/// under PIC both tiers hand the same linker-resolved address around,
+/// and the exec witness on the clif tier plus the differential on the
+/// corpus witnesses hold the two backends to one behavior.
+#[test]
+fn llvm_call_ind() {
+    if let Some(t) = ir_of_fixture("call_ind") {
+        let call = t
+            .lines()
+            .find(|l| l.trim_start().starts_with('%') && l.contains(" = call i64 %"))
+            .expect("the indirect call goes through a VALUE, not an @name");
+        assert!(
+            !call.contains('@'),
+            "an indirect call must not name a symbol: {call}"
+        );
+        insta::assert_snapshot!("llvm_call_ind", t);
+    }
+}
+
 #[test]
 fn llvm_overflow() {
     if let Some(t) = ir_of_fixture("overflow") {
