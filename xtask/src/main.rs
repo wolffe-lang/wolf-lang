@@ -759,8 +759,15 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// lanes that gained overlap the checked lane on two entries only.
 /// (History: s94 145/142/142 — the four `corpus/generics/` witnesses,
 /// +4 every lane.)
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 150), ("release", 150)];
-const UNION_FLOOR: usize = 168;
+/// Ratcheted by s97 over 279 entries: native and release +2, union
+/// +2 — `rows/hof_tail.lu` and `rows/inferred_private.lu`, refused
+/// since always because WIR had no opcode to call through a fn value
+/// (#112), run on both native tiers through `call.ind`. checked +0:
+/// the checked rung still refuses the module-item read that produces
+/// the value (#12), so `all-three` holds at 127 — the first ratchet
+/// whose all-three prediction MEASURED true, stated for the record.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 152), ("release", 152)];
+const UNION_FLOOR: usize = 170;
 const ALL_THREE_FLOOR: usize = 127;
 
 /// One lane's observation of one corpus entry.
