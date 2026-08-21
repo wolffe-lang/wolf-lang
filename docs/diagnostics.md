@@ -1149,6 +1149,35 @@ moment. Bind the error and branch instead — `else |e| match e { … }`
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__else_tag_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__handler_uncovered.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0809_handler_uncovered.snap
 
+## E0810 — a temporary has no home — bind it first
+
+A `dyn` cast erases a value behind a pointer: the trait object's data
+half points AT the operand, so the operand must be a place that
+outlives the cast — a binding, a field of a binding, or an index into
+one. A temporary (a literal, a call result, an arithmetic value) dies
+at the end of its expression, and a pointer at it would dangle. Bind
+the value first, then cast the binding:
+
+    let home = make_value()
+    render(home as dyn Draw)
+
+The binding gives the value a home for exactly as long as the trait
+object is used; the checker lends the place to the pair and refuses
+writes that would pull the home out from under it.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__dyn_temp_refused.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0810_dyn_cast_of_a_temporary.snap
+
+## E0811 — the type does not implement the trait it is cast to
+
+`v as dyn Trait` erases a concrete type behind the coherence-unique
+impl of `Trait` for that type — the vtable the object dispatches
+through is built FROM that impl. Without the impl there is nothing to
+build: implement the trait for the type, or pass the value as itself.
+Only nominal types (structs, enums) carry trait impls; primitives,
+functions and other shapes cannot enter a `dyn` today.
+
+Fixtures: crates/wolf_sema/tests/snapshots/method_diagnostics__e0811_dyn_cast_without_an_impl.snap
+
 ## E1001 — this value was moved away (or never given one) before this use
 
 In wolf, assignment and argument passing *move* a value: after
@@ -1176,7 +1205,7 @@ the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap
 
 ## E1004 — this value is placed in one region, but needed in another
 

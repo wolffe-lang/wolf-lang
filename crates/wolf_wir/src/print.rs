@@ -461,7 +461,14 @@ pub fn print_selected(m: &Module, funcs: &[crate::ir::FuncId]) -> String {
         if !used_data.contains(&(i as u32)) {
             continue;
         }
-        writeln!(out, "data @{} = \"{}\"", d.name, escape_bytes(&d.bytes)).unwrap();
+        if d.funcs.is_empty() {
+            writeln!(out, "data @{} = \"{}\"", d.name, escape_bytes(&d.bytes)).unwrap();
+        } else {
+            // s98: a vtable — fn-pointer slots, content in the dump so
+            // the D8 hash sees the slot list like any other bytes.
+            let slots: Vec<String> = d.funcs.iter().map(|f| format!("@{f}")).collect();
+            writeln!(out, "data @{} = fns ({})", d.name, slots.join(", ")).unwrap();
+        }
         any_head = true;
     }
     let mut first = !any_head;

@@ -1,0 +1,14 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `d` cannot be changed while `d` is lent out
+  --> mem:///main.lu:15:5
+   |
+14 |     let o = d as dyn Draw
+   |         - the value is lent here
+15 |     d = Dot { x: 9 }
+   |     ^ conflicting access
+   |
+   = note: the loan is still needed by a later use of the borrowing name; once its last use passes,
+     the place is free again.

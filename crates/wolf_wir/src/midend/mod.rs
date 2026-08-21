@@ -525,6 +525,19 @@ fn dead_function_elim(m: &mut Module, stats: &mut OptStats) {
                 {
                     work.push(cid);
                 }
+                // s98: a `data.addr` of a vtable keeps every slot shim
+                // live — the table's slots relocate against them, and a
+                // table a live function loads IS a use of each target
+                // exactly as a `func.addr` would be.
+                if let crate::ir::Aux::Data(di) = f.insts[inst].aux
+                    && let Some(d) = m.data.get(di as usize)
+                {
+                    for fname in &d.funcs {
+                        if let Some(&cid) = by_name.get(fname) {
+                            work.push(cid);
+                        }
+                    }
+                }
             }
         }
     }

@@ -126,7 +126,8 @@ fn main() {
          \"wir_fold_hits\": {}, \"wir_identity_hits\": {}, \
          \"wir_gvn_hits\": {}, \"wir_forward_hits\": {}, \
          \"wir_instantiations_seen\": {}, \"wir_instantiations_lowered\": {}, \
-         \"wir_instantiations_unique\": {}}}",
+         \"wir_instantiations_unique\": {}, \
+         \"wir_vtables_demanded\": {}, \"wir_vtables_unique\": {}}}",
         totals.insts,
         totals.fold,
         totals.identity,
@@ -134,6 +135,8 @@ fn main() {
         totals.forward,
         totals.instantiations_seen,
         totals.instantiations_lowered,
-        unique_total
+        unique_total,
+        totals.vtables_demanded,
+        totals.vtables_unique
     );
 }

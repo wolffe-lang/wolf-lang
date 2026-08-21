@@ -633,6 +633,24 @@ the inputs that would have decided it either way.)
 
 ---
 
+- `[mem.dyn.unsize]` A trait object is constructed by an **explicit
+  cast, from a place** (D47): `v as dyn Trait`, where `v` denotes a
+  binding, a field, or an index, and the concrete type carries the
+  coherence-unique impl of the dyn-safe trait. There is no implicit
+  coercion — the coercion table grows by addition, never by a new
+  implicit mechanism — and a temporary is refused (E0810): the pair's
+  data half points AT the operand, and a temporary has no home to
+  point into. The cast is a **shared lend of the place** for as long
+  as the pair is needed: writes to and moves of the place while the
+  pair lives are refused, the same deal as every other borrow in this
+  chapter, one object at a time. A pair lives in a local or crosses a
+  call as an argument; it does not (yet) cross a return, enter a
+  container, a field, or a row — each of those is a borrow story not
+  yet written, refused by name rather than guessed. The vtable the
+  cast builds is `[abi.native.dyn]`'s: one content-interned table per
+  (trait, impl) pair, slots in the dyn report's canonical order,
+  shims owned by the table.
+
 ## Appendix A — `corpus/regions.lu`, clause by clause `[mem.appendix]`
 
 ```text

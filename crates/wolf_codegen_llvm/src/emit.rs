@@ -1814,11 +1814,32 @@ impl<'a> Fx<'a> {
                     .ok_or_else(|| ice("data.addr names missing data"))?;
                 let sym = format!("_W.{}", d.name);
                 if self.cx.global_names.insert(sym.clone()) {
-                    let line = format!(
-                        "@\"{sym}\" = private unnamed_addr constant [{} x i8] {}, align 1",
-                        d.bytes.len().max(1),
-                        bytes_const(&d.bytes),
-                    );
+                    let line = if d.funcs.is_empty() {
+                        format!(
+                            "@\"{sym}\" = private unnamed_addr constant [{} x i8] {}, align 1",
+                            d.bytes.len().max(1),
+                            bytes_const(&d.bytes),
+                        )
+                    } else {
+                        // s98: a vtable — pointer-sized slots, each the
+                        // address of a module function
+                        // ([abi.native.dyn]); the symbols are link-time
+                        // constants exactly like `func.addr`'s.
+                        let mut slots = Vec::with_capacity(d.funcs.len());
+                        for fname in &d.funcs {
+                            let Some(entry) = self.funcs.get(fname) else {
+                                return Err(nyi(format!(
+                                    "a vtable slot `@{fname}` outside this object's subset"
+                                )));
+                            };
+                            slots.push(format!("ptr @\"{}\"", entry.symbol));
+                        }
+                        format!(
+                            "@\"{sym}\" = private unnamed_addr constant [{} x ptr] [{}], align 8",
+                            d.funcs.len(),
+                            slots.join(", "),
+                        )
+                    };
                     self.cx.globals.push(line);
                 }
                 self.vals

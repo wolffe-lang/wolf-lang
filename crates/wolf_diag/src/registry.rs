@@ -1110,6 +1110,31 @@ moment. Bind the error and branch instead — `else |e| match e { … }`
 — which checks every arm for coverage the ordinary way.
 "#);
 
+code!(E0810, "a temporary has no home — bind it first", r#"
+A `dyn` cast erases a value behind a pointer: the trait object's data
+half points AT the operand, so the operand must be a place that
+outlives the cast — a binding, a field of a binding, or an index into
+one. A temporary (a literal, a call result, an arithmetic value) dies
+at the end of its expression, and a pointer at it would dangle. Bind
+the value first, then cast the binding:
+
+    let home = make_value()
+    render(home as dyn Draw)
+
+The binding gives the value a home for exactly as long as the trait
+object is used; the checker lends the place to the pair and refuses
+writes that would pull the home out from under it.
+"#);
+
+code!(E0811, "the type does not implement the trait it is cast to", r#"
+`v as dyn Trait` erases a concrete type behind the coherence-unique
+impl of `Trait` for that type — the vtable the object dispatches
+through is built FROM that impl. Without the impl there is nothing to
+build: implement the trait for the type, or pass the value as itself.
+Only nominal types (structs, enums) carry trait impls; primitives,
+functions and other shapes cannot enter a `dyn` today.
+"#);
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004

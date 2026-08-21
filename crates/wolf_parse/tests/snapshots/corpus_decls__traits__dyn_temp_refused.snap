@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+TraitDecl 718..757 name=Draw
+  FnDecl 735..756 name=draw
+StructDecl 759..785 name=Dot fields=1
+ImplDecl 787..855 path=Draw for=Dot
+  FnDecl 811..853 name=draw body=Block
+FnDecl 857..903 name=render body=Block
+FnDecl 905..1026 name=main body=Block

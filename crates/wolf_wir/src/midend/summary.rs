@@ -366,6 +366,14 @@ pub fn summarize(m: &Module, homes: &Homes) -> ProgramSummary {
             }
         }
     }
+    // s98: a vtable slot is address-taken the same way — the shim's
+    // address escapes into module data, so its identity is pinned
+    // (dedup) and it never inlines away.
+    for d in &m.data {
+        for fname in &d.funcs {
+            address_taken.insert(fname.as_str());
+        }
+    }
     let recursive = recursive_set(m, &by_name);
     let mut funcs: Vec<FuncSummary> = m
         .funcs
@@ -401,6 +409,35 @@ fn one(
         let depth = loops.depth.get(&b).copied().unwrap_or(0);
         for &inst in &f.blocks[b].insts {
             size += 1;
+            // s98: a `data.addr` of a vtable is an edge to every slot
+            // shim — the table is emitted in the object that uses it,
+            // and its slots relocate against functions that must be
+            // co-resident (`func.addr`'s own subset rule). Without
+            // these edges the partitioner separates shim from table
+            // and the release tier refuses a program the debug tier
+            // runs.
+            if f.insts[inst].op == Opcode::DataAddr
+                && let Aux::Data(di) = f.insts[inst].aux
+            {
+                if let Some(d) = m.data.get(di as usize) {
+                    for fname in &d.funcs {
+                        if !by_name.contains_key(fname.as_str()) {
+                            continue;
+                        }
+                        let e = edges.entry(fname.clone()).or_insert_with(|| CallEdge {
+                            callee: fname.clone(),
+                            depth: 0,
+                            sites: 0,
+                            const_args: 0,
+                        });
+                        e.sites += 1;
+                        if depth >= e.depth {
+                            e.depth = depth;
+                        }
+                    }
+                }
+                continue;
+            }
             if f.insts[inst].op != Opcode::Call {
                 continue;
             }

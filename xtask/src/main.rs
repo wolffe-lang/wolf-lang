@@ -777,9 +777,25 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// surface decision), so this is the dispatch chain compiling and
 /// linking, with its execution pinned by the backends' hand-built
 /// vtable fixture.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 145), ("native", 153), ("release", 153)];
+/// Adjusted by s98 over 280 entries — the one DELIBERATE lowering in
+/// this table's history, with the reason the gate demands: checked
+/// 145 → 144 and all-three 128 → 127, because `traits/dyn_ok.lu` now
+/// CONSTRUCTS and CALLS through its pairs (D47, `[mem.dyn.unsize]`),
+/// and the checked rung refuses "trait dispatch in checked execution"
+/// by name — a pre-existing posture (#12's family) that never bit
+/// while the s96 dispatch chain was dead code behind the missing
+/// construction rule. The file did not regress; it gained the content
+/// the checked executor never supported, and pretending otherwise
+/// would need the pin softened. native holds 153; release holds 153
+/// (the vtable's slot shims are call-graph edges and DFE roots now —
+/// without that the release tier refused a table whose shims the
+/// partitioner had separated or eliminated). union holds 170. The
+/// new `traits/dyn_temp_refused.lu` is `rejected` (E0810 fail-pin,
+/// lupin divergence recorded as wolf-interp#31) and sits outside
+/// every run count.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 144), ("native", 153), ("release", 153)];
 const UNION_FLOOR: usize = 170;
-const ALL_THREE_FLOOR: usize = 128;
+const ALL_THREE_FLOOR: usize = 127;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -1740,6 +1756,10 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
                     ("wir_instantiations_seen", "instantiations"),
                     ("wir_instantiations_lowered", "bodies"),
                     ("wir_instantiations_unique", "bodies"),
+                    // s98: vtable demands vs distinct tables emitted —
+                    // the same discipline applied to dyn dispatch data.
+                    ("wir_vtables_demanded", "vtables"),
+                    ("wir_vtables_unique", "vtables"),
                 ] {
                     if let Some(x) = v[metric].as_f64() {
                         records.push(record(

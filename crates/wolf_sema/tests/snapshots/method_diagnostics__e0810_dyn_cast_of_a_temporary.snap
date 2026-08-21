@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0810]: a temporary has no home — bind it first
+ --> mem:///main.lu:8:20
+  |
+8 |     let s = render(Dot { x: 7 } as dyn Draw)
+  |                    ^^^^^^^^^^^^^^^^^^^^^^^^ this value would not outlive the cast
+  |
+  = note: the dyn pair's data half points AT the operand, so the operand must be a place: a
+    binding, a field, or an index. Bind it first — `let home = …` — and cast the binding:
+    `home as dyn Draw`.

@@ -583,19 +583,49 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                     _ => return line.fail("expected `@name` after `data`"),
                 };
                 line.expect(Tok::Eq)?;
-                let bytes = match line.peek() {
+                // s98: `data @name = fns [@a, @b]` — a vtable (fn-
+                // pointer slots); otherwise `= "bytes"` (s31 blobs).
+                let (bytes, funcs) = match line.peek() {
                     Some(Tok::Str(b)) => {
                         let b = b.clone();
                         line.next();
-                        b
+                        (b, Vec::new())
                     }
-                    _ => return line.fail("expected a string literal after `=`"),
+                    Some(Tok::Ident(k)) if k == "fns" => {
+                        line.next();
+                        line.expect(Tok::LParen)?;
+                        let mut fs = Vec::new();
+                        loop {
+                            match line.peek() {
+                                Some(Tok::Global(f)) => {
+                                    fs.push(f.clone());
+                                    line.next();
+                                }
+                                _ => return line.fail("expected `@fn` in the slot list"),
+                            }
+                            match line.peek() {
+                                Some(Tok::Comma) => {
+                                    line.next();
+                                }
+                                Some(Tok::RParen) => break,
+                                _ => return line.fail("expected `,` or `)` in the slot list"),
+                            }
+                        }
+                        line.expect(Tok::RParen)?;
+                        if fs.is_empty() {
+                            return line.fail("a vtable needs at least one slot");
+                        }
+                        (Vec::new(), fs)
+                    }
+                    _ => return line.fail("expected a string literal or `fns (...)` after `=`"),
                 };
                 line.expect_end()?;
                 if p.module.data.iter().any(|d| d.name == name) {
                     return line.fail(format!("data `@{name}` is declared twice"));
                 }
-                p.module.data.push(crate::ir::DataDecl { name, bytes });
+                p.module
+                    .data
+                    .push(crate::ir::DataDecl { name, bytes, funcs });
                 i = end;
             }
             Tok::Ident(kw) if kw == "fn" => {

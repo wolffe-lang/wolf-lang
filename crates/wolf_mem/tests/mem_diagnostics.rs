@@ -1212,3 +1212,45 @@ fn nested_read_iteration_stays_silent() {
          }\n",
     );
 }
+
+#[test]
+fn e1002_write_under_a_dyn_pair() {
+    // s98 (D47, `[mem.dyn.unsize]`): `d as dyn Draw` in binding
+    // position is a SHARED loan of `d`, borrower `o`, scoped by `o`'s
+    // liveness (NLL, not lexical). The write to `d` lands while
+    // `o.draw()` still needs the pair, so the loan engine refuses it —
+    // the teeth behind "slot-vs-place is unobservable".
+    snap(
+        "e1002_write_under_a_dyn_pair",
+        "trait Draw {\n    fn draw(self) -> int\n}\n\
+         struct Dot {\n    x: int,\n}\n\
+         impl Draw for Dot {\n    fn draw(self) -> int {\n        self.x\n    }\n}\n\
+         fn main() -> !int {\n    \
+             var d = Dot { x: 7 }\n    \
+             let o = d as dyn Draw\n    \
+             d = Dot { x: 9 }\n    \
+             if o.draw() == 7 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_write_after_a_dyn_pairs_last_use() {
+    // s98's loan is NLL-scoped, not lexical: `o`'s last use passes
+    // BEFORE the write to `d`, so the loan is dead and the write is
+    // free (the snapshot pins zero diagnostics). The E1002 twin above
+    // is the same program with the write and the use swapped.
+    snap(
+        "clean_write_after_dyn_last_use",
+        "trait Draw {\n    fn draw(self) -> int\n}\n\
+         struct Dot {\n    x: int,\n}\n\
+         impl Draw for Dot {\n    fn draw(self) -> int {\n        self.x\n    }\n}\n\
+         fn main() -> !int {\n    \
+             var d = Dot { x: 7 }\n    \
+             let o = d as dyn Draw\n    \
+             let first = o.draw()\n    \
+             d = Dot { x: 9 }\n    \
+             if first == 7 { 0 } else { 1 }\n\
+         }\n",
+    );
+}

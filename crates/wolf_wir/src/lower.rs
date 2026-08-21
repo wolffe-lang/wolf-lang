@@ -869,6 +869,7 @@ fn lower_body(
     )?;
     // s73: task bodies queued by spawn sites, synthesized post-pass.
     let mut pending: Vec<PendingTask<'_>> = Vec::new();
+    let mut dyn_shims: Vec<DynShim> = Vec::new();
     let mut b = FuncBuilder::new(module, wir_name, sig);
     // s30: spans thread from the typed HIR into WIR (the lossless s07
     // chain) — the file once per function, then a per-statement span
@@ -904,6 +905,7 @@ fn lower_body(
         foreign: None,
         lender,
         pending_specs: specs,
+        pending_dyn_shims: &mut dyn_shims,
         survey: survey.as_deref_mut(),
         b: &mut b,
     };
@@ -946,6 +948,7 @@ fn lower_body(
                 &mut pending,
                 lender,
                 specs,
+                &mut dyn_shims,
                 survey.as_deref_mut(),
             ) {
                 Ok(s) => stats.add(s),
@@ -953,6 +956,14 @@ fn lower_body(
             }
         }
         if let Err(e) = build_task_shim(module, &task) {
+            return Err(body_verdict(survey.as_deref_mut(), e));
+        }
+    }
+    // s98: the dyn-slot shims this body's casts demanded. After the
+    // task drain (a task body may cast); shims themselves never queue
+    // more work.
+    while let Some(shim) = dyn_shims.pop() {
+        if let Err(e) = build_dyn_shim(module, &shim) {
             return Err(body_verdict(survey.as_deref_mut(), e));
         }
     }
@@ -989,6 +1000,7 @@ fn lower_task_body<'t>(
     pending: &mut Vec<PendingTask<'t>>,
     lender: &'t Lender<'t>,
     specs: &mut Vec<SpecRequest>,
+    dyn_shims: &mut Vec<DynShim>,
     survey: Option<&mut Vec<NotYet>>,
 ) -> R<Stats> {
     let closure = task.closure.expect("closure task");
@@ -1025,6 +1037,7 @@ fn lower_task_body<'t>(
         foreign: None,
         lender,
         pending_specs: specs,
+        pending_dyn_shims: dyn_shims,
         survey,
         b: &mut b,
     };
@@ -1098,6 +1111,36 @@ fn lower_task_body<'t>(
 /// `CANCEL_TAG`) for a body whose error is the `cancelled` tag or
 /// whose scope was killed (the no-defer teardown branch, the c07
 /// handoff).
+/// s98: build one dyn-slot shim — the erased-shape function a vtable
+/// slot points at (`[abi.native.dyn]`). `(ptr, tail…)` in; the
+/// receiver VALUE flat-loads from the data pointer (the exec
+/// fixture's own shape: read through the pointer, then work); one
+/// call to the real target; its result straight out. Module-wide
+/// idempotent: two casts demanding one slot build one shim.
+fn build_dyn_shim(module: &mut Module, shim: &DynShim) -> R<()> {
+    if module.funcs.iter().any(|(_, f)| f.name == shim.name) {
+        return Ok(());
+    }
+    let mut b = FuncBuilder::new(module, shim.name.clone(), shim.erased_sig);
+    b.func.src_file = None; // synthetic: no line table
+    let entry = b.current_block();
+    let params = b.block_params(entry);
+    let (data, tail) = params.split_first().expect("erased sig has a receiver");
+    let tail: Vec<Value> = tail.to_vec();
+    // The vtable data pointer reads through the foreign header region
+    // (never stored through in any body this lowering emits).
+    let region = b.ins_region_foreign(ForeignRole::Header);
+    let recv = load_flat_raw(&mut b, shim.recv_ty, *data, region, shim.span)?;
+    let ext = b.func.import_func(shim.target.clone(), shim.target_sig);
+    let mut args = vec![recv];
+    args.extend(tail);
+    let rets = b.ins_call(ext, &args);
+    b.ins_ret(&rets);
+    let func = b.finish();
+    module.add_func(func);
+    Ok(())
+}
+
 fn build_task_shim(module: &mut Module, task: &PendingTask<'_>) -> R<()> {
     let cancelled_id = module.tag_id("cancelled");
     // Machine shape: (ptr) -> i64; the env token param erases.
@@ -1697,6 +1740,19 @@ fn wir_ty_frame(
         // construction rule is a surface decision filed for the
         // human, not decided silently (s96's stop).
         TyKind::Dyn { .. } => {
+            // s98 (D47's conservative reading): the pair exists as a
+            // local, a parameter, or an argument — TOP-LEVEL positions
+            // only (depth 0). Behind any other type — a struct field,
+            // a generic argument, a row payload, a fallible return —
+            // the pair could outlive the place its data half borrows
+            // through a shape the mem tier cannot see; refuse by name
+            // until the borrow story for that shape is written.
+            if depth > 0 {
+                return Err(refuse(
+                    "a `dyn` inside another type (the pair stays a local or an argument for now)",
+                    span,
+                ));
+            }
             Ok(Some(it.intern(types::TypeData::Agg(vec![
                 types::PTR,
                 types::PTR,
@@ -1935,6 +1991,16 @@ fn wir_sig_of(
                 });
             }
         }
+    }
+    // s98 (D47): a declared `dyn` RETURN would hand the pair down a
+    // frame while its data half borrows a place in the returning one;
+    // the borrow story for that crossing is unwritten. Refuse at the
+    // signature, so every body of the fn refuses the same way.
+    if matches!(table.kind(fsig.ret), TyKind::Dyn { .. }) {
+        return Err(refuse(
+            "a `dyn` return (the pair does not cross a return — bind it in the caller)",
+            span,
+        ));
     }
     let results = match wir_ty(&mut module.types, table, sigs, fsig.ret, span)? {
         Some(t) => vec![t],
@@ -2258,11 +2324,35 @@ struct Lowerer<'t, 'b, 'm> {
     /// s89: view specializations this body's call sites demanded, drained
     /// to fixpoint by [`lower_package`].
     pending_specs: &'b mut Vec<SpecRequest>,
+    /// s98: dyn-cast sites queue one erased-shape shim per vtable slot
+    /// (`{target}.dynshim`: load the receiver from the data pointer,
+    /// call the target); [`lower_body`] builds them after the task
+    /// drain. Shim bodies contain no casts, so the queue never feeds
+    /// itself.
+    pending_dyn_shims: &'b mut Vec<DynShim>,
     /// The survey lens ([`lower_package_survey`]): when on, a
     /// statement-level refusal is recorded here and lowering continues
     /// with the next statement instead of aborting the body.
     survey: Option<&'b mut Vec<NotYet>>,
     b: &'b mut FuncBuilder<'m>,
+}
+
+/// One queued dyn-slot shim (s98): the erased-shape function a vtable
+/// slot points at. `(ptr, tail…)` in, the receiver VALUE flat-loaded
+/// from the data pointer, one call to the real target, its result out.
+/// The shim is the table's problem, never the call site's
+/// (`[abi.native.dyn]`).
+struct DynShim {
+    /// The shim's WIR name: `{target}.dynshim`.
+    name: String,
+    /// The real method body the slot dispatches to.
+    target: String,
+    target_sig: SigId,
+    /// The erased signature (`ptr` receiver + declared tail).
+    erased_sig: SigId,
+    /// The receiver's WIR layout (what flat-loads from the data ptr).
+    recv_ty: TypeId,
+    span: Span,
 }
 
 /// One queued task body (s73): the entry shim `fn(env) -> i64` plus —
@@ -5872,7 +5962,242 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "raw-pointer casts (unsafe-tier WIR ops, deferred from s26 — see closeout)",
                 e.span,
             )),
+            CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
         }
+    }
+
+    /// s98 (D47): `place as dyn Trait` — build the pair.
+    ///
+    /// The DATA half is the place's spilled identity: the operand
+    /// value flat-stores into a `stack.alloc` slot, the same
+    /// convention `mut` arguments already use (s26) — wolf locals are
+    /// SSA values, and the slot is the only memory identity a local
+    /// has. The mem tier's shared loan forbids writes to the place
+    /// while the pair is live, so slot-vs-place is unobservable; the
+    /// slot is frame-lived and the pair cannot leave the frame (the
+    /// depth-0 rule, the return guard), so the pointer never dangles.
+    ///
+    /// The VTABLE half is a content-interned fn-pointer table: one
+    /// slot per method in the trait's `DynReport` canonical order,
+    /// each pointing at an erased-shape shim over the s95 instance
+    /// (`[abi.native.dyn]`: the shim is the table's problem, never
+    /// the call site's). Two casts of one (trait, impl) pair share
+    /// ONE table (D8's discipline applied to data).
+    fn lower_dyn_cast(
+        &mut self,
+        e: &'t GreenNode,
+        v: Option<Value>,
+        from: TyId,
+        to: TyId,
+    ) -> R<Flow> {
+        let Some(v) = v else {
+            return Err(refuse("a dyn cast of a unit value", e.span));
+        };
+        let sigs = self.sigs;
+        let TyKind::Dyn {
+            module: tmod,
+            name: tname,
+        } = self.table.kind(self.strip_sema(to)).clone()
+        else {
+            return Err(refuse("a dyn cast whose target is not a dyn", e.span));
+        };
+        let tr = wolf_sema::traits::TraitRef {
+            module: tmod as usize,
+            name: tname.clone(),
+        };
+        let Some(td) = sigs.traits.get(&tr) else {
+            return Err(refuse("a dyn cast on an unelaborated trait", e.span));
+        };
+        if !td.dyn_report.safe() {
+            return Err(refuse_named(
+                format!("a dyn cast to `{tname}`, which is not dyn-safe (object safety owns this)"),
+                e.span,
+            ));
+        }
+        let src = self.strip_sema(from);
+        let TyKind::Nominal { name: head, .. } = self.table.kind(src).clone() else {
+            return Err(refuse_named(
+                format!("a dyn cast of a non-nominal type to `{tname}`"),
+                e.span,
+            ));
+        };
+        let Some(imp) = sigs.impls.iter().find(|i| {
+            i.trait_ref.as_ref() == Some(&tr)
+                && matches!(
+                    sigs.table.kind(i.self_ty),
+                    TyKind::Nominal { name: n, .. } if n == &head
+                )
+        }) else {
+            return Err(refuse_named(
+                format!("a dyn cast without a coherent `{tname}` impl for `{head}`"),
+                e.span,
+            ));
+        };
+        if !imp.generics.is_empty() {
+            return Err(refuse_named(
+                format!("a generic `{tname}` impl behind a dyn cast (instantiate-at-cast)"),
+                e.span,
+            ));
+        }
+        // The data half: spill the operand into its slot.
+        let Some(src_w) = wir_ty(&mut self.b.module.types, self.table, sigs, from, e.span)? else {
+            return Err(refuse("a dyn cast of a unit-typed value", e.span));
+        };
+        let Some(size) = flat_size(&self.b.module.types, src_w) else {
+            return Err(refuse(
+                "a dyn cast of a value without a flat layout",
+                e.span,
+            ));
+        };
+        let (slot_region, slot) = self.b.ins_stack_alloc(size);
+        self.b.func.add_fact(FactData::new(
+            FactKind::Region(slot, slot_region),
+            Just::DefOp,
+        ));
+        self.b.func.add_fact(FactData::new(
+            FactKind::Deref(slot, DerefSize::Const(size)),
+            Just::DefOp,
+        ));
+        self.store_flat(v, slot, slot_region, e.span)?;
+        // The vtable half: one shim per canonical slot.
+        let mut slot_fns = Vec::with_capacity(td.dyn_report.methods.len());
+        for m in &td.dyn_report.methods {
+            let Some(tm) = td.method(m).filter(|mm| mm.has_self) else {
+                return Err(refuse("a dyn slot without a receiver method", e.span));
+            };
+            // The erased shape is the TRAIT's declaration; the same
+            // guards the dyn CALL path holds (a slot no call site
+            // could reach honestly is a slot this table refuses).
+            if let Some(mode) = tm.sig.params.first().and_then(|p| p.mode) {
+                let kw = match mode {
+                    ParamMode::Mut => "mut",
+                    ParamMode::Take => "take",
+                };
+                return Err(refuse_named(
+                    format!(
+                        "a `{kw} self` method behind a dyn cast (the erased receiver is a pointer)"
+                    ),
+                    e.span,
+                ));
+            }
+            for p in tm.sig.params.iter().skip(1) {
+                if p.mode.is_some() {
+                    return Err(refuse_named(
+                        format!("a moded parameter behind a dyn `{tname}.{m}` slot"),
+                        e.span,
+                    ));
+                }
+                if mentions_self(self.sig_table, p.ty) {
+                    return Err(refuse_named(
+                        "a `Self`-typed parameter behind a dyn slot (object safety owns this)"
+                            .to_string(),
+                        e.span,
+                    ));
+                }
+            }
+            if mentions_self(self.sig_table, tm.sig.ret) {
+                return Err(refuse_named(
+                    "a `Self`-typed return behind a dyn slot (object safety owns this)".to_string(),
+                    e.span,
+                ));
+            }
+            // The slot's real target: the impl's own body, or the
+            // trait's default monomorphized over `Self ↦ head` (the
+            // s95 mangling, exactly).
+            let (target, target_sig) = match imp.methods.iter().find(|mm| mm.name == *m) {
+                Some(mm) => {
+                    if !mm.sig.generics.is_empty() {
+                        return Err(refuse_named(
+                            format!("a generic method `{m}` behind a dyn slot"),
+                            e.span,
+                        ));
+                    }
+                    let name = format!("{head}.{tname}.{m}");
+                    let sig = wir_sig_of(self.b.module, self.sig_table, sigs, &mm.sig, 0, e.span)?;
+                    (name, sig)
+                }
+                None => {
+                    let base = format!("{tname}.{m}");
+                    let bound = freeze(self.table, src);
+                    let mut scratch = TypeTable::new();
+                    let t = thaw(&bound, &mut scratch);
+                    let key = SpecKey {
+                        mask: 0,
+                        subst: vec![("Self".to_string(), mono_spelling(&scratch, t))],
+                    };
+                    let full = spec_name(&base, &key);
+                    self.pending_specs.push(SpecRequest {
+                        name: base,
+                        key,
+                        bindings: vec![("Self".to_string(), bound.clone())],
+                        span: e.span,
+                    });
+                    let mut st = self.sig_table.clone();
+                    let map: std::collections::BTreeMap<String, TyId> =
+                        std::iter::once(("Self".to_string(), thaw(&bound, &mut st))).collect();
+                    let mut f = tm.sig.clone();
+                    for p in &mut f.params {
+                        p.ty = wolf_sema::types::subst(&mut st, p.ty, &map);
+                    }
+                    f.ret = wolf_sema::types::subst(&mut st, f.ret, &map);
+                    let sig = wir_sig_of(self.b.module, &st, sigs, &f, 0, e.span)?;
+                    (full, sig)
+                }
+            };
+            // The erased signature: ptr receiver + the declared tail.
+            let mut params = vec![Param {
+                ty: types::PTR,
+                mode: Mode::Val,
+            }];
+            for p in tm.sig.params.iter().skip(1) {
+                let Some(w) = wir_ty(&mut self.b.module.types, self.sig_table, sigs, p.ty, e.span)?
+                else {
+                    return Err(refuse("unit-typed parameters behind a dyn slot", e.span));
+                };
+                params.push(Param {
+                    ty: w,
+                    mode: Mode::Val,
+                });
+            }
+            let results = match wir_ty(
+                &mut self.b.module.types,
+                self.sig_table,
+                sigs,
+                tm.sig.ret,
+                e.span,
+            )? {
+                Some(t) => vec![t],
+                None => vec![],
+            };
+            let erased_sig = self.b.module.make_sig(params, results);
+            let shim = format!("{target}.dynshim");
+            self.pending_dyn_shims.push(DynShim {
+                name: shim.clone(),
+                target,
+                target_sig,
+                erased_sig,
+                recv_ty: src_w,
+                span: e.span,
+            });
+            slot_fns.push(shim);
+        }
+        let hint = format!("vt.{head}.{tname}");
+        let (idx, fresh) = self.b.module.intern_fn_table(&hint, &slot_fns);
+        self.b.stats.vtables_demanded += 1;
+        if fresh {
+            self.b.stats.vtables_unique += 1;
+        }
+        let vt = self.b.ins_data_addr(idx);
+        let pair_ty = self
+            .b
+            .module
+            .types
+            .intern(types::TypeData::Agg(vec![types::PTR, types::PTR]));
+        let pair = self
+            .b
+            .ins(Opcode::AggMake, &[slot, vt], &[pair_ty], Aux::None)
+            .one();
+        Ok(Flow::Val(Some(pair)))
     }
 
     fn lower_if(&mut self, e: &'t GreenNode, want: bool) -> R<Flow> {
