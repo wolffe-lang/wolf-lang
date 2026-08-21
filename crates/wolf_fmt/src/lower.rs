@@ -1203,6 +1203,12 @@ impl<'a> Fmt<'a> {
                 Child::Token(t) if t.kind == K::Comma => commas.push(t),
                 Child::Token(t) if matches!(t.kind, K::Term | K::Missing) => {}
                 Child::Token(_) => {}
+                // A zero-width recovery node is not an element: it
+                // renders nothing, but counting it drove separator
+                // placement — a comment beside the invisible element
+                // emitted before it on pass one and after it (attached
+                // to the next comma or closer) on every later pass.
+                Child::Node(m) if m.span.lo == m.span.hi => {}
                 Child::Node(m) => elems.push(m),
             }
         }
