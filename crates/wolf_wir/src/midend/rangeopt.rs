@@ -153,10 +153,17 @@ pub(crate) fn run(
             let (c, _) = eliminate_round(f, view, stats, false);
             changed |= c;
             // Metric honesty: an original whose FAST twin lost its
-            // check counts as eliminated on the hot path.
-            for (_, twin) in twins {
-                if !overflow_candidate(f.insts[twin].op) {
-                    stats.loop_checks_eliminated += 1;
+            // check counts as eliminated on the hot path — overflow
+            // twins in the check bucket, bounds twins in the bounds
+            // bucket (the original keeps its op; the twin's tells
+            // whether round 2 rewrote it).
+            for (orig, twin) in twins {
+                if overflow_candidate(f.insts[orig].op) {
+                    if !overflow_candidate(f.insts[twin].op) {
+                        stats.loop_checks_eliminated += 1;
+                    }
+                } else if f.insts[twin].op == Opcode::Jmp {
+                    stats.bounds_checks_eliminated += 1;
                 }
             }
         }
@@ -187,6 +194,12 @@ struct RangeCx<'a> {
     affine: HashMap<Value, (Value, i128)>,
     /// Hypothetical overrides (versioning what-if queries).
     hypo: HashMap<Value, Range>,
+    /// Hypothetical RELATIONS (versioning what-if queries): held as
+    /// if a dominating guard edge carried them, at every block.
+    /// Sound only because version_one materializes exactly these
+    /// comparisons as real guards on the fast path; empty outside a
+    /// what-if.
+    axioms: Vec<(IntCc, Value, Value)>,
     /// Recursion guard.
     visiting: HashSet<Value>,
     /// Instruction placement (batch-computed; the egg discipline).
@@ -205,7 +218,7 @@ fn type_bounds(cx: &RangeCx, v: Value) -> Option<Range> {
 
 impl<'a> RangeCx<'a> {
     fn new(f: &'a Function, view: &'a ModView, doms: &'a Doms, cfg: &analysis::Cfg) -> RangeCx<'a> {
-        Self::with_hypo(f, view, doms, cfg, HashMap::new())
+        Self::with_hypo(f, view, doms, cfg, HashMap::new(), Vec::new())
     }
 
     /// A context with hypothetical overrides installed BEFORE π
@@ -217,6 +230,7 @@ impl<'a> RangeCx<'a> {
         doms: &'a Doms,
         cfg: &analysis::Cfg,
         hypo: HashMap<Value, Range>,
+        axioms: Vec<(IntCc, Value, Value)>,
     ) -> RangeCx<'a> {
         let mut place = HashMap::new();
         for &b in &cfg.rpo {
@@ -233,6 +247,7 @@ impl<'a> RangeCx<'a> {
             base: HashMap::new(),
             affine: HashMap::new(),
             hypo,
+            axioms,
             visiting: HashSet::new(),
             place,
             trip: HashMap::new(),
@@ -1017,9 +1032,13 @@ impl<'a> RangeCx<'a> {
         // induction variable from 0, and the very edge that carries
         // `i < n` refines `n` to at least `i`'s floor plus one.
         let mut nonneg: Option<bool> = None;
+        // The axioms (what-if guards) hold everywhere; then the real
+        // relations along the dominator chain.
         let mut cur = Some(block);
-        while let Some(bb) = cur {
-            if let Some(known) = self.rel.get(&bb).cloned() {
+        let mut pending: Vec<(IntCc, Value, Value)> = self.axioms.clone();
+        loop {
+            {
+                let known = pending;
                 for (kcc, ka, kb) in known {
                     let oriented = if (ka, kb) == (a, b) {
                         kcc
@@ -1052,6 +1071,8 @@ impl<'a> RangeCx<'a> {
                     }
                 }
             }
+            let Some(bb) = cur else { break };
+            pending = self.rel.get(&bb).cloned().unwrap_or_default();
             cur = self.doms.idom(bb);
         }
         None
@@ -1077,38 +1098,78 @@ impl<'a> RangeCx<'a> {
         }
         let qcc = self.signed_view(cc, a, b, block)?;
         let target = kb.checked_sub(ka)?;
-        let mut d: Range = (-INF, INF);
+        // Collect every dominating relation (axioms first — the
+        // what-if guards hold everywhere) as a signed interval on the
+        // DIFFERENCE of its two bases.
+        let mut knowns: Vec<(IntCc, Value, Value)> = self.axioms.clone();
         let mut cur = Some(block);
         while let Some(at) = cur {
-            for (kcc, x, y) in self.rel.get(&at).cloned().unwrap_or_default() {
-                let (bx, kx) = self.affine_of(x);
-                let (by, ky) = self.affine_of(y);
-                // Orient the known relation onto (ba - bb).
-                let (kcc, p, q) = if (bx, by) == (ba, bb) {
-                    (kcc, kx, ky)
-                } else if (bx, by) == (bb, ba) {
-                    (swap_cc(kcc), ky, kx)
-                } else {
-                    continue;
-                };
-                let Some(kcc) = self.signed_view(kcc, x, y, block) else {
-                    continue;
-                };
-                let Some(c) = q.checked_sub(p) else { continue };
-                let Some(known) = diff_interval(kcc, c) else {
-                    continue;
-                };
-                d = (d.0.max(known.0), d.1.min(known.1));
+            knowns.extend(self.rel.get(&at).cloned().unwrap_or_default());
+            cur = self.doms.idom(at);
+        }
+        let mut edges: Vec<(Value, Value, Range)> = Vec::new();
+        for (kcc, x, y) in knowns {
+            let Some(kcc) = self.signed_view(kcc, x, y, block) else {
+                continue;
+            };
+            let (bx, kx) = self.affine_of(x);
+            let (by, ky) = self.affine_of(y);
+            if bx == by {
+                continue;
+            }
+            let Some(c) = ky.checked_sub(kx) else {
+                continue;
+            };
+            let Some(iv) = diff_interval(kcc, c) else {
+                continue;
+            };
+            edges.push((bx, by, iv));
+        }
+        // A known over (bx, by) bounds (by - bx) too, negated.
+        let orient = |bx: Value, by: Value, iv: Range, from: Value, to: Value| -> Option<Range> {
+            if (bx, by) == (from, to) {
+                Some(iv)
+            } else if (by, bx) == (from, to) {
+                Some((-iv.1, -iv.0))
+            } else {
+                None
+            }
+        };
+        // Direct edges over the query pair, exactly as before.
+        let mut d: Range = (-INF, INF);
+        for &(bx, by, iv) in &edges {
+            if let Some(iv) = orient(bx, by, iv, ba, bb) {
+                d = (d.0.max(iv.0), d.1.min(iv.1));
                 if d.0 > d.1 {
                     return None; // contradiction: claim nothing, ever
                 }
-                if let Some(v) = decide_cc(qcc, d, (target, target)) {
-                    return Some(v);
+            }
+        }
+        // The difference-bound step (#98): ONE intermediate base.
+        // d(ba,bb) = d(ba,bm) + d(bm,bb) — interval addition, each
+        // link individually signed-viewed above. Deliberately bounded
+        // at a single hop: the stencil class needs exactly one, and a
+        // closure that grows becomes a solver this pass must not be.
+        for &(bx1, by1, iv1) in &edges {
+            let (bm, first) = if bx1 == ba && by1 != bb {
+                (by1, iv1)
+            } else if by1 == ba && bx1 != bb {
+                (bx1, (-iv1.1, -iv1.0))
+            } else {
+                continue;
+            };
+            for &(bx2, by2, iv2) in &edges {
+                let Some(second) = orient(bx2, by2, iv2, bm, bb) else {
+                    continue;
+                };
+                let sum = (first.0 + second.0, first.1 + second.1);
+                d = (d.0.max(sum.0), d.1.min(sum.1));
+                if d.0 > d.1 {
+                    return None; // contradiction: claim nothing, ever
                 }
             }
-            cur = self.doms.idom(at);
         }
-        None
+        decide_cc(qcc, d, (target, target))
     }
 
     /// `cc` read in the SIGNED ordering, or `None` when it cannot be:
@@ -1318,6 +1379,13 @@ fn eliminate_round(
                         if count_metrics && is_bounds && decided {
                             stats.bounds_checks_eliminated += 1;
                         }
+                    } else if in_loop && is_bounds {
+                        // An undecided bounds guard in a loop is a
+                        // versioning candidate (#98): the guard it
+                        // wants is a relation between two loop-
+                        // invariant values, and version_one can ASK
+                        // for that relation at the loop's door.
+                        remaining.insert(inst, None);
                     }
                 }
             }
@@ -1516,13 +1584,28 @@ fn version_one(
                 .any(|&b| l.blocks.contains(&b) && f.blocks[b].insts.contains(&i)),
         }
     };
+    // A trap target is not an exit: it is a check's own failure arm
+    // (no params, no successors), and both copies keep pointing at
+    // it. Without this a loop containing a bounds GUARD — a br whose
+    // false arm traps — always had two exit targets and never
+    // versioned, which is why the K machinery only ever fired for
+    // chk ops (they trap in the op, no CFG edge). #98's shape.
+    let is_trap_target = |f: &Function, b: Block| -> bool {
+        f.blocks[b]
+            .insts
+            .first()
+            .is_some_and(|&i| f.insts[i].op == Opcode::Trap)
+    };
     let mut exits: Vec<Block> = Vec::new();
     for &b in &l.blocks {
         let Some(&term) = f.blocks[b].insts.last() else {
             continue;
         };
         let check = |bc: crate::ir::BlockCall, exits: &mut Vec<Block>| {
-            if !l.blocks.contains(&bc.block) && !exits.contains(&bc.block) {
+            if !l.blocks.contains(&bc.block)
+                && !is_trap_target(f, bc.block)
+                && !exits.contains(&bc.block)
+            {
                 exits.push(bc.block);
             }
         };
@@ -1591,6 +1674,20 @@ fn version_one(
     let n = *cargs.iter().find(|&&v| !defined_in_loop(f, v))?;
     let n_ty = f.value_ty(n);
     let (tlo, thi) = view.types.int_bounds(n_ty)?;
+    // Two candidate classes, two guard mechanisms (#98): overflow
+    // checks want a constant bound K on the header limit; bounds
+    // guards want a RELATION between the header limit and their own
+    // loop-invariant limit.
+    let chk_cands: Vec<Inst> = cands
+        .iter()
+        .copied()
+        .filter(|&c| overflow_candidate(f.insts[c].op))
+        .collect();
+    let bg_cands: Vec<Inst> = cands
+        .iter()
+        .copied()
+        .filter(|&c| !overflow_candidate(f.insts[c].op))
+        .collect();
     // K search: a bounded power-of-two ladder of what-if queries
     // (demand-driven, iteration-count bounded — D4). Prefer the
     // LARGEST K proving every candidate; fall back to the largest
@@ -1599,12 +1696,12 @@ fn version_one(
     let mut best: Option<(i128, usize)> = None;
     let mut k_try = thi / 2;
     for _ in 0..48 {
-        if k_try <= tlo.max(1) {
+        if k_try <= tlo.max(1) || chk_cands.is_empty() {
             break;
         }
         let hypo: HashMap<Value, Range> = [(n, (tlo, k_try))].into_iter().collect();
-        let mut cx = RangeCx::with_hypo(f, view, doms, cfg, hypo);
-        let proven = cands
+        let mut cx = RangeCx::with_hypo(f, view, doms, cfg, hypo, Vec::new());
+        let proven = chk_cands
             .iter()
             .filter(|&&c| {
                 let b = f
@@ -1616,7 +1713,7 @@ fn version_one(
                 provable(&mut cx, view, f, c, b)
             })
             .count();
-        if proven == cands.len() {
+        if proven == chk_cands.len() {
             best = Some((k_try, proven));
             break; // all proven at the largest K so far — take it
         }
@@ -1625,7 +1722,60 @@ fn version_one(
         }
         k_try /= 2;
     }
-    let (k, _) = best?;
+    // Relation plans (#98): a bounds guard comparing a loop-varying
+    // index against a loop-invariant limit `m` is provable on a path
+    // where `0 <= m` and `n <= m` are guard edges — the what-if asks
+    // whether the difference-bound closure then decides it, and the
+    // guards materialize below exactly as hypothesized.
+    let mut rel_plans: Vec<Value> = Vec::new();
+    for &bg in &bg_cands {
+        let cond = f.vpool.get(f.insts[bg].args)[0];
+        let Some(ci) = analysis::def_inst(f, cond) else {
+            continue;
+        };
+        if f.insts[ci].op != Opcode::Icmp {
+            continue;
+        }
+        let Aux::IntCc(gcc) = f.insts[ci].aux else {
+            continue;
+        };
+        let gargs = f.vpool.get(f.insts[ci].args);
+        let (x, y) = (gargs[0], gargs[1]);
+        let dl = (defined_in_loop(f, x), defined_in_loop(f, y));
+        let m = match dl {
+            (true, false) => y,
+            (false, true) => x,
+            _ => continue,
+        };
+        if m == n {
+            continue;
+        }
+        if f.value_ty(m) != n_ty {
+            continue;
+        }
+        let hypo: HashMap<Value, Range> = [(m, (0, INF))].into_iter().collect();
+        let axioms = vec![(IntCc::Sle, n, m)];
+        let mut cx = RangeCx::with_hypo(f, view, doms, cfg, hypo, axioms);
+        let b = f
+            .layout
+            .iter()
+            .copied()
+            .find(|&bb| f.blocks[bb].insts.contains(&bg))
+            .expect("candidate placed");
+        let decided = match (cx.range_at(x, b), cx.range_at(y, b)) {
+            (Some(ra), Some(rb)) => decide_cc(gcc, ra, rb),
+            _ => None,
+        }
+        .or_else(|| cx.decide_rel(gcc, x, y, b))
+        .or_else(|| cx.decide_rel_affine(gcc, x, y, b));
+        if decided == Some(true) && !rel_plans.contains(&m) {
+            rel_plans.push(m);
+        }
+    }
+    if best.is_none() && rel_plans.is_empty() {
+        return None;
+    }
+    let k = best.map(|(k, _)| k);
     // ---- loop-closed form: route live-outs through exit params -----------
     if !live_out.is_empty() {
         use crate::ir::ValueData;
@@ -1781,37 +1931,70 @@ fn version_one(
         }
     }
     f.span_cursor = None;
-    // ---- guard ------------------------------------------------------------
-    // G: `%k = iconst K; %c = icmp.sle n, %k; br %c, FP(..), H(..)`.
-    // FP is a pass-through FAST PREHEADER: it exists so the guard's
-    // taken edge has a single-entry target — the π seeding point that
-    // dominates the whole fast loop (headers have back edges and can
-    // never be single-entry themselves).
-    let htys: Vec<_> = f
-        .block_params(l.header)
-        .iter()
-        .map(|&p| f.value_ty(p))
-        .collect();
-    let g = f.make_block(&htys);
-    let gparams = f.block_params(g);
-    let fp = f.make_block(&htys);
-    let fpparams = f.block_params(fp);
-    let fast_entry = f.block_call(bmap[&l.header], &fpparams);
+    // ---- guards -----------------------------------------------------------
+    // A CHAIN of paramless guard blocks. Every taken edge has a
+    // single-entry target — a π seeding point dominating the whole
+    // fast loop. The chain ends at FP (fast preheader); every failing
+    // edge targets SP (slow preheader). FP and SP are the ONLY blocks
+    // that pass the loop entry arguments — the memory token among
+    // them — so any path consumes the token exactly once, whichever
+    // way the guards decide (token linearity; a chain whose guards
+    // carried the token in their own edge args consumed it once per
+    // guard on one path, and the verifier rightly refused). Guards:
+    //   K plan:        `%k = iconst K;  icmp.sle n, %k`
+    //   each rel plan: `%z = iconst 0;  icmp.sle %z, m`   (0 <= m)
+    //                  `icmp.sle n, m`                    (n <= m)
+    // — exactly the hypotheses the what-ifs installed, nothing more.
+    let entry_args: Vec<Value> = f.vpool.get(entry_edge.args);
+    let fp = f.make_block(&[]);
+    let fast_entry = f.block_call(bmap[&l.header], &entry_args);
     f.append_inst(fp, Opcode::Jmp, &[], &[], Aux::Jump(fast_entry));
-    let (_, kv) = f.append_inst(g, Opcode::Iconst, &[], &[n_ty], Aux::Int(k as i64));
-    let (_, cv) = f.append_inst(
-        g,
-        Opcode::Icmp,
-        &[n, kv[0]],
-        &[crate::types::BOOL],
-        Aux::IntCc(IntCc::Sle),
-    );
-    let fast = f.block_call(fp, &gparams);
-    let slow = f.block_call(l.header, &gparams);
-    f.append_inst(g, Opcode::Br, &[cv[0]], &[], Aux::Br(fast, slow));
-    // Retarget the entry edge at the guard.
-    let entry_args = f.vpool.get(entry_edge.args);
-    let g_edge = f.block_call(g, &entry_args);
+    let sp = f.make_block(&[]);
+    let slow_entry = f.block_call(l.header, &entry_args);
+    f.append_inst(sp, Opcode::Jmp, &[], &[], Aux::Jump(slow_entry));
+    let mut chain: Vec<(Block, Value)> = Vec::new();
+    if let Some(k) = k {
+        let g = f.make_block(&[]);
+        let (_, kv) = f.append_inst(g, Opcode::Iconst, &[], &[n_ty], Aux::Int(k as i64));
+        let (_, cv) = f.append_inst(
+            g,
+            Opcode::Icmp,
+            &[n, kv[0]],
+            &[crate::types::BOOL],
+            Aux::IntCc(IntCc::Sle),
+        );
+        chain.push((g, cv[0]));
+    }
+    for &m in &rel_plans {
+        let g0 = f.make_block(&[]);
+        let (_, zv) = f.append_inst(g0, Opcode::Iconst, &[], &[n_ty], Aux::Int(0));
+        let (_, c0) = f.append_inst(
+            g0,
+            Opcode::Icmp,
+            &[zv[0], m],
+            &[crate::types::BOOL],
+            Aux::IntCc(IntCc::Sle),
+        );
+        chain.push((g0, c0[0]));
+        let g1 = f.make_block(&[]);
+        let (_, c1) = f.append_inst(
+            g1,
+            Opcode::Icmp,
+            &[n, m],
+            &[crate::types::BOOL],
+            Aux::IntCc(IntCc::Sle),
+        );
+        chain.push((g1, c1[0]));
+    }
+    debug_assert!(!chain.is_empty(), "versioned with no guard to stand on");
+    for (i, &(g, cond)) in chain.iter().enumerate() {
+        let next = chain.get(i + 1).map(|&(nb, _)| nb).unwrap_or(fp);
+        let fast = f.block_call(next, &[]);
+        let slow = f.block_call(sp, &[]);
+        f.append_inst(g, Opcode::Br, &[cond], &[], Aux::Br(fast, slow));
+    }
+    // Retarget the entry edge at the chain's head.
+    let g_edge = f.block_call(chain[0].0, &[]);
     f.insts[pterm].aux = Aux::Jump(g_edge);
     Some(twin)
 }

@@ -480,9 +480,14 @@ fn rangeopt_relation_proves_the_unsigned_bounds_test() {
     );
 }
 
-/// The other half of the same rule, and the one that matters more: a
-/// bounds test nothing relates to the guard STAYS. Here the loop runs
-/// to `%0` and the index is tested against a DIFFERENT bound `%1`.
+/// The other half of the same rule, kept honest across #98: a bounds
+/// test nothing relates to the guard is never folded IN PLACE. Here
+/// the loop runs to `%0` and the index is tested against a DIFFERENT
+/// bound `%1` — since #98 the versioner may ASK for the missing
+/// relation at the loop's door (`0 <= %1` and `%0 <= %1` as real
+/// guards) and fold the FAST copy's check under them; the slow copy
+/// keeps the check and the trap, which is what "proves nothing"
+/// still means: nothing is proven unguarded.
 #[test]
 fn rangeopt_keeps_a_bounds_test_over_an_unrelated_bound() {
     let src = "fn @walk(i64, i64) -> i64 {\n\
@@ -506,13 +511,27 @@ fn rangeopt_keeps_a_bounds_test_over_an_unrelated_bound() {
                }\n";
     let (out, stats) = one_pass(src, "rangeopt");
     assert_eq!(stats.bounds_checks_seen, 1, "{stats}");
+    // The versioner asked for the relation and got it — the fast twin
+    // folds, and the metric counts the hot path's win exactly as the
+    // check metric does.
     assert_eq!(
-        stats.bounds_checks_eliminated, 0,
-        "an unrelated bound proves nothing: {stats}"
+        stats.bounds_checks_eliminated, 1,
+        "the guarded fast copy folds its check: {stats}"
+    );
+    // The teeth: the fold happened UNDER materialized guards, never in
+    // place. Both synthesized comparisons are real branches, the slow
+    // copy still tests the index against %1, and the trap is intact.
+    assert!(
+        out.contains("icmp.sle %0, %1"),
+        "the relation guard is a real branch:\n{out}"
+    );
+    assert!(
+        out.contains("icmp.ult"),
+        "the slow copy keeps the bounds test:\n{out}"
     );
     assert!(
         out.contains("trap.bounds"),
-        "the unproven guard keeps its trap:\n{out}"
+        "the unproven path keeps its trap:\n{out}"
     );
 }
 
