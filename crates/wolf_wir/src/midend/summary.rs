@@ -11,7 +11,7 @@
 //! `wolf_wir/summary-format.md` (as `text.md` documents the WIR
 //! textual format); this module is its implementation.
 //!
-//! # The frozen schema (v1)
+//! # The frozen schema (v2)
 //!
 //! The canonical serialization is line-oriented text — one function per
 //! line, deterministic field order, no floats, no wall-clock, no
@@ -19,11 +19,20 @@
 //! surface at once (one format, one authority):
 //!
 //! ```text
-//! summary-format 1
+//! summary-format 2
 //! fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
 //!    hash=<sha256> facts=<regions/noalias/ranges/deref/frozen> \
+//!    ret=<lo..=hi|-> stores=[a<k>:<lo..=hi>,…] \
 //!    hot=<-|u32> calls=[<callee>@<depth>/<sites>/<constargs>,…] impls=[]
 //! ```
+//!
+//! v2 (s99) adds the interprocedural range half — `ret=` is the
+//! function's provable return range (`-` = unbounded), `stores=` the
+//! store-meet per visible local container allocation site (`a<k>` in
+//! RPO discovery order; poisoned or store-free sites are absent).
+//! Both are computed by `midend/interproc.rs` on the same bodies this
+//! index describes. The bump invalidates every release cluster cache
+//! key by construction (the version leads the key accumulator).
 //!
 //! Field vocabulary:
 //! - `home` — the defining source module (`root` for the package root;
@@ -82,7 +91,7 @@ use super::dedup::body_hash;
 /// The frozen summary format version. Bump ONLY with a schema change;
 /// it is folded into every release-tier cache key, so a bump
 /// invalidates cluster objects and nothing else.
-pub const SUMMARY_FORMAT_VERSION: u32 = 1;
+pub const SUMMARY_FORMAT_VERSION: u32 = 2;
 
 /// The home-module map: WIR function name → defining source module.
 /// The mid-end has no notion of source modules (one `Module` holds the
@@ -216,6 +225,10 @@ pub struct FuncSummary {
     pub flags: Flags,
     pub body_hash: String,
     pub facts: FactDigest,
+    /// v2 (s99): the provable return range; `None` = unbounded.
+    pub ret: Option<(i128, i128)>,
+    /// v2 (s99): store-meet per local container allocation site.
+    pub stores: Vec<(u32, (i128, i128))>,
     /// The `hot=` slot: `None` = unknown (no profile / no record),
     /// `Some(0..=1000)` = normalized hotness rank. See the module docs
     /// and [`apply_profile`].
@@ -238,9 +251,14 @@ impl FuncSummary {
             .iter()
             .map(|t| format!("{}:{}", t.trait_name, t.impls.join("|")))
             .collect();
+        let stores: Vec<String> = self
+            .stores
+            .iter()
+            .map(|(k, (lo, hi))| format!("a{k}:{lo}..={hi}"))
+            .collect();
         format!(
-            "fn {} home={} size={} blocks={} flags={} hash={} facts={}/{}/{}/{}/{} hot={} \
-             calls=[{}] impls=[{}]",
+            "fn {} home={} size={} blocks={} flags={} hash={} facts={}/{}/{}/{}/{} ret={} \
+             stores=[{}] hot={} calls=[{}] impls=[{}]",
             self.name,
             self.home,
             self.size,
@@ -252,6 +270,11 @@ impl FuncSummary {
             self.facts.range,
             self.facts.deref,
             self.facts.frozen,
+            match self.ret {
+                Some((lo, hi)) => format!("{lo}..={hi}"),
+                None => "-".to_string(),
+            },
+            stores.join(","),
             match self.hotness {
                 Some(h) => h.to_string(),
                 None => "-".to_string(),
@@ -347,6 +370,8 @@ pub fn apply_profile(
 /// Deterministic: output is sorted by function name; every internal
 /// traversal is over sorted or arena-index order.
 pub fn summarize(m: &Module, homes: &Homes) -> ProgramSummary {
+    // v2 (s99): the interprocedural range half rides the same scan.
+    let ipr = super::interproc::analyze(m);
     let by_name: HashMap<&str, FuncId> = m
         .funcs
         .iter()
@@ -378,7 +403,7 @@ pub fn summarize(m: &Module, homes: &Homes) -> ProgramSummary {
     let mut funcs: Vec<FuncSummary> = m
         .funcs
         .iter()
-        .map(|(id, f)| one(m, id, f, homes, &by_name, &address_taken, &recursive))
+        .map(|(id, f)| one(m, id, f, homes, &by_name, &address_taken, &recursive, &ipr))
         .collect();
     funcs.sort_by(|a, b| a.name.cmp(&b.name));
     ProgramSummary {
@@ -387,6 +412,7 @@ pub fn summarize(m: &Module, homes: &Homes) -> ProgramSummary {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn one(
     m: &Module,
     id: FuncId,
@@ -395,6 +421,7 @@ fn one(
     by_name: &HashMap<&str, FuncId>,
     address_taken: &BTreeSet<&str>,
     recursive: &BTreeSet<FuncId>,
+    ipr: &super::interproc::Ipr,
 ) -> FuncSummary {
     let cfg = analysis::cfg(f);
     let doms = analysis::dominators(&cfg);
@@ -504,6 +531,12 @@ fn one(
         },
         body_hash: body_hash(m, f),
         facts,
+        ret: ipr.rets.get(&f.name).copied().flatten(),
+        stores: ipr
+            .stores
+            .get(&f.name)
+            .map(|st| st.iter().map(|(&k, &r)| (k, r)).collect())
+            .unwrap_or_default(),
         hotness: None,
         calls: edges.into_values().collect(),
         impls: Vec::new(),

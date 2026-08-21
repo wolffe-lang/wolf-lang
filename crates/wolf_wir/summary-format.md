@@ -26,7 +26,7 @@ hash-map iteration order — the whole index is a pure function of the
 module plus the home map.
 
 ```text
-summary-format 1
+summary-format 2
 fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
    hash=<sha256> facts=<region>/<noalias>/<range>/<deref>/<frozen> \
    hot=<-|u32> calls=[<callee>@<depth>/<sites>/<constargs>,...] impls=[]
@@ -47,7 +47,7 @@ fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
 
 ### The `hot` slot, filled (s45)
 
-s43 froze this format with a `hot=` slot in it so profile data could
+s43 froze this format with a `ret=`/`stores=` (v2, s99: the interprocedural range half — the provable return range and the store-meet per local container allocation site; `-`/absent when unproven) and `hot=` slot in it so profile data could
 arrive without a bump. s45 fills that slot — **and adds no field beside
 it**, which is what having reserved it was for. The line shape, field
 order, and `SUMMARY_FORMAT_VERSION` are unchanged; a consumer written
