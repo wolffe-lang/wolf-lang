@@ -717,6 +717,48 @@ recorded not chased: the ungated PGO lane reads b3 at −10.1% against
 an 8.5% floor on this loaded host — re-read it on a quiet host
 before believing it.
 
+### b3r — the fresh split after s99, and the alloc that was hiding
+
+Conditions: same i7-10870H, LOADED host (sibling lanes live), callgrind
+over 2 000 requests at ceca1d1; instruction counts exact, wall ratios
+indicative only.
+
+**A correction to the after-table above first:** its `region_alloc
+5.9% / region_free 3.7%` quoted only the `native.rs`-attributed rows.
+callgrind attributes inlined std helpers to THEIR source files, and
+aggregating every row by function shows what the shares really were:
+`__wolf_rt_region_alloc` totalled **256 Ir/request** (`try_from`
+machinery, `next_multiple_of`, two chunk-Vec accesses per call), and
+the free path ~98 Ir/request (an `iter().sum()` walk plus TWO separate
+TLS+RefCell sequences — chunk pool, then header pool).
+
+**The fix (rt-only):** the region header carries a real bump cursor
+(`cur`/`end` — one compare, one store, one add per allocation; a
+closed region fails the compare, so the empty case needs no branch),
+a running `owned` total replaces the free-time walk, and both pools
+live behind ONE thread-local RefCell so a free is one visit. The
+chunk-open half is `#[cold]` out of line. Debug zeroing unchanged
+(the s76 aid, by name); `LIVE_REGION_BYTES` moves at exactly the same
+boundaries; oversize and ladder behavior byte-identical.
+
+| | before (ceca1d1) | after |
+|---|---|---|
+| program total, 2 000 req | 2 247 131 Ir | **2 006 494 Ir (−120/req, −10.7%)** |
+| `region_alloc`, all attributions | 512k (256/req) | **below the 1% table** — fast path inlined into in-crate callers |
+| free+new family | ~131/req | ~68/req |
+| wall, 2M ops, paired runs | 104–150 ns/op | 82–128 (ratios 1.14–1.47x, load noise) |
+
+**What is left is not the runtime's:** `_Wmain` is 42.1% (844k — the
+16 inlined push fast paths and the checked adds on loaded values, the
+midend's items: s99 could not prove element loads here and family E
+owns the adds); `list_push` out-of-line 7.2% (the two growth calls,
+by design); `memcpy` 4.4% (growth copies). The largest remaining
+runtime row is the free's single TLS visit (~44 Ir/request), which is
+approaching the floor of what a RefCell-guarded pool can cost — going
+lower means `Cell`-based pools, not worth the temperament risk for
+44 Ir. The kernel's "pointer bump and a pointer reset" comment is now
+TRUE of the shipped runtime.
+
 En route the fast path caught a latent layout fact: lowering's block
 CREATION order was never execution order (a `region` block pre-creates
 its exit block, so exit code lives in an early-id block), and only the
