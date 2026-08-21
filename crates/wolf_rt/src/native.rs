@@ -276,24 +276,34 @@ const POOL_MAX_BYTES: usize = 2 * CHUNK_MAX;
 /// their capacity, so a warm cycle re-mallocs nothing at all).
 const REGION_POOL_MAX: usize = 8;
 
-thread_local! {
-    static CHUNK_POOL: core::cell::RefCell<ChunkPool> =
-        const { core::cell::RefCell::new(ChunkPool { chunks: Vec::new(), bytes: 0 }) };
+/// Both per-thread pools behind ONE thread-local and ONE `RefCell`:
+/// a region free retires chunks and parks its header in a single
+/// visit (the split design ran the TLS+borrow sequence twice).
+struct RtPools {
+    chunks: ChunkPool,
     // The Box IS the pooled resource: `region_new` hands out the box's
     // pointer as the region handle (`Box::into_raw`), so pooling
     // `Region` by value would re-malloc the very allocation the pool
     // exists to keep.
     #[allow(clippy::vec_box)]
-    static REGION_POOL: core::cell::RefCell<Vec<Box<Region>>> =
-        const { core::cell::RefCell::new(Vec::new()) };
+    regions: Vec<Box<Region>>,
+}
+
+thread_local! {
+    static POOLS: core::cell::RefCell<RtPools> = const {
+        core::cell::RefCell::new(RtPools {
+            chunks: ChunkPool { chunks: Vec::new(), bytes: 0 },
+            regions: Vec::new(),
+        })
+    };
 }
 
 /// A chunk of exactly `cap` bytes: pooled when one is waiting, fresh
 /// otherwise. Debug builds zero the pooled path too — reuse must not
 /// be less deterministic than a fresh chunk.
 fn take_chunk(cap: usize) -> Chunk {
-    let pooled = CHUNK_POOL.with(|p| {
-        let mut p = p.borrow_mut();
+    let pooled = POOLS.with(|p| {
+        let p = &mut p.borrow_mut().chunks;
         match p.chunks.iter().rposition(|c| c.len() == cap) {
             Some(i) => {
                 p.bytes -= cap;
@@ -319,18 +329,15 @@ fn take_chunk(cap: usize) -> Chunk {
 /// Retire one chunk: ladder-sized chunks pool (up to the cap), odd
 /// sizes — an oversize allocation's exact chunk — and overflow drop to
 /// the host allocator exactly as before #113.
-fn retire_chunk(c: Chunk) {
+fn retire_chunk_into(p: &mut ChunkPool, c: Chunk) {
     let n = c.len();
     if !(n.is_power_of_two() && (CHUNK_MIN..=CHUNK_MAX).contains(&n)) {
         return;
     }
-    CHUNK_POOL.with(|p| {
-        let mut p = p.borrow_mut();
-        if p.bytes + n <= POOL_MAX_BYTES {
-            p.bytes += n;
-            p.chunks.push(c);
-        }
-    });
+    if p.bytes + n <= POOL_MAX_BYTES {
+        p.bytes += n;
+        p.chunks.push(c);
+    }
 }
 
 /// The proc-ledger seam (s34, sprint Target 2): when procs exist, the
@@ -459,13 +466,23 @@ pub unsafe extern "C" fn __wolf_rt_region_ambient_leave(prev: *mut core::ffi::c_
 }
 
 struct Region {
+    /// Bump cursor into the current (last) chunk. Null when no chunk
+    /// is open; `cur == end` (or null/null) sends the next allocation
+    /// to the slow path, so the fast path needs no emptiness branch.
+    /// The pointers aim into a `Chunk`'s heap storage, which never
+    /// moves when the `Box<Region>` header itself is pooled/moved.
+    cur: *mut u8,
+    /// One past the current chunk's usable end.
+    end: *mut u8,
     /// Owned chunks — raw `MaybeUninit` capacity the bump cursor hands
     /// out. The Rust side never reads these bytes (pointers go to
     /// compiled code), so nothing here may materialize a `&[u8]` over
     /// unwritten capacity; `MaybeUninit` is that rule in the type.
     chunks: Vec<Chunk>,
-    /// Bump cursor within the last chunk.
-    used: usize,
+    /// Sum of owned chunk capacities — maintained at take time so
+    /// `region_free` subtracts one number instead of walking the
+    /// chunk list (the walk was 21 Ir/request on `b3_churn`).
+    owned: usize,
     /// Total bytes ever bump-allocated (aligned) — the ledger weight.
     /// Tracked unconditionally (one add on the alloc path); read only
     /// through the proc-ledger seam.
@@ -477,12 +494,14 @@ struct Region {
 pub extern "C" fn __wolf_rt_region_new() -> *mut core::ffi::c_void {
     // A pooled header was reset at retirement and keeps its chunk
     // Vec's capacity — a warm region cycle allocates nothing (#113).
-    let r = REGION_POOL
-        .with(|p| p.borrow_mut().pop())
+    let r = POOLS
+        .with(|p| p.borrow_mut().regions.pop())
         .unwrap_or_else(|| {
             Box::new(Region {
+                cur: core::ptr::null_mut(),
+                end: core::ptr::null_mut(),
                 chunks: Vec::new(),
-                used: 0,
+                owned: 0,
                 bytes: 0,
             })
         });
@@ -505,25 +524,55 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
     size: i64,
 ) -> *mut u8 {
     let r: &mut Region = unsafe { &mut *handle.cast() };
-    let size = usize::try_from(size).unwrap_or_else(|_| {
+    // The contract check `try_from` used to make: a negative size
+    // traps. Spelled as one sign test so the fast path carries a
+    // single predictable branch instead of `Result` machinery.
+    if size < 0 {
         __wolf_rt_trap(trap_code::ALLOC_CONTRACT);
-    });
-    let size = size.next_multiple_of(ALIGN).max(ALIGN);
-    let need_new_chunk = match r.chunks.last() {
-        Some(c) => r.used + size > c.len(),
-        None => true,
-    };
-    if need_new_chunk {
-        let cap = chunk_size(r.chunks.len(), size);
-        r.chunks.push(take_chunk(cap));
-        r.used = 0;
-        LIVE_REGION_BYTES.fetch_add(cap, std::sync::atomic::Ordering::Relaxed);
     }
-    let chunk = r.chunks.last_mut().expect("chunk exists");
-    let p = unsafe { chunk.as_mut_ptr().cast::<u8>().add(r.used) };
-    r.used += size;
+    // Round up to the 16-byte grain. `ALIGN` is a power of two, so
+    // this is `next_multiple_of` as an add+mask; `.max(ALIGN)` keeps
+    // zero-size allocations distinct, as before. No overflow: `size`
+    // fits i64 and the add is at most +15.
+    let size = ((size as usize) + (ALIGN - 1)) & !(ALIGN - 1);
+    let size = size.max(ALIGN);
+    // The bump: one compare, one store, one add. A closed region
+    // (null cur, null end) fails the compare for any size >= ALIGN,
+    // so the empty case needs no branch of its own. `cur` stays
+    // 16-aligned: every grant is a multiple of `ALIGN` off a chunk
+    // base, and the slow path re-establishes both pointers per chunk.
+    let cur = r.cur as usize;
+    let next = cur + size;
+    if next <= r.end as usize {
+        r.cur = next as *mut u8;
+        r.bytes += size;
+        return cur as *mut u8;
+    }
+    region_alloc_slow(r, size)
+}
+
+/// The chunk-open half of `region.alloc`, kept out of the hot path.
+/// Behavior is byte-for-byte the pre-cursor design: the previous
+/// chunk's tail is abandoned (the bump never back-fills), the new
+/// chunk's capacity follows the ladder, and `LIVE_REGION_BYTES` moves
+/// at exactly this boundary.
+#[cold]
+#[inline(never)]
+fn region_alloc_slow(r: &mut Region, size: usize) -> *mut u8 {
+    let cap = chunk_size(r.chunks.len(), size);
+    let mut c = take_chunk(cap);
+    LIVE_REGION_BYTES.fetch_add(cap, std::sync::atomic::Ordering::Relaxed);
+    r.owned += cap;
+    let base = c.as_mut_ptr().cast::<u8>();
+    r.chunks.push(c);
+    // SAFETY: `size <= cap` (chunk_size never returns below `size`),
+    // so both pointers stay inside or one-past the chunk's storage.
+    unsafe {
+        r.cur = base.add(size);
+        r.end = base.add(cap);
+    }
     r.bytes += size;
-    p
+    base
 }
 
 /// `region.free` — wholesale-free the region. The handle is dead after
@@ -541,21 +590,25 @@ pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
     if let Some(h) = ledger_hooks() {
         (h.on_free)(handle as usize, r.bytes);
     }
-    let owned: usize = r.chunks.iter().map(|c| c.len()).sum();
-    LIVE_REGION_BYTES.fetch_sub(owned, std::sync::atomic::Ordering::Relaxed);
+    LIVE_REGION_BYTES.fetch_sub(r.owned, std::sync::atomic::Ordering::Relaxed);
     // #113: chunks retire to the per-thread pool (the accounting above
-    // moved at exactly the same boundary it always did — LIVE bytes
-    // count regions, never the pool), and the reset header keeps its
-    // Vec capacity for the next region on this thread.
-    for c in r.chunks.drain(..) {
-        retire_chunk(c);
-    }
-    r.used = 0;
+    // moves at exactly the boundary it always did — LIVE bytes count
+    // regions, never the pool — with `owned` maintained at take time
+    // instead of re-walked here), and the reset header keeps its Vec
+    // capacity for the next region on this thread. One TLS visit and
+    // one RefCell borrow cover both pools; the split-pool design paid
+    // that sequence twice per free (~35 Ir/request on `b3_churn`).
+    r.cur = core::ptr::null_mut();
+    r.end = core::ptr::null_mut();
+    r.owned = 0;
     r.bytes = 0;
-    REGION_POOL.with(|p| {
+    POOLS.with(|p| {
         let mut p = p.borrow_mut();
-        if p.len() < REGION_POOL_MAX {
-            p.push(r);
+        for c in r.chunks.drain(..) {
+            retire_chunk_into(&mut p.chunks, c);
+        }
+        if p.regions.len() < REGION_POOL_MAX {
+            p.regions.push(r);
         }
     });
 }
