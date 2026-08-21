@@ -917,3 +917,322 @@ fn pipeline_preserves_entry_facts() {
     assert!(out.contains("fact noalias"), "{out}");
     assert!(out.contains("fact frozen"), "{out}");
 }
+
+// ------------------------------------------------ licm licensor (s102) --
+
+/// The a5 shape, reduced: a loop whose CALL stores only through its
+/// `excl.mut` parameter's object graph, while the loop's loads chain
+/// to a DIFFERENT entry parameter — the c04 disjointness theorem (G7:
+/// "a checker theorem nobody spends") licenses the hoist past both
+/// conservatism rules.
+fn licensor_src(callee_arg: &str, fact_line: &str) -> String {
+    format!(
+        "fn @sink(mut ptr, mem.r0, i64) -> i64 {{\n  \
+         fact deref %0 8 : excl.mut\n\
+         b0(%0: ptr, %1: mem.r0, %2: i64):\n  \
+         %3: mem.r2 = region.foreign 1\n  \
+         %4: mem.r1 = region.foreign 0\n  \
+         %5 = load.ptr %0, %1\n  \
+         %6 = load.ptr %5, %4\n  \
+         %7 = iconst.i64 0\n  \
+         %8 = ptr.off %6, %7, 8\n  \
+         %9 = store.i64 %2, %8, %3\n  \
+         ret %2\n\
+         }}\n\
+         fn @spin(ptr, mut ptr, mem.r0, i64) -> i64 {{\n  \
+         {fact_line}\n\
+         b0(%0: ptr, %1: ptr, %2: mem.r0, %3: i64):\n  \
+         %4: mem.r2 = region.foreign 1\n  \
+         %5: mem.r1 = region.foreign 0\n  \
+         %6 = iconst.i64 0\n  \
+         jmp b1(%6, %2, %6)\n\
+         b1(%7: i64, %8: mem.r0, %9: i64):\n  \
+         %10 = icmp.slt %7, %3\n  \
+         br %10, b2, b3\n\
+         b2:\n  \
+         %11 = load.ptr %0, %5\n  \
+         %12 = ptr.off %11, %6, 8\n  \
+         %13 = load.i64 %12, %4\n  \
+         %14, %15 = call @sink({callee_arg}, %8, %13)\n  \
+         %16 = iadd.wrap %9, %13\n  \
+         %17 = iconst.i64 1\n  \
+         %18 = iadd.wrap %7, %17\n  \
+         jmp b1(%18, %15, %16)\n\
+         b3:\n  \
+         ret %9\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn licm_licenses_a_load_past_a_disjoint_writing_callee() {
+    let src = licensor_src("%1", "fact deref %1 8 : excl.mut");
+    let (out, stats) = one_pass(&src, "licm");
+    assert!(
+        stats.loads_hoisted >= 2,
+        "the data-ptr and element loads hoist past the call: {stats}\n{out}"
+    );
+    insta::assert_snapshot!("licm_licensed_disjoint_callee", out);
+}
+
+/// The negative the theorem demands: the callee writes through the
+/// SAME chain the load reads (no exclusivity proof separates them) —
+/// nothing hoists, however invariant the load looks.
+#[test]
+fn licm_refuses_the_license_on_a_shared_root() {
+    let src = licensor_src("%0", "fact deref %1 8 : excl.mut");
+    let (_, stats) = one_pass(&src, "licm");
+    assert_eq!(
+        stats.loads_hoisted, 0,
+        "a writer through the load's own root licenses nothing: {stats}"
+    );
+}
+
+/// No exclusivity fact, no license: the same disjoint-looking shape
+/// WITHOUT `excl.mut` on the written param keeps blocking (the
+/// D44-addendum rule — no fact, no proof, no hoist).
+#[test]
+fn licm_refuses_the_license_without_the_theorem() {
+    let src = licensor_src("%1", "fact deref %1 8 : frozen.read");
+    let (_, stats) = one_pass(&src, "licm");
+    assert_eq!(
+        stats.loads_hoisted, 0,
+        "no excl.mut fact on the written param, no license: {stats}"
+    );
+}
+
+/// An EXTERNAL callee has no write set — Unknown blocks everything,
+/// exactly as before s102.
+#[test]
+fn licm_refuses_the_license_for_an_external_callee() {
+    let src = "decl @mystery(mut ptr, mem.r0, i64) -> i64\n\
+               fn @spin(ptr, mut ptr, mem.r0, i64) -> i64 {\n  \
+               fact deref %1 8 : excl.mut\n\
+               b0(%0: ptr, %1: ptr, %2: mem.r0, %3: i64):\n  \
+               %4: mem.r2 = region.foreign 1\n  \
+               %5: mem.r1 = region.foreign 0\n  \
+               %6 = iconst.i64 0\n  \
+               jmp b1(%6, %2, %6)\n\
+               b1(%7: i64, %8: mem.r0, %9: i64):\n  \
+               %10 = icmp.slt %7, %3\n  \
+               br %10, b2, b3\n\
+               b2:\n  \
+               %11 = load.ptr %0, %5\n  \
+               %12 = ptr.off %11, %6, 8\n  \
+               %13 = load.i64 %12, %4\n  \
+               %14, %15 = call @mystery(%1, %8, %13)\n  \
+               %16 = iadd.wrap %9, %13\n  \
+               %17 = iconst.i64 1\n  \
+               %18 = iadd.wrap %7, %17\n  \
+               jmp b1(%18, %15, %16)\n\
+               b3:\n  \
+               ret %9\n\
+               }\n";
+    let (_, stats) = one_pass(src, "licm");
+    assert_eq!(
+        stats.loads_hoisted, 0,
+        "an external callee's writes are unbounded: {stats}"
+    );
+}
+
+// ---------------------------------------------- loop-region CSE (s102) --
+
+/// Two identical sequential pure loops: the second merges onto the
+/// first (e3's mechanism at WIR level).
+fn twin_loops_src(second_entry: &str, second_body_op: &str) -> String {
+    format!(
+        "fn @twice(i64) -> i64 {{\n\
+         b0(%0: i64):\n  \
+         %1 = iconst.i64 0\n  \
+         %2 = iconst.i64 8\n  \
+         %3 = iconst.i64 1\n  \
+         jmp b1(%1, %1)\n\
+         b1(%4: i64, %5: i64):\n  \
+         %6 = icmp.slt %4, %0\n  \
+         br %6, b2, b3\n\
+         b2:\n  \
+         %7 = imul.wrap %4, %2\n  \
+         %8 = iadd.wrap %5, %7\n  \
+         %9 = iadd.wrap %4, %3\n  \
+         jmp b1(%9, %8)\n\
+         b3:\n  \
+         jmp b4({second_entry})\n\
+         b4(%10: i64, %11: i64):\n  \
+         %12 = icmp.slt %10, %0\n  \
+         br %12, b5, b6\n\
+         b5:\n  \
+         %13 = {second_body_op} %10, %2\n  \
+         %14 = iadd.wrap %11, %13\n  \
+         %15 = iadd.wrap %10, %3\n  \
+         jmp b4(%15, %14)\n\
+         b6:\n  \
+         %16 = iadd.wrap %5, %11\n  \
+         ret %16\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn loopcse_merges_identical_sequential_loops() {
+    let src = twin_loops_src("%1, %1", "imul.wrap");
+    let (out, stats) = one_pass(&src, "loopcse");
+    assert_eq!(stats.loops_cse, 1, "the twin merges: {stats}\n{out}");
+    insta::assert_snapshot!("loopcse_merged_twins", out);
+}
+
+/// Different body op — no merge, however alike the rest looks.
+#[test]
+fn loopcse_refuses_a_differing_body() {
+    let src = twin_loops_src("%1, %1", "iadd.wrap");
+    let (_, stats) = one_pass(&src, "loopcse");
+    assert_eq!(stats.loops_cse, 0, "different ops never merge: {stats}");
+}
+
+/// Different entry values — no merge (the exit values would differ).
+#[test]
+fn loopcse_refuses_differing_entry_args() {
+    let src = twin_loops_src("%3, %1", "imul.wrap");
+    let (_, stats) = one_pass(&src, "loopcse");
+    assert_eq!(stats.loops_cse, 0, "different entries never merge: {stats}");
+}
+
+/// Branch-arm ALTERNATIVES (the versioner's fast/slow twins) never
+/// merge: neither loop's exit dominates the other's preheader.
+#[test]
+fn loopcse_refuses_versioned_alternatives() {
+    let src = "fn @alt(i64, i64) -> i64 {\n\
+               b0(%0: i64, %1: i64):\n  \
+               %2 = iconst.i64 0\n  \
+               %3 = iconst.i64 8\n  \
+               %4 = iconst.i64 1\n  \
+               %5 = icmp.slt %2, %1\n  \
+               br %5, b1, b4\n\
+               b1:\n  \
+               jmp b2(%2, %2)\n\
+               b2(%6: i64, %7: i64):\n  \
+               %8 = icmp.slt %6, %0\n  \
+               br %8, b3, b7\n\
+               b3:\n  \
+               %9 = imul.wrap %6, %3\n  \
+               %10 = iadd.wrap %7, %9\n  \
+               %11 = iadd.wrap %6, %4\n  \
+               jmp b2(%11, %10)\n\
+               b4:\n  \
+               jmp b5(%2, %2)\n\
+               b5(%12: i64, %13: i64):\n  \
+               %14 = icmp.slt %12, %0\n  \
+               br %14, b6, b8\n\
+               b6:\n  \
+               %15 = imul.wrap %12, %3\n  \
+               %16 = iadd.wrap %13, %15\n  \
+               %17 = iadd.wrap %12, %4\n  \
+               jmp b5(%17, %16)\n\
+               b7:\n  \
+               ret %7\n\
+               b8:\n  \
+               ret %13\n\
+               }\n";
+    let (_, stats) = one_pass(src, "loopcse");
+    assert_eq!(
+        stats.loops_cse, 0,
+        "alternatives in sibling arms never merge: {stats}"
+    );
+}
+
+/// A loop that READS memory never merges: the loads could observe
+/// different bytes on the two executions.
+#[test]
+fn loopcse_refuses_a_loop_that_loads() {
+    let src = "fn @rd(ptr, mem.r0, i64) -> i64 {\n\
+               b0(%0: ptr, %1: mem.r0, %2: i64):\n  \
+               %3 = iconst.i64 0\n  \
+               %4 = iconst.i64 1\n  \
+               jmp b1(%3, %3)\n\
+               b1(%5: i64, %6: i64):\n  \
+               %7 = icmp.slt %5, %2\n  \
+               br %7, b2, b3\n\
+               b2:\n  \
+               %8 = load.i64 %0, %1\n  \
+               %9 = iadd.wrap %6, %8\n  \
+               %10 = iadd.wrap %5, %4\n  \
+               jmp b1(%10, %9)\n\
+               b3:\n  \
+               jmp b4(%3, %3)\n\
+               b4(%11: i64, %12: i64):\n  \
+               %13 = icmp.slt %11, %2\n  \
+               br %13, b5, b6\n\
+               b5:\n  \
+               %14 = load.i64 %0, %1\n  \
+               %15 = iadd.wrap %12, %14\n  \
+               %16 = iadd.wrap %11, %4\n  \
+               jmp b4(%16, %15)\n\
+               b6:\n  \
+               %17 = iadd.wrap %6, %12\n  \
+               ret %17\n\
+               }\n";
+    let (_, stats) = one_pass(src, "loopcse");
+    assert_eq!(stats.loops_cse, 0, "a loading loop never merges: {stats}");
+}
+
+// ---------------------------------- rewrite relations (s102, d2) --
+
+/// A just-proven `iadd.chk x, 5` IS the relation `sum >= x` — the
+/// branch folder spends it on d2's skeleton shape `x <= x+5`, which
+/// intervals alone cannot decide when the loop bound is unknown.
+/// The guard chain gives x a range ([0, %0] via the entry guard), so
+/// the chk proves; the ule then folds off the recorded relation.
+fn rewrite_relation_src(add_op: &str) -> String {
+    format!(
+        "fn @skel(i64, i64) -> i64 {{\n\
+         b0(%0: i64, %1: i64):\n  \
+         %2 = iconst.i64 0\n  \
+         %3 = iconst.i64 5\n  \
+         %4 = iconst.i64 100000\n  \
+         %5 = icmp.sle %0, %4\n  \
+         br %5, b1, b6\n\
+         b1:\n  \
+         jmp b2(%2, %2)\n\
+         b2(%6: i64, %7: i64):\n  \
+         %8 = icmp.slt %6, %0\n  \
+         br %8, b3, b5\n\
+         b3:\n  \
+         %9 = {add_op} %6, %3\n  \
+         %10 = icmp.ule %6, %9\n  \
+         br %10, b4, b7\n\
+         b4:\n  \
+         %11 = iadd.wrap %7, %9\n  \
+         %12 = iconst.i64 1\n  \
+         %13 = iadd.wrap %6, %12\n  \
+         jmp b2(%13, %11)\n\
+         b5:\n  \
+         ret %7\n\
+         b6:\n  \
+         ret %2\n\
+         b7:\n  \
+         trap.bounds\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn rangeopt_spends_a_proven_check_as_a_relation() {
+    let (out, stats) = one_pass(&rewrite_relation_src("iadd.chk"), "rangeopt");
+    assert!(stats.checks_rewritten >= 1, "the chk proves: {stats}");
+    assert!(
+        !out.contains("br %10") && !out.contains("trap.bounds"),
+        "the skeleton BRANCH folds off the recorded relation (the dead \
+         icmp is simplify's DCE, not rangeopt's):\n{out}"
+    );
+}
+
+/// The D44-addendum negative: a USER wrap op minted the same opcode
+/// and proves nothing — the comparison must NOT fold from a wrap form
+/// no check-elimination established.
+#[test]
+fn rangeopt_never_spends_a_user_wrap_as_a_relation() {
+    let (out, _stats) = one_pass(&rewrite_relation_src("iadd.wrap"), "rangeopt");
+    assert!(
+        out.contains("br %10") && out.contains("trap.bounds"),
+        "a user wrap op establishes no order — the branch stays:\n{out}"
+    );
+}

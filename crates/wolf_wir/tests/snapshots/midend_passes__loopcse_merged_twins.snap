@@ -1,0 +1,25 @@
+---
+source: crates/wolf_wir/tests/midend_passes.rs
+assertion_line: 1080
+expression: out
+---
+fn @twice(i64) -> i64 {
+b0(%0: i64):
+  %1 = iconst.i64 0
+  %2 = iconst.i64 8
+  %3 = iconst.i64 1
+  jmp b1(%1, %1)
+b1(%4: i64, %5: i64):
+  %6 = icmp.slt %4, %0
+  br %6, b2, b3
+b2:
+  %7 = imul.wrap %4, %2
+  %8 = iadd.wrap %5, %7
+  %9 = iadd.wrap %4, %3
+  jmp b1(%9, %8)
+b3:
+  jmp b4
+b4:
+  %10 = iadd.wrap %5, %5
+  ret %10
+}
