@@ -1684,6 +1684,24 @@ fn wir_ty_frame(
                 span,
             ))
         }
+        // s96: a trait object is the two-word pair (data, vtable) —
+        // `[abi.native.dyn]`. The data half points at the erased value
+        // and carries the region obligations the checker already
+        // assigned it; the vtable half points at static slots in the
+        // trait's `DynReport.methods` order (sema's canonical record —
+        // the interface serializes exactly that list, so a slot index
+        // is a cross-module fact). The layout lands here; TABLES
+        // cannot yet be demanded — nothing constructs a dyn value
+        // (no coercion, cast, or unification admits concrete → dyn),
+        // so the pair only ever arrives as a parameter today. The
+        // construction rule is a surface decision filed for the
+        // human, not decided silently (s96's stop).
+        TyKind::Dyn { .. } => {
+            Ok(Some(it.intern(types::TypeData::Agg(vec![
+                types::PTR,
+                types::PTR,
+            ]))))
+        }
         // s94 elaborated applied generic nominals, so what still
         // reaches lowering as an opaque token is the residue the
         // checker leaves by design: const-generic VALUE arguments
@@ -6379,7 +6397,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             } = disp
         {
             if *dyn_call {
-                return Err(refuse("dyn-method calls (vtables, s96)", e.span));
+                // s96: the receiver is the leading `Self` argument
+                // (the trait method's params[0]); everything after it
+                // is an ordinary argument.
+                let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+                let Some(recv) = args.first().copied().and_then(Arg::value) else {
+                    return Err(refuse("a dyn call without a receiver argument", e.span));
+                };
+                let rest: Vec<_> = args[1..].to_vec();
+                return self.lower_dyn_trait_call(recv, rest, *module, name, method, e);
             }
             return self.lower_qualified_trait_call(d, cs, *module, name, method, e);
         }
@@ -6730,6 +6756,144 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// method-call form; the arguments marshal as ordinary values (a
     /// `mut` parameter through this surface refuses by name until a
     /// witness needs it).
+    /// s96: a dyn-method call — the dispatch record says `dyn_call`,
+    /// so there is no static callee to name. The receiver is the
+    /// two-word pair (`[abi.native.dyn]`); dispatch loads the slot the
+    /// trait's `DynReport` names (sema's canonical order — the
+    /// interface serializes that list, so a slot index is a
+    /// cross-module fact) and calls indirect with the ERASED
+    /// signature: the receiver crosses as the DATA pointer, every
+    /// other parameter and the return exactly as declared — dyn-safety
+    /// pinned them `Self`-free at resolve (E0508/09/10 are the
+    /// witnesses), and the guards below refuse by name if that ever
+    /// slips. s97's `call.ind` is the whole call path; s96 builds no
+    /// call machinery of its own.
+    fn lower_dyn_trait_call(
+        &mut self,
+        recv: &'t GreenNode,
+        args: Vec<Arg<'t>>,
+        tmodule: usize,
+        tname: &str,
+        method: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let tr = wolf_sema::traits::TraitRef {
+            module: tmodule,
+            name: tname.to_string(),
+        };
+        let Some(td) = self.sigs.traits.get(&tr) else {
+            return Err(refuse("a dyn call on an unelaborated trait", e.span));
+        };
+        // Belt and suspenders: sema refuses dyn-unsafe traits at the
+        // `dyn` spelling; a call reaching here without a safe report
+        // would dispatch into a table sema never shaped.
+        if !td.dyn_report.safe() {
+            return Err(refuse_named(
+                format!("a dyn call on `{tname}`, which is not dyn-safe (object safety owns this)"),
+                e.span,
+            ));
+        }
+        let Some(slot) = td.dyn_report.methods.iter().position(|m| m == method) else {
+            return Err(refuse_named(
+                format!(
+                    "a dyn call to `{tname}.{method}`, which is not in the dyn-safe method set"
+                ),
+                e.span,
+            ));
+        };
+        let Some(tm) = td.method(method).filter(|mm| mm.has_self) else {
+            return Err(refuse("a dyn call without a receiver method", e.span));
+        };
+        let msig = &tm.sig;
+        // The erased convention passes the DATA pointer as the
+        // receiver, by value. A `mut`/`take` receiver would promise
+        // writeback or consumption through erasure — no witness needs
+        // either; refuse by name rather than guess a convention.
+        if let Some(mode) = msig.params.first().and_then(|p| p.mode) {
+            let kw = match mode {
+                ParamMode::Mut => "mut",
+                ParamMode::Take => "take",
+            };
+            return Err(refuse_named(
+                format!("a `{kw} self` method through `dyn` (the erased receiver is a pointer)"),
+                e.span,
+            ));
+        }
+        for p in msig.params.iter().skip(1) {
+            if p.mode.is_some() {
+                return Err(refuse_named(
+                    format!("a moded parameter through a dyn `{tname}.{method}` call"),
+                    e.span,
+                ));
+            }
+            if mentions_self(self.sig_table, p.ty) {
+                return Err(refuse_named(
+                    "a `Self`-typed parameter through `dyn` (object safety owns this)".to_string(),
+                    e.span,
+                ));
+            }
+        }
+        if mentions_self(self.sig_table, msig.ret) {
+            return Err(refuse_named(
+                "a `Self`-typed return through `dyn` (object safety owns this)".to_string(),
+                e.span,
+            ));
+        }
+        // Receiver first, then ordinary arguments.
+        let Some(pair) = flow_val!(self.lower_expr(recv)) else {
+            return Err(refuse("unit-typed dyn receivers", recv.span));
+        };
+        let mut vals = Vec::new();
+        for a in &args {
+            let Some(vexpr) = Arg::value(*a) else {
+                continue;
+            };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            vals.push(v);
+        }
+        // The dispatch chain: pair → (data, vtable) → slot → call.ind.
+        let data = self
+            .b
+            .ins(Opcode::AggGet, &[pair], &[types::PTR], Aux::Int(0))
+            .one();
+        let vt = self
+            .b
+            .ins(Opcode::AggGet, &[pair], &[types::PTR], Aux::Int(1))
+            .one();
+        let slot_addr = self.field_addr(vt, (slot as u64) * 8);
+        // A vtable is immutable static data; its loads thread the
+        // header foreign token (never stored through in any body this
+        // lowering emits, so no forwarding hazard).
+        let r = self.foreign_hdr_region();
+        let fp = self.b.ins_load(types::PTR, slot_addr, r);
+        // The erased signature, from the trait's own declaration: PTR
+        // receiver + the declared tail, all by value, token-free.
+        let table = self.sig_table;
+        let mut params = vec![Param {
+            ty: types::PTR,
+            mode: Mode::Val,
+        }];
+        for p in msig.params.iter().skip(1) {
+            let Some(w) = wir_ty(&mut self.b.module.types, table, self.sigs, p.ty, e.span)? else {
+                return Err(refuse("unit-typed parameters", e.span));
+            };
+            params.push(Param {
+                ty: w,
+                mode: Mode::Val,
+            });
+        }
+        let results = match wir_ty(&mut self.b.module.types, table, self.sigs, msig.ret, e.span)? {
+            Some(t) => vec![t],
+            None => vec![],
+        };
+        let sig = self.b.module.make_sig(params, results);
+        let mut cargs = vec![data];
+        cargs.extend(vals);
+        Ok(Flow::Val(self.b.ins_call_ind(fp, sig, &cargs)))
+    }
+
     fn lower_qualified_trait_call(
         &mut self,
         d: CallExpr<'t>,
@@ -11283,10 +11447,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("a method call without a dispatch record", e.span));
         };
         // s95: static trait dispatch routes through the record the
-        // checker already wrote — never re-derived (s18). `dyn` stays
-        // s96's: a witness-table call has no static callee to name.
-        if let Dispatch::Trait { dyn_call: true, .. } = disp {
-            return Err(refuse("dyn-method calls (vtables, s96)", e.span));
+        // checker already wrote — never re-derived (s18). s96: a dyn
+        // record routes to the witness-table call — the receiver is
+        // the member base, the args are the list.
+        if let Dispatch::Trait {
+            module,
+            name,
+            method,
+            dyn_call: true,
+        } = disp
+        {
+            let Some(callee) = d.callee() else {
+                return Err(refuse("a method call without a callee", e.span));
+            };
+            let m = wolf_ast::MemberExpr::cast(callee)
+                .ok_or_else(|| refuse("a method call without a receiver", e.span))?;
+            let Some(base) = m.base() else {
+                return Err(refuse("a method call without a receiver", e.span));
+            };
+            let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+            return self.lower_dyn_trait_call(base, args, *module, name, method, e);
         }
         // The receiver place: `recv.m(…)` / `(mut recv).m(…)`.
         let Some(callee) = d.callee() else {

@@ -15,6 +15,7 @@
     "abi.err.trap": "04-abi.md",
     "abi.native": "04-abi.md",
     "abi.native.call": "04-abi.md",
+    "abi.native.dyn": "04-abi.md",
     "abi.native.layout": "04-abi.md",
     "abi.native.niche": "04-abi.md",
     "abi.native.nounwind": "04-abi.md",

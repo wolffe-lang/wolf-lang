@@ -137,10 +137,12 @@ fn corpus_root() -> PathBuf {
 #[test]
 fn survey_is_a_superset_and_changes_nothing_on_refusing_corpus_files() {
     // s97 moved `rows/hof_tail.lu` and `rows/inferred_private.lu` to
-    // `lowers` (the indirect call landed) — replaced here by files
-    // still refusing for other reasons, per this assertion's own note.
+    // `lowers` (the indirect call landed), and s96 moved
+    // `traits/dyn_ok.lu` (dyn dispatch landed) — each replaced by a
+    // file still refusing for other reasons, per this assertion's own
+    // note.
     for name in [
-        "traits/dyn_ok.lu",
+        "memory/shared_ok.lu",
         "json/rows.lu",
         "memory/prov_holy_grail.lu",
         "memory/handle_stale.lu",

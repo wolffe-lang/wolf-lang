@@ -54,6 +54,25 @@ fn llvm_call_ind() {
     }
 }
 
+/// s96 (`[abi.native.dyn]`): the dyn dispatch chain on the LLVM tier.
+/// Same no-symbol assertion as `llvm_call_ind` — the dispatch call
+/// goes through the slot-loaded VALUE; a `@name` here would mean the
+/// emitter re-derived a static callee for an erased type.
+#[test]
+fn llvm_dyn_dispatch() {
+    if let Some(t) = ir_of_fixture("dyn_dispatch") {
+        let call = t
+            .lines()
+            .find(|l| l.trim_start().starts_with('%') && l.contains(" = call i64 %"))
+            .expect("the dispatch call goes through a VALUE, not an @name");
+        assert!(
+            !call.contains('@'),
+            "a dyn dispatch call must not name a symbol: {call}"
+        );
+        insta::assert_snapshot!("llvm_dyn_dispatch", t);
+    }
+}
+
 #[test]
 fn llvm_overflow() {
     if let Some(t) = ir_of_fixture("overflow") {

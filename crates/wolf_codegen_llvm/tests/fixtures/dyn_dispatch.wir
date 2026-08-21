@@ -1,0 +1,41 @@
+; s96 ([abi.native.dyn]): the dispatch chain, executed. @main hand-
+; builds a one-slot vtable (a stack slot holding a func.addr) and a
+; one-i64 data slot holding 40, packs the (data, vtable) pair, and
+; @dispatch runs the exact chain the lowering emits: agg.get data,
+; agg.get vtable, slot load, call.ind with the erased signature. The
+; erased callee reads through the data pointer and adds the 2, so
+; exit 42 proves BOTH pair halves flow: the call went through the
+; table, and the receiver really was the data pointer.
+
+fn @erased_get(ptr) -> i64 {
+b0(%d: ptr):
+  %r0: mem.r0 = region.foreign 0
+  %v = load.i64 %d, %r0
+  %two = iconst.i64 2
+  %r = iadd.chk %v, %two
+  ret %r
+}
+
+fn @dispatch({ptr, ptr}) -> i64 {
+b0(%pair: {ptr, ptr}):
+  %r0: mem.r0 = region.foreign 0
+  %data = agg.get %pair, 0
+  %vt = agg.get %pair, 1
+  %fp = load.ptr %vt, %r0
+  %r = call.ind %fp(%data) : (ptr) -> i64
+  ret %r
+}
+
+fn @main() -> i64 {
+b0:
+  %sz = iconst.i64 8
+  %vt: ptr, %m0: mem.r0 = stack.alloc %sz
+  %fp = func.addr @erased_get()
+  %m1 = store.ptr %fp, %vt, %m0
+  %data: ptr, %n0: mem.r1 = stack.alloc %sz
+  %forty = iconst.i64 40
+  %n1 = store.i64 %forty, %data, %n0
+  %pair = agg.make %data, %vt
+  %r = call @dispatch(%pair)
+  ret %r
+}

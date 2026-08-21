@@ -120,6 +120,18 @@ fn call_ind_runs_through_the_pointer() {
     assert_eq!(code, 42);
 }
 
+/// s96 (`[abi.native.dyn]`): the dispatch chain, executed — a one-slot
+/// vtable in a stack slot, the (data, vtable) pair packed and passed,
+/// and the erased callee reached THROUGH the slot reads 40 through the
+/// data pointer and adds 2. Exit 42 proves both pair halves flow.
+#[test]
+fn dyn_dispatch_runs_through_the_table() {
+    let Some((code, _)) = run_wir("dyn_dispatch", &fixture("dyn_dispatch")) else {
+        return;
+    };
+    assert_eq!(code, 42);
+}
+
 /// The contract's acceptance fixture: branches, calls, structs, and
 /// checked arithmetic, through `cc`, exiting correctly.
 #[test]

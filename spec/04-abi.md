@@ -60,6 +60,29 @@ AAPCS64, win64, Apple arm64 deltas).
   sound with one record slot per site. Same stability status as the
   task record: `[abi.native.unstable]` governs.
 
+- `[abi.native.dyn]` A trait object is a TWO-WORD pair: the data
+  pointer, then the vtable pointer, laid out as an ordinary by-value
+  aggregate `{ptr, ptr}`. The data half points at the erased value and
+  carries exactly the region obligations the checker assigned that
+  value — erasure changes dispatch, never ownership. The vtable half
+  points at immutable static storage: one pointer-sized slot per
+  method of the trait's dyn-safe method set, in the CANONICAL order
+  sema's dyn-safety report records (the interface serializes that
+  list, so a slot index is a cross-module fact — not declaration
+  order). Every slot holds a function of the ERASED signature: the
+  receiver crosses as the data pointer, every other parameter and the
+  result exactly as the trait declares them, which dyn-safety
+  guarantees are `Self`-free; a slot whose target's own convention
+  differs (a by-value receiver, say) is reached through a shim of the
+  erased shape, and the shim is the table's problem, never the call
+  site's. Dispatch is two loads and an indirect call; nothing else is
+  promised. Tables themselves cannot yet be demanded — the language
+  has no rule that converts a concrete value to a trait object, and
+  until that rule exists (a filed surface decision, not one this
+  clause makes) the pair only ever arrives from another frame. Same
+  stability status as everything in this section:
+  `[abi.native.unstable]` governs.
+
 ## §2 C membranes `[abi.c]`
 
 - `[abi.c.seams]` Exactly three ABI seams exist: `extern "c"` function

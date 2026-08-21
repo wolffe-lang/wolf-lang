@@ -5434,20 +5434,6 @@ impl<'a> Checker<'a> {
                 c_call: false,
             },
         ));
-        // s95: the dispatch record — the same record method-call sites
-        // get, so lowering reads the trait identity instead of
-        // re-deriving it from the callee string (the s18 rule). `Self`
-        // solves from the arguments; at an archetype site it lands on
-        // a rigid, and the INSTANCE's argument types name the impl.
-        self.dispatch.push((
-            e.span,
-            Dispatch::Trait {
-                module: tr.module,
-                name: tr.name.clone(),
-                method: mname.to_string(),
-                dyn_call: false,
-            },
-        ));
         // Blame span for the Self obligation: the argument that pins
         // `Self` (call-site errors point at the argument, D28).
         let mut self_blame = callee_span;
@@ -5485,6 +5471,26 @@ impl<'a> Checker<'a> {
                 method: mname.to_string(),
             },
         );
+        // s95: the dispatch record — the same record method-call sites
+        // get, so lowering reads the trait identity instead of
+        // re-deriving it from the callee string (the s18 rule). Pushed
+        // AFTER the arguments check (s96): `Self` has solved by now,
+        // and a `Self` that landed on a trait object makes this a dyn
+        // call — the record must say so, or lowering would hunt a
+        // static impl for a type that erased it. At an archetype site
+        // `Self` stays rigid and the INSTANCE's argument types name
+        // the impl, as before.
+        let solved_self = self.shallow(self_var);
+        let dyn_call = matches!(self.lo.table.kind(solved_self), TyKind::Dyn { .. });
+        self.dispatch.push((
+            e.span,
+            Dispatch::Trait {
+                module: tr.module,
+                name: tr.name.clone(),
+                method: mname.to_string(),
+                dyn_call,
+            },
+        ));
         let ret = subst(&mut self.lo.table, method.sig.ret, &map);
         Ok(self.normalize(ret))
     }
