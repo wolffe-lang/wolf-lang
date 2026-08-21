@@ -353,6 +353,19 @@ enum Value {
     Struct {
         fields: Vec<(String, Value)>,
     },
+    /// A top-level fn as a VALUE (s95/s97's fn values, the checked
+    /// twin): the body index. Copies — a fn value is a pointer.
+    Fn(usize),
+    /// A trait object (D47/s98's checked twin): the concrete type's
+    /// name rides the value so `dyn_call` dispatch can resolve the
+    /// impl at run time — the executor's answer to the native pair's
+    /// vtable half. Value-semantic: the mem tier's static loan (the
+    /// pair borrows its place) already refused every program where
+    /// cloning the inner is observable.
+    Dyn {
+        concrete: String,
+        inner: Box<Value>,
+    },
     Enum {
         variant: String,
         payload: Vec<Value>,
@@ -390,6 +403,7 @@ impl Value {
                 | Value::Range { .. }
                 | Value::Handle { .. }
                 | Value::Ptr(_)
+                | Value::Fn(_)
         )
     }
 }
@@ -523,6 +537,29 @@ struct Machine<'t> {
     fns_by_decl: HashMap<Span, usize>,
     /// (self-type name, method name) -> body index, inherent impls.
     methods: HashMap<(String, String), usize>,
+    /// Trait-impl methods, keyed (self type, trait, method) — the
+    /// trait in the key keeps two traits' same-named methods on one
+    /// type apart (#12).
+    trait_methods: HashMap<(String, String, String), usize>,
+    /// Trait DEFAULT bodies, keyed (trait module, trait, method):
+    /// executed when no impl overrides (s95's `Self ↦ subject`, the
+    /// checked twin — the subject rides `self_tys`).
+    trait_defaults: HashMap<(usize, String, String), usize>,
+    /// Per-frame concrete `Self`, pushed beside `frames`: inside a
+    /// trait default body the receiver types as `Rigid("Self")`, and
+    /// this stack is what names the subject at nested dispatch.
+    self_tys: Vec<Option<String>>,
+    /// The next `call_body`'s `Self` — set by dispatch sites,
+    /// consumed exactly once at frame push.
+    pending_self_ty: Option<String>,
+    /// Per-frame generic bindings, name → concrete nominal: built at
+    /// the CALL site from the caller's own typed arguments, so a
+    /// `Show.show(v)` inside `fn describe[T: Show](v: T)` can name
+    /// the type `T` stands for this call (#12). The machine executes
+    /// generic bodies directly — this map is its monomorphization.
+    frame_rigids: Vec<HashMap<String, String>>,
+    /// The next `call_body`'s rigid bindings, like `pending_self_ty`.
+    pending_rigids: Option<HashMap<String, String>>,
 
     allocs: Vec<Allocation>,
     regions: Vec<DynRegion>,
@@ -584,6 +621,77 @@ impl<'t> Machine<'t> {
 
     fn trap<T>(&self, kind: &'static str, clause: &'static str, span: Span) -> E<T> {
         Err(Stop::Trap(TrapInfo { kind, clause, span }))
+    }
+
+    /// The concrete nominal a checked expression's TYPE names, seen
+    /// through this frame's generic bindings: `Nominal` directly,
+    /// `Self` through `self_tys`, any other rigid through
+    /// `frame_rigids` — so nested generic calls propagate.
+    fn ty_concrete_name(&self, span: Span) -> Option<String> {
+        match self.expr_ty(span)? {
+            TyKind::Nominal { name, .. } => Some(name.clone()),
+            TyKind::Rigid(r) if r == "Self" => self.self_tys.last().cloned().flatten(),
+            TyKind::Rigid(r) => self.frame_rigids.last().and_then(|m| m.get(r)).cloned(),
+            _ => None,
+        }
+    }
+
+    /// The concrete type a trait dispatch lands on (#12). Static when
+    /// the checker typed the receiver as a nominal; the `self_tys`
+    /// stack when it typed it `Self` (a trait default body's own
+    /// receiver); the VALUE when the record says `dyn_call` (D47 —
+    /// erasure makes the type a run-time fact, which is the one place
+    /// this machine reads a type from a value).
+    fn trait_concrete(
+        &self,
+        recv_span: Span,
+        dyn_call: bool,
+        recv_val: &Value,
+        at: Span,
+    ) -> E<String> {
+        if dyn_call {
+            return match recv_val {
+                Value::Dyn { concrete, .. } => Ok(concrete.clone()),
+                _ => self.refuse("a dyn dispatch on a non-dyn value", at),
+            };
+        }
+        if let Some(name) = self.ty_concrete_name(recv_span) {
+            return Ok(name);
+        }
+        match self.expr_ty(recv_span) {
+            Some(TyKind::Dyn { .. }) => match recv_val {
+                Value::Dyn { concrete, .. } => Ok(concrete.clone()),
+                _ => self.refuse("a dyn dispatch on a non-dyn value", at),
+            },
+            _ => self.refuse("trait dispatch on a non-nominal receiver", at),
+        }
+    }
+
+    /// The body a trait method call executes: the impl's override
+    /// first, the trait's default second — s14's resolution order,
+    /// read from the indexes `Machine::new` built.
+    fn resolve_trait_body(
+        &self,
+        concrete: &str,
+        tr_module: usize,
+        tr_name: &str,
+        method: &str,
+        at: Span,
+    ) -> E<usize> {
+        if let Some(&b) = self.trait_methods.get(&(
+            concrete.to_string(),
+            tr_name.to_string(),
+            method.to_string(),
+        )) {
+            return Ok(b);
+        }
+        if let Some(&b) =
+            self.trait_defaults
+                .get(&(tr_module, tr_name.to_string(), method.to_string()))
+        {
+            return Ok(b);
+        }
+        self.refuse("a trait method with neither an impl body nor a default", at)
     }
 
     fn ub<T>(&self, row: UbRow, message: String, span: Span, tag_span: Span) -> E<T> {
@@ -1114,6 +1222,12 @@ impl<'t> Machine<'t> {
             fns: HashMap::new(),
             fns_by_decl: HashMap::new(),
             methods: HashMap::new(),
+            trait_methods: HashMap::new(),
+            trait_defaults: HashMap::new(),
+            self_tys: Vec::new(),
+            pending_self_ty: None,
+            frame_rigids: Vec::new(),
+            pending_rigids: None,
             allocs: Vec::new(),
             regions: Vec::new(),
             lists: Vec::new(),
@@ -1177,7 +1291,8 @@ impl<'t> Machine<'t> {
                         // Inherent impls spell the target as the
                         // path (`impl V {`); trait impls carry the
                         // self type after `for`.
-                        let target = wolf_ast::ImplDecl::cast(o).and_then(|d| {
+                        let d = wolf_ast::ImplDecl::cast(o);
+                        let target = d.and_then(|d| {
                             d.self_ty()
                                 .map(|t| t.span)
                                 .or_else(|| d.trait_path().map(|p| p.syntax().span))
@@ -1187,7 +1302,41 @@ impl<'t> Machine<'t> {
                             let ty =
                                 String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize])
                                     .into_owned();
-                            m.methods.insert((ty, b.name.clone()), i);
+                            // A TRAIT impl (`impl T for V`) also keys
+                            // (self, trait, method) so two traits'
+                            // same-named methods stay apart (#12).
+                            if let Some((tspan, _)) = d.and_then(|d| {
+                                d.trait_path().map(|p| p.syntax().span).zip(d.self_ty())
+                            }) {
+                                let tr = String::from_utf8_lossy(
+                                    &src[tspan.lo as usize..tspan.hi as usize],
+                                )
+                                .into_owned();
+                                let tr = tr.rsplit('.').next().unwrap_or(tr.as_str()).to_string();
+                                // ONLY the trait index: letting a
+                                // trait impl into the inherent index
+                                // let its `speak` overwrite `impl
+                                // Dog`'s own, and `d.speak()` answered
+                                // the trait (ty.method.order says
+                                // inherent wins; method_inherent.lu
+                                // is the witness).
+                                m.trait_methods.insert((ty, tr, b.name.clone()), i);
+                            } else {
+                                m.methods.insert((ty, b.name.clone()), i);
+                            }
+                        }
+                    }
+                    Some(o) if o.kind == SyntaxKind::TraitDecl => {
+                        // A default body: the trait's own method with
+                        // a block, executed for any impl that does not
+                        // override (s95's `Self ↦ subject`, checked).
+                        if let Some(tok) = wolf_ast::TraitDecl::cast(o).and_then(|t| t.name()) {
+                            let src = &pkg.files[b.file].raw.src;
+                            let tr = String::from_utf8_lossy(
+                                &src[tok.span.lo as usize..tok.span.hi as usize],
+                            )
+                            .into_owned();
+                            m.trait_defaults.insert((b.module, tr, b.name.clone()), i);
                         }
                     }
                     _ => {}
@@ -1273,6 +1422,9 @@ impl<'t> Machine<'t> {
             frame.locals.push(v);
         }
         self.frames.push(frame);
+        self.self_tys.push(self.pending_self_ty.take());
+        self.frame_rigids
+            .push(self.pending_rigids.take().unwrap_or_default());
         let result = self.eval_block(block, true);
         let out = match result {
             Ok(Flow::Val(v)) => self.exit_scopes_to(0, false).map(|()| v),
@@ -1286,6 +1438,8 @@ impl<'t> Machine<'t> {
             Err(e) => Err(e),
         };
         self.frames.pop();
+        self.self_tys.pop();
+        self.frame_rigids.pop();
         out
     }
 
@@ -3951,6 +4105,30 @@ impl<'t> Machine<'t> {
                 };
             }
         }
+        // A bare top-level fn name in VALUE position (s95/s97's fn
+        // values, the checked twin) — only when the checker typed the
+        // expression as a fn, so a module const stays an honest
+        // refusal (#12).
+        if e.kind == SyntaxKind::PathExpr && matches!(self.expr_ty(e.span), Some(TyKind::Fn(_, _)))
+        {
+            let name = self.text(e.span);
+            if !name.contains('.') && !name.contains("::") {
+                let module = self.tc.bodies[self.frames.last().expect("frame").body]
+                    .body
+                    .module;
+                // F-0048's resolution order, minus the decl locus a
+                // value read does not carry.
+                if let Some(&b) = self.fns.get(&(module, name.clone())).or_else(|| {
+                    self.fns
+                        .iter()
+                        .filter(|((_, n), _)| *n == name)
+                        .map(|(_, b)| b)
+                        .min()
+                }) {
+                    return Ok(Flow::Val(Value::Fn(b)));
+                }
+            }
+        }
         self.refuse("module items in checked execution", e.span)
     }
 
@@ -4177,6 +4355,26 @@ impl<'t> Machine<'t> {
                     }
                     _ => self.refuse("this raw bridge shape", e.span),
                 }
+            }
+            Some(CastKind::Unsize) => {
+                // D47 (s98's checked twin): `place as dyn Trait`. The
+                // cast READS the place (a lend, never a move — the
+                // static loan already guards every write under a live
+                // pair), and the value carries the concrete type's
+                // name — this machine's vtable half.
+                let v = if let Some(place) = self.place_of(inner)? {
+                    self.read_place(&place, inner.span)?
+                } else {
+                    val!(self.eval(inner))
+                };
+                let concrete = match self.expr_ty(inner.span) {
+                    Some(TyKind::Nominal { name, .. }) => name.clone(),
+                    _ => return self.refuse("an unsize of a non-nominal receiver", e.span),
+                };
+                Ok(Flow::Val(Value::Dyn {
+                    concrete,
+                    inner: Box::new(v),
+                }))
             }
             _ => {
                 let v = val!(self.eval(inner));
@@ -4505,6 +4703,63 @@ impl<'t> Machine<'t> {
         let Some(sig) = cs else {
             return self.refuse("calls outside the modelled surface", e.span);
         };
+        // A QUALIFIED dispatch (`Trait.method(recv, …)` or a
+        // qualified inherent) carries an s17 record at the call span:
+        // the first argument is the receiver, and the record — not
+        // the callee name — names the body (#12, the s18 rule).
+        if let Some(rec) = self.ctx().dispatch.get(&e.span) {
+            enum Q {
+                I(String),
+                T(usize, String, bool),
+            }
+            // `sig.callee` is the dotted spelling (`Draw.draw`);
+            // the record's own `method` field is the bare name the
+            // indexes key on.
+            let (q, mname) = match rec {
+                Dispatch::Inherent { ty, method } => (Q::I(ty.clone()), method.clone()),
+                Dispatch::Trait {
+                    module,
+                    name,
+                    method,
+                    dyn_call,
+                } => (Q::T(*module, name.clone(), *dyn_call), method.clone()),
+            };
+            let mut arg_exprs = d.args().into_iter().flat_map(|l| l.args());
+            let Some(recv_expr) = arg_exprs.next().and_then(Arg::value) else {
+                return self.refuse("a qualified dispatch without a receiver", e.span);
+            };
+            let self_mode = sig.params.first().and_then(|p| p.mode);
+            let mut self_val = self.eval_arg(recv_expr, self_mode)?;
+            let (body, subject) = match q {
+                Q::I(ty_name) => {
+                    let Some(&body) = self.methods.get(&(ty_name.clone(), mname.clone())) else {
+                        return self.refuse("methods without resolvable bodies", e.span);
+                    };
+                    (body, ty_name)
+                }
+                Q::T(module, name, dyn_call) => {
+                    let concrete =
+                        self.trait_concrete(recv_expr.span, dyn_call, &self_val, e.span)?;
+                    if let Value::Dyn { inner, .. } = self_val {
+                        self_val = *inner;
+                    }
+                    let body = self.resolve_trait_body(&concrete, module, &name, &mname, e.span)?;
+                    (body, concrete)
+                }
+            };
+            let mut call_args = vec![self_val];
+            for (i, a) in arg_exprs.enumerate() {
+                let Some(v) = Arg::value(a) else { continue };
+                let mode = sig.params.get(i + 1).and_then(|p| p.mode);
+                call_args.push(self.eval_arg(v, mode)?);
+            }
+            self.pending_self_ty = Some(subject);
+            let out = self.call_body(body, call_args)?;
+            if let Value::ErrTag { .. } = out {
+                return Ok(Flow::Err(out));
+            }
+            return Ok(Flow::Val(out));
+        }
         let module = self.tc.bodies[self.frames.last().expect("frame").body]
             .body
             .module;
@@ -4513,7 +4768,7 @@ impl<'t> Machine<'t> {
         // caller's own module answers same-module calls, and the
         // name-only net picks the SMALLEST body index — a stable,
         // deterministic choice, never a hash order's.
-        let Some(&body) = sig
+        let by_name = sig
             .decl_span
             .and_then(|ds| self.fns_by_decl.get(&ds))
             .or_else(|| self.fns.get(&(module, sig.callee.clone())))
@@ -4524,9 +4779,74 @@ impl<'t> Machine<'t> {
                     .map(|(_, b)| b)
                     .min()
             })
-        else {
-            return self.refuse("calls into unresolvable bodies", e.span);
+            .copied();
+        let body = match by_name {
+            Some(b) => b,
+            None => {
+                // A call through a fn VALUE (s95/s97's fn values, the
+                // checked twin): the callee is a place holding
+                // `Value::Fn` — a param, a binding, a field.
+                let through_value = match d.callee() {
+                    Some(callee) => match self.place_of(callee)? {
+                        Some(place) => match self.read_place(&place, callee.span)? {
+                            Value::Fn(b) => Some(b),
+                            _ => None,
+                        },
+                        None => None,
+                    },
+                    None => None,
+                };
+                match through_value {
+                    Some(b) => b,
+                    None => return self.refuse("calls into unresolvable bodies", e.span),
+                }
+            }
         };
+        // Generic bindings for the callee (#12): a declared param type
+        // that NAMES one of the callee's own generic params binds it
+        // to the caller-side concrete type of the matching argument —
+        // read through this frame's own bindings, so nesting
+        // propagates. Spelled from the callee's source, not the
+        // caller's (cross-file calls).
+        {
+            let callee_node = self.ctxs[body]
+                .as_ref()
+                .expect("callable body has ctx")
+                .node;
+            let callee_file = self.tc.bodies[body].body.file;
+            let csrc = &self.pkg.files[callee_file].raw.src;
+            let slice = |sp: Span| {
+                String::from_utf8_lossy(&csrc[sp.lo as usize..sp.hi as usize]).into_owned()
+            };
+            if let Some(fd) = wolf_ast::FnDecl::cast(callee_node)
+                && let Some(gl) = fd.generics()
+            {
+                let gnames: Vec<String> = gl
+                    .params()
+                    .filter_map(|gp| gp.name().map(|t| slice(t.span)))
+                    .collect();
+                if !gnames.is_empty() {
+                    let mut map: HashMap<String, String> = HashMap::new();
+                    let mut arg_iter = d.args().into_iter().flat_map(|l| l.args());
+                    for pdecl in fd.params().into_iter().flat_map(|ps| ps.params()) {
+                        let a = arg_iter.next();
+                        let (Some(tynode), Some(a)) = (pdecl.ty(), a) else {
+                            continue;
+                        };
+                        let tytext = slice(tynode.span);
+                        if gnames.contains(&tytext)
+                            && let Some(v) = Arg::value(a)
+                            && let Some(c) = self.ty_concrete_name(v.span)
+                        {
+                            map.entry(tytext).or_insert(c);
+                        }
+                    }
+                    if !map.is_empty() {
+                        self.pending_rigids = Some(map);
+                    }
+                }
+            }
+        }
         let mut args = Vec::new();
         for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
             let Some(v) = Arg::value(a) else { continue };
@@ -5076,19 +5396,59 @@ impl<'t> Machine<'t> {
                 }
             }
             _ => {
-                // An inherent user method (s17 dispatch record).
-                let ty_name = match self.ctx().dispatch.get(&e.span) {
-                    Some(Dispatch::Inherent { ty, .. }) => ty.clone(),
-                    Some(Dispatch::Trait { .. }) => {
-                        return self.refuse("trait dispatch in checked execution", e.span);
-                    }
+                // A user method — inherent or trait — through the s17
+                // dispatch record (the s18 rule: READ the record,
+                // never re-derive; #12).
+                enum Target {
+                    Inherent(String),
+                    Trait {
+                        module: usize,
+                        name: String,
+                        dyn_call: bool,
+                    },
+                }
+                let target = match self.ctx().dispatch.get(&e.span) {
+                    Some(Dispatch::Inherent { ty, .. }) => Target::Inherent(ty.clone()),
+                    Some(Dispatch::Trait {
+                        module,
+                        name,
+                        dyn_call,
+                        ..
+                    }) => Target::Trait {
+                        module: *module,
+                        name: name.clone(),
+                        dyn_call: *dyn_call,
+                    },
                     None => return self.refuse("this method call shape", e.span),
                 };
-                let Some(&body) = self.methods.get(&(ty_name, sig.callee.clone())) else {
-                    return self.refuse("methods without resolvable bodies", e.span);
-                };
                 let self_mode = sig.params.first().and_then(|p| p.mode);
-                let self_val = self.eval_arg(recv, self_mode)?;
+                let mut self_val = self.eval_arg(recv, self_mode)?;
+                let (body, subject) = match target {
+                    Target::Inherent(ty_name) => {
+                        let Some(&body) = self.methods.get(&(ty_name.clone(), sig.callee.clone()))
+                        else {
+                            return self.refuse("methods without resolvable bodies", e.span);
+                        };
+                        (body, ty_name)
+                    }
+                    Target::Trait {
+                        module,
+                        name,
+                        dyn_call,
+                    } => {
+                        let concrete =
+                            self.trait_concrete(recv.span, dyn_call, &self_val, e.span)?;
+                        if let Value::Dyn { inner, .. } = self_val {
+                            // The erased receiver enters the body as
+                            // the concrete value (the data half).
+                            self_val = *inner;
+                        }
+                        let body =
+                            self.resolve_trait_body(&concrete, module, &name, &sig.callee, e.span)?;
+                        (body, concrete)
+                    }
+                };
+                self.pending_self_ty = Some(subject);
                 let mut call_args = vec![self_val];
                 for (i, a) in args.into_iter().flat_map(|l| l.args()).enumerate() {
                     let Some(v) = Arg::value(a) else { continue };
