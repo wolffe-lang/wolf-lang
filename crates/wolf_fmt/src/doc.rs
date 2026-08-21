@@ -77,6 +77,59 @@ impl Doc {
     }
 }
 
+/// Will this doc certainly render with a newline, wherever it is
+/// placed? Unlike [`Doc::forced`] this PIERCES shields — a hug shield
+/// keeps enclosing groups flat, but the newlines inside it are still
+/// real ink on the page — and it also counts a flat run that cannot
+/// fit even at column zero, which the renderer will break by width.
+/// `block()`'s inline choice asks this question; `forced()` answers a
+/// different one (group breaking), and conflating them let a block
+/// whose shielded closure was certain to break render "inline" on
+/// pass one and multiline in reality (idem_member_chain_width's
+/// second layer).
+pub(crate) fn wont_render_inline(d: &Doc) -> bool {
+    fn pierced(d: &Doc) -> bool {
+        match d {
+            Doc::Hardline | Doc::FreshLine | Doc::Blankline | Doc::BreakParent => true,
+            Doc::Raw(bytes) => bytes.contains(&b'\n'),
+            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) | Doc::Shield(ds) => {
+                ds.iter().any(pierced)
+            }
+            _ => false,
+        }
+    }
+    // The width half must PIERCE shields too — `fits` deliberately
+    // stops at one (the hug contract), which would blind this check to
+    // exactly the content whose width decides the question.
+    fn overflows(d: &Doc, budget: &mut isize) -> bool {
+        match d {
+            Doc::Text(t) | Doc::Raw(t) => {
+                match t.iter().position(|&b| b == b'\n') {
+                    // A break inside: the flat prefix ends here.
+                    Some(_) => false,
+                    None => {
+                        *budget -= t.iter().filter(|&&b| (b & 0xC0) != 0x80).count() as isize;
+                        *budget < 0
+                    }
+                }
+            }
+            Doc::Line => {
+                *budget -= 1;
+                *budget < 0
+            }
+            Doc::IfBreak { flat, .. } => {
+                *budget -= flat.iter().filter(|&&b| (b & 0xC0) != 0x80).count() as isize;
+                *budget < 0
+            }
+            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) | Doc::Shield(ds) => {
+                ds.iter().any(|c| overflows(c, budget))
+            }
+            _ => false,
+        }
+    }
+    pierced(d) || overflows(d, &mut (WIDTH as isize))
+}
+
 /// Would `docs`, rendered flat starting at `col`, stay within the width
 /// through its next hard stop? (Classic first-fit measure.)
 fn fits(docs: &[Doc], col: usize) -> bool {
@@ -100,11 +153,21 @@ fn fits(docs: &[Doc], col: usize) -> bool {
             Doc::Softline => {}
             // A forced break ends the line: everything up to here fit.
             Doc::Hardline | Doc::FreshLine | Doc::Blankline => return budget >= 0,
-            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) | Doc::Shield(ds) => {
+            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) => {
                 for c in ds.iter().rev() {
                     stack.push(c);
                 }
             }
+            // The hug shield's contract is that the construct inside
+            // manages its own breaking while the call and chain around
+            // it stay FLAT — so measurement ends here, successfully.
+            // Descending instead made the chain's fit depend on the
+            // shielded block's internal geometry: an inline-in-source
+            // block measured flat (huge) and broke the chain, while
+            // the same block written multiline measured to its first
+            // hardline and the chain joined — one flip per pass
+            // (idem_member_chain_width).
+            Doc::Shield(_) => return budget >= 0,
             Doc::IfBreak { flat, .. } => budget -= chars(flat) as isize,
             Doc::LineSuffix(_) | Doc::BreakParent => {}
         }

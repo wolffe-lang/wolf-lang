@@ -992,7 +992,7 @@ impl<'a> Fmt<'a> {
 
         let inline_ok = src_inline
             && live.len() <= 2
-            && !live.iter().any(|(_, b)| b.forced())
+            && !live.iter().any(|(_, b)| crate::doc::wont_render_inline(b))
             && !self.has_inner_trailing_comment(b)
             && rbrace.is_some_and(|r| !self.has_lead_comment(r));
 
