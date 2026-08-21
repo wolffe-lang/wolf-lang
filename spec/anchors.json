@@ -202,6 +202,7 @@
     "mem.boundary.module": "02-memory-model.md",
     "mem.boundary.trusted": "02-memory-model.md",
     "mem.codes": "02-memory-model.md",
+    "mem.dyn.unsize": "02-memory-model.md",
     "mem.iter": "02-memory-model.md",
     "mem.iter.excl": "02-memory-model.md",
     "mem.iter.excl.1": "02-memory-model.md",

@@ -76,11 +76,11 @@ AAPCS64, win64, Apple arm64 deltas).
   differs (a by-value receiver, say) is reached through a shim of the
   erased shape, and the shim is the table's problem, never the call
   site's. Dispatch is two loads and an indirect call; nothing else is
-  promised. Tables themselves cannot yet be demanded — the language
-  has no rule that converts a concrete value to a trait object, and
-  until that rule exists (a filed surface decision, not one this
-  clause makes) the pair only ever arrives from another frame. Same
-  stability status as everything in this section:
+  promised. Tables are demanded by `as dyn` cast sites
+  (`[mem.dyn.unsize]`, D47): one content-interned table per
+  (trait, impl) pair, synthesized with its shims when a cast first
+  names the pair; the data half is the cast operand's spilled place.
+  Same stability status as everything in this section:
   `[abi.native.unstable]` governs.
 
 ## §2 C membranes `[abi.c]`
