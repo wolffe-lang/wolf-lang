@@ -224,12 +224,10 @@ pub(crate) fn write_sets(m: &Module) -> HashMap<String, WriteSet> {
             if out.contains_key(&f.name) {
                 continue;
             }
-            match write_set_of(f, &view, &names, &out) {
-                Some(ws) => {
-                    out.insert(f.name.clone(), ws);
-                    changed = true;
-                }
-                None => {} // depends on an unresolved callee: next sweep
+            // None: depends on an unresolved callee — next sweep.
+            if let Some(ws) = write_set_of(f, &view, &names, &out) {
+                out.insert(f.name.clone(), ws);
+                changed = true;
             }
         }
     }

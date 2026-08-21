@@ -1375,7 +1375,7 @@ fn record_rewrite_relation(cx: &mut RangeCx, f: &Function, inst: Inst, b: Block)
     let res = f.vpool.get(f.insts[inst].results)[0];
     let (x, y) = (args[0], args[1]);
     let mut out: Vec<(IntCc, Value, Value)> = Vec::new();
-    let mut sign_at = |cx: &mut RangeCx, v: Value| -> Option<std::cmp::Ordering> {
+    let sign_at = |cx: &mut RangeCx, v: Value| -> Option<std::cmp::Ordering> {
         let r = cx.range_at(v, b)?;
         if r.0 >= 0 {
             Some(std::cmp::Ordering::Greater)
