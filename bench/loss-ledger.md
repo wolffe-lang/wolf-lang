@@ -210,6 +210,28 @@ generalized from "a limit against a constant K" to "a limit against another
 loop-invariant value", which is what `out.len >= src.len` needs. Both are
 `rangeopt` work with `a2_stencil1d` as the regression test.
 
+**Landed 2026-08-21 (#98), half of it.** The affine half (s78) had already
+discharged the three `src` guards; what remained was one bounds guard on
+`out[i]` and two element-add overflow checks. The versioning client now
+takes bounds guards as candidates at all (a br to a trap arm made every
+guarded loop "multi-exit" and versioning never fired — the trap arm is the
+check's own failure arm, not an exit), asks for the missing relation as
+REAL guards at the loop's door (`0 <= out.len`, `last <= out.len`, a
+paramless chain so the memory token is consumed once per path), and the
+relational channel chains the two base pairs through one intermediate —
+the difference-bound step, deliberately bounded at a single hop. The fast
+copy's bounds check folds; the slow copy keeps everything. Measured on
+this host loaded, ratios only: **0.299x → 0.331x** vs naive C; IR volume
+266 → 309 instructions, the one kernel that moved (`kernel_ceiling_history`
+in gates.json carries the decomposition). The two overflow checks stay —
+an opaque `List[int]` element is unbounded intra-procedurally, exactly
+D44's second-addendum caveat — and they are what still blocks
+vectorization (rustc sits at C parity here because its release adds wrap).
+Closing them needs element-range facts from the container layer or
+interprocedural value-range summaries; neither exists, and a pre-scan
+guard would change the guard's complexity class. e3/d2 were checked for
+free movement: none (0.483x, 0.827x — unchanged within noise).
+
 ## G7 — buffer disjointness is a checker theorem nobody spends
 
 > **SUPERSEDED 2026-08-21 (#115):** the closing numbers below predate
