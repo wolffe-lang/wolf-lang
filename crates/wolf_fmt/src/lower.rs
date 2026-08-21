@@ -546,7 +546,13 @@ impl<'a> Fmt<'a> {
     /// Trivia of a token that is itself dropped (`Term`, stripped
     /// commas): comments survive, text does not.
     fn tok_trivia_only(&self, t: &GreenToken, out: &mut Vec<Doc>) {
-        self.lead(t, out);
+        // A dropped token's comments get DANGLING geometry: a break
+        // before each comment, none after — lead()'s final gap-break
+        // anchors on the dropped token's own source position, and the
+        // list then adds its own break, printing a blank line the
+        // reparse (where the comment leads whatever comes next) never
+        // reproduces. One drift per pass, in every dropped-comma shape.
+        self.dangling_lead(t, out);
         self.trail(t, out);
     }
 
@@ -691,8 +697,23 @@ impl<'a> Fmt<'a> {
                 _ => rest.push(it),
             }
         }
-        uses.sort_by_key(|a| self.use_sort_key(a));
-        imports.sort_by_key(|a| self.import_sort_key(a));
+        // A module-doc comment (`//!`) riding an import pins the whole
+        // group in source order: sorting moved the carrier to the top
+        // of the file, where the reparse read its comment as a HEADER
+        // and applied the header's blank-line rule — a layout the
+        // first pass never produced. A comment must not become a
+        // header by sorting; clean code never docs an import with
+        // `//!`, so ordinary files still sort.
+        let pins_order = |n: &&GreenNode| {
+            first_token(n)
+                .is_some_and(|t| t.leading.iter().any(|s| self.slice(*s).starts_with(b"//!")))
+        };
+        if !uses.iter().any(pins_order) {
+            uses.sort_by_key(|a| self.use_sort_key(a));
+        }
+        if !imports.iter().any(pins_order) {
+            imports.sort_by_key(|a| self.import_sort_key(a));
+        }
 
         let ordered: Vec<(&GreenNode, bool)> = uses
             .iter()
@@ -971,7 +992,7 @@ impl<'a> Fmt<'a> {
 
         let inline_ok = src_inline
             && live.len() <= 2
-            && !live.iter().any(|(_, b)| b.forced())
+            && !live.iter().any(|(_, b)| crate::doc::wont_render_inline(b))
             && !self.has_inner_trailing_comment(b)
             && rbrace.is_some_and(|r| !self.has_lead_comment(r));
 
@@ -1079,8 +1100,17 @@ impl<'a> Fmt<'a> {
         inner.push(if pad { Doc::Line } else { Doc::Softline });
         for (i, e) in elems.iter().enumerate() {
             if i > 0 {
-                inner.push(Doc::text(","));
+                // A separator is printed ONLY where the source carries
+                // one. A damaged list (a recovered error node beside a
+                // real element, no comma between them) used to get a
+                // minted "," here; the reparse then read that comma as
+                // evidence of one more (missing) element, and every
+                // pass grew the list by a comma — the formatter must
+                // never invent tokens in a region the parser could not
+                // fully claim. Clean lists always carry their commas,
+                // so this changes nothing outside damage.
                 if let Some(c) = commas.get(i - 1) {
+                    inner.push(Doc::text(","));
                     self.tok_trivia_only(c, &mut inner);
                 }
                 inner.push(Doc::Line);
@@ -1101,6 +1131,9 @@ impl<'a> Fmt<'a> {
         {
             self.tok_trivia_only(c, &mut inner);
         }
+        if let Some(c) = close {
+            self.dangling_lead(c, &mut inner);
+        }
         g.push(Doc::Indent(inner));
         g.push(if pad { Doc::Line } else { Doc::Softline });
         if let Some(c) = close {
@@ -1118,6 +1151,37 @@ impl<'a> Fmt<'a> {
             g.push(Doc::BreakParent);
         }
         out.push(Doc::Group(g));
+    }
+
+    /// A closer's leading comments, emitted INSIDE the body's indent —
+    /// a comment dangling before `}` belongs to the body, and emitting
+    /// it at the closer's column made its indent depend on which token
+    /// the parser attached it to: leading a comma (inside the list) it
+    /// sat at the body indent, leading the closer (after a pass moved
+    /// it there) it dropped to the closer's — one drift per pass.
+    /// Geometry is fixed at one newline before the first comment and
+    /// blank-aware between comments; the group's own break supplies the
+    /// newline before the closer, so the shape is a render fixed point.
+    /// Marks the spans consumed so the closer's own emission stays bare.
+    fn dangling_lead(&self, t: &GreenToken, out: &mut Vec<Doc>) {
+        let mut prev_end: Option<u32> = None;
+        for s in &t.leading {
+            let bytes = self.slice(*s);
+            if !is_comment(bytes) {
+                continue;
+            }
+            if self.consumed.borrow().contains(&(s.lo, s.hi)) {
+                continue;
+            }
+            match prev_end {
+                Some(pe) if self.blank_between(pe, s.lo) => out.push(Doc::Blankline),
+                Some(_) => out.push(Doc::Hardline),
+                None => out.push(Doc::FreshLine),
+            }
+            out.push(Doc::Text(trim_end(bytes).to_vec()));
+            self.consumed.borrow_mut().insert((s.lo, s.hi));
+            prev_end = Some(s.hi);
+        }
     }
 
     fn subtree_token_has_comment(&self, t: &GreenToken) -> bool {
@@ -1154,6 +1218,12 @@ impl<'a> Fmt<'a> {
                 Child::Token(t) if t.kind == K::Comma => commas.push(t),
                 Child::Token(t) if matches!(t.kind, K::Term | K::Missing) => {}
                 Child::Token(_) => {}
+                // A zero-width recovery node is not an element: it
+                // renders nothing, but counting it drove separator
+                // placement — a comment beside the invisible element
+                // emitted before it on pass one and after it (attached
+                // to the next comma or closer) on every later pass.
+                Child::Node(m) if m.span.lo == m.span.hi => {}
                 Child::Node(m) => elems.push(m),
             }
         }
@@ -2333,11 +2403,11 @@ impl<'a> Fmt<'a> {
         {
             self.tok_trivia_only(c, &mut inner);
         }
+        if let Some(c) = close {
+            self.dangling_lead(c, &mut inner);
+        }
         g.push(Doc::Indent(inner));
         g.push(Doc::Line);
-        if let Some(c) = close {
-            self.lead(c, &mut g);
-        }
         g.push(Doc::text("}"));
         if let Some(c) = close {
             self.trail(c, &mut g);
@@ -2345,6 +2415,7 @@ impl<'a> Fmt<'a> {
         if force
             || fields.iter().any(|f| self.subtree_has_comment(f))
             || commas.iter().any(|c| self.subtree_token_has_comment(c))
+            || self.has_lead_comment_opt(close)
         {
             g.push(Doc::BreakParent);
         }
