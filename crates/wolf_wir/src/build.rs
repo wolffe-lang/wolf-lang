@@ -247,6 +247,19 @@ impl<'m> FuncBuilder<'m> {
 
     /// Finish: every block must be sealed and filled. Returns the
     /// function (the caller verifies it — the round-trip gate).
+    ///
+    /// The layout leaves in CANONICAL order — the printer's reachable
+    /// RPO, unreachable blocks appended in creation order (the layout
+    /// bijection holds either way). Creation order was never a
+    /// contract: a `region` block pre-creates its exit block on the
+    /// X4 cleanup chain, so code lowered AFTER the body (the exit's
+    /// `ambient_leave`, the frees) lives in a block created BEFORE
+    /// the body's own branches, and any consumer walking layout as
+    /// execution order read the exit ahead of the body. The printer
+    /// always re-sorted, which hid it; #113's conditional push put a
+    /// runtime seam inside a body diamond for the first time and the
+    /// mid-end seam litmus caught the raw layout disagreeing with the
+    /// canonical one. One order everywhere ends the class.
     pub fn finish(self) -> Function {
         for (i, info) in self.blocks.iter().enumerate() {
             debug_assert!(info.sealed, "block b{i} left unsealed at finish");
@@ -256,7 +269,17 @@ impl<'m> FuncBuilder<'m> {
                 "block b{i} has unresolved placeholder params"
             );
         }
-        self.func
+        let mut f = self.func;
+        let rpo = crate::print::reachable_rpo(&f);
+        let mut in_rpo: std::collections::HashSet<_> = rpo.iter().copied().collect();
+        let mut layout = rpo;
+        for &b in &f.layout {
+            if in_rpo.insert(b) {
+                layout.push(b);
+            }
+        }
+        f.layout = layout;
+        f
     }
 
     pub fn types(&mut self) -> &mut TypeInterner {

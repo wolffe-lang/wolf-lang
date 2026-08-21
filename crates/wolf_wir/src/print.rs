@@ -80,7 +80,7 @@ pub fn block_order(f: &Function) -> Vec<Block> {
 /// Reverse postorder over the blocks reachable from the entry.
 /// Successors are visited in reverse so the RPO lists then-targets
 /// before else-targets (natural reading order for diamonds and loops).
-fn reachable_rpo(f: &Function) -> Vec<Block> {
+pub(crate) fn reachable_rpo(f: &Function) -> Vec<Block> {
     let mut post: Vec<Block> = Vec::new();
     let mut seen: HashSet<Block> = HashSet::new();
     let Some(entry) = f.entry() else {
