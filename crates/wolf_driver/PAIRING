@@ -1,0 +1,12 @@
+# The reference-interpreter pairing (r01 criteria row 7): the lupin
+# release this wolf is differentially tested against, and the
+# conformance pin that lupin release itself declares.
+#
+# `wolf --version` prints this file; nothing else defines the pairing
+# (#87 retired the hardcoded constants that went three releases stale).
+# Update it WITH the differential ritual — the pairing test compares
+# the version below against the sibling lupin binary whenever one is
+# present, so a stale stamp fails the local gauntlet instead of
+# shipping.
+lupin-version = 0.1.13
+lupin-pin = c9da6d9
