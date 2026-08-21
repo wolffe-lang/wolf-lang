@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 125
 expression: out
 ---
 decl @__wolf_rt_region_ambient_enter(ptr) -> ptr
@@ -16,22 +17,11 @@ b0:
   %8 = call @__wolf_rt_region_ambient_enter(%2)
   %9 = iconst.i64 2
   %10 = agg.make %9
-  %11 = agg.get %7, 0
-  %12 = agg.get %10, 0
-  %13 = iadd.chk %11, %12
+  %11 = iconst.i64 3
   call @__wolf_rt_region_ambient_leave(%8)
-  %14 = iconst.i64 3
-  %15 = agg.make %14
-  %16 = agg.get %15, 0
-  %17 = iadd.chk %13, %16
+  %12 = agg.make %11
+  %13 = iconst.i64 6
   call @__wolf_rt_region_ambient_leave(%5)
-  %18 = iconst.i64 6
-  %19 = icmp.eq %17, %18
-  br %19, b1, b2
-b1:
-  jmp b3(%4)
-b2:
-  jmp b3(%6)
-b3(%20: i64):
-  ret %20
+  %14 = bconst true
+  ret %4
 }

@@ -298,6 +298,82 @@ fn loop_carried_token_becomes_a_block_param() {
     assert!(header_line.contains("i64"), "counter param too: {dump}");
 }
 
+// ------------------------------------------- the s99-era identities ----
+
+/// `isub.wrap(iadd.chk(x, k), x)` IS `k` — exact because a live
+/// checked-add result holds the mathematical sum (it would have
+/// trapped otherwise). The shape is a slice width: `s[i..i + K]`
+/// lowers this exact pair, and the width folding to `K` is what lets
+/// `str_eq_inline` see a constant operand length (d2's hot loop).
+#[test]
+fn isub_wrap_of_iadd_chk_is_the_addend() {
+    let mut m = Module::new();
+    let mut b = arith_builder(&mut m);
+    let params = b.block_params(b.current_block());
+    let (x, k) = (params[0], params[1]);
+    let end = b.ins(Opcode::IaddChk, &[x, k], &[I64], Aux::None).one();
+    let idents_before = b.stats.identity;
+    // Both operand orders of the sub's match against the add.
+    let w1 = b.ins(Opcode::IsubWrap, &[end, x], &[I64], Aux::None).one();
+    assert_eq!(w1, k, "isub.wrap(x + k, x) is k, the existing value");
+    let w2 = b.ins(Opcode::IsubWrap, &[end, k], &[I64], Aux::None).one();
+    assert_eq!(w2, x, "isub.wrap(x + k, k) is x, the existing value");
+    assert_eq!(b.stats.identity, idents_before + 2);
+    b.ins_ret(&[w1]);
+    let f = b.finish();
+    verify_function(&m, &f).expect("verifies");
+}
+
+/// The same identity over `iadd.wrap`: ((x + k) mod 2^b) - x is k mod
+/// 2^b, which IS k for same-width operands — all `.wrap` promises.
+#[test]
+fn isub_wrap_of_iadd_wrap_is_the_addend() {
+    let mut m = Module::new();
+    let mut b = arith_builder(&mut m);
+    let params = b.block_params(b.current_block());
+    let (x, k) = (params[0], params[1]);
+    let end = b.ins(Opcode::IaddWrap, &[x, k], &[I64], Aux::None).one();
+    let w = b.ins(Opcode::IsubWrap, &[end, x], &[I64], Aux::None).one();
+    assert_eq!(w, k);
+    b.ins_ret(&[w]);
+    let f = b.finish();
+    verify_function(&m, &f).expect("verifies");
+}
+
+/// `agg.get(agg.make(v0, v1), k)` IS `vk` — a pair built and
+/// immediately projected carries nothing the ingredient did not. The
+/// lowering needs this at BUILD time: a slice's `{ptr, len}` is an
+/// `agg.make`, and `str_eq_inline` asks `as_int_const` of the length
+/// one projection deep.
+#[test]
+fn agg_get_of_agg_make_is_the_ingredient() {
+    let mut m = Module::new();
+    let sig = m.make_sig(vec![Param::val(PTR), Param::val(I64)], vec![I64]);
+    let mut b = FuncBuilder::new(&mut m, "t", sig);
+    let params = b.block_params(b.current_block());
+    let (p, l) = (params[0], params[1]);
+    let agg_ty = b
+        .module
+        .types
+        .intern(wolf_wir::types::TypeData::Agg(vec![PTR, I64]));
+    let pair = b.ins(Opcode::AggMake, &[p, l], &[agg_ty], Aux::None).one();
+    let got_p = b.ins(Opcode::AggGet, &[pair], &[PTR], Aux::Int(0)).one();
+    let got_l = b.ins(Opcode::AggGet, &[pair], &[I64], Aux::Int(1)).one();
+    assert_eq!(got_p, p, "projection 0 is the ingredient");
+    assert_eq!(got_l, l, "projection 1 is the ingredient");
+    // A constant ingredient is therefore VISIBLE to as_int_const
+    // through the pair — the property d2's lowering leans on.
+    let five = b.iconst(I64, 5);
+    let cpair = b
+        .ins(Opcode::AggMake, &[p, five], &[agg_ty], Aux::None)
+        .one();
+    let clen = b.ins(Opcode::AggGet, &[cpair], &[I64], Aux::Int(1)).one();
+    assert_eq!(b.as_int_const(clen), Some(5));
+    b.ins_ret(&[got_l]);
+    let f = b.finish();
+    verify_function(&m, &f).expect("verifies");
+}
+
 // ----------------------------------------------- determinism gate ----
 
 #[test]

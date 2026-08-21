@@ -16,17 +16,14 @@ b0(%0: ptr, %1: mem.r0):
   %7 = ptr.off %0, %6, 1
   %8 = load.i64 %7, %1
   %9 = agg.make %2, %5, %8
-  %10 = agg.get %9, 0
-  %11 = agg.get %9, 1
-  %12 = iadd.chk %10, %11
-  %13 = store.i64 %12, %0, %1
-  %14 = iconst.i64 0
-  %15 = store.i64 %14, %4, %13
-  %16 = load.i64 %0, %15
-  %17 = load.i64 %7, %15
-  %18 = agg.make %16, %14, %17
-  %19 = agg.get %18, 0
-  ret %19
+  %10 = iadd.chk %2, %5
+  %11 = store.i64 %10, %0, %1
+  %12 = iconst.i64 0
+  %13 = store.i64 %12, %4, %11
+  %14 = load.i64 %0, %13
+  %15 = load.i64 %7, %13
+  %16 = agg.make %14, %12, %15
+  ret %14
 }
 
 fn @main() -> i64 {
@@ -39,31 +36,27 @@ b0:
   %3 = agg.make %0, %1, %2
   %4 = iconst.i64 24
   %5: ptr, %6: mem.r0 = stack.alloc %4
-  %7 = agg.get %3, 0
-  %8 = store.i64 %7, %5, %6
-  %9 = agg.get %3, 1
-  %10 = iconst.i64 8
-  %11 = ptr.off %5, %10, 1
-  %12 = store.i64 %9, %11, %8
-  %13 = agg.get %3, 2
-  %14 = iconst.i64 16
-  %15 = ptr.off %5, %14, 1
-  %16 = store.i64 %13, %15, %12
-  %17, %18 = call @P.norm(%5, %16)
-  %19 = load.i64 %5, %18
-  %20 = load.i64 %11, %18
-  %21 = load.i64 %15, %18
-  %22 = agg.make %19, %20, %21
-  %23 = agg.get %22, 2
-  %24 = iadd.chk %17, %23
-  %25 = iconst.i64 42
-  %26 = icmp.eq %24, %25
-  br %26, b1, b2
+  %7 = store.i64 %0, %5, %6
+  %8 = iconst.i64 8
+  %9 = ptr.off %5, %8, 1
+  %10 = store.i64 %1, %9, %7
+  %11 = iconst.i64 16
+  %12 = ptr.off %5, %11, 1
+  %13 = store.i64 %2, %12, %10
+  %14, %15 = call @P.norm(%5, %13)
+  %16 = load.i64 %5, %15
+  %17 = load.i64 %9, %15
+  %18 = load.i64 %12, %15
+  %19 = agg.make %16, %17, %18
+  %20 = iadd.chk %14, %18
+  %21 = iconst.i64 42
+  %22 = icmp.eq %20, %21
+  br %22, b1, b2
 b1:
-  %27 = iconst.i64 0
-  jmp b3(%27)
+  %23 = iconst.i64 0
+  jmp b3(%23)
 b2:
   jmp b3(%0)
-b3(%28: i64):
-  ret %28
+b3(%24: i64):
+  ret %24
 }
