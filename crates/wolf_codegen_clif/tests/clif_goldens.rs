@@ -49,6 +49,16 @@ fn clif_call_ind() {
     }
 }
 
+/// s96 (`[abi.native.dyn]`): the dyn dispatch chain — pair split,
+/// slot load, `call_indirect` — with the vtable hand-built in a
+/// stack slot so the shape is executable without a construction rule.
+#[test]
+fn clif_dyn_dispatch() {
+    if let Some(t) = clif_of("dyn_dispatch") {
+        insta::assert_snapshot!("clif_dyn_dispatch", t)
+    }
+}
+
 #[test]
 fn clif_overflow() {
     if let Some(t) = clif_of("overflow") {
