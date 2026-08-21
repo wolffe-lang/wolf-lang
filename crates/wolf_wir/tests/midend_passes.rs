@@ -480,6 +480,39 @@ fn rangeopt_relation_proves_the_unsigned_bounds_test() {
     );
 }
 
+/// The UTF-8 continuation probe's interval shape (d2, the s99
+/// follow-on diagnosis): `x & 192` with `x` proven non-negative and
+/// bounded BELOW the probe constant decides `(x & 192) != 128` — AND
+/// cannot increase a non-negative operand, so the result is bounded
+/// by `min(hi(x), mask)`, and [0,127] is disjoint from 128 where the
+/// mask-only bound [0,192] is not. The bounded source here is itself
+/// a mask (`%p & 127`); a byte load with a minted range fact is the
+/// same shape.
+#[test]
+fn rangeopt_band_carries_the_operand_bound() {
+    let src = "fn @probe(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iconst.i64 127\n  \
+               %2 = band %0, %1\n  \
+               %3 = iconst.i64 192\n  \
+               %4 = band %2, %3\n  \
+               %5 = iconst.i64 128\n  \
+               %6 = icmp.ne %4, %5\n  \
+               br %6, b1, b2\n\
+               b1:\n  \
+               %7 = iconst.i64 1\n  \
+               ret %7\n\
+               b2:\n  \
+               %8 = iconst.i64 0\n  \
+               ret %8\n\
+               }\n";
+    let (out, _stats) = one_pass(src, "rangeopt");
+    assert!(
+        !out.contains("br "),
+        "the probe is decided — [0,127] & 192 cannot be 128:\n{out}"
+    );
+}
+
 /// The other half of the same rule, kept honest across #98: a bounds
 /// test nothing relates to the guard is never folded IN PLACE. Here
 /// the loop runs to `%0` and the index is tested against a DIFFERENT
