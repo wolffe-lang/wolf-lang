@@ -111,7 +111,7 @@ use wolf_backend::BackendError;
 use wolf_backend::abi::{self, Conv, ParamPass, RegClass, RetPass, Unit};
 use wolf_backend::layout::{self, Layout};
 use wolf_wir::entity::EntityRef;
-use wolf_wir::facts::{DerefSize, FactKind};
+use wolf_wir::facts::{DerefSize, FactKind, Just};
 use wolf_wir::ir::{
     Aux, Block as WBlock, Function as WFunction, Inst as WInst, Mode, Module as WModule, SigId,
     Value as WValue, ValueDef,
@@ -567,6 +567,24 @@ pub(crate) struct Fx<'a> {
     region_scope: BTreeMap<u32, usize>,
     /// Region index → (`!alias.scope` LIST id, `!noalias` LIST id).
     scope_lists: BTreeMap<u32, (usize, Option<usize>)>,
+    /// Region index → every OTHER class's scope id (raw members, for
+    /// merging with the s104 pair scopes below).
+    class_others: BTreeMap<u32, Vec<usize>>,
+    /// s104: guard-justified `noalias` subjects → their pair
+    /// memberships, each (own pair-scope id, the counterpart's
+    /// pair-scope id). An access whose address chains to a subject by
+    /// `ptr.off` steps carries its pair scopes in `!alias.scope` and
+    /// the counterparts' in `!noalias` — the split the class machinery
+    /// cannot make (two buffers share the Foreign(Buffer) class). The
+    /// pair scopes REPLACE the class scope in `!alias.scope`: scoped
+    /// noalias needs one side's list to cover the other side's scopes
+    /// wholesale, and the counterpart can never disclaim the class
+    /// both live in. A subject may sit in several pairs (one written
+    /// buffer against each read buffer). Fail-closed: an address that
+    /// does not chain to a subject gets class scopes only.
+    pair_scope: BTreeMap<WValue, Vec<(usize, usize)>>,
+    /// Interned merged metadata lists, keyed by (region, subject).
+    pair_lists: BTreeMap<(u32, WValue), (usize, usize)>,
     /// Regions whose effect token names every writer of their storage
     /// (`wolf_wir::midend::exhaustive_regions`) — the call-site
     /// `!noalias` fact's whole license (s83).
@@ -655,6 +673,9 @@ pub(crate) fn emit_function(
         frozen: HashSet::new(),
         region_scope: BTreeMap::new(),
         scope_lists: BTreeMap::new(),
+        class_others: BTreeMap::new(),
+        pair_scope: BTreeMap::new(),
+        pair_lists: BTreeMap::new(),
         exhaustive: if opts.strip_facts {
             HashSet::new()
         } else {
@@ -802,6 +823,16 @@ impl<'a> Fx<'a> {
                         let r = f.vpool.get(data.results)[0];
                         hit |= ok(f, m, roles, uses, r)?;
                     }
+                    // s104: a compare READS the pointer value and
+                    // stores through nothing — the overlap guard's
+                    // `icmp.ule end, base` must not cost the buffer
+                    // its alignment claim. Neutral, not qualifying:
+                    // `hit` unchanged, the walk continues. The
+                    // fail-closed cases this discriminator exists for
+                    // (vtable slots, channel handles) reach their
+                    // pointers through calls and loads, never
+                    // compares, and stay excluded.
+                    Opcode::Icmp => {}
                     _ => return None, // any other use: fail closed
                 }
             }
@@ -950,22 +981,111 @@ impl<'a> Fx<'a> {
         for &r in &regions {
             self.region_scope.insert(r, class_scope[&class_of(r)]);
         }
+        // s104: one scope PER SUBJECT of each guard-justified noalias
+        // pair, in the same domain. The verifier already audited the
+        // guard (dominance + operand identity), so by the time this
+        // runs the claim is exactly as trustworthy as a theorem tag —
+        // and the split it licenses is the one the class machinery
+        // refuses (#82): two buffers in the Foreign(Buffer) class.
+        let mut pair_n = 0usize;
+        let mut halves: Vec<(WValue, usize)> = Vec::new();
+        let mut pair_subjects: Vec<(WValue, WValue)> = Vec::new();
+        for fd in self.f.facts.values() {
+            let (FactKind::Noalias(a, b), Just::Guard(_)) = (fd.kind, fd.just) else {
+                continue;
+            };
+            let mk = |cx: &mut ModuleCx, tag: &str, n: usize| {
+                let name = format!("{fname}.pair{n}.{tag}");
+                cx.meta_node(format!("distinct !{{!\"{name}\", !{domain}}}"))
+            };
+            let sa = mk(self.cx, "a", pair_n);
+            let sb = mk(self.cx, "b", pair_n);
+            self.pair_scope.entry(a).or_default().push((sa, sb));
+            self.pair_scope.entry(b).or_default().push((sb, sa));
+            halves.push((a, sa));
+            halves.push((b, sb));
+            pair_subjects.push((a, b));
+            pair_n += 1;
+        }
+        // Each pair scope is a SUB-scope of its subject's region
+        // class: the class-level noalias lists below name the pair
+        // scopes explicitly (an access that cannot touch the class
+        // cannot touch the pair's slice of it), because the pair
+        // members themselves leave the class scope out of their
+        // `!alias.scope`. Classify each subject by the accesses that
+        // chain to it; a subject seen under two classes — or none —
+        // drops its whole pair. Fail closed, like every s101 walk.
+        let mut subj_class: BTreeMap<WValue, Option<ScopeClass>> = BTreeMap::new();
+        if !self.pair_scope.is_empty() {
+            for &b in &self.f.layout {
+                if !self.reachable.contains(&b) {
+                    continue;
+                }
+                for &i in &self.f.blocks[b].insts {
+                    let data = self.f.insts[i];
+                    let args = self.f.vpool.get(data.args);
+                    let (addr, tok) = match data.op {
+                        Opcode::Load => (args[0], args[1]),
+                        Opcode::Store => (args[1], args[2]),
+                        _ => continue,
+                    };
+                    let Some(subject) = self.pair_subject_of(addr) else {
+                        continue;
+                    };
+                    let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(tok)) else {
+                        continue;
+                    };
+                    let c = class_of(r.index() as u32);
+                    subj_class
+                        .entry(subject)
+                        .and_modify(|e| {
+                            if *e != Some(c) {
+                                *e = None;
+                            }
+                        })
+                        .or_insert(Some(c));
+                }
+            }
+            for &(a, b) in &pair_subjects {
+                let classified = |v: WValue| matches!(subj_class.get(&v), Some(Some(_)));
+                if !classified(a) || !classified(b) {
+                    self.pair_scope.remove(&a);
+                    self.pair_scope.remove(&b);
+                }
+            }
+            halves.retain(|(s, _)| self.pair_scope.contains_key(s));
+        }
         let all: Vec<(ScopeClass, usize)> = class_scope.iter().map(|(&c, &s)| (c, s)).collect();
         for &(c, s) in &all {
             let own = self.cx.meta_node(format!("!{{!{s}}}"));
-            let others: Vec<String> = all
+            let mut other_ids: Vec<usize> = all
                 .iter()
                 .filter(|&&(o, _)| o != c)
-                .map(|&(_, os)| format!("!{os}"))
+                .map(|&(_, os)| os)
                 .collect();
-            let noalias = if others.is_empty() {
+            for &(subj, half) in &halves {
+                if let Some(&Some(pc)) = subj_class.get(&subj)
+                    && pc != c
+                {
+                    other_ids.push(half);
+                }
+            }
+            let noalias = if other_ids.is_empty() {
                 None
             } else {
-                Some(self.cx.meta_node(format!("!{{{}}}", others.join(", "))))
+                Some(self.cx.meta_node(format!(
+                    "!{{{}}}",
+                    other_ids
+                        .iter()
+                        .map(|os| format!("!{os}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )))
             };
             for &r in &regions {
                 if class_of(r) == c {
                     self.scope_lists.insert(r, (own, noalias));
+                    self.class_others.insert(r, other_ids.clone());
                 }
             }
         }
@@ -1047,21 +1167,81 @@ impl<'a> Fx<'a> {
     /// The access metadata suffix for a memory op on region `tok`'s
     /// memory: `!alias.scope` (its own region) + `!noalias` (every
     /// provably-disjoint region this function touches).
-    fn scope_suffix(&self, tok: WValue) -> String {
+    fn scope_suffix(&mut self, tok: WValue, addr: WValue) -> String {
         if self.cx.opts.strip_facts {
             return String::new();
         }
         let TypeData::Mem(r) = self.m.types.get(self.f.value_ty(tok)) else {
             return String::new(); // io-token ops carry no region scopes
         };
-        let Some(&(own, noalias)) = self.scope_lists.get(&(r.index() as u32)) else {
+        let r = r.index() as u32;
+        let Some(&(own, noalias)) = self.scope_lists.get(&r) else {
             return String::new();
         };
+        // s104: an address chaining to a guarded-noalias subject by
+        // `ptr.off` steps alone carries the pair split on top of the
+        // class scopes. Fail-closed: any other def stops the walk and
+        // the access keeps class scopes only.
+        if let Some(subject) = self.pair_subject_of(addr) {
+            let memberships = self.pair_scope[&subject].clone();
+            let (mown, mna) = match self.pair_lists.get(&(r, subject)) {
+                Some(&l) => l,
+                None => {
+                    // `!alias.scope` is the pair scopes ALONE — never
+                    // the class scope. Disjointness needs the other
+                    // member's `!noalias` to cover this list wholesale,
+                    // and no member can disclaim the class both live
+                    // in; one stray class scope and the split is inert
+                    // (measured: it cost a2 the whole window carry).
+                    // The class-level lists in build_scopes name the
+                    // pair scopes instead, so class-vs-pair queries
+                    // lose nothing.
+                    let mown = self.cx.meta_node(format!(
+                        "!{{{}}}",
+                        memberships
+                            .iter()
+                            .map(|(own, _)| format!("!{own}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    let mut ids: Vec<usize> =
+                        self.class_others.get(&r).cloned().unwrap_or_default();
+                    ids.extend(memberships.iter().map(|&(_, other)| other));
+                    let mna = self.cx.meta_node(format!(
+                        "!{{{}}}",
+                        ids.iter()
+                            .map(|os| format!("!{os}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                    self.pair_lists.insert((r, subject), (mown, mna));
+                    (mown, mna)
+                }
+            };
+            return format!(", !alias.scope !{mown}, !noalias !{mna}");
+        }
         let mut s = format!(", !alias.scope !{own}");
         if let Some(na) = noalias {
             let _ = write!(s, ", !noalias !{na}");
         }
         s
+    }
+
+    /// The guarded-noalias subject an address derives from, if its
+    /// whole chain to one is `ptr.off` steps (s104).
+    fn pair_subject_of(&self, mut v: WValue) -> Option<WValue> {
+        for _ in 0..64 {
+            if self.pair_scope.contains_key(&v) {
+                return Some(v);
+            }
+            match self.f.values[v].def {
+                ValueDef::Result(i, 0) if self.f.insts[i].op == Opcode::PtrOff => {
+                    v = self.f.vpool.get(self.f.insts[i].args)[0];
+                }
+                _ => return None,
+            }
+        }
+        None
     }
 
     /// The `!noalias` suffix for a CALL: every region this function
@@ -1800,7 +1980,7 @@ impl<'a> Fx<'a> {
             Opcode::Load => {
                 let p = self.op(args[0])?;
                 let rty = self.f.value_ty(results[0]);
-                let scopes = self.scope_suffix(args[1]);
+                let scopes = self.scope_suffix(args[1], args[0]);
                 if is_agg(self.m, rty) {
                     let l = self.layout_of(rty)?;
                     let slot = self.new_slot(l);
@@ -1836,7 +2016,7 @@ impl<'a> Fx<'a> {
             Opcode::Store => {
                 let vty = self.f.value_ty(args[0]);
                 let p = self.op(args[1])?;
-                let scopes = self.scope_suffix(args[2]);
+                let scopes = self.scope_suffix(args[2], args[1]);
                 if is_agg(self.m, vty) {
                     let src = self.addr(args[0])?;
                     let size = self.layout_of(vty)?.size;

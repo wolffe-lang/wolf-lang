@@ -1,0 +1,43 @@
+; s104: the guarded-noalias pair split, and its fail-closed drop.
+; @split is the versioner's shape by hand: two buffer bases loaded
+; from two headers, the overlap guard (end_w <=u r || end_r <=u w),
+; and a noalias fact on the taken edge's identity copies, justified
+; by the guard. The b1 accesses chain to the fact subjects by
+; ptr.off steps, so they carry the pair scopes ({fn}.pair0.a/b) —
+; alias.scope is the pair scopes ALONE (the class scope would make
+; the split inert: the other member can never disclaim the class
+; both live in), and the other classes' noalias lists name the pair
+; scopes instead. The b2 accesses go through the RAW bases — no
+; chain to a subject, class scopes only: the drop, in the same
+; golden.
+fn @split(mut ptr, ptr, i64) -> i64 {
+  fact noalias %fa %fb : guard %c
+b0(%oh: ptr, %sh: ptr, %n: i64):
+  %h: mem.r0 = region.foreign 0
+  %bt: mem.r1 = region.foreign 1
+  %ob = load.ptr %oh, %h
+  %sb = load.ptr %sh, %h
+  %eo = ptr.off %ob, %n, 8
+  %es = ptr.off %sb, %n, 8
+  %c1 = icmp.ule %eo, %sb
+  %c2 = icmp.ule %es, %ob
+  %c = bor %c1, %c2
+  br %c, b1, b2
+b1:
+  %z = iconst.i64 0
+  %fa = ptr.off %ob, %z, 1
+  %fb = ptr.off %sb, %z, 1
+  %one = iconst.i64 1
+  %ps = ptr.off %fb, %one, 8
+  %e = load.i64 %ps, %bt
+  %po = ptr.off %fa, %one, 8
+  %t1 = store.i64 %e, %po, %bt
+  ret %e
+b2:
+  %two = iconst.i64 2
+  %ps2 = ptr.off %sb, %two, 8
+  %e2 = load.i64 %ps2, %bt
+  %po2 = ptr.off %ob, %two, 8
+  %t2 = store.i64 %e2, %po2, %bt
+  ret %e2
+}
