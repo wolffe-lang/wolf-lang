@@ -10,6 +10,7 @@ use xtask::corpus::{self, Directives};
 use xtask::stats;
 
 mod bench_t1;
+mod ritual;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -97,6 +98,11 @@ fn main() -> ExitCode {
             eprintln!("                         [--kernels=a,b]   (t1 only)");
             eprintln!("       cargo xtask bench diff <baseline.jsonl> <candidate.jsonl> [--gate]");
             eprintln!("       cargo xtask bench gate <t1.jsonl>    (the M2 verdict, nightly)");
+            eprintln!("       cargo xtask bench ritual [--out-dir=DIR] [--dry-run]");
+            eprintln!(
+                "                         (the s44 nightly, codified: quiet check, conditions,\n\
+                 \x20                        run, gate, tick ledger, bench-data append)"
+            );
             eprintln!(
                 "       cargo xtask fmt-fuzz [--ci] [--seconds=N] [--seed=N] [--cases=N] [--out=DIR]"
             );
@@ -1135,6 +1141,9 @@ const KERNELS: &[(&str, u64)] = &[
 fn bench_cmd(args: &[String]) -> ExitCode {
     if args.first().map(String::as_str) == Some("diff") {
         return bench_diff(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some("ritual") {
+        return ritual::ritual(&args[1..]);
     }
     if args.first().map(String::as_str) == Some("gate") {
         let Some(path) = args.get(1) else {

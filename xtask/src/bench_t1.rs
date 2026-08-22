@@ -1771,17 +1771,29 @@ pub fn bench_gates() -> ExitCode {
 /// the published numbers and not from a transient in-memory state. Exit 1
 /// when the primary gate does not hold.
 pub fn gate(path: &str) -> ExitCode {
+    let (scored, outcome) = match gate_eval(path) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+    gate_render(path, &scored, &outcome)
+}
+
+/// The gate's decision half, separated from its rendering so the
+/// ritual (s44's codified nightly) can persist the outcome. Byte-for-
+/// byte the same procedure `gate` always ran; `gate` now delegates.
+pub fn gate_eval(path: &str) -> Result<(Vec<Scored>, t1::GateOutcome), String> {
     let Ok(body) = std::fs::read_to_string(path) else {
-        eprintln!("bench gate: cannot read {path}");
-        return ExitCode::from(2);
+        return Err(format!("bench gate: cannot read {path}"));
     };
     let mut scored: Vec<Scored> = Vec::new();
     let mut floors: BTreeMap<String, f64> = BTreeMap::new();
     let mut rows: Vec<(String, String, f64, String)> = Vec::new();
     for line in body.lines().filter(|l| !l.trim().is_empty()) {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
-            eprintln!("bench gate: {path}: malformed JSONL record");
-            return ExitCode::from(2);
+            return Err(format!("bench gate: {path}: malformed JSONL record"));
         };
         let bench = v["bench"].as_str().unwrap_or("");
         let metric = v["metric"].as_str().unwrap_or("");
@@ -1803,8 +1815,9 @@ pub fn gate(path: &str) -> ExitCode {
         }
     }
     if rows.is_empty() {
-        eprintln!("bench gate: {path} carries no speedup_vs_c_naive records");
-        return ExitCode::from(2);
+        return Err(format!(
+            "bench gate: {path} carries no speedup_vs_c_naive records"
+        ));
     }
     for (kernel, family, speedup, stored) in rows {
         let floor = floors.get(&kernel).copied();
@@ -1812,12 +1825,11 @@ pub fn gate(path: &str) -> ExitCode {
         // reproducible from the raw ratio and the raw floor.
         let verdict = t1::score(1.0, speedup, floor);
         if !stored.is_empty() && stored != verdict.label() {
-            eprintln!(
+            return Err(format!(
                 "bench gate: {kernel}: stored verdict {stored} disagrees with re-derived {} \
                  — the report JSON and the decision procedure have diverged",
                 verdict.label()
-            );
-            return ExitCode::from(2);
+            ));
         }
         scored.push(Scored {
             kernel,
@@ -1831,8 +1843,14 @@ pub fn gate(path: &str) -> ExitCode {
         .map(|md| t1::parse_exceptions(&md))
         .unwrap_or_default();
     let outcome = t1::evaluate_gate(&scored, &exceptions);
+    Ok((scored, outcome))
+}
+
+/// The gate's rendering half — exactly the lines the monolithic `gate`
+/// printed, over a pre-computed outcome.
+pub fn gate_render(path: &str, scored: &[Scored], outcome: &t1::GateOutcome) -> ExitCode {
     eprintln!("== M2 gate over {path}");
-    for s in &scored {
+    for s in scored {
         eprintln!(
             "  {:<18} {} {:>7.3}x {:<4}{}",
             s.kernel,
