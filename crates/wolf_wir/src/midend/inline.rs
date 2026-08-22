@@ -604,6 +604,8 @@ fn splice(f: &mut Function, view: &super::ModView, plan: &Plan) {
             // s99 mints Range only; a summary-justified deref/frozen
             // has no minting site and no custody story — refuse.
             (FactKind::Deref(..) | FactKind::Frozen(..), Just::Summary(_)) => false,
+            // s104 mints Noalias only; same rule.
+            (FactKind::Deref(..) | FactKind::Frozen(..), Just::Guard(_)) => false,
         };
         if !keep {
             continue;

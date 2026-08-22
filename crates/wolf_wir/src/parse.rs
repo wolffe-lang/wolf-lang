@@ -1662,6 +1662,9 @@ fn parse_fact(
         }
     } else if let Some(t) = Theorem::ALL.iter().find(|t| t.tag() == jkw) {
         Just::Theorem(*t)
+    } else if jkw == "guard" {
+        let n = line.val_name()?;
+        Just::Guard(fact_val(line, &n)?)
     } else if let Some(hex) = jkw.strip_prefix("summary.") {
         match u64::from_str_radix(hex, 16) {
             Ok(d) if hex.len() == 16 => Just::Summary(d),
