@@ -11,37 +11,29 @@ define internal i64 @"_Wsplit$1dba348390f0fe32"(ptr noalias noundef %p0, ptr %p1
 b0:
   %t1 = load ptr, ptr %p0, align 8, !alias.scope !5, !noalias !6, !align !9
   %t2 = load ptr, ptr %p1, align 8, !alias.scope !5, !noalias !6, !align !10
-  %t3 = mul i64 %p2, 8
-  %t4 = getelementptr i8, ptr %t1, i64 %t3
-  %t5 = mul i64 %p2, 8
-  %t6 = getelementptr i8, ptr %t2, i64 %t5
-  %t7 = icmp ule ptr %t4, %t2
+  %t3 = getelementptr i64, ptr %t1, i64 %p2
+  %t4 = getelementptr i64, ptr %t2, i64 %p2
+  %t5 = icmp ule ptr %t3, %t2
+  %t6 = zext i1 %t5 to i8
+  %t7 = icmp ule ptr %t4, %t1
   %t8 = zext i1 %t7 to i8
-  %t9 = icmp ule ptr %t6, %t1
-  %t10 = zext i1 %t9 to i8
-  %t11 = or i8 %t8, %t10
-  %t12 = icmp ne i8 %t11, 0
-  br i1 %t12, label %b1, label %b2
+  %t9 = or i8 %t6, %t8
+  %t10 = icmp ne i8 %t9, 0
+  br i1 %t10, label %b1, label %b2
 b1:
-  %t13 = mul i64 0, 1
-  %t14 = getelementptr i8, ptr %t1, i64 %t13
-  %t15 = mul i64 0, 1
-  %t16 = getelementptr i8, ptr %t2, i64 %t15
-  %t17 = mul i64 1, 8
-  %t18 = getelementptr i8, ptr %t16, i64 %t17
-  %t19 = load i64, ptr %t18, align 8, !alias.scope !11, !noalias !12
-  %t20 = mul i64 1, 8
-  %t21 = getelementptr i8, ptr %t14, i64 %t20
-  store i64 %t19, ptr %t21, align 8, !alias.scope !13, !noalias !14
-  ret i64 %t19
+  %t11 = getelementptr i8, ptr %t1, i64 0
+  %t12 = getelementptr i8, ptr %t2, i64 0
+  %t13 = getelementptr i64, ptr %t12, i64 1
+  %t14 = load i64, ptr %t13, align 8, !alias.scope !11, !noalias !12
+  %t15 = getelementptr i64, ptr %t11, i64 1
+  store i64 %t14, ptr %t15, align 8, !alias.scope !13, !noalias !14
+  ret i64 %t14
 b2:
-  %t22 = mul i64 2, 8
-  %t23 = getelementptr i8, ptr %t2, i64 %t22
-  %t24 = load i64, ptr %t23, align 8, !alias.scope !7, !noalias !8
-  %t25 = mul i64 2, 8
-  %t26 = getelementptr i8, ptr %t1, i64 %t25
-  store i64 %t24, ptr %t26, align 8, !alias.scope !7, !noalias !8
-  ret i64 %t24
+  %t16 = getelementptr i64, ptr %t2, i64 2
+  %t17 = load i64, ptr %t16, align 8, !alias.scope !7, !noalias !8
+  %t18 = getelementptr i64, ptr %t1, i64 2
+  store i64 %t17, ptr %t18, align 8, !alias.scope !7, !noalias !8
+  ret i64 %t17
 }
 
 

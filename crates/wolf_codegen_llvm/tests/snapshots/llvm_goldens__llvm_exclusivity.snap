@@ -12,36 +12,34 @@ b0:
   %slot1 = alloca [24 x i8], align 8
   %slot2 = alloca [24 x i8], align 8
   %t1 = load i64, ptr %p0, align 8, !alias.scope !2
-  %t2 = mul i64 8, 1
-  %t3 = getelementptr i8, ptr %p0, i64 %t2
-  %t4 = load i64, ptr %t3, align 8, !alias.scope !2
-  %t5 = mul i64 16, 1
-  %t6 = getelementptr i8, ptr %p0, i64 %t5
-  %t7 = load i64, ptr %t6, align 8, !alias.scope !2
+  %t2 = getelementptr i8, ptr %p0, i64 8
+  %t3 = load i64, ptr %t2, align 8, !alias.scope !2
+  %t4 = getelementptr i8, ptr %p0, i64 16
+  %t5 = load i64, ptr %t4, align 8, !alias.scope !2
   store i64 %t1, ptr %slot1, align 8
-  %t8 = getelementptr i8, ptr %slot1, i64 8
-  store i64 %t4, ptr %t8, align 8
-  %t9 = getelementptr i8, ptr %slot1, i64 16
-  store i64 %t7, ptr %t9, align 8
-  %t10 = load i64, ptr %slot1, align 8
-  %t11 = getelementptr i8, ptr %slot1, i64 8
-  %t12 = load i64, ptr %t11, align 8
-  %t13 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t10, i64 %t12)
-  %t14 = extractvalue { i64, i1 } %t13, 0
-  %t15 = extractvalue { i64, i1 } %t13, 1
-  br i1 %t15, label %trap1, label %cont16, !prof !3
-cont16:
-  store i64 %t14, ptr %p0, align 8, !alias.scope !2
-  store i64 0, ptr %t3, align 8, !alias.scope !2
-  %t17 = load i64, ptr %p0, align 8, !alias.scope !2
-  %t18 = load i64, ptr %t6, align 8, !alias.scope !2
-  store i64 %t17, ptr %slot2, align 8
-  %t19 = getelementptr i8, ptr %slot2, i64 8
-  store i64 0, ptr %t19, align 8
-  %t20 = getelementptr i8, ptr %slot2, i64 16
-  store i64 %t18, ptr %t20, align 8
-  %t21 = load i64, ptr %slot2, align 8
-  ret i64 %t21
+  %t6 = getelementptr i8, ptr %slot1, i64 8
+  store i64 %t3, ptr %t6, align 8
+  %t7 = getelementptr i8, ptr %slot1, i64 16
+  store i64 %t5, ptr %t7, align 8
+  %t8 = load i64, ptr %slot1, align 8
+  %t9 = getelementptr i8, ptr %slot1, i64 8
+  %t10 = load i64, ptr %t9, align 8
+  %t11 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t8, i64 %t10)
+  %t12 = extractvalue { i64, i1 } %t11, 0
+  %t13 = extractvalue { i64, i1 } %t11, 1
+  br i1 %t13, label %trap1, label %cont14, !prof !3
+cont14:
+  store i64 %t12, ptr %p0, align 8, !alias.scope !2
+  store i64 0, ptr %t2, align 8, !alias.scope !2
+  %t15 = load i64, ptr %p0, align 8, !alias.scope !2
+  %t16 = load i64, ptr %t4, align 8, !alias.scope !2
+  store i64 %t15, ptr %slot2, align 8
+  %t17 = getelementptr i8, ptr %slot2, i64 8
+  store i64 0, ptr %t17, align 8
+  %t18 = getelementptr i8, ptr %slot2, i64 16
+  store i64 %t16, ptr %t18, align 8
+  %t19 = load i64, ptr %slot2, align 8
+  ret i64 %t19
 trap1:
   call void @__wolf_rt_trap(i32 1)
   unreachable
@@ -281,144 +279,140 @@ b0:
   store i64 %t114, ptr %slot16, align 8, !alias.scope !29, !noalias !30
   %t115 = getelementptr i8, ptr %slot15, i64 8
   %t116 = load i64, ptr %t115, align 8
-  %t117 = mul i64 8, 1
-  %t118 = getelementptr i8, ptr %slot16, i64 %t117
-  store i64 %t116, ptr %t118, align 8, !alias.scope !29, !noalias !30
-  %t119 = getelementptr i8, ptr %slot15, i64 16
-  %t120 = load i64, ptr %t119, align 8
-  %t121 = mul i64 16, 1
-  %t122 = getelementptr i8, ptr %slot16, i64 %t121
-  store i64 %t120, ptr %t122, align 8, !alias.scope !29, !noalias !30
-  %t123 = call i64 @"_WV.norm$dd74aa86acb928c5"(ptr %slot16)
-  %t124 = load i64, ptr %slot16, align 8, !alias.scope !29, !noalias !30
-  %t125 = load i64, ptr %t118, align 8, !alias.scope !29, !noalias !30
-  %t126 = load i64, ptr %t122, align 8, !alias.scope !29, !noalias !30
-  store i64 %t124, ptr %slot17, align 8
-  %t127 = getelementptr i8, ptr %slot17, i64 8
-  store i64 %t125, ptr %t127, align 8
-  %t128 = getelementptr i8, ptr %slot17, i64 16
-  store i64 %t126, ptr %t128, align 8
-  %t129 = getelementptr i8, ptr %slot15, i64 24
-  %t130 = load i64, ptr %slot17, align 1
-  %t131 = getelementptr i8, ptr %slot17, i64 8
+  %t117 = getelementptr i8, ptr %slot16, i64 8
+  store i64 %t116, ptr %t117, align 8, !alias.scope !29, !noalias !30
+  %t118 = getelementptr i8, ptr %slot15, i64 16
+  %t119 = load i64, ptr %t118, align 8
+  %t120 = getelementptr i8, ptr %slot16, i64 16
+  store i64 %t119, ptr %t120, align 8, !alias.scope !29, !noalias !30
+  %t121 = call i64 @"_WV.norm$dd74aa86acb928c5"(ptr %slot16)
+  %t122 = load i64, ptr %slot16, align 8, !alias.scope !29, !noalias !30
+  %t123 = load i64, ptr %t117, align 8, !alias.scope !29, !noalias !30
+  %t124 = load i64, ptr %t120, align 8, !alias.scope !29, !noalias !30
+  store i64 %t122, ptr %slot17, align 8
+  %t125 = getelementptr i8, ptr %slot17, i64 8
+  store i64 %t123, ptr %t125, align 8
+  %t126 = getelementptr i8, ptr %slot17, i64 16
+  store i64 %t124, ptr %t126, align 8
+  %t127 = getelementptr i8, ptr %slot15, i64 24
+  %t128 = load i64, ptr %slot17, align 1
+  %t129 = getelementptr i8, ptr %slot17, i64 8
+  %t130 = load i64, ptr %t129, align 1
+  %t131 = getelementptr i8, ptr %slot17, i64 16
   %t132 = load i64, ptr %t131, align 1
-  %t133 = getelementptr i8, ptr %slot17, i64 16
-  %t134 = load i64, ptr %t133, align 1
-  store i64 %t130, ptr %slot18, align 1
-  %t135 = getelementptr i8, ptr %slot18, i64 8
-  store i64 %t132, ptr %t135, align 1
-  %t136 = getelementptr i8, ptr %slot18, i64 16
-  store i64 %t134, ptr %t136, align 1
-  %t137 = getelementptr i8, ptr %slot18, i64 24
-  %t138 = load i64, ptr %t129, align 1
-  %t139 = getelementptr i8, ptr %t129, i64 8
+  store i64 %t128, ptr %slot18, align 1
+  %t133 = getelementptr i8, ptr %slot18, i64 8
+  store i64 %t130, ptr %t133, align 1
+  %t134 = getelementptr i8, ptr %slot18, i64 16
+  store i64 %t132, ptr %t134, align 1
+  %t135 = getelementptr i8, ptr %slot18, i64 24
+  %t136 = load i64, ptr %t127, align 1
+  %t137 = getelementptr i8, ptr %t127, i64 8
+  %t138 = load i64, ptr %t137, align 1
+  %t139 = getelementptr i8, ptr %t127, i64 16
   %t140 = load i64, ptr %t139, align 1
-  %t141 = getelementptr i8, ptr %t129, i64 16
-  %t142 = load i64, ptr %t141, align 1
-  store i64 %t138, ptr %t137, align 1
-  %t143 = getelementptr i8, ptr %t137, i64 8
-  store i64 %t140, ptr %t143, align 1
-  %t144 = getelementptr i8, ptr %t137, i64 16
-  store i64 %t142, ptr %t144, align 1
-  %t145 = getelementptr i8, ptr %slot18, i64 24
-  %t146 = load i64, ptr %t145, align 8
-  %t147 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t123, i64 %t146)
-  %t148 = extractvalue { i64, i1 } %t147, 0
-  %t149 = extractvalue { i64, i1 } %t147, 1
-  br i1 %t149, label %trap1, label %cont150, !prof !3
-cont150:
-  %t151 = load i64, ptr %slot18, align 8
-  store i64 %t151, ptr %slot19, align 8, !alias.scope !31, !noalias !32
-  %t152 = getelementptr i8, ptr %slot18, i64 8
-  %t153 = load i64, ptr %t152, align 8
-  %t154 = mul i64 8, 1
-  %t155 = getelementptr i8, ptr %slot19, i64 %t154
-  store i64 %t153, ptr %t155, align 8, !alias.scope !31, !noalias !32
-  %t156 = getelementptr i8, ptr %slot18, i64 16
-  %t157 = load i64, ptr %t156, align 8
-  %t158 = mul i64 16, 1
-  %t159 = getelementptr i8, ptr %slot19, i64 %t158
-  store i64 %t157, ptr %t159, align 8, !alias.scope !31, !noalias !32
-  call void @"_WV.set_x$84f3cbb04cbd3927"(ptr %slot19, i64 %t157)
-  %t160 = load i64, ptr %slot19, align 8, !alias.scope !31, !noalias !32
-  %t161 = load i64, ptr %t155, align 8, !alias.scope !31, !noalias !32
-  %t162 = load i64, ptr %t159, align 8, !alias.scope !31, !noalias !32
-  store i64 %t160, ptr %slot20, align 8
-  %t163 = getelementptr i8, ptr %slot20, i64 8
-  store i64 %t161, ptr %t163, align 8
+  store i64 %t136, ptr %t135, align 1
+  %t141 = getelementptr i8, ptr %t135, i64 8
+  store i64 %t138, ptr %t141, align 1
+  %t142 = getelementptr i8, ptr %t135, i64 16
+  store i64 %t140, ptr %t142, align 1
+  %t143 = getelementptr i8, ptr %slot18, i64 24
+  %t144 = load i64, ptr %t143, align 8
+  %t145 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t121, i64 %t144)
+  %t146 = extractvalue { i64, i1 } %t145, 0
+  %t147 = extractvalue { i64, i1 } %t145, 1
+  br i1 %t147, label %trap1, label %cont148, !prof !3
+cont148:
+  %t149 = load i64, ptr %slot18, align 8
+  store i64 %t149, ptr %slot19, align 8, !alias.scope !31, !noalias !32
+  %t150 = getelementptr i8, ptr %slot18, i64 8
+  %t151 = load i64, ptr %t150, align 8
+  %t152 = getelementptr i8, ptr %slot19, i64 8
+  store i64 %t151, ptr %t152, align 8, !alias.scope !31, !noalias !32
+  %t153 = getelementptr i8, ptr %slot18, i64 16
+  %t154 = load i64, ptr %t153, align 8
+  %t155 = getelementptr i8, ptr %slot19, i64 16
+  store i64 %t154, ptr %t155, align 8, !alias.scope !31, !noalias !32
+  call void @"_WV.set_x$84f3cbb04cbd3927"(ptr %slot19, i64 %t154)
+  %t156 = load i64, ptr %slot19, align 8, !alias.scope !31, !noalias !32
+  %t157 = load i64, ptr %t152, align 8, !alias.scope !31, !noalias !32
+  %t158 = load i64, ptr %t155, align 8, !alias.scope !31, !noalias !32
+  store i64 %t156, ptr %slot20, align 8
+  %t159 = getelementptr i8, ptr %slot20, i64 8
+  store i64 %t157, ptr %t159, align 8
+  %t160 = getelementptr i8, ptr %slot20, i64 16
+  store i64 %t158, ptr %t160, align 8
+  %t161 = load i64, ptr %slot20, align 1
+  %t162 = getelementptr i8, ptr %slot20, i64 8
+  %t163 = load i64, ptr %t162, align 1
   %t164 = getelementptr i8, ptr %slot20, i64 16
-  store i64 %t162, ptr %t164, align 8
-  %t165 = load i64, ptr %slot20, align 1
-  %t166 = getelementptr i8, ptr %slot20, i64 8
-  %t167 = load i64, ptr %t166, align 1
-  %t168 = getelementptr i8, ptr %slot20, i64 16
-  %t169 = load i64, ptr %t168, align 1
-  store i64 %t165, ptr %slot21, align 1
-  %t170 = getelementptr i8, ptr %slot21, i64 8
-  store i64 %t167, ptr %t170, align 1
-  %t171 = getelementptr i8, ptr %slot21, i64 16
-  store i64 %t169, ptr %t171, align 1
-  %t172 = getelementptr i8, ptr %slot21, i64 24
-  %t173 = load i64, ptr %t145, align 1
-  %t174 = getelementptr i8, ptr %t145, i64 8
-  %t175 = load i64, ptr %t174, align 1
-  %t176 = getelementptr i8, ptr %t145, i64 16
-  %t177 = load i64, ptr %t176, align 1
-  store i64 %t173, ptr %t172, align 1
-  %t178 = getelementptr i8, ptr %t172, i64 8
-  store i64 %t175, ptr %t178, align 1
-  %t179 = getelementptr i8, ptr %t172, i64 16
-  store i64 %t177, ptr %t179, align 1
-  %t180 = call i64 @"_Weat$9752258b14112037"(ptr %slot21)
-  %t181 = getelementptr i8, ptr %slot21, i64 24
-  %t182 = getelementptr i8, ptr %t181, i64 8
-  %t183 = load i64, ptr %t182, align 8
+  %t165 = load i64, ptr %t164, align 1
+  store i64 %t161, ptr %slot21, align 1
+  %t166 = getelementptr i8, ptr %slot21, i64 8
+  store i64 %t163, ptr %t166, align 1
+  %t167 = getelementptr i8, ptr %slot21, i64 16
+  store i64 %t165, ptr %t167, align 1
+  %t168 = getelementptr i8, ptr %slot21, i64 24
+  %t169 = load i64, ptr %t143, align 1
+  %t170 = getelementptr i8, ptr %t143, i64 8
+  %t171 = load i64, ptr %t170, align 1
+  %t172 = getelementptr i8, ptr %t143, i64 16
+  %t173 = load i64, ptr %t172, align 1
+  store i64 %t169, ptr %t168, align 1
+  %t174 = getelementptr i8, ptr %t168, i64 8
+  store i64 %t171, ptr %t174, align 1
+  %t175 = getelementptr i8, ptr %t168, i64 16
+  store i64 %t173, ptr %t175, align 1
+  %t176 = call i64 @"_Weat$9752258b14112037"(ptr %slot21)
+  %t177 = getelementptr i8, ptr %slot21, i64 24
+  %t178 = getelementptr i8, ptr %t177, i64 8
+  %t179 = load i64, ptr %t178, align 8
   store i64 0, ptr %slot22, align 8
-  %t184 = getelementptr i8, ptr %slot22, i64 8
-  store i64 0, ptr %t184, align 8
+  %t180 = getelementptr i8, ptr %slot22, i64 8
+  store i64 0, ptr %t180, align 8
+  %t181 = getelementptr i8, ptr %slot22, i64 16
+  store i64 0, ptr %t181, align 8
+  %t182 = load i64, ptr %slot22, align 1
+  %t183 = getelementptr i8, ptr %slot22, i64 8
+  %t184 = load i64, ptr %t183, align 1
   %t185 = getelementptr i8, ptr %slot22, i64 16
-  store i64 0, ptr %t185, align 8
-  %t186 = load i64, ptr %slot22, align 1
-  %t187 = getelementptr i8, ptr %slot22, i64 8
-  %t188 = load i64, ptr %t187, align 1
-  %t189 = getelementptr i8, ptr %slot22, i64 16
-  %t190 = load i64, ptr %t189, align 1
-  store i64 %t186, ptr %slot23, align 1
-  %t191 = getelementptr i8, ptr %slot23, i64 8
-  store i64 %t188, ptr %t191, align 1
-  %t192 = getelementptr i8, ptr %slot23, i64 16
-  store i64 %t190, ptr %t192, align 1
-  %t193 = getelementptr i8, ptr %slot23, i64 24
-  %t194 = load i64, ptr %t181, align 1
-  %t195 = getelementptr i8, ptr %t181, i64 8
-  %t196 = load i64, ptr %t195, align 1
-  %t197 = getelementptr i8, ptr %t181, i64 16
-  %t198 = load i64, ptr %t197, align 1
-  store i64 %t194, ptr %t193, align 1
-  %t199 = getelementptr i8, ptr %t193, i64 8
-  store i64 %t196, ptr %t199, align 1
-  %t200 = getelementptr i8, ptr %t193, i64 16
-  store i64 %t198, ptr %t200, align 1
-  %t201 = load i64, ptr %slot23, align 8
-  %t202 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t201, i64 %t148)
+  %t186 = load i64, ptr %t185, align 1
+  store i64 %t182, ptr %slot23, align 1
+  %t187 = getelementptr i8, ptr %slot23, i64 8
+  store i64 %t184, ptr %t187, align 1
+  %t188 = getelementptr i8, ptr %slot23, i64 16
+  store i64 %t186, ptr %t188, align 1
+  %t189 = getelementptr i8, ptr %slot23, i64 24
+  %t190 = load i64, ptr %t177, align 1
+  %t191 = getelementptr i8, ptr %t177, i64 8
+  %t192 = load i64, ptr %t191, align 1
+  %t193 = getelementptr i8, ptr %t177, i64 16
+  %t194 = load i64, ptr %t193, align 1
+  store i64 %t190, ptr %t189, align 1
+  %t195 = getelementptr i8, ptr %t189, i64 8
+  store i64 %t192, ptr %t195, align 1
+  %t196 = getelementptr i8, ptr %t189, i64 16
+  store i64 %t194, ptr %t196, align 1
+  %t197 = load i64, ptr %slot23, align 8
+  %t198 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t197, i64 %t146)
+  %t199 = extractvalue { i64, i1 } %t198, 0
+  %t200 = extractvalue { i64, i1 } %t198, 1
+  br i1 %t200, label %trap1, label %cont201, !prof !3
+cont201:
+  %t202 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t199, i64 %t176)
   %t203 = extractvalue { i64, i1 } %t202, 0
   %t204 = extractvalue { i64, i1 } %t202, 1
   br i1 %t204, label %trap1, label %cont205, !prof !3
 cont205:
-  %t206 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t203, i64 %t180)
+  %t206 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t203, i64 %t179)
   %t207 = extractvalue { i64, i1 } %t206, 0
   %t208 = extractvalue { i64, i1 } %t206, 1
   br i1 %t208, label %trap1, label %cont209, !prof !3
 cont209:
-  %t210 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t207, i64 %t183)
-  %t211 = extractvalue { i64, i1 } %t210, 0
-  %t212 = extractvalue { i64, i1 } %t210, 1
-  br i1 %t212, label %trap1, label %cont213, !prof !3
-cont213:
-  %t214 = icmp eq i64 %t211, 18
-  %t215 = zext i1 %t214 to i8
-  %t216 = icmp ne i8 %t215, 0
-  br i1 %t216, label %b1, label %b2
+  %t210 = icmp eq i64 %t207, 18
+  %t211 = zext i1 %t210 to i8
+  %t212 = icmp ne i8 %t211, 0
+  br i1 %t212, label %b1, label %b2
 b1:
   br label %b3
 b2:

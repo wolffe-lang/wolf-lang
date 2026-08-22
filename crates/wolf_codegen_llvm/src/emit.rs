@@ -1971,10 +1971,26 @@ impl<'a> Fx<'a> {
                 };
                 let p = self.op(args[0])?;
                 let i = self.op(args[1])?;
-                let scaled = self.tmp();
-                self.line(format!("  {scaled} = mul i64 {i}, {scale}"));
                 let t = self.tmp();
-                self.line(format!("  {t} = getelementptr i8, ptr {p}, i64 {scaled}"));
+                // s104: power-of-two scales ride the GEP's own element
+                // stride instead of `mul` + byte GEP. Same address math
+                // to the letter — but LLVM's loop vectorizer only
+                // recognizes cross-iteration window reuse (the stencil
+                // carry) in the typed spelling; the byte spelling costs
+                // a2 the whole mechanism. Measured, not read: identical
+                // loops differing only in this spelling vectorize at
+                // 1 load vs 5 loads per 4 outputs under clang 22.
+                match scale {
+                    1 | 2 | 4 | 8 => {
+                        let ety = format!("i{}", scale * 8);
+                        self.line(format!("  {t} = getelementptr {ety}, ptr {p}, i64 {i}"));
+                    }
+                    _ => {
+                        let scaled = self.tmp();
+                        self.line(format!("  {scaled} = mul i64 {i}, {scale}"));
+                        self.line(format!("  {t} = getelementptr i8, ptr {p}, i64 {scaled}"));
+                    }
+                }
                 self.vals.insert(results[0], Repr::Scalar(t));
             }
             Opcode::Load => {
