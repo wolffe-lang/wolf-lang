@@ -1,0 +1,257 @@
+---
+source: crates/wolf_wir/tests/wir_dumps.rs
+assertion_line: 57
+expression: "wolf_wir::print_module(&m)"
+---
+decl @__wolf_rt_env_args() -> ptr
+decl @__wolf_rt_list_new(i64, mem.r0, mem.r1) -> ptr
+decl @__wolf_rt_list_push(ptr, ptr, mem.r0, mem.r1, mem.r2)
+decl @__wolf_rt_print_begin()
+decl @__wolf_rt_print_end(i64)
+decl @__wolf_rt_print_i64(i64)
+decl @__wolf_rt_print_str(ptr, i64)
+decl @__wolf_rt_time_now_ms() -> i64
+decl @ops_arg(i64) -> i64
+decl @probe(mut ptr, mem.r0, ptr)
+data @str.0 = "{\"ns\":"
+data @str.1 = ",\"ops\":"
+data @str.2 = ",\"sink\":"
+data @str.3 = "}"
+data @str.4 = "\n"
+
+fn @ops_arg(i64) -> i64 {
+b0(%0: i64):
+  %1: mem.r1 = region.foreign 1
+  %2: mem.r0 = region.foreign 0
+  %3 = call @__wolf_rt_env_args()
+  %4 = iconst.i64 0
+  %5 = iconst.i64 8
+  %6 = ptr.off %3, %5, 1
+  %7 = load.i64 %6, %2
+  %8 = icmp.ult %4, %7
+  br %8, b1, b2
+b1:
+  %9 = load.ptr %3, %2
+  %10 = ptr.off %9, %4, 16
+  %11 = load.ptr %10, %1
+  %12 = ptr.off %10, %5, 1
+  %13 = load.i64 %12, %1
+  %14 = agg.make %11, %13
+  %15: eu{{ptr, i64}} = eu.make.ok %14
+  jmp b3(%15)
+b2:
+  %16 = iconst.i64 1
+  %17: eu{{ptr, i64}} = eu.make.err %16
+  jmp b3(%17)
+b3(%18: eu{{ptr, i64}}):
+  %19: bool = eu.is_err %18
+  br %19, b4, b5
+b4:
+  ret %0
+b5:
+  %20: {ptr, i64} = eu.ok %18
+  %21 = agg.get %20, 0
+  %22 = agg.get %20, 1
+  jmp b6(%4, %4)
+b6(%23: i64, %24: i64):
+  %25 = icmp.slt %23, %22
+  br %25, b7, b13
+b7:
+  %26 = ptr.off %21, %23, 1
+  %27 = load.i8 %26, %1
+  %28 = zext.i64 %27
+  %29 = iconst.i64 48
+  %30 = icmp.slt %28, %29
+  br %30, b8, b9
+b8:
+  ret %0
+b9:
+  %31 = iconst.i64 57
+  %32 = icmp.sgt %28, %31
+  br %32, b10, b11
+b10:
+  ret %0
+b11:
+  %33 = iconst.i64 10
+  %34 = imul.chk %24, %33
+  %35 = isub.chk %28, %29
+  %36 = iadd.chk %34, %35
+  jmp b12
+b12:
+  %37 = iconst.i64 1
+  %38 = iadd.chk %23, %37
+  jmp b6(%38, %36)
+b13:
+  %39 = icmp.eq %24, %4
+  br %39, b14, b15
+b14:
+  jmp b16(%0)
+b15:
+  jmp b16(%24)
+b16(%40: i64):
+  ret %40
+}
+
+fn @probe(mut ptr, mem.r0, ptr) {
+  fact deref %0 8 : excl.mut
+b0(%0: ptr, %1: mem.r0, %2: ptr):
+  %3: mem.r2 = region.foreign 1
+  %4: mem.r1 = region.foreign 0
+  %5 = iconst.i64 0
+  %6 = iconst.i64 8
+  %7 = iconst.i64 100
+  %8 = ptr.off %2, %6, 1
+  %9 = load.i64 %8, %4
+  %10 = icmp.ult %5, %9
+  br %10, b1, b7
+b1:
+  jmp b2(%5, %5, %3)
+b2(%11: i64, %12: i64, %13: mem.r2):
+  %14 = icmp.slt %11, %7
+  br %14, b3, b6
+b3:
+  %15 = load.ptr %2, %4
+  %16 = ptr.off %15, %5, 8
+  %17 = load.i64 %16, %13
+  %18 = iadd.chk %12, %17
+  %19 = iconst.i64 1048575
+  %20 = band %18, %19
+  %21 = load.ptr %0, %1
+  %22 = ptr.off %21, %6, 1
+  %23 = load.i64 %22, %4
+  %24 = icmp.ult %5, %23
+  br %24, b4, b5
+b4:
+  %25 = load.ptr %21, %4
+  %26 = ptr.off %25, %5, 8
+  %27 = store.i64 %20, %26, %13
+  %28 = iconst.i64 1
+  %29 = iadd.chk %11, %28
+  jmp b2(%29, %20, %27)
+b5:
+  trap.bounds
+b6:
+  ret
+b7:
+  trap.bounds
+}
+
+fn @main() -> i64 {
+  fact deref %31 8 : op
+  fact deref %50 8 : op
+  fact deref %64 8 : op
+  fact region %31 r2 : op
+  fact region %50 r3 : op
+  fact region %64 r4 : op
+b0:
+  %0: mem.r1 = region.foreign 1
+  %1: mem.r0 = region.foreign 0
+  %2 = iconst.i64 300
+  %3 = call @ops_arg(%2)
+  %4 = iconst.i64 4096
+  %5 = iconst.i64 8
+  %6, %7, %8 = call @__wolf_rt_list_new(%5, %1, %0)
+  %9, %10, %11 = call @__wolf_rt_list_new(%5, %7, %8)
+  %12 = iconst.i64 0
+  jmp b1(%12, %10, %11)
+b1(%13: i64, %14: mem.r0, %15: mem.r1):
+  %16 = icmp.slt %13, %4
+  br %16, b2, b9
+b2:
+  %17 = iconst.i64 255
+  %18 = band %13, %17
+  %19 = ptr.off %6, %5, 1
+  %20 = load.i64 %19, %14
+  %21 = iconst.i64 16
+  %22 = ptr.off %6, %21, 1
+  %23 = load.i64 %22, %14
+  %24 = icmp.ult %20, %23
+  br %24, b3, b4
+b3:
+  %25 = load.ptr %6, %14
+  %26 = ptr.off %25, %20, 8
+  %27 = store.i64 %18, %26, %15
+  %28 = iconst.i64 1
+  %29 = iadd.wrap %20, %28
+  %30 = store.i64 %29, %19, %14
+  jmp b5(%30, %27)
+b4:
+  %31: ptr, %32: mem.r2 = stack.alloc %5
+  %33 = store.i64 %18, %31, %32
+  %34, %35, %36 = call @__wolf_rt_list_push(%6, %31, %33, %14, %15)
+  jmp b5(%35, %36)
+b5(%37: mem.r0, %38: mem.r1):
+  %39 = ptr.off %9, %5, 1
+  %40 = load.i64 %39, %37
+  %41 = ptr.off %9, %21, 1
+  %42 = load.i64 %41, %37
+  %43 = icmp.ult %40, %42
+  br %43, b6, b7
+b6:
+  %44 = load.ptr %9, %37
+  %45 = ptr.off %44, %40, 8
+  %46 = store.i64 %12, %45, %38
+  %47 = iconst.i64 1
+  %48 = iadd.wrap %40, %47
+  %49 = store.i64 %48, %39, %37
+  jmp b8(%49, %46)
+b7:
+  %50: ptr, %51: mem.r3 = stack.alloc %5
+  %52 = store.i64 %12, %50, %51
+  %53, %54, %55 = call @__wolf_rt_list_push(%9, %50, %52, %37, %38)
+  jmp b8(%54, %55)
+b8(%56: mem.r0, %57: mem.r1):
+  %58 = iconst.i64 1
+  %59 = iadd.chk %13, %58
+  jmp b1(%59, %56, %57)
+b9:
+  %60 = call @__wolf_rt_time_now_ms()
+  jmp b10(%12, %9)
+b10(%61: i64, %62: ptr):
+  %63 = icmp.slt %61, %3
+  br %63, b11, b12
+b11:
+  %64: ptr, %65: mem.r4 = stack.alloc %5
+  %66 = store.ptr %62, %64, %65
+  %67 = call @probe(%64, %66, %6)
+  %68 = load.ptr %64, %67
+  %69 = iconst.i64 1
+  %70 = iadd.chk %61, %69
+  jmp b10(%70, %68)
+b12:
+  %71 = call @__wolf_rt_time_now_ms()
+  %72 = isub.chk %71, %60
+  %73 = iconst.i64 1000000
+  %74 = imul.chk %72, %73
+  %75 = imul.chk %3, %4
+  %76 = iconst.i64 2048
+  %77 = ptr.off %62, %5, 1
+  %78 = load.i64 %77, %14
+  %79 = icmp.ult %76, %78
+  br %79, b13, b14
+b13:
+  %80 = load.ptr %62, %14
+  %81 = ptr.off %80, %76, 8
+  %82 = load.i64 %81, %15
+  call @__wolf_rt_print_begin()
+  %83 = data.addr @str.0
+  %84 = iconst.i64 6
+  call @__wolf_rt_print_str(%83, %84)
+  call @__wolf_rt_print_i64(%74)
+  %85 = data.addr @str.1
+  %86 = iconst.i64 7
+  call @__wolf_rt_print_str(%85, %86)
+  call @__wolf_rt_print_i64(%75)
+  %87 = data.addr @str.2
+  call @__wolf_rt_print_str(%87, %5)
+  call @__wolf_rt_print_i64(%82)
+  %88 = data.addr @str.3
+  %89 = iconst.i64 1
+  call @__wolf_rt_print_str(%88, %89)
+  %90 = data.addr @str.4
+  call @__wolf_rt_print_str(%90, %89)
+  call @__wolf_rt_print_end(%89)
+  ret %12
+b14:
+  trap.bounds
+}
