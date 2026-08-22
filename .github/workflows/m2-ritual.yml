@@ -1,0 +1,81 @@
+# The M2 ritual, nightly, on the dedicated runner ONLY.
+#
+# `runs-on: [self-hosted, bench]` is deliberate and has no hosted
+# fallback: #89's whole history is that a shared runner's numbers are
+# not trustworthy, and the ritual command itself REFUSES on a busy
+# machine — so a mislabeled runner fails loudly instead of measuring
+# garbage. Registering the runner is the human's checklist in
+# docs/bench-runner.md.
+#
+# The ritual performs: quiet check -> conditions -> t1 run -> gate ->
+# tick ledger -> bench-data append. A refuted gate is a RESULT (exit 0,
+# verdict in the ledger); only a ritual that could not be performed
+# honestly fails this job.
+name: m2-ritual
+
+on:
+  schedule:
+    - cron: "47 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: m2-ritual
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ritual:
+    name: the s44 nightly, codified
+    runs-on: [self-hosted, bench]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # full history: the ritual appends to the bench-data branch
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      # The nightly bench job's tool list. On the dedicated runner these
+      # should be PREINSTALLED (docs/bench-runner.md); this step is
+      # best-effort for first boot, and a missing tool narrows a lane
+      # by name rather than faking the axis. llvm-profdata unskips the
+      # PGO scrutiny lane — the runner's first improvement over the
+      # nine hand-runs, which all ran without it.
+      - name: measurement tools (best-effort; runner should preinstall)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq time util-linux clang llvm lld linux-tools-common "linux-tools-$(uname -r)" || true
+      - name: the ritual
+        run: |
+          cargo xtask bench ritual --out-dir=bench-results/ritual
+      - name: ledger tail -> summary
+        if: always()
+        run: |
+          echo '## M2 ritual ledger (tail)' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -v '^#' bench/ritual-ledger.jsonl | tail -5 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ritual-artifacts
+          path: bench-results/ritual/
+          if-no-files-found: ignore
+      # The ledger line the ritual appended lives in the WORKING TREE of
+      # this checkout; the bench-data branch got the archive copy inside
+      # the ritual itself. The tracked ledger's canonical history rides
+      # trunk: push the appended line back as a bot commit so the next
+      # ritual's tick arithmetic reads it. A push race with a human
+      # commit fails loudly here and the next night self-heals.
+      - name: push the ledger line to trunk
+        run: |
+          set -e
+          if git diff --quiet bench/ritual-ledger.jsonl; then
+            echo "ledger unchanged (ritual refused before accounting)"; exit 0
+          fi
+          git config user.name "wolf-bench-bot"
+          git config user.email "bench@wolf-lang.invalid"
+          git add bench/ritual-ledger.jsonl
+          git commit -m "ritual: ledger $(date -u +%Y-%m-%d) ($(git rev-parse --short HEAD))"
+          git push origin HEAD:trunk
