@@ -1045,8 +1045,16 @@ impl<'a> Fmt<'a> {
             g.push(Doc::Indent(inner));
             g.push(Doc::Line);
             g.push(Doc::text("}"));
+            // The rbrace's trailing comment rides INSIDE the group,
+            // after the `}` it trails. Pushed to the caller's stream it
+            // sat before the whole group in doc order — benign while
+            // the group rendered flat (same line end), but the moment
+            // anything forced the group to break (a FreshLine from an
+            // own-line comment leading the `{`), the suffix detached
+            // from its brace and floated to the enclosing line — the
+            // `! //` of idem_prefix_bang_suffix.
             if let Some(r) = rbrace {
-                self.trail(r, out);
+                self.trail(r, &mut g);
             }
             out.push(Doc::Group(g));
             return;
