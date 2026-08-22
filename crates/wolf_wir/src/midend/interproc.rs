@@ -480,16 +480,30 @@ fn scan(m: &Module, f: &Function) -> Local {
                                 Aux::Scale(s) => s,
                                 _ => 1,
                             };
-                            let x = match base {
-                                Origin::Hdr(_) if scale == 1 && matches!(k, Some(8) | Some(16)) => {
-                                    Origin::HdrField
+                            let x = if k == Some(0) {
+                                // A zero offset is the identity — the
+                                // s104 versioner's guarded subject
+                                // copies are exactly this shape, and
+                                // an identity hop must not demote a
+                                // data pointer to an element address
+                                // (the store through it would become
+                                // unattributable and poison the whole
+                                // container's channel).
+                                base
+                            } else {
+                                match base {
+                                    Origin::Hdr(_)
+                                        if scale == 1 && matches!(k, Some(8) | Some(16)) =>
+                                    {
+                                        Origin::HdrField
+                                    }
+                                    Origin::Hdr(_) => Origin::Other,
+                                    Origin::Data(r) => Origin::Elem(r),
+                                    Origin::Stack(s) => Origin::Stack(s),
+                                    Origin::Const => Origin::Const,
+                                    Origin::Unset => Origin::Unset,
+                                    _ => Origin::Other,
                                 }
-                                Origin::Hdr(_) => Origin::Other,
-                                Origin::Data(r) => Origin::Elem(r),
-                                Origin::Stack(s) => Origin::Stack(s),
-                                Origin::Const => Origin::Const,
-                                Origin::Unset => Origin::Unset,
-                                _ => Origin::Other,
                             };
                             changed |= set(&mut o, r0, x);
                         }
