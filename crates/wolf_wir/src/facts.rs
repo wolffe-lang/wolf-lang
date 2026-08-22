@@ -149,6 +149,17 @@ pub enum Just {
     /// The digest names the exact index the fixpoint read, so a fact
     /// is auditable back to its proof even in a bare dump.
     Summary(u64),
+    /// `: guard %v` — proved by a check the PROGRAM executes: %v is
+    /// the boolean result of a runtime buffer-overlap test, and the
+    /// fact's subjects are defined only on the taken edge (s104). The
+    /// verifier audits the SHAPE — the guard's operand identity with
+    /// the subjects' own base chains, and that the taken edge
+    /// dominates both subjects — per the custody model: the versioner
+    /// that minted the fact owns the extent arithmetic, exactly as
+    /// c04 owns a theorem tag's proof. The guard IS the proof, which
+    /// is what makes this D44-addendum-safe: no range of inputs can
+    /// make the claim false on the path where it exists.
+    Guard(Value),
 }
 
 /// A fact: claim + justification + optional span back to the program

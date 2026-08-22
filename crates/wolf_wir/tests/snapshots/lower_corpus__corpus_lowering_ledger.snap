@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 365
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -98,6 +97,7 @@ io/eprint.lu: lowers
 json/query.lu: refused — json builtins in native lowering (checked lane only at s40)
 json/rows.lu: refused — json builtins in native lowering (checked lane only at s40)
 kernels/churn_b3.lu: lowers
+kernels/guarded_stencil.lu: lowers
 kernels/hot_counter.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
 kernels/hot_sum_reduce.lu: lowers

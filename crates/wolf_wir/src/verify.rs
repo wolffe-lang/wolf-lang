@@ -445,14 +445,26 @@ impl<'a> Verifier<'a> {
             | Opcode::UmulChk
             | Opcode::UdivChk
             | Opcode::UremChk
-            | Opcode::Band
-            | Opcode::Bor
-            | Opcode::Bxor
             | Opcode::Shl
             | Opcode::Lshr
             | Opcode::Ashr => {
                 self.expect_counts(inst, 2, 1)?;
                 if !int(args[0]) || !int(args[1]) {
+                    return Err(self.type_err(inst, "integer op needs integer operands"));
+                }
+                self.same_tys(inst, &[args[0], args[1], results[0]])?;
+            }
+            Opcode::Band | Opcode::Bor | Opcode::Bxor => {
+                // s104: bool operands are admitted — a bool is an
+                // i8-shaped flag (the icmp equality precedent), and
+                // and/or/xor on flags are exactly as meaningful as on
+                // i8. The overlap guard's disjunction is `bor` of two
+                // compare results. Mixed bool/int stays refused by
+                // `same_tys`.
+                self.expect_counts(inst, 2, 1)?;
+                let bool_op = |v: Value| self.f.value_ty(v) == crate::types::BOOL;
+                let both_bool = bool_op(args[0]) && bool_op(args[1]);
+                if !both_bool && (!int(args[0]) || !int(args[1])) {
                     return Err(self.type_err(inst, "integer op needs integer operands"));
                 }
                 self.same_tys(inst, &[args[0], args[1], results[0]])?;
@@ -492,7 +504,31 @@ impl<'a> Verifier<'a> {
                 if both_bool && !equality {
                     return Err(self.type_err(inst, "icmp on bool operands must be `eq` or `ne`"));
                 }
-                if !both_bool && (!int(args[0]) || !int(args[1])) {
+                // s104: pointer operands are admitted for EQUALITY and
+                // the UNSIGNED orders — an address ordered as unsigned
+                // is exactly the overlap-guard comparison, while a
+                // signed order on an address would be a claim about a
+                // sign bit no pointer has (the bool rule's own style).
+                let ptr_op = |v: Value| self.f.value_ty(v) == crate::types::PTR;
+                let both_ptr = ptr_op(args[0]) && ptr_op(args[1]);
+                if both_ptr
+                    && !matches!(
+                        data.aux,
+                        Aux::IntCc(
+                            IntCc::Eq
+                                | IntCc::Ne
+                                | IntCc::Ult
+                                | IntCc::Ule
+                                | IntCc::Ugt
+                                | IntCc::Uge
+                        )
+                    )
+                {
+                    return Err(
+                        self.type_err(inst, "icmp on ptr operands must be unsigned or equality")
+                    );
+                }
+                if !both_bool && !both_ptr && (!int(args[0]) || !int(args[1])) {
                     return Err(self.type_err(inst, "icmp needs integer or bool operands"));
                 }
                 if self.f.value_ty(args[0]) != self.f.value_ty(args[1]) {
@@ -1491,6 +1527,243 @@ impl<'a> Verifier<'a> {
         }
     }
 
+    /// The terminal base of a `ptr.off` chain: peel offsets until the
+    /// value is not a `ptr.off` result.
+    fn chain_base(&self, mut v: Value) -> Value {
+        for _ in 0..64 {
+            match self.f.values[v].def {
+                ValueDef::Result(di, 0) if self.f.insts[di].op == Opcode::PtrOff => {
+                    v = self.args(di)[0];
+                }
+                _ => return v,
+            }
+        }
+        v
+    }
+
+    /// s104: the shape audit for a guard-justified `noalias` fact —
+    /// custody, not proof. The versioner that minted the fact owns the
+    /// extent arithmetic (as c04 owns a theorem tag); this check pins
+    /// what one function CAN see:
+    ///
+    /// - the guard is `bor(ule(endA, baseB), ule(endB, baseA))` over
+    ///   pointers, each end at least one `ptr.off` step off its base —
+    ///   the operand-identity half (a guard over unrelated pointers
+    ///   justifies nothing);
+    /// - each fact subject derives from a distinct guard base by
+    ///   `ptr.off` steps alone;
+    /// - the subjects are defined in blocks dominated by the guard
+    ///   branch's TAKEN edge, whose target has the guard block as its
+    ///   only predecessor — so the fact exists only where the check
+    ///   passed. A forged fact — wrong dominance, unrelated operands —
+    ///   is refused: the negatives are pinned in `verify_red`.
+    fn check_guarded_noalias(
+        &self,
+        id: crate::facts::FactId,
+        a: Value,
+        b: Value,
+        c: Value,
+    ) -> VResult {
+        if self.f.value_ty(c) != crate::types::BOOL {
+            return Err(self.fact_fail(ErrClass::FactJust, id, "guard must be a bool value"));
+        }
+        let ValueDef::Result(bi, 0) = self.f.values[c].def else {
+            return Err(self.fact_fail(
+                ErrClass::FactJust,
+                id,
+                "guard must be the result of a `bor` of two pointer compares",
+            ));
+        };
+        if self.f.insts[bi].op != Opcode::Bor {
+            return Err(self.fact_fail(
+                ErrClass::FactJust,
+                id,
+                "guard must be the result of a `bor` of two pointer compares",
+            ));
+        }
+        let bargs = self.args(bi);
+        let mut ends_bases: Vec<(Value, Value)> = Vec::new();
+        for &cv in &bargs {
+            let ValueDef::Result(ci, 0) = self.f.values[cv].def else {
+                return Err(self.fact_fail(
+                    ErrClass::FactJust,
+                    id,
+                    "guard arm must be an `icmp.ule` over pointers",
+                ));
+            };
+            let ok = self.f.insts[ci].op == Opcode::Icmp
+                && matches!(self.f.insts[ci].aux, Aux::IntCc(IntCc::Ule));
+            if !ok {
+                return Err(self.fact_fail(
+                    ErrClass::FactJust,
+                    id,
+                    "guard arm must be an `icmp.ule` over pointers",
+                ));
+            }
+            let cargs = self.args(ci);
+            if self.f.value_ty(cargs[0]) != crate::types::PTR {
+                return Err(self.fact_fail(
+                    ErrClass::FactJust,
+                    id,
+                    "guard arm must be an `icmp.ule` over pointers",
+                ));
+            }
+            ends_bases.push((cargs[0], cargs[1]));
+        }
+        let [(end0, r0), (end1, r1)] = ends_bases[..] else {
+            return Err(self.fact_fail(ErrClass::FactJust, id, "guard must have two arms"));
+        };
+        // Arms: ule(endA, baseB) and ule(endB, baseA) — each end must
+        // actually step off its base (a zero-hop "end" guards nothing).
+        let (base_a, base_b) = (r1, r0);
+        if base_a == base_b
+            || end0 == base_a
+            || end1 == base_b
+            || self.chain_base(end0) != base_a
+            || self.chain_base(end1) != base_b
+        {
+            return Err(self.fact_fail(
+                ErrClass::FactJust,
+                id,
+                "guard operands do not tie the compared extents to the fact subjects' bases",
+            ));
+        }
+        // One subject per base, ptr.off-derived.
+        let sides_ok = (self.derived_from(a, base_a) && self.derived_from(b, base_b))
+            || (self.derived_from(a, base_b) && self.derived_from(b, base_a));
+        if !sides_ok {
+            return Err(self.fact_fail(
+                ErrClass::FactJust,
+                id,
+                "guard operands do not tie the compared extents to the fact subjects' bases",
+            ));
+        }
+        // Dominance: the unique br on the guard's taken edge.
+        let mut takens: Vec<(Block, Block)> = Vec::new();
+        for &bb in &self.canon.blocks {
+            let Some(&term) = self.f.blocks[bb].insts.last() else {
+                continue;
+            };
+            if self.f.insts[term].op == Opcode::Br
+                && self.args(term).first() == Some(&c)
+                && let Aux::Br(t, _) = self.f.insts[term].aux
+            {
+                takens.push((bb, t.block));
+            }
+        }
+        let [(gb, taken)] = takens[..] else {
+            return Err(self.fact_fail(
+                ErrClass::FactJust,
+                id,
+                "guard must feed exactly one branch",
+            ));
+        };
+        let mut preds: Vec<Block> = Vec::new();
+        for &bb in &self.canon.blocks {
+            for sc in successors(self.f, bb) {
+                if sc == taken && !preds.contains(&bb) {
+                    preds.push(bb);
+                }
+            }
+        }
+        if preds != [gb] {
+            return Err(self.fact_fail(
+                ErrClass::FactJust,
+                id,
+                "the guard's taken edge must be the target's only entry",
+            ));
+        }
+        let def_block = |v: Value| -> Option<Block> {
+            match self.f.values[v].def {
+                ValueDef::Param(bb, _) => Some(bb),
+                ValueDef::Result(ii, _) => self
+                    .canon
+                    .blocks
+                    .iter()
+                    .copied()
+                    .find(|&bb| self.f.blocks[bb].insts.contains(&ii)),
+            }
+        };
+        let idom = self.idoms();
+        let dominates = |x: Block, mut y: Block| -> bool {
+            loop {
+                if y == x {
+                    return true;
+                }
+                let Some(&up) = idom.get(&y) else {
+                    return false;
+                };
+                if up == y {
+                    return false;
+                }
+                y = up;
+            }
+        };
+        for subj in [a, b] {
+            let Some(db) = def_block(subj) else {
+                return Err(self.fact_fail(
+                    ErrClass::FactJust,
+                    id,
+                    "guarded subjects must be defined in reachable blocks",
+                ));
+            };
+            if !dominates(taken, db) {
+                return Err(self.fact_fail(
+                    ErrClass::FactJust,
+                    id,
+                    "guarded subjects must be defined under the guard's taken edge",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Iterative idoms over the canon RPO (Cooper–Harvey–Kennedy), for
+    /// the fact checks — the dominance walk recomputes them only when
+    /// a guard-justified fact is present.
+    fn idoms(&self) -> HashMap<Block, Block> {
+        let rpo = &self.canon.blocks;
+        let mut rpo_num: HashMap<Block, usize> = HashMap::new();
+        for (i, &bb) in rpo.iter().enumerate() {
+            rpo_num.insert(bb, i);
+        }
+        let mut preds: HashMap<Block, Vec<Block>> = HashMap::new();
+        for &bb in rpo {
+            for sc in successors(self.f, bb) {
+                preds.entry(sc).or_default().push(bb);
+            }
+        }
+        let Some(entry) = self.f.entry() else {
+            return HashMap::new();
+        };
+        let mut idom: HashMap<Block, Block> = HashMap::new();
+        idom.insert(entry, entry);
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for &bb in rpo.iter().skip(1) {
+                let plist = preds.get(&bb).cloned().unwrap_or_default();
+                let mut new_idom: Option<Block> = None;
+                for &pp in &plist {
+                    if !idom.contains_key(&pp) {
+                        continue;
+                    }
+                    new_idom = Some(match new_idom {
+                        None => pp,
+                        Some(cur) => intersect(&idom, &rpo_num, cur, pp),
+                    });
+                }
+                if let Some(ni) = new_idom
+                    && idom.get(&bb) != Some(&ni)
+                {
+                    idom.insert(bb, ni);
+                    changed = true;
+                }
+            }
+        }
+        idom
+    }
+
     /// Is `v` equal to `base`, or derived from it through `ptr.off`
     /// steps (structural provenance inheritance)?
     fn derived_from(&self, mut v: Value, base: Value) -> bool {
@@ -1523,7 +1796,7 @@ impl<'a> Verifier<'a> {
             if let FactKind::Deref(_, DerefSize::Scaled { count, .. }) = fd.kind {
                 operands.push(count);
             }
-            if let Just::Op(v) = fd.just {
+            if let Just::Op(v) | Just::Guard(v) = fd.just {
                 operands.push(v);
             }
             for v in operands {
@@ -1556,11 +1829,14 @@ impl<'a> Verifier<'a> {
                         Just::Theorem(
                             Theorem::ExclMut | Theorem::FrozenRead | Theorem::ExclField,
                         ) => {}
+                        Just::Guard(c) => {
+                            self.check_guarded_noalias(id, a, b, c)?;
+                        }
                         _ => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "noalias must cite a checker theorem — there is no way to state an unverified aliasing claim in safe-tier WIR",
+                                "noalias must cite a checker theorem or a guard — there is no way to state an unverified aliasing claim in safe-tier WIR",
                             ));
                         }
                     }
@@ -1589,6 +1865,13 @@ impl<'a> Verifier<'a> {
                                 ErrClass::FactJust,
                                 id,
                                 "summary justifications mint range facts only (s99)",
+                            ));
+                        }
+                        Just::Guard(_) => {
+                            return Err(self.fact_fail(
+                                ErrClass::FactJust,
+                                id,
+                                "guard justifications mint noalias facts only (s104)",
                             ));
                         }
                         Just::DefOp | Just::Op(_) => {
@@ -1666,7 +1949,7 @@ impl<'a> Verifier<'a> {
                         // is `midend::interproc::reverify`, run under
                         // `verify_each` in the whole-program phase.
                         Just::Summary(_) => {}
-                        Just::Op(_) => {
+                        Just::Op(_) | Just::Guard(_) => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
@@ -1744,6 +2027,13 @@ impl<'a> Verifier<'a> {
                                 ErrClass::FactJust,
                                 id,
                                 "summary justifications mint range facts only (s99)",
+                            ));
+                        }
+                        Just::Guard(_) => {
+                            return Err(self.fact_fail(
+                                ErrClass::FactJust,
+                                id,
+                                "guard justifications mint noalias facts only (s104)",
                             ));
                         }
                         Just::DefOp | Just::Op(_) => {

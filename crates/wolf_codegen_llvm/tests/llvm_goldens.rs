@@ -110,6 +110,40 @@ fn llvm_intdot_range() {
     }
 }
 
+/// s104: the guarded-noalias pair split, and its fail-closed drop —
+/// one golden, both shapes. The b1 accesses (through the fact's
+/// identity-copy subjects) carry the per-pair scopes; their
+/// `!alias.scope` lists are the pair scopes ALONE and differ between
+/// the two members, which is the whole split. The b2 accesses
+/// (through the raw bases, no ptr.off chain to a subject) keep class
+/// scopes only — the drop. The snapshot is the pin for the class
+/// lists naming the pair scopes.
+#[test]
+fn llvm_noalias_pair() {
+    if let Some(t) = ir_of_fixture("noalias_pair") {
+        assert!(
+            t.contains("split.pair0.a") && t.contains("split.pair0.b"),
+            "the guarded fact mints one scope per subject: {t}"
+        );
+        let meta_of = |line_marker: &str| -> &str {
+            t.lines()
+                .find(|l| l.contains(line_marker) && l.contains("!alias.scope"))
+                .unwrap_or_else(|| panic!("no scoped access matching {line_marker}: {t}"))
+                .split("!alias.scope ")
+                .nth(1)
+                .unwrap()
+        };
+        // The two pair members' membership lists differ — mutual
+        // exclusion needs distinct scopes, not a shared one.
+        assert_ne!(
+            meta_of("load i64"),
+            meta_of("store i64"),
+            "the pair members must sit in DIFFERENT scopes: {t}"
+        );
+        insta::assert_snapshot!("llvm_noalias_pair", t);
+    }
+}
+
 #[test]
 fn llvm_exclusivity() {
     if let Some(t) = ir_of_fixture("exclusivity") {

@@ -233,6 +233,10 @@ pub struct OptStats {
     /// Of those, statically eliminated (directly or via versioning).
     pub loop_checks_eliminated: usize,
     pub loops_versioned: usize,
+    /// Guard-justified noalias facts minted by the overlap plan
+    /// (s104): a versioned loop whose fast path runs under a runtime
+    /// buffer-disjointness check, with the fact confined to it.
+    pub noalias_guards: usize,
     /// Container bounds guards observed (s75): a `br` whose false arm
     /// is a bare `trap.bounds` block. Counted wherever they appear,
     /// not only in loops — a check outside a loop is still a check.

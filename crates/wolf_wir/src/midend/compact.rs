@@ -139,6 +139,10 @@ pub(crate) fn remap_fact(fd: &FactData, vmap: &HashMap<Value, Value>) -> Option<
     };
     let just = match fd.just {
         Just::Op(v) => Just::Op(mv(v)?),
+        // A guard justification names a value the same way `: op` does
+        // — an unmapped guard would point a caller-side fact at a
+        // stale value, so it remaps or the fact drops.
+        Just::Guard(v) => Just::Guard(mv(v)?),
         other => other,
     };
     Some(FactData {

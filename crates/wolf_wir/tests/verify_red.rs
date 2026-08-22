@@ -486,3 +486,115 @@ fn icmp_mixing_bool_and_int_is_rejected() {
         ErrClass::Type,
     );
 }
+
+// ---- s104: guard-justified noalias --------------------------------------
+
+/// The overlap-guard shape the versioner mints: subjects defined under
+/// the guard's taken edge, ends tied to the subjects' own bases. This
+/// is the positive the two forgeries below are measured against, and
+/// the spelling round-trips byte-stable.
+const GUARDED_OK: &str = "fn @f(mut ptr, ptr, i64) -> i64 {\n  \
+  fact noalias %fa %fb : guard %c\n\
+b0(%a: ptr, %b: ptr, %n: i64):\n  \
+  %ea = ptr.off %a, %n, 8\n  \
+  %eb = ptr.off %b, %n, 8\n  \
+  %c1 = icmp.ule %ea, %b\n  \
+  %c2 = icmp.ule %eb, %a\n  \
+  %c = bor %c1, %c2\n  \
+  br %c, b1, b2\n\
+b1:\n  \
+  %z = iconst.i64 0\n  \
+  %fa = ptr.off %a, %z, 1\n  \
+  %fb = ptr.off %b, %z, 1\n  \
+  %r1 = iconst.i64 1\n  \
+  ret %r1\n\
+b2:\n  \
+  %r2 = iconst.i64 0\n  \
+  ret %r2\n\
+}\n";
+
+#[test]
+fn guarded_noalias_verifies_and_roundtrips() {
+    let m = wolf_wir::parse_module(GUARDED_OK).expect("parses");
+    wolf_wir::verify_module(&m).expect("verifies");
+    let once = wolf_wir::print_module(&m);
+    let m2 = wolf_wir::parse_module(&once).expect("reparses");
+    wolf_wir::verify_module(&m2).expect("reverifies");
+    let twice = wolf_wir::print_module(&m2);
+    assert_eq!(once, twice, "guard spelling must round-trip byte-stable");
+}
+
+#[test]
+fn guarded_noalias_forged_dominance_rejected() {
+    // The subjects are the raw params — defined in the entry block,
+    // NOT under the guard's taken edge. The claim would then flow to
+    // the aliasing path too, which is the exact unsoundness the
+    // dominance rule exists to refuse.
+    let err = expect_reject(
+        "fn @f(mut ptr, ptr, i64) -> i64 {\n  \
+  fact noalias %a %b : guard %c\n\
+b0(%a: ptr, %b: ptr, %n: i64):\n  \
+  %ea = ptr.off %a, %n, 8\n  \
+  %eb = ptr.off %b, %n, 8\n  \
+  %c1 = icmp.ule %ea, %b\n  \
+  %c2 = icmp.ule %eb, %a\n  \
+  %c = bor %c1, %c2\n  \
+  br %c, b1, b2\n\
+b1:\n  \
+  %r1 = iconst.i64 1\n  \
+  ret %r1\n\
+b2:\n  \
+  %r2 = iconst.i64 0\n  \
+  ret %r2\n\
+}\n",
+        ErrClass::FactJust,
+    );
+    assert!(
+        err.msg.contains("defined under the guard"),
+        "names the forgery: {}",
+        err.msg
+    );
+}
+
+#[test]
+fn guarded_noalias_unrelated_operands_rejected() {
+    // The guard compares %a/%b extents but the fact claims %fd/%fb —
+    // %fd derives from a THIRD pointer the guard never examined. A
+    // guard over unrelated pointers justifies nothing.
+    let err = expect_reject(
+        "fn @f(mut ptr, ptr, ptr, i64) -> i64 {\n  \
+  fact noalias %fd %fb : guard %c\n\
+b0(%a: ptr, %b: ptr, %d: ptr, %n: i64):\n  \
+  %ea = ptr.off %a, %n, 8\n  \
+  %eb = ptr.off %b, %n, 8\n  \
+  %c1 = icmp.ule %ea, %b\n  \
+  %c2 = icmp.ule %eb, %a\n  \
+  %c = bor %c1, %c2\n  \
+  br %c, b1, b2\n\
+b1:\n  \
+  %z = iconst.i64 0\n  \
+  %fd = ptr.off %d, %z, 1\n  \
+  %fb = ptr.off %b, %z, 1\n  \
+  %r1 = iconst.i64 1\n  \
+  ret %r1\n\
+b2:\n  \
+  %r2 = iconst.i64 0\n  \
+  ret %r2\n\
+}\n",
+        ErrClass::FactJust,
+    );
+    assert!(
+        err.msg.contains("do not tie"),
+        "names the forgery: {}",
+        err.msg
+    );
+}
+
+#[test]
+fn icmp_signed_order_on_pointers_rejected() {
+    // Addresses have no sign bit to order by (the bool rule's style).
+    expect_reject(
+        "fn @f(ptr, ptr) -> i64 {\nb0(%a: ptr, %b: ptr):\n  %c = icmp.slt %a, %b\n  %r = iconst.i64 0\n  ret %r\n}\n",
+        ErrClass::Type,
+    );
+}

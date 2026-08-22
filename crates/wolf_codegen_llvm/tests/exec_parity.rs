@@ -115,3 +115,36 @@ fn object_emission_produces_elf() {
     assert!(product.bytes.len() > 64);
     assert_eq!(&product.bytes[..4], b"\x7fELF");
 }
+
+/// s104 witness (a), release tier: the aliasing case. Same fixture as
+/// the debug tier's `aliased_stencil_takes_the_slow_loop` — one
+/// container's header passed as both stencil arguments — through the
+/// REAL midend (which versions the loop and mints the guard-justified
+/// noalias fact) and clang. The guard fails at runtime, the slow loop
+/// runs with class-only scopes, and the feedback answer holds at -O0
+/// and -O2: sink a[4] = 24 (disjoint semantics would say 12). D2/X3:
+/// tiers and opt levels agree on meaning; the fast path only ever
+/// buys speed.
+#[test]
+fn aliased_stencil_slow_loop_release() {
+    let mut m = fixture("noalias_guard_alias");
+    let homes = wolf_wir::midend::summary::Homes::single();
+    let wp = wolf_wir::midend::optimize_whole_program(
+        &mut m,
+        &homes,
+        &wolf_wir::midend::Options::default(),
+    )
+    .expect("midend");
+    assert!(
+        wp.stats.opt.noalias_guards >= 1,
+        "the versioner must mint the overlap guard on this shape"
+    );
+    let shim = add_plain_entry_shim(&mut m);
+    let Some(ir) = module_ir(&m, Some(shim), EmitOptions::default()) else {
+        return;
+    };
+    for opt in ["-O0", "-O2"] {
+        let (code, _, stderr) = run_ir(&format!("noalias_alias_{}", &opt[1..]), &ir, opt);
+        assert_eq!(code, 24, "aliasing semantics at {opt} (stderr: {stderr})");
+    }
+}

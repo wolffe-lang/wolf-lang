@@ -1,0 +1,36 @@
+//! check: run(exit=12)
+//! phase: run
+//! conforms: arith.checked
+//! s104 guarded-stencil witness: the a2 shape — a 3-point stencil
+//! reading one container chain and writing another — versioned on a
+//! runtime buffer-overlap guard whose taken edge mints the
+//! guard-justified noalias fact (noalias_guards >= 1, gated in
+//! midend_corpus.rs; the emitter's pair-scope split is pinned by
+//! llvm_goldens::llvm_noalias_pair; the aliasing complement executes
+//! in the tiers' noalias_guard_alias witnesses, where the same
+//! stencil over ONE container exits 24). The exit code pins the
+//! disjoint semantics: src = [0..6), out[4] = 3 + 4 + 5 = 12 — the
+//! aliased feedback answer would be 24, so the pair of witnesses
+//! brackets the guard from both sides.
+
+fn stencil(mut out: List[int], src: List[int]) {
+    var i = 1
+    let last = src.len - 1
+    while i < last {
+        out[i] = src[i - 1] + src[i] + src[i + 1] & 1048575
+        i = i + 1
+    }
+}
+
+fn main() -> !int {
+    var src = List[int]()
+    var out = List[int]()
+    var i = 0
+    while i < 6 {
+        (mut src).push(i)
+        (mut out).push(0)
+        i = i + 1
+    }
+    stencil(mut out, src)
+    out[4]
+}

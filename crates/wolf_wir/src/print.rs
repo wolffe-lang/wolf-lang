@@ -365,6 +365,7 @@ pub(crate) fn render_fact(canon: &Canon, fact: &FactData) -> String {
         Just::DefOp => s.push_str(" : op"),
         Just::Op(v) => write!(s, " : op {}", canon.value(v)).unwrap(),
         Just::Summary(d) => write!(s, " : summary.{d:016x}").unwrap(),
+        Just::Guard(v) => write!(s, " : guard {}", canon.value(v)).unwrap(),
     }
     s
 }

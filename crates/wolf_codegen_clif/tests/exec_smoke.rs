@@ -405,3 +405,41 @@ fn eu_main_err_reports_tag_and_exits_one() {
         "the tag NAME is the documented report"
     );
 }
+
+/// s104 witness (a): the aliasing case the overlap guard exists for.
+/// @main passes ONE container's header as both stencil arguments (the
+/// `let b = a` header-copy shape surface wolf refuses as E1002 — the
+/// s99 posture: a hand-built module is the only place this executes).
+/// The raw lowering pins the reference semantics; the versioned build
+/// must mint the guard (noalias_guards >= 1), FAIL it at runtime, and
+/// take the slow loop to the same feedback answer — sink a[4] = 24
+/// from src[i]=i, len 6; a disjoint-semantics build would say 12. X3:
+/// versioning changes speed, never meaning.
+#[test]
+fn aliased_stencil_takes_the_slow_loop() {
+    let text = fixture("noalias_guard_alias");
+    let Some((raw, _e)) = run_wir("noalias_alias_raw", &text) else {
+        return;
+    };
+    assert_eq!(
+        raw, 24,
+        "feedback semantics in the never-versioned build: {_e}"
+    );
+    let mut m = wolf_wir::parse_module(&text).expect("parses");
+    let homes = wolf_wir::midend::summary::Homes::single();
+    let wp = wolf_wir::midend::optimize_whole_program(
+        &mut m,
+        &homes,
+        &wolf_wir::midend::Options::default(),
+    )
+    .expect("midend");
+    assert!(
+        wp.stats.opt.noalias_guards >= 1,
+        "the versioner must mint the overlap guard on this shape"
+    );
+    let printed = wolf_wir::print_module(&m);
+    let Some((opt, _)) = run_wir("noalias_alias_opt", &printed) else {
+        return;
+    };
+    assert_eq!(opt, 24, "the slow loop preserves aliasing semantics (X3)");
+}

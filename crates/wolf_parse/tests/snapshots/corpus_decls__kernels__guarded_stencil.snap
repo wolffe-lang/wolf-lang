@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 773..969 name=stencil body=Block
+FnDecl 971..1189 name=main body=Block

@@ -1696,6 +1696,36 @@ pub fn bench_gates() -> ExitCode {
                     ));
                 }
             }
+            // s104 witness: the guarded-noalias pair scopes in the
+            // emitted module (`{fn}.pairN.a/b` scope definitions from
+            // the versioner's overlap guard). Deterministic for a
+            // given wolf build, so it gates: the fast-loop window
+            // carry LLVM builds from this split (measured: 5 loads ->
+            // 3 loads + 2 stores per 4 outputs, the +1 window carried
+            // across the backedge in a register) rests on these
+            // scopes being minted; the split silently degrading fails
+            // HERE before any wall number moves. The asm-level carry
+            // itself is host-clang-shaped and lives in the ledger,
+            // like align16's measured outcome.
+            let pmin = expect["noalias_pair_scopes_min"].as_u64().unwrap_or(0) as usize;
+            if pmin > 0 {
+                let text = std::fs::read_to_string(&ll).unwrap_or_default();
+                let got = text
+                    .lines()
+                    .filter(|l| l.contains("distinct !{!\"") && l.contains(".pair"))
+                    .count();
+                eprintln!(
+                    "bench-gates: witness {:<18} pair-scopes={got} (floor {pmin})",
+                    k.name
+                );
+                if got < pmin {
+                    failures.push(format!(
+                        "{}: {got} guarded-noalias pair scope(s) in the emitted IR, floor \
+                         is {pmin} — the s104 overlap-guard split degraded",
+                        k.name
+                    ));
+                }
+            }
             if let Some(r) = vector_witness(&[
                 "-x",
                 "ir",
