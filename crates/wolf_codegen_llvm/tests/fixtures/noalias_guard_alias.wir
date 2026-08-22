@@ -1,0 +1,109 @@
+; s104 witness (a): the aliasing case the guard exists for. @stencil
+; is the real a2 kernel's pre-midend WIR, verbatim — the shape the
+; versioner versions with an overlap guard and a guard-justified
+; noalias fact on the fast path. @main builds ONE container and
+; passes its header as BOTH arguments (the `let b = a` header-copy
+; shape; surface wolf refuses it as E1002, the c04 exclusivity
+; theorem, so a hand-built module is the only place this executes —
+; the s99 posture). At runtime the buffers overlap totally: the
+; guard must send execution down the SLOW loop, whose feedback
+; semantics (out[i] reads the out[i-1] just written) yield
+; a = [0,3,8,15,24,5] from src[i]=i, len 6 — sink a[4] = 24, exit
+; code 24. A disjoint-semantics build would print 12; the sink
+; distinguishes. The never-versioned build must agree (X3: the slow
+; loop preserves aliasing semantics; versioning changes speed only).
+decl @stencil(mut ptr, mem.r0, ptr)
+
+fn @stencil(mut ptr, mem.r0, ptr) {
+  fact deref %0 8 : excl.mut
+b0(%0: ptr, %1: mem.r0, %2: ptr):
+  %3: mem.r2 = region.foreign 1
+  %4: mem.r1 = region.foreign 0
+  %5 = iconst.i64 1
+  %6 = iconst.i64 8
+  %7 = ptr.off %2, %6, 1
+  %8 = load.i64 %7, %4
+  %9 = isub.chk %8, %5
+  jmp b1(%5, %3)
+b1(%10: i64, %11: mem.r2):
+  %12 = icmp.slt %10, %9
+  br %12, b2, b11
+b2:
+  %13 = load.ptr %0, %1
+  %14 = isub.chk %10, %5
+  %15 = ptr.off %2, %6, 1
+  %16 = load.i64 %15, %4
+  %17 = icmp.ult %14, %16
+  br %17, b3, b10
+b3:
+  %18 = load.ptr %2, %4
+  %19 = ptr.off %18, %14, 8
+  %20 = load.i64 %19, %11
+  %21 = icmp.ult %10, %16
+  br %21, b4, b9
+b4:
+  %22 = ptr.off %18, %10, 8
+  %23 = load.i64 %22, %11
+  %24 = iadd.chk %20, %23
+  %25 = iadd.chk %10, %5
+  %26 = icmp.ult %25, %16
+  br %26, b5, b8
+b5:
+  %27 = ptr.off %18, %25, 8
+  %28 = load.i64 %27, %11
+  %29 = iadd.chk %24, %28
+  %30 = iconst.i64 1048575
+  %31 = band %29, %30
+  %32 = ptr.off %13, %6, 1
+  %33 = load.i64 %32, %4
+  %34 = icmp.ult %10, %33
+  br %34, b6, b7
+b6:
+  %35 = load.ptr %13, %4
+  %36 = ptr.off %35, %10, 8
+  %37 = store.i64 %31, %36, %11
+  jmp b1(%25, %37)
+b7:
+  trap.bounds
+b8:
+  trap.bounds
+b9:
+  trap.bounds
+b10:
+  trap.bounds
+b11:
+  ret
+}
+
+fn @main() -> i64 {
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2 = iconst.i64 32
+  %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1
+  %5 = iconst.i64 64
+  %6: ptr, %7: mem.r0 = region.alloc %0, %5, %4
+  %8 = store.ptr %6, %3, %7
+  %9 = iconst.i64 8
+  %10 = ptr.off %3, %9, 1
+  %11 = iconst.i64 6
+  %12 = store.i64 %11, %10, %8
+  %13 = iconst.i64 0
+  %14 = iconst.i64 1
+  jmp b1(%13, %12)
+b1(%15: i64, %16: mem.r0):
+  %17 = icmp.slt %15, %11
+  br %17, b2, b3
+b2:
+  %18 = ptr.off %6, %15, 8
+  %19 = store.i64 %15, %18, %16
+  %20 = iadd.wrap %15, %14
+  jmp b1(%20, %19)
+b3:
+  %21: ptr, %22: mem.r1 = stack.alloc %9
+  %23 = store.ptr %3, %21, %22
+  %24 = call @stencil(%21, %23, %3)
+  %25 = iconst.i64 4
+  %26 = ptr.off %6, %25, 8
+  %27 = load.i64 %26, %16
+  ret %27
+}

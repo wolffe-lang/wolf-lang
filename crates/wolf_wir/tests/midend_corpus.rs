@@ -382,3 +382,25 @@ fn kernel_walk_twice_merges_its_unrolled_loops() {
         stats.loops_cse
     );
 }
+
+/// s104's guarded-noalias witness, gated so the version + fact cannot
+/// rot: `guarded_stencil.lu` is a2's shape (a stencil reading one
+/// container chain and writing another), and the pipeline must
+/// version its loop on the buffer-overlap guard and mint the
+/// guard-justified noalias fact on the taken edge. The emitter half
+/// (the pair-scope split) is pinned by
+/// `llvm_goldens::llvm_noalias_pair`; the aliasing complement
+/// executes in both tiers' `noalias_guard_alias` witnesses. The exit
+/// value (12, disjoint semantics) is pinned by the fixture's own
+/// exit-code check.
+#[test]
+fn kernel_guarded_stencil_mints_the_overlap_guard() {
+    let entry = corpus_root().join("kernels").join("guarded_stencil.lu");
+    let mut module = lower(&entry).expect("guarded_stencil reaches the wir rung");
+    let stats = optimize_module(&mut module, &opts()).expect("pipeline green");
+    assert!(
+        stats.noalias_guards >= 1,
+        "the stencil loop versions on the overlap guard (noalias_guards = {}): {stats}",
+        stats.noalias_guards
+    );
+}
