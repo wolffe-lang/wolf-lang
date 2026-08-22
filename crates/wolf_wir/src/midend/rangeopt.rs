@@ -110,7 +110,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::facts::FactKind;
+use crate::facts::{FactData, FactKind, Just};
 use crate::ir::{Aux, Block, FuncId, Function, Inst, Module, Value, ValueDef};
 use crate::ops::{IntCc, Opcode};
 use crate::verify::VerifyError;
@@ -1638,12 +1638,234 @@ fn version_loops(
     }
     for (li, cands) in plans {
         let l = &loops.loops[li];
-        if let Some(pairs) = version_one(f, view, &cfg, &doms, l, &cands) {
+        if let Some((pairs, minted)) = version_one(f, view, &cfg, &doms, l, &cands) {
             stats.loops_versioned += 1;
+            stats.noalias_guards += minted;
             twins.extend(pairs);
         }
     }
     twins
+}
+
+/// One buffer pair the overlap guard separates (s104): the loop
+/// writes one container chain and reads another, with each buffer's
+/// header — and therefore its len — loop-invariant at version time.
+struct OverlapPair {
+    write_base: Value,
+    write_len: Value,
+    write_scale: u64,
+    read_base: Value,
+    read_len: Value,
+    read_scale: u64,
+}
+
+/// s104: detect the two-chain read/write shape the overlap guard can
+/// version. Fail-closed on everything the shape does not pin:
+///
+/// - every Buffer-role access in the loop must classify as
+///   `ptr.off(base, idx, scale)` with `base` the result of a
+///   Header-role load whose address is defined outside the loop (an
+///   unclassifiable access laundering a pointer means no plan);
+/// - no in-loop store outside the classified buffers (a header store
+///   — a push, a len update — would move the extent under the guard);
+/// - exactly one written base; up to two (write, read) pairs — more
+///   is a widening decision for a future sprint;
+/// - per base, one access scale, and a len read STRUCTURALLY: the
+///   outside-the-loop `load.i64` off the same header at the smallest
+///   constant field offset — the same len every lowered bounds check
+///   guards this container's accesses against. The extent needs no
+///   per-access re-proof: safe-tier lowering confines every container
+///   access to `idx <u len` (the check either still runs on the fast
+///   path or was folded because the compiler PROVED it), so
+///   `[base, base + len·scale)` covers every access by construction.
+///   That invariant is the mint's semantic ground (custody: the
+///   verifier audits shape; hand-written WIR owns its claims exactly
+///   as it already does for theorem tags).
+fn overlap_pairs(
+    f: &Function,
+    view: &ModView,
+    l: &analysis::NaturalLoop,
+) -> Option<Vec<OverlapPair>> {
+    use super::memopt::{foreign_roles, token_role};
+    use crate::ops::ForeignRole;
+    let foreign = foreign_roles(f, view);
+    let defined_in_loop = |v: Value| -> bool {
+        match f.values[v].def {
+            ValueDef::Param(b, _) => l.blocks.contains(&b),
+            ValueDef::Result(i, _) => f
+                .layout
+                .iter()
+                .any(|&b| l.blocks.contains(&b) && f.blocks[b].insts.contains(&i)),
+        }
+    };
+    // Classify every in-loop access; reject the loop on any store the
+    // classification does not cover.
+    let mut reads: Vec<(Value, u64)> = Vec::new();
+    let mut writes: Vec<(Value, u64)> = Vec::new();
+    for &b in &l.blocks {
+        for &inst in &f.blocks[b].insts {
+            let data = f.insts[inst];
+            let (addr, tok, is_store) = match data.op {
+                Opcode::Load => {
+                    let a = f.vpool.get(data.args);
+                    (a[0], *a.get(1)?, false)
+                }
+                Opcode::Store => {
+                    let a = f.vpool.get(data.args);
+                    (a[1], *a.get(2)?, true)
+                }
+                _ => continue,
+            };
+            let role = token_role(f, view, &foreign, tok);
+            if !matches!(role, Some(ForeignRole::Buffer)) {
+                if is_store {
+                    // A non-buffer in-loop store could move a header
+                    // field the guard's extent was read from.
+                    return None;
+                }
+                continue;
+            }
+            let ValueDef::Result(ai, 0) = f.values[addr].def else {
+                return None;
+            };
+            if f.insts[ai].op != Opcode::PtrOff {
+                return None;
+            }
+            let aargs = f.vpool.get(f.insts[ai].args);
+            let base = aargs[0];
+            let Aux::Scale(scale) = f.insts[ai].aux else {
+                return None;
+            };
+            if defined_in_loop(base) {
+                return None;
+            }
+            if is_store {
+                writes.push((base, scale));
+            } else {
+                reads.push((base, scale));
+            }
+        }
+    }
+    if writes.is_empty() || reads.is_empty() {
+        return None;
+    }
+    // Per base: the defining Header-role load names the header; the
+    // header's smallest-constant-offset outside-the-loop `load.i64`
+    // names the len.
+    let base_len = |base: Value| -> Option<Value> {
+        let ValueDef::Result(bi, 0) = f.values[base].def else {
+            return None;
+        };
+        if f.insts[bi].op != Opcode::Load {
+            return None;
+        }
+        let bargs = f.vpool.get(f.insts[bi].args);
+        let (hdr, btok) = (bargs[0], *bargs.get(1)?);
+        if !matches!(
+            token_role(f, view, &foreign, btok),
+            Some(ForeignRole::Header)
+        ) {
+            return None;
+        }
+        if defined_in_loop(hdr) || defined_in_loop(base) {
+            return None;
+        }
+        let mut best: Option<(i64, Value)> = None;
+        for &lb in &f.layout {
+            if l.blocks.contains(&lb) {
+                continue;
+            }
+            for &li in &f.blocks[lb].insts {
+                let ld = f.insts[li];
+                if ld.op != Opcode::Load {
+                    continue;
+                }
+                let largs = f.vpool.get(ld.args);
+                let Some(&ltok) = largs.get(1) else { continue };
+                if !matches!(
+                    token_role(f, view, &foreign, ltok),
+                    Some(ForeignRole::Header)
+                ) {
+                    continue;
+                }
+                let lres = f.vpool.get(ld.results)[0];
+                if f.value_ty(lres) != crate::types::I64 {
+                    continue;
+                }
+                let ValueDef::Result(pi, 0) = f.values[largs[0]].def else {
+                    continue;
+                };
+                if f.insts[pi].op != Opcode::PtrOff {
+                    continue;
+                }
+                let pargs = f.vpool.get(f.insts[pi].args);
+                if pargs[0] != hdr {
+                    continue;
+                }
+                let ValueDef::Result(ki, 0) = f.values[pargs[1]].def else {
+                    continue;
+                };
+                if f.insts[ki].op != Opcode::Iconst {
+                    continue;
+                }
+                let Aux::Int(k) = f.insts[ki].aux else {
+                    continue;
+                };
+                if k <= 0 {
+                    continue;
+                }
+                if best.is_none_or(|(bk, _)| k < bk) {
+                    best = Some((k, lres));
+                }
+            }
+        }
+        best.map(|(_, v)| v)
+    };
+    let coherent = |accs: &[(Value, u64)], base: Value| -> Option<u64> {
+        let mut found: Option<u64> = None;
+        for &(b, sc) in accs {
+            if b != base {
+                continue;
+            }
+            match found {
+                None => found = Some(sc),
+                Some(fs) if fs == sc => {}
+                _ => return None,
+            }
+        }
+        found
+    };
+    let wbase = writes[0].0;
+    if writes.iter().any(|&(b, _)| b != wbase) {
+        return None;
+    }
+    let wscale = coherent(&writes, wbase)?;
+    let wlen = base_len(wbase)?;
+    let mut rbases: Vec<Value> = Vec::new();
+    for &(b, _) in &reads {
+        if b != wbase && !rbases.contains(&b) {
+            rbases.push(b);
+        }
+    }
+    // The cap: up to two pairs (a2 and daxpy are one each); more is a
+    // widening decision for a future sprint.
+    if rbases.is_empty() || rbases.len() > 2 {
+        return None;
+    }
+    let mut pairs = Vec::new();
+    for rb in rbases {
+        let rscale = coherent(&reads, rb)?;
+        let rlen = base_len(rb)?;
+        pairs.push(OverlapPair {
+            write_base: wbase,
+            write_len: wlen,
+            write_scale: wscale,
+            read_base: rb,
+            read_len: rlen,
+            read_scale: rscale,
+        });
+    }
+    Some(pairs)
 }
 
 /// Version one loop; `None` when a structural precondition fails.
@@ -1654,7 +1876,7 @@ fn version_one(
     doms: &Doms,
     l: &analysis::NaturalLoop,
     cands: &[Inst],
-) -> Option<Vec<(Inst, Inst)>> {
+) -> Option<(Vec<(Inst, Inst)>, usize)> {
     // Single entry: one outside predecessor of the header, ending in a
     // plain jmp (the clean guard landing pad).
     let outside: Vec<Block> = cfg
@@ -1879,6 +2101,39 @@ fn version_one(
         return None;
     }
     let k = best.map(|(k, _)| k);
+    // s104: the overlap plan RIDES a loop the check plans already
+    // version — it never versions alone. Detected against the
+    // pre-version CFG; the guard blocks join the chain below.
+    let overlap = overlap_pairs(f, view, l).unwrap_or_default();
+    // The fast preheader exists BEFORE the clone so the noalias
+    // subjects — identity `ptr.off` copies of the two bases, defined
+    // only on the guarded path — can seed the clone's value map:
+    // every fast-copy use of a base rewrites to the guarded copy,
+    // while the slow path keeps the originals. A fact on the SHARED
+    // base values would flow to the aliasing path; the copies are
+    // what make the claim structurally confined to where the guard
+    // proved it. (If a future fold learns `ptr.off x, 0, 1 = x`, the
+    // facts retire honestly via ValueDeleted and the witness gates
+    // catch the rot — fail-safe, not fail-silent.)
+    let fp = f.make_block(&[]);
+    let mut base_copies: HashMap<Value, Value> = HashMap::new();
+    if !overlap.is_empty() {
+        let (_, zv) = f.append_inst(fp, Opcode::Iconst, &[], &[crate::types::I64], Aux::Int(0));
+        for pr in &overlap {
+            for base in [pr.write_base, pr.read_base] {
+                if let std::collections::hash_map::Entry::Vacant(e) = base_copies.entry(base) {
+                    let (_, cv) = f.append_inst(
+                        fp,
+                        Opcode::PtrOff,
+                        &[base, zv[0]],
+                        &[crate::types::PTR],
+                        Aux::Scale(1),
+                    );
+                    e.insert(cv[0]);
+                }
+            }
+        }
+    }
     // ---- loop-closed form: route live-outs through exit params -----------
     if !live_out.is_empty() {
         use crate::ir::ValueData;
@@ -1968,7 +2223,7 @@ fn version_one(
         .filter(|b| l.blocks.contains(b))
         .collect();
     let mut bmap: HashMap<Block, Block> = HashMap::new();
-    let mut vmap: HashMap<Value, Value> = HashMap::new();
+    let mut vmap: HashMap<Value, Value> = base_copies.clone();
     for &lb in &loop_blocks {
         let ptys: Vec<_> = f.block_params(lb).iter().map(|&p| f.value_ty(p)).collect();
         let nb = f.make_block(&ptys);
@@ -2049,7 +2304,6 @@ fn version_one(
     //                  `icmp.sle n, m`                    (n <= m)
     // — exactly the hypotheses the what-ifs installed, nothing more.
     let entry_args: Vec<Value> = f.vpool.get(entry_edge.args);
-    let fp = f.make_block(&[]);
     let fast_entry = f.block_call(bmap[&l.header], &entry_args);
     f.append_inst(fp, Opcode::Jmp, &[], &[], Aux::Jump(fast_entry));
     let sp = f.make_block(&[]);
@@ -2089,6 +2343,57 @@ fn version_one(
         );
         chain.push((g1, c1[0]));
     }
+    // Overlap guards (s104): per pair, one block computing
+    //   end_w = ptr.off(w, len_w, scale_w); end_r = ptr.off(r, len_r, scale_r)
+    //   taken  ⟺  end_w <=u r  ||  end_r <=u w
+    // — the ranges the loop's own bounds guards confine every access
+    // to are disjoint, so the fast path's accesses cannot alias. The
+    // taken edge IS the proof the minted fact cites.
+    let mut minted = 0usize;
+    for pr in &overlap {
+        let g = f.make_block(&[]);
+        let (_, ew) = f.append_inst(
+            g,
+            Opcode::PtrOff,
+            &[pr.write_base, pr.write_len],
+            &[crate::types::PTR],
+            Aux::Scale(pr.write_scale),
+        );
+        let (_, er) = f.append_inst(
+            g,
+            Opcode::PtrOff,
+            &[pr.read_base, pr.read_len],
+            &[crate::types::PTR],
+            Aux::Scale(pr.read_scale),
+        );
+        let (_, c1) = f.append_inst(
+            g,
+            Opcode::Icmp,
+            &[ew[0], pr.read_base],
+            &[crate::types::BOOL],
+            Aux::IntCc(IntCc::Ule),
+        );
+        let (_, c2) = f.append_inst(
+            g,
+            Opcode::Icmp,
+            &[er[0], pr.write_base],
+            &[crate::types::BOOL],
+            Aux::IntCc(IntCc::Ule),
+        );
+        let (_, cv) = f.append_inst(
+            g,
+            Opcode::Bor,
+            &[c1[0], c2[0]],
+            &[crate::types::BOOL],
+            Aux::None,
+        );
+        chain.push((g, cv[0]));
+        f.add_fact(FactData::new(
+            FactKind::Noalias(base_copies[&pr.write_base], base_copies[&pr.read_base]),
+            Just::Guard(cv[0]),
+        ));
+        minted += 1;
+    }
     debug_assert!(!chain.is_empty(), "versioned with no guard to stand on");
     for (i, &(g, cond)) in chain.iter().enumerate() {
         let next = chain.get(i + 1).map(|&(nb, _)| nb).unwrap_or(fp);
@@ -2099,5 +2404,5 @@ fn version_one(
     // Retarget the entry edge at the chain's head.
     let g_edge = f.block_call(chain[0].0, &[]);
     f.insts[pterm].aux = Aux::Jump(g_edge);
-    Some(twin)
+    Some((twin, minted))
 }
