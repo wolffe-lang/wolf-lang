@@ -56,12 +56,6 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           grep -v '^#' bench/ritual-ledger.jsonl | tail -5 >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ritual-artifacts
-          path: bench-results/ritual/
-          if-no-files-found: ignore
       # The ledger line the ritual appended lives in the WORKING TREE of
       # this checkout; the bench-data branch got the archive copy inside
       # the ritual itself. The tracked ledger's canonical history rides
@@ -79,3 +73,9 @@ jobs:
           git add bench/ritual-ledger.jsonl
           git commit -m "ritual: ledger $(date -u +%Y-%m-%d) ($(git rev-parse --short HEAD))"
           git push origin HEAD:trunk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ritual-artifacts
+          path: bench-results/ritual/
+          if-no-files-found: ignore

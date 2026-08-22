@@ -102,7 +102,11 @@ pub fn ritual(args: &[String]) -> ExitCode {
     // ------------------------------------------------ conditions file --
     let ts = utc_now_iso();
     std::fs::create_dir_all(&out_dir).expect("mkdir ritual out-dir");
-    let stem = format!("{ts}-{commit}");
+    // Filenames must be filesystem-agnostic: upload-artifact rejects
+    // the ISO stamp's colons (NTFS), which killed the first validation
+    // run's upload. The LEDGER keeps ISO; the filename drops separators.
+    let fname_ts: String = ts.chars().filter(|c| *c != ':' && *c != '-').collect();
+    let stem = format!("{fname_ts}-{commit}");
     let profdata = which("llvm-profdata");
     let conditions = format!(
         "M2 ritual conditions — {ts}, commit {commit}{dirty_mark}\n\
