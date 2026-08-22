@@ -51,8 +51,12 @@ flip from "ABSENT" to "present" the first night.
 gh api -X POST repos/wolffe-lang/wolf-lang/actions/runners/registration-token --jq .token
 
 mkdir -p ~/actions-runner && cd ~/actions-runner
-curl -o runner.tar.gz -L \
-  https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+# the runner's release assets are VERSIONED — no unversioned alias exists
+# (found the hard way registering wolf-bench-i7: the alias URL serves an
+# error page that tar rejects). Resolve the real asset:
+URL=$(gh api repos/actions/runner/releases/latest \
+  --jq '.assets[] | select(.name | test("^actions-runner-linux-x64-[0-9.]+\\.tar\\.gz$")) | .browser_download_url')
+curl -o runner.tar.gz -L "$URL"
 tar xzf runner.tar.gz
 ./config.sh --url https://github.com/wolffe-lang/wolf-lang \
     --token <TOKEN-FROM-ABOVE> \
