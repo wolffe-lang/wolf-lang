@@ -822,8 +822,13 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 /// five (+5); the checked executor reaches three of them (+3);
 /// all-three follows the checked lane (+3). Counts measured by this
 /// gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 156), ("native", 158), ("release", 158)];
-const UNION_FLOOR: usize = 175;
+// s104 ratchet over 288 entries: `kernels/guarded_stencil.lu` (the
+// overlap-guard witness) executes on native and release — 159 → 160
+// each, union 176 → 177. checked holds 156 and all-three holds 139:
+// like the other `kernels/` perf witnesses, it is outside the checked
+// executor's run set, so the lanes' non-nesting is unchanged.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 156), ("native", 160), ("release", 160)];
+const UNION_FLOOR: usize = 177;
 const ALL_THREE_FLOOR: usize = 139;
 
 /// One lane's observation of one corpus entry.

@@ -1340,3 +1340,77 @@ discipline), unbudgeted here and unnamed in the contract; building
 it at sprint end against no target is the reach the closeouts warn
 about. a2's ~0.76x residue is therefore c24's named remainder, with
 G9's disassembly and this paragraph as its inputs.
+
+## G11 — s104: the window crosses the backedge (2026-08-21)
+
+The residue G9 named and G10 declined is landed, and the mechanism
+was not the one the contract predicted. All numbers loaded-host
+(sibling lanes live), ratios and IR/asm evidence only; run six is
+the campaign's number.
+
+**a2 (was 0.756x ritual, 0.781x at s101): 0.982x vs naive C —
+TIE-class** (median-of-7 at ops=20000: 0.2808 ns/op wolf vs 0.2758
+naive; ten-run sink 256 stable). The fast loop's shape, before →
+after: 5 loads + 2 stores per 4 outputs, all `movdqu`, no reuse →
+**3 loads + 2 stores per 4 outputs** (2 `movaps` + 1 folded `paddq`
+operand), the +1 window carried across the backedge in a register
+and the shifted windows spliced by `pshufd` — the cross-iteration
+carry, in exactly clang's shape (clang's own restrict build does 1–2
+loads; the acceptance floor was ≤3). Contract acceptance met without
+target 5: rotation through header params is NOT built, per the
+measure-first clause.
+
+**Three ingredients, each proven load-bearing by ablation, none
+sufficient alone.** (1) The versioner guards the stencil loop on
+`end_w <=u r || end_r <=u w` over preheader-hoisted bases (~6
+instructions) and mints `noalias` on the taken edge's identity
+copies under the new `: guard` justification — custody: the
+versioner owns the arithmetic, the verifier audits shape (guard
+operands tie to the fact subjects' own base/extent chains, the
+fact's definitions sit under the taken edge, the taken target is
+single-entry); forged dominance and unrelated operands are pinned
+red in verify_red. (2) The emitter splits the Foreign(Buffer) class
+per pair ({fn}.pairN.a/b) — with the class scope OUT of the members'
+`!alias.scope`: scoped-noalias needs one side's noalias list to
+cover the other's scopes wholesale, and no member can disclaim the
+class both live in — one stray class scope and the split is
+provably inert (measured: identical binary to trunk). The other
+classes' noalias lists name the pair scopes instead (a sub-scope of
+a class is covered a fortiori), so class-vs-pair queries lose
+nothing, and fail-closed accesses keep class scopes only. (3)
+`ptr.off` now spells power-of-two strides as the GEP's element type:
+`mul` + byte-GEP and `getelementptr i64` are the same address
+arithmetic to the letter, but LLVM 22's vectorizer declines the
+carry on the byte spelling — measured on hand-minimized IR pairs
+differing in nothing else (1 explicit load vs 5). s101's align-16
+fact composes: the carried windows load `movaps`, and the overlap
+guard's `icmp` use of the buffer pointer is now a neutral use in the
+align walk (a compare stores through nothing; the vtable/channel
+drops all reach their pointers through calls and loads, never
+compares).
+
+**The interproc rider the versioner nearly broke:** the identity
+copies (`ptr.off base, 0, 1`) demoted Data origins to Elem in s99's
+store-attribution walk and silently poisoned the container — 7
+range facts and the discharged element-sum chks vanished before the
+zero-offset arm learned to pass origin through. The existing s99
+stencil test now fails without that fix; measured recovery: range
+loads 7, stencil `sadd.chk` 0, matching trunk.
+
+**alias_daxpy (the contract's rider): 0.978x, no movement outside
+noise** (prior 0.979x ritual / 0.955x at s101; median-of-7 same
+conditions). It mints its own pair (pair-scopes floor 2, gated) —
+but its loop has no shifted windows to carry, so the split buys
+shape nothing today; reported, not predicted, per the c22 rule.
+
+**Witnesses:** `corpus/kernels/guarded_stencil.lu` gates
+`noalias_guards >= 1` through the real pipeline (exit 12, disjoint
+semantics); the aliasing complement (`noalias_guard_alias.wir`, the
+`let b = a` header-copy shape only hand-built WIR can express —
+E1002 refuses it in surface wolf) executes on BOTH tiers, raw and
+versioned, exit 24 (feedback semantics, ten-run stable ×4 builds) —
+X3 held: the guard fails, the slow loop answers, versioning changes
+speed and never meaning. `noalias_pair_scopes_min` (floor 2 on a2
+and alias_daxpy) pins the split in the emitted IR the way
+`align16_min` pins alignment; `llvm_goldens::llvm_noalias_pair`
+pins one split and one fail-closed drop at the metadata level.
