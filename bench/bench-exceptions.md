@@ -16,12 +16,18 @@ the win, the measured cost, and the condition under which it is revisited.
 The gate reads this file, so each entry needs the marker line
 `- exception: <kernel-directory-name>` for the kernel to count as excepted.
 
-## Status at s103: still EMPTY — two drafts staged for run five, unspent.
+## Status: TWO EXCEPTIONS SPENT (human ruling, 2026-08-21, run seven)
 
-Posture ruled 2026-08-21, delegated to the session recommendation:
-drafted in advance with the evidence attached, to be spent at run five
-rather than improvised at the gate. Neither carries its marker line;
-filing one is a deliberate act at run five, not a default.
+The drafts below were staged at s103 (posture ruled 2026-08-21:
+drafted in advance, spent deliberately). At run seven — geomean
+1.095x, the loss set exactly these two, nothing undiagnosed anywhere
+in the suite — the human ruled: spend them. Marker lines follow each
+entry; the gate counts 2 of the cap of 3. Revisit conditions stand:
+b3's at any sound discharge for input-derived values or an X3
+amendment; word_count's expires the day sc14 lands.
+
+- exception: b3_churn
+- exception: word_count
 
 > **b3_churn** — checked adds on input-derived values.
 > *Root cause:* the request loop's arithmetic operates on values that
