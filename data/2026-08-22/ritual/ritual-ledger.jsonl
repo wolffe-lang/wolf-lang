@@ -25,4 +25,4 @@
 {"ts":"2026-08-22T03:02Z","commit":"34c36f1","geomean":1.095,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 7; loss set = the two drafts, unspent at run time (spent at 857c796)"}
 {"ts":"2026-08-22T03:53Z","commit":"857c796","geomean":1.099,"verdict":"HOLDS","consecutive":1,"note":"run 8, the clock's first counted hold"}
 {"ts":"2026-08-22T04:11Z","commit":"857c796","geomean":1.107,"verdict":"HOLDS","consecutive":1,"note":"run 9; same-night re-render (18m after the counted hold); count unchanged"}
-{"ts":"2026-08-22T06:21Z","commit":"545653b","geomean":1.071,"verdict":"HOLDS","consecutive":1,"note":"same-night re-render (130m after the counted hold); count unchanged"}
+{"ts":"2026-08-22T06:30Z","commit":"7296812","geomean":1.071,"verdict":"HOLDS","consecutive":1,"note":"same-night re-render (139m after the counted hold); count unchanged"}
