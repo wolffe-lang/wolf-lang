@@ -480,15 +480,24 @@ fn scan(m: &Module, f: &Function) -> Local {
                                 Aux::Scale(s) => s,
                                 _ => 1,
                             };
-                            let x = if k == Some(0) {
-                                // A zero offset is the identity — the
-                                // s104 versioner's guarded subject
-                                // copies are exactly this shape, and
-                                // an identity hop must not demote a
+                            let x = if k == Some(0) && scale == 1 {
+                                // A zero BYTE offset is the identity —
+                                // the s104 versioner's guarded subject
+                                // copies are exactly ptr.off(base,0,1),
+                                // and an identity hop must not demote a
                                 // data pointer to an element address
                                 // (the store through it would become
                                 // unattributable and poison the whole
-                                // container's channel).
+                                // container's channel). The scale is
+                                // the discriminator: a zero-INDEX
+                                // element access (scale > 1) is still
+                                // an element address — keying on the
+                                // offset alone cost a5's `src[0]` its
+                                // s99 range fact (the load stopped
+                                // classifying as Elem) and made
+                                // `dst[0] = …` stores unattributable
+                                // (three checked adds back in the hot
+                                // loop; ritual 1.011x → 0.603x).
                                 base
                             } else {
                                 match base {

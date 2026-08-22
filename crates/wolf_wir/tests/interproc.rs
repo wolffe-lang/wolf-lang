@@ -131,3 +131,28 @@ fn reverify_rejects_a_tampered_fact() {
         "a summary fact without a proof must be rejected"
     );
 }
+
+#[test]
+fn a_zero_index_element_access_is_still_an_element() {
+    // The a5 shape (the s104 regression, ritual 1.011x → 0.603x): the
+    // callee reads `src[0]` — a zero-INDEX element access, ptr.off
+    // with const 0 at scale 8 — and stores to `scratch[0]`, the same
+    // shape on the write side. c3b8b2a's identity rule keyed on the
+    // offset alone, so both stopped classifying as elements: the load
+    // lost its grant, the store went unattributable, and three checked
+    // adds returned to the hot loop. The identity is scale-1 ONLY.
+    let m = wolf_wir::parse_module(include_str!("fixtures/interproc_a5.wir")).expect("parse");
+    let ipr = interproc::analyze(&m);
+    let g = ipr.grants.get("probe").expect("probe granted");
+    assert_eq!(g.get(&2), Some(&(0, 255)), "src param grant at index 0");
+    let m2 = phase(include_str!("fixtures/interproc_a5.wir"));
+    let s = fn_text(&m2, "probe");
+    assert!(
+        s.contains("summary."),
+        "the channel should mint into probe:\n{s}"
+    );
+    assert!(
+        !s.contains("iadd.chk"),
+        "the element sum should discharge:\n{s}"
+    );
+}
