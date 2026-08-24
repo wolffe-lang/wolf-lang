@@ -892,9 +892,19 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // twin `typecheck/main_returns_str.lu` executes on no lane (a static
 // rejection, the residue class the divergence used to hide from) and
 // moves no count. Counts measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 163), ("native", 174), ("release", 174)];
-const UNION_FLOOR: usize = 188;
-const ALL_THREE_FLOOR: usize = 149;
+// s108 ratchet #3 over 306 entries: call-divergence in fallback
+// position (#35, narrowed). `rows/handler_diverge_call.lu` — the
+// generic handler whose tail is the literal `assert(false)`, hit path
+// — executes on all three lanes (+1 each, +1 all-three). Its trap
+// twin `rows/handler_diverge_trap.lu` executes on native and release
+// (the miss path traps `assert` there) while the checked executor
+// refuses the raising call in argument position by name — the s105
+// non-nesting shape: native/release +2 to 176, checked +1 to 164,
+// union +2 to 190, all-three +1 to 150. Counts measured by this gate,
+// not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 164), ("native", 176), ("release", 176)];
+const UNION_FLOOR: usize = 190;
+const ALL_THREE_FLOOR: usize = 150;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
