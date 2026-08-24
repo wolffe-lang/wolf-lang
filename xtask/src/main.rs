@@ -877,9 +877,17 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // The last two `checked lane only` arms are gone from the lowering;
 // the checked-native builtin split is CLOSED. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 161), ("native", 172), ("release", 172)];
-const UNION_FLOOR: usize = 186;
-const ALL_THREE_FLOOR: usize = 147;
+// s108 ratchet over 302 entries: the raw-literal decode fix (#76).
+// `strings/raw_fences.lu` — the `#`-fenced forms the off-by-one never
+// met — executes on all three lanes: +1 everywhere (162/173/173,
+// union 187, all-three 148). `lints/raw_interp_braces.lu` advanced
+// `phase: wir` → `run` in the same commit but moves no count: every
+// lane already EXECUTED it (with the opening quote in the value); the
+// stale pin only stopped the harness from judging its output. Counts
+// measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 162), ("native", 173), ("release", 173)];
+const UNION_FLOOR: usize = 187;
+const ALL_THREE_FLOOR: usize = 148;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
