@@ -1,0 +1,8 @@
+//! member: true
+//! conforms: gram.item.use
+
+/// The math-side probe: `v + 2`, the smaller of the twins' answers.
+pub fn probe(v: int) -> int { v + 2 }
+
+/// The twin discriminator: which `float` answered.
+pub fn tag() -> int { 2 }

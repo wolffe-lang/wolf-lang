@@ -912,9 +912,16 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // the checked executor still refuses the closure family by name, the
 // s105 split. Its capture twin `nested_fn_capture.lu` executes on no
 // lane. Counts measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 165), ("native", 177), ("release", 177)];
-const UNION_FLOOR: usize = 191;
-const ALL_THREE_FLOOR: usize = 151;
+// s108 ratchet #5 over 311 entries: #29's probe-close witness.
+// `resolve/leaf_twins` — two same-leaf modules (`fmt.float`,
+// `math.float`) coexisting, cross-importing, and disambiguated with
+// `use … as` — executes on all three lanes: +1 everywhere
+// (166/178/178, union 192, all-three 152). The issue's collapse no
+// longer reproduces anywhere; this file keeps it that way. Counts
+// measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 166), ("native", 178), ("release", 178)];
+const UNION_FLOOR: usize = 192;
+const ALL_THREE_FLOOR: usize = 152;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

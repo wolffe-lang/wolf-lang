@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 115..152 name=probe pub body=Block
+FnDecl 206..231 name=tag pub body=Block

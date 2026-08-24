@@ -361,7 +361,7 @@ shared surface gets a name. Acyclic imports are what make wolf's
 module-parallel compilation and interface hashing possible, so there
 is no escape hatch.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__cycle__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0303_cycle.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__cycle__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__leaf_twins__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0303_cycle.snap
 
 ## E0304 — the item exists but is not visible from here
 

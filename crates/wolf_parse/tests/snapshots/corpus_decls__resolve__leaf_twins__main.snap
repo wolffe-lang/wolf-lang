@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 640..654 path=fmt.float
+UseDecl 654..679 path=math.float as=mfloat
+FnDecl 680..818 name=main body=Block

@@ -214,6 +214,7 @@ regions.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 resolve/cycle/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/dupdef/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
+resolve/leaf_twins/main.lu: lowers
 resolve/pkgvis/main.lu: lowers
 resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers

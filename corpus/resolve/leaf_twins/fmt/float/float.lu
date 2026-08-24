@@ -1,0 +1,11 @@
+//! member: true
+//! conforms: gram.item.use
+
+use math.float as mf
+
+/// The formatting-side probe: the math answer, shifted where a
+/// collapsed-identity resolver would self-import instead.
+pub fn probe(v: int) -> int { mf.probe(v) + 10 }
+
+/// The shift, named — the +10 the witness asserts through `probe`.
+pub fn shift() -> int { 10 }
