@@ -1,0 +1,26 @@
+//! check: run(exit=1, stdout="error: timeout")
+//! phase: run
+//! conforms: err.union, err.propagate
+//!
+//! The s106 timeout witness (wolf-lang#45's builtin half): the
+//! `timeout` tag was DECLARED with the family at s39 and had no way
+//! to fire until `net_deadline` armed the s35 reactor's timer wheel.
+//! A read against a deliberately-silent peer — the accepted end
+//! never writes — fires the armed budget as the `timeout` row, and
+//! `?` makes it the documented process outcome: the tag on stdout,
+//! exit 1. Loopback + port 0 as always; 40ms is generous against a
+//! peer that will NEVER send, so the verdict is deterministic on any
+//! host. Checked twin: `read_deadline_against_a_silent_peer_is_the_
+//! timeout_row` in `crates/wolf_mem/tests/net.rs`.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+    net_deadline(cli, 40)?
+    let msg = net_read(cli, 16)?
+    print("unreachable: {msg}")
+    net_close(conn)?
+    0
+}

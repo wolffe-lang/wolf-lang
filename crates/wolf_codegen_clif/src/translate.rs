@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 94] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 102] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -146,6 +146,19 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 94] = [
     ("__wolf_rt_fs_stat", 4, true),
     ("__wolf_rt_fs_rename", 4, true),
     ("__wolf_rt_read_line", 1, true),
+    // The s106 net family (wolf_rt::net, #118's first crossing): fd
+    // handles and codes as i64, addresses/payloads as str pairs, the
+    // read result through a caller out slot — the fs discipline over
+    // the NetTable that was waiting. `net_deadline` arms the s35
+    // reactor budget (#45's builtin half).
+    ("__wolf_rt_net_listen", 2, true),
+    ("__wolf_rt_net_port", 1, true),
+    ("__wolf_rt_net_accept", 1, true),
+    ("__wolf_rt_net_connect", 2, true),
+    ("__wolf_rt_net_read", 3, true),
+    ("__wolf_rt_net_write", 3, true),
+    ("__wolf_rt_net_close", 1, true),
+    ("__wolf_rt_net_deadline", 2, true),
     // The s40 os/env/time families (wolf_rt::{os,time}): same shape
     // discipline — pointers/lens/codes as i64, str results through
     // caller out slots, list results as header pointers. `os_exit`

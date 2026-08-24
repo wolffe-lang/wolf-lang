@@ -5938,6 +5938,14 @@ impl<'a> Checker<'a> {
             ),
             "net_write" => (vec![int_, str_], rowed(self, unit, &["closed", "io"])),
             "net_close" => (vec![int_], rowed(self, unit, &["io"])),
+            // s106 (#45's builtin half): arm (`ms > 0`) or clear
+            // (`ms <= 0`) a per-socket deadline budget — every
+            // subsequent parking call on that socket (`accept`,
+            // `read`, `write`) resolves as its row's `timeout` tag
+            // when the budget fires first. Arming itself fails only on
+            // a forged/closed fd (or a host that cannot hold a
+            // deadline): `io`.
+            "net_deadline" => (vec![int_, int_], rowed(self, unit, &["io"])),
             // The s40 os/env builtin tier. `env_get`'s absent variable
             // is the `missing` row (an outcome, never a sentinel);
             // `utf8` covers a value the host holds in a non-UTF-8

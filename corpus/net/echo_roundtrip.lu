@@ -1,5 +1,5 @@
 //! check: run(exit=0, stdout="got: ping\nreply: pong")
-//! phase: mem
+//! phase: run
 //! conforms: err.union, err.propagate
 //!
 //! The s39 net litmus: a TCP echo over loopback, port 0 (the OS picks
@@ -7,10 +7,10 @@
 //! single-threaded ordering: a connect against a listening socket
 //! completes in the backlog before accept runs (TCP semantics), so
 //! the dial can precede the accept. Errors are D30 rows throughout —
-//! every edge here propagates with `?`. Run expectation proven by the
-//! checked-lane twins in `crates/wolf_mem/tests/net.rs`; the native
-//! lane refuses the net tier honestly at s39 (row-call ABI + str
-//! materialization owed), so this file pins `mem`.
+//! every edge here propagates with `?`. Checked-lane twins in
+//! `crates/wolf_mem/tests/net.rs`; since s106 the native lanes lower
+//! the family through `wolf_rt::net`'s shims over the NetTable
+//! (c26 — the crossing), so this file runs everywhere wolfgang runs.
 
 fn main() -> !int {
     let srv = net_listen("127.0.0.1:0")?

@@ -509,6 +509,37 @@ pub fn net_err_tag(kind: std::io::ErrorKind) -> &'static str {
     }
 }
 
+/// Accept under a deadline budget on the checked lane's v0 blocking
+/// path (s106, `net_deadline`): std's listener has no timed accept,
+/// so the emulation polls nonblocking until the budget elapses — the
+/// checked twin of the native reactor's timer wheel. A fired budget
+/// is `TimedOut`, which [`net_err_tag`] resolves as the `timeout` row.
+fn accept_deadline(
+    l: &std::net::TcpListener,
+    budget: std::time::Duration,
+) -> std::io::Result<(std::net::TcpStream, std::net::SocketAddr)> {
+    let t0 = std::time::Instant::now();
+    l.set_nonblocking(true)?;
+    let out = loop {
+        match l.accept() {
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                if t0.elapsed() >= budget {
+                    break Err(std::io::Error::from(std::io::ErrorKind::TimedOut));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            other => break other,
+        }
+    };
+    let _ = l.set_nonblocking(false);
+    // The accepted stream must come back BLOCKING whatever the
+    // listener's mode was during the poll.
+    if let Ok((s, _)) = &out {
+        let _ = s.set_nonblocking(false);
+    }
+    out
+}
+
 struct Ctx<'t> {
     tb: &'t TypedBody,
     node: &'t GreenNode,
@@ -586,6 +617,12 @@ struct Machine<'t> {
     /// `files`, same discipline — index = the `int` fd, `None` after
     /// close, forged/foreign fds are the `io` row.
     socks: Vec<Option<NetSock>>,
+    /// Armed LISTENER deadline budgets (s106 `net_deadline`), keyed by
+    /// the wolf fd: streams hold their budget on the socket itself
+    /// (`set_read_timeout`/`set_write_timeout`), but std's listener
+    /// has no timed accept, so the budget lives here and
+    /// `accept_deadline` polls it out.
+    sock_deadlines: HashMap<i64, std::time::Duration>,
     /// Spawned OS children (s40 os tier): a third handle namespace,
     /// same discipline — index = the `int` handle, `None` after a
     /// successful `os_wait` (the reap tombstones; double wait is
@@ -1245,6 +1282,7 @@ impl<'t> Machine<'t> {
             stdin_pos: 0,
             files: Vec::new(),
             socks: Vec::new(),
+            sock_deadlines: HashMap::new(),
             children: Vec::new(),
             args: Vec::new(),
             env_overlay: HashMap::new(),
@@ -3604,8 +3642,14 @@ impl<'t> Machine<'t> {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
+                let budget = self.sock_deadlines.get(&fd).copied();
                 let accepted = match self.sock(fd) {
-                    Some(NetSock::Listener(l)) => l.accept(),
+                    Some(NetSock::Listener(l)) => match budget {
+                        // s106: an armed budget bounds the park —
+                        // the `timeout` tag, reachable.
+                        Some(b) => accept_deadline(l, b),
+                        None => l.accept(),
+                    },
                     _ => return Ok(tag("io")),
                 };
                 match accepted {
@@ -3670,12 +3714,46 @@ impl<'t> Machine<'t> {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
+                self.sock_deadlines.remove(&fd);
                 match usize::try_from(fd).ok().and_then(|i| self.socks.get_mut(i)) {
                     Some(slot @ Some(_)) => {
                         *slot = None; // drop closes; double close is `io`
                         Ok(Flow::Val(Value::Unit))
                     }
                     _ => Ok(tag("io")),
+                }
+            }
+            // s106 (#45's builtin half): arm (`ms > 0`) or clear
+            // (`ms <= 0`) the socket's deadline budget. Streams hold
+            // it on the socket (std's own read/write timeouts — a
+            // fired one is `WouldBlock`/`TimedOut`, the `timeout` row
+            // via `net_err_tag`); listeners hold it in the side table
+            // `accept_deadline` polls. A forged or closed fd is `io`,
+            // never a trap.
+            "net_deadline" => {
+                let (Some(fd), Some(ms)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let budget = u64::try_from(ms)
+                    .ok()
+                    .filter(|&m| m > 0)
+                    .map(std::time::Duration::from_millis);
+                if matches!(self.sock(fd), Some(NetSock::Listener(_))) {
+                    match budget {
+                        Some(b) => self.sock_deadlines.insert(fd, b),
+                        None => self.sock_deadlines.remove(&fd),
+                    };
+                    return Ok(Flow::Val(Value::Unit));
+                }
+                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                    return Ok(tag("io"));
+                };
+                match s
+                    .set_read_timeout(budget)
+                    .and_then(|()| s.set_write_timeout(budget))
+                {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
                 }
             }
             _ => self.refuse("this net builtin", span),
@@ -4622,7 +4700,7 @@ impl<'t> Machine<'t> {
             // The s39 net builtin tier: same posture as fs — real host
             // operations, D30 rows, comptime is the one refusal site.
             "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read" | "net_write"
-            | "net_close" => {
+            | "net_close" | "net_deadline" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {

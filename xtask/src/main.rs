@@ -833,9 +833,17 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // each, union 176 → 177. checked holds 156 and all-three holds 139:
 // like the other `kernels/` perf witnesses, it is outside the checked
 // executor's run set, so the lanes' non-nesting is unchanged.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 156), ("native", 160), ("release", 160)];
-const UNION_FLOOR: usize = 177;
-const ALL_THREE_FLOOR: usize = 139;
+// s106 ratchet over 290 entries: net crosses (c26, #118). The two s39
+// witnesses (`net/echo_roundtrip`, `net/refused_row`) plus the new
+// `net/read_deadline` timeout witness execute on native and release
+// for the first time, and `net/spawn_accept` (the blocking-honesty
+// witness) joins them — 160 → 164 each. checked gains the timeout
+// witness (156 → 157; spawn_accept stays outside its run set: C1
+// defers structured concurrency there). union 177 → 179, all-three
+// 139 → 142 (the three non-conc net files now run everywhere).
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 157), ("native", 164), ("release", 164)];
+const UNION_FLOOR: usize = 179;
+const ALL_THREE_FLOOR: usize = 142;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

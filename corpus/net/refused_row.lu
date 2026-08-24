@@ -1,5 +1,5 @@
 //! check: run(exit=1, stdout="handled: 0\nerror: refused")
-//! phase: mem
+//! phase: run
 //! conforms: err.union, err.propagate
 //!
 //! Connection errors are ROWS, not traps (D30): dialing a port nobody
@@ -8,9 +8,10 @@
 //! documented process outcome: the tag on stdout, exit 1).
 //! Deterministic on any host without touching a fixed port: bind
 //! loopback port 0, learn the ephemeral port, close the listener,
-//! then dial it. Run expectation proven by the checked-lane twins in
-//! `crates/wolf_mem/tests/net.rs`; the native lane refuses the net
-//! tier honestly at s39, so this file pins `mem`.
+//! then dial it. Checked-lane twins in `crates/wolf_mem/tests/net.rs`;
+//! since s106 the native lanes lower the family too (c26), and this
+//! file's fail-pin keeps every lane's verdict honest — the tag must
+//! be `refused`, never a coarser one.
 
 fn main() -> !int {
     let srv = net_listen("127.0.0.1:0")?
