@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="{who}")
-//! phase: wir
-//! conforms: diag.sev.warn, gram.lex.str
+//! phase: run
+//! conforms: diag.sev.warn, gram.lex.str, gram.lex.str.raw
 //! warns: W0309
 //!
 //! W0309 — interpolation-shaped braces in a raw literal: `r"{who}"`
@@ -8,12 +8,13 @@
 //! an interpolation. One keystroke apart, different strings, no
 //! diagnostic — hence the warning.
 //!
-//! Pinned at `wir`, not `run` (s40): BOTH executors decode the raw
-//! literal with the naive first/last-byte quote strip, which leaves
-//! the `"` from `r"` in the value — they agree with each other
-//! (`"{who}` on both lanes) but not with this header's six-byte
-//! expectation. The raw-prefix strip is a shared decode fix owed by
-//! the string tier, tracked in the s40 closeout.
+//! Advanced from `phase: wir` to `run` by s108 (#76): the s40 pin
+//! parked a SHARED naive first/last-byte quote strip that left the
+//! `"` from `r"` in the value on both executors. lupin fixed its
+//! decode first (the v0.1.10 differential caught the one-sided
+//! residue); wolfgang's decoders now strip the full opening
+//! delimiter too, so the six-byte expectation this header always
+//! carried is the regression witness on every run-reaching lane.
 
 fn main() -> !int {
     let who = "reader"

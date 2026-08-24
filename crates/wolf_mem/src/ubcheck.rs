@@ -3013,6 +3013,14 @@ impl<'t> Machine<'t> {
             let out = String::from_utf8_lossy(&decoded).into_owned();
             return Ok(Flow::Val(Value::Str(out)));
         }
+        // Raw literal (#76): the whole opening delimiter — `r"`,
+        // `r#"`, … — strips, and the inner bytes are the value
+        // verbatim ([gram.lex.str.raw]: no escapes, no interpolation;
+        // the lexer emits no `Interp` inside one, so `holes` is empty).
+        if let Some(inner) = raw_str_inner(bytes) {
+            let out = String::from_utf8_lossy(inner).into_owned();
+            return Ok(Flow::Val(Value::Str(out)));
+        }
         // Byte-accurate rebuild: literal segments are copied as UTF-8
         // *bytes* (a per-byte `as char` push double-encoded every
         // non-ASCII literal — the c06 latin-1 divergence, retired
@@ -5763,12 +5771,39 @@ fn cooked_str_pattern(text: &str) -> Vec<u8> {
         let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
         return decode_escapes(&dedent_multiline(inner));
     }
+    // Raw literal (#76): the full delimiter strips, the inner bytes
+    // are the value ([gram.lex.str.raw]).
+    if let Some(inner) = raw_str_inner(bytes) {
+        return inner.to_vec();
+    }
     let inner = if bytes.len() >= 2 {
         &bytes[1..bytes.len() - 1]
     } else {
         bytes
     };
     decode_escapes(inner)
+}
+
+/// The inner bytes of a raw string literal's source text, or `None`
+/// when the text is not raw-delimited. `r"…"`, `r#"…"#`, `r##"…"##` —
+/// the whole opening delimiter (`r`, the `#` fence, the quote) and its
+/// balancing close strip; what remains IS the value
+/// ([gram.lex.str.raw]: no escapes, no interpolation). Byte-identical
+/// with native lowering's implementation (wolf_wir::lower) — #76
+/// retired the naive first/last-byte quote strip that left the
+/// opening `"` of `r"` in the value.
+fn raw_str_inner(bytes: &[u8]) -> Option<&[u8]> {
+    if bytes.first() != Some(&b'r') {
+        return None;
+    }
+    let hashes = bytes[1..].iter().take_while(|&&b| b == b'#').count();
+    let open = 1 + hashes; // index of the opening `"`
+    if bytes.get(open) != Some(&b'"') {
+        return None;
+    }
+    let start = open + 1;
+    let end = bytes.len().saturating_sub(1 + hashes).max(start);
+    Some(&bytes[start..end])
 }
 
 fn decode_escapes(bytes: &[u8]) -> Vec<u8> {

@@ -250,6 +250,7 @@ strings/format_spec_width.lu: lowers
 strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
 strings/match_str_dispatch.lu: lowers
+strings/raw_fences.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings/split_clause.lu: lowers

@@ -12203,6 +12203,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
             return decode_escapes(&dedent_multiline(inner));
         }
+        // Raw literal (#76): the whole opening delimiter — `r"`,
+        // `r#"`, … — strips, and the bytes between the fences ARE the
+        // value ([gram.lex.str.raw]: no escapes, no interpolation).
+        if let Some(inner) = raw_str_inner(bytes) {
+            return inner.to_vec();
+        }
         let inner = if bytes.len() >= 2 {
             &bytes[1..bytes.len() - 1]
         } else {
@@ -12242,6 +12248,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 return Vec::new();
             }
             return vec![StrSeg::Lit(lit)];
+        }
+        // Raw literal (#76): strip the full `r#*"` delimiter pair and
+        // take the inner bytes verbatim — no escapes, no interpolation
+        // ([gram.lex.str.raw]; the lexer emits no `Interp` inside one,
+        // so the holes list is empty here).
+        if let Some(inner) = raw_str_inner(bytes) {
+            if inner.is_empty() {
+                return Vec::new();
+            }
+            return vec![StrSeg::Lit(inner.to_vec())];
         }
         let (start, end) = if bytes.len() >= 2 {
             (1usize, bytes.len() - 1)
@@ -14817,6 +14833,28 @@ fn parse_uint_literal(text: &str) -> Option<u64> {
         return u64::from_str_radix(hex, 16).ok();
     }
     t.parse::<u64>().ok()
+}
+
+/// The inner bytes of a raw string literal's source text, or `None`
+/// when the text is not raw-delimited. `r"…"`, `r#"…"#`, `r##"…"##` —
+/// the whole opening delimiter (`r`, the `#` fence, the quote) and its
+/// balancing close strip; what remains IS the value
+/// ([gram.lex.str.raw]: no escapes, no interpolation). Byte-identical
+/// with the checked executor's implementation (wolf_mem::ubcheck) —
+/// #76 retired the naive first/last-byte quote strip that left the
+/// opening `"` of `r"` in the value.
+fn raw_str_inner(bytes: &[u8]) -> Option<&[u8]> {
+    if bytes.first() != Some(&b'r') {
+        return None;
+    }
+    let hashes = bytes[1..].iter().take_while(|&&b| b == b'#').count();
+    let open = 1 + hashes; // index of the opening `"`
+    if bytes.get(open) != Some(&b'"') {
+        return None;
+    }
+    let start = open + 1;
+    let end = bytes.len().saturating_sub(1 + hashes).max(start);
+    Some(&bytes[start..end])
 }
 
 /// Dedent a `"""` string's inner bytes by the closing delimiter's
