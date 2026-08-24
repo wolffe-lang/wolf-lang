@@ -256,8 +256,85 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // (cycle-aware fixpoint over each module's call graph) and reject
     // inferred rows on exported items (E0605).
     crate::rows::seal(pkg, &mut sigs);
+    // The entry-signature rule (#106): a root-module `main` is the
+    // program's entry, and its shape is a property of the declaration
+    // — ruled here, not at some backend's shim.
+    check_entry_sig(&mut sigs);
     wolf_diag::sort_diagnostics(&mut sigs.diagnostics);
     sigs
+}
+
+/// E0414 (#106) — what `main` may look like. The root module's `main`
+/// is the entry the process calls, so its signature is a whole-program
+/// contract: no parameters (the process has none to hand it), no
+/// generics (nothing instantiates the entry), and a return the process
+/// can be handed an exit status from — `()`, `int`, or an error union
+/// over either (`!int`, `!()`, `int ! {…}`: the ok value exits, an
+/// error value is D30's `error: <tag>` + exit 1). Everything else used
+/// to run on the checked rung with the value silently dropped and
+/// refuse at the native rung's C-entry shim — a lane divergence AND a
+/// codegen-phase answer to a declaration-shape question. Exit-code
+/// numerics stay #32's open spec question; this rules only the shapes.
+/// Runs after row sealing so `-> !T` inferred rows are concrete.
+fn check_entry_sig(sigs: &mut SigTables) {
+    let Some(ItemSig::Fn(f)) = sigs.get(0, "main") else {
+        return;
+    };
+    let ret_ok = {
+        let ok_ty = match *sigs.table.kind(f.ret) {
+            TyKind::ErrUnion(ok, _) => ok,
+            _ => f.ret,
+        };
+        // `Error` unifies with everything (D22): the wreck already
+        // has its own diagnostic, never a cascade off it.
+        matches!(
+            sigs.table.kind(ok_ty),
+            TyKind::Unit | TyKind::Prim(Prim::Int) | TyKind::Error
+        )
+    };
+    let (span, what, label): (Span, String, &str) = if !f.params.is_empty() {
+        let n = f.params.len();
+        (
+            f.name_span,
+            format!(
+                "`main` is the entry the process calls, and the process hands it no \
+                 arguments — this one wants {n}"
+            ),
+            "declared with parameters here",
+        )
+    } else if !f.generics.is_empty() {
+        (
+            f.name_span,
+            "`main` is the entry the process calls, so nothing exists to choose its \
+             type arguments — it cannot be generic"
+                .to_string(),
+            "declared generic here",
+        )
+    } else if !ret_ok {
+        let no_vars = |_: u32| -> Result<TyId, &'static str> { Err("_") };
+        let found = crate::types::render(&sigs.table, f.ret, &no_vars);
+        (
+            f.ret_span.unwrap_or(f.name_span),
+            format!(
+                "`main` returns `{found}`, which is not a type the process can be \
+                 handed"
+            ),
+            "the process can take an exit status from `()`, `int`, or an error \
+             union over them",
+        )
+    } else {
+        return;
+    };
+    sigs.diagnostics.push(
+        Diagnostic::error(codes::E0414, span, what)
+            .with_label(label)
+            .with_note(
+                "the entry's legal shapes: `fn main()`, `fn main() -> int`, \
+                 `fn main() -> !int` (and `!()` / an explicit error row over \
+                 `int` or `()`). An ok value becomes the exit status; an error \
+                 value prints `error: <tag>` and exits 1 (D30).",
+            ),
+    );
 }
 
 /// The module-namespace bindings of `file` within `module`, as
@@ -594,29 +671,44 @@ impl<'a> Lower<'a> {
                     .ty()
                     .map(|t| self.lower_type(module, file, &generics, t))
                     .unwrap_or_else(|| self.table.error());
-                match r.error_row() {
-                    // Explicit `T ! {row}` — the stated row (D30/s15).
-                    Some(row) => {
-                        let row_ty = self.lower_row(module, file, &generics, row);
-                        let ty = self.table.err_union(base, row_ty);
-                        (ty, Some(r.syntax().span), Some(row.syntax().span))
-                    }
-                    None => {
-                        // Bare `-> !T` on a module fn item is an
-                        // *inferred* row: mark it for sealing (s15,
-                        // the Zig-trap fix). Everywhere else the bare
-                        // form is the empty row.
-                        let ty = match (owner, self.table.kind(base).clone()) {
-                            (Some(name), TyKind::ErrUnion(inner, _)) => {
-                                let marker = self.table.intern(TyKind::InferredRow {
-                                    module: module as u32,
-                                    name: name.to_string(),
-                                });
-                                self.table.err_union(inner, marker)
-                            }
-                            _ => base,
-                        };
-                        (ty, Some(r.syntax().span), None)
+                // More than one `! {row}` tail (#34) is a nested
+                // union: it parses now, and its meaning is unruled —
+                // the return elaborates opaque ([`TyKind::Unsupported`])
+                // so every use refuses by name, never a guess.
+                if r.error_rows().nth(1).is_some() {
+                    let text = self.text(file, r.syntax().span);
+                    let norm = text
+                        .trim_start_matches("->")
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    let ty = self.table.intern(TyKind::Unsupported(norm));
+                    (ty, Some(r.syntax().span), None)
+                } else {
+                    match r.error_row() {
+                        // Explicit `T ! {row}` — the stated row (D30/s15).
+                        Some(row) => {
+                            let row_ty = self.lower_row(module, file, &generics, row);
+                            let ty = self.table.err_union(base, row_ty);
+                            (ty, Some(r.syntax().span), Some(row.syntax().span))
+                        }
+                        None => {
+                            // Bare `-> !T` on a module fn item is an
+                            // *inferred* row: mark it for sealing (s15,
+                            // the Zig-trap fix). Everywhere else the bare
+                            // form is the empty row.
+                            let ty = match (owner, self.table.kind(base).clone()) {
+                                (Some(name), TyKind::ErrUnion(inner, _)) => {
+                                    let marker = self.table.intern(TyKind::InferredRow {
+                                        module: module as u32,
+                                        name: name.to_string(),
+                                    });
+                                    self.table.err_union(inner, marker)
+                                }
+                                _ => base,
+                            };
+                            (ty, Some(r.syntax().span), None)
+                        }
                     }
                 }
             }
@@ -876,6 +968,23 @@ impl<'a> Lower<'a> {
         match node.kind {
             SyntaxKind::PathType => self.lower_path_type(module, file, generics, node),
             SyntaxKind::ErrorUnionType => {
+                // A union whose ok side is itself a union —
+                // `T ! {a} ! {b}` (postfix, #34) or `!T ! {a}` — now
+                // PARSES (the grammar's `type '!' error_row` admits
+                // its own result), but whether the nested row
+                // flattens into one union or stays a distinct layer
+                // is a spec question no row clause answers yet. The
+                // s108 rule: refuse by name — the whole type
+                // elaborates opaque ([`TyKind::Unsupported`]), so
+                // every USE is an honest NotYet, never a guessed
+                // semantics.
+                if node
+                    .nodes()
+                    .find(|n| is_type_kind(n.kind))
+                    .is_some_and(|n| n.kind == SyntaxKind::ErrorUnionType)
+                {
+                    return self.opaque(file, node);
+                }
                 let inner = node
                     .nodes()
                     .find(|n| is_type_kind(n.kind))
@@ -912,6 +1021,12 @@ impl<'a> Lower<'a> {
                     .collect();
                 let ret = match node.nodes().find_map(wolf_ast::RetType::cast) {
                     Some(r) => {
+                        // Nested return rows (#34) refuse by name —
+                        // the whole fn type elaborates opaque rather
+                        // than silently dropping the second row.
+                        if r.error_rows().nth(1).is_some() {
+                            return self.opaque(file, node);
+                        }
                         let base = r
                             .ty()
                             .map(|t| self.lower_type(module, file, generics, t))

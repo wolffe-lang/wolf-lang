@@ -583,6 +583,13 @@ impl<'a> RetType<'a> {
     pub fn error_row(self) -> Option<ErrorRow<'a>> {
         self.0.nodes().find_map(ErrorRow::cast)
     }
+
+    /// Every `! {row}` tail, in order (#34: `-> T ! {a} ! {b}` parses
+    /// with one row child per tail; more than one is a nested union,
+    /// which sema refuses by name until the spec rules its meaning).
+    pub fn error_rows(self) -> impl Iterator<Item = ErrorRow<'a>> {
+        self.0.nodes().filter_map(ErrorRow::cast)
+    }
 }
 
 ast_node!(

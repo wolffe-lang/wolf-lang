@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `()`, but the `else` fallback must produce `T`
+ --> mem:///main.lu:3:9
+  |
+2 |     let hit = v else |_| {
+  |               - the fallible expression is here
+3 |         assert(cond)
+  |         ^^^^^^^^^^^^ found `()` here
+  |
+  = note: expected `T`, found `()`

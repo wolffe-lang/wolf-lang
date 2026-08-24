@@ -206,7 +206,7 @@ zero-width placeholder and continues, so one miss does not cascade into
 a screenful. Fix the flagged spot first: later errors in the same
 region may be echoes of this one.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__range_bare.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range_inclusive.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__range_bare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__nested_row_param.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__range_bare.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range_inclusive.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
 
 ## E0202 — an opening delimiter is never closed
 
@@ -361,7 +361,7 @@ shared surface gets a name. Acyclic imports are what make wolf's
 module-parallel compilation and interface hashing possible, so there
 is no escape hatch.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__cycle__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0303_cycle.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__cycle__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__leaf_twins__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0303_cycle.snap
 
 ## E0304 — the item exists but is not visible from here
 
@@ -418,7 +418,7 @@ of making you eyeball two long renderings. Note that wolf never
 converts numbers implicitly — `int` and `i64` are simply different
 types, and the fix is an explicit `as` conversion.
 
-Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
@@ -598,6 +598,28 @@ formattable type. Reach for the conversion first when the intent is
 an integer.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__format_spec_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_hex_on_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_precision_on_int.snap
+
+## E0414 — this is not a signature `main` can have
+
+The root module's `main` is the entry the process calls, so its
+signature is a whole-program contract, ruled at the declaration
+(wolf-lang#106) rather than discovered at some backend's
+code-generation shim. Three constraints: `main` takes no parameters
+(the process hands it none — argument access is a library surface,
+not a parameter list); `main` is never generic (nothing exists to
+choose its type arguments); and `main` returns a type the process can
+be handed an exit status from — `()` (the process exits 0), `int`
+(the value is the exit status), or an error union over either
+(`!int`, `!()`, or an explicit row such as `int ! {none}`): the ok
+value exits as above, an error value prints `error: <tag>` and exits
+1 (D30's documented process behavior). A `main` returning anything
+else — `str`, `bool`, a struct — used to run on the checked rung with
+the value silently dropped and refuse at the native rung, a lane
+divergence with an invented semantics on one side. Which NUMBER each
+verdict class exits with process-wide is a separate, still-open spec
+question (#32); this code rules only the shapes.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__main_returns_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__main_unit_row.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0414_generic_main.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0414_main_params.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0414_str_main.snap
 
 ## E0501 — the generic body uses something its bounds do not provide
 

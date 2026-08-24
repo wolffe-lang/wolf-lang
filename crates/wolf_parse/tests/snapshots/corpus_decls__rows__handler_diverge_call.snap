@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 783..923 name=expect body=Block
+FnDecl 925..995 name=pick body=Block
+FnDecl 997..1107 name=main body=Block

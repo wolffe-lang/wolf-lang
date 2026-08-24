@@ -214,6 +214,7 @@ regions.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 resolve/cycle/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/dupdef/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
+resolve/leaf_twins/main.lu: lowers
 resolve/pkgvis/main.lu: lowers
 resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers
@@ -223,6 +224,8 @@ rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
+rows/handler_diverge_call.lu: lowers
+rows/handler_diverge_trap.lu: lowers
 rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: lowers
 rows/inferred_private.lu: lowers
@@ -233,6 +236,8 @@ rows/negative/missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
+rows/nested_row_param.lu: not mem-clean (pre-wir rungs own it)
+rows/nested_row_return.lu: not mem-clean (pre-wir rungs own it)
 rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
@@ -250,6 +255,7 @@ strings/format_spec_width.lu: lowers
 strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
 strings/match_str_dispatch.lu: lowers
+strings/raw_fences.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings/split_clause.lu: lowers
@@ -288,6 +294,8 @@ typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
+typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
+typecheck/main_unit_row.lu: lowers
 typecheck/match_exhaustive.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_narrow_scrutinee.lu: lowers
@@ -296,6 +304,8 @@ typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nested_fn_capture.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nested_fn_value.lu: lowers
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers

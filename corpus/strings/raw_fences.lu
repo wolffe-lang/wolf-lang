@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="say \"hi\" there\nfence #\" inside\nok")
+//! phase: run
+//! conforms: gram.lex.str.raw
+//!
+//! The `#`-fenced raw forms (#76): the decode bug was
+//! delimiter-length-shaped — a first/last-byte quote strip is one
+//! byte short for `r"` and gets shorter as the fence grows — so each
+//! fence width gets its own witness. `r#"…"#` may hold a bare `"`,
+//! `r##"…"##` may hold `#"`, and the bytes between the fences are
+//! the value, verbatim: no escapes (the backslash-n below is two
+//! bytes), no interpolation ([gram.lex.str.raw]).
+
+fn main() -> !int {
+    let one = r#"say "hi" there"#
+    let two = r##"fence #" inside"##
+    let esc = r"no\nescape"
+    print(one)
+    print(two)
+    if esc == "no\\nescape" { print("ok") } else { return 1 }
+    0
+}

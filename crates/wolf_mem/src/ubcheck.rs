@@ -1945,6 +1945,13 @@ impl<'t> Machine<'t> {
                         return Ok(other);
                     }
                 },
+                // #116b: nested named fns lift on the native tiers;
+                // the checked executor still refuses the closure
+                // family by name (#12), and a nested fn is a named
+                // capture-free closure.
+                SyntaxKind::FnDecl => {
+                    return self.refuse("a nested fn in checked execution", stmt.span);
+                }
                 k if k.is_item() => {
                     return self.refuse("nested item declarations", stmt.span);
                 }
@@ -3011,6 +3018,14 @@ impl<'t> Machine<'t> {
             let dedented = dedent_multiline(inner);
             let decoded = decode_escapes(&dedented);
             let out = String::from_utf8_lossy(&decoded).into_owned();
+            return Ok(Flow::Val(Value::Str(out)));
+        }
+        // Raw literal (#76): the whole opening delimiter — `r"`,
+        // `r#"`, … — strips, and the inner bytes are the value
+        // verbatim ([gram.lex.str.raw]: no escapes, no interpolation;
+        // the lexer emits no `Interp` inside one, so `holes` is empty).
+        if let Some(inner) = raw_str_inner(bytes) {
+            let out = String::from_utf8_lossy(inner).into_owned();
             return Ok(Flow::Val(Value::Str(out)));
         }
         // Byte-accurate rebuild: literal segments are copied as UTF-8
@@ -4151,6 +4166,43 @@ impl<'t> Machine<'t> {
     /// A path that is not a local: a module global (item initializer)
     /// or an unmodelled reference.
     fn item_value(&mut self, e: &'t GreenNode) -> E<Flow> {
+        // A QUALIFIED module-item fn in VALUE position (#116a):
+        // `let f = strx.is_pos` — the s95 bare-name read's
+        // cross-module twin, which the compiled tiers already run.
+        // Only when the checker typed the whole member expression as
+        // a fn, and only when the base names an imported module (a
+        // local of the same name shadows it, exactly as resolution
+        // ruled).
+        if e.kind == SyntaxKind::MemberExpr
+            && matches!(self.expr_ty(e.span), Some(TyKind::Fn(_, _)))
+        {
+            let m = MemberExpr::cast(e).expect("kind");
+            if let (Some(base), Some(member)) = (m.base(), m.member())
+                && base.kind == SyntaxKind::PathExpr
+            {
+                let bname = self.text(base.span);
+                if !bname.contains('.') && self.lookup(&bname).is_none() {
+                    let cur = &self.tc.bodies[self.frames.last().expect("frame").body].body;
+                    let (cur_module, cur_file) = (cur.module, cur.file);
+                    let md = &self.pkg.modules[cur_module];
+                    let target = md
+                        .files
+                        .iter()
+                        .position(|&f| f == cur_file)
+                        .and_then(|slot| md.bindings[slot].iter().find(|b| b.name == bname))
+                        .and_then(|b| match b.target {
+                            wolf_sema::BindTarget::PkgModule(m) => Some(m),
+                            _ => None,
+                        });
+                    if let Some(target) = target {
+                        let mname = self.text(member.span);
+                        if let Some(&b) = self.fns.get(&(target, mname)) {
+                            return Ok(Flow::Val(Value::Fn(b)));
+                        }
+                    }
+                }
+            }
+        }
         // Member of a temporary: evaluate the base and project.
         if e.kind == SyntaxKind::MemberExpr {
             let m = MemberExpr::cast(e).expect("kind");
@@ -5763,12 +5815,39 @@ fn cooked_str_pattern(text: &str) -> Vec<u8> {
         let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
         return decode_escapes(&dedent_multiline(inner));
     }
+    // Raw literal (#76): the full delimiter strips, the inner bytes
+    // are the value ([gram.lex.str.raw]).
+    if let Some(inner) = raw_str_inner(bytes) {
+        return inner.to_vec();
+    }
     let inner = if bytes.len() >= 2 {
         &bytes[1..bytes.len() - 1]
     } else {
         bytes
     };
     decode_escapes(inner)
+}
+
+/// The inner bytes of a raw string literal's source text, or `None`
+/// when the text is not raw-delimited. `r"…"`, `r#"…"#`, `r##"…"##` —
+/// the whole opening delimiter (`r`, the `#` fence, the quote) and its
+/// balancing close strip; what remains IS the value
+/// ([gram.lex.str.raw]: no escapes, no interpolation). Byte-identical
+/// with native lowering's implementation (wolf_wir::lower) — #76
+/// retired the naive first/last-byte quote strip that left the
+/// opening `"` of `r"` in the value.
+fn raw_str_inner(bytes: &[u8]) -> Option<&[u8]> {
+    if bytes.first() != Some(&b'r') {
+        return None;
+    }
+    let hashes = bytes[1..].iter().take_while(|&&b| b == b'#').count();
+    let open = 1 + hashes; // index of the opening `"`
+    if bytes.get(open) != Some(&b'"') {
+        return None;
+    }
+    let start = open + 1;
+    let end = bytes.len().saturating_sub(1 + hashes).max(start);
+    Some(&bytes[start..end])
 }
 
 fn decode_escapes(bytes: &[u8]) -> Vec<u8> {

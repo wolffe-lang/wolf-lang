@@ -317,3 +317,94 @@ fn e0413_hex_on_str() {
         "fn main() -> !int {\n    let s = \"wolf\"\n    print(\"[{s:x}]\")\n    0\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E0414 -----
+
+/// Catalog case (#106): `fn main() -> str` used to run on the checked
+/// rung with the value silently dropped and refuse at the native
+/// rung's C-entry shim — a lane divergence over a declaration fact.
+/// The shape is ruled here, at typecheck, with the legal spellings.
+#[test]
+fn e0414_str_main() {
+    snap_one(
+        "e0414_str_main",
+        "fn main() -> str {\n    print(\"hi\")\n    \"nope\"\n}\n",
+    );
+}
+
+/// The process hands `main` no arguments.
+#[test]
+fn e0414_main_with_params() {
+    snap_one("e0414_main_params", "fn main(x: int) -> int {\n    x\n}\n");
+}
+
+/// Nothing exists to choose the entry's type arguments.
+#[test]
+fn e0414_generic_main() {
+    snap_one(
+        "e0414_generic_main",
+        "fn main[T]() {\n    print(\"t\")\n}\n",
+    );
+}
+
+/// The boundary from the other side: every legal shape stays silent —
+/// `()`, `int`, `!int`, `!()`, and an explicit row over `int`.
+#[test]
+fn e0414_legal_shapes_are_silent() {
+    for src in [
+        "fn main() {\n    print(\"u\")\n}\n",
+        "fn main() -> int {\n    0\n}\n",
+        "fn main() -> !int {\n    0\n}\n",
+        "fn main() -> !() {\n    print(\"u\")\n}\n",
+        "fn main() -> int ! {none} {\n    0\n}\n",
+    ] {
+        let out = render_types(&[(&[], "main.lu", src)]);
+        assert!(out.is_empty(), "expected silence for {src:?}, got:\n{out}");
+    }
+}
+
+/// A non-root `main` is just a function — the entry rule reads the
+/// root module only.
+#[test]
+fn e0414_non_root_main_is_ordinary() {
+    let out = render_types(&[
+        (
+            &[],
+            "main.lu",
+            "use util\nfn main() -> !int {\n    print(util.main(3))\n    print(\"{util.twice(3)}\")\n    0\n}\n",
+        ),
+        (
+            &["util"],
+            "u.lu",
+            "/// The nested namesake: takes a parameter, returns `str`.\npub fn main(v: int) -> str {\n    \"{v}\"\n}\n/// A second item, so the module is not one of ceremony.\npub fn twice(v: int) -> int {\n    v * 2\n}\n",
+        ),
+    ]);
+    assert!(out.is_empty(), "expected silence, got:\n{out}");
+}
+
+// ------------------------------------------- #35 (narrowed): bottom --
+
+/// #35, narrowed (s108): `assert(false)` — the spelled-out literal —
+/// types as `!` and inhabits the `T` a generic handler's fallback
+/// owes, exactly as return-divergence already did.
+#[test]
+fn assert_false_diverges_in_fallback() {
+    let out = render_types(&[(
+        &[],
+        "main.lu",
+        "fn expect[T](v: T ! {none}, msg: str) -> T {\n    let hit = v else |_| {\n        print(\"FAILED: {msg}\")\n        assert(false)\n    }\n    hit\n}\n\nfn main() -> !int {\n    let a = expect(7, \"seven\")\n    if a == 7 { 0 } else { 1 }\n}\n",
+    )]);
+    assert!(out.is_empty(), "expected silence, got:\n{out}");
+}
+
+/// The scope boundary, pinned: a COMPUTED condition is not the
+/// literal — the checker cannot know it diverges, so the fallback
+/// still owes a `T` (E0401). Widening beyond the literal is the
+/// surface question that stays open on #35.
+#[test]
+fn e0401_computed_assert_still_owes_t() {
+    snap_one(
+        "e0401_computed_assert_fallback",
+        "fn expect[T](v: T ! {none}, cond: bool) -> T {\n    let hit = v else |_| {\n        assert(cond)\n    }\n    hit\n}\n\nfn main() -> !int {\n    let a = expect(7, false)\n    if a == 7 { 0 } else { 1 }\n}\n",
+    );
+}

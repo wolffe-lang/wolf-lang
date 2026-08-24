@@ -1,0 +1,15 @@
+//! check: fail(E0414)
+//! conforms: gram.item.fn
+//! phase: resolve
+//!
+//! #106 — what `main` may return is a declaration fact. This shape
+//! used to run on the checked rung (exit 0, the `"nope"` silently
+//! dropped) and refuse at the native rung's C-entry shim — a lane
+//! divergence no corpus file spelled, the `mixed` residue class made
+//! quiet. The rung that owns declarations rules it now, naming the
+//! legal spellings; exit-code NUMBERS stay #32's open question.
+
+fn main() -> str {
+    print("hi")
+    "nope"
+}

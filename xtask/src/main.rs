@@ -877,9 +877,51 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // The last two `checked lane only` arms are gone from the lowering;
 // the checked-native builtin split is CLOSED. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 161), ("native", 172), ("release", 172)];
-const UNION_FLOOR: usize = 186;
-const ALL_THREE_FLOOR: usize = 147;
+// s108 ratchet over 302 entries: the raw-literal decode fix (#76).
+// `strings/raw_fences.lu` — the `#`-fenced forms the off-by-one never
+// met — executes on all three lanes: +1 everywhere (162/173/173,
+// union 187, all-three 148). `lints/raw_interp_braces.lu` advanced
+// `phase: wir` → `run` in the same commit but moves no count: every
+// lane already EXECUTED it (with the opening quote in the value); the
+// stale pin only stopped the harness from judging its output. Counts
+// measured by this gate, not predicted.
+// s108 ratchet #2 over 304 entries: the entry-signature rule (#106).
+// `typecheck/main_unit_row.lu` — the run witness holding E0414's
+// legal boundary (`fn main() -> !()`) — executes on all three lanes:
+// +1 everywhere (163/174/174, union 188, all-three 149). Its fail
+// twin `typecheck/main_returns_str.lu` executes on no lane (a static
+// rejection, the residue class the divergence used to hide from) and
+// moves no count. Counts measured by this gate, not predicted.
+// s108 ratchet #3 over 306 entries: call-divergence in fallback
+// position (#35, narrowed). `rows/handler_diverge_call.lu` — the
+// generic handler whose tail is the literal `assert(false)`, hit path
+// — executes on all three lanes (+1 each, +1 all-three). Its trap
+// twin `rows/handler_diverge_trap.lu` executes on native and release
+// (the miss path traps `assert` there) while the checked executor
+// refuses the raising call in argument position by name — the s105
+// non-nesting shape: native/release +2 to 176, checked +1 to 164,
+// union +2 to 190, all-three +1 to 150. Counts measured by this gate,
+// not predicted.
+// s108 ratchet #4 over 310 entries: the callable tier's two gaps
+// (#116). One PRE-EXISTING file moved — `typecheck/fn_value_import`,
+// whose qualified cross-module fn value the checked executor refused
+// while both compiled tiers ran it, now runs on all three lanes:
+// checked +1 to 165, all-three +1 to 151. The new
+// `typecheck/nested_fn_value.lu` — a nested named fn as a fn value —
+// executes on native and release (+1 each to 177, union +1 to 191);
+// the checked executor still refuses the closure family by name, the
+// s105 split. Its capture twin `nested_fn_capture.lu` executes on no
+// lane. Counts measured by this gate, not predicted.
+// s108 ratchet #5 over 311 entries: #29's probe-close witness.
+// `resolve/leaf_twins` — two same-leaf modules (`fmt.float`,
+// `math.float`) coexisting, cross-importing, and disambiguated with
+// `use … as` — executes on all three lanes: +1 everywhere
+// (166/178/178, union 192, all-three 152). The issue's collapse no
+// longer reproduces anywhere; this file keeps it that way. Counts
+// measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 166), ("native", 178), ("release", 178)];
+const UNION_FLOOR: usize = 192;
+const ALL_THREE_FLOOR: usize = 152;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

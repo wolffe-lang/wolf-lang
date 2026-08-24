@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 46..67 path=math.float as=mf
+FnDecl 191..239 name=probe pub body=Block
+FnDecl 311..339 name=shift pub body=Block

@@ -523,9 +523,13 @@ fn ret_type(p: &mut Parser<'_>) {
         // The broken return type is this header's one report.
         p.fold_line_end();
     }
-    if p.at_punct(Punct::Not) {
+    while p.at_punct(Punct::Not) {
         p.bump();
         if p.at_punct(Punct::LBrace) {
+            // Right-recursive (#34): every further `! {row}` is
+            // another row child of this RetType — the header's flat
+            // tree shape holds, and sema refuses the nested meaning
+            // by name until the spec rules it.
             error_row(p);
         } else {
             p.error(
@@ -536,6 +540,7 @@ fn ret_type(p: &mut Parser<'_>) {
             p.missing();
             // One report per broken header tail.
             p.fold_line_end();
+            break;
         }
     }
     m.complete(p, SyntaxKind::RetType);
@@ -1437,12 +1442,20 @@ fn type_general(p: &mut Parser<'_>, postfix_row: bool) -> bool {
         _ => return false,
     };
     // Only `!` immediately opening a row is a tail; a lone `!` belongs
-    // to whatever follows (a prefix `!T`, an expression).
-    if postfix_row && p.at_punct(Punct::Not) && p.nth(1) == TokenKind::Punct(Punct::LBrace) {
+    // to whatever follows (a prefix `!T`, an expression). The tail is
+    // right-recursive (#34): `T ! {a} ! {b}` parses as
+    // `(T ! {a}) ! {b}` — the grammar's `type '!' error_row`
+    // production admits its own result — each further row wrapping
+    // the node before it. What a nested union MEANS is sema's
+    // question (it refuses by name until the spec rules); the
+    // parser's job is to stop answering a grammar question with
+    // E0201.
+    let mut cm = cm;
+    while postfix_row && p.at_punct(Punct::Not) && p.nth(1) == TokenKind::Punct(Punct::LBrace) {
         let m = cm.precede(p);
         p.bump(); // `!`
         error_row(p);
-        m.complete(p, SyntaxKind::ErrorUnionType);
+        cm = m.complete(p, SyntaxKind::ErrorUnionType);
     }
     true
 }

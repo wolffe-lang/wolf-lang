@@ -649,3 +649,78 @@ fn nested_closure_captures_propagate() {
     // below the outer limit). `x` is a parameter, never a capture.
     assert_eq!(sets, [vec!["k"], vec!["k"]]);
 }
+
+// -------------------------------------------------- #34: nested rows --
+
+/// A nested row parses (s108: the grammar's `type '!' error_row`
+/// admits its own result) and sema refuses it BY NAME — an honest
+/// NotYet, never a guessed flatten/nest semantics and never E0201.
+#[test]
+fn nested_row_refuses_by_name() {
+    for src in [
+        // Return position (#34's original reproducer).
+        "fn nest(x: int) -> int ! {none} ! {none} {\n    if x < 1 { return none }\n    x\n}\n\
+         fn main() -> !int {\n    let v = nest(16) else { return 1 }\n    if v == 16 { 0 } else { 1 }\n}\n",
+        // Parameter position.
+        "fn take_nested(v: int ! {none} ! {none}) -> int {\n    7\n}\n\
+         fn main() -> !int {\n    if take_nested(3) == 7 { 0 } else { 1 }\n}\n",
+    ] {
+        let tc = check_one(src);
+        // The rung is not completed, so conform-run reports the honest
+        // refusal and withholds partial diagnostics (the driver's
+        // conservatism contract).
+        assert!(
+            tc.not_yet
+                .iter()
+                .any(|n| n.construct.contains("a nested error row")),
+            "expected the by-name refusal for {src:?}, got {:?}",
+            tc.not_yet
+        );
+    }
+}
+
+// ------------------------------------------------ #116b: nested fns --
+
+/// A nested named fn checks as a capture-free fn value and binds like
+/// a `let`: direct call, HOF pass, and call through a binding all
+/// type.
+#[test]
+fn nested_fn_checks_and_binds() {
+    let tc = check_one(
+        "fn apply(f: fn(int) -> bool, v: int) -> bool { f(v) }\n\
+         fn main() -> !int {\n    fn odd(v: int) -> bool { v % 2 == 1 }\n    if odd(3) {} else { return 1 }\n    if apply(odd, 5) {} else { return 2 }\n    let g = odd\n    if g(7) {} else { return 3 }\n    0\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+/// The scoped-out shapes refuse by name: a capture of an enclosing
+/// local, and a generic nested fn.
+#[test]
+fn nested_fn_refusals_are_named() {
+    let cap = check_one(
+        "fn main() -> !int {\n    let base = 4\n    fn plus(v: int) -> int { v + base }\n    if plus(1) == 5 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        cap.not_yet
+            .iter()
+            .any(|n| n.construct.contains("capturing enclosing locals")),
+        "{:?}",
+        cap.not_yet
+    );
+    let generic = check_one(
+        "fn main() -> !int {\n    fn id[T](v: T) -> T { v }\n    if id(1) == 1 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        generic
+            .not_yet
+            .iter()
+            .any(|n| n.construct.contains("a generic nested fn")),
+        "{:?}",
+        generic.not_yet
+    );
+}

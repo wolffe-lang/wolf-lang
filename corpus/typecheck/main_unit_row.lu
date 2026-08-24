@@ -1,0 +1,14 @@
+//! check: run(exit=0, stdout="u")
+//! phase: run
+//! conforms: gram.item.fn
+//!
+//! The E0414 boundary from the legal side (#106): an error union over
+//! `()` is a shape every lane runs — the ok value hands the process a
+//! 0, same as `fn main()` — so the entry rule must keep admitting it.
+//! `entry_no_return.lu` pins bare `fn main()` and
+//! `rows/eu_main_err_exit.lu` pins `!int`'s error path; this pins the
+//! fourth spelling so the new sema check can never over-refuse.
+
+fn main() -> !() {
+    print("u")
+}

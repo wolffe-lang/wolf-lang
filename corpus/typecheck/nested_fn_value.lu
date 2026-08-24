@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="odd\nyes")
+//! phase: run
+//! conforms: gram.item.fn, ty.fn.value.qualified
+//!
+//! #116b — a nested named fn RESOLVES: it checks as a capture-free fn
+//! value with a name (the closure recipe with a declared signature)
+//! and binds like a `let`, so a doc example's `fn main()` wrapper can
+//! finally define its own predicate. Every provenance the callable
+//! tier owns is exercised: direct call, pass to a higher-order fn,
+//! bind and call through the binding. The native tiers lift the body
+//! through s105's closure queue (one `func.addr`, s97 `call.ind`);
+//! the checked executor still refuses the closure FAMILY by name
+//! ("a nested fn in checked execution", the #12 family) — the same
+//! split `memory/closure_value_paths.lu` pins for anonymous fns. The
+//! scoped-out shapes refuse by name too: captures of enclosing
+//! locals ("bind a closure instead"), generics, rows on the nested
+//! return.
+
+fn apply(f: fn(int) -> bool, v: int) -> bool { f(v) }
+
+fn main() -> !int {
+    fn odd(v: int) -> bool {
+        let m = v % 2
+        m == 1
+    }
+    if odd(3) { print("odd") } else { return 1 }
+    if apply(odd, 5) {} else { return 2 }
+    let g = odd
+    if g(7) { print("yes") } else { return 3 }
+    0
+}

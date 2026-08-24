@@ -603,6 +603,29 @@ fn row_fix_of(sig: &FnSig, table: &TypeTable) -> Option<RowFix> {
 
 /// Check one body against the elaborated signatures. Pure in
 /// `(&Package, &SigTables, &BodyRef)` — no shared mutable state.
+/// The span of the first nested error row spelled anywhere under
+/// `node` (#34): a `RetType` carrying more than one `! {row}` tail,
+/// or an `ErrorUnionType` whose ok side is itself an
+/// `ErrorUnionType`. `None` when the item spells no nesting.
+fn nested_row_span(node: &GreenNode) -> Option<wolf_span::Span> {
+    fn walk(n: &GreenNode) -> Option<wolf_span::Span> {
+        if n.kind == SyntaxKind::RetType
+            && n.nodes().filter(|c| c.kind == SyntaxKind::ErrorRow).count() > 1
+        {
+            return Some(n.span);
+        }
+        if n.kind == SyntaxKind::ErrorUnionType
+            && n.nodes()
+                .find(|c| wolf_ast::is_type_kind(c.kind))
+                .is_some_and(|c| c.kind == SyntaxKind::ErrorUnionType)
+        {
+            return Some(n.span);
+        }
+        n.nodes().find_map(walk)
+    }
+    walk(node)
+}
+
 pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult {
     let outer = pkg.files[body.file]
         .parse
@@ -619,6 +642,18 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
             .nth(mi)
             .expect("impl member index valid"),
     };
+    // #34 — a nested error row (`T ! {a} ! {b}`, or `!T ! {a}`)
+    // PARSES now, but no spec clause rules whether the layers flatten
+    // or nest, so any body that spells one refuses by name before
+    // checking starts: an honest `unsupported`, never a guessed
+    // semantics and never a misleading type error against the opaque
+    // form. The D-question (flatten vs. nest) is s108's named stop.
+    if let Some(span) = nested_row_span(node) {
+        return BodyResult::NotYetCheckable(NotYet {
+            construct: "a nested error row (its meaning is not ruled yet)",
+            span,
+        });
+    }
     let mut c = Checker {
         sigs,
         module: body.module,
@@ -3009,8 +3044,16 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            // Nested items in statement position wait for s17's
-            // restructuring of item environments (a nested fn is an
+            // A nested named fn (#116b): checks as a capture-free fn
+            // value — a closure with a name — and binds like a `let`
+            // (visible after its declaration; no recursion, exactly a
+            // `let`'s scoping). The scoped-out shapes refuse by name:
+            // generics, rows on the nested return, unannotated
+            // parameters, and captures of enclosing locals (bind a
+            // closure for those — its env machinery owns captures).
+            SyntaxKind::FnDecl => self.check_nested_fn(s),
+            // Other nested items in statement position wait for s17's
+            // restructuring of item environments (a nested type is an
             // item with a signature).
             k if k.is_item() => Err(NotYet {
                 construct: "a nested item declaration",
@@ -4383,6 +4426,13 @@ impl<'a> Checker<'a> {
             }
             TyKind::Var(v) if matches!(self.vars.kind_of(v), NumKind::Any) => Err(NotYet {
                 construct: "`else` on a value whose type is still being inferred",
+                span: scrut.span,
+            }),
+            // An opaque type ([`TyKind::Unsupported`]) MIGHT be
+            // fallible — a nested row (#34), a generic instantiation
+            // — so claiming "cannot fail" (E0608) would be a guess.
+            TyKind::Unsupported(_) => Err(NotYet {
+                construct: "`else` on a value whose type the checker holds opaque",
                 span: scrut.span,
             }),
             _ => {
@@ -6083,6 +6133,29 @@ impl<'a> Checker<'a> {
                             self.synth_expr(v)?;
                         }
                     }
+                }
+                // `assert(false)` — the spelled-out literal, not a
+                // computed condition — cannot return, so it types as
+                // `!` (bottom) and inhabits whatever the position
+                // expects: a generic handler's trap-and-never-return
+                // tail (`v else |_| { …; assert(false) }`) checks
+                // against `T` exactly as a `return`-diverging one
+                // already did (#35, narrowed). SCOPE, deliberate:
+                // only the literal diverges — `assert(cond)` with a
+                // runtime-false condition stays `()`, and no
+                // `never`-returning FUNCTION type exists; whether
+                // `testing.fail`-shaped calls earn a bottom type is
+                // the surface question that stays open on #35.
+                let diverges = arg_nodes
+                    .first()
+                    .and_then(|a| Arg::value(*a))
+                    .is_some_and(|v| {
+                        v.tokens()
+                            .next()
+                            .is_some_and(|t| t.kind == SyntaxKind::FalseKw)
+                    });
+                if diverges {
+                    return Ok(self.lo.table.never());
                 }
                 Ok(unit)
             }
@@ -9237,6 +9310,109 @@ impl<'a> Checker<'a> {
         };
         self.last_closure_row = raised;
         Ok(self.lo.table.intern(TyKind::Fn(ptys, ret)))
+    }
+
+    /// #116b — a nested named `fn` in statement position: typed as a
+    /// capture-free fn VALUE (the closure recipe with a declared
+    /// signature), bound by name like a `let`. The fn type records at
+    /// the DECL's span, so lowering's closure machinery (s105) picks
+    /// it up unchanged; an empty capture set records there too, which
+    /// is also the enforcement point — a nested fn that reaches an
+    /// enclosing local refuses by name rather than growing an env.
+    fn check_nested_fn(&mut self, s: &GreenNode) -> R<()> {
+        let d = wolf_ast::FnDecl::cast(s).expect("kind");
+        if d.generics().is_some() {
+            return Err(NotYet {
+                construct: "a generic nested fn",
+                span: s.span,
+            });
+        }
+        let params: Vec<_> = d.params().into_iter().flat_map(|p| p.params()).collect();
+        let mut ptys = Vec::new();
+        let mut binds = Vec::new();
+        for p in &params {
+            let Some(t) = p.ty() else {
+                return Err(NotYet {
+                    construct: "a nested fn parameter without a type",
+                    span: p.syntax().span,
+                });
+            };
+            let ty = self.lower_ty(t);
+            if let Some(n) = p.name() {
+                binds.push((self.text(n.span), n.span, ty));
+            }
+            ptys.push(ty);
+        }
+        let ret = match d.ret_ty() {
+            Some(r) => {
+                if r.error_row().is_some() {
+                    return Err(NotYet {
+                        construct: "an error row on a nested fn (module items own rows)",
+                        span: r.syntax().span,
+                    });
+                }
+                match r.ty() {
+                    Some(t) if t.kind == SyntaxKind::ErrorUnionType => {
+                        return Err(NotYet {
+                            construct: "an error row on a nested fn (module items own rows)",
+                            span: t.span,
+                        });
+                    }
+                    Some(t) => self.lower_ty(t),
+                    None => self.error_ty(),
+                }
+            }
+            None => self.lo.table.unit(),
+        };
+        self.capture_frames.push(CaptureFrame {
+            limit: self.scopes.len(),
+            caps: Vec::new(),
+        });
+        self.push_scope();
+        self.level += 1;
+        for (name, span, ty) in binds {
+            self.bind(name, span, ty);
+        }
+        let was = self.in_closure;
+        self.in_closure = true;
+        self.closure_rows.push(Vec::new());
+        let r = match d.body() {
+            Some(body) => {
+                let exp = Expect {
+                    ty: ret,
+                    reason: Reason::ClosureBody,
+                    because: Some(s.span),
+                };
+                self.check_expr(body.syntax(), &exp)
+            }
+            None => Ok(()),
+        };
+        let raised = self.closure_rows.pop().expect("closure row frame");
+        self.in_closure = was;
+        self.level -= 1;
+        self.pop_scope();
+        let frame = self.capture_frames.pop().expect("closure capture frame");
+        r?;
+        if !frame.caps.is_empty() {
+            return Err(NotYet {
+                construct: "a nested fn capturing enclosing locals (bind a closure instead)",
+                span: s.span,
+            });
+        }
+        if !raised.is_empty() {
+            return Err(NotYet {
+                construct: "a raise inside a nested fn (declare rows on module items)",
+                span: s.span,
+            });
+        }
+        self.task_captures.push((s.span, Vec::new()));
+        let fnty = self.lo.table.intern(TyKind::Fn(ptys, ret));
+        self.record(s.span, fnty);
+        if let Some(n) = d.name() {
+            let name = self.text(n.span);
+            self.bind(name, n.span, fnty);
+        }
+        Ok(())
     }
 
     // ---------------------------------------------------- defaulting ---
