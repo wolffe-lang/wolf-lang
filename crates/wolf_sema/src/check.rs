@@ -504,6 +504,10 @@ struct Checker<'a> {
     /// resolution-driven capture set, S-10's by-copy law made data.
     capture_frames: Vec<CaptureFrame>,
     /// Finished capture sets, keyed by spawn call-site span (s73).
+    /// s105: every closure ALSO records its own set, keyed by the
+    /// closure expression's span — the same resolution-driven
+    /// machinery, so the WIR and mem tiers read one record for both
+    /// the spawn form and the general closure value.
     task_captures: Vec<(Span, Vec<TaskCapture>)>,
     /// The most recently finished closure's raised row (s73): what
     /// its `?`s absorbed, empty when it cannot fail. The spawn typing
@@ -9078,6 +9082,13 @@ impl<'a> Checker<'a> {
                     );
                     return Ok(());
                 }
+                // s105: collect this closure's own capture set (the
+                // s73 machinery, keyed by the closure's span) — locals
+                // resolving below this depth are captures.
+                self.capture_frames.push(CaptureFrame {
+                    limit: self.scopes.len(),
+                    caps: Vec::new(),
+                });
                 self.push_scope();
                 self.level += 1;
                 for (p, &pty) in params.iter().zip(ptys.iter()) {
@@ -9121,6 +9132,13 @@ impl<'a> Checker<'a> {
                 self.in_closure = was;
                 self.level -= 1;
                 self.pop_scope();
+                let frame = self.capture_frames.pop().expect("closure capture frame");
+                let caps = frame
+                    .caps
+                    .into_iter()
+                    .map(|(name, ty)| TaskCapture { name, ty })
+                    .collect();
+                self.task_captures.push((e.span, caps));
                 r?;
                 let final_t = if raised.is_empty() {
                     body_t
@@ -9158,6 +9176,11 @@ impl<'a> Checker<'a> {
     fn synth_closure(&mut self, e: &GreenNode) -> R<TyId> {
         let d = ClosureExpr::cast(e).expect("kind");
         let params: Vec<_> = d.params().into_iter().flat_map(|p| p.params()).collect();
+        // s105: the closure's own capture set (see `check_closure`).
+        self.capture_frames.push(CaptureFrame {
+            limit: self.scopes.len(),
+            caps: Vec::new(),
+        });
         self.push_scope();
         self.level += 1;
         let mut ptys = Vec::new();
@@ -9188,6 +9211,13 @@ impl<'a> Checker<'a> {
         self.in_closure = was;
         self.level -= 1;
         self.pop_scope();
+        let frame = self.capture_frames.pop().expect("closure capture frame");
+        let caps = frame
+            .caps
+            .into_iter()
+            .map(|(name, ty)| TaskCapture { name, ty })
+            .collect();
+        self.task_captures.push((e.span, caps));
         let ret = ret?;
         // A closure whose `?`s raised becomes fallible: its return
         // type wraps into `!T` with the collected row (s73).

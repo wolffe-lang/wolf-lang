@@ -593,3 +593,59 @@ fn assert_wrong_arity_is_e0402() {
         tc.diagnostics[0].message
     );
 }
+
+// -------------------------------------- closure capture records (s105) ----
+
+/// Every closure records its capture set, keyed by the closure
+/// expression's span — the s73 spawn machinery generalized. The WIR
+/// and mem tiers read this record; nothing re-derives captures.
+#[test]
+fn closures_record_their_capture_sets() {
+    let tc = check_one(
+        "fn main() -> !int {\n    let base = 30\n    let f = fn(x: int) { x + base }\n    let g = fn() 2\n    if f(4) + g() == 36 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let BodyResult::Checked(t) = body(&tc, "main") else {
+        panic!("main checks")
+    };
+    // Two closures, two records: `f` captures `base`, `g` nothing.
+    let mut sets: Vec<Vec<&str>> = t
+        .task_captures
+        .iter()
+        .map(|(_, caps)| caps.iter().map(|c| c.name.as_str()).collect())
+        .collect();
+    sets.sort();
+    assert_eq!(sets, [Vec::<&str>::new(), vec!["base"]]);
+}
+
+/// A closure parameter is not a capture, and a nested closure's
+/// captures propagate into the enclosing closure's record.
+#[test]
+fn nested_closure_captures_propagate() {
+    let tc = check_one(
+        "fn main() -> !int {\n    let k = 7\n    let outer = fn(x: int) {\n        let inner = fn() k\n        x + inner()\n    }\n    if outer(1) == 8 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let BodyResult::Checked(t) = body(&tc, "main") else {
+        panic!("main checks")
+    };
+    let mut sets: Vec<Vec<&str>> = t
+        .task_captures
+        .iter()
+        .map(|(_, caps)| caps.iter().map(|c| c.name.as_str()).collect())
+        .collect();
+    sets.sort();
+    // inner records `k`; outer records `k` too (its body resolves it
+    // below the outer limit). `x` is a parameter, never a capture.
+    assert_eq!(sets, [vec!["k"], vec!["k"]]);
+}
