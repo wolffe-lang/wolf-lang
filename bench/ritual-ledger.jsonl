@@ -27,3 +27,4 @@
 {"ts":"2026-08-22T04:11Z","commit":"857c796","geomean":1.107,"verdict":"HOLDS","consecutive":1,"note":"run 9; same-night re-render (18m after the counted hold); count unchanged"}
 {"ts":"2026-08-22T06:30Z","commit":"7296812","geomean":1.071,"verdict":"HOLDS","consecutive":1,"note":"same-night re-render (139m after the counted hold); count unchanged"}
 {"ts":"2026-08-23T03:36Z","commit":"82c638e","geomean":1.066,"verdict":"HOLDS","consecutive":2}
+{"ts":"2026-08-24T03:39Z","commit":"2ff4dd1","geomean":1.080,"verdict":"HOLDS","consecutive":3}
