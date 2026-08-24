@@ -902,9 +902,19 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // non-nesting shape: native/release +2 to 176, checked +1 to 164,
 // union +2 to 190, all-three +1 to 150. Counts measured by this gate,
 // not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 164), ("native", 176), ("release", 176)];
-const UNION_FLOOR: usize = 190;
-const ALL_THREE_FLOOR: usize = 150;
+// s108 ratchet #4 over 310 entries: the callable tier's two gaps
+// (#116). One PRE-EXISTING file moved — `typecheck/fn_value_import`,
+// whose qualified cross-module fn value the checked executor refused
+// while both compiled tiers ran it, now runs on all three lanes:
+// checked +1 to 165, all-three +1 to 151. The new
+// `typecheck/nested_fn_value.lu` — a nested named fn as a fn value —
+// executes on native and release (+1 each to 177, union +1 to 191);
+// the checked executor still refuses the closure family by name, the
+// s105 split. Its capture twin `nested_fn_capture.lu` executes on no
+// lane. Counts measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 165), ("native", 177), ("release", 177)];
+const UNION_FLOOR: usize = 191;
+const ALL_THREE_FLOOR: usize = 151;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
