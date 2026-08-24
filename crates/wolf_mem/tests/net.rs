@@ -214,6 +214,83 @@ fn invalid_utf8_from_a_foreign_peer_is_the_utf8_row() {
     assert_eq!(out.stdout, "read: the-utf8-row\n");
 }
 
+// ------------------------------- s106: the deadline (`net_deadline`) --
+
+/// The corpus timeout-witness twin (`corpus/net/read_deadline.lu`): a
+/// read against a deliberately-silent peer fires its armed budget as
+/// the `timeout` row — declared since s39, reachable since s106 —
+/// and `?` makes it the documented process outcome (tag on stdout,
+/// exit 1).
+#[test]
+fn read_deadline_against_a_silent_peer_is_the_timeout_row() {
+    let out = run("fn main() -> !int {\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             let port = net_port(srv)?\n\
+             let cli = net_connect(\"127.0.0.1:{port}\")?\n\
+             let conn = net_accept(srv)?\n\
+             net_deadline(cli, 40)?\n\
+             let msg = net_read(cli, 16)?\n\
+             print(\"unreachable: {msg}\")\n\
+             net_close(conn)?\n\
+             0\n\
+         }\n");
+    assert!(
+        matches!(out.verdict, Verdict::Exit(1)),
+        "propagated row exits 1, got {:?} (stdout {:?})",
+        out.verdict,
+        out.stdout
+    );
+    assert_eq!(out.stdout, "error: timeout\n");
+}
+
+/// An armed budget bounds `accept` too (the side-table emulation),
+/// clearing (`ms <= 0`) restores the indefinite-wait contract, and a
+/// fired deadline does not poison the socket: readiness that truly
+/// arrives still resolves.
+#[test]
+fn accept_deadline_fires_clears_and_recovers() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             let port = net_port(srv)?\n\
+             net_deadline(srv, 40)?\n\
+             let idle = net_accept(srv) else |e| match e {\n\
+                 timeout => -1,\n\
+                 _ => -2,\n\
+             }\n\
+             print(\"idle accept: {idle}\")\n\
+             let cli = net_connect(\"127.0.0.1:{port}\")?\n\
+             net_deadline(srv, 0)?\n\
+             let conn = net_accept(srv)?\n\
+             net_write(cli, \"woke\")?\n\
+             net_deadline(conn, 5000)?\n\
+             let msg = net_read(conn, 16)?\n\
+             print(\"got: {msg}\")\n\
+             net_close(cli)?\n\
+             net_close(conn)?\n\
+             net_close(srv)?\n\
+             0\n\
+         }\n",
+        "idle accept: -1\ngot: woke\n",
+    );
+}
+
+/// Arming a deadline on a forged or closed fd is the `io` row — the
+/// same checkable-condition discipline as every other entry.
+#[test]
+fn deadline_on_a_forged_fd_is_the_io_row() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+             net_deadline(99, 40) else |_| print(\"forged: io\")\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             net_close(srv)?\n\
+             net_deadline(srv, 40) else |_| print(\"closed: io\")\n\
+             0\n\
+         }\n",
+        "forged: io\nclosed: io\n",
+    );
+}
+
 // ------------------------------------------------- read edge cases --
 
 /// `net_read` with a non-positive max is an empty string, not a row —

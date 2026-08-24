@@ -96,6 +96,10 @@ pub const PRELUDE: &[&str] = &[
     "net_read",
     "net_write",
     "net_close",
+    // s106 (#45's builtin half): the per-socket deadline budget that
+    // makes the `timeout` tag reachable — declared with the family
+    // since s39, armable since the s35 reactor, crossed here.
+    "net_deadline",
     // the os/env builtin tier (s40, capability-first per I13: the env
     // family + `os_cwd` carry `env`, the process trio + `os_exit`
     // carry `exec` in the sandbox table). std.os/std.env/std.process
