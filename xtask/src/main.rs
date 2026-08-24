@@ -885,9 +885,16 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // lane already EXECUTED it (with the opening quote in the value); the
 // stale pin only stopped the harness from judging its output. Counts
 // measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 162), ("native", 173), ("release", 173)];
-const UNION_FLOOR: usize = 187;
-const ALL_THREE_FLOOR: usize = 148;
+// s108 ratchet #2 over 304 entries: the entry-signature rule (#106).
+// `typecheck/main_unit_row.lu` — the run witness holding E0414's
+// legal boundary (`fn main() -> !()`) — executes on all three lanes:
+// +1 everywhere (163/174/174, union 188, all-three 149). Its fail
+// twin `typecheck/main_returns_str.lu` executes on no lane (a static
+// rejection, the residue class the divergence used to hide from) and
+// moves no count. Counts measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 163), ("native", 174), ("release", 174)];
+const UNION_FLOOR: usize = 188;
+const ALL_THREE_FLOOR: usize = 149;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
