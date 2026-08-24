@@ -186,26 +186,27 @@ fn main() -> !int {
     );
 }
 
-/// The checked-lane-only families refuse HONESTLY on the native rung:
-/// the record stays in the conservatism ledger (`unsupported`), never
-/// a wrong answer — the posture net held until its s106 crossing,
-/// pinned for json and the process trio (s107's crossings).
+/// s107: the last two checked-lane-only families CROSSED (c26 —
+/// #118 closes on this). What this file used to pin as an honest
+/// `unsupported` refusal is now ordinary parity — the corpus-level
+/// three-lane witnesses (and the live-child ten-run) live in
+/// `json_process_native.rs`; this fixture keeps the s40 file's own
+/// narrative complete.
 #[test]
-fn json_and_process_refuse_honestly_on_native() {
-    let src = r#"
+fn json_and_process_cross_on_native() {
+    parity(
+        "s40_json_crossed",
+        r#"
 fn main() -> !int {
     let ok = json_valid("[1]")
     print("{ok}")
+    let n = json_get("[1, 2]", "1")?
+    print("{n}")
+    os_wait(99) else |_| { print("io"); -1 }
     0
 }
-"#;
-    let checked = lane("s40_json_refusal", src, "--checked").expect("checked runs");
-    assert_eq!(checked.verdict, "exit(0)");
-    assert_eq!(checked.stdout, "true\n");
-    if let Some(native) = lane("s40_json_refusal", src, "--native") {
-        assert_eq!(
-            native.verdict, "unsupported",
-            "json stays checked-lane-only at s40 — an honest refusal, never a wrong answer"
-        );
-    }
+"#,
+        "exit(0)",
+        "true\n2\nio\n",
+    );
 }

@@ -1,17 +1,18 @@
 //! check: run(exit=0, stdout="true\nlupin 42\narray null 3 2")
-//! phase: mem
+//! phase: run
 //! conforms: err.union
 //!
 //! std.x.json's query kernels (s40, nursery-first per D31): RFC 8259
 //! validation and dotted-path queries — digits index arrays, other
 //! segments key objects, "" is the root. Strings decode, numbers keep
 //! their source spelling (no rounding introduced by the tier).
-//! Checked lane only at s40: the reference parser is
-//! `wolf_mem::json` (module doc pins semantics); the native mirror
-//! lands with the std.x.json facade. PURE — the one builtin family
-//! with no capability tag; comptime still refuses (no json evaluator
-//! in the D33 allowlist at v0, `corpus/comptime/` owns the sandbox
-//! shapes).
+//! The reference parser is `wolf_mem::json` (module doc pins
+//! semantics); since s107 the native lanes lower the family too (c26,
+//! the last crossing) through its hand mirror `wolf_rt::json`, the
+//! two copies pinned by the driver's json_parity test. PURE — the one
+//! builtin family with no capability tag; comptime still refuses (no
+//! json evaluator in the D33 allowlist at v0, `corpus/comptime/` owns
+//! the sandbox shapes).
 
 fn main() -> !int {
     let ok = json_valid("[1, 2, 3]")
