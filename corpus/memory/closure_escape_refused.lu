@@ -1,6 +1,6 @@
 //! check: run(exit=0)
 //! phase: mem
-//! conforms: mem.model.value, mem.tier0.borrow.1
+//! conforms: mem.model.value, mem.tier0.borrow.1, abi.native.closure
 //! s105 (c25): the escape position that REMAINS refused, by name — a
 //! CAPTURING closure crossing a call boundary. The fn-value ABI is
 //! one word (s95/s97) and the pair is two; the env borrows places of

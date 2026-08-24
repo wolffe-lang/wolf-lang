@@ -83,6 +83,28 @@ AAPCS64, win64, Apple arm64 deltas).
   Same stability status as everything in this section:
   `[abi.native.unstable]` governs.
 
+- `[abi.native.closure]` A capture-free closure IS a function: it
+  lambda-lifts to a module function whose signature is the closure's
+  fn type, and its value is the one-word code pointer every fn value
+  is (`[abi.native.call]`'s indirect form dispatches it; nothing
+  marks it as having been a closure). A CAPTURING closure is a
+  TWO-WORD pair: the entry pointer, then the env record pointer, laid
+  out as an ordinary by-value aggregate `{ptr, ptr}` — the
+  `[abi.native.dyn]` shape with the vtable slot replaced by a direct
+  entry. The env record packs the captured values in capture order at
+  8-byte-aligned offsets (the `[abi.native.taskenv]` layout, frame
+  storage); the entry is a synthesized function taking the env
+  pointer first and the declared parameters after, loading each
+  capture from the record before the body runs. A call through the
+  pair is two component reads and one indirect call with the env
+  leading. The record BORROWS its captures — every capture is
+  read-only, writes to the captured places refuse while the pair
+  lives, and the pair does not leave the frame that built it (no
+  argument, return, or container position) — which is exactly what
+  makes the record's bitwise copy of each capture unobservable. Same
+  stability status as everything in this section:
+  `[abi.native.unstable]` governs.
+
 ## §2 C membranes `[abi.c]`
 
 - `[abi.c.seams]` Exactly three ABI seams exist: `extern "c"` function
