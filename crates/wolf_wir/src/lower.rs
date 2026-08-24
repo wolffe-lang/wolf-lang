@@ -6691,9 +6691,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
-        // The s39 net builtin tier mirrors the fs posture: checked
-        // lane executes, native lowering owes the row-returning call
-        // ABI + str materialization — an honest refusal, tier named.
+        // The s39 net builtin tier, natively (s106 — c26's first
+        // crossing): one `wolf_rt::net` shim per call over the process
+        // NetTable, codes to row tags, str results through out slots —
+        // the fs pattern, family for family. `net_deadline` arms the
+        // s35 reactor budget, making the `timeout` tag reachable
+        // natively (#45's builtin half).
         if matches!(
             callee_text.as_str(),
             "net_listen"
@@ -6703,11 +6706,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_read"
                 | "net_write"
                 | "net_close"
+                | "net_deadline"
         ) {
-            return Err(refuse(
-                "net builtins in native lowering (checked lane only at s39)",
-                e.span,
-            ));
+            return self.lower_net_builtin(&callee_text, d, e);
         }
         // The s40 os/env and time builtin tiers, natively: same eu
         // shape as fs — codes become row tags, str results
@@ -9353,6 +9354,165 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(out)))
             }
             _ => Err(refuse("this io/fs builtin", e.span)),
+        }
+    }
+
+    /// The s39 net builtin family, natively (s106 — the crossing #118
+    /// tracked): each call is one `wolf_rt::net` shim over the process
+    /// NetTable; the returned code (`wolf_rt::net::net_code`) becomes
+    /// the row value here through [`Self::code_tag_chain`], coarsened
+    /// against the DECLARED row exactly as the checked executor's
+    /// `coarse` — a tag the call's `!T` does not declare reports `io`.
+    /// The read result reloads from the out slot as a `{ptr, len}`
+    /// pair; fd results ride the `fs_open` convention (the handle
+    /// >= 0, or the negated code).
+    fn lower_net_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed net arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let arg = |i: usize| -> R<Value> {
+            argv.get(i)
+                .copied()
+                .ok_or_else(|| refuse("a net call with missing arguments", e.span))
+        };
+        // The wire codes, as (coarsened) row tags. `utf8` is only
+        // `net_read`'s; on every other row it coarsens like the rest.
+        let declared = self.row_tag_names(e.span);
+        let tag_pairs: Vec<(i64, &str)> =
+            [(1, "refused"), (2, "timeout"), (3, "closed"), (4, "utf8")]
+                .into_iter()
+                .map(|(c, t)| {
+                    (
+                        c,
+                        if declared.iter().any(|d| d == t) {
+                            t
+                        } else {
+                            "io"
+                        },
+                    )
+                })
+                .collect();
+        let zero_eq = |zelf: &mut Self, rc: Value| -> Value {
+            let z = zelf.b.iconst(types::I64, 0);
+            zelf.b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one()
+        };
+        match name {
+            // The fd family: the handle (>= 0), or `-code`.
+            "net_listen" | "net_connect" | "net_port" | "net_accept" => {
+                let rc = match name {
+                    "net_listen" | "net_connect" => {
+                        let s = arg(0)?;
+                        let (p, l) = self.str_parts(s);
+                        let sym = if name == "net_listen" {
+                            "__wolf_rt_net_listen"
+                        } else {
+                            "__wolf_rt_net_connect"
+                        };
+                        self.rt_call(sym, &[p, l], Some(types::I64))
+                    }
+                    "net_port" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_net_port", &[fd], Some(types::I64))
+                    }
+                    _ => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_net_accept", &[fd], Some(types::I64))
+                    }
+                }
+                .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(Some(rc)),
+                    |zelf| {
+                        // The failure code arrived negated.
+                        let zz = zelf.b.iconst(types::I64, 0);
+                        let code = zelf
+                            .b
+                            .ins(Opcode::IsubWrap, &[zz, rc], &[types::I64], Aux::None)
+                            .one();
+                        Ok(zelf.code_tag_chain(code, &tag_pairs, "io"))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "net_read" => {
+                let fd = arg(0)?;
+                let max = arg(1)?;
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_net_read",
+                        &[fd, max],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |zelf| Ok(Some(zelf.load_str_slot(slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "net_write" | "net_close" | "net_deadline" => {
+                let rc = match name {
+                    "net_write" => {
+                        let fd = arg(0)?;
+                        let s = arg(1)?;
+                        let (sp, sl) = self.str_parts(s);
+                        self.rt_call("__wolf_rt_net_write", &[fd, sp, sl], Some(types::I64))
+                    }
+                    "net_close" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_net_close", &[fd], Some(types::I64))
+                    }
+                    _ => {
+                        let fd = arg(0)?;
+                        let ms = arg(1)?;
+                        self.rt_call("__wolf_rt_net_deadline", &[fd, ms], Some(types::I64))
+                    }
+                }
+                .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            _ => Err(refuse("this net builtin", e.span)),
         }
     }
 

@@ -409,6 +409,12 @@ fn the_same_seed_gives_the_same_output_ten_times() {
         "corpus/conc/proc_kill_defers.lu",
         "corpus/conc/proc_cancel_defers.lu",
         "corpus/conc/proc_spawn_loop.lu",
+        // s106's reviewer flag, decided here: a spawned `net_accept`
+        // parks a real thread BEFORE the connect that resolves it
+        // exists — the socket table must not be held across the park
+        // (deadlock) and the blocked accept must not starve the
+        // scheduler's seam. Ten runs on both tiers is the verdict.
+        "corpus/net/spawn_accept.lu",
     ];
     for release in [false, true] {
         for file in files {

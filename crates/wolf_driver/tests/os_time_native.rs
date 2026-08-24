@@ -188,8 +188,8 @@ fn main() -> !int {
 
 /// The checked-lane-only families refuse HONESTLY on the native rung:
 /// the record stays in the conservatism ledger (`unsupported`), never
-/// a wrong answer — the s39 net posture, pinned for json and the
-/// process trio.
+/// a wrong answer — the posture net held until its s106 crossing,
+/// pinned for json and the process trio (s107's crossings).
 #[test]
 fn json_and_process_refuse_honestly_on_native() {
     let src = r#"

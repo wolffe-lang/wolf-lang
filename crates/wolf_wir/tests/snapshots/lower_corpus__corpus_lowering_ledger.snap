@@ -185,8 +185,10 @@ memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer wri
 memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
-net/echo_roundtrip.lu: refused — net builtins in native lowering (checked lane only at s39)
-net/refused_row.lu: refused — net builtins in native lowering (checked lane only at s39)
+net/echo_roundtrip.lu: lowers
+net/read_deadline.lu: lowers
+net/refused_row.lu: lowers
+net/spawn_accept.lu: lowers
 os/args_cwd.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers

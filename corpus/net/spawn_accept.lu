@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="echo: howl")
+//! phase: run
+//! conforms: conc.task.spawn, conc.task.scope, err.union, err.propagate
+//!
+//! Blocking honesty under native tasks (s106, the c26 reviewer flag):
+//! the spawned task's `net_accept` PARKS a real thread before main's
+//! dial exists, so this witness proves two things at once — the
+//! runtime's socket table is not held across the park (a
+//! lock-across-accept would deadlock the very connect that resolves
+//! it), and a blocked accept does not starve the scheduler's seam
+//! (the X12 ten-run suite in `conc_native.rs` runs this file on both
+//! tiers). Output is deterministic by construction: main writes,
+//! the task echoes, main reads — one order, whatever the schedule.
+//! The checked lane refuses structured concurrency wholesale (C1
+//! deferred), so this file's run rung is the native tiers'.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    scope s {
+        s.spawn(fn() {
+            let conn = net_accept(srv) else |_| -1
+            let msg = net_read(conn, 16) else |_| "?"
+            net_write(conn, "echo: {msg}") else |_| print("task write failed")
+        })
+        let cli = net_connect("127.0.0.1:{port}")?
+        net_write(cli, "howl")?
+        let reply = net_read(cli, 32)?
+        print("{reply}")
+        net_close(cli)?
+    }
+    net_close(srv)?
+    0
+}
