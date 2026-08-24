@@ -1,0 +1,23 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.prov.region, mem.region.open.2
+//! s105 (c25): a REGION captured by a closure stays refused, by name
+//! — the handle would ride an env record whose extent no region law
+//! follows (the same stop as region-in-container, one mechanism
+//! over). `wir` refuses "a region captured by a closure (open it in
+//! the enclosing frame — c25 closeout)"; the working spelling is
+//! region_value_pass.lu — pass the region to a named fn.
+
+fn main() -> !int {
+    let r = region()
+    let f = fn() {
+        var t = 0
+        in r {
+            var xs = List[int]()
+            (mut xs).push(1)
+            t = xs[0]
+        }
+        t
+    }
+    f() - 1
+}

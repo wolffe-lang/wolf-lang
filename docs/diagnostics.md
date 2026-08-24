@@ -1220,7 +1220,7 @@ the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap
 
 ## E1004 — this value is placed in one region, but needed in another
 
@@ -1395,7 +1395,7 @@ consumes the value and the caller is done with it. Or keep it `read`
 and work on this function's own duplicate: `var local = copy p` gives
 a value it owns outright.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
 ## E1015 — RETIRED — an escaping byte-view lend now copies and warns W1004
 
@@ -2091,7 +2091,7 @@ looks like the closure tracks the variable. Create the closure after
 the last assignment, pass the value as a parameter at each call, or
 restructure so the captured binding never changes underneath it.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1102_stale_capture.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1102_stale_capture.snap
 
 ## W1301 — this `unsafe` block does not state its invariant
 

@@ -1,8 +1,10 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: mem.tier0.mode.read, mem.ub, mem.prov.tag
-//! (phase typecheck → mem in s73: the memory tier lowers closures now
-//! — capture-as-read modeling; the wir rung still refuses fn values.)
+//! (phase typecheck → mem in s73, mem → run in s105: the capture-free
+//! callback lambda-lifts to a plain fn value and the call through the
+//! `f` parameter is s97's `call.ind` — the last c05-family refusal on
+//! this file is gone.)
 //! The SB "holy grail" shape: a `read` parameter is immutable for the
 //! whole call, so the second load may be hoisted/CSE'd across the opaque
 //! callback (§7/O2). This file is the CONFORMING side: the program can't

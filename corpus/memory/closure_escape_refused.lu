@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.model.value, mem.tier0.borrow.1, abi.native.closure
+//! s105 (c25): the escape position that REMAINS refused, by name — a
+//! CAPTURING closure crossing a call boundary. The fn-value ABI is
+//! one word (s95/s97) and the pair is two; the env borrows places of
+//! the creating frame, so handing the pair to a callee would put the
+//! borrow where no loan can see it (exactly how s98 closed dyn's
+//! escapes). `wir` refuses "a capturing closure read as a value (the
+//! pair stays in its frame; call it by name — c25 closeout)". lupin
+//! runs it (deep-copy captures); the divergence stays closed from the
+//! compiler side by the refusal.
+
+fn apply(f: fn(int) -> int, x: int) -> int { f(x) }
+
+fn main() -> !int {
+    let base = 10
+    let g = fn(x: int) { x + base }
+    if apply(g, 1) == 11 { 0 } else { 1 }
+}

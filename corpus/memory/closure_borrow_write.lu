@@ -1,0 +1,24 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.borrow.1, mem.tier0.borrow.2
+//! warns: W1102
+//! s105 (c25): a capturing closure BORROWS its captured places — the
+//! s98 pair-borrows-its-place loan design, plural. The env copies the
+//! bits, and the shared loan is what makes the copy unobservable: a
+//! write to a captured place while the closure is still needed is the
+//! one program that could tell copy from reference apart, and it
+//! refuses through the same NLL engine dyn pairs use. (W1102, the
+//! stale-capture warning, keeps its advisory role for the shapes NLL
+//! lets through — a write after the closure's last use.)
+//! (lupin 0.1.13 runs this file — its closures copy captures at
+//! creation and it accepts the stale read, exit 255. The loan is the
+//! stricter reading, chosen so copy-vs-borrow can never be observed;
+//! the dyn_temp_refused.lu pattern, recorded for wolf-interp.)
+
+fn main() -> !int {
+    var n = 1
+    let f = fn() n
+    n = 2                          // ERROR E1002: f still needs `n`
+    let a = f()
+    a - n
+}

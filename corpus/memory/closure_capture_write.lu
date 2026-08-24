@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.tier0.borrow.2, mem.model.value
+//! s105 (c25): the capture shape the loan cannot admit — a closure
+//! WRITING a captured binding. The env holds a copy; lupin's closure
+//! semantics copies too, but a write through either copy is the
+//! program that could tell copy from reference apart, so borrow-only
+//! closures refuse it by name at `wir` ("a closure writing its
+//! captured binding … borrow-only closures, c25 closeout"). The
+//! program is written to exit 0 under either reading, so the check
+//! stays honest while the compiler refuses.
+
+fn main() -> !int {
+    var n = 0
+    let f = fn() { n = n + 1 }
+    f()
+    0
+}

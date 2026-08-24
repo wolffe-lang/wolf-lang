@@ -1,0 +1,29 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.region.create.3, mem.region.open.2
+//! s105 (c25): a region VALUE crossing a call boundary — the handle
+//! is the value (the s73 channel shape in an argument position). The
+//! callee opens it and allocates through it (D12: ambient placement
+//! follows the dynamic call stack), twice, so the second call proves
+//! the region survived the first.
+
+fn fill(r: region, n: int) -> int {
+    var total = 0
+    in r {
+        var xs = List[int]()
+        var i = 0
+        while i < n {
+            (mut xs).push(i)
+            i = i + 1
+        }
+        for v in xs { total += v }
+    }
+    total
+}
+
+fn main() -> !int {
+    let r = region()
+    let a = fill(r, 5)
+    let b = fill(r, 3)
+    if a == 10 && b == 3 { 0 } else { 1 }
+}

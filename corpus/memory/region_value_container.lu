@@ -1,0 +1,19 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.region.edge.iso, mem.prov.region
+//! s105 (c25): the value position that REMAINS refused, by name — a
+//! region stored INSIDE another value. The mem tier follows the iso
+//! edge (s20's stash), but a handle behind an aggregate boundary is
+//! one WIR extent tracking cannot follow: `wir` refuses "a region
+//! inside another value (extent tracking stops at the aggregate
+//! boundary — c25 closeout)". The store alone is the witness: the
+//! `Holder` TYPE is what cannot lower.
+
+struct Holder { child: region }
+
+fn main() -> !int {
+    let c = region()
+    let h = Holder { child: move c }
+    let _ = h
+    0
+}

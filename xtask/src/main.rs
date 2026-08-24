@@ -841,9 +841,35 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // witness (156 → 157; spawn_accept stays outside its run set: C1
 // defers structured concurrency there). union 177 → 179, all-three
 // 139 → 142 (the three non-conc net files now run everywhere).
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 157), ("native", 164), ("release", 164)];
-const UNION_FLOOR: usize = 179;
-const ALL_THREE_FLOOR: usize = 142;
+// s105 ratchet over 292 entries — the region VALUE tier (c25): four
+// new witnesses. `memory/region_value_pass.lu` and
+// `memory/region_value_return.lu` execute on all three lanes (native
+// and release learned the handle-as-value lowering; the checked
+// executor always ran regions) — +2 native, +2 release, +2 all-three.
+// `memory/region_value_container.lu` and `memory/region_value_elem.lu`
+// pin the refusals that REMAIN (a region behind an aggregate boundary
+// / a container element) and execute on the checked lane only — with
+// the two movers, checked +4 and union +4. Counts measured by this
+// gate, not predicted.
+// s105 ratchet #2 over 299 entries — the closure value tier (c25):
+// native and release +3 each (165), union +3 (184). One PRE-EXISTING
+// file moved — `memory/prov_holy_grail.lu`, refused since s73 as
+// "closure lowering outside `spawn`", runs on both native tiers now
+// that a capture-free closure lambda-lifts to an s95 fn value — plus
+// the two new run witnesses (`closure_value_paths`,
+// `closure_kill_list`). checked holds 160 and all-three holds 141:
+// the checked executor still refuses closures by name ("closures in
+// checked execution", the #12 family), so the native tiers pulled
+// ahead — the non-nesting this gate exists to keep visible. The four
+// new refusal witnesses (escape/write/mut/region-capture) execute on
+// no lane and sit outside every run count.
+// merge ratchet (s106 + s105, over 301 entries): the two lanes ratcheted
+// off the same base over DISJOINT movers (net/* vs memory/*), so the
+// merged floors are the sum of both deltas — measured by this gate on
+// the merged tree, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 161), ("native", 169), ("release", 169)];
+const UNION_FLOOR: usize = 186;
+const ALL_THREE_FLOOR: usize = 144;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

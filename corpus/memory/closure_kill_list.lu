@@ -1,0 +1,27 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.model.order, mem.model.alloc
+//! s105 (c25): a closure calling into container allocation crosses
+//! the s99 kill-list — the `call.ind` sits between the caller's own
+//! container reads, and the midend's availability kill treats it as
+//! writing any container it could reach. The builder's token-keyed
+//! load forwarding across the call stays SOUND because every mutating
+//! road into an indirect callee refuses by name: a read parameter
+//! cannot write (E1014), fn types carry no `mut` (s97 target 4), and
+//! captures are read-only (borrow-only closures). Ten-run
+//! deterministic by the s105 acceptance.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(7)
+    let k = 30
+    let f = fn() {
+        var ys = List[int]()
+        (mut ys).push(k + 5)
+        ys[0]
+    }
+    let a = xs[0]
+    let b = f()
+    let c = xs[0]
+    if a + b + c == 49 { 0 } else { 1 }
+}
