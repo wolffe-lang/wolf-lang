@@ -1,0 +1,3 @@
+verdict: HOLDS
+geomean: 1.080
+exceptions: 2

@@ -1,0 +1,5 @@
+M2 ritual conditions — 2026-08-24T03:39Z, commit 2ff4dd1
+load: 0.59 at launch (quiet check: settled, zero compiler processes beyond self)
+governor: powersave; smt: on; aslr: 2
+llvm-profdata: present
+performed by: cargo xtask bench ritual (the codified protocol; conditions generated, not typed)
