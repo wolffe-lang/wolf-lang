@@ -235,6 +235,8 @@ rows/negative/missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
+rows/nested_row_param.lu: not mem-clean (pre-wir rungs own it)
+rows/nested_row_return.lu: not mem-clean (pre-wir rungs own it)
 rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers

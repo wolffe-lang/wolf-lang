@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 621..678 name=take_nested body=Block
+FnDecl 680..745 name=main body=Block

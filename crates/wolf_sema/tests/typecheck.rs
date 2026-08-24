@@ -649,3 +649,32 @@ fn nested_closure_captures_propagate() {
     // below the outer limit). `x` is a parameter, never a capture.
     assert_eq!(sets, [vec!["k"], vec!["k"]]);
 }
+
+// -------------------------------------------------- #34: nested rows --
+
+/// A nested row parses (s108: the grammar's `type '!' error_row`
+/// admits its own result) and sema refuses it BY NAME — an honest
+/// NotYet, never a guessed flatten/nest semantics and never E0201.
+#[test]
+fn nested_row_refuses_by_name() {
+    for src in [
+        // Return position (#34's original reproducer).
+        "fn nest(x: int) -> int ! {none} ! {none} {\n    if x < 1 { return none }\n    x\n}\n\
+         fn main() -> !int {\n    let v = nest(16) else { return 1 }\n    if v == 16 { 0 } else { 1 }\n}\n",
+        // Parameter position.
+        "fn take_nested(v: int ! {none} ! {none}) -> int {\n    7\n}\n\
+         fn main() -> !int {\n    if take_nested(3) == 7 { 0 } else { 1 }\n}\n",
+    ] {
+        let tc = check_one(src);
+        // The rung is not completed, so conform-run reports the honest
+        // refusal and withholds partial diagnostics (the driver's
+        // conservatism contract).
+        assert!(
+            tc.not_yet
+                .iter()
+                .any(|n| n.construct.contains("a nested error row")),
+            "expected the by-name refusal for {src:?}, got {:?}",
+            tc.not_yet
+        );
+    }
+}

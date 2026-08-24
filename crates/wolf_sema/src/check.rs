@@ -603,6 +603,29 @@ fn row_fix_of(sig: &FnSig, table: &TypeTable) -> Option<RowFix> {
 
 /// Check one body against the elaborated signatures. Pure in
 /// `(&Package, &SigTables, &BodyRef)` — no shared mutable state.
+/// The span of the first nested error row spelled anywhere under
+/// `node` (#34): a `RetType` carrying more than one `! {row}` tail,
+/// or an `ErrorUnionType` whose ok side is itself an
+/// `ErrorUnionType`. `None` when the item spells no nesting.
+fn nested_row_span(node: &GreenNode) -> Option<wolf_span::Span> {
+    fn walk(n: &GreenNode) -> Option<wolf_span::Span> {
+        if n.kind == SyntaxKind::RetType
+            && n.nodes().filter(|c| c.kind == SyntaxKind::ErrorRow).count() > 1
+        {
+            return Some(n.span);
+        }
+        if n.kind == SyntaxKind::ErrorUnionType
+            && n.nodes()
+                .find(|c| wolf_ast::is_type_kind(c.kind))
+                .is_some_and(|c| c.kind == SyntaxKind::ErrorUnionType)
+        {
+            return Some(n.span);
+        }
+        n.nodes().find_map(walk)
+    }
+    walk(node)
+}
+
 pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult {
     let outer = pkg.files[body.file]
         .parse
@@ -619,6 +642,18 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
             .nth(mi)
             .expect("impl member index valid"),
     };
+    // #34 — a nested error row (`T ! {a} ! {b}`, or `!T ! {a}`)
+    // PARSES now, but no spec clause rules whether the layers flatten
+    // or nest, so any body that spells one refuses by name before
+    // checking starts: an honest `unsupported`, never a guessed
+    // semantics and never a misleading type error against the opaque
+    // form. The D-question (flatten vs. nest) is s108's named stop.
+    if let Some(span) = nested_row_span(node) {
+        return BodyResult::NotYetCheckable(NotYet {
+            construct: "a nested error row (its meaning is not ruled yet)",
+            span,
+        });
+    }
     let mut c = Checker {
         sigs,
         module: body.module,
@@ -4383,6 +4418,13 @@ impl<'a> Checker<'a> {
             }
             TyKind::Var(v) if matches!(self.vars.kind_of(v), NumKind::Any) => Err(NotYet {
                 construct: "`else` on a value whose type is still being inferred",
+                span: scrut.span,
+            }),
+            // An opaque type ([`TyKind::Unsupported`]) MIGHT be
+            // fallible — a nested row (#34), a generic instantiation
+            // — so claiming "cannot fail" (E0608) would be a guess.
+            TyKind::Unsupported(_) => Err(NotYet {
+                construct: "`else` on a value whose type the checker holds opaque",
                 span: scrut.span,
             }),
             _ => {
