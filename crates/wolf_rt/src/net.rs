@@ -61,6 +61,9 @@
 
 use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
+use std::sync::Mutex;
+
+use crate::str::{ambient_copy, view, write_pair};
 
 /// The v0 row-tag mapping: `io::ErrorKind` → net row tag. One table,
 /// mirrored by `wolf_mem::ubcheck::net_err_tag`, pinned by the
@@ -104,8 +107,11 @@ pub struct NetTable {
 pub type NetErr = &'static str;
 
 impl NetTable {
-    pub fn new() -> NetTable {
-        NetTable::default()
+    /// `const` so the shim tier's process table ([`NET`]) can live in a
+    /// `static Mutex` without lazy-init machinery (the fs `FILES`
+    /// precedent).
+    pub const fn new() -> NetTable {
+        NetTable { socks: Vec::new() }
     }
 
     fn push(&mut self, s: Sock) -> i64 {
@@ -128,6 +134,32 @@ impl NetTable {
         self.entry(fd).map(|e| &mut e.sock)
     }
 
+    /// The park parameters of a readiness wait — the raw OS fd (a
+    /// stream when `want_stream`, else a listener; the wrong kind or a
+    /// tombstone is `io`) and the socket's armed deadline as an
+    /// absolute instant. Split out of [`NetTable::wait_ready`] so the
+    /// SHIM tier (one process table behind a `Mutex`) can snapshot
+    /// these under a short lock and park with the lock RELEASED — a
+    /// blocked accept holding the table would deadlock the connect
+    /// that resolves it.
+    #[cfg(target_os = "linux")]
+    fn park_spec(
+        &mut self,
+        fd: i64,
+        want_stream: bool,
+    ) -> Result<(std::os::fd::RawFd, Option<std::time::Instant>), NetErr> {
+        use std::os::fd::AsRawFd as _;
+        let Some(e) = self.entry(fd) else {
+            return Err("io");
+        };
+        let raw = match (&e.sock, want_stream) {
+            (Sock::Stream(s), true) => s.as_raw_fd(),
+            (Sock::Listener(l), false) => l.as_raw_fd(),
+            _ => return Err("io"),
+        };
+        Ok((raw, e.deadline.map(|d| std::time::Instant::now() + d)))
+    }
+
     /// Park in the reactor until `fd` (a stream when `want_stream`,
     /// else a listener) is ready for `interest`, or its deadline
     /// budget fires (`timeout`). The net flavor of the wait is
@@ -139,16 +171,7 @@ impl NetTable {
         want_stream: bool,
         interest: crate::reactor::Interest,
     ) -> Result<(), NetErr> {
-        use std::os::fd::AsRawFd as _;
-        let Some(e) = self.entry(fd) else {
-            return Err("io");
-        };
-        let raw = match (&e.sock, want_stream) {
-            (Sock::Stream(s), true) => s.as_raw_fd(),
-            (Sock::Listener(l), false) => l.as_raw_fd(),
-            _ => return Err("io"),
-        };
-        let deadline = e.deadline.map(|d| std::time::Instant::now() + d);
+        let (raw, deadline) = self.park_spec(fd, want_stream)?;
         match crate::reactor::wait_fd_net(raw, interest, deadline) {
             crate::reactor::IoWait::Ready => Ok(()),
             crate::reactor::IoWait::TimedOut => Err("timeout"),
@@ -211,6 +234,14 @@ impl NetTable {
     pub fn accept(&mut self, fd: i64) -> Result<i64, NetErr> {
         #[cfg(target_os = "linux")]
         self.wait_ready(fd, false, crate::reactor::Interest::Read)?;
+        self.accept_ready(fd)
+    }
+
+    /// [`NetTable::accept`]'s syscall half — readiness already awaited
+    /// (or the platform's honest v0 posture: the syscall itself
+    /// blocks). The shim tier calls this under the table lock AFTER
+    /// parking with the lock released.
+    fn accept_ready(&mut self, fd: i64) -> Result<i64, NetErr> {
         let accepted = match self.get(fd) {
             Some(Sock::Listener(l)) => l.accept(),
             Some(Sock::Stream(_)) => return Err("io"),
@@ -264,6 +295,12 @@ impl NetTable {
         }
         #[cfg(target_os = "linux")]
         self.wait_ready(fd, true, crate::reactor::Interest::Read)?;
+        self.read_ready(fd, max)
+    }
+
+    /// [`NetTable::read`]'s syscall half (see [`NetTable::accept_ready`]
+    /// for the split's reason). `max` is already known positive.
+    fn read_ready(&mut self, fd: i64, max: i64) -> Result<Vec<u8>, NetErr> {
         let Some(Sock::Stream(s)) = self.get(fd) else {
             return Err("io");
         };
@@ -285,6 +322,12 @@ impl NetTable {
     pub fn write(&mut self, fd: i64, bytes: &[u8]) -> Result<(), NetErr> {
         #[cfg(target_os = "linux")]
         self.wait_ready(fd, true, crate::reactor::Interest::Write)?;
+        self.write_ready(fd, bytes)
+    }
+
+    /// [`NetTable::write`]'s syscall half (see
+    /// [`NetTable::accept_ready`] for the split's reason).
+    fn write_ready(&mut self, fd: i64, bytes: &[u8]) -> Result<(), NetErr> {
         let Some(Sock::Stream(s)) = self.get(fd) else {
             return Err("io");
         };
@@ -301,6 +344,217 @@ impl NetTable {
             }
             _ => Err("io"),
         }
+    }
+}
+
+// ----------------------------- s106: the native shim tier (#118) --
+//
+// The fs crossing pattern (s40/s90), applied to the table that was
+// waiting: every entry returns a small ERROR CODE ([`net_code`]);
+// lowering maps codes to the module's interned row tags (coarsening
+// undeclared tags to `io`, exactly the checked executor's `coarse`)
+// and builds the `!T` value — the runtime never traps and never sees
+// a tag name. Text results materialize in the ambient region and
+// return as `{ptr, len}` pairs through caller out slots, the fs
+// shims' shape symbol for symbol.
+//
+// LOCK DISCIPLINE (the one place this family may not be fs-verbatim):
+// the process table is one `Mutex<NetTable>`, and accept/read/write
+// PARK — under native tasks a blocked accept holds its thread until
+// the connect that resolves it runs on another. Holding the table
+// across the park would deadlock exactly that pair, so the parking
+// shims snapshot the park parameters under a short lock
+// ([`NetTable::park_spec`]), wait in the reactor with the lock
+// RELEASED, and relock for the syscall half (`*_ready`). The window
+// between readiness and syscall is the same one `std::net` callers
+// live with; the corpus discipline (one logical owner per socket)
+// keeps it moot. Off-linux the shims keep the v0 blocking-syscall
+// posture — the syscall itself blocks under the lock, the honest
+// mirror of the checked lane's own path (native codegen is
+// linux-gated at this tier anyway).
+
+/// Error codes of the net family (lowering maps them to row tags,
+/// coarsening any the call's row does not declare to `io` — the
+/// checked lane's `coarse`, compile-time-dispatched). `UTF8` is the
+/// read shim's own decode verdict, never [`err_tag`]'s.
+pub mod net_code {
+    pub const OK: i64 = 0;
+    pub const REFUSED: i64 = 1;
+    pub const TIMEOUT: i64 = 2;
+    pub const CLOSED: i64 = 3;
+    pub const UTF8: i64 = 4;
+    pub const IO: i64 = 5;
+}
+
+/// The process-wide socket table behind the shim family — the fs
+/// `FILES` precedent, holding the [`NetTable`] the unit tests pin.
+static NET: Mutex<NetTable> = Mutex::new(NetTable::new());
+
+fn tbl() -> std::sync::MutexGuard<'static, NetTable> {
+    NET.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// A row tag as its wire code ([`net_code`]).
+fn code_of_tag(tag: NetErr) -> i64 {
+    match tag {
+        "refused" => net_code::REFUSED,
+        "timeout" => net_code::TIMEOUT,
+        "closed" => net_code::CLOSED,
+        _ => net_code::IO,
+    }
+}
+
+/// Await readiness with the table lock RELEASED (see the lock
+/// discipline note above). Off-linux this is a no-op: the syscall
+/// half blocks by itself, the v0 posture.
+#[cfg(target_os = "linux")]
+fn wait_unlocked(
+    fd: i64,
+    want_stream: bool,
+    interest: crate::reactor::Interest,
+) -> Result<(), NetErr> {
+    let (raw, deadline) = tbl().park_spec(fd, want_stream)?;
+    match crate::reactor::wait_fd_net(raw, interest, deadline) {
+        crate::reactor::IoWait::Ready => Ok(()),
+        crate::reactor::IoWait::TimedOut => Err("timeout"),
+        crate::reactor::IoWait::Cancelled => Err("io"),
+    }
+}
+
+/// `net_listen(addr) -> int ! {io}` — the fd (>= 0), or `-code` on
+/// failure (the `fs_open` convention: one i64 return carries both).
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_listen(ap: i64, al: i64) -> i64 {
+    let addr = unsafe { view(ap, al) };
+    match tbl().listen(addr) {
+        Ok(fd) => fd,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// `net_port(fd) -> int ! {io}` — the bound local port (>= 0), or
+/// `-code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
+    match tbl().port(fd) {
+        Ok(p) => p,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// `net_accept(fd) -> int ! {timeout, io}` — parks until a connection
+/// arrives (or the armed deadline fires); the stream's fd, or `-code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
+    #[cfg(target_os = "linux")]
+    if let Err(t) = wait_unlocked(fd, false, crate::reactor::Interest::Read) {
+        return -code_of_tag(t);
+    }
+    match tbl().accept_ready(fd) {
+        Ok(nfd) => nfd,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// `net_connect(addr) -> int ! {refused, timeout, io}` — the blocking
+/// dial (the module doc's recorded delta); the stream's fd, or
+/// `-code`.
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
+    let addr = unsafe { view(ap, al) };
+    match tbl().connect(addr) {
+        Ok(fd) => fd,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// `net_read(fd, max) -> str ! {closed, timeout, utf8, io}` — parks
+/// until bytes arrive (at most `max`, clamped to 1 MiB); the peer's
+/// orderly close is `CLOSED`, a non-UTF-8 arrival is `UTF8`.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
+    {
+        // The no-park fast paths, under one short lock: wrong-kind or
+        // forged fd is `io` whatever `max` says (the #40 ordering),
+        // and `max <= 0` is the empty str with no wait owed.
+        let mut t = tbl();
+        if !matches!(t.get(fd), Some(Sock::Stream(_))) {
+            return net_code::IO;
+        }
+        if max <= 0 {
+            let p = ambient_copy(b"");
+            unsafe { write_pair(out, p as i64, 0) };
+            return net_code::OK;
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Read) {
+        return code_of_tag(t);
+    }
+    match tbl().read_ready(fd, max) {
+        Err(t) => code_of_tag(t),
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(s) => {
+                let p = ambient_copy(s.as_bytes());
+                unsafe { write_pair(out, p as i64, s.len() as i64) };
+                net_code::OK
+            }
+            Err(_) => net_code::UTF8,
+        },
+    }
+}
+
+/// `net_write(fd, s) -> () ! {closed, io}` — send space awaited at
+/// admission (a fired deadline surfaces as `TIMEOUT`, which the row
+/// coarsens to `io`); then the whole buffer drains.
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
+    let s = unsafe { view(sp, sl) };
+    #[cfg(target_os = "linux")]
+    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Write) {
+        return code_of_tag(t);
+    }
+    match tbl().write_ready(fd, s.as_bytes()) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
+    }
+}
+
+/// `net_close(fd) -> () ! {io}` — tombstones the slot; double close
+/// (or a forged fd) is `io`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_close(fd: i64) -> i64 {
+    match tbl().close(fd) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
+    }
+}
+
+/// `net_deadline(fd, ms) -> () ! {io}` — arm (`ms > 0`) or clear
+/// (`ms <= 0`) the socket's deadline budget ([`NetTable::set_deadline`];
+/// s106 arms what s35 built — wolf-lang#45's builtin half). Off-linux
+/// the honest `io` refusal, never a silently-inert deadline.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_deadline(fd: i64, ms: i64) -> i64 {
+    match tbl().set_deadline(fd, ms) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
     }
 }
 
@@ -424,5 +678,110 @@ mod tests {
         let cli = t.connect(&format!("127.0.0.1:{port}")).expect("connect");
         assert_eq!(t.accept(cli), Err("io"));
         assert_eq!(t.read(srv, 4), Err("io"));
+    }
+
+    // ---------------- s106: the shim tier over one process table --
+
+    fn pair_of(s: &str) -> (i64, i64) {
+        (s.as_ptr() as i64, s.len() as i64)
+    }
+
+    /// The corpus echo roundtrip through the extern surface: codes
+    /// out, str pairs through the out slot, fd handles process-global
+    /// — the fs shim tests' shape.
+    #[test]
+    fn shim_echo_roundtrip_and_rows() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let srv = unsafe { __wolf_rt_net_listen(ap, al) };
+        assert!(srv >= 0);
+        let port = __wolf_rt_net_port(srv);
+        assert!(port > 0);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        let cli = unsafe { __wolf_rt_net_connect(cp, cl) };
+        assert!(cli >= 0);
+        let (mp, ml) = pair_of("ping");
+        assert_eq!(unsafe { __wolf_rt_net_write(cli, mp, ml) }, net_code::OK);
+        let conn = __wolf_rt_net_accept(srv);
+        assert!(conn >= 0);
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(unsafe { __wolf_rt_net_read(conn, 16, o) }, net_code::OK);
+        assert_eq!(unsafe { view(out[0], out[1]) }, "ping");
+        // `max <= 0` is the empty str, no wait owed.
+        assert_eq!(unsafe { __wolf_rt_net_read(conn, 0, o) }, net_code::OK);
+        assert_eq!(out[1], 0);
+        assert_eq!(__wolf_rt_net_close(cli), net_code::OK);
+        // The peer's finish is CLOSED; double close is IO.
+        assert_eq!(unsafe { __wolf_rt_net_read(conn, 16, o) }, net_code::CLOSED);
+        assert_eq!(__wolf_rt_net_close(cli), net_code::IO);
+        assert_eq!(__wolf_rt_net_close(conn), net_code::OK);
+        assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
+        // A forged fd is IO on every entry, never a trap.
+        assert_eq!(__wolf_rt_net_accept(99_999), -net_code::IO);
+        assert_eq!(__wolf_rt_net_port(99_999), -net_code::IO);
+        assert_eq!(unsafe { __wolf_rt_net_read(99_999, 4, o) }, net_code::IO);
+        assert_eq!(__wolf_rt_net_deadline(99_999, 50), net_code::IO);
+    }
+
+    /// Dialing a just-released port through the shim is the REFUSED
+    /// code — `corpus/net/refused_row.lu`'s native half.
+    #[test]
+    fn shim_refused_code() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let srv = unsafe { __wolf_rt_net_listen(ap, al) };
+        assert!(srv >= 0);
+        let port = __wolf_rt_net_port(srv);
+        assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        assert_eq!(unsafe { __wolf_rt_net_connect(cp, cl) }, -net_code::REFUSED);
+    }
+
+    /// A non-UTF-8 arrival is the UTF8 code (the read shim's own
+    /// decode verdict, mirroring the checked lane's).
+    #[test]
+    fn shim_invalid_utf8_is_the_utf8_code() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let srv = unsafe { __wolf_rt_net_listen(ap, al) };
+        let port = __wolf_rt_net_port(srv);
+        let mut raw = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).expect("dial");
+        let conn = __wolf_rt_net_accept(srv);
+        raw.write_all(&[0xff, 0xfe]).expect("send");
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(unsafe { __wolf_rt_net_read(conn, 16, o) }, net_code::UTF8);
+        assert_eq!(__wolf_rt_net_close(conn), net_code::OK);
+        assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
+    }
+
+    /// s106: the TIMEOUT code crosses the shim boundary — the armed
+    /// deadline fires with the table lock RELEASED (a parked read must
+    /// not hold the table; see the shim tier's lock discipline), and
+    /// clearing restores the indefinite wait.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn shim_deadline_times_out_and_clears() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let srv = unsafe { __wolf_rt_net_listen(ap, al) };
+        let port = __wolf_rt_net_port(srv);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        let cli = unsafe { __wolf_rt_net_connect(cp, cl) };
+        let conn = __wolf_rt_net_accept(srv);
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        // No data: the read budget fires as the TIMEOUT code.
+        assert_eq!(__wolf_rt_net_deadline(cli, 40), net_code::OK);
+        assert_eq!(unsafe { __wolf_rt_net_read(cli, 16, o) }, net_code::TIMEOUT);
+        // Data resolves the same socket after a clear.
+        let (mp, ml) = pair_of("pong");
+        assert_eq!(unsafe { __wolf_rt_net_write(conn, mp, ml) }, net_code::OK);
+        assert_eq!(__wolf_rt_net_deadline(cli, 0), net_code::OK);
+        assert_eq!(unsafe { __wolf_rt_net_read(cli, 16, o) }, net_code::OK);
+        assert_eq!(unsafe { view(out[0], out[1]) }, "pong");
+        for fd in [cli, conn, srv] {
+            assert_eq!(__wolf_rt_net_close(fd), net_code::OK);
+        }
     }
 }
