@@ -301,8 +301,25 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                 }
             }
             Doc::Group(ds) => {
-                let flat =
-                    !ds.iter().any(Doc::forced) && fits(ds, pending_indent.unwrap_or(col).max(col));
+                // A group under a FLAT parent inherits flat (the
+                // classic algorithm's invariant) instead of
+                // re-measuring. For measured content the two agree:
+                // the parent's `fits` descended into this group, so it
+                // fits, and a forced child would have forced the
+                // parent broken. The difference is content the parent
+                // could not see — a hug shield's interior (and
+                // anything after one), where `fits` deliberately
+                // stops. There a fresh measure at the true column let
+                // this group break by width UNDER a flat parent: the
+                // flat chain around it was a lie the next pass
+                // (reading the break from the source) refused to
+                // repeat, cascading its outer blocks multiline — one
+                // layout per pass (idem_member_chain_width).
+                // Structural forces still break; width inside a shield
+                // defers to the shield's contract that the
+                // surroundings stay flat.
+                let flat = !ds.iter().any(Doc::forced)
+                    && (mode == Mode::Flat || fits(ds, pending_indent.unwrap_or(col).max(col)));
                 let m = if flat { Mode::Flat } else { Mode::Broken };
                 for c in ds.iter().rev() {
                     stack.push((ind, m, c));

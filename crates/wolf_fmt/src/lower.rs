@@ -1296,14 +1296,17 @@ impl<'a> Fmt<'a> {
                         prev = None;
                         continue;
                     }
-                    let first = first_token(m).map(|t| t.kind);
+                    // Spacing consults the RENDERED boundary tokens —
+                    // dropped parens change what sits on the page.
+                    let cctx = child_ctx(n.kind, m, ctx);
+                    let first = self.rendered_first(m, cctx).map(|t| t.kind);
                     if let (Some(p), Some(f)) = (prev, first)
                         && self.child_space(p, f, m.kind)
                     {
                         out.push(Doc::text(" "));
                     }
-                    self.node(m, out, child_ctx(n.kind, m, ctx));
-                    prev = last_token(m).map(|t| t.kind);
+                    self.node(m, out, cctx);
+                    prev = self.rendered_last(m, cctx).map(|t| t.kind);
                 }
             }
         }
@@ -1895,20 +1898,11 @@ impl<'a> Fmt<'a> {
         // token, and an own-line comment forces its group broken, so
         // `//\n(r.0)` printed flat on pass one and broken on pass two.
         // Keeping the parens keeps the ownership, and that is stable.
-        let droppable = match inner {
-            Some(e) => {
-                !paren_blacklisted(e.kind)
-                    && lp.is_none_or(|t| !self.has_lead_comment(t))
-                    && rp.is_none_or(|t| !self.has_lead_comment(t))
-                    && ctx_allows_bare(ctx, e)
-            }
-            None => false,
-        };
-        if droppable {
+        if let Some(e) = self.paren_drop_inner(n, ctx) {
             if let Some(lp) = lp {
                 self.tok_trivia_only(lp, out);
             }
-            self.expr(inner.unwrap(), out, ctx);
+            self.expr(e, out, ctx);
             if let Some(rp) = rp {
                 self.tok_trivia_only(rp, out);
             }
@@ -1932,7 +1926,86 @@ impl<'a> Fmt<'a> {
         out.push(Doc::Group(g));
     }
 
+    /// The inner expression [`Fmt::paren`] will unwrap `n` to in `ctx`,
+    /// if any — the single droppability predicate, shared with the
+    /// spacing walk so both always agree about what ends up on the
+    /// page.
+    fn paren_drop_inner<'n>(&self, n: &'n GreenNode, ctx: Ctx) -> Option<&'n GreenNode> {
+        if n.kind != K::ParenExpr {
+            return None;
+        }
+        // Moded receivers `(mut p)` / `(take p)` (X1): load-bearing.
+        if n.tokens().any(|t| matches!(t.kind, K::MutKw | K::TakeKw)) {
+            return None;
+        }
+        let inner = n.nodes().next()?;
+        let lp = n.child_token(K::LParen);
+        let rp = n.child_token(K::RParen);
+        (!paren_blacklisted(inner.kind)
+            && lp.is_none_or(|t| !self.has_lead_comment(t))
+            && rp.is_none_or(|t| !self.has_lead_comment(t))
+            && ctx_allows_bare(ctx, inner))
+        .then_some(inner)
+    }
+
+    /// First/last token of `n` as RENDERED: pierces parens the dropper
+    /// will unwrap, descending the boundary spine with the same ctx
+    /// each structural emitter hands that child. Pair spacing must
+    /// consult the token that actually lands on the page, not the
+    /// source delimiter: a closure body `(4) / {}` measured tight
+    /// against `fn()` as an LParen on pass one (`fn()4`) and spaced as
+    /// an Int on pass two (`fn() 4`) — one spacing per pass
+    /// (idem_broken_call_spacing).
+    fn rendered_first<'n>(&self, n: &'n GreenNode, ctx: Ctx) -> Option<&'n GreenToken> {
+        if n.kind == K::ParenExpr {
+            return match self.paren_drop_inner(n, ctx) {
+                Some(inner) => self.rendered_first(inner, ctx),
+                None => first_token(n),
+            };
+        }
+        match n.children.first() {
+            Some(Child::Node(m)) => self.rendered_first(m, spine_ctx(n, m, ctx, true)),
+            _ => first_token(n),
+        }
+    }
+
+    fn rendered_last<'n>(&self, n: &'n GreenNode, ctx: Ctx) -> Option<&'n GreenToken> {
+        if n.kind == K::ParenExpr {
+            return match self.paren_drop_inner(n, ctx) {
+                Some(inner) => self.rendered_last(inner, ctx),
+                None => last_token(n),
+            };
+        }
+        match n.children.last() {
+            Some(Child::Node(m)) => self.rendered_last(m, spine_ctx(n, m, ctx, false)),
+            _ => last_token(n),
+        }
+    }
+
     // --------------------------------------------------------- binexpr --
+
+    /// Leading comments of the chain's first token, emitted OUTSIDE
+    /// the chain's group and marked consumed. They render on their own
+    /// lines before any of the group's ink, so inside the group they
+    /// could only ever force a break the flat form never shows — and
+    /// which token owns such a comment migrates between passes (pass
+    /// one: a list separator, whose trivia the list emits outside the
+    /// element; pass two: the element's own first token). Owner inside
+    /// the group forced `t - 1` to break at the operator where owner
+    /// outside kept it flat — one layout per pass
+    /// (idem_arm_body_break).
+    fn hoist_lead(&self, n: &GreenNode, out: &mut Vec<Doc>) {
+        let Some(t) = first_token(n) else {
+            return;
+        };
+        self.lead(t, out);
+        let mut consumed = self.consumed.borrow_mut();
+        for s in &t.leading {
+            if is_comment(self.slice(*s)) {
+                consumed.insert((s.lo, s.hi));
+            }
+        }
+    }
 
     /// Flatten a same-tier chain: break after operators, continuations
     /// indented once (`[gram.fmt.continuation]`).
@@ -1945,6 +2018,7 @@ impl<'a> Fmt<'a> {
             self.walk_children(n, out, Ctx::Free);
             return;
         }
+        self.hoist_lead(n, out);
         let mut parts: Vec<Doc> = Vec::new();
         self.flatten_bin(n, t, &mut parts, true);
         let mut g = parts;
@@ -2044,6 +2118,9 @@ impl<'a> Fmt<'a> {
     /// One postfix chain: base, then `.member`/calls/indexes/`?`,
     /// breaking *after* dots (trailing style).
     fn postfix_chain(&self, n: &GreenNode, out: &mut Vec<Doc>) {
+        // Same rule as `bin_chain`: the leftmost token's leading
+        // comments ride outside the chain's group.
+        self.hoist_lead(n, out);
         let mut base = Vec::new();
         let mut ops = Vec::new();
         self.flatten_postfix(n, &mut base, &mut ops);
@@ -2795,6 +2872,38 @@ fn margin_set(stmts: &[&GreenNode]) -> HashSet<usize> {
         }
     }
     broken
+}
+
+/// The ctx each structural emitter hands its leftmost (`leftmost`) or
+/// rightmost child — mirrored here so the rendered-token spine walk
+/// makes the same paren-drop decisions the emitters will. The value
+/// only matters where a `ParenExpr` sits on the spine; everywhere else
+/// it is inert.
+fn spine_ctx(n: &GreenNode, m: &GreenNode, ctx: Ctx, leftmost: bool) -> Ctx {
+    match n.kind {
+        K::BinExpr => {
+            let t = tier(n);
+            if t == 99 {
+                child_ctx(n.kind, m, ctx)
+            } else {
+                Ctx::BinOperand {
+                    tier: t,
+                    left: leftmost,
+                    assoc_left: tier_associates_left(t),
+                }
+            }
+        }
+        K::CallExpr | K::BracketApply | K::MemberExpr | K::TryExpr => Ctx::Postfix,
+        K::CastExpr => Ctx::Cast,
+        K::PrefixExpr | K::FromEndExpr => Ctx::Prefix,
+        K::ElseExpr => Ctx::BinOperand {
+            tier: 15,
+            left: leftmost,
+            assoc_left: false,
+        },
+        K::RangeExpr => Ctx::RangeEnd,
+        _ => child_ctx(n.kind, m, ctx),
+    }
 }
 
 /// The context an expression child of `parent` sits in when reached by
