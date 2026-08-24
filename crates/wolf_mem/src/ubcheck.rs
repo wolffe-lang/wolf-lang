@@ -4159,6 +4159,43 @@ impl<'t> Machine<'t> {
     /// A path that is not a local: a module global (item initializer)
     /// or an unmodelled reference.
     fn item_value(&mut self, e: &'t GreenNode) -> E<Flow> {
+        // A QUALIFIED module-item fn in VALUE position (#116a):
+        // `let f = strx.is_pos` — the s95 bare-name read's
+        // cross-module twin, which the compiled tiers already run.
+        // Only when the checker typed the whole member expression as
+        // a fn, and only when the base names an imported module (a
+        // local of the same name shadows it, exactly as resolution
+        // ruled).
+        if e.kind == SyntaxKind::MemberExpr
+            && matches!(self.expr_ty(e.span), Some(TyKind::Fn(_, _)))
+        {
+            let m = MemberExpr::cast(e).expect("kind");
+            if let (Some(base), Some(member)) = (m.base(), m.member())
+                && base.kind == SyntaxKind::PathExpr
+            {
+                let bname = self.text(base.span);
+                if !bname.contains('.') && self.lookup(&bname).is_none() {
+                    let cur = &self.tc.bodies[self.frames.last().expect("frame").body].body;
+                    let (cur_module, cur_file) = (cur.module, cur.file);
+                    let md = &self.pkg.modules[cur_module];
+                    let target = md
+                        .files
+                        .iter()
+                        .position(|&f| f == cur_file)
+                        .and_then(|slot| md.bindings[slot].iter().find(|b| b.name == bname))
+                        .and_then(|b| match b.target {
+                            wolf_sema::BindTarget::PkgModule(m) => Some(m),
+                            _ => None,
+                        });
+                    if let Some(target) = target {
+                        let mname = self.text(member.span);
+                        if let Some(&b) = self.fns.get(&(target, mname)) {
+                            return Ok(Flow::Val(Value::Fn(b)));
+                        }
+                    }
+                }
+            }
+        }
         // Member of a temporary: evaluate the base and project.
         if e.kind == SyntaxKind::MemberExpr {
             let m = MemberExpr::cast(e).expect("kind");
