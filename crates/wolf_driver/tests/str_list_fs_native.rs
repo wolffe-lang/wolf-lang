@@ -564,7 +564,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // The s73 conc families (scope/chan/select/sync/proc).
         "scope_", "chan_", "sync_", "when_", "proc_",
         // The s106 net family (#118's first crossing).
-        "net_",
+        "net_", // The s107 json family (#118's last crossing).
+        "json_",
     ] {
         let n = wolf_codegen_clif::RT_SYMBOLS
             .iter()
@@ -576,10 +577,12 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // ambient-region enter/leave pair; s81 the validating byte source
     // (`str_from_utf8`, wolf-lang#58); s90 the ten fs entries of
     // #51/#52 plus `os_exe` (#69); s106 the eight net entries (#118's
-    // first crossing — seven s39 builtins plus `net_deadline`).
+    // first crossing — seven s39 builtins plus `net_deadline`); s107
+    // the four json kernels plus the process trio (#118's last
+    // crossing — the checked-native builtin split closes).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        102,
+        109,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
