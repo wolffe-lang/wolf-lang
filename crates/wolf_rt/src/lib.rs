@@ -8,6 +8,11 @@
 
 pub mod fs;
 pub mod io;
+// The s107 json query kernels (c26's last crossing): the HAND MIRROR
+// of `wolf_mem::json` — the locked graph keeps the reference out of
+// reach (D15), the driver's `json_parity` test keeps the copies from
+// drifting (the fmtspec precedent).
+pub mod json;
 pub mod list;
 pub mod native;
 pub mod net;
