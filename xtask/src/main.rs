@@ -867,9 +867,19 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // off the same base over DISJOINT movers (net/* vs memory/*), so the
 // merged floors are the sum of both deltas — measured by this gate on
 // the merged tree, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 161), ("native", 169), ("release", 169)];
+// s107 ratchet over 301 entries: json and process cross (c26's last
+// arms, #118). `json/query.lu`, `json/rows.lu`, `os/spawn_rows.lu`
+// execute on native and release for the first time — 169 → 172 each,
+// all-three 144 → 147 (the checked lane always ran all three; the
+// native tiers joined files it held, the s96 mirror shape). checked
+// holds 161 and union holds 186 — no file entered or left the union,
+// which is exactly what a crossing of checked-held files looks like.
+// The last two `checked lane only` arms are gone from the lowering;
+// the checked-native builtin split is CLOSED. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 161), ("native", 172), ("release", 172)];
 const UNION_FLOOR: usize = 186;
-const ALL_THREE_FLOOR: usize = 144;
+const ALL_THREE_FLOOR: usize = 147;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

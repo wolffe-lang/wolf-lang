@@ -10,17 +10,37 @@
 //! `env_set` rejects `=`/NUL/empty names as `invalid`, argv drops the
 //! program name.
 //!
-//! The process trio (`os_spawn`/`os_wait`/`os_kill`) is CHECKED-LANE
-//! ONLY at s40 (lowering refuses honestly, the s39 net posture): its
-//! native rung needs List[str] argv unpacking plus a child table, and
-//! lands with the std.process facade work.
+//! The process trio (`os_spawn`/`os_wait`/`os_kill`) crossed at s107
+//! (c26's last crossing, wolf-lang#118): a [`ChildTable`] over
+//! `std::process` — dense i64 handles into an id-keyed store (the
+//! NetTable shape), never raw pids, so a forged handle can never
+//! alias a foreign OS process. Argv is array-only, straight from the
+//! `List[str]` header (no shell-string spawn exists anywhere, by
+//! construction); v0 stdio is null-wired, mirroring the checked
+//! lane's `os_builtin` entry for entry.
+//!
+//! # Zombie discipline (the reviewer flag)
+//!
+//! `os_wait` REAPS: `Child::wait` collects the OS exit status, and a
+//! successful wait tombstones the slot (double wait is `io`).
+//! `os_kill` does NOT tombstone — kill-then-wait is the documented
+//! reap path (the checked lane's own posture), so a killed child is
+//! never stranded unreapable behind a dead handle. A program that
+//! kills and never waits leaves the reap to process exit, exactly as
+//! the checked machine does; the TESTS wait — never sample — per the
+//! #50 lesson, and the kill test below proves the kill-then-wait
+//! sequence leaves no zombie behind.
 //!
 //! Error codes per entry (lowering maps them to row tags):
 //! `env_get`: 0 ok, 1 missing, 2 utf8. `env_set`: 0 ok, 1 invalid.
-//! `os_cwd`, `os_exe` (s90/#69): 0 ok, 1 io.
+//! `os_cwd`, `os_exe` (s90/#69): 0 ok, 1 io. The process trio:
+//! [`proc_code`].
+
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
 
 use crate::list::push_str;
-use crate::str::{ambient_copy, view, write_pair};
+use crate::str::{ambient_copy, view, write_pair, write_word};
 
 /// `env_args() -> List[str]` — the program's arguments, program name
 /// dropped (argv[0] is the binary's path, not the program's input).
@@ -155,6 +175,192 @@ pub extern "C" fn __wolf_rt_os_exit(code: i64) -> ! {
     std::process::exit(code.rem_euclid(256) as i32)
 }
 
+// ------------------------- s107: the process trio (wolf-lang#118) --
+
+/// A process operation's failure: the row tag it raises. The
+/// vocabulary is `{not_found, denied, signal, io}` — `not_found` and
+/// `denied` at spawn (rule 3: anything else coarsens to `io`),
+/// `signal` a child that died without an exit code, `io` every
+/// operation on a forged or reaped handle (a checkable condition,
+/// never a trap).
+pub type ProcErr = &'static str;
+
+/// The child table: index = the `int` handle wolf code holds; `None`
+/// after a successful wait (the reap tombstones; double wait is
+/// `io`). `kill` does NOT tombstone: kill-then-wait is the reap path
+/// (see the module doc's zombie discipline). Deliberately NOT the OS
+/// pid — dense small ints into this table, the NetTable/fs shape.
+#[derive(Debug, Default)]
+pub struct ChildTable {
+    children: Vec<Option<Child>>,
+}
+
+impl ChildTable {
+    /// `const` so the shim tier's process table ([`CHILDREN`]) can
+    /// live in a `static Mutex` without lazy-init machinery (the
+    /// fs/net precedent).
+    pub const fn new() -> ChildTable {
+        ChildTable {
+            children: Vec::new(),
+        }
+    }
+
+    /// Spawn `argv[0]` with `argv[1..]`, stdio null-wired. An empty
+    /// argv names no program: `not_found`. Spawn failures map
+    /// `NotFound`/`PermissionDenied` and coarsen the rest to `io` —
+    /// the checked lane's exact table.
+    pub fn spawn(&mut self, argv: &[&str]) -> Result<i64, ProcErr> {
+        let Some((prog, rest)) = argv.split_first() else {
+            return Err("not_found");
+        };
+        let spawned = Command::new(prog)
+            .args(rest)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match spawned {
+            Err(e) => Err(match e.kind() {
+                std::io::ErrorKind::NotFound => "not_found",
+                std::io::ErrorKind::PermissionDenied => "denied",
+                _ => "io",
+            }),
+            Ok(child) => {
+                let h = self.children.len() as i64;
+                self.children.push(Some(child));
+                Ok(h)
+            }
+        }
+    }
+
+    /// Wait for the child and REAP it (the slot tombstones on any
+    /// completed wait). The exit code, or `signal` for a child that
+    /// died without one (unix); a forged or already-reaped handle is
+    /// `io`, and so is a failed wait syscall.
+    pub fn wait(&mut self, h: i64) -> Result<i64, ProcErr> {
+        let Some(slot) = usize::try_from(h)
+            .ok()
+            .and_then(|i| self.children.get_mut(i))
+        else {
+            return Err("io");
+        };
+        let Some(child) = slot.as_mut() else {
+            return Err("io"); // double wait
+        };
+        match child.wait() {
+            Err(_) => Err("io"),
+            Ok(status) => {
+                *slot = None; // reaped
+                match status.code() {
+                    Some(c) => Ok(i64::from(c)),
+                    // Died without a code (a signal, unix): its own
+                    // outcome, never a fake code.
+                    None => Err("signal"),
+                }
+            }
+        }
+    }
+
+    /// Kill the child. Already-exited is `io` (the child is not yours
+    /// to kill anymore); the handle stays live for the wait that
+    /// reaps it — kill never tombstones.
+    pub fn kill(&mut self, h: i64) -> Result<(), ProcErr> {
+        let Some(Some(child)) = usize::try_from(h)
+            .ok()
+            .and_then(|i| self.children.get_mut(i))
+        else {
+            return Err("io");
+        };
+        child.kill().map_err(|_| "io")
+    }
+}
+
+/// Error codes of the process family (lowering maps them to row tags,
+/// coarsening any the call's row does not declare to `io`).
+pub mod proc_code {
+    pub const OK: i64 = 0;
+    pub const NOT_FOUND: i64 = 1;
+    pub const DENIED: i64 = 2;
+    pub const SIGNAL: i64 = 3;
+    pub const IO: i64 = 4;
+}
+
+/// The process-wide child table behind the shim trio — the fs
+/// `FILES`/net `NET` precedent.
+static CHILDREN: Mutex<ChildTable> = Mutex::new(ChildTable::new());
+
+fn children() -> std::sync::MutexGuard<'static, ChildTable> {
+    CHILDREN.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// A row tag as its wire code ([`proc_code`]).
+fn proc_code_of_tag(tag: ProcErr) -> i64 {
+    match tag {
+        "not_found" => proc_code::NOT_FOUND,
+        "denied" => proc_code::DENIED,
+        "signal" => proc_code::SIGNAL,
+        _ => proc_code::IO,
+    }
+}
+
+/// `os_spawn(argv: List[str]) -> int ! {not_found, denied, io}` — the
+/// child's handle (>= 0), or `-code` (the `fs_open` convention). The
+/// argv arrives as one list header whose 16-byte elements are str
+/// pairs; a header of the wrong element width (unreachable from
+/// compiled code — sema types the argument) is the `io` code, the
+/// only answer that is not undefined behaviour.
+///
+/// # Safety
+///
+/// `hdr` must be a live `List[str]` header from
+/// [`crate::list::__wolf_rt_list_new`] whose elements are valid str
+/// pairs.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_spawn(hdr: i64) -> i64 {
+    let Some(pairs) = (unsafe { crate::list::str_pair_elems(hdr) }) else {
+        return -proc_code::IO;
+    };
+    let argv: Vec<&str> = pairs.iter().map(|&[p, l]| unsafe { view(p, l) }).collect();
+    match children().spawn(&argv) {
+        Ok(h) => h,
+        Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+/// `os_wait(h) -> int ! {signal, io}` — parks until the child exits,
+/// REAPS it (see the module doc's zombie discipline), and writes the
+/// exit code through `out` on code 0.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait(h: i64, out: i64) -> i64 {
+    // The wait blocks with the table UNLOCKED past a short snapshot?
+    // No: unlike the net shims, `Child::wait` needs `&mut Child`, so
+    // the wait holds the lock — one child, one waiter is the corpus
+    // discipline (a second handle to the same child does not exist;
+    // handles are affine ints wolf code cannot forge into aliases
+    // that both wait). The trade is recorded here rather than hidden.
+    match children().wait(h) {
+        Ok(code) => {
+            unsafe { write_word(out, code) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// `os_kill(h) -> () ! {io}` — terminate the child; the handle stays
+/// live for the wait that reaps it.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_kill(h: i64) -> i64 {
+    match children().kill(h) {
+        Ok(()) => proc_code::OK,
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +424,108 @@ mod tests {
             std::path::Path::new(p).is_file(),
             "os_exe names a file: {p}"
         );
+    }
+
+    // ------------------- s107: the process trio over a ChildTable --
+    //
+    // Platform posture: the row tests spawn nothing and run on every
+    // tier-1 host; the live-child tests are unix-gated on the checked
+    // twins' precedent (`/bin/sh` is the one portable-enough fixture;
+    // windows coverage rides the std.process facade sprint with its
+    // own fixture story — `crates/wolf_mem/tests/os_time_json.rs`).
+
+    /// `corpus/os/spawn_rows.lu`'s native half: an empty argv names no
+    /// program, an unspawnable program is `not_found`, a forged handle
+    /// is `io` on wait AND kill — rows, never traps, no child ever
+    /// spawned.
+    #[test]
+    fn process_rows_without_a_child() {
+        let mut t = ChildTable::new();
+        assert_eq!(t.spawn(&[]), Err("not_found"));
+        assert_eq!(t.spawn(&["wolf-s107-no-such-program"]), Err("not_found"));
+        assert_eq!(t.wait(99), Err("io"));
+        assert_eq!(t.kill(99), Err("io"));
+    }
+
+    /// The same rows through the extern surface: the argv arrives as
+    /// a real `List[str]` header; codes come back negated on the
+    /// spawn handle path (the `fs_open` convention).
+    #[test]
+    fn shim_process_rows() {
+        let empty = crate::list::__wolf_rt_list_new(16);
+        assert_eq!(unsafe { __wolf_rt_os_spawn(empty) }, -proc_code::NOT_FOUND);
+        let argv = crate::list::new_list(16);
+        crate::list::push_str(argv, "wolf-s107-no-such-program");
+        assert_eq!(
+            unsafe { __wolf_rt_os_spawn(argv as i64) },
+            -proc_code::NOT_FOUND
+        );
+        // A header of the wrong element width is the io code — the
+        // only answer that is not undefined behaviour (FFI-only; sema
+        // types compiled argv `List[str]`).
+        let ints = crate::list::__wolf_rt_list_new(8);
+        assert_eq!(unsafe { __wolf_rt_os_spawn(ints) }, -proc_code::IO);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(unsafe { __wolf_rt_os_wait(9_999, o) }, proc_code::IO);
+        assert_eq!(__wolf_rt_os_kill(9_999), proc_code::IO);
+    }
+
+    /// The reap discipline, witnessed (#50: WAIT for the outcome,
+    /// never sample it): the exit code arrives through wait, the
+    /// successful wait tombstones, and the double wait is `io`.
+    #[cfg(unix)]
+    #[test]
+    fn wait_reaps_and_double_wait_is_io() {
+        let mut t = ChildTable::new();
+        let h = t.spawn(&["/bin/sh", "-c", "exit 7"]).expect("spawn");
+        assert_eq!(t.wait(h), Ok(7));
+        assert_eq!(t.wait(h), Err("io"), "the reap tombstoned the slot");
+    }
+
+    /// The zombie-discipline flag, end to end: kill does NOT
+    /// tombstone (the handle stays live for the reaping wait), the
+    /// wait after the kill is the `signal` row AND the reap — the
+    /// child is collected before the test returns, so kill-then-drop
+    /// leaks no zombie past it. After the reap the handle is dead on
+    /// every entry.
+    #[cfg(unix)]
+    #[test]
+    fn kill_then_wait_is_signal_and_reaps() {
+        let mut t = ChildTable::new();
+        let h = t.spawn(&["/bin/sh", "-c", "sleep 30"]).expect("spawn");
+        assert_eq!(t.kill(h), Ok(()));
+        assert_eq!(t.wait(h), Err("signal"), "no exit code: the signal row");
+        assert_eq!(t.wait(h), Err("io"), "the signal wait reaped too");
+        assert_eq!(t.kill(h), Err("io"), "a reaped handle is not yours");
+    }
+
+    /// The live sequence through the extern surface: spawn a real
+    /// child by argv pairs, wait for its code through the out word.
+    #[cfg(unix)]
+    #[test]
+    fn shim_spawn_wait_kill_roundtrip() {
+        let argv = crate::list::new_list(16);
+        crate::list::push_str(argv, "/bin/sh");
+        crate::list::push_str(argv, "-c");
+        crate::list::push_str(argv, "exit 5");
+        let h = unsafe { __wolf_rt_os_spawn(argv as i64) };
+        assert!(h >= 0, "spawn hands back a handle: {h}");
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(unsafe { __wolf_rt_os_wait(h, o) }, proc_code::OK);
+        assert_eq!(out[0], 5);
+        assert_eq!(unsafe { __wolf_rt_os_wait(h, o) }, proc_code::IO);
+        // Kill-then-wait through the shims: the signal code, then the
+        // tombstone.
+        let argv2 = crate::list::new_list(16);
+        crate::list::push_str(argv2, "/bin/sh");
+        crate::list::push_str(argv2, "-c");
+        crate::list::push_str(argv2, "sleep 30");
+        let h2 = unsafe { __wolf_rt_os_spawn(argv2 as i64) };
+        assert!(h2 >= 0);
+        assert_eq!(__wolf_rt_os_kill(h2), proc_code::OK);
+        assert_eq!(unsafe { __wolf_rt_os_wait(h2, o) }, proc_code::SIGNAL);
+        assert_eq!(unsafe { __wolf_rt_os_wait(h2, o) }, proc_code::IO);
     }
 }

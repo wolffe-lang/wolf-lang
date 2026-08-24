@@ -7233,26 +7233,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         ) {
             return self.lower_os_time_builtin(&callee_text, d, e);
         }
-        // The s40 process trio mirrors the s39 net posture: checked
-        // lane executes, native lowering owes List[str] argv unpacking
-        // plus a child table — an honest refusal, tier named. Same for
-        // json: the reference parser is the checked lane's
-        // (`wolf_mem::json`); its native mirror lands with the
-        // std.x.json facade work.
+        // The s40 process trio, natively (s107 — c26's LAST crossing;
+        // #118 closes): the argv `List[str]` header crosses as one
+        // pointer to `wolf_rt::os`'s ChildTable shims, codes to row
+        // tags, the exit code back through an out word. Wait reaps;
+        // kill never tombstones — the zombie discipline is the
+        // runtime's module doc.
         if matches!(callee_text.as_str(), "os_spawn" | "os_wait" | "os_kill") {
-            return Err(refuse(
-                "process builtins in native lowering (checked lane only at s40)",
-                e.span,
-            ));
+            return self.lower_process_builtin(&callee_text, d, e);
         }
+        // The s40 json builtin tier, natively (s107): the reference
+        // parser stays the checked lane's (`wolf_mem::json`);
+        // `wolf_rt::json` is its hand mirror (the locked graph keeps
+        // the reference out of the runtime's reach — D15) and the
+        // driver's json_parity test pins the two. With this arm the
+        // last checked-lane-only refusal leaves the lowering.
         if matches!(
             callee_text.as_str(),
             "json_valid" | "json_get" | "json_type" | "json_len"
         ) {
-            return Err(refuse(
-                "json builtins in native lowering (checked lane only at s40)",
-                e.span,
-            ));
+            return self.lower_json_builtin(&callee_text, d, e);
         }
         // s81 (#58): the validating byte source. Unlike json it lands on
         // BOTH lanes in the sprint that introduces it — a border post
@@ -10053,6 +10053,226 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(out)))
             }
             _ => Err(refuse("this net builtin", e.span)),
+        }
+    }
+
+    /// The s40 json builtin family, natively (s107 — the crossing that
+    /// closes #118): each call is one `wolf_rt::json` shim over the
+    /// hand-mirrored reference (`wolf_mem::json` stays the semantic
+    /// authority; the driver's json_parity test pins the copies).
+    /// Wire codes (`wolf_rt::json::json_code`: 1 parse, 2 missing,
+    /// 3 kind) become row values through [`Self::code_tag_chain`];
+    /// str results reload from the out slot; `json_len` rides the
+    /// `fs_open` handle convention (the count >= 0, or the negated
+    /// code — a json length is never negative). PURE: no capability
+    /// tag, no process state, the one shim family with neither.
+    fn lower_json_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed json arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let arg = |i: usize| -> R<Value> {
+            argv.get(i)
+                .copied()
+                .ok_or_else(|| refuse("a json call with missing arguments", e.span))
+        };
+        if name == "json_valid" {
+            let s = arg(0)?;
+            let (sp, sl) = self.str_parts(s);
+            let rc = self
+                .rt_call("__wolf_rt_json_valid", &[sp, sl], Some(types::I64))
+                .expect("rc");
+            return Ok(Flow::Val(Some(self.nonzero(rc))));
+        }
+        let s = arg(0)?;
+        let path = arg(1)?;
+        let (sp, sl) = self.str_parts(s);
+        let (pp, pl) = self.str_parts(path);
+        match name {
+            "json_get" | "json_type" => {
+                // The declared row is `{parse, missing}`; `kind` is
+                // unreachable on these entries (a scalar step answers
+                // `missing` in the walk), and any residue coarsens to
+                // `parse` — the RFC-violation catch-all.
+                let sym = if name == "json_get" {
+                    "__wolf_rt_json_get"
+                } else {
+                    "__wolf_rt_json_type"
+                };
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot(sym, &[sp, sl, pp, pl], slot, region, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |zelf| Ok(Some(zelf.load_str_slot(slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &[(2, "missing")], "parse")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "json_len" => {
+                let rc = self
+                    .rt_call("__wolf_rt_json_len", &[sp, sl, pp, pl], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(Some(rc)),
+                    |zelf| {
+                        // The failure code arrived negated.
+                        let zz = zelf.b.iconst(types::I64, 0);
+                        let code = zelf
+                            .b
+                            .ins(Opcode::IsubWrap, &[zz, rc], &[types::I64], Aux::None)
+                            .one();
+                        Ok(zelf.code_tag_chain(code, &[(1, "parse"), (2, "missing")], "kind"))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            _ => Err(refuse("this json builtin", e.span)),
+        }
+    }
+
+    /// The s40 process trio, natively (s107): `wolf_rt::os`'s
+    /// ChildTable shims over `std::process`. The argv `List[str]`
+    /// crosses as its header pointer through [`Self::rt_call_foreign`]
+    /// (the shim READS the caller's list buffer — the
+    /// `fs_write_bytes` posture); the spawn handle rides the `fs_open`
+    /// convention, the exit code comes back through an out word whose
+    /// 0-code REAPS (the runtime's zombie discipline), and codes
+    /// (`wolf_rt::os::proc_code`) become the declared rows —
+    /// `{not_found, denied, io}` at spawn, `{signal, io}` at wait,
+    /// `{io}` at kill.
+    fn lower_process_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed process arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let arg = |i: usize| -> R<Value> {
+            argv.get(i)
+                .copied()
+                .ok_or_else(|| refuse("a process call with missing arguments", e.span))
+        };
+        match name {
+            "os_spawn" => {
+                let hdr = arg(0)?;
+                let rc = self
+                    .rt_call_foreign("__wolf_rt_os_spawn", &[hdr], None, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(Some(rc)),
+                    |zelf| {
+                        // The failure code arrived negated.
+                        let zz = zelf.b.iconst(types::I64, 0);
+                        let code = zelf
+                            .b
+                            .ins(Opcode::IsubWrap, &[zz, rc], &[types::I64], Aux::None)
+                            .one();
+                        Ok(zelf.code_tag_chain(code, &[(1, "not_found"), (2, "denied")], "io"))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_wait" => {
+                let h = arg(0)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_slot("__wolf_rt_os_wait", &[h], slot, region, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |zelf| Ok(Some(zelf.load_flat(types::I64, slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &[(3, "signal")], "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_kill" => {
+                let h = arg(0)?;
+                let rc = self
+                    .rt_call("__wolf_rt_os_kill", &[h], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |zelf| {
+                        let id = zelf.b.module.tag_id("io");
+                        Ok(zelf.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            _ => Err(refuse("this process builtin", e.span)),
         }
     }
 

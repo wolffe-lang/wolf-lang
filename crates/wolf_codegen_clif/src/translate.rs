@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 102] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 109] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -159,6 +159,14 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 102] = [
     ("__wolf_rt_net_write", 3, true),
     ("__wolf_rt_net_close", 1, true),
     ("__wolf_rt_net_deadline", 2, true),
+    // The s107 json family (wolf_rt::json, #118's last crossing):
+    // pure query kernels — two str pairs in, a code back, the
+    // rendered node through a caller out slot; `json_len` rides the
+    // handle convention (the count >= 0, or the negated code).
+    ("__wolf_rt_json_valid", 2, true),
+    ("__wolf_rt_json_get", 5, true),
+    ("__wolf_rt_json_type", 5, true),
+    ("__wolf_rt_json_len", 4, true),
     // The s40 os/env/time families (wolf_rt::{os,time}): same shape
     // discipline — pointers/lens/codes as i64, str results through
     // caller out slots, list results as header pointers. `os_exit`
@@ -173,6 +181,13 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 102] = [
     // ITSELF as its child.
     ("__wolf_rt_os_exe", 1, true),
     ("__wolf_rt_os_exit", 1, false),
+    // s107 (#118): the process trio over the ChildTable. `os_spawn`
+    // reads the caller's `List[str]` header (one pointer in, the
+    // handle >= 0 or the negated code back); `os_wait` writes the
+    // exit code through the out word and its 0-code REAPS.
+    ("__wolf_rt_os_spawn", 1, true),
+    ("__wolf_rt_os_wait", 2, true),
+    ("__wolf_rt_os_kill", 1, true),
     ("__wolf_rt_time_now_ms", 0, true),
     ("__wolf_rt_time_unix_ms", 0, true),
     ("__wolf_rt_time_sleep_ms", 1, false),

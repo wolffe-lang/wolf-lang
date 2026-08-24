@@ -94,8 +94,8 @@ grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
-json/query.lu: refused — json builtins in native lowering (checked lane only at s40)
-json/rows.lu: refused — json builtins in native lowering (checked lane only at s40)
+json/query.lu: lowers
+json/rows.lu: lowers
 kernels/churn_b3.lu: lowers
 kernels/guarded_stencil.lu: lowers
 kernels/hot_counter.lu: lowers
@@ -203,7 +203,7 @@ net/spawn_accept.lu: lowers
 os/args_cwd.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
-os/spawn_rows.lu: refused — process builtins in native lowering (checked lane only at s40)
+os/spawn_rows.lu: lowers
 overflow.lu: lowers
 procs.lu: lowers
 projects/count.lu: lowers
