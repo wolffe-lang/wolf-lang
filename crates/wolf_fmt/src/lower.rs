@@ -543,6 +543,36 @@ impl<'a> Fmt<'a> {
         self.trail(t, out);
     }
 
+    /// ALL of a dropped token's comments (leading and trailing alike)
+    /// as line-suffixes — for a token whose replacement is minted at a
+    /// DIFFERENT position, so every comment rides the minted token's
+    /// line end. A comment that led the dropped separator would
+    /// otherwise dangle at the drop site the reparse cannot see.
+    fn trail_like(&self, t: &GreenToken, out: &mut Vec<Doc>) {
+        let mut ws: &[u8] = b"";
+        for s in t.leading.iter().chain(t.trailing.iter()) {
+            let bytes = self.slice(*s);
+            if is_comment(bytes) {
+                // Same rule as `trail`: the whitespace run before the
+                // comment is preserved verbatim so hand alignment
+                // survives (`,   // E0802` in the lint corpus is
+                // aligned on purpose); minimum one space.
+                let mut suffix = if ws.is_empty() {
+                    b" ".to_vec()
+                } else {
+                    ws.to_vec()
+                };
+                suffix.extend_from_slice(trim_end(bytes));
+                out.push(Doc::LineSuffix(suffix));
+                ws = b"";
+            } else if !bytes.contains(&b'\n') {
+                ws = bytes;
+            } else {
+                ws = b"";
+            }
+        }
+    }
+
     /// Trivia of a token that is itself dropped (`Term`, stripped
     /// commas): comments survive, text does not.
     fn tok_trivia_only(&self, t: &GreenToken, out: &mut Vec<Doc>) {
@@ -1015,8 +1045,16 @@ impl<'a> Fmt<'a> {
             g.push(Doc::Indent(inner));
             g.push(Doc::Line);
             g.push(Doc::text("}"));
+            // The rbrace's trailing comment rides INSIDE the group,
+            // after the `}` it trails. Pushed to the caller's stream it
+            // sat before the whole group in doc order — benign while
+            // the group rendered flat (same line end), but the moment
+            // anything forced the group to break (a FreshLine from an
+            // own-line comment leading the `{`), the suffix detached
+            // from its brace and floated to the enclosing line — the
+            // `! //` of idem_prefix_bang_suffix.
             if let Some(r) = rbrace {
-                self.trail(r, out);
+                self.trail(r, &mut g);
             }
             out.push(Doc::Group(g));
             return;
@@ -2171,6 +2209,16 @@ impl<'a> Fmt<'a> {
         let mut past_arrow = false;
         let mut prev: Option<K> = None;
         let mut body: Vec<&GreenNode> = Vec::new();
+        // The arm's own separators are dropped and a canonical comma is
+        // minted at the end — so their comments must ride the MINTED
+        // comma, not the drop site. Emitting them mid-loop (before the
+        // body renders) hung a comma-trailing comment on the arrow line
+        // as a line-suffix, while pass 1 of the same program (no source
+        // comma yet) left it after the body: one landing spot per pass,
+        // never a fixpoint (idem_broken_arm_arrow_suffix,
+        // idem_select_arm_block_suffix). Trivia of a re-minted token
+        // rides the minted token's position.
+        let mut minted_comma_trivia: Vec<&GreenToken> = Vec::new();
         for c in &n.children {
             match c {
                 Child::Token(t) => match t.kind {
@@ -2179,6 +2227,7 @@ impl<'a> Fmt<'a> {
                         self.kw(Some(t), "=>", &mut g);
                         past_arrow = true;
                     }
+                    K::Comma | K::Term if past_arrow => minted_comma_trivia.push(t),
                     K::Comma | K::Term => self.tok_trivia_only(t, &mut g),
                     _ => {
                         if prev.is_some() && pair_space(prev.unwrap(), t.kind) {
@@ -2219,6 +2268,9 @@ impl<'a> Fmt<'a> {
             }
         }
         g.push(Doc::text(","));
+        for t in minted_comma_trivia {
+            self.trail_like(t, &mut g);
+        }
         out.push(Doc::Concat(g));
     }
 
