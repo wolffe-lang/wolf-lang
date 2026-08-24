@@ -133,6 +133,7 @@ lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_view_escape.lu: lowers
 memory/checked_unsigned.lu: lowers
+memory/closure_borrow_write.lu: not mem-clean (pre-wir rungs own it)
 memory/defer_order.lu: lowers
 memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers

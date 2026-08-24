@@ -59,12 +59,14 @@ pub(crate) struct Val {
     /// identity (`Holder { child: move c }` records `("child", c)`),
     /// so `in h.child { }` can resolve the iso edge it opens through.
     region_fields: Vec<(String, RegionId)>,
-    /// s98 (D47): this value is a dyn pair whose data half BORROWS the
-    /// named place. Set only on the cast expression's own value; the
-    /// borrow is claimed where the pair lands — a binding grows a
-    /// shared loan, a call argument joins the read surface, anything
-    /// else refuses by name at body end.
-    borrowed: Option<PlaceId>,
+    /// s98 (D47): this value BORROWS the named places. A dyn pair's
+    /// data half borrows its cast operand's place (one entry); a
+    /// capturing closure's env borrows every captured place (s105 —
+    /// the same design, plural). Set only on the producing
+    /// expression's own value; the borrow is claimed where the value
+    /// lands — a binding grows shared loans, a call argument joins
+    /// the read surface, anything else refuses by name at body end.
+    borrowed: Vec<PlaceId>,
 }
 
 impl Val {
@@ -78,7 +80,7 @@ impl Val {
             region: None,
             origin: Some(span),
             region_fields: Vec::new(),
-            borrowed: None,
+            borrowed: Vec::new(),
         }
     }
 
@@ -352,11 +354,13 @@ pub(crate) struct Lowerer<'t> {
     /// binding); the NLL engine ([`crate::loans`]) scopes them by the
     /// borrower's liveness.
     loans: Vec<crate::cfg::Loan>,
-    /// Dyn-cast expressions produced but not yet CLAIMED (bound or
-    /// passed). One left at body end is a pair in a position the
-    /// conservative reading does not admit — refuse by name, never
-    /// let it flow somewhere the borrow cannot be seen.
-    unclaimed_dyn: Vec<Span>,
+    /// Borrowing expressions (dyn casts, capturing closures) produced
+    /// but not yet CLAIMED (bound or passed). One left at body end is
+    /// a value in a position the conservative reading does not admit
+    /// — refuse by name, never let it flow somewhere the borrow
+    /// cannot be seen. The bool: the entry is a closure (it names its
+    /// own refusal).
+    unclaimed_pairs: Vec<(Span, bool)>,
 }
 
 impl<'t> Lowerer<'t> {
@@ -526,7 +530,7 @@ impl<'t> Lowerer<'t> {
             region,
             origin: Some(span),
             region_fields: Vec::new(),
-            borrowed: None,
+            borrowed: Vec::new(),
         }
     }
 
@@ -534,13 +538,13 @@ impl<'t> Lowerer<'t> {
     /// unclaimed list because the borrow found a home (a binding's
     /// loan or a call's read surface).
     fn claim_dyn(&mut self, val: &Val) {
-        if val.borrowed.is_none() {
+        if val.borrowed.is_empty() {
             return;
         }
         if let Some(origin) = val.origin
-            && let Some(i) = self.unclaimed_dyn.iter().position(|&s| s == origin)
+            && let Some(i) = self.unclaimed_pairs.iter().position(|&(s, _)| s == origin)
         {
-            self.unclaimed_dyn.remove(i);
+            self.unclaimed_pairs.remove(i);
         }
     }
 
@@ -1983,8 +1987,8 @@ impl<'t> Lowerer<'t> {
                     };
                     self.emit_read(place, e.span);
                     let mut val = self.val_of_place(place, e.span);
-                    val.borrowed = Some(place);
-                    self.unclaimed_dyn.push(e.span);
+                    val.borrowed = vec![place];
+                    self.unclaimed_pairs.push((e.span, false));
                     return Ok(val);
                 }
                 // s22 — a raw pointer bridge ([mem.prov.expose]):
@@ -2209,7 +2213,7 @@ impl<'t> Lowerer<'t> {
             region: Some(rid),
             origin: Some(e.span),
             region_fields: Vec::new(),
-            borrowed: None,
+            borrowed: Vec::new(),
         })
     }
 
@@ -2404,7 +2408,7 @@ impl<'t> Lowerer<'t> {
             region: Some(rid),
             origin: Some(e.span),
             region_fields: Vec::new(),
-            borrowed: None,
+            borrowed: Vec::new(),
         })
     }
 
@@ -2587,12 +2591,41 @@ impl<'t> Lowerer<'t> {
         Ok(out)
     }
 
-    /// A task closure: models as "runs once, here" — captured reads
-    /// are reads (by-copy per S-10), closure locals live in their own
-    /// scope. The closure VALUE carries no sites (it is consumed by
-    /// its spawn).
+    /// A closure: the body models as "runs once, here" — captured
+    /// reads are reads, closure locals live in their own scope. The
+    /// closure VALUE carries no sites, but it BORROWS every captured
+    /// place (s105 — the s98 pair design, plural): sema's capture
+    /// record names them, each becomes a shared borrow claimed where
+    /// the value lands (a spawn argument's call surface, a binding's
+    /// scoped loans), and writes under a live closure refuse through
+    /// the same NLL engine dyn pairs use.
     fn eval_closure(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = wolf_ast::ClosureExpr::cast(e).expect("kind");
+        // The capture record (keyed by this closure's span). Resolved
+        // to places BEFORE the body walk, at the derivation point —
+        // the borrow begins where the env is built.
+        let cap_names: Vec<String> = self
+            .tb
+            .task_captures
+            .iter()
+            .find(|(sp, _)| *sp == e.span)
+            .map(|(_, caps)| caps.iter().map(|c| c.name.clone()).collect())
+            .unwrap_or_default();
+        let mut borrowed: Vec<PlaceId> = Vec::new();
+        for name in &cap_names {
+            let Some(local) = self.lookup(name) else {
+                continue; // not a frame local (module state): no place
+            };
+            let place = self.places.intern(
+                Place {
+                    base: Base::Local(local.0),
+                    proj: Vec::new(),
+                },
+                self.locals[local.0 as usize].is_copy,
+            );
+            self.emit_read(place, e.span);
+            borrowed.push(place);
+        }
         self.push_scope();
         if let Some(params) = d.params() {
             for p in params.params() {
@@ -2612,7 +2645,17 @@ impl<'t> Lowerer<'t> {
         };
         r?;
         self.close_scope(end_span(e.span))?;
-        Ok(Val::none())
+        if borrowed.is_empty() {
+            return Ok(Val::none());
+        }
+        self.unclaimed_pairs.push((e.span, true));
+        Ok(Val {
+            sites: Vec::new(),
+            region: None,
+            origin: Some(e.span),
+            region_fields: Vec::new(),
+            borrowed,
+        })
     }
 
     /// `select { … }` — arms are alternative branches (exactly one
@@ -3370,8 +3413,10 @@ impl<'t> Lowerer<'t> {
                     let rv = self.eval_value(recv)?;
                     // s98: `(p as dyn T).m()` — the receiver pair's
                     // borrow is call-extent, same as an argument.
-                    if let Some(borrowed) = rv.borrowed {
-                        surface.read_args.push((borrowed, recv_span));
+                    if !rv.borrowed.is_empty() {
+                        for &b in &rv.borrowed {
+                            surface.read_args.push((b, recv_span));
+                        }
                         self.claim_dyn(&rv);
                     }
                 }
@@ -3480,8 +3525,10 @@ impl<'t> Lowerer<'t> {
                     // pair's borrow is call-extent: the place joins
                     // the read surface (immutably lent for the call)
                     // and dies with it.
-                    if let Some(borrowed) = av.borrowed {
-                        surface.read_args.push((borrowed, v.span));
+                    if !av.borrowed.is_empty() {
+                        for &b in &av.borrowed {
+                            surface.read_args.push((b, v.span));
+                        }
                         self.claim_dyn(&av);
                     }
                 }
@@ -3762,16 +3809,18 @@ impl<'t> Lowerer<'t> {
                 // needed. A copy of the binding does not extend the
                 // loan (recorded for a D47 addendum); the region story
                 // rides the held sites regardless.
-                if single && let Some(borrowed) = val.borrowed {
-                    let loan = crate::cfg::LoanId(self.loans.len() as u32);
-                    self.loans.push(crate::cfg::Loan {
-                        place: borrowed,
-                        kind: crate::cfg::LoanKind::Shared,
-                        borrower: local,
-                        origin: span,
-                        two_phase: false,
-                    });
-                    self.push(Stmt::Borrow { loan, span });
+                if single && !val.borrowed.is_empty() {
+                    for &borrowed in &val.borrowed {
+                        let loan = crate::cfg::LoanId(self.loans.len() as u32);
+                        self.loans.push(crate::cfg::Loan {
+                            place: borrowed,
+                            kind: crate::cfg::LoanKind::Shared,
+                            borrower: local,
+                            origin: span,
+                            two_phase: false,
+                        });
+                        self.push(Stmt::Borrow { loan, span });
+                    }
                     self.claim_dyn(val);
                 }
                 if single && let Some(rid) = val.region {
@@ -4034,7 +4083,7 @@ impl<'t> Lowerer<'t> {
             iter_claims: Vec::new(),
             unsafe_depth: 0,
             loans: Vec::new(),
-            unclaimed_dyn: Vec::new(),
+            unclaimed_pairs: Vec::new(),
             casts,
         }
     }
@@ -4129,10 +4178,15 @@ impl<'t> Lowerer<'t> {
     /// future shape, each needing the borrow story written first;
     /// refuse by name rather than let the pair outlive its place.
     fn check_unclaimed_dyn(&self) -> Result<(), NotYet> {
-        match self.unclaimed_dyn.first() {
+        match self.unclaimed_pairs.first() {
             None => Ok(()),
-            Some(&span) => Err(NotYet {
-                construct: "a dyn pair outside a binding or argument position (bind it or pass it)",
+            Some(&(span, closure)) => Err(NotYet {
+                construct: if closure {
+                    "a capturing closure outside a binding or argument position \
+                     (bind it or pass it)"
+                } else {
+                    "a dyn pair outside a binding or argument position (bind it or pass it)"
+                },
                 span,
             }),
         }
