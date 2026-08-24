@@ -1652,10 +1652,24 @@ fn wir_ty_frame(
             }
             Ok(Some(it.intern(types::TypeData::Agg(fields))))
         }
-        TyKind::RegionTy => Err(refuse(
-            "first-class region values beyond local bindings (c05)",
-            span,
-        )),
+        // s105: a region VALUE is its runtime handle — the header
+        // pointer the runtime already keys region identity on (#113's
+        // pooling work; the s73 channel crossing pinned the shape).
+        // Value positions only: a region INSIDE another value (a
+        // struct field, a tuple slot, an enum payload, an error-union
+        // half) is a handle extent tracking cannot follow through the
+        // aggregate boundary — refused by name, the c25 stop.
+        TyKind::RegionTy => {
+            if depth == 0 {
+                Ok(Some(types::PTR))
+            } else {
+                Err(refuse(
+                    "a region inside another value (extent tracking stops at the \
+                     aggregate boundary — c25 closeout)",
+                    span,
+                ))
+            }
+        }
         // s73 — the conc capability handles: opaque runtime pointers
         // (channels, sync cells, task scopes); proc ids and exit
         // reasons are plain words ([conc.proc.1], [conc.proc.exit]).
@@ -1984,6 +1998,15 @@ fn wir_sig_of(
         let Some(ty) = wir_ty(&mut module.types, table, sigs, p.ty, p.span)? else {
             return Err(refuse("unit-typed parameters", p.span));
         };
+        // s105: a region parameter is the arrived handle, read-only —
+        // `mut`/`take` would promise writeback or consumption of an
+        // identity this frame does not own.
+        if matches!(table.kind(p.ty), TyKind::RegionTy) && p.mode.is_some() {
+            return Err(refuse(
+                "a moded region parameter (a region arrives read-only — c25 closeout)",
+                p.span,
+            ));
+        }
         match p.mode {
             None => params.push(Param {
                 ty,
@@ -2081,6 +2104,12 @@ enum LocalBind {
         region: RegionId,
         handle: Value,
         frozen: bool,
+        /// This frame created the region (`region.new` seeded its token
+        /// chain here). A region that ARRIVED as a value — a parameter,
+        /// a call result, a channel receive — has its chain with its
+        /// creator: opening through the handle works, but freeze/free
+        /// would need a token this frame does not hold (s105).
+        owned: bool,
     },
     /// s89 — a `List[int]` parameter that arrived as a byte VIEW: the
     /// receiver's own `{ptr, len}`, exactly what `s.bytes()` is at the
@@ -2471,6 +2500,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             else {
                 unreachable!("unit params refused at sig build");
             };
+            // s105: a region parameter binds as a region — identity +
+            // arrived handle (the s73 adopted shape: the token chain
+            // is the creator's; opening through the handle works,
+            // freeze/free refuse by name).
+            if matches!(self.sig_table.kind(p.ty), TyKind::RegionTy) {
+                let val = entry_params[wir_idx];
+                wir_idx += 1;
+                self.b.func.add_debug_var(p.name.clone(), val, true);
+                let region = self.b.fresh_region();
+                self.scopes.last_mut().expect("scope").binds.push((
+                    p.name.clone(),
+                    LocalBind::Region {
+                        region,
+                        handle: val,
+                        frozen: false,
+                        owned: false,
+                    },
+                ));
+                continue;
+            }
             let wrapping = matches!(self.sig_table.kind(p.ty), TyKind::Wrapping(_));
             let unsigned = sema_unsigned(self.sig_table, p.ty);
             let bind = if p.mode == Some(ParamMode::Mut) {
@@ -2902,10 +2951,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(sema_ty) = sema_ty else {
             return Err(refuse("a binding without a recorded type", span));
         };
-        // s73: a region value arriving as a VALUE (a recv'd region,
-        // adopted — [conc.chan.move]): bind identity + handle. The
-        // adopted arena is the runtime's to free (proc ledger /
-        // process exit); no local token chain roots here.
+        // s73/s105: a region value arriving as a VALUE (a recv'd
+        // region, a call result, a rebound handle): bind identity +
+        // handle. The arriving arena's token chain is its creator's
+        // (runtime free via proc ledger / process exit, or the
+        // creating frame's free point); no local chain roots here —
+        // `owned: false`, so freeze/free refuse by name.
         if matches!(self.table.kind(self.strip_sema(sema_ty)), TyKind::RegionTy) {
             let Some(handle) = v else {
                 return Err(refuse("a region binding without a handle value", span));
@@ -2917,6 +2968,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     region,
                     handle,
                     frozen: false,
+                    owned: false,
                 },
             ));
             return Ok(Flow::Val(None));
@@ -2969,6 +3021,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     region,
                     handle,
                     frozen: false,
+                    owned: true,
                 }))
             }
             SyntaxKind::FreezeExpr => {
@@ -2982,7 +3035,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // binding; the expr path lowers it (s73).
                     return Ok(None);
                 }
-                let (region, handle) = self.expect_region(operand)?;
+                let (region, handle, owned) = self.expect_region(operand)?;
+                // s105: freezing consumes the mutable token — a chain
+                // only the creating frame holds. An arrived handle
+                // (parameter, call result, recv) refuses by name.
+                if !owned {
+                    return Err(refuse(
+                        "freezing a region this frame did not create (the token \
+                         chain lives with the creator — c25 closeout)",
+                        operand.span,
+                    ));
+                }
                 let frozen_tok = self.b.ins_sync_freeze(region, handle);
                 // Deep immutability is a fact about the handle from the
                 // freeze point on (op-justified; the verifier checks the
@@ -2996,14 +3059,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     region,
                     handle,
                     frozen: true,
+                    owned: true,
                 }))
             }
             _ => Ok(None),
         }
     }
 
-    /// Resolve an expression that must name a region binding.
-    fn expect_region(&mut self, e: &'t GreenNode) -> R<(RegionId, Value)> {
+    /// Resolve an expression that must name a region binding. The
+    /// third element: this frame created the region (freeze/free may
+    /// consume its token chain).
+    fn expect_region(&mut self, e: &'t GreenNode) -> R<(RegionId, Value, bool)> {
         if e.kind != SyntaxKind::PathExpr {
             return Err(refuse(
                 "region operands beyond named bindings (c05)",
@@ -3012,7 +3078,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let name = self.text(e.span);
         match self.lookup(&name) {
-            Some(LocalBind::Region { region, handle, .. }) => Ok((region, handle)),
+            Some(LocalBind::Region {
+                region,
+                handle,
+                owned,
+                ..
+            }) => Ok((region, handle, owned)),
             _ => Err(refuse(
                 "region operands beyond named bindings (c05)",
                 e.span,
@@ -3484,10 +3555,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }) => Ok(Flow::Val(Some(
                         self.read_mut_ref(ptr, region, elem, e.span)?,
                     ))),
-                    Some(LocalBind::Region { .. }) => Err(refuse(
-                        "first-class region values beyond local bindings (c05)",
-                        e.span,
-                    )),
+                    // s105: a region read as a VALUE is its runtime
+                    // handle — the s73 channel crossing's shape in
+                    // every value position (passed, returned,
+                    // rebound). Positions extent tracking cannot
+                    // follow refuse at the TYPE (a region inside
+                    // another value) or at the OP (container
+                    // elements), by name.
+                    Some(LocalBind::Region { handle, .. }) => Ok(Flow::Val(Some(handle))),
                     // s89: a lent view has no first-class WIR value —
                     // that is the invariant s77 set and this sprint
                     // kept. Every position the lend analysis admits is
@@ -4040,6 +4115,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     region,
                     handle,
                     frozen: false,
+                    owned: true,
                 },
             ));
         }
@@ -4059,7 +4135,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(region_expr) = d.region() else {
             return Err(refuse("an `in` block without a region", e.span));
         };
-        let (_region, handle) = self.expect_region(region_expr)?;
+        let (_region, handle, _owned) = self.expect_region(region_expr)?;
         let Some(body) = d.body() else {
             return Ok(Flow::Val(None));
         };
@@ -4331,6 +4407,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     region,
                     handle,
                     frozen: false,
+                    owned: true,
                 },
             ));
         }
@@ -4737,7 +4814,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // donor's binding is moved-from (wolf_mem proved
                     // it; the runtime routes the transfer seam).
                     let operand = strip_move(arg);
-                    let (_rid, handle) = self.expect_region(operand)?;
+                    let (_rid, handle, _owned) = self.expect_region(operand)?;
                     self.rt_call(
                         "__wolf_rt_chan_send_region",
                         &[ch, handle],
@@ -7840,6 +7917,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     // runtime.
 
     /// The sema type behind adapter wrappers (`distinct`, `wrapping`).
+    /// s105: a region ELEMENT in a container is the named stop — the
+    /// handle would leave extent tracking's sight (a `List[region]`
+    /// cell has no binding the mem tier's region law can follow).
+    /// Channels are the one deliberate exception ([conc.chan.move]).
+    fn refuse_region_elem(&self, elem: TyId, span: Span) -> R<()> {
+        if matches!(self.table.kind(self.strip_sema(elem)), TyKind::RegionTy) {
+            return Err(refuse(
+                "a region element in a container (extent tracking stops at the handle — c25 closeout)",
+                span,
+            ));
+        }
+        Ok(())
+    }
+
     fn strip_sema(&self, mut ty: TyId) -> TyId {
         for _ in 0..32 {
             match self.table.kind(ty) {
@@ -8882,6 +8973,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         mname: &str,
         e: &'t GreenNode,
     ) -> R<Flow> {
+        self.refuse_region_elem(elem_sema, e.span)?;
         let Some(ewty) = wir_ty(
             &mut self.b.module.types,
             self.table,
@@ -9665,6 +9757,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             TyKind::List(elem) => {
                 let elem = *elem;
+                self.refuse_region_elem(elem, e.span)?;
                 let Some(ewty) = wir_ty(
                     &mut self.b.module.types,
                     self.table,
@@ -9736,6 +9829,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             ));
         };
         let elem = *elem;
+        self.refuse_region_elem(elem, span)?;
         let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)?
         else {
             return Err(refuse("unit-typed List elements", span));
@@ -11806,6 +11900,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // element's flat layout.
         if let TyKind::List(elem) = self.table.kind(ty) {
             let elem = *elem;
+            self.refuse_region_elem(elem, e.span)?;
             let Some(ewty) = wir_ty(
                 &mut self.b.module.types,
                 self.table,
@@ -13331,6 +13426,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 && let TyKind::List(elem) = self.table.kind(self.strip_sema(it))
             {
                 let elem = *elem;
+                self.refuse_region_elem(elem, e.span)?;
                 return self.lower_for_list(d, iter, elem, e.span);
             }
             // s73: `for v in ch` drains to drained-close.

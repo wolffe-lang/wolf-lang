@@ -171,12 +171,16 @@ memory/region_multiopen_swap.lu: refused — Pool/shared constructor lowering (r
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
+memory/region_value_container.lu: refused — a region inside another value (extent tracking stops at the aggregate boundary — c25 closeout)
+memory/region_value_elem.lu: refused — a region element in a container (extent tracking stops at the handle — c25 closeout)
+memory/region_value_pass.lu: lowers
+memory/region_value_return.lu: lowers
 memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers, s27)
 memory/unsafe_assume_malformed.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_c_alloc_native.lu: lowers
 memory/unsafe_creation_not_use.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
-memory/unsafe_door_borrow.lu: refused — first-class region values beyond local bindings (c05)
+memory/unsafe_door_borrow.lu: refused — raw-pointer casts (unsafe-tier WIR ops, deferred from s26 — see closeout)
 memory/unsafe_door_misuse.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_noalias.lu: refused — assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)
 memory/unsafe_raw_outside.lu: not mem-clean (pre-wir rungs own it)

@@ -1,0 +1,27 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.region.create.2, mem.prov.region
+//! s105 (c25): a region VALUE returned — the affine handle moves out
+//! of the creating frame (X4: regions are first-class values; the
+//! caller's binding adopts identity + handle, the s20 ret-region
+//! shape). The caller opens it and allocates through it.
+//! (lupin 0.1.13 diverges here: it frees the callee's region at
+//! scope end and traps the caller's open as [mem.region.intra.2] —
+//! the return does not transfer the affine value. The compiler-side
+//! model moves it; recorded for wolf-interp.)
+
+fn make() -> region {
+    let r = region()
+    r
+}
+
+fn main() -> !int {
+    let r = make()
+    var t = 0
+    in r {
+        var xs = List[int]()
+        (mut xs).push(41)
+        t = xs[0] + 1
+    }
+    if t == 42 { 0 } else { 1 }
+}

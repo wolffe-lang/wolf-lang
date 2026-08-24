@@ -284,6 +284,12 @@ pub(crate) struct Lowerer<'t> {
     /// Per region: an escape/placement error involved it (no
     /// promotion).
     tainted_region: Vec<bool>,
+    /// s105: the region's handle was LENT to a callee (passed as an
+    /// argument or receiver). A callee may allocate through it (D12's
+    /// ambient law), so promotion's "nothing ever lands here and the
+    /// handle never leaves the frame" proof no longer holds — the
+    /// region keeps its runtime create/free and W1001 stays quiet.
+    lent_region: Vec<bool>,
     /// Frame-local clean regions: the promotion fact.
     promoted: Vec<RegionId>,
     /// Any placement demand failed (E1004/E1010 fired).
@@ -435,6 +441,7 @@ impl<'t> Lowerer<'t> {
         });
         self.moved_region.push(false);
         self.tainted_region.push(false);
+        self.lent_region.push(false);
         id
     }
 
@@ -465,6 +472,19 @@ impl<'t> Lowerer<'t> {
         let slot = &mut self.site_escape[site.0 as usize];
         if slot.is_none() {
             *slot = Some(why);
+        }
+    }
+
+    /// s105: a region binding's handle crossing a call boundary — see
+    /// `lent_region`.
+    fn mark_region_lent(&mut self, place: PlaceId) {
+        let pl = self.places.get(place);
+        if !pl.proj.is_empty() {
+            return;
+        }
+        let Base::Local(l) = pl.base else { return };
+        if let Some(Some(rid)) = self.region_local.get(&l).copied() {
+            self.lent_region[rid.0 as usize] = true;
         }
     }
 
@@ -867,7 +887,10 @@ impl<'t> Lowerer<'t> {
                 self.report_close_escape(rid, s, sp, close_span, Some(name));
             }
         }
-        if !self.tainted_region[rid.0 as usize] && !self.moved_region[rid.0 as usize] {
+        if !self.tainted_region[rid.0 as usize]
+            && !self.moved_region[rid.0 as usize]
+            && !self.lent_region[rid.0 as usize]
+        {
             self.promoted.push(rid);
         }
     }
@@ -3319,6 +3342,7 @@ impl<'t> Lowerer<'t> {
     /// held sites escape this frame's certainty (no stack promotion)
     /// and are carried into the call's result set.
     fn escape_to_callee(&mut self, place: PlaceId, carry: &mut Vec<SiteId>) {
+        self.mark_region_lent(place);
         for (s, _) in self.sites_of_place(place) {
             self.mark_escape(s, "passed to a call");
             carry.push(s);
@@ -3338,6 +3362,7 @@ impl<'t> Lowerer<'t> {
                 // `read self`: immutably lent for the call.
                 if let Some((place, _)) = self.as_place(recv) {
                     self.emit_read(place, recv_span);
+                    self.mark_region_lent(place);
                     if !self.places.is_copy(place) {
                         surface.read_args.push((place, recv_span));
                     }
@@ -3427,6 +3452,7 @@ impl<'t> Lowerer<'t> {
                 }
                 if let Some((place, _)) = self.as_place(v) {
                     self.emit_read(place, v.span);
+                    self.mark_region_lent(place);
                     if !self.places.is_copy(place) {
                         // Non-`Copy` read arguments are lent for the
                         // whole call; `Copy` ones were copied at
@@ -3994,6 +4020,7 @@ impl<'t> Lowerer<'t> {
             region_local: HashMap::new(),
             moved_region: Vec::new(),
             tainted_region: Vec::new(),
+            lent_region: Vec::new(),
             promoted: Vec::new(),
             conflicted: false,
             static_region: None,

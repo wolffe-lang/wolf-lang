@@ -833,9 +833,19 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // each, union 176 → 177. checked holds 156 and all-three holds 139:
 // like the other `kernels/` perf witnesses, it is outside the checked
 // executor's run set, so the lanes' non-nesting is unchanged.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 156), ("native", 160), ("release", 160)];
-const UNION_FLOOR: usize = 177;
-const ALL_THREE_FLOOR: usize = 139;
+// s105 ratchet over 292 entries — the region VALUE tier (c25): four
+// new witnesses. `memory/region_value_pass.lu` and
+// `memory/region_value_return.lu` execute on all three lanes (native
+// and release learned the handle-as-value lowering; the checked
+// executor always ran regions) — +2 native, +2 release, +2 all-three.
+// `memory/region_value_container.lu` and `memory/region_value_elem.lu`
+// pin the refusals that REMAIN (a region behind an aggregate boundary
+// / a container element) and execute on the checked lane only — with
+// the two movers, checked +4 and union +4. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 160), ("native", 162), ("release", 162)];
+const UNION_FLOOR: usize = 181;
+const ALL_THREE_FLOOR: usize = 141;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

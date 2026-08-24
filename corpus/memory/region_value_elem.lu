@@ -1,0 +1,15 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.prov.region, mem.region.intra.1
+//! s105 (c25): the container ELEMENT position stays refused, by name
+//! — a `List[region]` cell has no binding the region law can follow,
+//! so `wir` refuses "a region element in a container (extent tracking
+//! stops at the handle — c25 closeout)". Channels remain the one
+//! deliberate crossing ([conc.chan.move]).
+
+fn main() -> !int {
+    var rs = List[region]()
+    let r = region()
+    (mut rs).push(r)
+    0
+}
