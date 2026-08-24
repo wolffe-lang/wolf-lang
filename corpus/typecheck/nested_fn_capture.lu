@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: resolve
+//! conforms: gram.item.fn
+//!
+//! `nested_fn_value.lu`'s refusing twin (#116b): a nested fn that
+//! reaches an enclosing local. A capture means an environment, and
+//! the env machinery (s105) belongs to closure VALUES a binding
+//! claims — so this refuses by name on every lane ("a nested fn
+//! capturing enclosing locals (bind a closure instead)"), never a
+//! silent miscompile of `base`. The run expectation is the natural
+//! reading if captures are ever ruled in; the pin advances with that
+//! ruling.
+
+fn main() -> !int {
+    let base = 4
+    fn plus(v: int) -> int { v + base }
+    if plus(1) == 5 { 0 } else { 1 }
+}

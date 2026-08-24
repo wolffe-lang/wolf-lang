@@ -678,3 +678,49 @@ fn nested_row_refuses_by_name() {
         );
     }
 }
+
+// ------------------------------------------------ #116b: nested fns --
+
+/// A nested named fn checks as a capture-free fn value and binds like
+/// a `let`: direct call, HOF pass, and call through a binding all
+/// type.
+#[test]
+fn nested_fn_checks_and_binds() {
+    let tc = check_one(
+        "fn apply(f: fn(int) -> bool, v: int) -> bool { f(v) }\n\
+         fn main() -> !int {\n    fn odd(v: int) -> bool { v % 2 == 1 }\n    if odd(3) {} else { return 1 }\n    if apply(odd, 5) {} else { return 2 }\n    let g = odd\n    if g(7) {} else { return 3 }\n    0\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+/// The scoped-out shapes refuse by name: a capture of an enclosing
+/// local, and a generic nested fn.
+#[test]
+fn nested_fn_refusals_are_named() {
+    let cap = check_one(
+        "fn main() -> !int {\n    let base = 4\n    fn plus(v: int) -> int { v + base }\n    if plus(1) == 5 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        cap.not_yet
+            .iter()
+            .any(|n| n.construct.contains("capturing enclosing locals")),
+        "{:?}",
+        cap.not_yet
+    );
+    let generic = check_one(
+        "fn main() -> !int {\n    fn id[T](v: T) -> T { v }\n    if id(1) == 1 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        generic
+            .not_yet
+            .iter()
+            .any(|n| n.construct.contains("a generic nested fn")),
+        "{:?}",
+        generic.not_yet
+    );
+}

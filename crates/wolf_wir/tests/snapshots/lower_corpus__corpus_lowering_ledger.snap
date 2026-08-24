@@ -303,6 +303,8 @@ typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nested_fn_capture.lu: not mem-clean (pre-wir rungs own it)
+typecheck/nested_fn_value.lu: lowers
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers

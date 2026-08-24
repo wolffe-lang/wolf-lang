@@ -3044,8 +3044,16 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            // Nested items in statement position wait for s17's
-            // restructuring of item environments (a nested fn is an
+            // A nested named fn (#116b): checks as a capture-free fn
+            // value — a closure with a name — and binds like a `let`
+            // (visible after its declaration; no recursion, exactly a
+            // `let`'s scoping). The scoped-out shapes refuse by name:
+            // generics, rows on the nested return, unannotated
+            // parameters, and captures of enclosing locals (bind a
+            // closure for those — its env machinery owns captures).
+            SyntaxKind::FnDecl => self.check_nested_fn(s),
+            // Other nested items in statement position wait for s17's
+            // restructuring of item environments (a nested type is an
             // item with a signature).
             k if k.is_item() => Err(NotYet {
                 construct: "a nested item declaration",
@@ -9302,6 +9310,109 @@ impl<'a> Checker<'a> {
         };
         self.last_closure_row = raised;
         Ok(self.lo.table.intern(TyKind::Fn(ptys, ret)))
+    }
+
+    /// #116b — a nested named `fn` in statement position: typed as a
+    /// capture-free fn VALUE (the closure recipe with a declared
+    /// signature), bound by name like a `let`. The fn type records at
+    /// the DECL's span, so lowering's closure machinery (s105) picks
+    /// it up unchanged; an empty capture set records there too, which
+    /// is also the enforcement point — a nested fn that reaches an
+    /// enclosing local refuses by name rather than growing an env.
+    fn check_nested_fn(&mut self, s: &GreenNode) -> R<()> {
+        let d = wolf_ast::FnDecl::cast(s).expect("kind");
+        if d.generics().is_some() {
+            return Err(NotYet {
+                construct: "a generic nested fn",
+                span: s.span,
+            });
+        }
+        let params: Vec<_> = d.params().into_iter().flat_map(|p| p.params()).collect();
+        let mut ptys = Vec::new();
+        let mut binds = Vec::new();
+        for p in &params {
+            let Some(t) = p.ty() else {
+                return Err(NotYet {
+                    construct: "a nested fn parameter without a type",
+                    span: p.syntax().span,
+                });
+            };
+            let ty = self.lower_ty(t);
+            if let Some(n) = p.name() {
+                binds.push((self.text(n.span), n.span, ty));
+            }
+            ptys.push(ty);
+        }
+        let ret = match d.ret_ty() {
+            Some(r) => {
+                if r.error_row().is_some() {
+                    return Err(NotYet {
+                        construct: "an error row on a nested fn (module items own rows)",
+                        span: r.syntax().span,
+                    });
+                }
+                match r.ty() {
+                    Some(t) if t.kind == SyntaxKind::ErrorUnionType => {
+                        return Err(NotYet {
+                            construct: "an error row on a nested fn (module items own rows)",
+                            span: t.span,
+                        });
+                    }
+                    Some(t) => self.lower_ty(t),
+                    None => self.error_ty(),
+                }
+            }
+            None => self.lo.table.unit(),
+        };
+        self.capture_frames.push(CaptureFrame {
+            limit: self.scopes.len(),
+            caps: Vec::new(),
+        });
+        self.push_scope();
+        self.level += 1;
+        for (name, span, ty) in binds {
+            self.bind(name, span, ty);
+        }
+        let was = self.in_closure;
+        self.in_closure = true;
+        self.closure_rows.push(Vec::new());
+        let r = match d.body() {
+            Some(body) => {
+                let exp = Expect {
+                    ty: ret,
+                    reason: Reason::ClosureBody,
+                    because: Some(s.span),
+                };
+                self.check_expr(body.syntax(), &exp)
+            }
+            None => Ok(()),
+        };
+        let raised = self.closure_rows.pop().expect("closure row frame");
+        self.in_closure = was;
+        self.level -= 1;
+        self.pop_scope();
+        let frame = self.capture_frames.pop().expect("closure capture frame");
+        r?;
+        if !frame.caps.is_empty() {
+            return Err(NotYet {
+                construct: "a nested fn capturing enclosing locals (bind a closure instead)",
+                span: s.span,
+            });
+        }
+        if !raised.is_empty() {
+            return Err(NotYet {
+                construct: "a raise inside a nested fn (declare rows on module items)",
+                span: s.span,
+            });
+        }
+        self.task_captures.push((s.span, Vec::new()));
+        let fnty = self.lo.table.intern(TyKind::Fn(ptys, ret));
+        self.record(s.span, fnty);
+        if let Some(n) = d.name() {
+            let name = self.text(n.span);
+            self.bind(name, n.span, fnty);
+        }
+        Ok(())
     }
 
     // ---------------------------------------------------- defaulting ---

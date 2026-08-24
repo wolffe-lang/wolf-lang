@@ -3717,6 +3717,32 @@ impl<'t> Lowerer<'t> {
                     }
                 }
                 SyntaxKind::AssumeStmt => self.lower_assume(stmt)?,
+                // #116b: a nested named fn — capture-free (the
+                // checker refused captures by name), so its body is a
+                // self-contained frame: params are its own locals,
+                // walked in its own scope exactly as a capture-free
+                // closure's body is. The NAME binds as an initialized
+                // Copy local (a fn value is one code pointer).
+                SyntaxKind::FnDecl => {
+                    let d = wolf_ast::FnDecl::cast(stmt).expect("kind");
+                    self.push_scope();
+                    if let Some(params) = d.params() {
+                        for p in params.params() {
+                            if let Some(n) = p.name() {
+                                let nm = self.text(n.span);
+                                self.declare_init(&nm, n.span);
+                            }
+                        }
+                    }
+                    if let Some(b) = d.body() {
+                        self.walk_block(b, false)?;
+                    }
+                    self.close_scope(end_span(stmt.span))?;
+                    if let Some(n) = d.name() {
+                        let nm = self.text(n.span);
+                        self.declare_init(&nm, n.span);
+                    }
+                }
                 k if k.is_item() => {
                     return Err(NotYet {
                         construct: "nested item declarations",

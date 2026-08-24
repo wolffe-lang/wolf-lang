@@ -1013,7 +1013,6 @@ fn lower_task_body<'t>(
     survey: Option<&mut Vec<NotYet>>,
 ) -> R<Stats> {
     let closure = task.closure.expect("closure task");
-    let d = wolf_ast::ClosureExpr::cast(closure).expect("kind");
     let mut b = FuncBuilder::new(module, task.body_name.clone(), task.body_sig);
     b.func.src_file = Some(task.span.file.index() as u32);
     b.set_span(task.span.lo, task.span.hi);
@@ -1145,7 +1144,7 @@ fn lower_task_body<'t>(
             }
         }
     }
-    let Some(bnode) = d.body() else {
+    let Some(bnode) = callable_body(closure) else {
         return Err(refuse("a task closure without a body", closure.span));
     };
     if bnode.kind == SyntaxKind::Block {
@@ -2978,6 +2977,41 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)",
                 stmt.span,
             )),
+            // #116b: a nested named fn — a capture-free fn value with
+            // a name. The entry lifts through s105's closure queue
+            // (the checker enforced zero captures and recorded the fn
+            // type at this decl's span); the name binds like a `let`
+            // of the s95 `func.addr` value.
+            SyntaxKind::FnDecl => {
+                let d = wolf_ast::FnDecl::cast(stmt).expect("kind");
+                let v = self.queue_closure_entry(stmt, Vec::new(), None)?;
+                let Some(name_span) = d.name().map(|t| t.span) else {
+                    return Ok(Flow::Val(None));
+                };
+                let Some(sema_ty) = self.expr_sema_ty(stmt.span) else {
+                    return Err(refuse("a nested fn without a recorded type", stmt.span));
+                };
+                let name = self.text(name_span);
+                let Some(wty) = self.wir_value_ty(sema_ty, stmt.span)? else {
+                    return Err(refuse("a valueless nested fn", stmt.span));
+                };
+                let var = self.b.declare_var(wty);
+                if self.straight_line {
+                    self.b.mark_single_block(var);
+                }
+                self.b.def_var(var, v);
+                self.b.func.add_debug_var(name.clone(), v, false);
+                self.scopes.last_mut().expect("scope").binds.push((
+                    name,
+                    LocalBind::Val {
+                        var,
+                        wrapping: false,
+                        unsigned: false,
+                        wir_ty: wty,
+                    },
+                ));
+                Ok(Flow::Val(None))
+            }
             k if k.is_item() => Err(refuse("nested item declarations", stmt.span)),
             _ => Ok(Flow::Val(None)),
         }
@@ -4802,15 +4836,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         caps: Vec<(String, TyId)>,
         cap_layout: Option<(Vec<TypeId>, Vec<u64>)>,
     ) -> R<Value> {
-        let d = wolf_ast::ClosureExpr::cast(e).expect("kind");
         let Some(cty) = self.expr_sema_ty(e.span) else {
             return Err(refuse("a closure without a recorded type", e.span));
         };
         let TyKind::Fn(ptys, _) = self.table.kind(self.strip_sema(cty)).clone() else {
             return Err(refuse("a closure without a fn type", e.span));
         };
-        let pnames: Vec<String> = d
-            .params()
+        let pnames: Vec<String> = callable_params(e)
             .into_iter()
             .flat_map(|l| l.params())
             .map(|p| {
@@ -14833,6 +14865,28 @@ fn parse_uint_literal(text: &str) -> Option<u64> {
         return u64::from_str_radix(hex, 16).ok();
     }
     t.parse::<u64>().ok()
+}
+
+/// The parameter list of a callable node — a `ClosureExpr` or a
+/// nested `FnDecl` statement (#116b): the two shapes the s105 closure
+/// queue lifts.
+fn callable_params(e: &GreenNode) -> Option<wolf_ast::ParamList<'_>> {
+    match e.kind {
+        SyntaxKind::ClosureExpr => wolf_ast::ClosureExpr::cast(e).and_then(|d| d.params()),
+        SyntaxKind::FnDecl => wolf_ast::FnDecl::cast(e).and_then(|d| d.params()),
+        _ => None,
+    }
+}
+
+/// The body node of a callable node (see [`callable_params`]).
+fn callable_body(e: &GreenNode) -> Option<&GreenNode> {
+    match e.kind {
+        SyntaxKind::ClosureExpr => wolf_ast::ClosureExpr::cast(e).and_then(|d| d.body()),
+        SyntaxKind::FnDecl => wolf_ast::FnDecl::cast(e)
+            .and_then(|d| d.body())
+            .map(|b| b.syntax()),
+        _ => None,
+    }
 }
 
 /// The inner bytes of a raw string literal's source text, or `None`

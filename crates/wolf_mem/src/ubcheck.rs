@@ -1945,6 +1945,13 @@ impl<'t> Machine<'t> {
                         return Ok(other);
                     }
                 },
+                // #116b: nested named fns lift on the native tiers;
+                // the checked executor still refuses the closure
+                // family by name (#12), and a nested fn is a named
+                // capture-free closure.
+                SyntaxKind::FnDecl => {
+                    return self.refuse("a nested fn in checked execution", stmt.span);
+                }
                 k if k.is_item() => {
                     return self.refuse("nested item declarations", stmt.span);
                 }
