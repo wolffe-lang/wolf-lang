@@ -6084,6 +6084,29 @@ impl<'a> Checker<'a> {
                         }
                     }
                 }
+                // `assert(false)` — the spelled-out literal, not a
+                // computed condition — cannot return, so it types as
+                // `!` (bottom) and inhabits whatever the position
+                // expects: a generic handler's trap-and-never-return
+                // tail (`v else |_| { …; assert(false) }`) checks
+                // against `T` exactly as a `return`-diverging one
+                // already did (#35, narrowed). SCOPE, deliberate:
+                // only the literal diverges — `assert(cond)` with a
+                // runtime-false condition stays `()`, and no
+                // `never`-returning FUNCTION type exists; whether
+                // `testing.fail`-shaped calls earn a bottom type is
+                // the surface question that stays open on #35.
+                let diverges = arg_nodes
+                    .first()
+                    .and_then(|a| Arg::value(*a))
+                    .is_some_and(|v| {
+                        v.tokens()
+                            .next()
+                            .is_some_and(|t| t.kind == SyntaxKind::FalseKw)
+                    });
+                if diverges {
+                    return Ok(self.lo.table.never());
+                }
                 Ok(unit)
             }
             I::TypeInfo => {

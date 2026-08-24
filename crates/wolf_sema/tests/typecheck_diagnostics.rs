@@ -381,3 +381,30 @@ fn e0414_non_root_main_is_ordinary() {
     ]);
     assert!(out.is_empty(), "expected silence, got:\n{out}");
 }
+
+// ------------------------------------------- #35 (narrowed): bottom --
+
+/// #35, narrowed (s108): `assert(false)` — the spelled-out literal —
+/// types as `!` and inhabits the `T` a generic handler's fallback
+/// owes, exactly as return-divergence already did.
+#[test]
+fn assert_false_diverges_in_fallback() {
+    let out = render_types(&[(
+        &[],
+        "main.lu",
+        "fn expect[T](v: T ! {none}, msg: str) -> T {\n    let hit = v else |_| {\n        print(\"FAILED: {msg}\")\n        assert(false)\n    }\n    hit\n}\n\nfn main() -> !int {\n    let a = expect(7, \"seven\")\n    if a == 7 { 0 } else { 1 }\n}\n",
+    )]);
+    assert!(out.is_empty(), "expected silence, got:\n{out}");
+}
+
+/// The scope boundary, pinned: a COMPUTED condition is not the
+/// literal — the checker cannot know it diverges, so the fallback
+/// still owes a `T` (E0401). Widening beyond the literal is the
+/// surface question that stays open on #35.
+#[test]
+fn e0401_computed_assert_still_owes_t() {
+    snap_one(
+        "e0401_computed_assert_fallback",
+        "fn expect[T](v: T ! {none}, cond: bool) -> T {\n    let hit = v else |_| {\n        assert(cond)\n    }\n    hit\n}\n\nfn main() -> !int {\n    let a = expect(7, false)\n    if a == 7 { 0 } else { 1 }\n}\n",
+    );
+}

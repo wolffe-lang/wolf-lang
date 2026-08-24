@@ -1,0 +1,36 @@
+//! check: run(exit=trap(assert), stdout="FAILED: neg")
+//! phase: run
+//! conforms: err.union, err.rows, conf.trap.set
+//!
+//! `handler_diverge_call.lu`'s trap twin (#35, narrowed): the miss
+//! path actually TAKES the diverging fallback — the generic handler
+//! prints its message and `assert(false)` ends the process with the
+//! `assert` trap kind, the D30 divergence-is-ordinary-control-flow
+//! story. The compiled tiers agree on the trap; the checked executor
+//! refuses the raising call in argument position by name ("control
+//! flow in an argument" — a pre-existing, honest refusal, so this
+//! file pins the two lanes that run). Found en route and left
+//! visible: HOISTING the raise (`let p = pick(0)`, then
+//! `expect(p, …)`) makes the checked executor answer `error: none` +
+//! exit 1 — it propagates the raw row value at `let` instead of
+//! binding it — a one-sided divergence that belongs to the checked
+//! lane's row-value tier, not to #35's typing fix.
+
+fn expect[T](v: T ! {none}, msg: str) -> T {
+    let hit = v else |_| {
+        print("FAILED: {msg}")
+        assert(false)
+    }
+    hit
+}
+
+fn pick(x: int) -> int ! {none} {
+    if x < 1 { return none }
+    x
+}
+
+fn main() -> !int {
+    let a = expect(pick(0), "neg")
+    print("got {a}")
+    if a == 0 { 0 } else { 1 }
+}

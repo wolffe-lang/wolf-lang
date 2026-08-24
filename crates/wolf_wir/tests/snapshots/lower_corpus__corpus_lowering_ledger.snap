@@ -223,6 +223,8 @@ rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/eu_main_err_exit.lu: lowers
+rows/handler_diverge_call.lu: lowers
+rows/handler_diverge_trap.lu: lowers
 rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: lowers
 rows/inferred_private.lu: lowers
