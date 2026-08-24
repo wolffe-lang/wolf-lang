@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0414]: `main` is the entry the process calls, so nothing exists to choose its type arguments — it cannot be generic
+ --> mem:///main.lu:1:4
+  |
+1 | fn main[T]() {
+  |    ^^^^ declared generic here
+  |
+  = note: the entry's legal shapes: `fn main()`, `fn main() -> int`, `fn main() -> !int` (and
+    `!()` / an explicit error row over `int` or `()`). An ok value becomes the exit status;
+    an error value prints `error: <tag>` and exits 1 (D30).

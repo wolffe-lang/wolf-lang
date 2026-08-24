@@ -317,3 +317,67 @@ fn e0413_hex_on_str() {
         "fn main() -> !int {\n    let s = \"wolf\"\n    print(\"[{s:x}]\")\n    0\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E0414 -----
+
+/// Catalog case (#106): `fn main() -> str` used to run on the checked
+/// rung with the value silently dropped and refuse at the native
+/// rung's C-entry shim — a lane divergence over a declaration fact.
+/// The shape is ruled here, at typecheck, with the legal spellings.
+#[test]
+fn e0414_str_main() {
+    snap_one(
+        "e0414_str_main",
+        "fn main() -> str {\n    print(\"hi\")\n    \"nope\"\n}\n",
+    );
+}
+
+/// The process hands `main` no arguments.
+#[test]
+fn e0414_main_with_params() {
+    snap_one("e0414_main_params", "fn main(x: int) -> int {\n    x\n}\n");
+}
+
+/// Nothing exists to choose the entry's type arguments.
+#[test]
+fn e0414_generic_main() {
+    snap_one(
+        "e0414_generic_main",
+        "fn main[T]() {\n    print(\"t\")\n}\n",
+    );
+}
+
+/// The boundary from the other side: every legal shape stays silent —
+/// `()`, `int`, `!int`, `!()`, and an explicit row over `int`.
+#[test]
+fn e0414_legal_shapes_are_silent() {
+    for src in [
+        "fn main() {\n    print(\"u\")\n}\n",
+        "fn main() -> int {\n    0\n}\n",
+        "fn main() -> !int {\n    0\n}\n",
+        "fn main() -> !() {\n    print(\"u\")\n}\n",
+        "fn main() -> int ! {none} {\n    0\n}\n",
+    ] {
+        let out = render_types(&[(&[], "main.lu", src)]);
+        assert!(out.is_empty(), "expected silence for {src:?}, got:\n{out}");
+    }
+}
+
+/// A non-root `main` is just a function — the entry rule reads the
+/// root module only.
+#[test]
+fn e0414_non_root_main_is_ordinary() {
+    let out = render_types(&[
+        (
+            &[],
+            "main.lu",
+            "use util\nfn main() -> !int {\n    print(util.main(3))\n    print(\"{util.twice(3)}\")\n    0\n}\n",
+        ),
+        (
+            &["util"],
+            "u.lu",
+            "/// The nested namesake: takes a parameter, returns `str`.\npub fn main(v: int) -> str {\n    \"{v}\"\n}\n/// A second item, so the module is not one of ceremony.\npub fn twice(v: int) -> int {\n    v * 2\n}\n",
+        ),
+    ]);
+    assert!(out.is_empty(), "expected silence, got:\n{out}");
+}

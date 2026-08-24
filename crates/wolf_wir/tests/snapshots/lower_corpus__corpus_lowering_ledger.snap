@@ -289,6 +289,8 @@ typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
+typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
+typecheck/main_unit_row.lu: lowers
 typecheck/match_exhaustive.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_narrow_scrutinee.lu: lowers

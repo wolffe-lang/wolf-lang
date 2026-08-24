@@ -256,8 +256,85 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // (cycle-aware fixpoint over each module's call graph) and reject
     // inferred rows on exported items (E0605).
     crate::rows::seal(pkg, &mut sigs);
+    // The entry-signature rule (#106): a root-module `main` is the
+    // program's entry, and its shape is a property of the declaration
+    // — ruled here, not at some backend's shim.
+    check_entry_sig(&mut sigs);
     wolf_diag::sort_diagnostics(&mut sigs.diagnostics);
     sigs
+}
+
+/// E0414 (#106) — what `main` may look like. The root module's `main`
+/// is the entry the process calls, so its signature is a whole-program
+/// contract: no parameters (the process has none to hand it), no
+/// generics (nothing instantiates the entry), and a return the process
+/// can be handed an exit status from — `()`, `int`, or an error union
+/// over either (`!int`, `!()`, `int ! {…}`: the ok value exits, an
+/// error value is D30's `error: <tag>` + exit 1). Everything else used
+/// to run on the checked rung with the value silently dropped and
+/// refuse at the native rung's C-entry shim — a lane divergence AND a
+/// codegen-phase answer to a declaration-shape question. Exit-code
+/// numerics stay #32's open spec question; this rules only the shapes.
+/// Runs after row sealing so `-> !T` inferred rows are concrete.
+fn check_entry_sig(sigs: &mut SigTables) {
+    let Some(ItemSig::Fn(f)) = sigs.get(0, "main") else {
+        return;
+    };
+    let ret_ok = {
+        let ok_ty = match *sigs.table.kind(f.ret) {
+            TyKind::ErrUnion(ok, _) => ok,
+            _ => f.ret,
+        };
+        // `Error` unifies with everything (D22): the wreck already
+        // has its own diagnostic, never a cascade off it.
+        matches!(
+            sigs.table.kind(ok_ty),
+            TyKind::Unit | TyKind::Prim(Prim::Int) | TyKind::Error
+        )
+    };
+    let (span, what, label): (Span, String, &str) = if !f.params.is_empty() {
+        let n = f.params.len();
+        (
+            f.name_span,
+            format!(
+                "`main` is the entry the process calls, and the process hands it no \
+                 arguments — this one wants {n}"
+            ),
+            "declared with parameters here",
+        )
+    } else if !f.generics.is_empty() {
+        (
+            f.name_span,
+            "`main` is the entry the process calls, so nothing exists to choose its \
+             type arguments — it cannot be generic"
+                .to_string(),
+            "declared generic here",
+        )
+    } else if !ret_ok {
+        let no_vars = |_: u32| -> Result<TyId, &'static str> { Err("_") };
+        let found = crate::types::render(&sigs.table, f.ret, &no_vars);
+        (
+            f.ret_span.unwrap_or(f.name_span),
+            format!(
+                "`main` returns `{found}`, which is not a type the process can be \
+                 handed"
+            ),
+            "the process can take an exit status from `()`, `int`, or an error \
+             union over them",
+        )
+    } else {
+        return;
+    };
+    sigs.diagnostics.push(
+        Diagnostic::error(codes::E0414, span, what)
+            .with_label(label)
+            .with_note(
+                "the entry's legal shapes: `fn main()`, `fn main() -> int`, \
+                 `fn main() -> !int` (and `!()` / an explicit error row over \
+                 `int` or `()`). An ok value becomes the exit status; an error \
+                 value prints `error: <tag>` and exits 1 (D30).",
+            ),
+    );
 }
 
 /// The module-namespace bindings of `file` within `module`, as

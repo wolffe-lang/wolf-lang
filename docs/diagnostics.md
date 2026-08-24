@@ -599,6 +599,28 @@ an integer.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__format_spec_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_hex_on_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_precision_on_int.snap
 
+## E0414 — this is not a signature `main` can have
+
+The root module's `main` is the entry the process calls, so its
+signature is a whole-program contract, ruled at the declaration
+(wolf-lang#106) rather than discovered at some backend's
+code-generation shim. Three constraints: `main` takes no parameters
+(the process hands it none — argument access is a library surface,
+not a parameter list); `main` is never generic (nothing exists to
+choose its type arguments); and `main` returns a type the process can
+be handed an exit status from — `()` (the process exits 0), `int`
+(the value is the exit status), or an error union over either
+(`!int`, `!()`, or an explicit row such as `int ! {none}`): the ok
+value exits as above, an error value prints `error: <tag>` and exits
+1 (D30's documented process behavior). A `main` returning anything
+else — `str`, `bool`, a struct — used to run on the checked rung with
+the value silently dropped and refuse at the native rung, a lane
+divergence with an invented semantics on one side. Which NUMBER each
+verdict class exits with process-wide is a separate, still-open spec
+question (#32); this code rules only the shapes.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__main_returns_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__main_unit_row.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0414_generic_main.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0414_main_params.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0414_str_main.snap
+
 ## E0501 — the generic body uses something its bounds do not provide
 
 The golden rule of wolf generics: a generic body is checked once,

@@ -621,6 +621,26 @@ formattable type. Reach for the conversion first when the intent is
 an integer.
 "#);
 
+code!(E0414, "this is not a signature `main` can have", r#"
+The root module's `main` is the entry the process calls, so its
+signature is a whole-program contract, ruled at the declaration
+(wolf-lang#106) rather than discovered at some backend's
+code-generation shim. Three constraints: `main` takes no parameters
+(the process hands it none — argument access is a library surface,
+not a parameter list); `main` is never generic (nothing exists to
+choose its type arguments); and `main` returns a type the process can
+be handed an exit status from — `()` (the process exits 0), `int`
+(the value is the exit status), or an error union over either
+(`!int`, `!()`, or an explicit row such as `int ! {none}`): the ok
+value exits as above, an error value prints `error: <tag>` and exits
+1 (D30's documented process behavior). A `main` returning anything
+else — `str`, `bool`, a struct — used to run on the checked rung with
+the value silently dropped and refuse at the native rung, a lane
+divergence with an invented semantics on one side. Which NUMBER each
+verdict class exits with process-wide is a separate, still-open spec
+question (#32); this code rules only the shapes.
+"#);
+
 // ------------------------------------------------------------------------
 // E05xx — traits, checked generics, and coherence (s14).
 // ------------------------------------------------------------------------
