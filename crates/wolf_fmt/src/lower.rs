@@ -1984,6 +1984,29 @@ impl<'a> Fmt<'a> {
 
     // --------------------------------------------------------- binexpr --
 
+    /// Leading comments of the chain's first token, emitted OUTSIDE
+    /// the chain's group and marked consumed. They render on their own
+    /// lines before any of the group's ink, so inside the group they
+    /// could only ever force a break the flat form never shows — and
+    /// which token owns such a comment migrates between passes (pass
+    /// one: a list separator, whose trivia the list emits outside the
+    /// element; pass two: the element's own first token). Owner inside
+    /// the group forced `t - 1` to break at the operator where owner
+    /// outside kept it flat — one layout per pass
+    /// (idem_arm_body_break).
+    fn hoist_lead(&self, n: &GreenNode, out: &mut Vec<Doc>) {
+        let Some(t) = first_token(n) else {
+            return;
+        };
+        self.lead(t, out);
+        let mut consumed = self.consumed.borrow_mut();
+        for s in &t.leading {
+            if is_comment(self.slice(*s)) {
+                consumed.insert((s.lo, s.hi));
+            }
+        }
+    }
+
     /// Flatten a same-tier chain: break after operators, continuations
     /// indented once (`[gram.fmt.continuation]`).
     fn bin_chain(&self, n: &GreenNode, out: &mut Vec<Doc>) {
@@ -1995,6 +2018,7 @@ impl<'a> Fmt<'a> {
             self.walk_children(n, out, Ctx::Free);
             return;
         }
+        self.hoist_lead(n, out);
         let mut parts: Vec<Doc> = Vec::new();
         self.flatten_bin(n, t, &mut parts, true);
         let mut g = parts;
@@ -2094,6 +2118,9 @@ impl<'a> Fmt<'a> {
     /// One postfix chain: base, then `.member`/calls/indexes/`?`,
     /// breaking *after* dots (trailing style).
     fn postfix_chain(&self, n: &GreenNode, out: &mut Vec<Doc>) {
+        // Same rule as `bin_chain`: the leftmost token's leading
+        // comments ride outside the chain's group.
+        self.hoist_lead(n, out);
         let mut base = Vec::new();
         let mut ops = Vec::new();
         self.flatten_postfix(n, &mut base, &mut ops);
