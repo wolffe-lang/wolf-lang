@@ -905,6 +905,7 @@ fn lower_body(
         fn_tail: None,
         callees: HashMap::new(),
         straight_line: false,
+        capture_binds: 0,
         task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
         pending_tasks: &mut pending,
         foreign: None,
@@ -960,7 +961,10 @@ fn lower_body(
                 Err(e) => return Err(body_verdict(survey.as_deref_mut(), e)),
             }
         }
-        if let Err(e) = build_task_shim(module, &task) {
+        // s105: a closure ENTRY is one function — no runtime shim.
+        if matches!(task.kind, PendingKind::Task)
+            && let Err(e) = build_task_shim(module, &task)
+        {
             return Err(body_verdict(survey.as_deref_mut(), e));
         }
     }
@@ -1042,6 +1046,7 @@ fn lower_task_body<'t>(
         fn_tail: None,
         callees: HashMap::new(),
         straight_line: false,
+        capture_binds: 0,
         task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
         pending_tasks: pending,
         foreign: None,
@@ -1058,26 +1063,87 @@ fn lower_task_body<'t>(
     {
         lo.fn_eu = Some(ret);
     }
-    // Prologue: captures are the entry block's params, bound by name.
+    // Prologue. Task kind: captures are the entry block's params,
+    // bound by name (s73/s86 — the shim unpacked the env). Closure
+    // kind (s105): the env RECORD pointer is the leading param;
+    // captures flat-load from it through a foreign-role region (the
+    // s98 dyn-shim read discipline: runtime-owned storage this body
+    // never stores through), then the declared parameters bind.
     let entry_params = lo.b.block_params(lo.b.current_block());
     lo.scopes.push(ScopeFrame::default());
-    for (i, (name, sema)) in task.caps.iter().enumerate() {
-        let wty = task.cap_wtys[i];
-        let val = entry_params[i];
-        let var = lo.b.declare_var(wty);
-        lo.b.def_var(var, val);
-        lo.b.func.add_debug_var(name.clone(), val, true);
-        let bind = LocalBind::Val {
-            var,
-            wrapping: matches!(lo.table.kind(*sema), TyKind::Wrapping(_)),
-            unsigned: sema_unsigned(lo.table, *sema),
-            wir_ty: wty,
-        };
-        lo.scopes
-            .last_mut()
-            .expect("scope")
-            .binds
-            .push((name.clone(), bind));
+    lo.capture_binds = task.caps.len();
+    match &task.kind {
+        PendingKind::Task => {
+            for (i, (name, sema)) in task.caps.iter().enumerate() {
+                let wty = task.cap_wtys[i];
+                let val = entry_params[i];
+                let var = lo.b.declare_var(wty);
+                lo.b.def_var(var, val);
+                lo.b.func.add_debug_var(name.clone(), val, true);
+                let bind = LocalBind::Val {
+                    var,
+                    wrapping: matches!(lo.table.kind(*sema), TyKind::Wrapping(_)),
+                    unsigned: sema_unsigned(lo.table, *sema),
+                    wir_ty: wty,
+                };
+                lo.scopes
+                    .last_mut()
+                    .expect("scope")
+                    .binds
+                    .push((name.clone(), bind));
+            }
+        }
+        PendingKind::Closure { params } => {
+            let has_env = !task.caps.is_empty();
+            if has_env {
+                let env = entry_params[0];
+                let renv = lo.b.ins_region_foreign(ForeignRole::Header);
+                for (i, (name, sema)) in task.caps.iter().enumerate() {
+                    let wty = task.cap_wtys[i];
+                    let off = task.cap_offs[i];
+                    let addr = if off == 0 {
+                        env
+                    } else {
+                        let k = lo.b.iconst(types::I64, off as i64);
+                        lo.b.ins_ptr_off(env, k, 1)
+                    };
+                    let val = load_flat_raw(lo.b, wty, addr, renv, task.span)?;
+                    let var = lo.b.declare_var(wty);
+                    lo.b.def_var(var, val);
+                    lo.b.func.add_debug_var(name.clone(), val, true);
+                    let bind = LocalBind::Val {
+                        var,
+                        wrapping: matches!(lo.table.kind(*sema), TyKind::Wrapping(_)),
+                        unsigned: sema_unsigned(lo.table, *sema),
+                        wir_ty: wty,
+                    };
+                    lo.scopes
+                        .last_mut()
+                        .expect("scope")
+                        .binds
+                        .push((name.clone(), bind));
+                }
+            }
+            let first = if has_env { 1 } else { 0 };
+            for (j, (name, sema)) in params.iter().enumerate() {
+                let val = entry_params[first + j];
+                let wty = lo.b.func.value_ty(val);
+                let var = lo.b.declare_var(wty);
+                lo.b.def_var(var, val);
+                lo.b.func.add_debug_var(name.clone(), val, true);
+                let bind = LocalBind::Val {
+                    var,
+                    wrapping: matches!(lo.table.kind(lo.strip_sema(*sema)), TyKind::Wrapping(_)),
+                    unsigned: sema_unsigned(lo.table, *sema),
+                    wir_ty: wty,
+                };
+                lo.scopes
+                    .last_mut()
+                    .expect("scope")
+                    .binds
+                    .push((name.clone(), bind));
+            }
+        }
     }
     let Some(bnode) = d.body() else {
         return Err(refuse("a task closure without a body", closure.span));
@@ -2119,6 +2185,13 @@ enum LocalBind {
     /// s77's seven consuming positions — the lend analysis proved that
     /// before the caller was allowed to pass one.
     BytesView { ptr: Value, len: Value },
+    /// s105: a capturing closure bound by `let` — the two-word pair
+    /// (entry fn ptr via `func.addr`, env record ptr), the s96/s98
+    /// aggregate with the vtable slot replaced by a direct entry. The
+    /// pair stays in its frame: a call reads both halves (two
+    /// `agg.get`s and a `call.ind`, env leading); any other read
+    /// refuses by name.
+    Closure { pair: Value },
     /// A unit-typed binding (no runtime value).
     Unit,
     /// A `when`-body payload rebind (s73, [conc.when.body]): reads and
@@ -2358,6 +2431,13 @@ struct Lowerer<'t, 'b, 'm> {
     /// control construct is one block, so every variable is
     /// single-block and bypasses the global Braun maps.
     straight_line: bool,
+    /// s105: the leading binds of scope 0 are CAPTURES (this Lowerer
+    /// is a closure/task body). Writes, `mut`/`take` lends of a name
+    /// that resolves to one refuse by name — borrow-only closures:
+    /// the env holds copies, and only read-only captures keep the
+    /// copy unobservable (the mem tier's shared loans are the other
+    /// half of that argument).
+    capture_binds: usize,
     /// s73: spawn-site capture sets by method-call span (sema's
     /// conc-lowering handoff — the closure environment layout input).
     task_captures: HashMap<Span, &'t [wolf_sema::TaskCapture]>,
@@ -2412,10 +2492,24 @@ struct DynShim {
     span: Span,
 }
 
+/// What a queued body IS (s105): a spawn task (the s73/s86 shape —
+/// body fn + runtime entry shim), or a closure VALUE's entry fn (one
+/// function: `(env?, params…) -> ret`, captures loaded from the env
+/// record in its own prologue; no runtime shim).
+#[derive(Clone)]
+enum PendingKind {
+    Task,
+    /// The closure's declared parameters (name, sema type), in order.
+    Closure {
+        params: Vec<(String, TyId)>,
+    },
+}
+
 /// One queued task body (s73): the entry shim `fn(env) -> i64` plus —
 /// for closure tasks — the body function lowered from the closure with
 /// its captures as parameters. Proc spawns of named functions reuse
-/// the already-lowered callee as the body.
+/// the already-lowered callee as the body. s105: also one queued
+/// closure ENTRY (see [`PendingKind`]).
 struct PendingTask<'t> {
     /// The entry shim's WIR name (what `func.addr` names).
     shim_name: String,
@@ -2438,6 +2532,7 @@ struct PendingTask<'t> {
     body_ret: Option<TypeId>,
     /// The declaration span (diagnostics + line tables).
     span: Span,
+    kind: PendingKind,
 }
 
 impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
@@ -2938,6 +3033,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             return Ok(Flow::Val(None));
         }
+        // s105: a CAPTURING closure bound by `let`/`var` — build the
+        // pair here, where the binding claims the borrow (the mem
+        // tier's loan already did the same one rung earlier).
+        // Capture-free closures fall through: they are ordinary s95
+        // fn values.
+        if init.kind == SyntaxKind::ClosureExpr
+            && let Some(name_span) = name_span
+            && !self.closure_captures(init.span).is_empty()
+        {
+            let pair = self.lower_closure_pair(init)?;
+            let name = self.text(name_span);
+            self.scopes
+                .last_mut()
+                .expect("scope")
+                .binds
+                .push((name, LocalBind::Closure { pair }));
+            return Ok(Flow::Val(None));
+        }
         let v = flow_val!(self.lower_expr(init));
         let Some(name_span) = name_span else {
             return Ok(Flow::Val(None));
@@ -3127,6 +3240,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// declaration point and the exit are invisible (its own nested
     /// scopes, pushed at or beyond the install depth, stay visible).
     fn lookup(&self, name: &str) -> Option<LocalBind> {
+        self.lookup_at(name).map(|(_, _, b)| b)
+    }
+
+    /// [`Self::lookup`] with the resolution point: (scope index, bind
+    /// index, bind). The capture classifier's input (s105).
+    fn lookup_at(&self, name: &str) -> Option<(usize, usize, LocalBind)> {
         for (i, scope) in self.scopes.iter().enumerate().rev() {
             let limit = match self.visible {
                 Some((fs, fb, depth)) if i < depth => {
@@ -3137,13 +3256,65 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 _ => scope.binds.len(),
             };
-            for (n, b) in scope.binds[..limit].iter().rev() {
+            for (j, (n, b)) in scope.binds[..limit].iter().enumerate().rev() {
                 if n == name {
-                    return Some(*b);
+                    return Some((i, j, *b));
                 }
             }
         }
         None
+    }
+
+    /// s105: does `name` resolve to a CAPTURE of the closure/task body
+    /// this Lowerer is building? Shadowing-correct: a closure-local
+    /// rebinding of the same name resolves deeper and answers false.
+    fn resolves_to_capture(&self, name: &str) -> bool {
+        self.capture_binds > 0
+            && matches!(self.lookup_at(name), Some((0, j, _)) if j < self.capture_binds)
+    }
+
+    /// s105: refuse a write/`mut`/`take` position whose place ROOT is
+    /// a capture — borrow-only closures. `what` names the spelling.
+    fn check_capture_write(&self, e: &'t GreenNode, what: &'static str) -> R<()> {
+        if self.capture_binds == 0 {
+            return Ok(());
+        }
+        let mut cur = e;
+        loop {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    let Some(base) = wolf_ast::MemberExpr::cast(cur).and_then(|m| m.base()) else {
+                        return Ok(());
+                    };
+                    cur = base;
+                }
+                SyntaxKind::BracketApply => {
+                    let Some(base) = BracketApply::cast(cur).and_then(|b| b.callee()) else {
+                        return Ok(());
+                    };
+                    cur = base;
+                }
+                SyntaxKind::ParenExpr => {
+                    let Some(inner) = ParenExpr::cast(cur).and_then(|p| p.expr()) else {
+                        return Ok(());
+                    };
+                    cur = inner;
+                }
+                SyntaxKind::PathExpr => break,
+                _ => return Ok(()),
+            }
+        }
+        let root = self.text(cur.span);
+        if self.resolves_to_capture(&root) {
+            return Err(refuse_named(
+                format!(
+                    "a closure {what} its captured binding `{root}` (captures are \
+                     read-only — borrow-only closures, c25 closeout)"
+                ),
+                e.span,
+            ));
+        }
+        Ok(())
     }
 
     fn compound_bin(op: SyntaxKind) -> Option<SyntaxKind> {
@@ -3167,6 +3338,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(place) = d.place() else {
             return Ok(Flow::Val(None));
         };
+        self.check_capture_write(place, "writing")?;
         if place.kind == SyntaxKind::MemberExpr {
             return self.lower_member_assign(d, place, stmt.span);
         }
@@ -3196,6 +3368,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             LocalBind::Region { .. } => Err(refuse(
                 "region rebinding (c05 identity backlog)",
+                place.span,
+            )),
+            // s105: the pair is claimed by ITS binding for its whole
+            // extent (the mem tier scoped the loans to it); rebinding
+            // would need loan transfer nothing models yet.
+            LocalBind::Closure { .. } => Err(refuse(
+                "reassigning a closure binding (the pair stays with its `let` — \
+                 c25 closeout)",
                 place.span,
             )),
             // s89: a lent view is read-only — the lend analysis admits
@@ -3563,6 +3743,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // another value) or at the OP (container
                     // elements), by name.
                     Some(LocalBind::Region { handle, .. }) => Ok(Flow::Val(Some(handle))),
+                    // s105: the pair does not leave its frame — the
+                    // fn-value ABI is one word, and the env borrows
+                    // places of THIS frame. Calls go through the
+                    // binding; any other read refuses by name.
+                    Some(LocalBind::Closure { .. }) => Err(refuse(
+                        "a capturing closure read as a value (the pair stays in its \
+                         frame; call it by name — c25 closeout)",
+                        e.span,
+                    )),
                     // s89: a lent view has no first-class WIR value —
                     // that is the invariant s77 set and this sprint
                     // kept. Every position the lend analysis admits is
@@ -3794,10 +3983,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "unsafe-tier WIR ops (deferred from s26 — see closeout)",
                 e.span,
             )),
-            SyntaxKind::ClosureExpr => Err(refuse(
-                "closure lowering outside `spawn` (fn values, c05)",
-                e.span,
-            )),
+            // s105: a closure VALUE. Capture-free closures lambda-lift
+            // to a synthesized module fn — the value is one code
+            // pointer (`func.addr`), indistinguishable from the s95
+            // bare-fn read, so it stores, passes, returns and calls
+            // through every s97 path. A CAPTURING closure is the
+            // two-word pair, admitted only where a binding claims it
+            // (the mem tier's loan discipline mirrors this): anywhere
+            // else refuses by name.
+            SyntaxKind::ClosureExpr => {
+                if self.closure_captures(e.span).is_empty() {
+                    let v = self.queue_closure_entry(e, Vec::new(), None)?;
+                    Ok(Flow::Val(Some(v)))
+                } else {
+                    Err(refuse(
+                        "a capturing closure outside a `let` binding (the env \
+                         borrows its captures; bind it, then call it — c25 \
+                         closeout)",
+                        e.span,
+                    ))
+                }
+            }
             // The conc surface (s73): native lowering onto the
             // s32–s36 runtime ABI.
             SyntaxKind::ScopeExpr => self.lower_conc_scope(e, want),
@@ -4470,7 +4676,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .map(|cs| cs.iter().map(|c| (c.name.clone(), c.ty)).collect())
             .unwrap_or_default();
         let arena = self.task_env_arena(recv, e.span)?;
-        let (env, env_region, layout) = self.pack_task_env(&caps, arena, e.span)?;
+        let (env, env_region, layout) = self.pack_task_env(&caps, arena, e.span, false)?;
         let task_no = self.pending_tasks.len();
         let base = self.b.func.name.clone();
         let body_name = format!("{base}.task{task_no}");
@@ -4491,6 +4697,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             cap_offs: layout.1,
             body_ret,
             span: e.span,
+            kind: PendingKind::Task,
         });
         // The entry pointer: func.addr of the (post-pass) shim.
         let shim_sig = self.task_shim_sig();
@@ -4574,6 +4781,188 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// s105: sema's capture record for the closure at `span` (empty
+    /// when the closure captures nothing — or, defensively, when the
+    /// record is missing; the entry build re-checks).
+    fn closure_captures(&self, span: Span) -> Vec<(String, TyId)> {
+        self.task_captures
+            .get(&span)
+            .map(|cs| cs.iter().map(|c| (c.name.clone(), c.ty)).collect())
+            .unwrap_or_default()
+    }
+
+    /// s105: queue a closure's ENTRY function and return its address
+    /// (`func.addr`). Capture-free: the entry's signature IS the
+    /// closure's fn type — a true s95 fn value. Capturing: the env
+    /// record pointer leads, and the caller wraps the address into
+    /// the pair.
+    fn queue_closure_entry(
+        &mut self,
+        e: &'t GreenNode,
+        caps: Vec<(String, TyId)>,
+        cap_layout: Option<(Vec<TypeId>, Vec<u64>)>,
+    ) -> R<Value> {
+        let d = wolf_ast::ClosureExpr::cast(e).expect("kind");
+        let Some(cty) = self.expr_sema_ty(e.span) else {
+            return Err(refuse("a closure without a recorded type", e.span));
+        };
+        let TyKind::Fn(ptys, _) = self.table.kind(self.strip_sema(cty)).clone() else {
+            return Err(refuse("a closure without a fn type", e.span));
+        };
+        let pnames: Vec<String> = d
+            .params()
+            .into_iter()
+            .flat_map(|l| l.params())
+            .map(|p| {
+                p.name()
+                    .map(|n| self.text(n.span))
+                    .unwrap_or_else(|| "_".to_string())
+            })
+            .collect();
+        if pnames.len() != ptys.len() {
+            return Err(refuse(
+                "a closure whose parameter list disagrees with its type",
+                e.span,
+            ));
+        }
+        let params: Vec<(String, TyId)> = pnames.into_iter().zip(ptys).collect();
+        let body_ret = self.task_body_ret(e)?;
+        let mut sigparams: Vec<Param> = Vec::new();
+        if !caps.is_empty() {
+            sigparams.push(Param {
+                ty: types::PTR,
+                mode: Mode::Val,
+            });
+        }
+        for (_, sema) in &params {
+            if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
+                return Err(refuse(
+                    "a region parameter on a closure (c25 closeout)",
+                    e.span,
+                ));
+            }
+            let Some(w) = self.wir_value_ty(*sema, e.span)? else {
+                return Err(refuse("unit-typed closure parameters", e.span));
+            };
+            sigparams.push(Param {
+                ty: w,
+                mode: Mode::Val,
+            });
+        }
+        let results: Vec<TypeId> = body_ret.into_iter().collect();
+        let entry_sig = self.b.module.make_sig(sigparams, results);
+        let n = self.pending_tasks.len();
+        let base = self.b.func.name.clone();
+        let name = format!("{base}.cls{n}");
+        let (cap_wtys, cap_offs) = cap_layout.unwrap_or_default();
+        self.pending_tasks.push(PendingTask {
+            shim_name: name.clone(),
+            body_name: name.clone(),
+            body_sig: entry_sig,
+            closure: Some(e),
+            caps,
+            cap_wtys,
+            cap_offs,
+            body_ret,
+            span: e.span,
+            kind: PendingKind::Closure { params },
+        });
+        let ext = self.rt_like_import(&name, entry_sig);
+        Ok(self.b.ins_func_addr(ext))
+    }
+
+    /// s105: build a CAPTURING closure's pair at its `let` binding —
+    /// env record packed in a frame slot (values read now, the s86
+    /// packing; the mem tier's loans make copy-vs-borrow
+    /// unobservable), entry queued, the two words joined.
+    fn lower_closure_pair(&mut self, e: &'t GreenNode) -> R<Value> {
+        let caps = self.closure_captures(e.span);
+        let (slot, _region, layout) = self.pack_task_env(&caps, None, e.span, true)?;
+        let entry = self.queue_closure_entry(e, caps, Some(layout))?;
+        let pair_ty = self
+            .b
+            .module
+            .types
+            .intern(types::TypeData::Agg(vec![types::PTR, types::PTR]));
+        Ok(self
+            .b
+            .ins(Opcode::AggMake, &[entry, slot], &[pair_ty], Aux::None)
+            .one())
+    }
+
+    /// s105: a call through a closure binding's pair — the dyn
+    /// dispatch shape with the vtable slot replaced by a direct
+    /// entry: two `agg.get`s and s97's `call.ind`, env leading. The
+    /// sig comes from the closure's recorded fn TYPE, exactly as
+    /// `lower_indirect_call` builds it, plus the leading env `ptr`.
+    fn lower_closure_call(
+        &mut self,
+        pair: Value,
+        d: CallExpr<'t>,
+        cs: &CallSig,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let Some(callee) = d.callee() else {
+            return Err(refuse("calls outside the resolved surface", e.span));
+        };
+        let Some(fn_ty) = self.expr_sema_ty(callee.span) else {
+            return Err(refuse(
+                "an indirect callee without a recorded type",
+                callee.span,
+            ));
+        };
+        let TyKind::Fn(param_tys, ret_ty) = self.table.kind(self.strip_sema(fn_ty)).clone() else {
+            return Err(refuse(
+                "an indirect callee that is not fn-typed",
+                callee.span,
+            ));
+        };
+        if cs.params.iter().any(|p| p.mode.is_some()) {
+            return Err(refuse(
+                "an indirect callee with parameter modes (fn types carry none)",
+                e.span,
+            ));
+        }
+        let mut args = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            args.push(v);
+        }
+        let table = self.table;
+        let mut params = vec![Param {
+            ty: types::PTR,
+            mode: Mode::Val,
+        }];
+        for &pt in &param_tys {
+            let Some(w) = wir_ty(&mut self.b.module.types, table, self.sigs, pt, e.span)? else {
+                return Err(refuse("unit-typed parameters", e.span));
+            };
+            params.push(Param {
+                ty: w,
+                mode: Mode::Val,
+            });
+        }
+        let results = match wir_ty(&mut self.b.module.types, table, self.sigs, ret_ty, e.span)? {
+            Some(t) => vec![t],
+            None => vec![],
+        };
+        let sig = self.b.module.make_sig(params, results);
+        let entry = self
+            .b
+            .ins(Opcode::AggGet, &[pair], &[types::PTR], Aux::Int(0))
+            .one();
+        let env = self
+            .b
+            .ins(Opcode::AggGet, &[pair], &[types::PTR], Aux::Int(1))
+            .one();
+        let mut cargs = vec![env];
+        cargs.extend(args);
+        Ok(Flow::Val(self.b.ins_call_ind(entry, sig, &cargs)))
+    }
+
     /// Where THIS spawn's capture record must live (s86).
     ///
     /// `Ok(None)` — a frame slot is sound: the spawn site is reached at
@@ -4630,23 +5019,43 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         caps: &[(String, TyId)],
         arena: Option<(RegionId, Value)>,
         span: Span,
+        closure: bool,
     ) -> R<(Value, RegionId, (Vec<TypeId>, Vec<u64>))> {
         let mut wtys = Vec::with_capacity(caps.len());
         let mut offs = Vec::with_capacity(caps.len());
         let mut size = 0u64;
         for (name, sema) in caps {
             let Some(wty) = self.wir_value_ty(*sema, span)? else {
-                return Err(refuse("unit-typed task captures", span));
+                return Err(refuse(
+                    if closure {
+                        "unit-typed closure captures"
+                    } else {
+                        "unit-typed task captures"
+                    },
+                    span,
+                ));
             };
             if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
                 let _ = name;
                 return Err(refuse(
-                    "a region captured by a task (send it through a channel — [conc.chan.move])",
+                    if closure {
+                        "a region captured by a closure (open it in the enclosing \
+                         frame — c25 closeout)"
+                    } else {
+                        "a region captured by a task (send it through a channel — [conc.chan.move])"
+                    },
                     span,
                 ));
             }
             let Some(sz) = flat_size(&self.b.module.types, wty) else {
-                return Err(refuse("task captures without a flat layout", span));
+                return Err(refuse(
+                    if closure {
+                        "closure captures without a flat layout"
+                    } else {
+                        "task captures without a flat layout"
+                    },
+                    span,
+                ));
             };
             wtys.push(wty);
             offs.push(size);
@@ -4682,8 +5091,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .expect("payload word"),
                 Some(LocalBind::Region { .. }) => {
                     return Err(refuse(
-                        "a region captured by a task (send it through a channel — \
-                         [conc.chan.move])",
+                        if closure {
+                            "a region captured by a closure (open it in the enclosing \
+                             frame — c25 closeout)"
+                        } else {
+                            "a region captured by a task (send it through a channel — \
+                             [conc.chan.move])"
+                        },
+                        span,
+                    ));
+                }
+                // s105: a capturing closure's pair stays in its frame
+                // — an env record holding another env's pair would put
+                // borrowed places behind two boundaries no tracker
+                // follows.
+                Some(LocalBind::Closure { .. }) => {
+                    return Err(refuse(
+                        "a capturing closure captured by value (the pair stays in \
+                         its frame — c25 closeout)",
                         span,
                     ));
                 }
@@ -5151,6 +5576,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             cap_offs: offs,
             body_ret,
             span: e.span,
+            kind: PendingKind::Task,
         });
         let shim_sig = self.task_shim_sig();
         let shim_ext = self.rt_like_import(&shim_name, shim_sig);
@@ -6996,6 +7422,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 args.push(len);
                 continue;
             }
+            if mode == Some(ParamMode::Take) {
+                self.check_capture_write(vexpr, "consuming (`take`)")?;
+            }
             if mode == Some(ParamMode::Mut) {
                 let formal = next_formal;
                 next_formal += 1;
@@ -7134,6 +7563,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(callee) = d.callee() else {
             return Err(refuse("calls outside the resolved surface", e.span));
         };
+        // s105: a call through a CLOSURE binding routes through the
+        // pair (env leading); everything else is s97's plain fn-value
+        // call.
+        if callee.kind == SyntaxKind::PathExpr {
+            let name = self.text(callee.span);
+            if let Some(LocalBind::Closure { pair }) = self.lookup(&name) {
+                return self.lower_closure_call(pair, d, cs, e);
+            }
+        }
         let Some(fn_ty) = self.expr_sema_ty(callee.span) else {
             return Err(refuse(
                 "an indirect callee without a recorded type",
@@ -8974,6 +9412,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         e: &'t GreenNode,
     ) -> R<Flow> {
         self.refuse_region_elem(elem_sema, e.span)?;
+        // s105: a MUTATING method on a captured List — the env holds a
+        // copy of the handle, so the write would land on the live
+        // list while the reference semantics (S-10 deep copy at
+        // capture) says it must not. Reads stay divergence-free
+        // because the loan forbids writes while the closure lives;
+        // writes from inside are the one spelling left, refused by
+        // name (borrow-only closures).
+        if matches!(mname, "push" | "pop" | "clear") {
+            self.check_capture_write(recv_place, "mutating")?;
+        }
         let Some(ewty) = wir_ty(
             &mut self.b.module.types,
             self.table,
@@ -11821,6 +12269,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// path of a by-value aggregate local spills; a re-lent `mut`
     /// parameter passes through.
     fn lower_mut_arg(&mut self, vexpr: &'t GreenNode) -> R<MutArg> {
+        self.check_capture_write(vexpr, "lending `mut`")?;
         match vexpr.kind {
             SyntaxKind::PathExpr => {
                 let name = self.text(vexpr.span);
@@ -12224,6 +12673,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             _ => {
                 // read / take: the receiver travels by value.
+                if recv_mode == Some(ParamMode::Take) {
+                    self.check_capture_write(recv_place, "consuming (`take`)")?;
+                }
                 let Some(v) = flow_val!(self.lower_expr(recv_place)) else {
                     return Err(refuse("a valueless receiver", recv_place.span));
                 };
@@ -12235,6 +12687,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
             let mode = cs.params.get(i + 1).and_then(|p| p.mode);
             let Some(vexpr) = Arg::value(a) else { continue };
+            if mode == Some(ParamMode::Take) {
+                self.check_capture_write(vexpr, "consuming (`take`)")?;
+            }
             if mode == Some(ParamMode::Mut) {
                 let formal = next_formal;
                 next_formal += 1;

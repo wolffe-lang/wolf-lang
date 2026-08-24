@@ -843,8 +843,20 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // / a container element) and execute on the checked lane only — with
 // the two movers, checked +4 and union +4. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 160), ("native", 162), ("release", 162)];
-const UNION_FLOOR: usize = 181;
+// s105 ratchet #2 over 299 entries — the closure value tier (c25):
+// native and release +3 each (165), union +3 (184). One PRE-EXISTING
+// file moved — `memory/prov_holy_grail.lu`, refused since s73 as
+// "closure lowering outside `spawn`", runs on both native tiers now
+// that a capture-free closure lambda-lifts to an s95 fn value — plus
+// the two new run witnesses (`closure_value_paths`,
+// `closure_kill_list`). checked holds 160 and all-three holds 141:
+// the checked executor still refuses closures by name ("closures in
+// checked execution", the #12 family), so the native tiers pulled
+// ahead — the non-nesting this gate exists to keep visible. The four
+// new refusal witnesses (escape/write/mut/region-capture) execute on
+// no lane and sit outside every run count.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 160), ("native", 165), ("release", 165)];
+const UNION_FLOOR: usize = 184;
 const ALL_THREE_FLOOR: usize = 141;
 
 /// One lane's observation of one corpus entry.

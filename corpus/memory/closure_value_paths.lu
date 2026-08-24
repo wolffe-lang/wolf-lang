@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.model.value, mem.tier0.borrow.1
+//! s105 (c25): the closure VALUE paths that WORK, differential-clean
+//! against lupin. A capturing closure is the two-word pair (entry fn
+//! ptr, env record ptr) — bound by `let`, called twice through
+//! `call.ind` with the env leading. A capture-free closure
+//! lambda-lifts to a plain s95 fn value: it passes to a HOF, returns
+//! from a fn, and calls through every s97 path. The env BORROWS its
+//! captures (shared loans, closure_borrow_write.lu is the refusing
+//! twin), which is exactly why the env's bitwise copy is
+//! unobservable.
+
+fn twice(f: fn(int) -> int, x: int) -> int { f(f(x)) }
+
+fn offset() -> fn(int) -> int {
+    fn(x: int) { x + 4 }
+}
+
+fn main() -> !int {
+    let base = 6
+    let scaled = fn(x: int) { x * base }
+    let a = scaled(3)
+    let b = scaled(4)
+    let c = twice(fn(x: int) { x + 1 }, 0)
+    let d = offset()(10)
+    if a == 18 && b == 24 && c == 2 && d == 14 { 0 } else { 1 }
+}

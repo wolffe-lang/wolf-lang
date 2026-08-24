@@ -1,0 +1,22 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.tier0.borrow.2, mem.tier0.mode.mut
+//! s105 (c25): the deep-vs-shallow divergence this refusal CLOSES. A
+//! captured `List` is a handle; mutating it from inside the closure
+//! (`(mut xs).push`) would land on the live heap list while lupin's
+//! by-value capture semantics gives the closure its own copy — the
+//! two implementations would answer differently. Borrow-only
+//! closures refuse the mutation by name at `wir` ("a closure
+//! mutating its captured binding … c25 closeout"); reads of captured
+//! handles stay divergence-free because the loans forbid every
+//! outside write while the closure lives. The observation here reads
+//! only the pre-capture element, so lupin exits 0 and the check
+//! stays honest.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    let f = fn() { (mut xs).push(2) }
+    f()
+    if xs[0] == 1 { 0 } else { 1 }
+}

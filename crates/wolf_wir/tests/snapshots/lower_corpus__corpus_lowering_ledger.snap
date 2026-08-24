@@ -134,6 +134,12 @@ memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_view_escape.lu: lowers
 memory/checked_unsigned.lu: lowers
 memory/closure_borrow_write.lu: not mem-clean (pre-wir rungs own it)
+memory/closure_capture_mut.lu: refused — a closure mutating its captured binding `xs` (captures are read-only — borrow-only closures, c25 closeout)
+memory/closure_capture_write.lu: refused — a closure writing its captured binding `n` (captures are read-only — borrow-only closures, c25 closeout)
+memory/closure_escape_refused.lu: refused — a capturing closure read as a value (the pair stays in its frame; call it by name — c25 closeout)
+memory/closure_kill_list.lu: lowers
+memory/closure_region_capture.lu: refused — a region captured by a closure (open it in the enclosing frame — c25 closeout)
+memory/closure_value_paths.lu: lowers
 memory/defer_order.lu: lowers
 memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
@@ -150,7 +156,7 @@ memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
-memory/prov_holy_grail.lu: refused — closure lowering outside `spawn` (fn values, c05)
+memory/prov_holy_grail.lu: lowers
 memory/prov_two_phase.lu: lowers
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
