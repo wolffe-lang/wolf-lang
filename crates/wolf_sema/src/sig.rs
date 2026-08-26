@@ -671,44 +671,37 @@ impl<'a> Lower<'a> {
                     .ty()
                     .map(|t| self.lower_type(module, file, &generics, t))
                     .unwrap_or_else(|| self.table.error());
-                // More than one `! {row}` tail (#34) is a nested
-                // union: it parses now, and its meaning is unruled —
-                // the return elaborates opaque ([`TyKind::Unsupported`])
-                // so every use refuses by name, never a guess.
-                if r.error_rows().nth(1).is_some() {
-                    let text = self.text(file, r.syntax().span);
-                    let norm = text
-                        .trim_start_matches("->")
-                        .split_whitespace()
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    let ty = self.table.intern(TyKind::Unsupported(norm));
-                    (ty, Some(r.syntax().span), None)
-                } else {
-                    match r.error_row() {
-                        // Explicit `T ! {row}` — the stated row (D30/s15).
-                        Some(row) => {
+                match r.error_row() {
+                    // Explicit `T ! {row}` — the stated row (D30/s15).
+                    // Additional `! {row}` tails FLATTEN into the same
+                    // union (D51, #34): one row, tags merged; the
+                    // extend-the-row fix-it site is the LAST row's
+                    // closing brace.
+                    Some(_) => {
+                        let mut row_span = None;
+                        let ty = r.error_rows().fold(base, |acc, row| {
+                            row_span = Some(row.syntax().span);
                             let row_ty = self.lower_row(module, file, &generics, row);
-                            let ty = self.table.err_union(base, row_ty);
-                            (ty, Some(r.syntax().span), Some(row.syntax().span))
-                        }
-                        None => {
-                            // Bare `-> !T` on a module fn item is an
-                            // *inferred* row: mark it for sealing (s15,
-                            // the Zig-trap fix). Everywhere else the bare
-                            // form is the empty row.
-                            let ty = match (owner, self.table.kind(base).clone()) {
-                                (Some(name), TyKind::ErrUnion(inner, _)) => {
-                                    let marker = self.table.intern(TyKind::InferredRow {
-                                        module: module as u32,
-                                        name: name.to_string(),
-                                    });
-                                    self.table.err_union(inner, marker)
-                                }
-                                _ => base,
-                            };
-                            (ty, Some(r.syntax().span), None)
-                        }
+                            self.err_union_flat(file, acc, row_ty, Some(&row), row.syntax().span)
+                        });
+                        (ty, Some(r.syntax().span), row_span)
+                    }
+                    None => {
+                        // Bare `-> !T` on a module fn item is an
+                        // *inferred* row: mark it for sealing (s15,
+                        // the Zig-trap fix). Everywhere else the bare
+                        // form is the empty row.
+                        let ty = match (owner, self.table.kind(base).clone()) {
+                            (Some(name), TyKind::ErrUnion(inner, _)) => {
+                                let marker = self.table.intern(TyKind::InferredRow {
+                                    module: module as u32,
+                                    name: name.to_string(),
+                                });
+                                self.table.err_union(inner, marker)
+                            }
+                            _ => base,
+                        };
+                        (ty, Some(r.syntax().span), None)
                     }
                 }
             }
@@ -823,6 +816,149 @@ impl<'a> Lower<'a> {
             tags.push((name, payload));
         }
         self.table.row(tags, tail)
+    }
+
+    /// D51 (#34) — a nested error row FLATTENS: `T ! {a} ! {b}` means
+    /// `T ! {a ∪ b}`, one union with the tags merged. When `base` is
+    /// already an error union, `row` unions into its row; otherwise
+    /// the plain `base ! row` forms. A tag spelled in both layers with
+    /// the same payload types is one tag (set union); CONFLICTING
+    /// payload types cannot flatten — E0609, with the wrapper-type
+    /// fix-it (layering that must stay separable is a nominal
+    /// wrapper, per the ruling). `row_ast` (the outer row's syntax,
+    /// when the caller has it) sharpens the diagnostic to the exact
+    /// entry; `span` is the fallback site.
+    fn err_union_flat(
+        &mut self,
+        file: usize,
+        base: TyId,
+        row: TyId,
+        row_ast: Option<&wolf_ast::ErrorRow<'_>>,
+        span: Span,
+    ) -> TyId {
+        let TyKind::ErrUnion(ok, inner_row) = self.table.kind(base).clone() else {
+            return self.table.err_union(base, row);
+        };
+        let (
+            TyKind::Row {
+                tags: inner_tags,
+                tail: inner_tail,
+            },
+            TyKind::Row {
+                tags: outer_tags,
+                tail: outer_tail,
+            },
+        ) = (
+            self.table.kind(inner_row).clone(),
+            self.table.kind(row).clone(),
+        )
+        else {
+            // A non-concrete layer (an inferred-row marker never meets
+            // an explicit row; defensive): keep the outer spelling.
+            return self.table.err_union(ok, row);
+        };
+        let mut tags = inner_tags;
+        for (name, payload) in outer_tags {
+            match tags.iter().find(|(n, _)| *n == name) {
+                None => tags.push((name, payload)),
+                // The same tag in both layers with the same payload is
+                // ONE tag — union semantics, the silent merge.
+                Some((_, have)) if *have == payload => {}
+                Some((_, have)) => {
+                    let have = have.clone();
+                    self.layer_payload_conflict(file, &name, &have, &payload, row_ast, span);
+                }
+            }
+        }
+        let tail = match (inner_tail, outer_tail) {
+            (None, t) | (t, None) => t,
+            (Some(a), Some(b)) if a == b => Some(a),
+            (Some(a), Some(_)) => {
+                // Two different tails (two row variables, or a row
+                // variable against `..`): a row extends exactly one
+                // tail — the single-row rule (E0601), held across
+                // layers. The first layer's tail stands.
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0601,
+                        span,
+                        "the layers of this nested error row extend different tails",
+                    )
+                    .with_label("a row extends exactly one tail")
+                    .with_note(
+                        "a nested error row flattens to one union \
+                         ([gram.type.row.flatten]), so its layers share one \
+                         tail; merge the two type parameters, or spell one \
+                         side's tags out.",
+                    ),
+                );
+                Some(a)
+            }
+        };
+        let merged = self.table.row(tags, tail);
+        self.table.err_union(ok, merged)
+    }
+
+    /// The E0609 report behind [`Lower::err_union_flat`]: one tag,
+    /// two layers, two payload shapes — the one thing flattening
+    /// cannot hold.
+    fn layer_payload_conflict(
+        &mut self,
+        file: usize,
+        tag: &str,
+        inner_payload: &[TyId],
+        outer_payload: &[TyId],
+        row_ast: Option<&wolf_ast::ErrorRow<'_>>,
+        span: Span,
+    ) {
+        let no_vars = |_: u32| -> Result<TyId, &'static str> { Err("_") };
+        let inner_r = crate::types::render_tag(&self.table, tag, inner_payload, &no_vars);
+        let outer_r = crate::types::render_tag(&self.table, tag, outer_payload, &no_vars);
+        // The exact entry in the outer row, when its syntax is at hand.
+        let entry_span = row_ast
+            .and_then(|r| {
+                r.entries().find_map(|e| {
+                    let p = e.path()?;
+                    let name: Vec<String> = p
+                        .segments()
+                        .map(|t| self.text(file, t.span))
+                        .collect::<Vec<_>>();
+                    (name.join(".") == tag).then_some(e.syntax().span)
+                })
+            })
+            .unwrap_or(span);
+        let payload_r: Vec<String> = outer_payload
+            .iter()
+            .map(|t| crate::types::render(&self.table, *t, &no_vars))
+            .collect();
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0609,
+                entry_span,
+                format!(
+                    "the tag `{tag}` appears in both layers of this nested \
+                     error row with different payloads"
+                ),
+            )
+            .with_label(format!("`{outer_r}` here, `{inner_r}` in the inner layer"))
+            .with_note(
+                "a nested error row flattens to one union \
+                 ([gram.type.row.flatten]): tag names are structural, so the \
+                 same name in two layers is the same tag, and one tag carries \
+                 one payload shape. Layers that must stay separable are a \
+                 nominal wrapper type — wrap one payload and the tags stop \
+                 colliding.",
+            )
+            .with_suggestion(Suggestion::new(
+                format!(
+                    "wrap this layer's payload in a nominal type of its own \
+                     (`type {tag}Wrapped = distinct {}`)",
+                    payload_r.join(", ")
+                ),
+                vec![(entry_span, format!("{tag}({tag}Wrapped)"))],
+                Applicability::HasPlaceholders,
+            )),
+        );
     }
 
     /// Elaborate an item's generic parameter list into [`GenericSig`]s
@@ -968,23 +1104,6 @@ impl<'a> Lower<'a> {
         match node.kind {
             SyntaxKind::PathType => self.lower_path_type(module, file, generics, node),
             SyntaxKind::ErrorUnionType => {
-                // A union whose ok side is itself a union —
-                // `T ! {a} ! {b}` (postfix, #34) or `!T ! {a}` — now
-                // PARSES (the grammar's `type '!' error_row` admits
-                // its own result), but whether the nested row
-                // flattens into one union or stays a distinct layer
-                // is a spec question no row clause answers yet. The
-                // s108 rule: refuse by name — the whole type
-                // elaborates opaque ([`TyKind::Unsupported`]), so
-                // every USE is an honest NotYet, never a guessed
-                // semantics.
-                if node
-                    .nodes()
-                    .find(|n| is_type_kind(n.kind))
-                    .is_some_and(|n| n.kind == SyntaxKind::ErrorUnionType)
-                {
-                    return self.opaque(file, node);
-                }
                 let inner = node
                     .nodes()
                     .find(|n| is_type_kind(n.kind))
@@ -995,11 +1114,15 @@ impl<'a> Lower<'a> {
                 // has no body to infer a row from: it is the empty
                 // row. Item returns replace this with the inferred-row
                 // marker ([`Lower::fn_sig_core`]).
-                let row = match node.nodes().find_map(wolf_ast::ErrorRow::cast) {
+                let row_ast = node.nodes().find_map(wolf_ast::ErrorRow::cast);
+                let row = match row_ast {
                     Some(r) => self.lower_row(module, file, generics, r),
                     None => self.table.empty_row(),
                 };
-                self.table.err_union(inner, row)
+                // A union whose ok side is itself a union —
+                // `T ! {a} ! {b}` (postfix, #34) or `!T ! {a}` —
+                // FLATTENS (D51): one union, tags merged.
+                self.err_union_flat(file, inner, row, row_ast.as_ref(), node.span)
             }
             SyntaxKind::TupleType => {
                 let elems: Vec<TyId> = node
@@ -1021,23 +1144,16 @@ impl<'a> Lower<'a> {
                     .collect();
                 let ret = match node.nodes().find_map(wolf_ast::RetType::cast) {
                     Some(r) => {
-                        // Nested return rows (#34) refuse by name —
-                        // the whole fn type elaborates opaque rather
-                        // than silently dropping the second row.
-                        if r.error_rows().nth(1).is_some() {
-                            return self.opaque(file, node);
-                        }
                         let base = r
                             .ty()
                             .map(|t| self.lower_type(module, file, generics, t))
                             .unwrap_or_else(|| self.table.error());
-                        match r.error_row() {
-                            Some(row) => {
-                                let row_ty = self.lower_row(module, file, generics, row);
-                                self.table.err_union(base, row_ty)
-                            }
-                            None => base,
-                        }
+                        // Every `! {row}` tail folds into ONE union —
+                        // nested return rows flatten (D51, #34).
+                        r.error_rows().fold(base, |acc, row| {
+                            let row_ty = self.lower_row(module, file, generics, row);
+                            self.err_union_flat(file, acc, row_ty, Some(&row), row.syntax().span)
+                        })
                     }
                     None => self.table.unit(),
                 };

@@ -1,0 +1,18 @@
+//! check: fail(E0301)
+//! phase: parse
+//! conforms: gram.expr.tagident, err.rows
+//!
+//! D52's negative: declared-row-first is exactly as wide as the
+//! declared row. `gone` is not a tag the parameter's row declares,
+//! so the bare identifier is not a candidate tag at this argument —
+//! it resolves as an ordinary name, misses everything in scope, and
+//! keeps its E0301 ([gram.expr.tagident]). The deferral never trades
+//! a typo for silence.
+
+fn or(v: int ! {none}, d: int) -> int {
+    v else d
+}
+
+fn main() -> !int {
+    if or(gone, 9) == 9 { 0 } else { 1 }
+}

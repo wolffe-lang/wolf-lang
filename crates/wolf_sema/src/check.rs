@@ -603,29 +603,6 @@ fn row_fix_of(sig: &FnSig, table: &TypeTable) -> Option<RowFix> {
 
 /// Check one body against the elaborated signatures. Pure in
 /// `(&Package, &SigTables, &BodyRef)` — no shared mutable state.
-/// The span of the first nested error row spelled anywhere under
-/// `node` (#34): a `RetType` carrying more than one `! {row}` tail,
-/// or an `ErrorUnionType` whose ok side is itself an
-/// `ErrorUnionType`. `None` when the item spells no nesting.
-fn nested_row_span(node: &GreenNode) -> Option<wolf_span::Span> {
-    fn walk(n: &GreenNode) -> Option<wolf_span::Span> {
-        if n.kind == SyntaxKind::RetType
-            && n.nodes().filter(|c| c.kind == SyntaxKind::ErrorRow).count() > 1
-        {
-            return Some(n.span);
-        }
-        if n.kind == SyntaxKind::ErrorUnionType
-            && n.nodes()
-                .find(|c| wolf_ast::is_type_kind(c.kind))
-                .is_some_and(|c| c.kind == SyntaxKind::ErrorUnionType)
-        {
-            return Some(n.span);
-        }
-        n.nodes().find_map(walk)
-    }
-    walk(node)
-}
-
 pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult {
     let outer = pkg.files[body.file]
         .parse
@@ -643,17 +620,9 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
             .expect("impl member index valid"),
     };
     // #34 — a nested error row (`T ! {a} ! {b}`, or `!T ! {a}`)
-    // PARSES now, but no spec clause rules whether the layers flatten
-    // or nest, so any body that spells one refuses by name before
-    // checking starts: an honest `unsupported`, never a guessed
-    // semantics and never a misleading type error against the opaque
-    // form. The D-question (flatten vs. nest) is s108's named stop.
-    if let Some(span) = nested_row_span(node) {
-        return BodyResult::NotYetCheckable(NotYet {
-            construct: "a nested error row (its meaning is not ruled yet)",
-            span,
-        });
-    }
+    // FLATTENS at signature elaboration (D51, [`Lower::err_union_flat`]);
+    // by the time a body checks, the layers are one union and nothing
+    // here needs to know they were ever spelled apart.
     let mut c = Checker {
         sigs,
         module: body.module,
@@ -3386,6 +3355,12 @@ impl<'a> Checker<'a> {
                         self.record(e.span, exp.ty);
                         return Ok(());
                     }
+                    // D52's priced hazard ([gram.expr.tagident]): the
+                    // bare name IS a tag the expected row declares,
+                    // but a local (or generic) wins — resolution's
+                    // normal shadowing, warned so the collision is
+                    // never silent.
+                    self.warn_shadowed_tag(e, row);
                 }
                 let t = self.synth_expr(e)?;
                 self.expect_unify(e.span, t, exp);
@@ -3650,6 +3625,46 @@ impl<'a> Checker<'a> {
             return None;
         }
         Some(t.span)
+    }
+
+    /// W0305 at a checked position (D52, [gram.expr.tagident]): the
+    /// bare identifier names a tag the EXPECTED row declares, but a
+    /// local binding or generic parameter shadows it — the local wins
+    /// (resolution's rule everywhere), and the collision is warned at
+    /// the use so the two readings are never silent. Fires exactly
+    /// when [`Self::deferred_tag`] declined FOR that reason.
+    fn warn_shadowed_tag(&mut self, e: &GreenNode, row: TyId) {
+        if e.kind != SyntaxKind::PathExpr {
+            return;
+        }
+        let Some(t) = PathExpr::cast(e).and_then(|p| p.ident()) else {
+            return;
+        };
+        let name = self.text(t.span);
+        if !self.row_declares(row, &name) || name == "Self" {
+            return;
+        }
+        let shadowed_by = if self.lookup_local(&name).is_some() {
+            "a local binding"
+        } else if self.generics.contains(&name) {
+            "a generic parameter"
+        } else {
+            return;
+        };
+        self.diags.push(
+            Diagnostic::warning(
+                codes::W0305,
+                t.span,
+                format!("the row tag `{name}` is shadowed by {shadowed_by} here"),
+            )
+            .with_label("the local wins")
+            .with_note(
+                "the expected row declares this word as a tag, but locals shadow \
+                 (resolution's rule everywhere) — this expression is the local's \
+                 value, never the tag. Rename one of the two; tags are cheap to \
+                 rename because they exist only in rows, raises, and arms.",
+            ),
+        );
     }
 
     /// Does this row type declare the tag?

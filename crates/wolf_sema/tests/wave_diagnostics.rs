@@ -85,6 +85,20 @@ fn w0305_tag_collides_with_item() {
     );
 }
 
+/// D52 ([gram.expr.tagident]): at a checked position whose expected
+/// row declares the tag, a local named like it WINS (locals shadow),
+/// and the collision warns at the use — the typing-rung emitter,
+/// beside the wave's declaration-site one above.
+#[test]
+fn w0305_local_shadows_tag_at_argument() {
+    snap_typed(
+        "w0305_tag_shadowed_at_use",
+        "fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+         fn main() -> !int {\n    let none = 3\n    \
+             if or(none, 9) == 3 { 0 } else { 1 }\n}\n",
+    );
+}
+
 #[test]
 fn w0306_prefix_operator_statement() {
     snap(

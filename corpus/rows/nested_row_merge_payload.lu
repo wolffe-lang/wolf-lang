@@ -1,0 +1,24 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.type.row.flatten, err.rows, err.union
+//!
+//! D51's silent-merge half, pinned: a payload-CARRYING tag spelled in
+//! both layers of a nested row with the SAME payload type is one tag
+//! — union semantics, no report ([gram.type.row.flatten]). The
+//! flattened row is `{Bad(int), none}`; both raise paths and the ok
+//! path behave. The conflict twin (same tag, different payloads) is
+//! `negative/nested_row_conflict.lu` (E0609).
+
+fn poke(n: int) -> int ! {Bad(int), none} ! {Bad(int)} {
+    if n == 0 { return Bad(7) }
+    if n == 1 { return none }
+    n
+}
+
+fn main() -> !int {
+    let a = poke(0) else 3
+    let b = poke(1) else 4
+    let c = poke(5) else 0
+    if a == 3 { if b == 4 { if c == 5 { return 0 } } }
+    1
+}

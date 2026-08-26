@@ -919,9 +919,21 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // (166/178/178, union 192, all-three 152). The issue's collapse no
 // longer reproduces anywhere; this file keeps it that way. Counts
 // measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 166), ("native", 178), ("release", 178)];
-const UNION_FLOOR: usize = 192;
-const ALL_THREE_FLOOR: usize = 152;
+// s109 ratchet over 317 entries: the rulings land (D51/D52). Six new
+// run-phase witnesses. D51's three — `rows/nested_row_return` and
+// `nested_row_param` advancing resolve→run plus the new
+// `nested_row_merge_payload` — execute on all three lanes (+3 each,
+// +3 all-three). D52's three: `tag_let_position` and
+// `tag_shadow_local` execute on all three (+2 each, +2 all-three;
+// the checked lane's WRONG let value is #122, but coverage counts
+// execution reach); `tag_arg_position` executes on native and release
+// only (the checked executor refuses the raising call in argument
+// position by name — the s105 non-nesting shape): native/release +1.
+// Totals 171/184/184, union 198, all-three 157. Counts measured by
+// this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 171), ("native", 184), ("release", 184)];
+const UNION_FLOOR: usize = 198;
+const ALL_THREE_FLOOR: usize = 157;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

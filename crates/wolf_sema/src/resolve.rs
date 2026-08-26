@@ -20,11 +20,11 @@ use std::collections::BTreeSet;
 
 use rayon::prelude::*;
 use wolf_ast::{
-    Arg, ArgList, AsmExpr, Block, ClosureExpr, ConstDecl, ElseExpr, EnumDecl, EnumVariant, FnDecl,
-    ForExpr, GenericParamList, GreenNode, ImplDecl, LetDecl, MatchArm, MatchExpr, MemberExpr,
-    Param, ParamList, PathExpr, PathType, RegionBlock, RetType, ScopeExpr, SelectArm, SpawnExpr,
-    StringExpr, StructDecl, StructField, SyntaxKind, TraitDecl, TypeDecl, VarDecl, is_expr_kind,
-    is_type_kind,
+    Arg, ArgList, AsmExpr, Block, CallExpr, ClosureExpr, ConstDecl, ElseExpr, EnumDecl,
+    EnumVariant, ErrorRow, FnDecl, ForExpr, GenericParamList, GreenNode, ImplDecl, LetDecl,
+    MatchArm, MatchExpr, MemberExpr, Param, ParamList, PathExpr, PathType, RegionBlock, RetType,
+    ScopeExpr, SelectArm, SpawnExpr, StringExpr, StructDecl, StructField, SyntaxKind, TraitDecl,
+    TypeDecl, VarDecl, is_expr_kind, is_type_kind,
 };
 use wolf_diag::{Applicability, Diagnostic, Diagnostics, Suggestion, codes};
 use wolf_span::Span;
@@ -68,6 +68,39 @@ pub(crate) fn lexical_row_tags(node: &GreenNode, src: &[u8]) -> BTreeSet<String>
     let mut out = BTreeSet::new();
     walk(node, src, &mut out);
     out
+}
+
+/// Every SINGLE-SEGMENT tag name spelled in an `ErrorRow` under `node`
+/// that is not one of `generics` (a payload-less generic entry is the
+/// row's polymorphic tail, not a tag — deferring it would trade E0301
+/// for silence). The per-parameter scan behind D52's argument-position
+/// deferral ([`Resolver::callee_param_rows`]); dotted tags need no
+/// deferral (a bare identifier cannot spell one).
+fn collect_bare_row_tags(
+    node: &GreenNode,
+    src: &[u8],
+    generics: &BTreeSet<String>,
+    out: &mut BTreeSet<String>,
+) {
+    if node.kind == SyntaxKind::ErrorRow
+        && let Some(row) = ErrorRow::cast(node)
+    {
+        for entry in row.entries() {
+            let Some(path) = entry.path() else { continue };
+            let segs: Vec<_> = path.segments().collect();
+            if let [one] = segs.as_slice() {
+                let name =
+                    String::from_utf8_lossy(&src[one.span.lo as usize..one.span.hi as usize])
+                        .into_owned();
+                if !generics.contains(&name) {
+                    out.insert(name);
+                }
+            }
+        }
+    }
+    for child in node.nodes() {
+        collect_bare_row_tags(child, src, generics, out);
+    }
 }
 
 /// A fully resolved package: the loaded graph plus every diagnostic the
@@ -658,11 +691,18 @@ impl Resolver<'_> {
                 }
             }
             SyntaxKind::CallExpr | SyntaxKind::BracketApply => {
+                // D52 ([gram.expr.tagident]): arguments join the
+                // raise-position deferral — a bare lowercase miss in
+                // argument position whose callee's declared parameter
+                // row spells that tag is typing's to resolve.
+                let rows = (node.kind == SyntaxKind::CallExpr)
+                    .then(|| self.callee_param_rows(node))
+                    .flatten();
                 for n in node.nodes() {
                     if is_expr_kind(n.kind) {
                         self.resolve_expr(n);
                     } else if let Some(args) = ArgList::cast(n) {
-                        self.resolve_args(args);
+                        self.resolve_args(args, rows.as_deref());
                     }
                 }
             }
@@ -781,7 +821,7 @@ impl Resolver<'_> {
                         self.resolve_path_first(p.syntax(), true);
                     }
                     if let Some(args) = s.args() {
-                        self.resolve_args(args);
+                        self.resolve_args(args, None);
                     }
                 }
             }
@@ -817,16 +857,97 @@ impl Resolver<'_> {
         }
     }
 
-    fn resolve_args(&mut self, args: ArgList<'_>) {
-        for a in args.args() {
+    fn resolve_args(&mut self, args: ArgList<'_>, rows: Option<&[BTreeSet<String>]>) {
+        for (i, a) in args.args().enumerate() {
             if let Some(v) = Arg::value(a) {
                 if is_type_kind(v.kind) {
                     self.resolve_type(v);
-                } else {
-                    self.resolve_expr(v);
+                    continue;
                 }
+                // D52 ([gram.expr.tagident]) — declared-row-first, one
+                // position wider: a bare lowercase identifier that
+                // resolves NOWHERE, sitting in an argument position
+                // whose declared parameter row spells that tag, defers
+                // to typing (which injects the tag against the
+                // expected row exactly as at a raise site). Anything
+                // that resolves — a local, an import, a module item —
+                // resolves as itself (locals shadow; W0305 prices the
+                // collision), and a name no row declares keeps its
+                // E0301 below.
+                if let Some(rows) = rows
+                    && v.kind == SyntaxKind::PathExpr
+                    && let Some(t) = PathExpr::cast(v).and_then(|p| p.ident())
+                {
+                    let name = self.text(t.span);
+                    if !name.chars().next().is_some_and(char::is_uppercase)
+                        && rows.get(i).is_some_and(|s| s.contains(&name))
+                        && !self.in_scope(&name)
+                        && name != "self"
+                        && self.binding_index(&name).is_none()
+                        && self.pkg.tables[self.module].get(&name).is_none()
+                        && !prelude::in_prelude(&name)
+                        && !prelude::is_builtin_type(&name)
+                    {
+                        continue; // the tag — s13's call
+                    }
+                }
+                self.resolve_expr(v);
             }
         }
+    }
+
+    /// D52's lexical half: for a call through a bare fn name, the tag
+    /// names each declared parameter row spells — minus the callee's
+    /// generic parameters (a payload-less generic entry is the row's
+    /// tail, not a tag) — indexed by parameter position. `None` when
+    /// the callee is not a path to a fn declaration resolution can see
+    /// (a local fn value, a member call, a builtin): a lowercase miss
+    /// there keeps its E0301, and the deferral stays exactly as wide
+    /// as the clause — the EXPECTED type has to declare the tag.
+    fn callee_param_rows(&self, call: &GreenNode) -> Option<Vec<BTreeSet<String>>> {
+        let callee = CallExpr::cast(call)?.callee()?;
+        let t = PathExpr::cast(callee)?.ident()?;
+        let name = self.text(t.span);
+        if self.in_scope(&name) || name == "self" {
+            return None; // a local shadows the item — no decl to read
+        }
+        let (module, item_name) = match self.binding_index(&name) {
+            Some(i) => match &self.bindings[i].target {
+                BindTarget::Item { module, name } => (*module, name.clone()),
+                _ => return None,
+            },
+            None => (self.module, name),
+        };
+        let item = self.pkg.tables[module].get(&item_name)?;
+        let node = crate::sig::item_node(self.pkg, item);
+        let d = FnDecl::cast(node)?;
+        let src = &self.pkg.files[item.file].raw.src;
+        let text_of = |span: Span| -> String {
+            String::from_utf8_lossy(&src[span.lo as usize..span.hi as usize]).into_owned()
+        };
+        let generics: BTreeSet<String> = d
+            .generics()
+            .map(|g| {
+                g.params()
+                    .filter_map(|p| p.name())
+                    .map(|t| text_of(t.span))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let params = d.params()?;
+        Some(
+            params
+                .params()
+                .filter(|p| !p.is_self())
+                .map(|p| {
+                    let mut tags = BTreeSet::new();
+                    if let Some(ty) = Param::ty(p) {
+                        collect_bare_row_tags(ty, src, &generics, &mut tags);
+                    }
+                    tags
+                })
+                .collect(),
+        )
     }
 
     fn resolve_match_arm(&mut self, arm: MatchArm<'_>) {
@@ -1116,6 +1237,63 @@ mod tests {
             "fn main() -> !int {\n    let x = nowhere\n    x\n}\n",
         )]);
         assert_eq!(codes_of(&r), ["E0301"]);
+    }
+
+    #[test]
+    fn arg_position_defers_when_callee_row_spells_the_tag() {
+        // D52 ([gram.expr.tagident]): the callee's declared parameter
+        // row spells `none`, so the bare argument defers to typing.
+        let r = resolve(&[(
+            &[],
+            "main.lu",
+            "fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+             fn main() -> !int { if or(none, 9) == 9 { 0 } else { 1 } }\n",
+        )]);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        // The negative: a name the declared row does NOT spell keeps
+        // its E0301 — the deferral is exactly as wide as the row.
+        let r = resolve(&[(
+            &[],
+            "main.lu",
+            "fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+             fn main() -> !int { if or(gone, 9) == 9 { 0 } else { 1 } }\n",
+        )]);
+        assert_eq!(codes_of(&r), ["E0301"]);
+        // Positions do not smear: the tag name in the WRONG argument
+        // slot (a plain-int parameter) keeps its E0301 too.
+        let r = resolve(&[(
+            &[],
+            "main.lu",
+            "fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+             fn main() -> !int { if or(4, none) == 4 { 0 } else { 1 } }\n",
+        )]);
+        assert_eq!(codes_of(&r), ["E0301"]);
+    }
+
+    #[test]
+    fn arg_position_defers_through_an_import() {
+        // The callee's decl lives in another module; the binding walks
+        // there and reads the same declared row.
+        let r = resolve(&[
+            (
+                &["util"],
+                "util.lu",
+                "/// Defaulting over `none`.\npub fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+                 /// A second export (module-shape lint quiet).\npub fn id(v: int) -> int {\n    v\n}\n",
+            ),
+            (
+                &[],
+                "main.lu",
+                "use util.{or}\n\nfn main() -> !int { if or(none, 9) == 9 { 0 } else { 1 } }\n",
+            ),
+        ]);
+        let errors: Vec<&str> = r
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == wolf_diag::Severity::Error)
+            .map(|d| d.code.as_str())
+            .collect();
+        assert!(errors.is_empty(), "{:?}", r.diagnostics);
     }
 
     #[test]

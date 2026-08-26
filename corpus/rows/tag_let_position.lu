@@ -1,0 +1,17 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.expr.tagident, err.union, err.rows
+//!
+//! D52 (#38) — declared-row-first, annotated-`let` position: the
+//! annotation is the expected type, its row declares `none`, and the
+//! bare initializer resolves as the tag ([gram.expr.tagident]) — the
+//! same declared-row-first rule as return position and arguments.
+//! The compiled lanes agree (`w` defaults to 5); the checked
+//! executor's wrong value at this shape is #122 (its own filing),
+//! and lupin does not have the rule yet (the is19 mirror, per D52).
+
+fn main() -> !int {
+    let v: int ! {none} = none
+    let w = v else 5
+    if w == 5 { 0 } else { 1 }
+}

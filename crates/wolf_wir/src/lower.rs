@@ -7493,9 +7493,31 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 continue;
             }
             let v = flow_val!(self.lower_expr(vexpr));
-            let Some(v) = v else {
+            let Some(mut v) = v else {
                 return Err(refuse("unit-typed arguments", vexpr.span));
             };
+            // A read-mode argument whose declared parameter is an
+            // error union takes the same adjustment a fallible return
+            // operand does (D30's ok-injection / s15's row widening at
+            // the call boundary): rows are first-class in parameter
+            // position (#3), so `take_nested(3)` injects `3` as the
+            // ok half exactly like `return 3` would.
+            if bindings.is_empty()
+                && let Some(p) = callee_sig.params.get(i)
+                && matches!(self.sig_table.kind(p.ty), TyKind::ErrUnion(..))
+                && let Some(want) = wir_ty(
+                    &mut self.b.module.types,
+                    self.sig_table,
+                    self.sigs,
+                    p.ty,
+                    vexpr.span,
+                )?
+                && self.b.func.value_ty(v) != want
+            {
+                v = self
+                    .arm_to_merge(Some(v), Some(want), vexpr.span)?
+                    .expect("a union-typed argument has a value");
+            }
             args.push(v);
         }
         // The call-site disjointness theorem, made explicit: distinct

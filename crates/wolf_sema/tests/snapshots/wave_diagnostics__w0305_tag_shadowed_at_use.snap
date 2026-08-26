@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, true)"
+---
+warning[W0305]: the row tag `none` is shadowed by a local binding here
+ --> mem:///main.lu:6:11
+  |
+6 |     if or(none, 9) == 3 { 0 } else { 1 }
+  |           ^^^^ the local wins
+  |
+  = note: the expected row declares this word as a tag, but locals shadow (resolution's rule
+    everywhere) — this expression is the local's value, never the tag. Rename one of the
+    two; tags are cheap to rename because they exist only in rows, raises, and arms.

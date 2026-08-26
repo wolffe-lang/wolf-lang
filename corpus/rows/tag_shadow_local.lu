@@ -1,0 +1,21 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.expr.tagident, err.union, diag.sev.warn
+//! warns: W0305
+//!
+//! D52's priced hazard, witnessed at the new position: a local named
+//! like a tag the expected row declares SHADOWS it — locals win,
+//! matching resolution everywhere else — so `or(none, 9)` passes the
+//! local's 3, the callee sees an ok value, and the fallback never
+//! fires. W0305 warns at the use ([gram.expr.tagident]); whether it
+//! escalates to deny-by-default is c16's question, noted there.
+//! lupin agrees on the value (locals shadow there too).
+
+fn or(v: int ! {none}, d: int) -> int {
+    v else d
+}
+
+fn main() -> !int {
+    let none = 3
+    if or(none, 9) == 3 { 0 } else { 1 }
+}

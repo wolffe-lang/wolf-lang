@@ -206,7 +206,7 @@ zero-width placeholder and continues, so one miss does not cascade into
 a screenful. Fix the flagged spot first: later errors in the same
 region may be echoes of this one.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__range_bare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__nested_row_param.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__range_bare.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range_inclusive.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__range_bare.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range_inclusive.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
 
 ## E0202 — an opening delimiter is never closed
 
@@ -333,7 +333,7 @@ that_module` at the top of the file, then reach it as
 capitalized name used as an error-row tag (D30) is deferred to the type
 checker rather than reported by this pass.
 
-Fixtures: crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -919,6 +919,22 @@ the fallible expression itself. (An `else` completing an `if` is a
 different construct — this message is about `expr else fallback`.)
 
 Fixtures: crates/wolf_sema/tests/snapshots/row_diagnostics__e0608_else_infallible.snap
+
+## E0609 — the layers of a nested error row give one tag two payloads
+
+A nested error row flattens: `T ! {a} ! {b}` means `T ! {a ∪ b}` — one
+union, tags merged ([gram.type.row.flatten]). Tag names are structural,
+so the same name in two layers is the *same tag*, and a tag carries one
+payload shape; two layers declaring `Fail(int)` and `Fail(str)` cannot
+collapse into one row without deciding which `Fail` survives, and wolf
+refuses to decide silently. When the two failures really are different
+things, give them different tag names. When the layering itself is the
+point — an outer wrapper whose `Fail` must stay distinguishable from
+the inner one — say so nominally: wrap one payload in its own type
+(`type FailWrapped = distinct str`) and carry `Fail(FailWrapped)`; a
+nominal wrapper is what layering honestly is.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__nested_row_conflict.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0609_layer_conflict.snap
 
 ## E0701 — comptime code reached for ambient IO
 
@@ -1793,7 +1809,7 @@ absolute: a tag may not share a name with anything in scope. Rename
 the tag (or the item); tags are cheap to rename because they exist
 only in rows, raises, and arms.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_name_collision.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0305_tag_collision.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_name_collision.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__tag_shadow_local.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0305_tag_collision.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0305_tag_shadowed_at_use.snap
 
 ## W0306 — this statement is a bare prefix-operator expression
 

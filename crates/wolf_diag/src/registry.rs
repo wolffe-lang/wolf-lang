@@ -906,6 +906,20 @@ the fallible expression itself. (An `else` completing an `if` is a
 different construct — this message is about `expr else fallback`.)
 "#);
 
+code!(E0609, "the layers of a nested error row give one tag two payloads", r#"
+A nested error row flattens: `T ! {a} ! {b}` means `T ! {a ∪ b}` — one
+union, tags merged ([gram.type.row.flatten]). Tag names are structural,
+so the same name in two layers is the *same tag*, and a tag carries one
+payload shape; two layers declaring `Fail(int)` and `Fail(str)` cannot
+collapse into one row without deciding which `Fail` survives, and wolf
+refuses to decide silently. When the two failures really are different
+things, give them different tag names. When the layering itself is the
+point — an outer wrapper whose `Fail` must stay distinguishable from
+the inner one — say so nominally: wrap one payload in its own type
+(`type FailWrapped = distinct str`) and carry `Fail(FailWrapped)`; a
+nominal wrapper is what layering honestly is.
+"#);
+
 // ------------------------------------------------------------------------
 // E07xx — comptime / CTFE (s16, D29 + D33). The sandbox family: every
 // refusal names its reason, every budget is finite, and the witness

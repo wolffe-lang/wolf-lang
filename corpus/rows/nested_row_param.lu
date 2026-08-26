@@ -1,15 +1,15 @@
 //! check: run(exit=0)
-//! phase: resolve
-//! conforms: gram.type.row, err.union
+//! phase: run
+//! conforms: gram.type.row, gram.type.row.flatten, err.union
 //!
-//! #34's parameter half: rows are first-class in every type position
-//! (#3), so the nested form must parse where a single row does — this
-//! was fail(E0201) at the parameter list before s108, while lupin ran
-//! it. Sema holds the nested type opaque and refuses the body by
-//! name (see `nested_row_return.lu` — same D-question, same honest
-//! unsupported). The run expectation is the flattening reading a
-//! ruling would most likely pin (`3` widens in, `take_nested`
-//! answers 7); it starts gating when the pin advances.
+//! #34's parameter half, ruled by D51: rows are first-class in every
+//! type position (#3), so the nested form parses where a single row
+//! does — and flattens the same way ([gram.type.row.flatten]):
+//! `int ! {none} ! {none}` is `int ! {none}`. The call is the D30
+//! boundary machinery at an argument: `3` injects as the ok half
+//! (the widening a fallible return operand gets), `take_nested`
+//! answers 7. Pinned at `run` since s109, agreeing with lupin (which
+//! always ran it).
 
 fn take_nested(v: int ! {none} ! {none}) -> int {
     7

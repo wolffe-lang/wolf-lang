@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0609]: the tag `Bad` appears in both layers of this nested error row with different payloads
+ --> mem:///main.lu:1:40
+  |
+1 | fn poke(n: int) -> int ! {Bad(int)} ! {Bad(str)} {
+  |                                        ^^^^^^^^ `Bad(str)` here, `Bad(int)` in the inner layer
+  |
+  = note: a nested error row flattens to one union ([gram.type.row.flatten]): tag names are
+    structural, so the same name in two layers is the same tag, and one tag carries one
+    payload shape. Layers that must stay separable are a nominal wrapper type — wrap one
+    payload and the tags stop colliding.
+help: wrap this layer's payload in a nominal type of its own (`type BadWrapped = distinct str`)
+  |
+1 | fn poke(n: int) -> int ! {Bad(int)} ! {Bad(BadWrapped)} {
+  |
