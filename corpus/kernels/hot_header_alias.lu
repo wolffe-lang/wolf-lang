@@ -1,0 +1,25 @@
+//! check: run(exit=9)
+//! phase: run
+//! conforms: arith.checked
+//! s110 negative witness: the aliasing complement of hot_header.lu.
+//! TWO lists advance in one loop, so the loop body stores to two
+//! header-role field sets and no single-base proof places them — a
+//! same-class store the license cannot discharge (s80: two
+//! Header-role roots name the same storage class; region identity is
+//! not the aliasing unit there, the role is). The pipeline must
+//! refuse promotion (headers_promoted == 0, header_bail_alias >= 1 —
+//! gated in midend_corpus.rs) and the result must be identical to the
+//! unpromoted semantics: a[3] + b[3] = 3 + 6 = 9, pinned by the exit
+//! code.
+
+fn main() -> !int {
+    var a = List[int]()
+    var b = List[int]()
+    var j = 0
+    while j < 12 {
+        (mut a).push(j)
+        (mut b).push(j * 2)
+        j = j + 1
+    }
+    (a[3] + b[3]) & 255
+}

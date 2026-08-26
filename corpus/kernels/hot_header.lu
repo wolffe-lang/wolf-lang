@@ -1,0 +1,34 @@
+//! check: run(exit=62)
+//! phase: run
+//! conforms: mem.region.create.1, arith.checked
+//! s110 header-promotion witness: the b3 push-loop shape — a scratch
+//! region, one List, a 20-push loop (growth calls at pushes 1, 9 and
+//! 17: cap 0 -> 8 -> 16 -> 32), then a sum over the elements. The
+//! pipeline must promote the list header's data/len/cap to
+//! loop-carried values licensed by the Header/Buffer role split
+//! (element stores provably miss the header) with the growth call as
+//! a flush/reload boundary (headers_promoted >= 1, loads folded >= 3,
+//! stores deferred >= 1 — gated in midend_corpus.rs, with the ten-run
+//! determinism check beside it). The aliasing complement is
+//! hot_header_alias.lu. The exit code pins the semantics either way:
+//! sum of j & 7 for j in 0..20 = 28 + 28 + 6 = 62.
+
+struct Req { id: int, size: int }
+
+fn main() -> !int {
+    var total = 0
+    region scratch {
+        var buf = List[Req]()
+        var j = 0
+        while j < 20 {
+            (mut buf).push(Req { id: j, size: j & 7 })
+            j = j + 1
+        }
+        var t = 0
+        while t < buf.len {
+            total = (total + buf[t].size) & 255
+            t = t + 1
+        }
+    }
+    total
+}

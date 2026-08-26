@@ -931,8 +931,17 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // position by name — the s105 non-nesting shape): native/release +1.
 // Totals 171/184/184, union 198, all-three 157. Counts measured by
 // this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 171), ("native", 184), ("release", 184)];
-const UNION_FLOOR: usize = 198;
+// s110 ratchet over 319 entries: the header-promotion witnesses.
+// `kernels/hot_header` (the b3 push-loop shape, promotion gated in
+// midend_corpus.rs) and `kernels/hot_header_alias` (the aliasing
+// complement, refusal gated) execute on native and release (+2 each
+// to 186, union +2 to 200); the checked executor reports both
+// unsupported ("this operator in checked execution" — the
+// guarded_stencil verdict, same tier, same shape), so checked and
+// all-three hold at 171/157. Counts measured by this gate, not
+// predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 171), ("native", 186), ("release", 186)];
+const UNION_FLOOR: usize = 200;
 const ALL_THREE_FLOOR: usize = 157;
 
 /// One lane's observation of one corpus entry.
