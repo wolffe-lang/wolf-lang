@@ -333,7 +333,7 @@ that_module` at the top of the file, then reach it as
 capitalized name used as an error-row tag (D30) is deferred to the type
 checker rather than reported by this pass.
 
-Fixtures: crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -1809,7 +1809,7 @@ absolute: a tag may not share a name with anything in scope. Rename
 the tag (or the item); tags are cheap to rename because they exist
 only in rows, raises, and arms.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_name_collision.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0305_tag_collision.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_name_collision.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__tag_shadow_local.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0305_tag_collision.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0305_tag_shadowed_at_use.snap
 
 ## W0306 — this statement is a bare prefix-operator expression
 
