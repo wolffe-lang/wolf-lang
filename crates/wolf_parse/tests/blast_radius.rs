@@ -258,6 +258,47 @@ fn colon_mutation_in_generics_is_structural() {
     );
 }
 
+/// The exact #109 counter-example, pinned deterministically (no
+/// seed): swapping `match op` to `op match` in
+/// `corpus/strings/match_str_dispatch.lu` used to draw FOUR cascade
+/// diagnostics — the statement boundary, then the arm list swallowed
+/// whole as a block-expression *scrutinee* (three more inside and
+/// after it). [gram.amb.structlit] says a `{` in scrutinee position
+/// begins the construct's block, never an expression; with the parser
+/// honoring that, the wreck is two reports: the statement boundary
+/// and the missing scrutinee, and the arms parse clean.
+#[test]
+fn swapped_match_keyword_keeps_the_tight_bound() {
+    let f =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/strings/match_str_dispatch.lu");
+    let src = std::fs::read(&f).expect("read match_str_dispatch.lu");
+    let probe = b"match op {";
+    let start = src
+        .windows(probe.len())
+        .position(|w| w == probe)
+        .expect("match_str_dispatch.lu still spells `match op {`");
+    let mut mutated = src.clone();
+    mutated.splice(
+        start..start + b"match op".len(),
+        b" op match ".iter().copied(),
+    );
+
+    let mut sm = wolf_span::SourceMap::new();
+    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(&f), &src), &src);
+    let mfile = sm.intern(&f.with_extension("mut_swap"));
+    let parse = wolf_parse::parse_tokens(&wolf_lex::lex(mfile, &mutated), &mutated);
+    wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
+    let added = parse
+        .diagnostics
+        .len()
+        .saturating_sub(baseline.diagnostics.len());
+    assert!(
+        added <= 3,
+        "#109 regression: {added} added parser diagnostics (max 3): {:?}",
+        parse.diagnostics
+    );
+}
+
 /// A damaged construct may announce its own extent — one E0202 per
 /// opener left unclosed, so the ceiling is how deep the delimiters nest
 /// at the damage, not how much damage there is.

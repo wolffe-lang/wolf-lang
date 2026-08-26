@@ -268,6 +268,11 @@ impl<'a> Parser<'a> {
                     | Keyword::Use
                     | Keyword::Import
                     | Keyword::Extern
+                    // `pub` is the visibility prefix of a declaration and
+                    // nothing else — a cross-line `.` reaching a `pub`
+                    // swallowed the NEXT item's visibility and re-keyed
+                    // its span (#109's second latent case).
+                    | Keyword::Pub
             )
         )
     }

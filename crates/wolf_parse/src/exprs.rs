@@ -848,6 +848,12 @@ fn primary(p: &mut Parser<'_>, ctx: Ctx) -> Option<(CompletedMarker, bool)> {
             return Some((cm, true));
         }
         TokenKind::Punct(Punct::LParen) => paren_or_tuple(p, ctx),
+        // A leading `{` in condition/scrutinee position begins the
+        // construct's block — never a block expression
+        // ([gram.amb.structlit]). Letting it parse as one made
+        // `match {` swallow the whole arm list as a scrutinee and
+        // over-cascade recovery past the measured max (#109).
+        TokenKind::Punct(Punct::LBrace) if ctx.no_struct_lit => return None,
         TokenKind::Punct(Punct::LBrace) => block(p),
         TokenKind::Punct(Punct::Not | Punct::Minus | Punct::Star) => prefix_expr(p, ctx),
         TokenKind::Punct(Punct::Amp) => {
@@ -1428,12 +1434,54 @@ fn for_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     m.complete(p, SyntaxKind::ForExpr)
 }
 
+/// Do the braces at the current position (`p` at `{`) enclose
+/// arm-shaped content — a `=>` at nesting depth 1 before the matching
+/// `}`? Lookahead, bounded by the brace's own extent, used only on the
+/// wreck path (a `match` whose scrutinee is missing): committing such
+/// a brace to the arm grammar when its content is statement-shaped
+/// misreads every statement as a pattern and over-cascades recovery
+/// (#109's neighbor case), while refusing a genuine arm list would
+/// wreck the honest `match { A => … }` typo. The content decides.
+fn braces_enclose_arms(p: &Parser<'_>) -> bool {
+    debug_assert!(p.at_punct(Punct::LBrace), "lookahead off `{{`");
+    let mut depth = 1usize;
+    for i in 1.. {
+        match p.nth(i) {
+            TokenKind::Punct(Punct::LBrace | Punct::LParen | Punct::LBracket) => depth += 1,
+            TokenKind::Punct(Punct::RBrace | Punct::RParen | Punct::RBracket) => {
+                depth -= 1;
+                if depth == 0 {
+                    return false; // closed without a top-level `=>`
+                }
+            }
+            TokenKind::Punct(Punct::FatArrow) if depth == 1 => return true,
+            TokenKind::Eof => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
 /// `match expr '{' arm* '}'`.
 fn match_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
     p.bump(); // match
-    condition_required(p, ctx, "the match scrutinee");
-    if !p.at_punct(Punct::LBrace) {
+    let scrutinee_ok = expr_bp(p, 0, ctx.condition()).is_some();
+    if !scrutinee_ok {
+        // condition_required's shape, inlined: the arms decision below
+        // needs to know the scrutinee was missing.
+        p.error(
+            codes::EXPECTED_TOKEN,
+            p.current_span(),
+            "expected the match scrutinee",
+        );
+        p.missing();
+        p.recover_until(true, |k| {
+            k == TokenKind::Punct(Punct::LBrace) || k == TokenKind::Term
+        });
+        p.fold_line_end();
+    }
+    if !p.at_punct(Punct::LBrace) || (!scrutinee_ok && !braces_enclose_arms(p)) {
         p.error_unless_folded(
             codes::EXPECTED_TOKEN,
             p.here(),
