@@ -26,7 +26,7 @@ fn main() -> !int {
         }
         var t = 0
         while t < buf.len {
-            total = (total + buf[t].size) & 255
+            total = total + buf[t].size & 255
             t = t + 1
         }
     }
