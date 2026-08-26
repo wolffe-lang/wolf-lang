@@ -1,0 +1,18 @@
+//! check: fail(E0609)
+//! phase: resolve
+//! conforms: gram.type.row.flatten, err.rows
+//!
+//! D51's recorded cost, priced with eyes open: a nested error row
+//! flattens ([gram.type.row.flatten]), so two layers are inseparable
+//! exactly when the same payload-carrying tag appears in both with
+//! different meanings — `Bad(int)` and `Bad(str)` are one structural
+//! tag that cannot carry both shapes. The fix-it names the honest
+//! answer: layering is a nominal wrapper type.
+
+fn poke(n: int) -> int ! {Bad(int)} ! {Bad(str)} {
+    n
+}
+
+fn main() -> !int {
+    poke(3) else 0
+}

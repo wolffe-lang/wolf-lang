@@ -105,6 +105,19 @@ fn e0606_payload_mismatch_on_shared_tag() {
     );
 }
 
+// ---------------------------------------------------------- E0609 -----
+
+/// D51: a nested row flattens, so one tag in two layers with two
+/// payload shapes cannot collapse — the report names both shapes and
+/// the fix-it names the wrapper-type answer.
+#[test]
+fn e0609_nested_layer_payload_conflict() {
+    snap_one(
+        "e0609_layer_conflict",
+        "fn poke(n: int) -> int ! {Bad(int)} ! {Bad(str)} {\n    n\n}\n\nfn main() -> !int {\n    poke(3) else 0\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0607 -----
 
 #[test]

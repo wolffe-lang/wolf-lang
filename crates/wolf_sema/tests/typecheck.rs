@@ -653,10 +653,12 @@ fn nested_closure_captures_propagate() {
 // -------------------------------------------------- #34: nested rows --
 
 /// A nested row parses (s108: the grammar's `type '!' error_row`
-/// admits its own result) and sema refuses it BY NAME — an honest
-/// NotYet, never a guessed flatten/nest semantics and never E0201.
+/// admits its own result) and FLATTENS (D51): `T ! {a} ! {b}` is
+/// `T ! {a ∪ b}` — one union, tags merged, in return and parameter
+/// position alike. The bodies check clean; nothing downstream knows
+/// the layers were ever spelled apart.
 #[test]
-fn nested_row_refuses_by_name() {
+fn nested_row_flattens() {
     for src in [
         // Return position (#34's original reproducer).
         "fn nest(x: int) -> int ! {none} ! {none} {\n    if x < 1 { return none }\n    x\n}\n\
@@ -664,19 +666,30 @@ fn nested_row_refuses_by_name() {
         // Parameter position.
         "fn take_nested(v: int ! {none} ! {none}) -> int {\n    7\n}\n\
          fn main() -> !int {\n    if take_nested(3) == 7 { 0 } else { 1 }\n}\n",
+        // A payload-carrying tag in both layers with the SAME payload
+        // type merges silently (union semantics).
+        "fn poke(n: int) -> int ! {Bad(int), none} ! {Bad(int)} {\n    if n == 0 { return Bad(7) }\n    if n == 1 { return none }\n    n\n}\n\
+         fn main() -> !int {\n    let a = poke(0) else 3\n    if a == 3 { 0 } else { 1 }\n}\n",
     ] {
         let tc = check_one(src);
-        // The rung is not completed, so conform-run reports the honest
-        // refusal and withholds partial diagnostics (the driver's
-        // conservatism contract).
         assert!(
-            tc.not_yet
-                .iter()
-                .any(|n| n.construct.contains("a nested error row")),
-            "expected the by-name refusal for {src:?}, got {:?}",
+            tc.fully_checked() && tc.diagnostics.is_empty(),
+            "expected the flattened union to check clean for {src:?}: {:?} / {:?}",
+            tc.diagnostics,
             tc.not_yet
         );
     }
+}
+
+/// D51's recorded cost: the same tag in both layers with CONFLICTING
+/// payload types cannot flatten — E0609, once, at the outer entry.
+#[test]
+fn nested_row_payload_conflict_is_e0609() {
+    let tc = check_one(
+        "fn poke(n: int) -> int ! {Bad(int)} ! {Bad(str)} {\n    n\n}\n\
+         fn main() -> !int {\n    poke(3) else 0\n}\n",
+    );
+    assert_eq!(codes(&tc), ["E0609"], "{:?}", tc.diagnostics);
 }
 
 // ------------------------------------------------ #116b: nested fns --

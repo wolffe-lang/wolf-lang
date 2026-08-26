@@ -539,6 +539,18 @@ row_entry ::= path ('(' type (',' type)* ')')?
   which stays as spelled in `[gram.item.fn]`. (Adopted 2026-08-10 from
   wolf-std F-0002 / issue #3: `std.option`'s six helpers were unwritable
   with rows confined to return position.)
+- **A nested error row flattens** `[gram.type.row.flatten]`: the `type '!'
+  error_row` production admits its own result, and the nested form means
+  the union of the layers — `T ! {a} ! {b}` is `T ! {a ∪ b}`, and
+  `!T ! {row}` is `T ! {row}` — one union, tags merged. Rows are
+  structural sets, so the same tag spelled in more than one layer is one
+  tag; a tag whose layers agree on its payload types merges silently,
+  and a tag whose layers disagree is rejected (E0609) — layering that
+  must stay separable is a nominal wrapper type, spelled as one. (Ruled
+  2026-08-26, D51 / issue #34; the reference implementation always
+  flattened.) Files: `rows/nested_row_return.lu`,
+  `rows/nested_row_param.lu`, `rows/nested_row_merge_payload.lu`,
+  `rows/negative/nested_row_conflict.lu` (counter).
 - `handle Node`, `shared Config`, `weak Parent`: prefix type keywords.
 - `Map[str, int]`, `List[(T, int)]`: `[]` type application.
 - `&T`-style reference *types* do not exist in the surface (borrows are
