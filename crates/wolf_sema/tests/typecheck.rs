@@ -681,6 +681,49 @@ fn nested_row_flattens() {
     }
 }
 
+// --------------------------------------- #38 / D52: declared-row-first --
+
+/// D52 ([gram.expr.tagident]): a bare lowercase identifier in a
+/// checked position whose expected type is an error union declaring
+/// that tag resolves as the tag — argument position and annotated
+/// `let` position join the raise-site rule.
+#[test]
+fn declared_tag_resolves_at_argument_and_let() {
+    for src in [
+        // Argument position (`or(none, 9)` — std.option's shape).
+        "fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+         fn main() -> !int {\n    if or(none, 9) == 9 { 0 } else { 1 }\n}\n",
+        // Annotated-let position.
+        "fn main() -> !int {\n    let v: int ! {none} = none\n    let w = v else 5\n    if w == 5 { 0 } else { 1 }\n}\n",
+    ] {
+        let tc = check_one(src);
+        assert!(
+            tc.fully_checked() && !tc.has_errors(),
+            "expected the declared tag to resolve for {src:?}: {:?} / {:?}",
+            tc.diagnostics,
+            tc.not_yet
+        );
+    }
+}
+
+/// D52's priced hazard: a local named like a declared tag SHADOWS it
+/// (locals win, resolution's rule everywhere) — and W0305 warns at
+/// the use, so the collision is never silent.
+#[test]
+fn local_shadows_declared_tag_and_w0305_warns() {
+    let tc = check_one(
+        "fn or(v: int ! {none}, d: int) -> int {\n    v else d\n}\n\
+         fn main() -> !int {\n    let none = 3\n    if or(none, 9) == 3 { 0 } else { 1 }\n}\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    assert_eq!(codes(&tc), ["W0305"], "{:?}", tc.diagnostics);
+}
+
 /// D51's recorded cost: the same tag in both layers with CONFLICTING
 /// payload types cannot flatten — E0609, once, at the outer entry.
 #[test]

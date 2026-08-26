@@ -394,6 +394,25 @@ position without parens (`[gram.amb.structlit]`).
   shape and sema (D29) sees a single argument list (`[gram.amb.brackets]`).
 - `(e)` grouping; `(a, b)` tuple; `(a,)` one-tuple.
 - Parenthesized-vs-tuple: comma decides, standard.
+- **Declared-row-first tag resolution** `[gram.expr.tagident]`: a bare
+  identifier in a *checked position* whose expected type is an error
+  union declaring that tag resolves as the tag — the raise value, not a
+  name lookup. The checked positions are: the operand of `return` (and a
+  fallible function's tail) against the declared return row — the
+  original raise-site rule (s37, issue #30), in force since then but
+  recorded here for the first time (D52 names the absence a finding);
+  a call argument against the callee's declared parameter row; and an
+  annotated `let`/`var` initializer against the annotation's row.
+  Anything the identifier otherwise resolves to wins first when it is a
+  *local binding or generic parameter* (the tightest scopes shadow, as
+  everywhere; W0305 warns at the use) — while module items, imports, and
+  prelude names LOSE to a declared tag (the s37 silent-wrong fix:
+  `return hex` inside module `hex` under `! {hex}` is the tag). A bare
+  identifier no expected row declares resolves as an ordinary name and
+  misses with E0301 — the rule is exactly as wide as the declared row.
+  (Ruled 2026-08-26, D52 / issue #38.) Files: `rows/tag_arg_position.lu`,
+  `rows/tag_let_position.lu`, `rows/tag_shadow_local.lu`,
+  `rows/negative/tag_undeclared_arg.lu` (counter).
 
 ### 3.4 Control flow as expressions `[gram.expr.flow]`
 

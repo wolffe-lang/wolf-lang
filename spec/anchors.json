@@ -152,6 +152,7 @@
     "gram.expr.prec": "01-grammar.md",
     "gram.expr.primary": "01-grammar.md",
     "gram.expr.region": "01-grammar.md",
+    "gram.expr.tagident": "01-grammar.md",
     "gram.expr.unsafe": "01-grammar.md",
     "gram.fmt": "01-grammar.md",
     "gram.fmt.brace": "01-grammar.md",

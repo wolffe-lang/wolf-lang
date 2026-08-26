@@ -237,12 +237,16 @@ rows/negative/nested_row_conflict.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/tag_undeclared_arg.lu: not mem-clean (pre-wir rungs own it)
 rows/nested_row_merge_payload.lu: lowers
 rows/nested_row_param.lu: lowers
 rows/nested_row_return.lu: lowers
 rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
+rows/tag_arg_position.lu: lowers
+rows/tag_let_position.lu: lowers
+rows/tag_shadow_local.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
 strings/byte_view_lend.lu: lowers

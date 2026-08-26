@@ -3355,6 +3355,12 @@ impl<'a> Checker<'a> {
                         self.record(e.span, exp.ty);
                         return Ok(());
                     }
+                    // D52's priced hazard ([gram.expr.tagident]): the
+                    // bare name IS a tag the expected row declares,
+                    // but a local (or generic) wins — resolution's
+                    // normal shadowing, warned so the collision is
+                    // never silent.
+                    self.warn_shadowed_tag(e, row);
                 }
                 let t = self.synth_expr(e)?;
                 self.expect_unify(e.span, t, exp);
@@ -3619,6 +3625,46 @@ impl<'a> Checker<'a> {
             return None;
         }
         Some(t.span)
+    }
+
+    /// W0305 at a checked position (D52, [gram.expr.tagident]): the
+    /// bare identifier names a tag the EXPECTED row declares, but a
+    /// local binding or generic parameter shadows it — the local wins
+    /// (resolution's rule everywhere), and the collision is warned at
+    /// the use so the two readings are never silent. Fires exactly
+    /// when [`Self::deferred_tag`] declined FOR that reason.
+    fn warn_shadowed_tag(&mut self, e: &GreenNode, row: TyId) {
+        if e.kind != SyntaxKind::PathExpr {
+            return;
+        }
+        let Some(t) = PathExpr::cast(e).and_then(|p| p.ident()) else {
+            return;
+        };
+        let name = self.text(t.span);
+        if !self.row_declares(row, &name) || name == "Self" {
+            return;
+        }
+        let shadowed_by = if self.lookup_local(&name).is_some() {
+            "a local binding"
+        } else if self.generics.contains(&name) {
+            "a generic parameter"
+        } else {
+            return;
+        };
+        self.diags.push(
+            Diagnostic::warning(
+                codes::W0305,
+                t.span,
+                format!("the row tag `{name}` is shadowed by {shadowed_by} here"),
+            )
+            .with_label("the local wins")
+            .with_note(
+                "the expected row declares this word as a tag, but locals shadow \
+                 (resolution's rule everywhere) — this expression is the local's \
+                 value, never the tag. Rename one of the two; tags are cheap to \
+                 rename because they exist only in rows, raises, and arms.",
+            ),
+        );
     }
 
     /// Does this row type declare the tag?

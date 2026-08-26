@@ -1,0 +1,24 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.expr.tagident, err.union, err.rows
+//!
+//! D52 (#38) — declared-row-first, argument position: a bare
+//! lowercase identifier in a checked position whose EXPECTED type is
+//! an error union declaring that tag resolves as the tag
+//! ([gram.expr.tagident]). `or(none, 9)` is std.option's motivating
+//! shape: `none` injects against the parameter's declared row exactly
+//! as it would at a raise site, and `or(4, 9)` is the ok-injection
+//! twin (a plain value widening into the union-typed parameter). The
+//! negative twin (a tag the row does NOT declare stays E0301) is
+//! `negative/tag_undeclared_arg.lu`. lupin does not have the rule yet
+//! (the is19 mirror, per D52): it reports `` `none` does not
+//! resolve `` — this witness pins the split honestly until then.
+
+fn or(v: int ! {none}, d: int) -> int {
+    v else d
+}
+
+fn main() -> !int {
+    if or(none, 9) == 9 { if or(4, 9) == 4 { return 0 } }
+    1
+}
