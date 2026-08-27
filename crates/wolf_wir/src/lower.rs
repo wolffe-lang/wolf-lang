@@ -1977,6 +1977,22 @@ fn flat_align(it: &types::TypeInterner, t: TypeId) -> u64 {
     }
 }
 
+/// A `List` element's STRIDE: the packed flat size rounded up to the
+/// element's alignment — standard array-of-struct layout (s119, #144).
+/// For every layout the old tiling rule accepted the packed size
+/// already tiles and the stride IS `flat_size`; the rounding only
+/// reaches shapes that were refused (a `bool` beside an int/List
+/// field). What the stride guarantees is that every element's field
+/// offsets keep ONE alignment class across the whole buffer. The tail
+/// padding is storage nothing reads: wolf_rt's list traffic is
+/// byte-wise (`elem` bytes per copy), and the stride never crosses
+/// the C membrane — no List marshaling exists there.
+fn list_stride_of(it: &types::TypeInterner, t: TypeId) -> Option<u64> {
+    let size = flat_size(it, t)?;
+    let align = flat_align(it, t).max(1);
+    Some(size.div_ceil(align) * align)
+}
+
 /// The packed byte offset of each field of a flat aggregate.
 fn flat_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<Vec<u64>> {
     let mut out = Vec::with_capacity(fields.len());
@@ -9536,29 +9552,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_ptr_off(data, idx, esize)
     }
 
-    /// The element stride, checked to TILE at the element's alignment.
+    /// The element stride: [`list_stride_of`], the packed size rounded
+    /// up to the element's alignment.
     ///
-    /// A shim copied elements byte-wise, so a packed layout that does
-    /// not tile (`{i32, i64}` — 12 bytes, so every other element lands
-    /// 4 bytes off) cost nothing but a memcpy. Compiled loads claim
-    /// natural alignment, so the same layout would be a misaligned
-    /// access. Rather than quietly emit one, refuse: the conservatism
-    /// ledger is the honest home for a shape the packed v0 layout
-    /// cannot address directly. (Every scalar element tiles, because
-    /// its stride IS its alignment; so do the aggregates the corpus
-    /// holds.)
+    /// History: v0 used the packed size AS the stride and refused a
+    /// non-tiling one (`{i32, i64}` — 12 bytes, so every other
+    /// element's fields land 4 bytes off the alignment class compiled
+    /// loads claim). s119 (#144) pads the stride instead — standard
+    /// array-of-struct layout — so the refusal retired: the padded
+    /// stride tiles by construction, every accepted-before layout is
+    /// byte-identical, and the previously refused `bool`-beside-wider
+    /// shapes get the layout arrays have always had. Interior offsets
+    /// stay packed — the exact claim posture the `mut`-spill layout
+    /// has carried since s27, finalized at c06.
     fn list_stride(&mut self, ewty: TypeId, span: Span) -> R<u64> {
-        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
-            return Err(refuse("List elements without a flat layout", span));
-        };
-        let align = flat_align(&self.b.module.types, ewty);
-        if align == 0 || esize % align != 0 {
-            return Err(refuse(
-                "List elements whose packed layout does not tile at their alignment",
-                span,
-            ));
+        match list_stride_of(&self.b.module.types, ewty) {
+            Some(s) => Ok(s),
+            None => Err(refuse("List elements without a flat layout", span)),
         }
-        Ok(esize)
     }
 
     /// `%b = icmp.ult %idx, %len` — the in-bounds test.
@@ -9633,9 +9644,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         else {
             return Err(refuse("unit-typed List elements", e.span));
         };
-        let Some(esize) = flat_size(&self.b.module.types, ewty) else {
-            return Err(refuse("List elements without a flat layout", e.span));
-        };
+        let esize = self.list_stride(ewty, e.span)?;
         let Some(hdr) = flow_val!(self.lower_expr(recv_place)) else {
             return Err(refuse("a valueless List receiver", recv_place.span));
         };
@@ -9657,11 +9666,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // publish `len + 1` through the header region, exactly the
             // stores `pop`/`clear` already make in place. Only a full
             // buffer calls out. The value is lowered BEFORE the length
-            // is read (it may itself push — the `get` discipline), and
-            // a non-tiling element keeps the call-only path: a direct
-            // store claims natural alignment the packed v0 layout
-            // cannot promise there (the `list_stride` rule), while the
-            // slot-spill call copies bytes and promises nothing.
+            // is read (it may itself push — the `get` discipline). The
+            // direct store's alignment claims are covered by the
+            // stride: [`list_stride_of`] tiles by construction (s119),
+            // so the old non-tiling call-only fallback retired with
+            // the refusal it accompanied.
             "push" => {
                 let Some(vx) = arg_exprs.first() else {
                     return Err(refuse("`push` without a value", e.span));
@@ -9671,14 +9680,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Flow::Val(None) => return Err(refuse("unit-typed List elements", vx.span)),
                     Flow::Diverged => return Ok(Flow::Diverged),
                 };
-                let align = flat_align(&self.b.module.types, ewty);
-                let tiles = align != 0 && esize % align == 0;
-                if !tiles {
-                    let (region, slot) = self.rt_slot(esize);
-                    self.store_flat(v, slot, region, vx.span)?;
-                    self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
-                    return Ok(Flow::Val(None));
-                }
                 let len = self.list_len_of(hdr);
                 let cap = self.list_cap_of(hdr);
                 let room = self.list_in_bounds(len, cap);
@@ -13155,9 +13156,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             else {
                 return Err(refuse("unit-typed List elements", e.span));
             };
-            let Some(esize) = flat_size(&self.b.module.types, ewty) else {
-                return Err(refuse("List elements without a flat layout", e.span));
-            };
+            let esize = self.list_stride(ewty, e.span)?;
             let sz = self.b.iconst(types::I64, esize as i64);
             // Threads the foreign token: the fresh header is storage
             // compiled code will load from, so the chain must know.

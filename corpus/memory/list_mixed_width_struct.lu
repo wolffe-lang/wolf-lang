@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="42 4")
+//! phase: run
+//! conforms: mem.model.value
+//!
+//! #144's other packing class (s119): `{i32, int}` — packed 12 bytes
+//! against align 8, the exact example the old tiling refusal named.
+//! With the stride rounded to the element's alignment (12 → 16) every
+//! element's fields keep one alignment class and the shape runs on
+//! all three lanes.
+
+struct M {
+    a: i32,
+    b: int,
+}
+
+fn main() -> int {
+    var xs = List[M]()
+    var i = 0
+    while i < 4 {
+        (mut xs).push(M { a: 3, b: i * 7 })
+        i = i + 1
+    }
+    var t = 0
+    var ta = 0
+    for m in xs {
+        t = t + m.b
+        if m.a == 3 {
+            ta = ta + 1
+        }
+    }
+    print("{t} {ta}")
+    0
+}

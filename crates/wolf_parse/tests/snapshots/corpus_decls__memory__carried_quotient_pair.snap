@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 837..949 name=floordiv body=Block
+FnDecl 951..1100 name=lb32 body=Block
+FnDecl 1102..1692 name=sc_mid body=Block
+FnDecl 1694..1877 name=main body=Block

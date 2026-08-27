@@ -317,7 +317,16 @@ Closing it needs both halves:
 `flat_offsets` packs fields end to end while `Opcode::Load`/`Store` claim
 `natural_align` at the LLVM tier, so an aggregate like `{i32, i64}` puts an
 `i64` at offset 4 and loads it `align 8`. This predates s75 (it is the v0
-`mut`-arg spill layout) and no corpus shape reaches it. s75 does not widen
-it: `List` element access refuses a stride that does not tile at the
-element's alignment rather than emit a misaligned access at `k*esize`. The
-real fix is an aligned flat layout, or alignment on the WIR memory ops.
+`mut`-arg spill layout) and no corpus shape reaches it. s75 did not widen
+it: `List` element access refused a stride that does not tile at the
+element's alignment rather than emit a misaligned access at `k*esize`.
+
+s119 (#144) delta: the refusal retired — the element STRIDE now rounds up
+to the element's alignment (array-of-struct layout), so element bases and
+every field's alignment CLASS are uniform across the buffer. Interior
+offsets stay packed, so the newly admitted mixed-width elements (`{bool,
+int, List}`, `{i32, int}`) put wide fields at unaligned offsets with
+natural-alignment claims — the SAME class this entry already tracks for
+the spill layout, now reachable through list element traffic too. The
+real fix is unchanged: an aligned flat layout, or alignment on the WIR
+memory ops (c06's slate).

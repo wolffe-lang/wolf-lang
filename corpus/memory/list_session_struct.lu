@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="102 1 1408 4 184")
+//! phase: run
+//! conforms: mem.model.value
+//!
+//! The #144 witness (s119): a `List` whose element mixes a `bool`
+//! with wider fields — the wolf-wws TLS per-connection session shape
+//! (`up: bool` beside `int`/`List[int]`). At base the native tier
+//! refused it ("packed layout does not tile at their alignment": the
+//! packed 17-byte element against align 8) while the checked tier ran
+//! it. s119 rounds the element STRIDE up to the element's alignment —
+//! standard array-of-struct layout — so every field keeps one
+//! alignment class across the buffer and nothing is refused.
+//! Constructed, pushed, index-read, index-written, and iterated
+//! (nested `List` field included) on all three lanes.
+
+struct Session {
+    up: bool,
+    fd: int,
+    buf: List[int],
+}
+
+fn main() -> int {
+    var tbl = List[Session]()
+    var i = 0
+    while i < 5 {
+        var b = List[int]()
+        (mut b).push(i * 10)
+        (mut b).push(i * 10 + 1)
+        (mut tbl).push(Session { up: i % 2 == 0, fd: 100 + i, buf: b })
+        i = i + 1
+    }
+    let s2 = tbl[2]
+    let u2 = if s2.up { 1 } else { 0 }
+    tbl[1] = Session { up: true, fd: 999, buf: List[int]() }
+    var fds = 0
+    var ups = 0
+    var bytes = 0
+    for c in tbl {
+        fds = fds + c.fd
+        if c.up {
+            ups = ups + 1
+        }
+        for x in c.buf {
+            bytes = bytes + x
+        }
+    }
+    print("{s2.fd} {u2} {fds} {ups} {bytes}")
+    0
+}

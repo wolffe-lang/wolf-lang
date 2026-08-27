@@ -1063,9 +1063,31 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // file moved lanes — the deltas are exactly the three new files.
 // Totals 199/218/218, union 232, all-three 185. Counts measured by
 // this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 199), ("native", 218), ("release", 218)];
-const UNION_FLOOR: usize = 232;
-const ALL_THREE_FLOOR: usize = 185;
+// s119 ratchet over 362 entries: the loop and the layout (c32's first
+// codegen-debts pass, #142/#144 — both found by real TLS code). Four
+// new run-phase witnesses, each three-lane, so every count moves +4.
+// `memory/carried_quotient_pair.lu` / `carried_quotient_nested.lu` —
+// the #142 shapes (a floordiv quotient carried across sequential and
+// nested index-write loops, TweetNaCl `modL`): at base the release
+// mid-end ICEd on them (versioning against a stale CFG missed the
+// second loop's loop-closed live-out routing; the verifier's
+// edge-located token rule is the other half).
+// `memory/list_session_struct.lu` / `list_mixed_width_struct.lu` —
+// the #144 shapes (a `bool`/`i32` beside wider fields in a `List`
+// element): at base the native tier refused the non-tiling packed
+// stride; the stride now rounds up to the element's alignment. The
+// full per-file three-lane sweep diff is exactly the four new files —
+// no pre-existing file moved lanes. Totals 200/219/219, union 233,
+// all-three 186. Counts measured by this gate, not predicted.
+// merge ratchet (s118 + s119, over 366 entries): the two lanes
+// ratcheted off the same base over DISJOINT movers — s118's three
+// os/random witnesses and s119's four codegen witnesses, all
+// three-lane — so the merged floors are the sum of both deltas
+// (+3 and +4 on every count). Measured by this gate on the merged
+// tree, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 203), ("native", 222), ("release", 222)];
+const UNION_FLOOR: usize = 236;
+const ALL_THREE_FLOOR: usize = 189;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

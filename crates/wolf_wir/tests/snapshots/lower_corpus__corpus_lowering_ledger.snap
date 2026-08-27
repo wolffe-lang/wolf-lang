@@ -155,6 +155,8 @@ lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_view_escape.lu: lowers
+memory/carried_quotient_nested.lu: lowers
+memory/carried_quotient_pair.lu: lowers
 memory/checked_unsigned.lu: lowers
 memory/closure_borrow_write.lu: not mem-clean (pre-wir rungs own it)
 memory/closure_capture_mut.lu: refused — a closure mutating its captured binding `xs` (captures are read-only — borrow-only closures, c25 closeout)
@@ -172,7 +174,9 @@ memory/exclusivity.lu: lowers
 memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 memory/list_elem_assign.lu: lowers
+memory/list_mixed_width_struct.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
+memory/list_session_struct.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
