@@ -47,6 +47,7 @@ pub mod cluster;
 mod coalesce;
 mod compact;
 pub mod dedup;
+mod hdrprom;
 mod inline;
 pub mod instrument;
 pub mod interproc;
@@ -93,6 +94,9 @@ pub struct Thresholds {
     pub version_max_insts: u32,
     /// Loop-versioning: minimum remaining checks to pay for a guard.
     pub version_min_checks: u32,
+    /// Header promotion (s110): minimum in-loop header-cell accesses
+    /// before the loop is worth carrying promoted values for.
+    pub hdrprom_min_ops: u32,
     /// Whole-program (s43): target summed WIR size per codegen
     /// cluster — the cluster COUNT falls out of it, so this and
     /// `cluster_max` are the whole partition's only inputs besides the
@@ -163,6 +167,7 @@ impl Default for Thresholds {
             coalesce_max_bytes: 4096,
             version_max_insts: 48,
             version_min_checks: 1,
+            hdrprom_min_ops: 2,
             cluster_target_size: 512,
             cluster_max: 8,
             import_max: 96,
@@ -254,6 +259,25 @@ pub struct OptStats {
     /// Identical sequential pure loops merged — the second loop's exit
     /// values become the first's (s102, loop-region CSE).
     pub loops_cse: usize,
+    /// Header regions promoted to loop-carried values (s110): one per
+    /// (loop, region) pair whose whole license held.
+    pub headers_promoted: usize,
+    /// Header cells those promotions carry (fields, not accesses).
+    pub header_cells: usize,
+    /// In-loop (and landing-pad) header-field loads folded to the
+    /// carried value.
+    pub header_loads_promoted: usize,
+    /// In-loop header-field stores deferred to the escape-point flush.
+    pub header_stores_deferred: usize,
+    /// Promotions refused: an in-loop access the license cannot place
+    /// (variant address, second base, same-role chain, overlap).
+    pub header_bail_alias: usize,
+    /// Promotions refused: a call with no proof (external without the
+    /// chain token, `call.ind`, rc traffic, nonempty write set).
+    pub header_bail_call: usize,
+    /// Promotions refused: structure (no preheader, token threading,
+    /// shared exit target, a token leaking past the loop).
+    pub header_bail_shape: usize,
     /// Uncalled, unexported function bodies dropped after inlining.
     pub funcs_removed: usize,
 }
@@ -333,10 +357,21 @@ impl std::fmt::Display for OptStats {
             "  regions: {} promoted ({} alloc(s)), {} alloc(s) coalesced",
             self.regions_promoted, self.allocs_promoted, self.allocs_coalesced
         )?;
-        write!(
+        writeln!(
             f,
             "  licm: {} load(s), {} invariant op(s) hoisted, {} loop(s) cse'd; {} dead func(s) dropped",
             self.loads_hoisted, self.invariants_hoisted, self.loops_cse, self.funcs_removed
+        )?;
+        write!(
+            f,
+            "  hdrprom: {} header(s) promoted ({} cell(s): {} load(s) folded, {} store(s) deferred); bails {} alias / {} call / {} shape",
+            self.headers_promoted,
+            self.header_cells,
+            self.header_loads_promoted,
+            self.header_stores_deferred,
+            self.header_bail_alias,
+            self.header_bail_call,
+            self.header_bail_shape
         )
     }
 }
@@ -514,6 +549,11 @@ fn optimize_one(
         // per shape, not a wall-clock fixpoint).
         rangeopt::revisit(m, fid, ve, th, stats)?;
     }
+    // Header promotion after licm: what licm could not hoist (the
+    // foreign-token conservatism) is exactly this pass's candidate
+    // set, and its preheader loads must not be re-considered by licm
+    // in the same visit (s110).
+    hdrprom::run(m, fid, ve, th, stats)?;
     loopcse::run(m, fid, ve, stats)?;
     simplify::run(m, fid, ve, th, stats)?;
     Ok(())
@@ -599,6 +639,7 @@ pub fn run_named_pass(
         "sink" => sink::run(m, func, ve, th, stats),
         "coalesce" => coalesce::run(m, func, ve, th, stats),
         "licm" => licm::run(m, func, ve, stats),
+        "hdrprom" => hdrprom::run(m, func, ve, th, stats),
         "loopcse" => loopcse::run(m, func, ve, stats),
         other => panic!("unknown mid-end pass `{other}`"),
     }

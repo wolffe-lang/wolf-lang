@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 365
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -99,6 +100,8 @@ json/rows.lu: lowers
 kernels/churn_b3.lu: lowers
 kernels/guarded_stencil.lu: lowers
 kernels/hot_counter.lu: lowers
+kernels/hot_header.lu: lowers
+kernels/hot_header_alias.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
 kernels/hot_sum_reduce.lu: lowers
 kernels/walk_twice.lu: lowers

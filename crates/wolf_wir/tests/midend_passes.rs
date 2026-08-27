@@ -1236,3 +1236,118 @@ fn rangeopt_never_spends_a_user_wrap_as_a_relation() {
         "a user wrap op establishes no order — the branch stays:\n{out}"
     );
 }
+
+// ------------------------------------------------------- hdrprom ----
+//
+// s110 header promotion, per-arm litmuses on hand WIR (the corpus
+// witnesses in midend_corpus.rs cover the end-to-end pipeline; these
+// pin each licensor arm in isolation).
+
+/// The b3 push shape, minimal: a Header/Buffer role pair, a loop that
+/// loads len + data every iteration, stores an element through the
+/// BUFFER chain, stores len back through the HEADER chain, and calls
+/// the growth seam on the slow path. The pass must carry both cells,
+/// defer the len store, treat the call as a flush/reload boundary,
+/// and fold the landing-pad len load.
+fn hdrprom_push_src(loop_extra: &str) -> String {
+    format!(
+        "decl @mk(mem.r0, mem.r1) -> ptr\n\
+         decl @push(ptr, mem.r0, mem.r1)\n\
+         \n\
+         fn @f() -> i64 {{\n\
+         b0:\n  \
+         %0: mem.r1 = region.foreign 0\n  \
+         %1: mem.r2 = region.foreign 1\n  \
+         %2, %3, %4 = call @mk(%0, %1)\n  \
+         %5 = iconst.i64 8\n  \
+         %6 = ptr.off %2, %5, 1\n  \
+         %7 = iconst.i64 0\n  \
+         %8 = iconst.i64 100\n  \
+         %9 = iconst.i64 1\n  \
+         jmp b1(%7, %3, %4)\n\
+         b1(%10: i64, %11: mem.r1, %12: mem.r2):\n  \
+         %13 = icmp.slt %10, %8\n  \
+         br %13, b2, b5\n\
+         b2:\n  \
+         %14 = load.i64 %6, %11\n  \
+         %15 = load.ptr %2, %11\n  \
+         %16 = icmp.slt %14, %8\n{loop_extra}  \
+         br %16, b3, b4\n\
+         b3:\n  \
+         %17 = ptr.off %15, %14, 8\n  \
+         %18 = store.i64 %10, %17, %12\n  \
+         %19 = iadd.wrap %14, %9\n  \
+         %20 = store.i64 %19, %6, %11\n  \
+         %21 = iadd.wrap %10, %9\n  \
+         jmp b1(%21, %20, %18)\n\
+         b4:\n  \
+         %22, %23 = call @push(%2, %11, %12)\n  \
+         %24 = iadd.wrap %10, %9\n  \
+         jmp b1(%24, %22, %23)\n\
+         b5:\n  \
+         %25 = load.i64 %6, %11\n  \
+         ret %25\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn hdrprom_promotes_the_push_header() {
+    let (out, stats) = one_pass(&hdrprom_push_src(""), "hdrprom");
+    assert_eq!(
+        stats.headers_promoted, 1,
+        "the header promotes: {stats}\n{out}"
+    );
+    assert_eq!(stats.header_cells, 2, "len + data carry: {stats}");
+    assert_eq!(
+        stats.header_loads_promoted, 3,
+        "two in-loop loads + the landing-pad load fold: {stats}\n{out}"
+    );
+    assert_eq!(
+        stats.header_stores_deferred, 1,
+        "the fast-path len store defers: {stats}\n{out}"
+    );
+    // The landing pad opens with the flush; the loop's fast path
+    // carries values instead of touching memory.
+    assert!(
+        out.contains("b5:\n  %") && !out.contains("%25 = load"),
+        "the exit load folds to the carried value behind a flush:\n{out}"
+    );
+}
+
+/// An external call in the loop that takes NO header token: no write
+/// set, no exhaustive theorem, no boundary shape — the license has
+/// nothing and must refuse, counted under the call arm.
+#[test]
+fn hdrprom_refuses_an_unproven_call() {
+    let src = hdrprom_push_src("  call @ext()\n").replace(
+        "decl @mk(mem.r0, mem.r1) -> ptr\n",
+        "decl @ext()\ndecl @mk(mem.r0, mem.r1) -> ptr\n",
+    );
+    let (out, stats) = one_pass(&src, "hdrprom");
+    assert_eq!(
+        stats.headers_promoted, 0,
+        "an opaque tokenless callee blocks promotion: {stats}\n{out}"
+    );
+    assert!(
+        stats.header_bail_call >= 1,
+        "the refusal is counted under the call arm: {stats}"
+    );
+}
+
+/// A same-chain load at a loop-VARIANT address (an element read
+/// through the header region's own chain): no proof separates it from
+/// the deferred store's cell — refuse, counted under the alias arm.
+#[test]
+fn hdrprom_refuses_a_variant_address_on_the_chain() {
+    let src = hdrprom_push_src("  %90 = ptr.off %2, %10, 8\n  %91 = load.i64 %90, %11\n");
+    let (out, stats) = one_pass(&src, "hdrprom");
+    assert_eq!(
+        stats.headers_promoted, 0,
+        "a variant-address access on the header chain blocks promotion: {stats}\n{out}"
+    );
+    assert!(
+        stats.header_bail_alias >= 1,
+        "the refusal is counted under the alias arm: {stats}"
+    );
+}

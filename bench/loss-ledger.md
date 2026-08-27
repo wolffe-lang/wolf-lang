@@ -1414,3 +1414,75 @@ speed and never meaning. `noalias_pair_scopes_min` (floor 2 on a2
 and alias_daxpy) pins the split in the emitted IR the way
 `align16_min` pins alignment; `llvm_goldens::llvm_noalias_pair`
 pins one split and one fail-closed drop at the metadata level.
+
+## s110 — the header earns its keep (b3's midend residue, claimed)
+
+Conditions: i7-10870H, LOADED host (sibling lanes build concurrently),
+so per the contract every acceptance number here is callgrind Ir —
+exact, load-insensitive — over 2 000 requests at base 87405ac, A/B
+against the same base compiler, sinks identical. **The wall verdict
+belongs to the nightly ritual after merge; no wall number is claimed
+here** (the a2 loaded-host lesson).
+
+**The profile reproduced first (the c24 law):** `_Wmain` 844,129 Ir
+(41.83% of 2,017,860) — b3r's split to the instruction. The fresh IR
+read corrected the candidate's arithmetic, though, and the correction
+matters: the push loop's header traffic is len load ×16 + data load
+×14 + len store ×14 + the exit pair = **62 Ir/request ≈ 14.7% of
+`_Wmain`**, but the cap check is a FUSED `cmp reg, [mem]` — one x86
+instruction whether or not the cap is in a register — so the
+Ir-recoverable share was **46/request (10.9%)**, not the ledger's
+4×16 sketch. The ~15% was an ops count, not an Ir count.
+
+**The mechanism (midend, `hdrprom`, s110):** loop-carried header
+promotion licensed by proofs the facts machinery already mints —
+element stores discharged by the Header/Buffer role split (the s104
+pair scopes as WIR roles: a Buffer-chain store provably misses
+Header-class storage), header-chain ops placed as single-base
+constant-offset 8-byte cells, calls discharged by s102 write sets
+(`Params([])` rides), the s83 exhaustive theorem (local regions), or
+— the b3 shape — the growth call versioning the chain becomes a
+flush/reload BOUNDARY: dirty cells store back before
+`__wolf_rt_list_push`, every cell reloads after, and the 14 fast
+pushes between boundaries never touch the header. One flush per loop
+exit re-synchronizes memory; landing-pad reloads fold to the carried
+values. Anything unproven refuses promotion and is counted
+(`header_bail_alias/call/shape` — the negative witness pins the
+refusal).
+
+| callgrind Ir, 2 000 req / same args | base | after | delta |
+|---|---|---|---|
+| b3_churn program | 2,017,904 | 1,949,899 | **−3.4%** |
+| b3_churn `_Wmain` | 844,129 | 776,129 | **−8.1% (−34 Ir/req)** |
+| list_alloc program (free win) | 1,039,926,517 | 980,072,526 | **−5.8%** |
+| c2_ecs_sweep program (free win) | 402,670,164 | 402,370,253 | −0.07% |
+| the other ten kernels | — | — | emitted `.ll` byte-identical |
+
+The −34/req nets the 46 recoverable against the 12/req the
+synchronization costs (3 preheader loads, 2×(1 flush + 3 reloads) at
+the two growth boundaries, 1 exit flush). Fast-path push shrinks
+19 → 16 Ir. IR-volume: the sync instructions GROW three kernels'
+emitted IR (b3 204→212, list_alloc 210→218, c2 188→198), a bought
+trade ratcheted with its story (kernel ceiling 0.918→0.924; corpus
+0.675→0.678 under its 0.704 ceiling).
+
+**Scope honesty:** list_alloc and c2 were free generalization wins
+(the same license held); nothing else promotes today. Residues, named
+and stopped: same-role multi-list loops want an origin-walk
+disjointness proof (s99's machinery, unclaimed here — the negative
+witness is the fence); calls with NONEMPTY write sets could ride with
+an argument-origin proof; neither is licensed until built. b3's
+checked-adds exception (X3) is untouched and its basis unchanged —
+the header traffic was orthogonal, exactly as the draft priced it
+(83 Ir/req of checks remain, family E's item). What remains of b3
+after this: the X3 share, the two growth calls by design, and the
+bump/retire split (#113's residue).
+
+**Witnesses:** `corpus/kernels/hot_header.lu` gates
+`headers_promoted >= 1`, loads folded ≥ 3, store deferred ≥ 1 through
+the real pipeline (exit 62 pins semantics on both tiers);
+`hot_header_alias.lu` is the aliasing complement — two lists in one
+loop, promotion refused (`header_bail_alias >= 1`, gated), exit 9
+identical semantics; per-arm litmuses on hand WIR (boundary + defer +
+landing-pad fold; unproven-call refusal; variant-address refusal);
+ten-run determinism on both witnesses, gated.

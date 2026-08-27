@@ -404,3 +404,72 @@ fn kernel_guarded_stencil_mints_the_overlap_guard() {
         stats.noalias_guards
     );
 }
+
+/// s110's header-promotion witness, gated so the license cannot rot:
+/// `hot_header.lu` is b3's push-loop shape (a region-scoped List, a
+/// 20-push loop with growth calls, a sum), and the pipeline must
+/// promote the header's data/len/cap to loop-carried values — at
+/// least three loads folded (the in-loop reads plus the landing-pad
+/// folds) and the fast-path len store deferred to the escape points.
+/// The exit value (62) is pinned by the fixture's own exit-code check
+/// in the corpus gate, on both tiers.
+#[test]
+fn kernel_hot_header_promotes_the_header_cells() {
+    let entry = corpus_root().join("kernels").join("hot_header.lu");
+    let mut module = lower(&entry).expect("hot_header reaches the wir rung");
+    let stats = optimize_module(&mut module, &opts()).expect("pipeline green");
+    assert!(
+        stats.headers_promoted >= 1,
+        "the push loop's header promotes (headers_promoted = {}): {stats}",
+        stats.headers_promoted
+    );
+    assert!(
+        stats.header_loads_promoted >= 3 && stats.header_stores_deferred >= 1,
+        "the promotion carries the cells ({} load(s) folded, {} store(s) deferred): {stats}",
+        stats.header_loads_promoted,
+        stats.header_stores_deferred
+    );
+}
+
+/// The negative half (the aliasing complement): two lists advance in
+/// one loop, so the body stores through two header-role field sets no
+/// single-base proof places — the license must refuse, loudly, and
+/// the program's semantics are pinned by its exit code (9) exactly
+/// like the positive witness. Unproven = no promotion is the pass's
+/// contract; this test keeps it one.
+#[test]
+fn kernel_hot_header_alias_refuses_promotion() {
+    let entry = corpus_root().join("kernels").join("hot_header_alias.lu");
+    let mut module = lower(&entry).expect("hot_header_alias reaches the wir rung");
+    let stats = optimize_module(&mut module, &opts()).expect("pipeline green");
+    assert_eq!(
+        stats.headers_promoted, 0,
+        "an aliasing same-role store forbids promotion: {stats}"
+    );
+    assert!(
+        stats.header_bail_alias >= 1,
+        "the refusal is counted, not silent (header_bail_alias = {}): {stats}",
+        stats.header_bail_alias
+    );
+}
+
+/// Ten-run determinism on both s110 witnesses: fresh lower + full
+/// pipeline, ten times each, byte-identical dumps (the promotion
+/// mints params, loads and flushes — every one must land in one
+/// canonical order).
+#[test]
+fn hot_header_witnesses_are_ten_run_deterministic() {
+    for name in ["hot_header.lu", "hot_header_alias.lu"] {
+        let entry = corpus_root().join("kernels").join(name);
+        let mut first: Option<String> = None;
+        for run in 0..10 {
+            let mut module = lower(&entry).expect("witness reaches the wir rung");
+            optimize_module(&mut module, &opts()).expect("pipeline green");
+            let dump = print_module(&module);
+            match &first {
+                None => first = Some(dump),
+                Some(f) => assert_eq!(f, &dump, "{name}: run {run} diverged"),
+            }
+        }
+    }
+}
