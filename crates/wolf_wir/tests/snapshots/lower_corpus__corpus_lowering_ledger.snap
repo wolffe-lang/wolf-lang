@@ -221,6 +221,8 @@ net/spawn_accept.lu: lowers
 os/args_cwd.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
+os/signal_loopback.lu: lowers
+os/signal_supervisor.lu: lowers
 os/spawn_rows.lu: lowers
 overflow.lu: lowers
 procs.lu: lowers
