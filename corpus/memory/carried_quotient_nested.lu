@@ -1,0 +1,86 @@
+//! check: run(exit=0, stdout="32 4018")
+//! phase: run
+//! conforms: arith.checked
+//!
+//! The #142 sibling slice (s119): a NESTED index-write loop feeding a
+//! flat one over the same `mut List[int]` — the slice of `sc_reduce`
+//! that at base tripped the OTHER verify class (token-linearity: the
+//! header `br`'s exit-edge token argument flagged against the body
+//! store) once the stale-CFG routing was repaired. One seed body, two
+//! verify classes, one cause — this file pins the nested half.
+
+fn floordiv(a: int, b: int) -> int {
+    let q = a / b
+    if a - q * b < 0 {
+        return q - 1
+    }
+    q
+}
+
+fn lb32() -> List[int] {
+    var lb = List[int]()
+    var i: int = 0
+    while i < 32 {
+        (mut lb).push(i + 1)
+        i = i + 1
+    }
+    lb
+}
+
+fn sc_reduce(mut x: List[int]) -> List[int] {
+    let lb = lb32()
+    var carry: int = 0
+    var i: int = 63
+    while i >= 32 {
+        carry = 0
+        var j: int = i - 32
+        while j < i - 12 {
+            let xj = x[j]
+            let l = lb[j - (i - 32)]
+            let xi = x[i]
+            let v = xj + carry - 16 * xi * l
+            carry = floordiv(v + 128, 256)
+            x[j] = v - carry * 256
+            j = j + 1
+        }
+        x[i] = 0
+        i = i - 1
+    }
+    var carry2: int = 0
+    let x31 = x[31]
+    let q = floordiv(x31, 16)
+    var k: int = 0
+    while k < 32 {
+        let xk = x[k]
+        let l = lb[k]
+        let v = xk + carry2 - q * l
+        carry2 = floordiv(v, 256)
+        x[k] = v - carry2 * 256
+        k = k + 1
+    }
+    var out = List[int]()
+    k = 0
+    while k < 32 {
+        (mut out).push(x[k])
+        k = k + 1
+    }
+    out
+}
+
+fn main() -> int {
+    var x = List[int]()
+    var i: int = 0
+    while i < 64 {
+        (mut x).push(i)
+        i = i + 1
+    }
+    let r = sc_reduce(mut x)
+    var s = 0
+    var k = 0
+    while k < 32 {
+        s = s + r[k]
+        k = k + 1
+    }
+    print("{r.len} {s}")
+    0
+}

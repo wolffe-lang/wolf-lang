@@ -1,0 +1,75 @@
+//! check: run(exit=0, stdout="32")
+//! phase: run
+//! conforms: arith.checked
+//!
+//! The #142 witness (s119): two SEQUENTIAL index-write loops over the
+//! same `mut List[int]`, each carrying a floordiv quotient across the
+//! back edge — the TweetNaCl `modL` shape `std.x.crypto.curve25519`'s
+//! `sc_reduce` reaches on every Ed25519 sign and verify. At base the
+//! release mid-end versioned BOTH loops against one stale CFG
+//! snapshot, so the second loop's live-outs (its memory token among
+//! them) missed their loop-closed exit routing and verification broke
+//! (dominance, or the token consumed twice on one path). Either loop
+//! alone compiled; the pair is the trigger. Green here means the
+//! versioner routes live-outs against the CURRENT graph and the
+//! verifier locates branch-edge token consumption on the edge.
+
+fn floordiv(a: int, b: int) -> int {
+    let q = a / b
+    if a - q * b < 0 {
+        return q - 1
+    }
+    q
+}
+
+fn lb32() -> List[int] {
+    var lb = List[int]()
+    var i: int = 0
+    while i < 32 {
+        (mut lb).push(i + 1)
+        i = i + 1
+    }
+    lb
+}
+
+fn sc_mid(mut x: List[int]) -> List[int] {
+    let lb = lb32()
+    var carry2: int = 0
+    let x31 = x[31]
+    let q = floordiv(x31, 16)
+    var k: int = 0
+    while k < 32 {
+        let xk = x[k]
+        let l = lb[k]
+        let v = xk + carry2 - q * l
+        carry2 = floordiv(v, 256)
+        x[k] = v - carry2 * 256
+        k = k + 1
+    }
+    k = 0
+    while k < 32 {
+        let xk = x[k]
+        let l = lb[k]
+        x[k] = xk - carry2 * l
+        k = k + 1
+    }
+    var out = List[int]()
+    k = 0
+    while k < 32 {
+        (mut out).push(x[k])
+        k = k + 1
+    }
+    out
+}
+
+fn main() -> int {
+    var x = List[int]()
+    var i: int = 0
+    while i < 64 {
+        (mut x).push(i)
+        i = i + 1
+    }
+    let r = sc_mid(mut x)
+    print("{r.len}")
+    0
+}

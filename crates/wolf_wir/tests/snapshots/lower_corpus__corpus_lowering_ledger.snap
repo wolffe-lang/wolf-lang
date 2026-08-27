@@ -154,6 +154,8 @@ lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_view_escape.lu: lowers
+memory/carried_quotient_nested.lu: lowers
+memory/carried_quotient_pair.lu: lowers
 memory/checked_unsigned.lu: lowers
 memory/closure_borrow_write.lu: not mem-clean (pre-wir rungs own it)
 memory/closure_capture_mut.lu: refused — a closure mutating its captured binding `xs` (captures are read-only — borrow-only closures, c25 closeout)
