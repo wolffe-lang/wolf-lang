@@ -2862,9 +2862,20 @@ impl<'a> Fx<'a> {
             pi += 1;
         }
         debug_assert_eq!(pi, n_ll);
+        // c28 [ct.attr.barrier]: a consttime fn is `noinline` at the
+        // release tier — the WIR-verified body stays one symbol, so
+        // the contract's guarantee attaches to the code that runs and
+        // the asm witness can find it in the disassembly. `optnone`
+        // is deliberately NOT emitted: optimizing WITHIN the body is
+        // welcome; dissolving the body's boundary is not.
+        let noinline = if self.f.consttime.is_some() {
+            " noinline"
+        } else {
+            ""
+        };
         let _ = writeln!(
             out,
-            "define {linkage}{} @\"{symbol}\"({}) nounwind {{",
+            "define {linkage}{} @\"{symbol}\"({}) nounwind{noinline} {{",
             si.ret_ty(),
             named.join(", ")
         );
