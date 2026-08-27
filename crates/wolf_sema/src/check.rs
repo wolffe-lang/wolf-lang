@@ -1582,7 +1582,7 @@ impl<'a> Checker<'a> {
             TyKind::Wrapping(_) => true,
             TyKind::Var(v) => matches!(
                 self.vars.kind_of(*v),
-                NumKind::Integer | NumKind::Float | NumKind::Num
+                NumKind::Integer | NumKind::IntFrozen | NumKind::Float | NumKind::Num
             ),
             _ => false,
         };
@@ -2449,7 +2449,10 @@ impl<'a> Checker<'a> {
         let int_ok = match self.kind_of(ok_half) {
             TyKind::Unit | TyKind::Error | TyKind::Never => true,
             TyKind::Prim(p) => p.is_integer(),
-            TyKind::Var(v) => matches!(self.vars.kind_of(v), NumKind::Integer | NumKind::Any),
+            TyKind::Var(v) => matches!(
+                self.vars.kind_of(v),
+                NumKind::Integer | NumKind::IntFrozen | NumKind::Any
+            ),
             _ => false,
         };
         if !int_ok {
@@ -3075,7 +3078,21 @@ impl<'a> Checker<'a> {
                 Ok(ty)
             }
             (Some(a), None) => Ok(self.lower_ty(a)),
-            (None, Some(i)) => self.synth_expr(i),
+            (None, Some(i)) => {
+                // No annotation: the initializer's type IS this binding's
+                // type, and naming it freezes an unresolved integer
+                // literal into a VALUE (D54.3, `[type.numlit.value]`) —
+                // it may still resolve its width from later use, but it
+                // can no longer adopt a float the way the bare literal
+                // could. Annotated bindings above never reach here, so a
+                // literal checked directly against a float annotation
+                // still adopts (`[type.numlit.adopt]`).
+                let ty = self.synth_expr(i)?;
+                if let TyKind::Var(v) = self.kind_of(ty) {
+                    self.vars.freeze_value(v);
+                }
+                Ok(ty)
+            }
             // Neither annotation nor initializer: definite-assignment
             // analysis is c04; type-wise this is a fresh existential
             // (E0405 if no later use pins it).
@@ -3551,7 +3568,7 @@ impl<'a> Checker<'a> {
             TyKind::Prim(Prim::F32 | Prim::F64) => Some(HoleClass::Float),
             TyKind::Prim(_) | TyKind::Wrapping(_) => Some(HoleClass::Int),
             TyKind::Var(v) => match self.vars.kind_of(v) {
-                NumKind::Integer => Some(HoleClass::Int),
+                NumKind::Integer | NumKind::IntFrozen => Some(HoleClass::Int),
                 NumKind::Float => Some(HoleClass::Float),
                 _ => None,
             },
@@ -4025,7 +4042,11 @@ impl<'a> Checker<'a> {
             TyKind::Wrapping(_) => true,
             TyKind::Var(v) => matches!(
                 vars.kind_of(*v),
-                NumKind::Integer | NumKind::Float | NumKind::Num | NumKind::Any
+                NumKind::Integer
+                    | NumKind::IntFrozen
+                    | NumKind::Float
+                    | NumKind::Num
+                    | NumKind::Any
             ),
             TyKind::Error | TyKind::Never => true,
             _ => false,
@@ -4134,7 +4155,7 @@ impl<'a> Checker<'a> {
                 TyKind::Prim(p) => p.is_integer(),
                 TyKind::Var(v) => matches!(
                     vars.kind_of(*v),
-                    NumKind::Integer | NumKind::Num | NumKind::Any
+                    NumKind::Integer | NumKind::IntFrozen | NumKind::Num | NumKind::Any
                 ),
                 _ => false,
             };
@@ -9460,7 +9481,7 @@ impl<'a> Checker<'a> {
         for (v, kind, origin) in self.vars.unresolved_roots() {
             let var_ty = self.lo.table.intern(TyKind::Var(v));
             match kind {
-                NumKind::Integer | NumKind::Num => {
+                NumKind::Integer | NumKind::IntFrozen | NumKind::Num => {
                     let i32_ = self.lo.table.prim(Prim::I32);
                     let _ = unify(&mut self.lo.table, &mut self.vars, var_ty, i32_);
                 }

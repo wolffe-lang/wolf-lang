@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="0")
+//! phase: run
+//! conforms: type.numlit.default
+//!
+//! Division soundness, integer context (the twin of numlit_div_float):
+//! `let n: int = 1 / 2` is `0` — with no float context the literals
+//! default to `int` and `/` is integer division (`[type.numlit.default]`).
+
+fn main() -> !int {
+    let n: int = 1 / 2
+    print("{n}")
+    0
+}

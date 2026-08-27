@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="yes")
+//! phase: run
+//! conforms: type.numlit.adopt, type.numlit.propagate
+//!
+//! Comparison adopts (the D49 bridge, extended): `c <= 200` with `c:
+//! f64` resolves the bare `200` as `200.0` — the comparison operator
+//! carries the float context to its integer-literal operand.
+
+fn main() -> !int {
+    let c: f64 = 5.0
+    if c <= 200 { print("yes") }
+    0
+}

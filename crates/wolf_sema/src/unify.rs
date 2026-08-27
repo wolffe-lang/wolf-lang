@@ -32,6 +32,17 @@ pub enum NumKind {
     Any,
     Num,
     Integer,
+    /// A `{integer}`-kind constraint that has been **frozen into a
+    /// value** by a name binding (D54.3, `[type.numlit.value]`). It
+    /// behaves exactly like `Integer` — defaults to `i32`, adopts any
+    /// integer WIDTH from downstream use, renders as `{integer}` — with
+    /// one difference: it does NOT cross into a float expectation. The
+    /// literal's adoption of a float (`[type.numlit.adopt]`) is a
+    /// literal's privilege; once `let n = 0` names the value, the
+    /// crossing is refused (E0401, "conversions are spelled"). Freezing
+    /// is contagious through unification: meeting `Integer` with
+    /// `IntFrozen` yields `IntFrozen`.
+    IntFrozen,
     Float,
 }
 
@@ -42,9 +53,12 @@ impl NumKind {
         Some(match (self, other) {
             (Any, k) | (k, Any) => k,
             (Num, k) | (k, Num) => k,
+            // Freezing wins over a live literal kind: a term touching a
+            // frozen value is itself a value, no longer float-crossable.
+            (IntFrozen, Integer) | (Integer, IntFrozen) | (IntFrozen, IntFrozen) => IntFrozen,
             (Integer, Integer) => Integer,
             (Float, Float) => Float,
-            (Integer, Float) | (Float, Integer) => return None,
+            (Integer | IntFrozen, Float) | (Float, Integer | IntFrozen) => return None,
         })
     }
 
@@ -53,7 +67,9 @@ impl NumKind {
         match self {
             NumKind::Any => "_",
             NumKind::Num => "{number}",
-            NumKind::Integer => "{integer}",
+            // A frozen value still reads as `{integer}` to the user; the
+            // freeze is an internal crossing-discipline, not a new kind.
+            NumKind::Integer | NumKind::IntFrozen => "{integer}",
             NumKind::Float => "{float}",
         }
     }
@@ -164,6 +180,22 @@ impl VarStore {
         self.vars[self.find(v) as usize].kind
     }
 
+    /// Freeze a `{integer}` literal variable into a VALUE (D54.3,
+    /// `[type.numlit.value]`): called when a name binding captures an
+    /// as-yet-unresolved integer literal, so the value can no longer
+    /// adopt a float expectation the way the literal itself could. A
+    /// no-op unless the root is a live `Integer` (a `Float`/`Any`/`Num`
+    /// root, or an already-solved var, is left untouched); logged, so
+    /// it rolls back with any trial that captured it.
+    pub fn freeze_value(&mut self, v: u32) {
+        let root = self.find(v);
+        if self.vars[root as usize].solution.is_none()
+            && self.vars[root as usize].kind == NumKind::Integer
+        {
+            self.set_kind(root, NumKind::IntFrozen);
+        }
+    }
+
     /// Origin span of `v`'s root.
     pub fn origin_of(&self, v: u32) -> Span {
         self.vars[self.find(v) as usize].origin
@@ -262,7 +294,17 @@ fn kind_admits(table: &TypeTable, kind: NumKind, ty: TyId) -> bool {
     match kind {
         NumKind::Any => true,
         NumKind::Num => matches!(concrete, NumKind::Integer | NumKind::Float),
-        NumKind::Integer => concrete == NumKind::Integer,
+        // D54.1 `[type.numlit.adopt]`: an `{integer}`-kind LITERAL
+        // satisfies a FLOAT expectation as well as an integer one — `0`
+        // is `0.0` where a float is wanted, lossless because a literal
+        // carries no computation history. One-directional: a `{float}`
+        // literal never satisfies an integer expectation (below).
+        NumKind::Integer => matches!(concrete, NumKind::Integer | NumKind::Float),
+        // A FROZEN integer value (D54.3, `[type.numlit.value]`): it may
+        // still resolve its integer WIDTH downstream, but the float
+        // crossing is a literal's privilege it has spent — `let n = 0;
+        // let x: f64 = n` is refused (E0401), the conversion is spelled.
+        NumKind::IntFrozen => concrete == NumKind::Integer,
         NumKind::Float => concrete == NumKind::Float,
     }
 }
@@ -626,11 +668,32 @@ mod tests {
         let intlit = s.fresh(&mut t, 0, NumKind::Integer, sp());
         let i64_ = t.prim(Prim::I64);
         assert!(unify(&mut t, &mut s, intlit, i64_).is_ok());
+        // D54.1 `[type.numlit.adopt]`: an integer LITERAL satisfies a
+        // float expectation — `0` is `0.0` where an `f64` is wanted.
         let f64_ = t.prim(Prim::F64);
         let intlit2 = s.fresh(&mut t, 0, NumKind::Integer, sp());
         assert!(
-            unify(&mut t, &mut s, intlit2, f64_).is_err(),
-            "an integer literal is not a float"
+            unify(&mut t, &mut s, intlit2, f64_).is_ok(),
+            "an integer literal adopts a float expectation (D54.1)"
+        );
+        // D54.3 `[type.numlit.value]`: a FROZEN integer value does not —
+        // `let n = 0; let x: f64 = n` stays refused.
+        let intval = s.fresh(&mut t, 0, NumKind::Integer, sp());
+        if let TyKind::Var(v) = t.kind(intval) {
+            s.freeze_value(*v);
+        }
+        let f64b = t.prim(Prim::F64);
+        assert!(
+            unify(&mut t, &mut s, intval, f64b).is_err(),
+            "a frozen integer value does not adopt a float (D54.3)"
+        );
+        // One-directional: a FLOAT literal never satisfies an integer
+        // expectation.
+        let floatlit = s.fresh(&mut t, 0, NumKind::Float, sp());
+        let i32_ = t.prim(Prim::I32);
+        assert!(
+            unify(&mut t, &mut s, floatlit, i32_).is_err(),
+            "a float literal is not an integer (D54.1, one-directional)"
         );
         // wrapping[u32] is an integer type for literal purposes (X3).
         let u32_ = t.prim(Prim::U32);

@@ -1,0 +1,13 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.numlit.ambig
+//!
+//! Ambiguity is a NAMED error, never a guess (D54, `[type.numlit.ambig]`):
+//! `1 + 2.0` forces one term to be both `{integer}` and `{float}` at
+//! once, and the operator bridge reports the conflict by name with the
+//! spelled-`as` fix — the checker never picks a side.
+
+fn main() -> !int {
+    let x = 1 + 2.0
+    0
+}

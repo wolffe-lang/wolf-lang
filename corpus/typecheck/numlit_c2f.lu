@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="0 32\n20 68\n40 104\n60 140\n80 176\n100 212\n120 248\n140 284\n160 320\n180 356\n200 392")
+//! phase: run
+//! conforms: type.numlit.adopt, type.numlit.propagate
+//!
+//! The witness (D54, the human's c2f program): Celsius→Fahrenheit with
+//! EXACTLY ONE annotation (`var c: f64 = 0`) and no `.0` anywhere else.
+//! Every bare integer literal here — `0`, `200`, `1.8`'s companion `32`,
+//! `20` — adopts `f64` from the float context it sits in
+//! (`[type.numlit.adopt]`), and adoption propagates across the whole
+//! `c * 1.8 + 32` term (`[type.numlit.propagate]`). Retires the
+//! `.0`-on-everything tax the ergonomics report surfaced.
+
+fn main() -> !int {
+    var c: f64 = 0
+    while c <= 200 {
+        print("{c} {c * 1.8 + 32}")
+        c += 20
+    }
+    0
+}

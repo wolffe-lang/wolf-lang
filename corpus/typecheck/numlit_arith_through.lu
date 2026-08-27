@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="212")
+//! phase: run
+//! conforms: type.numlit.propagate
+//!
+//! Arithmetic adopts THROUGH a term: in `c * 1.8 + 32` with `c: f64`,
+//! the bare `32` adopts `f64` because the whole term is float — adoption
+//! propagates across `*` and `+` (`[type.numlit.propagate]`).
+
+fn main() -> !int {
+    let c: f64 = 100.0
+    print("{c * 1.8 + 32}")
+    0
+}
