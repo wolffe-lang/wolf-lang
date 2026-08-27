@@ -11,7 +11,7 @@ fn main() -> !int {
     let x: f64 = 3.7
     let y: f64 = -3.7
     let u: u32 = 250
-    let back = (u as f64) as u32
+    let back = u as f64 as u32
     print("{x as int} {y as int} {back}")
     0
 }

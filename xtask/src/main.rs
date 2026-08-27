@@ -968,9 +968,23 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // off-by-default proof at the coverage level. Totals 178/193/193,
 // union 207, all-three 164. Counts measured by this gate, not
 // predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 178), ("native", 193), ("release", 193)];
-const UNION_FLOOR: usize = 207;
-const ALL_THREE_FLOOR: usize = 164;
+// s113 ratchet over 346 entries: D54's numeric-literal system (the
+// anchor) lands with the c2f witness and its litmus battery, and #138's
+// int↔float casts close. Nine new run-phase witnesses execute on the
+// lanes: six adopt/propagate/divide litmus files plus the c2f witness
+// all run on ALL three lanes (checked/native/release each +9), and the
+// three cast run-witnesses (`cast_int_to_float`, and the two
+// float→int trap faults `cast_float_overflow_trap`/`cast_float_nan_trap`)
+// reach native/release but not checked (native/release each +1 more).
+// The static-refusal litmus files (numlit_value_refused,
+// numlit_float_to_int_refused, numlit_ambiguity_named) land as
+// `rejected` and by design do not move coverage. No pre-existing file
+// moved lanes — Group A's zero-churn proof at the coverage level.
+// Totals 187/203/203, union 217, all-three 173. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 187), ("native", 203), ("release", 203)];
+const UNION_FLOOR: usize = 217;
+const ALL_THREE_FLOOR: usize = 173;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
