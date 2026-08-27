@@ -6089,6 +6089,15 @@ impl<'a> Checker<'a> {
             }
             "os_wait" => (vec![int_], rowed(self, int_, &["signal", "io"])),
             "os_kill" => (vec![int_], rowed(self, unit, &["io"])),
+            // signal RECEPTION (s114, #126): the abstraction is by
+            // MEANING — the set is a bitmask (reload=1, terminate=2,
+            // quit=4, upgrade=8). `listen` registers interest, `wait`
+            // parks the task until one of the set arrives and returns
+            // which one, `raise` self-delivers (the loopback). The one
+            // row is `io` (a bad set, an install failure) — delivery
+            // itself is a value, never a trap.
+            "os_signal_listen" | "os_signal_raise" => (vec![int_], rowed(self, unit, &["io"])),
+            "os_signal_wait" => (vec![int_], rowed(self, int_, &["io"])),
             // The s40 time builtin tier (X12): ms integers — monotonic
             // from an arbitrary process-local anchor, wall ms since
             // the Unix epoch, and a blocking sleep.
