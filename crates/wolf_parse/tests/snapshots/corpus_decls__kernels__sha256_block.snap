@@ -1,0 +1,13 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 769..816 name=mask32 body=Block
+FnDecl 885..1012 name=bsig0 body=Block
+FnDecl 1081..1207 name=bsig1 body=Block
+FnDecl 1274..1388 name=ssig0 body=Block
+FnDecl 1457..1573 name=ssig1 body=Block
+FnDecl 1575..1686 name=ch body=Block
+FnDecl 1688..1795 name=maj body=Block
+FnDecl 1931..3843 name=k256 body=Block
+FnDecl 3845..5686 name=main body=Block

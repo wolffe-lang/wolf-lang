@@ -2750,7 +2750,12 @@ impl<'t> Machine<'t> {
             | SyntaxKind::Minus
             | SyntaxKind::Star
             | SyntaxKind::Slash
-            | SyntaxKind::Percent => {
+            | SyntaxKind::Percent
+            | SyntaxKind::Amp
+            | SyntaxKind::Pipe
+            | SyntaxKind::Caret
+            | SyntaxKind::Shl
+            | SyntaxKind::Shr => {
                 let v = self.arith_binop_at(op, l, r, e.span, e.span)?;
                 Ok(Flow::Val(v))
             }
@@ -2814,6 +2819,11 @@ impl<'t> Machine<'t> {
             SyntaxKind::StarEq => SyntaxKind::Star,
             SyntaxKind::SlashEq => SyntaxKind::Slash,
             SyntaxKind::PercentEq => SyntaxKind::Percent,
+            SyntaxKind::AmpEq => SyntaxKind::Amp,
+            SyntaxKind::PipeEq => SyntaxKind::Pipe,
+            SyntaxKind::CaretEq => SyntaxKind::Caret,
+            SyntaxKind::ShlEq => SyntaxKind::Shl,
+            SyntaxKind::ShrEq => SyntaxKind::Shr,
             other => other,
         };
         self.arith_binop_at(op, l, r, span, ty_span)
@@ -2831,11 +2841,10 @@ impl<'t> Machine<'t> {
             (Value::Int(a), Value::Int(b)) => {
                 // Wrapping types wrap at their width; checked prims
                 // trap (X3).
-                if let Some((lo, hi, mask)) = self
+                if let Some((mask, bits, unsigned)) = self
                     .wrapping_width(ty_span)
                     .or_else(|| self.wrapping_width(span))
                 {
-                    let _ = (lo, hi);
                     let out = match op {
                         SyntaxKind::Plus => a.wrapping_add(b),
                         SyntaxKind::Minus => a.wrapping_sub(b),
@@ -2852,9 +2861,47 @@ impl<'t> Machine<'t> {
                             }
                             a.wrapping_rem(b)
                         }
+                        // Bitwise/shift arms mirror the native rung
+                        // (#130): band/bor/bxor on the width's bits;
+                        // shift amounts mask to the bit width (the
+                        // WIR `shl`/`lshr`/`ashr` contract); `>>` is
+                        // logical for unsigned wrapping types and
+                        // arithmetic for signed ones (`sema_unsigned`,
+                        // the s26 decision).
+                        SyntaxKind::Amp => a & b,
+                        SyntaxKind::Pipe => a | b,
+                        SyntaxKind::Caret => a ^ b,
+                        SyntaxKind::Shl => {
+                            let c = (b as u64 & u64::from(bits - 1)) as u32;
+                            a.wrapping_shl(c)
+                        }
+                        SyntaxKind::Shr => {
+                            let c = (b as u64 & u64::from(bits - 1)) as u32;
+                            if unsigned {
+                                ((a as u64 & mask as u64) >> c) as i64
+                            } else {
+                                // Sign-extend from the wrap width,
+                                // then shift arithmetically.
+                                let sh = 64 - bits;
+                                (a.wrapping_shl(sh) >> sh) >> c
+                            }
+                        }
                         _ => a,
                     };
                     return Ok(Value::Int(out & mask));
+                }
+                // Bitwise/shift on CHECKED (non-wrapping) integers has
+                // no ruled checked-tier semantics yet — the honest
+                // refusal, never a silent identity.
+                if matches!(
+                    op,
+                    SyntaxKind::Amp
+                        | SyntaxKind::Pipe
+                        | SyntaxKind::Caret
+                        | SyntaxKind::Shl
+                        | SyntaxKind::Shr
+                ) {
+                    return self.refuse("this operator in checked execution", span);
                 }
                 let out = match op {
                     SyntaxKind::Plus => a.checked_add(b),
@@ -2907,9 +2954,11 @@ impl<'t> Machine<'t> {
         }
     }
 
-    /// Is the expression at `span` a `wrapping[T]`? Returns the wrap
-    /// mask when so.
-    fn wrapping_width(&self, span: Span) -> Option<(i64, i64, i64)> {
+    /// Is the expression at `span` a `wrapping[T]`? Returns
+    /// `(mask, bits, unsigned)` when so — the wrap mask, the wrap
+    /// width, and the inner prim's signedness (mirrors the native
+    /// rung's `sema_unsigned`: `uint`/`u8`/`u16`/`u32`/`u64`).
+    fn wrapping_width(&self, span: Span) -> Option<(i64, u32, bool)> {
         let ctx = self.ctx();
         let id = ctx.expr_tys.get(&span)?;
         if let TyKind::Wrapping(inner) = ctx.tb.table.kind(*id)
@@ -2921,7 +2970,8 @@ impl<'t> Machine<'t> {
             } else {
                 (1i64 << bits) - 1
             };
-            return Some((0, mask, mask));
+            let unsigned = matches!(p, Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64);
+            return Some((mask, bits, unsigned));
         }
         None
     }
@@ -2964,6 +3014,22 @@ impl<'t> Machine<'t> {
                 );
             }
             _ => {}
+        }
+        // Unsigned WRAPPING literals are bit patterns on the wrap
+        // width (#130, mirroring the native rung's s26 rule): the
+        // full u64 range is admissible at `wrapping[u64]`
+        // (`0xc19bf174cf692694` is a value, not an overflow), and a
+        // literal beyond a narrower wrap width refuses exactly as
+        // WIR lowering does. Storage keeps this machine's masked
+        // convention (`arith_binop_at` masks every result the same
+        // way).
+        if let Some((mask, bits, true)) = self.wrapping_width(e.span)
+            && let Some(v) = parse_uint_literal(&text)
+        {
+            if bits < 64 && v >= (1u64 << bits) {
+                return self.refuse("an unsigned literal beyond its type's width", e.span);
+            }
+            return Ok(Value::Int((v as i64) & mask));
         }
         match parse_int_literal(&text) {
             Some(n) => Ok(Value::Int(n)),
@@ -5943,6 +6009,17 @@ fn parse_int_literal(text: &str) -> Option<i64> {
         return i64::from_str_radix(oct, 8).ok();
     }
     t.parse().ok()
+}
+
+/// Unsigned literal as a bit pattern: full u64 range, decimal or
+/// `0x…` hex — the native rung's `parse_uint_literal`, mirrored
+/// (#130). Other spellings fall back to [`parse_int_literal`].
+fn parse_uint_literal(text: &str) -> Option<u64> {
+    let t: String = text.chars().filter(|&c| c != '_').collect();
+    if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        return u64::from_str_radix(hex, 16).ok();
+    }
+    t.parse::<u64>().ok()
 }
 
 fn prim_bits(p: Prim) -> Option<u32> {

@@ -688,3 +688,91 @@ fn posture_mutate_while_iterating_walks_the_snapshot() {
         other => panic!("posture moved — update the s72 record: {other:?}"),
     }
 }
+
+// ------------------------- #130: wrapping shifts/bitwise (s111) --
+
+/// The checked tier executes `wrapping[T]` shifts and bitwise mixes
+/// with the native rung's semantics (wolf-lang#130 / F-0091): the
+/// FIPS 180-4 Sigma0{256} rotation of SHA-256's initial `a`, the
+/// `ch` mix over the initial `e f g`, and a full-width logical
+/// shift — every value cross-checked against the sc16 vector
+/// corpus's two executing lanes.
+#[test]
+fn wrapping_shift_bitwise_mirror_native() {
+    assert_exit(
+        "fn mask32() -> wrapping[u64] { 0xffffffff }\n\
+         fn bsig0(x: wrapping[u64]) -> wrapping[u64] {\n    \
+             ((x >> 2 | x << 30) ^ (x >> 13 | x << 19) ^ (x >> 22 | x << 10)) & mask32()\n\
+         }\n\
+         fn ch(x: wrapping[u64], y: wrapping[u64], z: wrapping[u64]) -> wrapping[u64] {\n    \
+             (x & y) ^ ((x ^ mask32()) & z)\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let s = bsig0(0x6a09e667) as int\n    \
+             let c = ch(0x510e527f, 0x9b05688c, 0x1f83d9ab) as int\n    \
+             if s == 3458249854 && c == 528861580 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// `>>` on an unsigned wrapping type is a LOGICAL shift (zero-fill),
+/// exactly the native rung's `lshr` — the top bit must not smear.
+#[test]
+fn wrapping_u64_shr_is_logical() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let big: wrapping[u64] = 0x8000000000000000\n    \
+             if (big >> 63) as int == 1 && (big >> 1) as int == 4611686018427387904 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// Shift amounts mask to the bit width (the WIR `shl`/`lshr`
+/// contract both backends implement): a shift by 64 on a 64-bit
+/// wrapping value is a shift by zero.
+#[test]
+fn wrapping_shift_amount_masks_to_width() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let x: wrapping[u64] = 5\n    \
+             if (x << 64) as int == 5 && (x >> 64) as int == 5 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// Compound bitwise/shift assignment reuses the same arms (the
+/// native rung maps `<<=` to `shl` and friends).
+#[test]
+fn wrapping_compound_bitwise_assign() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             var x: wrapping[u64] = 5\n    \
+             x <<= 3\n    \
+             x |= 1\n    \
+             x ^= 0xf\n    \
+             x &= 0xff\n    \
+             x >>= 1\n    \
+             if x as int == 19 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// A `wrapping[u64]` literal above `2^63 - 1` is a bit pattern, not
+/// an overflow (#130's literal half): SHA-512's `K[15]` constant
+/// round-trips through hi/lo halves.
+#[test]
+fn wrapping_u64_full_range_literal() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let k: wrapping[u64] = 0xc19bf174cf692694\n    \
+             let hi = (k >> 32) as int\n    \
+             let lo = (k & 0xffffffff) as int\n    \
+             if hi == 3248222580 && lo == 3479774868 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
