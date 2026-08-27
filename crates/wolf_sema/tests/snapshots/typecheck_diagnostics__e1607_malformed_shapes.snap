@@ -1,0 +1,21 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1607]: `frob` is not a consttime argument — the only form is `public(…)`
+ --> mem:///main.lu:1:13
+  |
+1 | #[consttime(frob(k))]
+  |             ^^^^^^^
+  |
+  = note: a parameter `public(…)` fails to name stays secret — refusing the attribute here beats
+    refusing a branch the author believes is licensed
+
+error[E1607]: `public` needs a parameter list: `public(name, …)`
+ --> mem:///main.lu:6:13
+  |
+6 | #[consttime(public)]
+  |             ^^^^^^
+  |
+  = note: a parameter `public(…)` fails to name stays secret — refusing the attribute here beats
+    refusing a branch the author believes is licensed

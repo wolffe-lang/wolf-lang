@@ -408,3 +408,40 @@ fn e0401_computed_assert_still_owes_t() {
         "fn expect[T](v: T ! {none}, cond: bool) -> T {\n    let hit = v else |_| {\n        assert(cond)\n    }\n    hit\n}\n\nfn main() -> !int {\n    let a = expect(7, false)\n    if a == 7 { 0 } else { 1 }\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E1607 -----
+
+/// c28 [ct.attr.public]: a `public(…)` entry naming no parameter is
+/// refused AT THE ATTRIBUTE — the alternative is a secret-by-default
+/// parameter the author believes is public, refused later with a
+/// message about a branch they think is licensed.
+#[test]
+fn e1607_public_names_no_parameter() {
+    snap_one(
+        "e1607_public_names_no_parameter",
+        "#[consttime(public(nope))]\nfn f(k: int) -> int {\n    0\n}\n\nfn main() -> !int {\n    f(1)\n}\n",
+    );
+}
+
+/// The other malformed shapes: a non-`public` argument, and `public`
+/// without a list.
+#[test]
+fn e1607_malformed_argument_shapes() {
+    snap_one(
+        "e1607_malformed_shapes",
+        "#[consttime(frob(k))]\nfn f(k: int) -> int {\n    0\n}\n\n#[consttime(public)]\nfn g(k: int) -> int {\n    0\n}\n\nfn main() -> !int {\n    f(1) + g(1)\n}\n",
+    );
+}
+
+/// The well-formed spellings stay silent: bare, and a real parameter.
+#[test]
+fn e1607_well_formed_stays_clean() {
+    assert_eq!(
+        render_types(&[(
+            &[],
+            "main.lu",
+            "#[consttime]\nfn f(k: wrapping[u64]) -> wrapping[u64] {\n    k\n}\n\n#[consttime(public(n))]\nfn g(k: wrapping[u64], n: int) -> wrapping[u64] {\n    k\n}\n\nfn main() -> !int {\n    let r = f(1) | g(2, 3)\n    if r == 3 { 0 } else { 1 }\n}\n",
+        )]),
+        ""
+    );
+}

@@ -105,6 +105,27 @@ pub struct FnSig {
     /// declared in the package manifest (E1303, `wolf audit`'s
     /// supply-chain surface).
     pub trusted: Option<String>,
+    /// c28 — `#[consttime]` (spec/09 `[ct.attr]`): this function's
+    /// body is subject to the constant-time taint discipline. Every
+    /// parameter is secret unless named in `public(…)`; lowering
+    /// carries the contract onto the WIR function, where the taint
+    /// verifier enforces it (`[ct.taint]`). `None` = ordinary
+    /// function, and the tier costs nothing.
+    pub consttime: Option<CtSig>,
+}
+
+/// The parsed `#[consttime]` contract on one function ([ct.attr]):
+/// which parameters the author exempted as public. Unmatched or
+/// malformed `public(…)` entries are E1607 at elaboration — a
+/// misspelled exemption must not silently strengthen the contract.
+#[derive(Debug, Clone)]
+pub struct CtSig {
+    /// Parameter NAMES declared public, deduplicated, in attribute
+    /// order. Everything else (receiver included) is secret.
+    pub public: Vec<String>,
+    /// The attribute path's span (the "because" locus for membrane
+    /// and sink refusals that cite the contract).
+    pub span: Span,
 }
 
 impl FnSig {
@@ -707,6 +728,7 @@ impl<'a> Lower<'a> {
             }
             None => (self.table.unit(), None, None),
         };
+        let consttime = self.consttime_attr(file, node, &params);
         FnSig {
             params,
             ret,
@@ -716,7 +738,121 @@ impl<'a> Lower<'a> {
             generics: own,
             comptime: d.is_comptime(),
             trusted: trusted_attr(node, |sp| self.text(file, sp)),
+            consttime,
         }
+    }
+
+    /// The `#[consttime]` / `#[consttime(public(a, b))]` attribute on
+    /// a fn item (c28, spec/09 `[ct.attr]`). Parses through the
+    /// ordinary attribute grammar; every argument must be `public(…)`
+    /// over this function's declared parameter names, and anything
+    /// else is E1607 HERE — the alternative is a secret-by-default
+    /// parameter the author believes is public, refused later with a
+    /// message about a branch they think is licensed.
+    fn consttime_attr(
+        &mut self,
+        file: usize,
+        node: &GreenNode,
+        params: &[ParamSig],
+    ) -> Option<CtSig> {
+        let mut found: Option<CtSig> = None;
+        for attr in node.nodes().filter_map(wolf_ast::Attribute::cast) {
+            for item in attr.items() {
+                let Some(path) = item.path() else { continue };
+                let span = path.syntax().span;
+                if self.text(file, span).trim() != "consttime" {
+                    continue;
+                }
+                let mut ct = CtSig {
+                    public: Vec::new(),
+                    span,
+                };
+                if let Some(input) = item.input() {
+                    let mut args = 0usize;
+                    for arg in input.nodes().filter_map(wolf_ast::AttrItem::cast) {
+                        args += 1;
+                        let aspan = arg.syntax().span;
+                        let aname = arg
+                            .path()
+                            .map(|p| self.text(file, p.syntax().span))
+                            .unwrap_or_default();
+                        if aname.trim() != "public" {
+                            self.ct_malformed(
+                                aspan,
+                                format!(
+                                    "`{}` is not a consttime argument — the only form is \
+                                     `public(…)`",
+                                    aname.trim()
+                                ),
+                            );
+                            continue;
+                        }
+                        let Some(pubin) = arg.input() else {
+                            self.ct_malformed(
+                                aspan,
+                                "`public` needs a parameter list: `public(name, …)`".to_string(),
+                            );
+                            continue;
+                        };
+                        let mut names = 0usize;
+                        for name_item in pubin.nodes().filter_map(wolf_ast::AttrItem::cast) {
+                            names += 1;
+                            let nspan = name_item.syntax().span;
+                            let nm = name_item
+                                .path()
+                                .map(|p| self.text(file, p.syntax().span))
+                                .unwrap_or_default();
+                            let nm = nm.trim().to_string();
+                            if nm.is_empty() || name_item.input().is_some() {
+                                self.ct_malformed(
+                                    nspan,
+                                    "`public(…)` takes bare parameter names".to_string(),
+                                );
+                                continue;
+                            }
+                            if !params.iter().any(|p| p.name == nm) {
+                                self.ct_malformed(
+                                    nspan,
+                                    format!("`public({nm})` names no parameter of this function"),
+                                );
+                                continue;
+                            }
+                            if !ct.public.contains(&nm) {
+                                ct.public.push(nm);
+                            }
+                        }
+                        if names == 0 {
+                            self.ct_malformed(
+                                aspan,
+                                "`public` needs a parameter list: `public(name, …)`".to_string(),
+                            );
+                        }
+                    }
+                    if args == 0 {
+                        // `#[consttime = "…"]` and other non-list
+                        // inputs: no attr-shaped argument at all.
+                        self.ct_malformed(
+                            span,
+                            "the only consttime argument form is `public(…)`".to_string(),
+                        );
+                    }
+                }
+                if found.is_none() {
+                    found = Some(ct);
+                }
+            }
+        }
+        found
+    }
+
+    /// E1607 — the consttime attribute's argument does not elaborate
+    /// against this function ([ct.attr.public]).
+    fn ct_malformed(&mut self, span: Span, what: String) {
+        self.diags
+            .push(Diagnostic::error(codes::E1607, span, what).with_note(
+                "a parameter `public(…)` fails to name stays secret — refusing the \
+                 attribute here beats refusing a branch the author believes is licensed",
+            ));
     }
 
     /// Elaborate an enum's variant table (s17): names + payload types.
