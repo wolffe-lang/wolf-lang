@@ -2354,6 +2354,15 @@ enum MutArg {
     Relend { ptr: Value, region: RegionId },
 }
 
+/// The base a `mut` member chain resolves against (s111, #133).
+enum ChainBase {
+    /// A by-value local: SSA aggregate, spill + writeback.
+    Val { var: Var },
+    /// A `mut` parameter: pointer-shaped (s26) — the chain becomes a
+    /// static byte offset into the caller's slot.
+    MutRef { ptr: Value, region: RegionId },
+}
+
 /// What to restore from a spill slot after the call.
 enum WriteBackShape {
     /// A whole local: reload and redefine.
@@ -12680,10 +12689,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins(Opcode::AggMake, &parts, &[aty], Aux::None).one()
     }
 
-    /// Resolve a (possibly nested) member chain over a by-value local:
-    /// the base variable, the field index path (outer to inner), and
-    /// the leaf's WIR type.
-    fn resolve_member_chain(&mut self, e: &'t GreenNode) -> R<(Var, Vec<usize>, TypeId)> {
+    /// Resolve a (possibly nested) member chain over a local place:
+    /// the chain base (a by-value local, or a `mut` parameter's
+    /// pointer — #133), the field index path (outer to inner), the
+    /// leaf's flat BYTE offset inside the base's layout, and the
+    /// leaf's WIR type.
+    fn resolve_member_chain(
+        &mut self,
+        e: &'t GreenNode,
+    ) -> R<(ChainBase, Vec<usize>, u64, TypeId)> {
         let mut members: Vec<wolf_ast::MemberExpr<'t>> = Vec::new();
         let mut cur = e;
         while cur.kind == SyntaxKind::MemberExpr {
@@ -12698,19 +12712,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("`mut` places beyond local paths", e.span));
         }
         let name = self.text(cur.span);
-        let Some(LocalBind::Val {
-            var,
-            wir_ty: mut wt,
-            ..
-        }) = self.lookup(&name)
-        else {
-            return Err(refuse(
-                "`mut` places beyond local by-value bindings",
-                e.span,
-            ));
+        let (base, mut wt) = match self.lookup(&name) {
+            Some(LocalBind::Val { var, wir_ty, .. }) => (ChainBase::Val { var }, wir_ty),
+            // #133: the base is a `mut` PARAMETER. The mem tier's
+            // field-granular exclusivity (X1, s18 family) already
+            // licensed the projection; the offset walk below realizes
+            // it against the flat spill layout.
+            Some(LocalBind::MutRef {
+                ptr, region, elem, ..
+            }) => (ChainBase::MutRef { ptr, region }, elem),
+            _ => {
+                return Err(refuse(
+                    "`mut` places beyond local by-value bindings",
+                    e.span,
+                ));
+            }
         };
         members.reverse(); // innermost (closest to the base) first
         let mut path = Vec::with_capacity(members.len());
+        let mut off = 0u64;
         for m in members {
             let base = m.base().expect("checked above");
             let Some(base_sema) = self.expr_sema_ty(base.span) else {
@@ -12723,10 +12743,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let Some(&fty) = fields.get(index) else {
                 return Err(refuse("a member the aggregate does not carry", e.span));
             };
+            // Field offsets under the v0 flat layout (fields packed
+            // in declaration order — the spill convention `mut`
+            // arguments already use, s27).
+            let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+                return Err(refuse("`mut` paths over non-flat fields", e.span));
+            };
+            off += offs[index];
             path.push(index);
             wt = fty;
         }
-        Ok((var, path, wt))
+        Ok((base, path, off, wt))
     }
 
     /// Classify one `mut` argument: a whole flat local or a flat field
@@ -12764,29 +12791,43 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             SyntaxKind::MemberExpr => {
-                let (var, path, fty) = self.resolve_member_chain(vexpr)?;
+                let (base, path, off, fty) = self.resolve_member_chain(vexpr)?;
                 let Some(size) = flat_size(&self.b.module.types, fty) else {
                     return Err(refuse(
                         "`mut` arguments of non-flat types (spill layout, c06)",
                         vexpr.span,
                     ));
                 };
-                let mut cur = self.b.use_var(var);
-                for &idx in &path {
-                    let aty = self.b.func.value_ty(cur);
-                    let types::TypeData::Agg(fields) = self.b.module.types.get(aty).clone() else {
-                        return Err(refuse("`mut` fields of non-aggregates", vexpr.span));
-                    };
-                    cur = self
-                        .b
-                        .ins(Opcode::AggGet, &[cur], &[fields[idx]], Aux::Int(idx as i64))
-                        .one();
+                match base {
+                    ChainBase::Val { var } => {
+                        let mut cur = self.b.use_var(var);
+                        for &idx in &path {
+                            let aty = self.b.func.value_ty(cur);
+                            let types::TypeData::Agg(fields) = self.b.module.types.get(aty).clone()
+                            else {
+                                return Err(refuse("`mut` fields of non-aggregates", vexpr.span));
+                            };
+                            cur = self
+                                .b
+                                .ins(Opcode::AggGet, &[cur], &[fields[idx]], Aux::Int(idx as i64))
+                                .one();
+                        }
+                        Ok(MutArg::Spill {
+                            cur,
+                            size,
+                            writeback: WriteBackShape::Field { var, path, fty },
+                        })
+                    }
+                    // #133: a field path off a `mut` parameter
+                    // re-lends a pointer INTO the caller's slot — the
+                    // flat layout makes the offset static, the callee
+                    // writes land directly, and no writeback exists
+                    // to get stale.
+                    ChainBase::MutRef { ptr, region } => {
+                        let fp = self.field_addr(ptr, off);
+                        Ok(MutArg::Relend { ptr: fp, region })
+                    }
                 }
-                Ok(MutArg::Spill {
-                    cur,
-                    size,
-                    writeback: WriteBackShape::Field { var, path, fty },
-                })
             }
             _ => Err(refuse(
                 "`mut` arguments beyond local places (c06)",

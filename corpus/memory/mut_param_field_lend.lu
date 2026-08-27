@@ -1,0 +1,58 @@
+//! check: run(exit=0, stdout="111 2 7\n5 9")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.excl.2
+//!
+//! `f(mut param.field)` — a `mut` FIELD PATH whose base is itself a
+//! `mut` parameter (#133, s111): the Sha384-wraps-Sha512 shape, where
+//! the wrapper's update wants to be one line instead of a
+//! copy-advance-write-back dance over the whole core. X1's
+//! field-granular exclusivity already licenses the projection; the
+//! lowering re-lends a pointer into the caller's slot at the field's
+//! flat offset, so the callee's writes land directly and the sibling
+//! field is untouched. Exercised one level deep off a local (the
+//! healed half), one level off a `mut` parameter (the filed half),
+//! and two levels deep off a `mut` parameter (the chain).
+
+struct Core {
+    n: int,
+    m: int,
+}
+
+struct Wrap {
+    core: Core,
+    tag: int,
+}
+
+struct Outer {
+    a: int,
+    w: Wrap,
+}
+
+fn advance(mut c: Core, k: int) {
+    c.n = c.n + k
+    c.m = c.m + 1
+}
+
+fn bump(mut n: int) {
+    n = n + 4
+}
+
+fn update(mut w: Wrap, k: int) {
+    advance(mut w.core, k)
+}
+
+fn deep(mut o: Outer) {
+    advance(mut o.w.core, 1)
+    bump(mut o.a)
+}
+
+fn main() -> int {
+    var w = Wrap { core: Core { n: 1, m: 0 }, tag: 7 }
+    advance(mut w.core, 10)
+    update(mut w, 100)
+    print("{w.core.n} {w.core.m} {w.tag}")
+    var o = Outer { a: 1, w: Wrap { core: Core { n: 8, m: 0 }, tag: 3 } }
+    deep(mut o)
+    print("{o.a} {o.w.core.n}")
+    0
+}
