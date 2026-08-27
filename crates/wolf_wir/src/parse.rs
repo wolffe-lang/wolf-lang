@@ -628,7 +628,7 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                     .push(crate::ir::DataDecl { name, bytes, funcs });
                 i = end;
             }
-            Tok::Ident(kw) if kw == "fn" => {
+            Tok::Ident(kw) if kw == "fn" || kw == "consttime" => {
                 i = parse_function(&toks, i, &mut p, false)?;
             }
             // `export fn @name…` — the C membrane marker (s29).
@@ -641,7 +641,7 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                     l,
                     c,
                     format!(
-                        "expected `decl`, `data`, `fn` or `export fn`, found {}",
+                        "expected `decl`, `data`, `fn`, `consttime fn` or `export fn`, found {}",
                         t.describe()
                     ),
                 );
@@ -788,11 +788,57 @@ enum LineKind {
 }
 
 fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser, export: bool) -> PResult<usize> {
-    // Header line: `('export')? fn @name(SIG) [-> ...] {` (the caller
-    // consumed any `export`; `start` points at `fn`).
+    // Header line: `('export')? ('consttime' '(' idx,* ')')? fn
+    // @name(SIG) [-> ...] {` (the caller consumed any `export`;
+    // `start` points at `consttime` or `fn`).
+    let mut start = start;
+    let mut consttime: Option<Vec<u16>> = None;
+    if matches!(toks.get(start), Some((Tok::Ident(kw), ..)) if kw == "consttime") {
+        let (mut l, mut c) = (toks[start].1, toks[start].2);
+        start += 1;
+        if !matches!(toks.get(start), Some((Tok::LParen, ..))) {
+            return err(
+                l,
+                c,
+                "`consttime` needs `(…)` — the secret signature parameter indices",
+            );
+        }
+        start += 1;
+        let mut secret: Vec<u16> = Vec::new();
+        loop {
+            match toks.get(start) {
+                Some((Tok::RParen, ..)) => {
+                    start += 1;
+                    break;
+                }
+                Some((Tok::Num(nrepr), nl, nc)) => {
+                    let Ok(v) = nrepr.parse::<u16>() else {
+                        return err(*nl, *nc, format!("bad secret parameter index `{nrepr}`"));
+                    };
+                    secret.push(v);
+                    start += 1;
+                    if matches!(toks.get(start), Some((Tok::Comma, ..))) {
+                        start += 1;
+                    }
+                }
+                other => {
+                    if let Some(&(_, nl, nc)) = other {
+                        (l, c) = (nl, nc);
+                    }
+                    return err(l, c, "expected a secret parameter index or `)`");
+                }
+            }
+        }
+        // Canonical form is sorted and deduplicated (the printer emits
+        // it that way); normalizing here keeps print → parse → print a
+        // fixpoint for hand-written files too.
+        secret.sort_unstable();
+        secret.dedup();
+        consttime = Some(secret);
+    }
     if !matches!(toks.get(start), Some((Tok::Ident(kw), ..)) if kw == "fn") {
         let (l, c) = toks.get(start).map(|&(_, l, c)| (l, c)).unwrap_or((0, 0));
-        return err(l, c, "expected `fn` after `export`");
+        return err(l, c, "expected `fn` after `export`/`consttime`");
     }
     let head_end = line_end(toks, start);
     let mut head = Line::new(&toks[start..head_end]);
@@ -865,6 +911,17 @@ fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser, export: bool) 
 
     let mut func = Function::new(name.clone(), sig);
     func.export = export;
+    if let Some(secret) = consttime {
+        let nparams = p.module.sigs[sig].params.len();
+        if let Some(&bad) = secret.iter().find(|&&ix| ix as usize >= nparams) {
+            return head.fail(format!(
+                "consttime names secret parameter {bad}, but the signature has {nparams}"
+            ));
+        }
+        func.consttime = Some(crate::ir::CtContract {
+            secret_params: secret,
+        });
+    }
     let mut blocks: HashMap<String, Block> = HashMap::new();
     let mut values: HashMap<String, Value> = HashMap::new();
 

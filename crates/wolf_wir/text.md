@@ -27,7 +27,12 @@ fixpoint for every module (property-tested).
 ```
 module   := { decl | func }
 decl     := "decl" "@" name sig
-func     := "fn" "@" name sig "{" NL { fact NL } block { block } "}"
+func     := [ "export" ] [ consttime ] "fn" "@" name sig
+            "{" NL { fact NL } block { block } "}"
+consttime := "consttime" "(" [ INT { "," INT } ] ")"
+            ; c28 [ct.attr.carry]: the constant-time contract — the
+            ; listed signature parameter indices are SECRET (the taint
+            ; sources); canonical form is sorted and deduplicated.
 sig      := "(" [ param { "," param } ] ")" [ "->" type { "," type } ]
 param    := [ "mut" | "read" | "take" ] type
 type     := "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "bool"

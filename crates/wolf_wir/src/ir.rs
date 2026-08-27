@@ -169,6 +169,17 @@ pub struct SrcSpan {
     pub hi: u32,
 }
 
+/// The constant-time contract carried on a WIR function (c28, spec/09
+/// `[ct.attr.carry]`): which signature parameters are SECRET — the
+/// taint sources of `[ct.taint.source]`. Everything not listed
+/// (public exemptions, effect tokens) is public. Indices are into the
+/// function's `SigData::params`, sorted ascending; the set is part of
+/// the canonical text, so the contract rides the D8 body hash.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CtContract {
+    pub secret_params: Vec<u16>,
+}
+
 /// One named source binding's SSA definition (s30 debug aux): `name`
 /// currently holds `val`. A name may appear many times — once per
 /// (re)binding or assignment — and one value may carry several names
@@ -230,6 +241,14 @@ pub struct Function {
     /// external linkage. Textually `export fn @name…`. Everything else
     /// stays `wolf-abi-0` internal.
     pub export: bool,
+    /// c28 — the constant-time contract ([ct.attr.carry]): `Some` iff
+    /// the source function carried `#[consttime]`. Canonical and
+    /// hash-bearing: textually `consttime(i, j) fn @name…` where the
+    /// indices are the SECRET signature parameters (the taint
+    /// sources). The verifier (`crate::ct`) enforces `[ct.taint]`
+    /// over marked functions; the mid-end treats them as inlining
+    /// boundaries ([ct.attr.barrier]).
+    pub consttime: Option<CtContract>,
     pub blocks: PrimaryMap<Block, BlockData>,
     pub insts: PrimaryMap<Inst, InstData>,
     pub values: PrimaryMap<Value, ValueData>,
@@ -264,6 +283,7 @@ impl Function {
             name: name.into(),
             sig,
             export: false,
+            consttime: None,
             blocks: PrimaryMap::new(),
             insts: PrimaryMap::new(),
             values: PrimaryMap::new(),

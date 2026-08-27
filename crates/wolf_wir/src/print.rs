@@ -375,7 +375,20 @@ pub(crate) fn print_function(m: &Module, f: &Function) -> String {
     let canon = canonicalize(f);
     let mut out = String::new();
     let export = if f.export { "export " } else { "" };
-    writeln!(out, "{export}fn @{}{} {{", f.name, render_sig(m, f.sig)).unwrap();
+    // c28 [ct.attr.carry]: the constant-time contract is canonical
+    // text — `consttime(i, j)` lists the SECRET signature params.
+    let ct = match &f.consttime {
+        None => String::new(),
+        Some(c) => format!(
+            "consttime({}) ",
+            c.secret_params
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+    writeln!(out, "{export}{ct}fn @{}{} {{", f.name, render_sig(m, f.sig)).unwrap();
     // Facts, sorted by rendered line — deterministic and diff-stable.
     let mut fact_lines: Vec<String> = f.facts.values().map(|fd| render_fact(&canon, fd)).collect();
     fact_lines.sort();

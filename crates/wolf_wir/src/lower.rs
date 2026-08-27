@@ -2577,11 +2577,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.scopes.push(ScopeFrame::default());
         let mut wir_idx = 0usize;
         let mut mut_ptrs: Vec<(Value, TypeId)> = Vec::new();
+        // c28 [ct.attr.carry]: under `#[consttime]`, collect the WIR
+        // signature indices of each SECRET surface parameter as the
+        // param loop walks the (mode-expanded) entry words. Effect
+        // tokens are never secret ([ct.taint] — tokens sequence
+        // memory, they do not hold it), so a `mut` pair contributes
+        // only its pointer half; a byte view contributes both words
+        // (the view's length is the container's, and v1's granularity
+        // keeps a secret container whole — [ct.taint.source]).
+        let mut ct_secret: Vec<u16> = Vec::new();
+        let ct_is_secret = |name: &str| {
+            fsig.consttime
+                .as_ref()
+                .is_some_and(|ct| !ct.public.iter().any(|p| p == name))
+        };
         for (pi, p) in fsig.params.iter().enumerate() {
             // s89: a lent byte view is two entry words, bound as the
             // view itself — no header, no allocation, nothing to
             // materialize on entry.
             if view_mask & (1u32 << pi) != 0 {
+                if ct_is_secret(&p.name) {
+                    ct_secret.push(wir_idx as u16);
+                    ct_secret.push(wir_idx as u16 + 1);
+                }
                 let ptr = entry_params[wir_idx];
                 let len = entry_params[wir_idx + 1];
                 wir_idx += 2;
@@ -2608,6 +2626,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // is the creator's; opening through the handle works,
             // freeze/free refuse by name).
             if matches!(self.sig_table.kind(p.ty), TyKind::RegionTy) {
+                if ct_is_secret(&p.name) {
+                    ct_secret.push(wir_idx as u16);
+                }
                 let val = entry_params[wir_idx];
                 wir_idx += 1;
                 self.b.func.add_debug_var(p.name.clone(), val, true);
@@ -2622,6 +2643,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     },
                 ));
                 continue;
+            }
+            if ct_is_secret(&p.name) {
+                ct_secret.push(wir_idx as u16);
             }
             let wrapping = matches!(self.sig_table.kind(p.ty), TyKind::Wrapping(_));
             let unsigned = sema_unsigned(self.sig_table, p.ty);
@@ -2665,6 +2689,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .expect("scope")
                 .binds
                 .push((p.name.clone(), bind));
+        }
+        // c28: pin the constant-time contract on the WIR function —
+        // present even with an empty secret set (a consttime fn whose
+        // every parameter is public still refuses membrane crossings
+        // of derived secrets from callees; and the marking is the
+        // mid-end's inlining boundary either way).
+        if fsig.consttime.is_some() {
+            ct_secret.sort_unstable();
+            ct_secret.dedup();
+            self.b.func.consttime = Some(crate::ir::CtContract {
+                secret_params: ct_secret,
+            });
         }
         // The c04 handoff, at last (s26): the exclusivity theorem the
         // memory checker proved for each `mut` parameter becomes entry

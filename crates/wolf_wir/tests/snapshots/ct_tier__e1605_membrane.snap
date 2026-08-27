@@ -1,0 +1,12 @@
+---
+source: crates/wolf_wir/tests/ct_tier.rs
+expression: "render(&v, &sources)"
+---
+error[E1605]: in consttime fn `leaky`: a secret argument crosses into `helper`, which is not consttime
+ --> mem:///main.lu:5:5
+  |
+5 |     helper(k)
+  |     ^^^^^^^^^
+  |
+  = note: the constant-time contract stops at unverified code — mark the callee `#[consttime]`, or
+    keep the secret's work inside this function
