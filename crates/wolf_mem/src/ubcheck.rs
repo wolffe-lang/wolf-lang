@@ -449,9 +449,20 @@ enum Stop {
 enum Flow {
     Val(Value),
     Return(Value),
-    Err(Value),
+    /// A row error unwinding. The flag is PROPAGATION (#122): `false`
+    /// for a raw row value (a raise site, a fallible call's error
+    /// half) — the shape that BINDS at `let`/`var` (D52's
+    /// declared-row-first reading; rows are values, and native and
+    /// lupin both bind here) — `true` once a `?` has explicitly
+    /// propagated it, which keeps unwinding through every binder.
+    Err(Value, bool),
     Break,
     Continue,
+}
+
+/// A raw (non-propagating) row error — see [`Flow::Err`].
+fn raise(v: Value) -> Flow {
+    Flow::Err(v, false)
 }
 
 type E<T> = Result<T, Stop>;
@@ -1475,7 +1486,7 @@ impl<'t> Machine<'t> {
             // tag value crosses to the caller — the call site rewraps
             // it as `Flow::Err` (or `main` reports it, D30's process
             // behavior).
-            Ok(Flow::Err(v)) => self.exit_scopes_to(0, true).map(|()| v),
+            Ok(Flow::Err(v, _)) => self.exit_scopes_to(0, true).map(|()| v),
             Ok(Flow::Break) | Ok(Flow::Continue) => Ok(Value::Unit),
             Err(e) => Err(e),
         };
@@ -1874,7 +1885,7 @@ impl<'t> Machine<'t> {
                                 }
                             }
                             other => {
-                                self.close_scope(matches!(other, Flow::Err(_)))?;
+                                self.close_scope(matches!(other, Flow::Err(..)))?;
                                 return Ok(other);
                             }
                         }
@@ -1885,7 +1896,7 @@ impl<'t> Machine<'t> {
                     match self.bind_decl(d.pattern(), d.init())? {
                         Flow::Val(_) => {}
                         other => {
-                            self.close_scope(matches!(other, Flow::Err(_)))?;
+                            self.close_scope(matches!(other, Flow::Err(..)))?;
                             return Ok(other);
                         }
                     }
@@ -1895,7 +1906,7 @@ impl<'t> Machine<'t> {
                     match self.bind_decl(d.pattern(), d.init())? {
                         Flow::Val(_) => {}
                         other => {
-                            self.close_scope(matches!(other, Flow::Err(_)))?;
+                            self.close_scope(matches!(other, Flow::Err(..)))?;
                             return Ok(other);
                         }
                     }
@@ -1914,7 +1925,7 @@ impl<'t> Machine<'t> {
                             }
                         }
                         other => {
-                            self.close_scope(matches!(other, Flow::Err(_)))?;
+                            self.close_scope(matches!(other, Flow::Err(..)))?;
                             return Ok(other);
                         }
                     }
@@ -1922,7 +1933,7 @@ impl<'t> Machine<'t> {
                 SyntaxKind::AssignStmt => match self.eval_assign(stmt)? {
                     Flow::Val(_) => {}
                     other => {
-                        self.close_scope(matches!(other, Flow::Err(_)))?;
+                        self.close_scope(matches!(other, Flow::Err(..)))?;
                         return Ok(other);
                     }
                 },
@@ -1941,7 +1952,7 @@ impl<'t> Machine<'t> {
                 SyntaxKind::AssumeStmt => match self.eval_assume(stmt)? {
                     Flow::Val(_) => {}
                     other => {
-                        self.close_scope(matches!(other, Flow::Err(_)))?;
+                        self.close_scope(matches!(other, Flow::Err(..)))?;
                         return Ok(other);
                     }
                 },
@@ -1964,7 +1975,15 @@ impl<'t> Machine<'t> {
 
     fn bind_decl(&mut self, pat: Option<&'t GreenNode>, init: Option<&'t GreenNode>) -> E<Flow> {
         let v = match init {
-            Some(e) => val!(self.eval(e)),
+            Some(e) => match self.eval(e)? {
+                Flow::Val(v) => v,
+                // #122: a RAW row value at `let`/`var` BINDS — the
+                // spec's reading (D52 declared-row-first; rows are
+                // values), which native and lupin already implement.
+                // Only a `?`-propagated error keeps unwinding.
+                Flow::Err(v, false) => v,
+                other => return Ok(other),
+            },
             None => Value::Uninit,
         };
         if let Some(pat) = pat {
@@ -2058,7 +2077,17 @@ impl<'t> Machine<'t> {
             return self.raw_index_write(place_expr, v, compound, stmt.span);
         }
         let v = match d.value() {
-            Some(e) => val!(self.eval(e)),
+            Some(e) => match self.eval(e)? {
+                Flow::Val(v) => v,
+                // #122's assignment sibling, measured in the same
+                // sweep: a RAW row value assigned to a row-typed
+                // place binds exactly as it does at `let` (native
+                // does); only a `?`-propagated error unwinds. The
+                // compound path below never sees rows (arith owns
+                // it).
+                Flow::Err(v, false) if !compound => v,
+                other => return Ok(other),
+            },
             None => Value::Unit,
         };
         let Some(place) = self.place_of(place_expr)? else {
@@ -2102,7 +2131,7 @@ impl<'t> Machine<'t> {
                 if e.kind == SyntaxKind::PathExpr
                     && let Some(tag) = self.raised_tag(e)
                 {
-                    return Ok(Flow::Err(Value::ErrTag {
+                    return Ok(raise(Value::ErrTag {
                         tag,
                         payload: Vec::new(),
                     }));
@@ -2202,7 +2231,12 @@ impl<'t> Machine<'t> {
                     None => Flow::Val(Value::Unit),
                 };
                 match inner {
-                    Flow::Err(err) => Ok(Flow::Err(err)),
+                    // `?` is the one PROPAGATING consumer (#122): a
+                    // row error reaching it — as a flow or as a bound
+                    // row VALUE — unwinds toward the caller (D30),
+                    // through any `let` on the way.
+                    Flow::Err(err, _) => Ok(Flow::Err(err, true)),
+                    Flow::Val(v @ Value::ErrTag { .. }) => Ok(Flow::Err(v, true)),
                     other => Ok(other),
                 }
             }
@@ -2350,7 +2384,7 @@ impl<'t> Machine<'t> {
             None => Ok(Flow::Val(Value::Unit)),
         };
         match &out {
-            Ok(Flow::Err(_)) => self.close_scope(true)?,
+            Ok(Flow::Err(..)) => self.close_scope(true)?,
             _ => self.close_scope(false)?,
         }
         self.ambient.pop();
@@ -2424,7 +2458,7 @@ impl<'t> Machine<'t> {
                 Some(body) => self.eval(body)?,
                 None => Flow::Val(Value::Unit),
             };
-            self.close_scope(matches!(out, Flow::Err(_)))?;
+            self.close_scope(matches!(out, Flow::Err(..)))?;
             return Ok(out);
         }
         Ok(Flow::Val(Value::Unit))
@@ -2580,7 +2614,7 @@ impl<'t> Machine<'t> {
                     }
                     Flow::Continue | Flow::Val(_) => {}
                     other => {
-                        self.close_scope(matches!(other, Flow::Err(_)))?;
+                        self.close_scope(matches!(other, Flow::Err(..)))?;
                         return Ok(other);
                     }
                 }
@@ -2596,8 +2630,14 @@ impl<'t> Machine<'t> {
             Some(s) => self.eval(s)?,
             None => Flow::Val(Value::Unit),
         };
+        // A bound row VALUE scrutinizes exactly like the err flow
+        // (#122: `let`-bound rows reach their handlers).
+        let scrut = match scrut {
+            Flow::Val(v @ Value::ErrTag { .. }) => raise(v),
+            other => other,
+        };
         match scrut {
-            Flow::Err(err) => {
+            Flow::Err(err, _) => {
                 self.push_scope();
                 if let Some(pat) = d.handler_pattern() {
                     if pat.kind == SyntaxKind::PathPat {
@@ -2615,7 +2655,7 @@ impl<'t> Machine<'t> {
                     Some(fb) => self.eval(fb)?,
                     None => Flow::Val(Value::Unit),
                 };
-                self.close_scope(matches!(out, Flow::Err(_)))?;
+                self.close_scope(matches!(out, Flow::Err(..)))?;
                 Ok(out)
             }
             other => Ok(other),
@@ -2750,7 +2790,12 @@ impl<'t> Machine<'t> {
             | SyntaxKind::Minus
             | SyntaxKind::Star
             | SyntaxKind::Slash
-            | SyntaxKind::Percent => {
+            | SyntaxKind::Percent
+            | SyntaxKind::Amp
+            | SyntaxKind::Pipe
+            | SyntaxKind::Caret
+            | SyntaxKind::Shl
+            | SyntaxKind::Shr => {
                 let v = self.arith_binop_at(op, l, r, e.span, e.span)?;
                 Ok(Flow::Val(v))
             }
@@ -2814,6 +2859,11 @@ impl<'t> Machine<'t> {
             SyntaxKind::StarEq => SyntaxKind::Star,
             SyntaxKind::SlashEq => SyntaxKind::Slash,
             SyntaxKind::PercentEq => SyntaxKind::Percent,
+            SyntaxKind::AmpEq => SyntaxKind::Amp,
+            SyntaxKind::PipeEq => SyntaxKind::Pipe,
+            SyntaxKind::CaretEq => SyntaxKind::Caret,
+            SyntaxKind::ShlEq => SyntaxKind::Shl,
+            SyntaxKind::ShrEq => SyntaxKind::Shr,
             other => other,
         };
         self.arith_binop_at(op, l, r, span, ty_span)
@@ -2831,11 +2881,10 @@ impl<'t> Machine<'t> {
             (Value::Int(a), Value::Int(b)) => {
                 // Wrapping types wrap at their width; checked prims
                 // trap (X3).
-                if let Some((lo, hi, mask)) = self
+                if let Some((mask, bits, unsigned)) = self
                     .wrapping_width(ty_span)
                     .or_else(|| self.wrapping_width(span))
                 {
-                    let _ = (lo, hi);
                     let out = match op {
                         SyntaxKind::Plus => a.wrapping_add(b),
                         SyntaxKind::Minus => a.wrapping_sub(b),
@@ -2852,9 +2901,47 @@ impl<'t> Machine<'t> {
                             }
                             a.wrapping_rem(b)
                         }
+                        // Bitwise/shift arms mirror the native rung
+                        // (#130): band/bor/bxor on the width's bits;
+                        // shift amounts mask to the bit width (the
+                        // WIR `shl`/`lshr`/`ashr` contract); `>>` is
+                        // logical for unsigned wrapping types and
+                        // arithmetic for signed ones (`sema_unsigned`,
+                        // the s26 decision).
+                        SyntaxKind::Amp => a & b,
+                        SyntaxKind::Pipe => a | b,
+                        SyntaxKind::Caret => a ^ b,
+                        SyntaxKind::Shl => {
+                            let c = (b as u64 & u64::from(bits - 1)) as u32;
+                            a.wrapping_shl(c)
+                        }
+                        SyntaxKind::Shr => {
+                            let c = (b as u64 & u64::from(bits - 1)) as u32;
+                            if unsigned {
+                                ((a as u64 & mask as u64) >> c) as i64
+                            } else {
+                                // Sign-extend from the wrap width,
+                                // then shift arithmetically.
+                                let sh = 64 - bits;
+                                (a.wrapping_shl(sh) >> sh) >> c
+                            }
+                        }
                         _ => a,
                     };
                     return Ok(Value::Int(out & mask));
+                }
+                // Bitwise/shift on CHECKED (non-wrapping) integers has
+                // no ruled checked-tier semantics yet — the honest
+                // refusal, never a silent identity.
+                if matches!(
+                    op,
+                    SyntaxKind::Amp
+                        | SyntaxKind::Pipe
+                        | SyntaxKind::Caret
+                        | SyntaxKind::Shl
+                        | SyntaxKind::Shr
+                ) {
+                    return self.refuse("this operator in checked execution", span);
                 }
                 let out = match op {
                     SyntaxKind::Plus => a.checked_add(b),
@@ -2907,9 +2994,11 @@ impl<'t> Machine<'t> {
         }
     }
 
-    /// Is the expression at `span` a `wrapping[T]`? Returns the wrap
-    /// mask when so.
-    fn wrapping_width(&self, span: Span) -> Option<(i64, i64, i64)> {
+    /// Is the expression at `span` a `wrapping[T]`? Returns
+    /// `(mask, bits, unsigned)` when so — the wrap mask, the wrap
+    /// width, and the inner prim's signedness (mirrors the native
+    /// rung's `sema_unsigned`: `uint`/`u8`/`u16`/`u32`/`u64`).
+    fn wrapping_width(&self, span: Span) -> Option<(i64, u32, bool)> {
         let ctx = self.ctx();
         let id = ctx.expr_tys.get(&span)?;
         if let TyKind::Wrapping(inner) = ctx.tb.table.kind(*id)
@@ -2921,7 +3010,8 @@ impl<'t> Machine<'t> {
             } else {
                 (1i64 << bits) - 1
             };
-            return Some((0, mask, mask));
+            let unsigned = matches!(p, Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64);
+            return Some((mask, bits, unsigned));
         }
         None
     }
@@ -2964,6 +3054,22 @@ impl<'t> Machine<'t> {
                 );
             }
             _ => {}
+        }
+        // Unsigned WRAPPING literals are bit patterns on the wrap
+        // width (#130, mirroring the native rung's s26 rule): the
+        // full u64 range is admissible at `wrapping[u64]`
+        // (`0xc19bf174cf692694` is a value, not an overflow), and a
+        // literal beyond a narrower wrap width refuses exactly as
+        // WIR lowering does. Storage keeps this machine's masked
+        // convention (`arith_binop_at` masks every result the same
+        // way).
+        if let Some((mask, bits, true)) = self.wrapping_width(e.span)
+            && let Some(v) = parse_uint_literal(&text)
+        {
+            if bits < 64 && v >= (1u64 << bits) {
+                return self.refuse("an unsigned literal beyond its type's width", e.span);
+            }
+            return Ok(Value::Int((v as i64) & mask));
         }
         match parse_int_literal(&text) {
             Some(n) => Ok(Value::Int(n)),
@@ -3165,7 +3271,7 @@ impl<'t> Machine<'t> {
     fn io_fs_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use std::io::{Read as _, Write as _};
         fn tag(t: &str) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: t.to_string(),
                 payload: Vec::new(),
             })
@@ -3604,7 +3710,7 @@ impl<'t> Machine<'t> {
     fn net_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use std::io::{Read as _, Write as _};
         fn tag(t: &str) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: t.to_string(),
                 payload: Vec::new(),
             })
@@ -3786,12 +3892,14 @@ impl<'t> Machine<'t> {
     /// env/cwd/processes, D30 rows only. `env_set` writes the
     /// machine-local overlay (never the threaded host process's
     /// environment — the struct field documents the asymmetry);
-    /// `os_spawn` is argv-array only with v0 stdio null-wired; every
+    /// `os_spawn` is argv-array only; child stdout/stderr INHERIT
+    /// (write-through, #129 — the native runtime's wiring, mirrored),
+    /// stdin stays null-wired; every
     /// operation on a reaped or foreign child handle is `io`, never a
     /// trap.
     fn os_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         fn tag(t: &str) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: t.to_string(),
                 payload: Vec::new(),
             })
@@ -3925,8 +4033,13 @@ impl<'t> Machine<'t> {
                 let spawned = std::process::Command::new(prog)
                     .args(rest)
                     .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
+                    // Write-through (#129): the child shares the
+                    // HOST process's stdout/stderr — this machine's
+                    // buffered print stream cannot capture fd-level
+                    // writes, a documented asymmetry (capture is the
+                    // named upstream ask).
+                    .stdout(std::process::Stdio::inherit())
+                    .stderr(std::process::Stdio::inherit())
                     .spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
@@ -4029,7 +4142,7 @@ impl<'t> Machine<'t> {
     fn json_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use crate::json as jr;
         fn tag(e: jr::JsonErr) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: match e {
                     jr::JsonErr::Parse => "parse",
                     jr::JsonErr::Missing => "missing",
@@ -4107,7 +4220,7 @@ impl<'t> Machine<'t> {
     /// algorithm for the native lane, byte for byte.
     fn str_from_utf8(&mut self, argv: Vec<Value>, span: Span) -> E<Flow> {
         let utf8 = || {
-            Ok(Flow::Err(Value::ErrTag {
+            Ok(raise(Value::ErrTag {
                 tag: "utf8".to_string(),
                 payload: Vec::new(),
             }))
@@ -4515,6 +4628,14 @@ impl<'t> Machine<'t> {
                 // Numeric/adapter/identity casts are value-preserving
                 // here; out-of-range narrowing traps (X3 posture).
                 if let Value::Int(n) = v {
+                    // A WRAPPING-typed cast target wraps at its width
+                    // (#131's checked twin): mask-to-width, the
+                    // native rung's `itrunc` — never a trap. The
+                    // masked storage convention keeps sub-64-bit
+                    // values non-negative, as `arith_binop_at` does.
+                    if let Some((mask, ..)) = self.wrapping_width(e.span) {
+                        return Ok(Flow::Val(Value::Int(n & mask)));
+                    }
                     if let Some((lo, hi)) = self.prim_range(e.span)
                         && (n < lo || n > hi)
                     {
@@ -4831,7 +4952,7 @@ impl<'t> Machine<'t> {
                     payload.push(val!(self.eval(v)));
                 }
             }
-            return Ok(Flow::Err(Value::ErrTag { tag, payload }));
+            return Ok(raise(Value::ErrTag { tag, payload }));
         }
         // A plain user fn call.
         let Some(sig) = cs else {
@@ -4890,7 +5011,7 @@ impl<'t> Machine<'t> {
             self.pending_self_ty = Some(subject);
             let out = self.call_body(body, call_args)?;
             if let Value::ErrTag { .. } = out {
-                return Ok(Flow::Err(out));
+                return Ok(raise(out));
             }
             return Ok(Flow::Val(out));
         }
@@ -4991,7 +5112,7 @@ impl<'t> Machine<'t> {
         // A raised row tag crosses the call as the error flow — the
         // caller's `?`/`else`/`match` observes it (D30).
         if let Value::ErrTag { .. } = out {
-            return Ok(Flow::Err(out));
+            return Ok(raise(out));
         }
         Ok(Flow::Val(out))
     }
@@ -5187,7 +5308,7 @@ impl<'t> Machine<'t> {
                     // rows — absence is a row, not a trap.
                     "pop" => match self.lists[id].pop() {
                         Some(v) => Ok(Flow::Val(v)),
-                        None => Ok(Flow::Err(Value::ErrTag {
+                        None => Ok(raise(Value::ErrTag {
                             tag: "none".to_string(),
                             payload: Vec::new(),
                         })),
@@ -5201,7 +5322,7 @@ impl<'t> Machine<'t> {
                             return self.refuse("List.get with a non-int index", e.span);
                         };
                         if i < 0 || i as usize >= self.lists[id].len() {
-                            return Ok(Flow::Err(Value::ErrTag {
+                            return Ok(raise(Value::ErrTag {
                                 tag: "none".to_string(),
                                 payload: Vec::new(),
                             }));
@@ -5216,7 +5337,7 @@ impl<'t> Machine<'t> {
                         };
                         match v {
                             Some(v) => Ok(Flow::Val(v)),
-                            None => Ok(Flow::Err(Value::ErrTag {
+                            None => Ok(raise(Value::ErrTag {
                                 tag: "none".to_string(),
                                 payload: Vec::new(),
                             })),
@@ -5352,7 +5473,7 @@ impl<'t> Machine<'t> {
                             self.cells[cell].strong += 1;
                             Ok(Flow::Val(Value::Shared(cell)))
                         } else {
-                            Ok(Flow::Err(Value::ErrTag {
+                            Ok(raise(Value::ErrTag {
                                 tag: "gone".to_string(),
                                 payload: Vec::new(),
                             }))
@@ -5381,7 +5502,7 @@ impl<'t> Machine<'t> {
                     }
                 }
                 let none_miss = || {
-                    Ok(Flow::Err(Value::ErrTag {
+                    Ok(raise(Value::ErrTag {
                         tag: "none".to_string(),
                         payload: Vec::new(),
                     }))
@@ -5591,7 +5712,7 @@ impl<'t> Machine<'t> {
                 }
                 let out = self.call_body(body, call_args)?;
                 if let Value::ErrTag { .. } = out {
-                    return Ok(Flow::Err(out));
+                    return Ok(raise(out));
                 }
                 Ok(Flow::Val(out))
             }
@@ -5943,6 +6064,17 @@ fn parse_int_literal(text: &str) -> Option<i64> {
         return i64::from_str_radix(oct, 8).ok();
     }
     t.parse().ok()
+}
+
+/// Unsigned literal as a bit pattern: full u64 range, decimal or
+/// `0x…` hex — the native rung's `parse_uint_literal`, mirrored
+/// (#130). Other spellings fall back to [`parse_int_literal`].
+fn parse_uint_literal(text: &str) -> Option<u64> {
+    let t: String = text.chars().filter(|&c| c != '_').collect();
+    if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        return u64::from_str_radix(hex, 16).ok();
+    }
+    t.parse::<u64>().ok()
 }
 
 fn prim_bits(p: Prim) -> Option<u32> {

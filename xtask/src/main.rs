@@ -940,9 +940,24 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // guarded_stencil verdict, same tier, same shape), so checked and
 // all-three hold at 171/157. Counts measured by this gate, not
 // predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 171), ("native", 186), ("release", 186)];
-const UNION_FLOOR: usize = 200;
-const ALL_THREE_FLOOR: usize = 157;
+// s111 ratchet over 323 entries: the crypto probe pays back (c27,
+// wave five). Four new run-phase witnesses, each executing on ALL
+// three lanes, so every number moves by exactly four:
+// `kernels/sha256_block` (#130 — the checked tier's new wrapping
+// shift/bitwise arms carry a full FIPS 180-4 compression),
+// `typecheck/wrap_narrow_cast` (#131 — itrunc to wrapping targets),
+// `generics/list_wrapping_elem` (#132 — the SHA-512 K-table shape),
+// and `memory/mut_param_field_lend` (#133 — mut field paths off mut
+// parameters re-lend into the caller's slot). No pre-existing file
+// moved lanes: the checked tier's non-wrapping bitwise refusal holds
+// (`hot_header`/`guarded_stencil`/`walk_twice` keep their honest
+// verdicts), and #122's fix changes tag_let_position's checked
+// VERDICT (exit 1 -> exit 0), not its execution reach. Totals
+// 175/190/190, union 204, all-three 161. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 175), ("native", 190), ("release", 190)];
+const UNION_FLOOR: usize = 204;
+const ALL_THREE_FLOOR: usize = 161;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

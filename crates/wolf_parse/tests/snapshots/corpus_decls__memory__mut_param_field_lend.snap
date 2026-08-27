@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 779..818 name=Core fields=2
+StructDecl 820..865 name=Wrap fields=2
+StructDecl 867..908 name=Outer fields=2
+FnDecl 910..981 name=advance body=Block
+FnDecl 983..1020 name=bump body=Block
+FnDecl 1022..1083 name=update body=Block
+FnDecl 1085..1157 name=deep body=Block
+FnDecl 1159..1456 name=main body=Block

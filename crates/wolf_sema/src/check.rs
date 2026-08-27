@@ -4739,6 +4739,19 @@ impl<'a> Checker<'a> {
                 "List" => Some(self.lo.table.intern(TyKind::List(elem))),
                 "Pool" => Some(self.lo.table.intern(TyKind::Pool(elem))),
                 "channel" => Some(self.lo.table.intern(TyKind::Chan(elem))),
+                // `wrapping[uN]` in element position (#132): the one
+                // builtin type constructor, validated exactly as the
+                // type-position lowering validates it (integer prims
+                // only) — `List[wrapping[u64]]` is `List` of a fixed
+                // 8-byte scalar, no generic-data machinery involved.
+                "wrapping"
+                    if matches!(
+                        self.lo.table.kind(elem),
+                        TyKind::Prim(p) if p.is_integer()
+                    ) =>
+                {
+                    Some(self.lo.table.intern(TyKind::Wrapping(elem)))
+                }
                 _ => None,
             };
         }

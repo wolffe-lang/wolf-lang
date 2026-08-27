@@ -16,8 +16,15 @@
 //! NetTable shape), never raw pids, so a forged handle can never
 //! alias a foreign OS process. Argv is array-only, straight from the
 //! `List[str]` header (no shell-string spawn exists anywhere, by
-//! construction); v0 stdio is null-wired, mirroring the checked
-//! lane's `os_builtin` entry for entry.
+//! construction). Child stdio (s111, wolf-lang#129/F-0065): stdout
+//! and stderr INHERIT the parent's — the child writes through, so a
+//! parent whose stdout is captured (conform-run's pipe, a test rig)
+//! sees the child's output in its own stream; stdin stays null-wired
+//! (a child never consumes the parent's input; it reads immediate
+//! EOF). Capture-to-string handles remain the named upstream ask on
+//! #129 — no capture surface is declared (s40/s107), and none is
+//! invented here. The checked lane's `os_builtin` mirrors this
+//! wiring entry for entry.
 //!
 //! # Zombie discipline (the reviewer flag)
 //!
@@ -205,7 +212,8 @@ impl ChildTable {
         }
     }
 
-    /// Spawn `argv[0]` with `argv[1..]`, stdio null-wired. An empty
+    /// Spawn `argv[0]` with `argv[1..]` — stdout/stderr inherited
+    /// (write-through, #129), stdin null-wired. An empty
     /// argv names no program: `not_found`. Spawn failures map
     /// `NotFound`/`PermissionDenied` and coarsen the rest to `io` —
     /// the checked lane's exact table.
@@ -216,8 +224,8 @@ impl ChildTable {
         let spawned = Command::new(prog)
             .args(rest)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
             .spawn();
         match spawned {
             Err(e) => Err(match e.kind() {

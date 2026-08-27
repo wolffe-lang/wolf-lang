@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 365
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -69,6 +68,7 @@ generics/explicit_apply.lu: lowers
 generics/explicit_apply_arity.lu: not mem-clean (pre-wir rungs own it)
 generics/first_of_list.lu: lowers
 generics/hundred_shapes.lu: lowers
+generics/list_wrapping_elem.lu: lowers
 generics/pair_of.lu: lowers
 generics/two_instances.lu: lowers
 generics/two_level_raise.lu: lowers
@@ -104,6 +104,7 @@ kernels/hot_header.lu: lowers
 kernels/hot_header_alias.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
 kernels/hot_sum_reduce.lu: lowers
+kernels/sha256_block.lu: lowers
 kernels/walk_twice.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
@@ -157,6 +158,7 @@ memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
+memory/mut_param_field_lend.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/prov_holy_grail.lu: lowers
@@ -321,4 +323,5 @@ typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
 typecheck/variant_value/main.lu: lowers
+typecheck/wrap_narrow_cast.lu: lowers
 wordcount.lu: not mem-clean (pre-wir rungs own it)

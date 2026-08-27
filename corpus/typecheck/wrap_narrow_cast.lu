@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="300 44 4294967295")
+//! phase: run
+//! conforms: arith.wrapping
+//!
+//! `int as wrapping[u32]` — the narrowing WRAPPING cast (#131, s111):
+//! mask-to-width is the family's meaning (bit truncation, `itrunc` on
+//! the native rung), the committed dual of the widening direction's
+//! extension. The general narrowing cast keeps its s27 range-check
+//! question; a wrapping target does not raise it. Witnessed in both
+//! directions: a value in range (300 survives), a value needing the
+//! mask (0x1_0000_002c wraps to 44), and the sign bit-pattern (-1 is
+//! 0xffffffff — reading back through the unsigned zero-extension).
+
+fn main() -> int {
+    let a: int = 300
+    let in_range = a as wrapping[u32] as int
+    let big: int = 0x1_0000_002c
+    let masked = big as wrapping[u32] as int
+    let neg: int = 0 - 1
+    let bits = neg as wrapping[u32] as int
+    print("{in_range} {masked} {bits}")
+    0
+}

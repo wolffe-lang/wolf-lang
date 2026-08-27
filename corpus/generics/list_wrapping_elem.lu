@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="80 4 3248222580 3479774868 3200376318662263854")
+//! phase: run
+//! conforms: arith.wrapping
+//!
+//! `List[wrapping[u64]]` — prelude-container instantiation with a
+//! wrapping element type (#132, s111): SHA-512's round-constant
+//! shape, the table load that retires sc16's paired hi/lo
+//! `List[int]` workaround. The four K constants carried here have
+//! set top bits (they have no `int` spelling at all), the read-back
+//! recombines them through the full wrapping shift/bitwise family,
+//! and `len` pins the container's own accounting at the spec's
+//! eighty rows. The constants ride annotated `let`s: lupin 0.1.13
+//! reads a full-range wrapping literal at `let` but traps `overflow`
+//! on the same literal directly in argument position (recorded by
+//! s111; wolfc types both) — the annotated spelling keeps all four
+//! comparators executing this file.
+
+fn main() -> int {
+    let k0: wrapping[u64] = 0xc19bf174cf692694
+    let k1: wrapping[u64] = 0xe49b69c19ef14ad2
+    let k2: wrapping[u64] = 0xefbe4786384f25e3
+    let k3: wrapping[u64] = 0x0fc19dc68b8cd5b5
+    var k = List[wrapping[u64]]()
+    (mut k).push(k0)
+    (mut k).push(k1)
+    (mut k).push(k2)
+    (mut k).push(k3)
+    for _ in 0..76 {
+        (mut k).push(0)
+    }
+    let n = k.len
+    let first = k[0]
+    let hi = (first >> 32) as int
+    let lo = (first & 0xffffffff) as int
+    var used = 0
+    var mix: wrapping[u64] = 0
+    for t in 0..4 {
+        mix = mix * 31 ^ (k[t] >> 7 | k[t] << 57) ^ k[t] >> 1
+        used = used + 1
+    }
+    let m = (mix & 0x7fffffffffffffff) as int
+    print("{n} {used} {hi} {lo} {m}")
+    0
+}

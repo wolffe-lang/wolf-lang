@@ -1,0 +1,175 @@
+//! check: run(exit=0, stdout="3128432319 2399260650 1094795486 1571693091 2953011619 2518121116 3021012833 4060091821")
+//! phase: run
+//! conforms: arith.wrapping
+//!
+//! The digest-vector witness (#130, s111): one SHA-256 compression —
+//! FIPS 180-4 §6.2's worked "abc" example — spelled the way the spec
+//! writes it: `wrapping[u64]` rotations and mixes with 32-bit words
+//! carried in the low half (the sc16 module's own shape). Every
+//! wrapping shift/bitwise operator the checked tier refused before
+//! s111 sits on the hot path here, so the file holds all three lanes
+//! to the same 1,210-vector-backed semantics: the eight state words
+//! of SHA-256("abc"), in decimal (ba7816bf 8f01cfea 414140de
+//! 5dae2223 b00361a3 96177a9c b410ff61 f20015ad).
+
+fn mask32() -> wrapping[u64] {
+    0xffffffff
+}
+
+/// Sigma0{256}(x) = ROTR2 ^ ROTR13 ^ ROTR22 — FIPS 180-4 (4.4).
+fn bsig0(x: wrapping[u64]) -> wrapping[u64] {
+    ((x >> 2 | x << 30) ^ (x >> 13 | x << 19) ^ (x >> 22 | x << 10)) & mask32()
+}
+
+/// Sigma1{256}(x) = ROTR6 ^ ROTR11 ^ ROTR25 — FIPS 180-4 (4.5).
+fn bsig1(x: wrapping[u64]) -> wrapping[u64] {
+    ((x >> 6 | x << 26) ^ (x >> 11 | x << 21) ^ (x >> 25 | x << 7)) & mask32()
+}
+
+/// sigma0{256}(x) = ROTR7 ^ ROTR18 ^ SHR3 — FIPS 180-4 (4.6).
+fn ssig0(x: wrapping[u64]) -> wrapping[u64] {
+    ((x >> 7 | x << 25) ^ (x >> 18 | x << 14) ^ x >> 3) & mask32()
+}
+
+/// sigma1{256}(x) = ROTR17 ^ ROTR19 ^ SHR10 — FIPS 180-4 (4.7).
+fn ssig1(x: wrapping[u64]) -> wrapping[u64] {
+    ((x >> 17 | x << 15) ^ (x >> 19 | x << 13) ^ x >> 10) & mask32()
+}
+
+fn ch(x: wrapping[u64], y: wrapping[u64], z: wrapping[u64]) -> wrapping[u64] {
+    x & y ^ (x ^ mask32()) & z
+}
+
+fn maj(x: wrapping[u64], y: wrapping[u64], z: wrapping[u64]) -> wrapping[u64] {
+    x & y ^ x & z ^ y & z
+}
+
+/// The K{256} round constants (FIPS 180-4 §4.2.2), as `int` rows —
+/// each fits in 32 bits, widened per use (the sc16 spelling).
+fn k256() -> List[int] {
+    var k = List[int]()
+    (mut k).push(0x428a2f98)
+    (mut k).push(0x71374491)
+    (mut k).push(0xb5c0fbcf)
+    (mut k).push(0xe9b5dba5)
+    (mut k).push(0x3956c25b)
+    (mut k).push(0x59f111f1)
+    (mut k).push(0x923f82a4)
+    (mut k).push(0xab1c5ed5)
+    (mut k).push(0xd807aa98)
+    (mut k).push(0x12835b01)
+    (mut k).push(0x243185be)
+    (mut k).push(0x550c7dc3)
+    (mut k).push(0x72be5d74)
+    (mut k).push(0x80deb1fe)
+    (mut k).push(0x9bdc06a7)
+    (mut k).push(0xc19bf174)
+    (mut k).push(0xe49b69c1)
+    (mut k).push(0xefbe4786)
+    (mut k).push(0x0fc19dc6)
+    (mut k).push(0x240ca1cc)
+    (mut k).push(0x2de92c6f)
+    (mut k).push(0x4a7484aa)
+    (mut k).push(0x5cb0a9dc)
+    (mut k).push(0x76f988da)
+    (mut k).push(0x983e5152)
+    (mut k).push(0xa831c66d)
+    (mut k).push(0xb00327c8)
+    (mut k).push(0xbf597fc7)
+    (mut k).push(0xc6e00bf3)
+    (mut k).push(0xd5a79147)
+    (mut k).push(0x06ca6351)
+    (mut k).push(0x14292967)
+    (mut k).push(0x27b70a85)
+    (mut k).push(0x2e1b2138)
+    (mut k).push(0x4d2c6dfc)
+    (mut k).push(0x53380d13)
+    (mut k).push(0x650a7354)
+    (mut k).push(0x766a0abb)
+    (mut k).push(0x81c2c92e)
+    (mut k).push(0x92722c85)
+    (mut k).push(0xa2bfe8a1)
+    (mut k).push(0xa81a664b)
+    (mut k).push(0xc24b8b70)
+    (mut k).push(0xc76c51a3)
+    (mut k).push(0xd192e819)
+    (mut k).push(0xd6990624)
+    (mut k).push(0xf40e3585)
+    (mut k).push(0x106aa070)
+    (mut k).push(0x19a4c116)
+    (mut k).push(0x1e376c08)
+    (mut k).push(0x2748774c)
+    (mut k).push(0x34b0bcb5)
+    (mut k).push(0x391c0cb3)
+    (mut k).push(0x4ed8aa4a)
+    (mut k).push(0x5b9cca4f)
+    (mut k).push(0x682e6ff3)
+    (mut k).push(0x748f82ee)
+    (mut k).push(0x78a5636f)
+    (mut k).push(0x84c87814)
+    (mut k).push(0x8cc70208)
+    (mut k).push(0x90befffa)
+    (mut k).push(0xa4506ceb)
+    (mut k).push(0xbef9a3f7)
+    (mut k).push(0xc67178f2)
+    k
+}
+
+fn main() -> int {
+    // The padded one-block message for "abc": 0x61626380, thirteen
+    // zero words, then the 24-bit length (FIPS 180-4 §5.1.1).
+    var w = List[int]()
+    (mut w).push(0x61626380)
+    for _ in 0..13 {
+        (mut w).push(0)
+    }
+    (mut w).push(0)
+    (mut w).push(24)
+
+    // Message schedule (§6.2.2 step 1).
+    for t in 16..64 {
+        let wt = ssig1(w[t - 2] as wrapping[u64]) +
+            w[t - 7] as wrapping[u64] +
+            ssig0(w[t - 15] as wrapping[u64]) +
+            w[t - 16] as wrapping[u64] &
+            mask32()
+        (mut w).push(wt as int)
+    }
+
+    let k = k256()
+
+    // H(0) (§5.3.3) and the 64 rounds (§6.2.2 step 3).
+    var a: wrapping[u64] = 0x6a09e667
+    var b: wrapping[u64] = 0xbb67ae85
+    var c: wrapping[u64] = 0x3c6ef372
+    var d: wrapping[u64] = 0xa54ff53a
+    var e: wrapping[u64] = 0x510e527f
+    var f: wrapping[u64] = 0x9b05688c
+    var g: wrapping[u64] = 0x1f83d9ab
+    var h: wrapping[u64] = 0x5be0cd19
+    for t in 0..64 {
+        let t1 = h + bsig1(e) + ch(e, f, g) + k[t] as wrapping[u64] + w[t] as wrapping[u64] &
+            mask32()
+        let t2 = bsig0(a) + maj(a, b, c) & mask32()
+        h = g
+        g = f
+        f = e
+        e = d + t1 & mask32()
+        d = c
+        c = b
+        b = a
+        a = t1 + t2 & mask32()
+    }
+
+    // H(1) = H(0) + working vars (§6.2.2 step 4) — the digest words.
+    let h0 = (0x6a09e667 + a & mask32()) as int
+    let h1 = (0xbb67ae85 + b & mask32()) as int
+    let h2 = (0x3c6ef372 + c & mask32()) as int
+    let h3 = (0xa54ff53a + d & mask32()) as int
+    let h4 = (0x510e527f + e & mask32()) as int
+    let h5 = (0x9b05688c + f & mask32()) as int
+    let h6 = (0x1f83d9ab + g & mask32()) as int
+    let h7 = (0x5be0cd19 + h & mask32()) as int
+    print("{h0} {h1} {h2} {h3} {h4} {h5} {h6} {h7}")
+    0
+}

@@ -688,3 +688,194 @@ fn posture_mutate_while_iterating_walks_the_snapshot() {
         other => panic!("posture moved — update the s72 record: {other:?}"),
     }
 }
+
+// ------------------------- #130: wrapping shifts/bitwise (s111) --
+
+/// The checked tier executes `wrapping[T]` shifts and bitwise mixes
+/// with the native rung's semantics (wolf-lang#130 / F-0091): the
+/// FIPS 180-4 Sigma0{256} rotation of SHA-256's initial `a`, the
+/// `ch` mix over the initial `e f g`, and a full-width logical
+/// shift — every value cross-checked against the sc16 vector
+/// corpus's two executing lanes.
+#[test]
+fn wrapping_shift_bitwise_mirror_native() {
+    assert_exit(
+        "fn mask32() -> wrapping[u64] { 0xffffffff }\n\
+         fn bsig0(x: wrapping[u64]) -> wrapping[u64] {\n    \
+             ((x >> 2 | x << 30) ^ (x >> 13 | x << 19) ^ (x >> 22 | x << 10)) & mask32()\n\
+         }\n\
+         fn ch(x: wrapping[u64], y: wrapping[u64], z: wrapping[u64]) -> wrapping[u64] {\n    \
+             (x & y) ^ ((x ^ mask32()) & z)\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let s = bsig0(0x6a09e667) as int\n    \
+             let c = ch(0x510e527f, 0x9b05688c, 0x1f83d9ab) as int\n    \
+             if s == 3458249854 && c == 528861580 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// `>>` on an unsigned wrapping type is a LOGICAL shift (zero-fill),
+/// exactly the native rung's `lshr` — the top bit must not smear.
+#[test]
+fn wrapping_u64_shr_is_logical() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let big: wrapping[u64] = 0x8000000000000000\n    \
+             if (big >> 63) as int == 1 && (big >> 1) as int == 4611686018427387904 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// Shift amounts mask to the bit width (the WIR `shl`/`lshr`
+/// contract both backends implement): a shift by 64 on a 64-bit
+/// wrapping value is a shift by zero.
+#[test]
+fn wrapping_shift_amount_masks_to_width() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let x: wrapping[u64] = 5\n    \
+             if (x << 64) as int == 5 && (x >> 64) as int == 5 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// Compound bitwise/shift assignment reuses the same arms (the
+/// native rung maps `<<=` to `shl` and friends).
+#[test]
+fn wrapping_compound_bitwise_assign() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             var x: wrapping[u64] = 5\n    \
+             x <<= 3\n    \
+             x |= 1\n    \
+             x ^= 0xf\n    \
+             x &= 0xff\n    \
+             x >>= 1\n    \
+             if x as int == 19 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// A `wrapping[u64]` literal above `2^63 - 1` is a bit pattern, not
+/// an overflow (#130's literal half): SHA-512's `K[15]` constant
+/// round-trips through hi/lo halves.
+#[test]
+fn wrapping_u64_full_range_literal() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let k: wrapping[u64] = 0xc19bf174cf692694\n    \
+             let hi = (k >> 32) as int\n    \
+             let lo = (k & 0xffffffff) as int\n    \
+             if hi == 3248222580 && lo == 3479774868 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// #131's checked twin: a cast to a WRAPPING target masks to the
+/// width (never traps) — both directions witnessed, plus the sign
+/// bit-pattern round-trip through the unsigned zero-extension.
+#[test]
+fn wrapping_narrow_cast_masks_to_width() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let a: int = 300\n    \
+             let big: int = 0x1_0000_002c\n    \
+             let neg: int = 0 - 1\n    \
+             let in_range = (a as wrapping[u32]) as int\n    \
+             let masked = (big as wrapping[u32]) as int\n    \
+             let bits = (neg as wrapping[u32]) as int\n    \
+             if in_range == 300 && masked == 44 && bits == 4294967295 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+// ------------------------------ #122: rows bind at let (s111) --
+
+/// A RAW row value at `let` BINDS (D52's declared-row-first reading:
+/// rows are values) — the s108-found divergence where this machine
+/// answered `error: none`/exit 1 while native ran the handler.
+#[test]
+fn raw_row_at_let_binds_and_reaches_its_handler() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let v: int ! {none} = none\n    \
+             let w = v else 5\n    \
+             if w == 5 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// The hoisted shape from `rows/handler_diverge_trap.lu`'s header:
+/// `let p = pick(0)` binds the row, and the bound value reaches the
+/// payload handler through a parameter — the fallback runs.
+#[test]
+fn bound_row_crosses_a_call_to_its_handler() {
+    assert_exit(
+        "fn expect(v: int ! {none}, d: int) -> int {\n    \
+             let hit = v else d\n    \
+             hit\n\
+         }\n\
+         fn pick(x: int) -> int ! {none} {\n    \
+             if x < 1 { return none }\n    \
+             x\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let p = pick(0)\n    \
+             let a = expect(p, 41)\n    \
+             let q = pick(7)\n    \
+             let b = expect(q, 0)\n    \
+             if a == 41 && b == 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// `?` stays the one PROPAGATING consumer: through a `let`, a raw
+/// error under `?` unwinds to the caller instead of binding.
+#[test]
+fn qmark_still_propagates_through_let() {
+    assert_exit(
+        "fn pick(x: int) -> int ! {none} {\n    \
+             if x < 1 { return none }\n    \
+             x\n\
+         }\n\
+         fn tryit(x: int) -> int ! {none} {\n    \
+             let v = pick(x)?\n    \
+             v + 100\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let ok = tryit(5) else 0 - 1\n    \
+             let bad = tryit(0) else 0 - 1\n    \
+             if ok == 105 && bad == 0 - 1 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// The assignment sibling, measured in the same s111 sweep: a raw
+/// row value assigned to a row-typed `var` binds exactly as at
+/// `let`.
+#[test]
+fn raw_row_at_assignment_binds() {
+    assert_exit(
+        "fn pick(x: int) -> int ! {none} {\n    \
+             if x < 1 { return none }\n    \
+             x\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var w: int ! {none} = none\n    \
+             w = pick(0)\n    \
+             let z = w else 0 - 7\n    \
+             if z == 0 - 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
