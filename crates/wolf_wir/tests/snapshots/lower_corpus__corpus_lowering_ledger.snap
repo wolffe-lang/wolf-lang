@@ -40,6 +40,7 @@ conc/proc_spawn_loop.lu: lowers
 conc/select_seeded.lu: lowers
 conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
+conc/spawn_cluster_split.lu: lowers
 conc/spawn_fanout_loop.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
@@ -157,6 +158,7 @@ memory/checked_unsigned.lu: lowers
 memory/closure_borrow_write.lu: not mem-clean (pre-wir rungs own it)
 memory/closure_capture_mut.lu: refused — a closure mutating its captured binding `xs` (captures are read-only — borrow-only closures, c25 closeout)
 memory/closure_capture_write.lu: refused — a closure writing its captured binding `n` (captures are read-only — borrow-only closures, c25 closeout)
+memory/closure_cluster_split.lu: lowers
 memory/closure_escape_refused.lu: refused — a capturing closure read as a value (the pair stays in its frame; call it by name — c25 closeout)
 memory/closure_kill_list.lu: lowers
 memory/closure_region_capture.lu: refused — a region captured by a closure (open it in the enclosing frame — c25 closeout)

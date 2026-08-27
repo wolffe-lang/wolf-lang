@@ -75,6 +75,8 @@ fn summary_format_is_frozen() {
     // stay empty — that is the whole point of freezing them. v2 (s99)
     // adds `ret=`/`stores=`: unproven renders as `-`/`[]`, and a
     // full-type-bounds range IS unproven (normalized at the source).
+    // v3 (s117) adds `refs=`: `func.addr` reference edges, empty here
+    // (no function in this fixture takes an address).
     assert!(
         text.contains("impls=[]"),
         "devirt headroom present:\n{text}"
@@ -87,7 +89,8 @@ fn summary_format_is_frozen() {
         assert_eq!(f.body_hash.len(), 64, "sha256 hex");
     }
     let redacted = redact_hashes(&text);
-    insta::assert_snapshot!("summary_format_v2", redacted);
+    assert!(text.contains("refs=[]"), "reference slot present:\n{text}");
+    insta::assert_snapshot!("summary_format_v3", redacted);
 }
 
 /// The digest is a pure function of the rendered index — the property
@@ -424,6 +427,27 @@ fn task_seam_carriers_are_never_imported() {
         "a task-seam carrier is never imported: {clusters:?}"
     );
 
+    // s117 (#136): the reference edge is in the summary and the
+    // partition honors it — the task entry lands in its spawner's
+    // cluster, never in whichever bin was lightest.
+    assert_eq!(
+        spawner.refs,
+        vec!["body".to_string()],
+        "the `func.addr` reference is a summary edge: {spawner:?}"
+    );
+    let clusters2 = cluster::partition(&s, &th);
+    let of = |name: &str| {
+        clusters2
+            .iter()
+            .position(|c| c.members.iter().any(|m| m == name))
+            .unwrap_or_else(|| panic!("`{name}` clustered"))
+    };
+    assert_eq!(
+        of("spawner"),
+        of("body"),
+        "the shim travels with its spawner: {clusters2:?}"
+    );
+
     let mut m2 = parse_module(src).expect("parses");
     let wp = optimize_whole_program(&mut m2, &homes, &tiny_clusters()).expect("green");
     let out = print_module(&m2);
@@ -444,4 +468,154 @@ fn task_seam_carriers_are_never_imported() {
         wp.stats.dedup.bodies_merged, 0,
         "nothing merged behind the seam"
     );
+}
+
+// ------------------------------------------- s117: func.addr edges ----
+
+/// The #136 mechanism, reduced (s117): a task shim is reached by
+/// `func.addr`, not by call, so pre-fix the partitioner saw no edge
+/// into it and bin-packed the shim away from its spawner — and the
+/// release emitter then refused `func.addr` of a symbol outside its
+/// own object, on a program the debug tier runs. The wsm01 twist this
+/// fixture pins: the spawner is ALREADY over `cluster_target_size`, so
+/// an ordinary affinity edge would be refused by the size cap — the
+/// reference fuse must be exempt from it.
+#[test]
+fn func_addr_referee_travels_with_its_referrer() {
+    let src = "decl @__wolf_rt_scope_spawn(ptr) -> i64\n\
+               \n\
+               fn @entry() -> i64 {\n\
+               b0:\n  \
+               %0 = iconst.i64 7\n  \
+               ret %0\n\
+               }\n\
+               \n\
+               fn @spawner(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = func.addr @entry()\n  \
+               %2 = call @__wolf_rt_scope_spawn(%1)\n  \
+               %3 = iadd.chk %0, %2\n  \
+               %4 = iadd.chk %3, %0\n  \
+               %5 = iadd.chk %4, %0\n  \
+               ret %5\n\
+               }\n\
+               \n\
+               fn @filler_a(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iadd.chk %0, %0\n  \
+               %2 = iadd.chk %1, %0\n  \
+               %3 = iadd.chk %2, %0\n  \
+               ret %3\n\
+               }\n\
+               \n\
+               fn @filler_b(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = imul.chk %0, %0\n  \
+               %2 = imul.chk %1, %0\n  \
+               %3 = imul.chk %2, %0\n  \
+               ret %3\n\
+               }\n";
+    let m = parse_module(src).expect("fixture parses");
+    verify_module(&m).expect("verifies");
+    let s = summarize(&m, &Homes::single());
+    let th = tiny_clusters().thresholds;
+    let spawner = s.get("spawner").expect("summarized");
+    assert_eq!(
+        spawner.refs,
+        vec!["entry".to_string()],
+        "the reference edge is in the summary: {spawner:?}"
+    );
+    assert!(
+        spawner.calls.iter().all(|c| c.callee != "entry"),
+        "a reference is NOT a call edge (no site for the import \
+         ranking or the inline budget): {spawner:?}"
+    );
+    // The wsm01 precondition holds: the spawner alone busts the cap,
+    // so only a cap-exempt fuse can keep the pair together.
+    assert!(
+        spawner.size > th.cluster_target_size,
+        "the spawner is over the target size ({} > {})",
+        spawner.size,
+        th.cluster_target_size
+    );
+    let clusters = cluster::partition(&s, &th);
+    assert!(
+        clusters.len() > 1,
+        "the fixture partitions (no collapse): {clusters:?}"
+    );
+    let of = |name: &str| {
+        clusters
+            .iter()
+            .position(|c| c.members.iter().any(|m| m == name))
+            .unwrap_or_else(|| panic!("`{name}` clustered"))
+    };
+    assert_eq!(
+        of("spawner"),
+        of("entry"),
+        "the shim travels with its spawner: {clusters:?}"
+    );
+    let members: usize = clusters.iter().map(|c| c.members.len()).sum();
+    assert_eq!(members, s.funcs.len(), "every function lands exactly once");
+    assert_eq!(
+        clusters,
+        cluster::partition(&s, &th),
+        "and the partition is still deterministic"
+    );
+}
+
+/// The same class, one constructor over (s105): a closure entry is a
+/// `func.addr` referee exactly like a task shim — no runtime seam in
+/// sight — and rides the same summary edge. The end-to-end pipeline
+/// keeps the pair co-resident and the module verifies.
+#[test]
+fn closure_entry_rides_the_same_reference_edge() {
+    let src = "fn @cls_entry(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = iadd.chk %0, %0\n  \
+               ret %1\n\
+               }\n\
+               \n\
+               fn @maker(i64) -> ptr {\n\
+               b0(%0: i64):\n  \
+               %1 = func.addr @cls_entry()\n  \
+               %2 = iadd.chk %0, %0\n  \
+               %3 = iadd.chk %2, %0\n  \
+               %4 = iadd.chk %3, %0\n  \
+               ret %1\n\
+               }\n\
+               \n\
+               fn @other(i64) -> i64 {\n\
+               b0(%0: i64):\n  \
+               %1 = imul.chk %0, %0\n  \
+               %2 = imul.chk %1, %0\n  \
+               %3 = imul.chk %2, %0\n  \
+               ret %3\n\
+               }\n";
+    let m = parse_module(src).expect("fixture parses");
+    verify_module(&m).expect("verifies");
+    let s = summarize(&m, &Homes::single());
+    let maker = s.get("maker").expect("summarized");
+    assert_eq!(maker.refs, vec!["cls_entry".to_string()], "{maker:?}");
+    assert!(
+        s.get("cls_entry").expect("summarized").flags.address_taken,
+        "a closure entry is address-taken like a task entry"
+    );
+    let th = tiny_clusters().thresholds;
+    let clusters = cluster::partition(&s, &th);
+    assert!(clusters.len() > 1, "partitions: {clusters:?}");
+    let of = |name: &str| {
+        clusters
+            .iter()
+            .position(|c| c.members.iter().any(|m| m == name))
+            .unwrap_or_else(|| panic!("`{name}` clustered"))
+    };
+    assert_eq!(
+        of("maker"),
+        of("cls_entry"),
+        "the closure entry travels with its maker: {clusters:?}"
+    );
+
+    let mut m2 = parse_module(src).expect("parses");
+    optimize_whole_program(&mut m2, &Homes::single(), &tiny_clusters()).expect("green");
+    verify_module(&m2).expect("still verifies");
 }

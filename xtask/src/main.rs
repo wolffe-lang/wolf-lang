@@ -1026,8 +1026,27 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // itself, refused@resolve → run on all three. Totals 196/213/213,
 // union 227, all-three 182. Counts measured by this gate, not
 // predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 196), ("native", 213), ("release", 213)];
-const UNION_FLOOR: usize = 227;
+//
+// s117 ratchet over 358 entries: the shim travels with its spawner
+// (#136, c31's first clustering-correctness sprint). Two new
+// run-phase witnesses, both native+release only (the checked machine
+// refuses spawn AND closures by name — C1-deferred / borrow-only
+// closures, the s114 precedent): `conc/spawn_cluster_split.lu` — the
+// wolf-wws parked-forwarder shape reduced, a spawner whose program
+// partitions into two clusters; at base the release tier refused
+// `func.addr of @main.task0.entry outside this object's subset`
+// while native ran it, and the v3 summary's `refs=` edge (a
+// `func.addr` reference is reachability the call graph cannot see)
+// fuses the shim into its spawner's cluster cap-exempt.
+// `memory/closure_cluster_split.lu` — the same class one constructor
+// over (s105): `@main.cls0` split from `main` refused identically at
+// base, covered by the same edge by construction, never by a spawn
+// special case. Native/release each +2, union +2; checked and
+// all-three unchanged — the deltas are exactly the two new files, no
+// pre-existing file moved lanes. Totals 196/215/215, union 229,
+// all-three 182. Counts measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 196), ("native", 215), ("release", 215)];
+const UNION_FLOOR: usize = 229;
 const ALL_THREE_FLOOR: usize = 182;
 
 /// One lane's observation of one corpus entry.
