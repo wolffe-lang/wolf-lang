@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 767..832 name=Session fields=3
+FnDecl 834..1493 name=main body=Block
