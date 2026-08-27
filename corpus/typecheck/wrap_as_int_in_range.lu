@@ -1,0 +1,17 @@
+//! check: run(exit=0, stdout="9223372036854775807 2147483647")
+//! phase: run
+//! conforms: type.numlit.cast.wrap, arith.wrapping
+//!
+//! D56 (#135), the passing half: `wrapping[T] as int` CONVERTS an
+//! in-range value cleanly — only an out-of-range one traps (the
+//! `wrap_top_bit_as_int`/`wrap_high_as_i32` witnesses). A
+//! `wrapping[u64]` holding `i64::MAX` (top bit clear) and a
+//! `wrapping[u32]` holding `i32::MAX` both leave the wrapping domain
+//! value-preserving, at both int widths.
+
+fn main() -> int {
+    let a: wrapping[u64] = 0x7fffffffffffffff
+    let b: wrapping[u32] = 0x7fffffff
+    print("{a as int} {b as i32 as int}")
+    0
+}

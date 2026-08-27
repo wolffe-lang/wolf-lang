@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.wrap, arith.wrapping
+//!
+//! D56 (#135), the narrower width: `wrapping[u32] as i32` traps the
+//! same way `wrapping[u64] as int` does. `0x80000000` fits `u32` but
+//! not `i32`, so the value-preserving cast TRAPS (overflow) rather
+//! than silently reinterpreting the sign bit. Both int widths carry
+//! the ruling identically.
+
+fn main() -> !int {
+    let hi: wrapping[u32] = 0x80000000
+    let n = hi as i32 as int
+    n
+}

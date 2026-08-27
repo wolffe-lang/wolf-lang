@@ -119,8 +119,23 @@ conversion, and its numeric arms are closed and total:
   named `std` function — the cast itself never guesses. Target
   signedness (`fptosi` vs `fptoui`) follows the target type.
 
+- `[type.numlit.cast.wrap]` **`wrapping[T] as int` is value-preserving
+  and traps out of range** (D56). Leaving the wrapping domain is a
+  conversion of the held VALUE, not a reinterpretation of its bits: a
+  `wrapping[u64]` holding `2^63` or more does not fit `i64`, so the cast
+  **traps** (`trap(overflow)`, `[conf.trap.set]`), joining the same
+  checked-arithmetic trap family as the float row — never the silent
+  bit-cast to a negative number that the earlier lowering emitted (the
+  "cast that lies" D54 forbids). An in-range value converts unchanged;
+  the widening unsigned direction (`wrapping[u32] as int`) zero-extends
+  and never traps. A bit-reinterpretation, if ever wanted, is a distinct
+  explicit unsafe-tier operation, never this `as` cast's silent default —
+  the same posture as saturation on the float row.
+
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
-beyond what literal adoption needs) nor the narrowing integer cast's
-range-check question (s27's, still open) — D54 is the literal story and
-the cast's two numeric directions, no more.
+beyond what literal adoption needs) nor the general narrowing integer
+cast's range-check question (s27's, still open — the wrapping row above
+is the value-preservation answer only for leaving the wrapping domain) —
+D54 is the literal story, D56 the wrapping escape, and the cast's numeric
+directions, no more.
