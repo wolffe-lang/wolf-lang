@@ -359,7 +359,17 @@
     "proto.record.warn": "06-differential-protocol.md",
     "proto.seed": "06-differential-protocol.md",
     "proto.seed.equal": "06-differential-protocol.md",
-    "proto.seed.flag": "06-differential-protocol.md"
+    "proto.seed.flag": "06-differential-protocol.md",
+    "type.numlit": "10-types.md",
+    "type.numlit.adopt": "10-types.md",
+    "type.numlit.ambig": "10-types.md",
+    "type.numlit.cast": "10-types.md",
+    "type.numlit.cast.trunc": "10-types.md",
+    "type.numlit.cast.widen": "10-types.md",
+    "type.numlit.default": "10-types.md",
+    "type.numlit.kind": "10-types.md",
+    "type.numlit.propagate": "10-types.md",
+    "type.numlit.value": "10-types.md"
   },
   "version": 1
 }
