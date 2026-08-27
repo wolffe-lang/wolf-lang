@@ -7390,6 +7390,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_cwd"
                 | "os_exe"
                 | "os_exit"
+                // The OS random source (s118, #143): one shim, a
+                // minted List[int] through the out slot, and the one
+                // os-tier call whose failure is a TRAP, not a row.
+                | "os_random"
                 | "time_now_ms"
                 | "time_unix_ms"
                 | "time_sleep_ms"
@@ -10835,6 +10839,43 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // sema-licensed unreachable spelling.
                 self.b.ins_trap(TrapKind::Assert);
                 Ok(Flow::Diverged)
+            }
+            // The OS random source (s118, #143): the shim mints an
+            // n-byte `List[int]` of OS entropy through the out slot
+            // (the `net_read_bytes` shape). A nonzero rc — a negative
+            // count (the caller contract, [mem.str.repeat]'s posture)
+            // or an OS that cannot provide bytes — is the
+            // deterministic trap `assert` at the call site, ruled by
+            // [os.random.trap]: there is deliberately NO row to map
+            // onto, because a row would invite the `else`-arm
+            // fallback to predictable bytes this surface exists to
+            // make impossible.
+            "os_random" => {
+                let n = arg(0)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_os_random",
+                        &[n],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                if self.trap_unless(hit, TrapKind::Assert) {
+                    return Ok(Flow::Diverged);
+                }
+                let out = self.load_flat(types::PTR, slot, region, e.span)?;
+                Ok(Flow::Val(Some(out)))
             }
             "time_now_ms" | "time_unix_ms" => {
                 let sym = if name == "time_now_ms" {
