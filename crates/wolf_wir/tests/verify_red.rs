@@ -386,6 +386,88 @@ fn token_consumed_on_disjoint_arms_is_accepted() {
     verify_module(&m).expect("disjoint-arm consumption is per-path linear");
 }
 
+/// s119/#142: a loop header's `br` passing the current token to the
+/// exit target while the body arm consumes it is PER-PATH linear —
+/// the consumption sits ON the exit edge, mutually exclusive with the
+/// body per activation (the c05 closeout's own statement: consumers
+/// on mutually exclusive CFG edges are legal). This is the loop-closed
+/// token routing the versioner emits; the read through the exit param
+/// also pins `token-order`'s edge-located view.
+#[test]
+fn token_on_loop_exit_edge_beside_body_store_is_accepted() {
+    let src = "fn @f(mut ptr, i64, mem.r0) {\n\
+               b0(%p: ptr, %v: i64, %m: mem.r0):\n  \
+               %z = iconst.i64 0\n  \
+               %n = iconst.i64 4\n  \
+               jmp b1(%z, %m)\n\
+               b1(%i: i64, %t: mem.r0):\n  \
+               %c = icmp.slt %i, %n\n  \
+               br %c, b2, b3(%t)\n\
+               b2:\n  \
+               %t2 = store.i64 %v, %p, %t\n  \
+               %o = iconst.i64 1\n  \
+               %i2 = iadd.wrap %i, %o\n  \
+               jmp b1(%i2, %t2)\n\
+               b3(%tf: mem.r0):\n  \
+               %r = load.i64 %p, %tf\n  \
+               ret\n\
+               }\n";
+    let m = wolf_wir::parse_module(src).expect("parses");
+    verify_module(&m).expect("exit-edge consumption is per-path linear with the body store");
+}
+
+/// The guard not weakened, 1/2: an operand consumer followed by a
+/// terminator passing the SAME (now stale) token on an edge is still
+/// sequential double-consumption — the edge args are evaluated after
+/// the store ran.
+#[test]
+fn store_then_stale_edge_arg_stays_rejected() {
+    expect_reject(
+        "fn @f(mut ptr, i64, mem.r0) {\n\
+         b0(%p: ptr, %v: i64, %m: mem.r0):\n  \
+         %t2 = store.i64 %v, %p, %m\n  \
+         jmp b1(%m)\n\
+         b1(%s: mem.r0):\n  \
+         ret\n\
+         }\n",
+        ErrClass::TokenLinearity,
+    );
+}
+
+/// The guard not weakened, 2/2: consumption on an edge followed by a
+/// consumer AT the edge's target is sequential — the taken edge's
+/// continuation runs it.
+#[test]
+fn edge_consumption_reaching_second_consumer_stays_rejected() {
+    expect_reject(
+        "fn @f(mut ptr, i64, mem.r0) {\n\
+         b0(%p: ptr, %v: i64, %m: mem.r0):\n  \
+         jmp b1(%m)\n\
+         b1(%s: mem.r0):\n  \
+         %t2 = store.i64 %v, %p, %m\n  \
+         ret\n\
+         }\n",
+        ErrClass::TokenLinearity,
+    );
+}
+
+/// `token-order` through an edge: a read of the consumed value at the
+/// consuming edge's target is a stale read (the live token there is
+/// the target's PARAM, not the value that died on the edge).
+#[test]
+fn read_of_edge_consumed_token_at_target_stays_rejected() {
+    expect_reject(
+        "fn @f(mut ptr, i64, mem.r0) {\n\
+         b0(%p: ptr, %v: i64, %m: mem.r0):\n  \
+         jmp b1(%m)\n\
+         b1(%s: mem.r0):\n  \
+         %r = load.i64 %p, %m\n  \
+         ret\n\
+         }\n",
+        ErrClass::TokenOrder,
+    );
+}
+
 /// Two consumers where one reaches the other stays a rejection: that
 /// path consumes the token twice.
 #[test]

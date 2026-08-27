@@ -1328,6 +1328,69 @@ impl<'a> Verifier<'a> {
         out
     }
 
+    /// Where `inst`'s consumption of `tok` is LOCATED: `Some(targets)`
+    /// when the only consuming positions are branch-edge arguments —
+    /// the consumption happens ON those edges, iff one is taken — and
+    /// `None` for operand consumption (store, call, the memory
+    /// family), which happens whenever the instruction executes. The
+    /// c05 closeout states linearity per-path over EDGES (the same
+    /// `region.free` on the normal and the error edge is legal);
+    /// locating a terminator's edge-arg consumption at the branch
+    /// instruction instead put it BEFORE the edge decision and
+    /// rejected valid loop-closed token routing (s119/#142: the
+    /// header `br` passes the current token to the exit target while
+    /// the body arm consumes it — mutually exclusive per activation).
+    fn consuming_edge_targets(&self, inst: Inst, tok: Value) -> Option<Vec<Block>> {
+        let carries = |args: crate::entity::EntityList<Value>| {
+            self.f.vpool.get(args).into_iter().any(|a| a == tok)
+        };
+        match self.f.insts[inst].op {
+            Opcode::Store
+            | Opcode::Call
+            | Opcode::RegionAlloc
+            | Opcode::RegionFree
+            | Opcode::RcDup
+            | Opcode::RcDrop
+            | Opcode::SyncFreeze => None,
+            _ => match self.f.insts[inst].aux {
+                Aux::Jump(e) => carries(e.args).then(|| vec![e.block]),
+                Aux::Br(t, e) => {
+                    let mut v = Vec::new();
+                    if carries(t.args) {
+                        v.push(t.block);
+                    }
+                    if carries(e.args) {
+                        v.push(e.block);
+                    }
+                    (!v.is_empty()).then_some(v)
+                }
+                _ => None,
+            },
+        }
+    }
+
+    /// Can consumption site A be FOLLOWED by point `b_block` on one
+    /// path that never re-enters `def` (re-entering re-defines the
+    /// value — loop-carried tokens are per-iteration instances)?
+    /// Operand consumption sits at its whole block; edge consumption
+    /// sits at the taken edge's target, so the path starts THERE — an
+    /// edge into `def` itself feeds the redefinition and follows
+    /// nothing.
+    fn consumption_then(
+        &self,
+        a_block: Block,
+        a_edges: &Option<Vec<Block>>,
+        b_block: Block,
+        def: Block,
+    ) -> bool {
+        match a_edges {
+            None => a_block == b_block || self.reaches_avoiding(a_block, b_block, def),
+            Some(ts) => ts
+                .iter()
+                .any(|&t| t != def && (t == b_block || self.reaches_avoiding(t, b_block, def))),
+        }
+    }
+
     fn check_tokens(&self) -> VResult {
         // Linearity is PER PATH (s27): a token value may have several
         // consumers when they sit on mutually exclusive CFG paths —
@@ -1338,6 +1401,8 @@ impl<'a> Verifier<'a> {
         // through the value's defining block does not count — re-
         // entering the def re-defines the value (loop-carried tokens
         // are per-iteration instances), same rule as `token-order`.
+        // A consumer that consumes via branch-edge arguments sits ON
+        // its edges, not at the branch ([`Self::consuming_edge_targets`]).
         let mut consumed: HashMap<Value, Vec<Inst>> = HashMap::new();
         for &b in &self.f.layout {
             for &inst in &self.f.blocks[b].insts {
@@ -1377,11 +1442,14 @@ impl<'a> Verifier<'a> {
                 for &b in &insts[i + 1..] {
                     let &(ab, _) = self.place.get(&a).expect("placed");
                     let &(bb, _) = self.place.get(&b).expect("placed");
-                    // One block runs top to bottom: two consumers in
-                    // it always both execute.
-                    let sequential = ab == bb
-                        || self.reaches_avoiding(ab, bb, def_block)
-                        || self.reaches_avoiding(bb, ab, def_block);
+                    let ea = self.consuming_edge_targets(a, tok);
+                    let eb = self.consuming_edge_targets(b, tok);
+                    // One block runs top to bottom: two OPERAND
+                    // consumers in it always both execute; an edge
+                    // consumer follows everything in its block, and is
+                    // followed only by its taken edge's target.
+                    let sequential = self.consumption_then(ab, &ea, bb, def_block)
+                        || self.consumption_then(bb, &eb, ab, def_block);
                     if sequential {
                         return Err(self.fail(
                             ErrClass::TokenLinearity,
@@ -1425,16 +1493,30 @@ impl<'a> Verifier<'a> {
                 let def_block = self.def_block_of(tok);
                 for &consumer in consumers {
                     let &(cb, cpos) = self.place.get(&consumer).expect("placed");
-                    let bad = if cb == b {
-                        // Same block: a read after the consume is stale
-                        // (within one block the value is never redefined).
-                        cpos < pos
-                    } else {
-                        // The consumer's block reaches the reader's block
-                        // without re-entering the token's defining block
-                        // (re-entering redefines the value — loop-carried
-                        // tokens are per-iteration instances).
-                        self.reaches_avoiding(cb, b, def_block)
+                    let bad = match self.consuming_edge_targets(consumer, tok) {
+                        Some(ts) => {
+                            // Edge consumption: the token dies ON the
+                            // taken edge, so only reads at or past the
+                            // edge's target are stale — reads in the
+                            // branch's own block precede the decision.
+                            // An edge into the defining block feeds the
+                            // redefinition.
+                            ts.iter().any(|&t| {
+                                t != def_block && (t == b || self.reaches_avoiding(t, b, def_block))
+                            })
+                        }
+                        None if cb == b => {
+                            // Same block: a read after the consume is stale
+                            // (within one block the value is never redefined).
+                            cpos < pos
+                        }
+                        None => {
+                            // The consumer's block reaches the reader's block
+                            // without re-entering the token's defining block
+                            // (re-entering redefines the value — loop-carried
+                            // tokens are per-iteration instances).
+                            self.reaches_avoiding(cb, b, def_block)
+                        }
                     };
                     if bad {
                         return Err(self.fail(

@@ -1877,9 +1877,22 @@ fn version_one(
     l: &analysis::NaturalLoop,
     cands: &[Inst],
 ) -> Option<(Vec<(Inst, Inst)>, usize)> {
+    // The CFG as it stands NOW — not the snapshot the plans were made
+    // against. version_loops versions several loops in one round, and
+    // an earlier version_one minted blocks (guard chain, fast/slow
+    // preheaders, the fast clone) the snapshot cannot see. Every
+    // STRUCTURAL question below — the header's outside predecessor,
+    // the exit's predecessors, which outside blocks use this loop's
+    // values — must be asked of the current graph, or a later loop's
+    // live-outs (its memory token among them) miss their loop-closed
+    // routing and the verifier rightly refuses the result (#142: a
+    // dominance break, or the same token consumed twice on one path).
+    // `cfg`/`doms` stay for the RANGE queries only: a matched pair
+    // over the original blocks, where every candidate lives.
+    let cur = analysis::cfg(f);
     // Single entry: one outside predecessor of the header, ending in a
     // plain jmp (the clean guard landing pad).
-    let outside: Vec<Block> = cfg
+    let outside: Vec<Block> = cur
         .preds
         .get(&l.header)?
         .iter()
@@ -1944,7 +1957,7 @@ fn version_one(
         }
     }
     let [exit_bb] = exits[..] else { return None };
-    if cfg
+    if cur
         .preds
         .get(&exit_bb)
         .is_some_and(|ps| ps.iter().any(|p| !l.blocks.contains(p)))
@@ -1953,7 +1966,7 @@ fn version_one(
     }
     // Live-outs: loop-defined values used anywhere outside the loop.
     let mut live_out: Vec<Value> = Vec::new();
-    for &b in &cfg.rpo {
+    for &b in &cur.rpo {
         if l.blocks.contains(&b) {
             continue;
         }
@@ -2182,7 +2195,7 @@ fn version_one(
             .copied()
             .zip(new_params.iter().copied())
             .collect();
-        for &b in &cfg.rpo.clone() {
+        for &b in &cur.rpo {
             if l.blocks.contains(&b) {
                 continue;
             }
@@ -2216,7 +2229,7 @@ fn version_one(
         }
     }
     // ---- clone ----------------------------------------------------------
-    let loop_blocks: Vec<Block> = cfg
+    let loop_blocks: Vec<Block> = cur
         .rpo
         .iter()
         .copied()
