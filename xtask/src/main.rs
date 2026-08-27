@@ -1045,9 +1045,25 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // all-three unchanged — the deltas are exactly the two new files, no
 // pre-existing file moved lanes. Totals 196/215/215, union 229,
 // all-three 182. Counts measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 196), ("native", 215), ("release", 215)];
-const UNION_FLOOR: usize = 229;
-const ALL_THREE_FLOOR: usize = 182;
+// s119 ratchet over 362 entries: the loop and the layout (c32's first
+// codegen-debts pass, #142/#144 — both found by real TLS code). Four
+// new run-phase witnesses, each three-lane, so every count moves +4.
+// `memory/carried_quotient_pair.lu` / `carried_quotient_nested.lu` —
+// the #142 shapes (a floordiv quotient carried across sequential and
+// nested index-write loops, TweetNaCl `modL`): at base the release
+// mid-end ICEd on them (versioning against a stale CFG missed the
+// second loop's loop-closed live-out routing; the verifier's
+// edge-located token rule is the other half).
+// `memory/list_session_struct.lu` / `list_mixed_width_struct.lu` —
+// the #144 shapes (a `bool`/`i32` beside wider fields in a `List`
+// element): at base the native tier refused the non-tiling packed
+// stride; the stride now rounds up to the element's alignment. The
+// full per-file three-lane sweep diff is exactly the four new files —
+// no pre-existing file moved lanes. Totals 200/219/219, union 233,
+// all-three 186. Counts measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 200), ("native", 219), ("release", 219)];
+const UNION_FLOOR: usize = 233;
+const ALL_THREE_FLOOR: usize = 186;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
