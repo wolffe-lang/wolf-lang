@@ -63,6 +63,7 @@ use std::io::{Read as _, Write as _};
 use std::net::{TcpListener, TcpStream};
 use std::sync::Mutex;
 
+use crate::fs::{byte_elems, write_bytes_list};
 use crate::str::{ambient_copy, view, write_pair};
 
 /// The v0 row-tag mapping: `io::ErrorKind` → net row tag. One table,
@@ -384,6 +385,10 @@ pub mod net_code {
     pub const CLOSED: i64 = 3;
     pub const UTF8: i64 = 4;
     pub const IO: i64 = 5;
+    /// `net_write_bytes`'s own verdict: a `List[int]` element outside
+    /// `0..=255` (the fs `fs_write_bytes` `INVALID`, mirrored). Never
+    /// [`err_tag`]'s — a bad list is refused before any syscall.
+    pub const INVALID: i64 = 6;
 }
 
 /// The process-wide socket table behind the shim family — the fs
@@ -531,6 +536,67 @@ pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
         return code_of_tag(t);
     }
     match tbl().write_ready(fd, s.as_bytes()) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
+    }
+}
+
+/// `net_read_bytes(fd, max) -> List[int] ! {closed, timeout, io}` —
+/// the byte twin of [`__wolf_rt_net_read`] (s115, #137): parks until
+/// bytes arrive (at most `max`, clamped to 1 MiB); no `UTF8` verdict,
+/// bytes are bytes, so a binary body finally survives the crossing.
+/// The `fs_read_bytes` shape, family for family.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes (the list header word).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
+    {
+        // The no-park fast paths (mirror [`__wolf_rt_net_read`]):
+        // wrong-kind or forged fd is `io` whatever `max` says, and
+        // `max <= 0` is the empty list with no wait owed.
+        let mut t = tbl();
+        if !matches!(t.get(fd), Some(Sock::Stream(_))) {
+            return net_code::IO;
+        }
+        if max <= 0 {
+            unsafe { write_bytes_list(out, b"") };
+            return net_code::OK;
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Read) {
+        return code_of_tag(t);
+    }
+    match tbl().read_ready(fd, max) {
+        Err(t) => code_of_tag(t),
+        Ok(bytes) => {
+            unsafe { write_bytes_list(out, &bytes) };
+            net_code::OK
+        }
+    }
+}
+
+/// `net_write_bytes(fd, bytes) -> () ! {closed, invalid, io}` — the
+/// byte twin of [`__wolf_rt_net_write`] (s115, #137): a `List[int]`
+/// element outside `0..=255` is `INVALID` and nothing is sent (the
+/// `fs_write_bytes` refusal, mirrored); otherwise the whole buffer
+/// drains with no UTF-8 gate.
+///
+/// # Safety
+///
+/// `hdr` must be a live `List[int]` header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
+    let Some(bytes) = (unsafe { byte_elems(hdr) }) else {
+        return net_code::INVALID;
+    };
+    #[cfg(target_os = "linux")]
+    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Write) {
+        return code_of_tag(t);
+    }
+    match tbl().write_ready(fd, &bytes) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
     }
@@ -686,6 +752,28 @@ mod tests {
         (s.as_ptr() as i64, s.len() as i64)
     }
 
+    /// A `List[int]` header, the shape a compiled byte argument has.
+    fn bytes_list(bs: &[i64]) -> i64 {
+        let hdr = crate::list::new_list(8);
+        for &b in bs {
+            crate::list::push_int(hdr, b);
+        }
+        hdr as i64
+    }
+
+    fn list_i64(hdr: i64) -> Vec<i64> {
+        let n = unsafe { crate::list::__wolf_rt_list_len(hdr) };
+        (0..n)
+            .map(|i| {
+                let mut cell = [0i64; 1];
+                let rc =
+                    unsafe { crate::list::__wolf_rt_list_read(hdr, i, cell.as_mut_ptr() as i64) };
+                assert_eq!(rc, 1);
+                cell[0]
+            })
+            .collect()
+    }
+
     /// The corpus echo roundtrip through the extern surface: codes
     /// out, str pairs through the out slot, fd handles process-global
     /// — the fs shim tests' shape.
@@ -726,16 +814,37 @@ mod tests {
 
     /// Dialing a just-released port through the shim is the REFUSED
     /// code — `corpus/net/refused_row.lu`'s native half.
+    ///
+    /// #121: the just-released ephemeral port can be rebound by a
+    /// CONCURRENT same-host run before this dial reaches it, so a lone
+    /// dial is racy. Harden with a bounded retry: an unexpected connect
+    /// (someone else grabbed the port) is closed and the probe restarts
+    /// on a fresh port; a genuine REFUSED converges on the first quiet
+    /// attempt. Test-only — the corpus witness is unaffected.
     #[test]
     fn shim_refused_code() {
-        let (ap, al) = pair_of("127.0.0.1:0");
-        let srv = unsafe { __wolf_rt_net_listen(ap, al) };
-        assert!(srv >= 0);
-        let port = __wolf_rt_net_port(srv);
-        assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
-        let addr = format!("127.0.0.1:{port}");
-        let (cp, cl) = pair_of(&addr);
-        assert_eq!(unsafe { __wolf_rt_net_connect(cp, cl) }, -net_code::REFUSED);
+        for attempt in 0..5 {
+            let (ap, al) = pair_of("127.0.0.1:0");
+            let srv = unsafe { __wolf_rt_net_listen(ap, al) };
+            assert!(srv >= 0);
+            let port = __wolf_rt_net_port(srv);
+            assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
+            let addr = format!("127.0.0.1:{port}");
+            let (cp, cl) = pair_of(&addr);
+            let rc = unsafe { __wolf_rt_net_connect(cp, cl) };
+            if rc == -net_code::REFUSED {
+                return;
+            }
+            // A racing run rebound the port between close and dial: the
+            // dial connected (a valid fd >= 0). Drop it and try a fresh
+            // port.
+            assert!(
+                rc >= 0,
+                "dial was neither REFUSED nor a live fd: {rc} (attempt {attempt})"
+            );
+            assert_eq!(__wolf_rt_net_close(rc), net_code::OK);
+        }
+        panic!("no quiet ephemeral port in 5 attempts — the host is saturated");
     }
 
     /// A non-UTF-8 arrival is the UTF8 code (the read shim's own
@@ -753,6 +862,71 @@ mod tests {
         assert_eq!(unsafe { __wolf_rt_net_read(conn, 16, o) }, net_code::UTF8);
         assert_eq!(__wolf_rt_net_close(conn), net_code::OK);
         assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
+    }
+
+    /// s115/#137: the byte path carries what the str path mangles — a
+    /// 0xFF, an embedded NUL, and a lone continuation byte (a split
+    /// codepoint the UTF-8 gate would reject). Round-trips byte-equal
+    /// through the shim boundary; a not-a-byte list is `INVALID` and
+    /// nothing is sent.
+    #[test]
+    fn shim_byte_roundtrip_and_invalid() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let srv = unsafe { __wolf_rt_net_listen(ap, al) };
+        let port = __wolf_rt_net_port(srv);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        let cli = unsafe { __wolf_rt_net_connect(cp, cl) };
+        let conn = __wolf_rt_net_accept(srv);
+        // Bytes no UTF-8 reader can hold.
+        let payload = [0xff, 0x00, 0x80, 0x41];
+        assert_eq!(
+            unsafe { __wolf_rt_net_write_bytes(cli, bytes_list(&payload)) },
+            net_code::OK
+        );
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(
+            unsafe { __wolf_rt_net_read_bytes(conn, 16, o) },
+            net_code::OK
+        );
+        assert_eq!(list_i64(out[0]), payload.to_vec());
+        // The str read would have refused the very same bytes.
+        let (mp, ml) = pair_of("more");
+        assert_eq!(unsafe { __wolf_rt_net_write(cli, mp, ml) }, net_code::OK);
+        // `max <= 0` is the empty list, no wait owed.
+        assert_eq!(
+            unsafe { __wolf_rt_net_read_bytes(conn, 0, o) },
+            net_code::OK
+        );
+        assert_eq!(list_i64(out[0]), Vec::<i64>::new());
+        // A not-a-byte element is INVALID; nothing is sent.
+        assert_eq!(
+            unsafe { __wolf_rt_net_write_bytes(cli, bytes_list(&[256])) },
+            net_code::INVALID
+        );
+        // The pending "more" still arrives, proving the refusal sent
+        // nothing ahead of it.
+        assert_eq!(
+            unsafe { __wolf_rt_net_read_bytes(conn, 16, o) },
+            net_code::OK
+        );
+        assert_eq!(
+            list_i64(out[0]),
+            b"more".iter().map(|&b| i64::from(b)).collect::<Vec<_>>()
+        );
+        // A forged fd is IO, never a trap.
+        assert_eq!(
+            unsafe { __wolf_rt_net_read_bytes(99_999, 4, o) },
+            net_code::IO
+        );
+        assert_eq!(
+            unsafe { __wolf_rt_net_write_bytes(99_999, bytes_list(&[1])) },
+            net_code::IO
+        );
+        for fd in [cli, conn, srv] {
+            assert_eq!(__wolf_rt_net_close(fd), net_code::OK);
+        }
     }
 
     /// s106: the TIMEOUT code crosses the shim boundary — the armed

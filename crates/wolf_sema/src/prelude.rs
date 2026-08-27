@@ -95,6 +95,11 @@ pub const PRELUDE: &[&str] = &[
     "net_connect",
     "net_read",
     "net_write",
+    // s115 (#137): the byte twins — `List[int]` in/out, no UTF-8 gate,
+    // so a server carries a binary body (`fs_read_bytes`/`fs_write_bytes`
+    // for the socket). The str variants stay for text.
+    "net_read_bytes",
+    "net_write_bytes",
     "net_close",
     // s106 (#45's builtin half): the per-socket deadline budget that
     // makes the `timeout` tag reachable — declared with the family

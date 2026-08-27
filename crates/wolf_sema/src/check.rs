@@ -6044,6 +6044,24 @@ impl<'a> Checker<'a> {
                 rowed(self, str_, &["closed", "timeout", "utf8", "io"]),
             ),
             "net_write" => (vec![int_, str_], rowed(self, unit, &["closed", "io"])),
+            // s115 (#137): the byte twins. `List[int]` in/out, no `utf8`
+            // row (bytes are bytes — the `fs_read_bytes` posture over the
+            // socket); the write gains `invalid` for a list element
+            // outside `0..=255`, exactly `fs_write_bytes`.
+            "net_read_bytes" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![int_, int_],
+                    rowed(self, list_int, &["closed", "timeout", "io"]),
+                )
+            }
+            "net_write_bytes" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![int_, list_int],
+                    rowed(self, unit, &["closed", "invalid", "io"]),
+                )
+            }
             "net_close" => (vec![int_], rowed(self, unit, &["io"])),
             // s106 (#45's builtin half): arm (`ms > 0`) or clear
             // (`ms <= 0`) a per-socket deadline budget — every

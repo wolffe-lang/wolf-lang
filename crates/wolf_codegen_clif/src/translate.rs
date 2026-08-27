@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 112] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 114] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -157,6 +157,12 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 112] = [
     ("__wolf_rt_net_connect", 2, true),
     ("__wolf_rt_net_read", 3, true),
     ("__wolf_rt_net_write", 3, true),
+    // s115/#137: the byte twins — `List[int]` in/out, no UTF-8 gate,
+    // so a wolf server can carry a binary body. `read_bytes` writes a
+    // list header through the out slot (the `fs_read_bytes` shape);
+    // `write_bytes` reads the caller's `List[int]` header.
+    ("__wolf_rt_net_read_bytes", 3, true),
+    ("__wolf_rt_net_write_bytes", 2, true),
     ("__wolf_rt_net_close", 1, true),
     ("__wolf_rt_net_deadline", 2, true),
     // The s107 json family (wolf_rt::json, #118's last crossing):

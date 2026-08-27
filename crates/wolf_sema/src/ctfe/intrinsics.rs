@@ -148,7 +148,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `net` capability (I13), and the whole family is refused at
         // comptime categorically — sockets are the loudest D33 case.
         "net_fetch" | "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read"
-        | "net_write" | "net_close" | "net_deadline" => SandboxCategory::Net,
+        | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline" => {
+            SandboxCategory::Net
+        }
         // The s40 os/env builtin tier: `env` is I13's capability for
         // the environment family plus the process-context reads
         // (`os_cwd` — machine state that differs per host); `exec`

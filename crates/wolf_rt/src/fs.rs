@@ -126,7 +126,7 @@ fn unix_ms(t: SystemTime) -> Option<i64> {
 /// # Safety
 ///
 /// `hdr` must be a live `List[int]` header.
-unsafe fn byte_elems(hdr: i64) -> Option<Vec<u8>> {
+pub(crate) unsafe fn byte_elems(hdr: i64) -> Option<Vec<u8>> {
     let elems = unsafe { crate::list::i64_elems(hdr) }?;
     let mut bytes = Vec::with_capacity(elems.len());
     for &v in elems {
@@ -141,7 +141,7 @@ unsafe fn byte_elems(hdr: i64) -> Option<Vec<u8>> {
 /// # Safety
 ///
 /// `out` must address 8 writable bytes.
-unsafe fn write_bytes_list(out: i64, bytes: &[u8]) {
+pub(crate) unsafe fn write_bytes_list(out: i64, bytes: &[u8]) {
     let hdr = new_list(8);
     for &b in bytes {
         push_int(hdr, i64::from(b));
