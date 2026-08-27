@@ -18,7 +18,7 @@ deliberately untouched (D4's honest tiers: the dev loop is Tier-F's).
 - Digest: `ProgramSummary::digest` = SHA-256 of the rendered text
 - Driver surface: `wolf build --release --codegen-report`
 
-## Schema (v1)
+## Schema (v3)
 
 Line-oriented text, one function per line, deterministic field order,
 sorted by function name. No floats, no wall clock, no thread order, no
@@ -26,10 +26,12 @@ hash-map iteration order — the whole index is a pure function of the
 module plus the home map.
 
 ```text
-summary-format 2
+summary-format 3
 fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
    hash=<sha256> facts=<region>/<noalias>/<range>/<deref>/<frozen> \
-   hot=<-|u32> calls=[<callee>@<depth>/<sites>/<constargs>,...] impls=[]
+   ret=<lo..=hi|-> stores=[a<k>:<lo..=hi>,...] \
+   hot=<-|u32> calls=[<callee>@<depth>/<sites>/<constargs>,...] \
+   refs=[<referee>,...] impls=[]
 ```
 
 | Field | Meaning |
@@ -43,6 +45,8 @@ fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
 | `facts` | D2 fact digest: counts per kind, in the fixed order region/noalias/range/deref/frozen. |
 | `hot` | Hotness hint. `-` = **unknown** (no profile, or no record for this body) — the default in every build. Otherwise a normalized **0..=1000 rank**. Reserved by s43, filled by s45 **without a format bump**; see below. |
 | `calls` | Outgoing edges to MODULE functions, sorted by callee. External `decl` callees — including every `__wolf_rt_*` seam — are not edges: they are opaque by construction. The three fields after `@` are the deepest loop depth of any site, the site count, and the constant-argument count, i.e. exactly the inputs the inliner's budget consults, so import decisions are makeable from summaries alone. |
+| `ret` / `stores` | v2 (s99): the interprocedural range half — the provable return range (`-` = unbounded) and the store-meet per visible local container allocation site (`a<k>` in RPO discovery order; poisoned or store-free sites are absent). |
+| `refs` | v3 (s117, #136): outgoing `func.addr` REFERENCE edges to module functions, name-sorted and deduped. A reference is reachability the call graph cannot see: task-entry shims and s105 closure/fn-value entries are reached by `func.addr`, not by call, and the release emitter resolves that symbol only inside its own object — so the partitioner fuses referee with referrer unconditionally (exempt from the target-size cap). Kept apart from `calls` because a reference has no call site: nothing here feeds the import ranking or the inline budget. |
 | `impls` | **Reserved (D42). Always `[]` at v1.** See below. |
 
 ### The `hot` slot, filled (s45)

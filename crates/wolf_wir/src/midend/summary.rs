@@ -11,7 +11,7 @@
 //! `wolf_wir/summary-format.md` (as `text.md` documents the WIR
 //! textual format); this module is its implementation.
 //!
-//! # The frozen schema (v2)
+//! # The frozen schema (v3)
 //!
 //! The canonical serialization is line-oriented text — one function per
 //! line, deterministic field order, no floats, no wall-clock, no
@@ -19,11 +19,12 @@
 //! surface at once (one format, one authority):
 //!
 //! ```text
-//! summary-format 2
+//! summary-format 3
 //! fn <name> home=<module> size=<insts> blocks=<n> flags=<EMTSRKA|-> \
 //!    hash=<sha256> facts=<regions/noalias/ranges/deref/frozen> \
 //!    ret=<lo..=hi|-> stores=[a<k>:<lo..=hi>,…] \
-//!    hot=<-|u32> calls=[<callee>@<depth>/<sites>/<constargs>,…] impls=[]
+//!    hot=<-|u32> calls=[<callee>@<depth>/<sites>/<constargs>,…] \
+//!    refs=[<referee>,…] impls=[]
 //! ```
 //!
 //! v2 (s99) adds the interprocedural range half — `ret=` is the
@@ -33,6 +34,18 @@
 //! Both are computed by `midend/interproc.rs` on the same bodies this
 //! index describes. The bump invalidates every release cluster cache
 //! key by construction (the version leads the key accumulator).
+//!
+//! v3 (s117, #136) adds `refs=` — the module functions whose address
+//! this function takes via `func.addr` (task-entry shims, s105
+//! closure/fn-value entries, and every future `func.addr` construct
+//! by construction). A reference is a REACHABILITY edge the call
+//! graph cannot see: the release emitter resolves a `func.addr`
+//! symbol only inside its own object, so the partitioner must keep
+//! referee with referrer — unconditionally, where a call edge is
+//! only an affinity preference. Kept apart from `calls` on purpose:
+//! a reference has no call site, so it must not feed the import
+//! ranking or the inline budget. The bump invalidates every release
+//! cluster cache key by construction, same as v2's.
 //!
 //! Field vocabulary:
 //! - `home` — the defining source module (`root` for the package root;
@@ -71,6 +84,12 @@
 //!   deepest loop depth any site sits at, the site count, and the
 //!   constant-argument count — the exact inputs [`super::inline`]'s budget consults, so
 //!   the import decision can be made from summaries alone.
+//! - `refs` — v3 (s117): outgoing `func.addr` REFERENCE edges to
+//!   module functions, name-sorted and deduped. No depth/site/const
+//!   payload: a reference is not a call site, so nothing here feeds
+//!   the inline budget or the import ranking — it exists so the
+//!   partitioner can keep the referee co-resident with its referrer
+//!   (the release emitter's own-object subset rule for `func.addr`).
 //! - `impls` — **RESERVED HEADROOM (D42)**. Per-trait
 //!   possible-implementation sets, for the singleton-dyn
 //!   devirtualization pass ruled POST-M2 backlog by report 10 (no T1
@@ -91,7 +110,7 @@ use super::dedup::body_hash;
 /// The frozen summary format version. Bump ONLY with a schema change;
 /// it is folded into every release-tier cache key, so a bump
 /// invalidates cluster objects and nothing else.
-pub const SUMMARY_FORMAT_VERSION: u32 = 2;
+pub const SUMMARY_FORMAT_VERSION: u32 = 3;
 
 /// The home-module map: WIR function name → defining source module.
 /// The mid-end has no notion of source modules (one `Module` holds the
@@ -234,6 +253,10 @@ pub struct FuncSummary {
     /// and [`apply_profile`].
     pub hotness: Option<u32>,
     pub calls: Vec<CallEdge>,
+    /// v3 (s117): `func.addr` reference edges — module functions whose
+    /// address this body takes, name-sorted and deduped. Reachability
+    /// for the partitioner, never a call site — see the module docs.
+    pub refs: Vec<String>,
     /// RESERVED (D42): always empty at v1.
     pub impls: Vec<TraitImpls>,
 }
@@ -258,7 +281,7 @@ impl FuncSummary {
             .collect();
         format!(
             "fn {} home={} size={} blocks={} flags={} hash={} facts={}/{}/{}/{}/{} ret={} \
-             stores=[{}] hot={} calls=[{}] impls=[{}]",
+             stores=[{}] hot={} calls=[{}] refs=[{}] impls=[{}]",
             self.name,
             self.home,
             self.size,
@@ -280,6 +303,7 @@ impl FuncSummary {
                 None => "-".to_string(),
             },
             calls.join(","),
+            self.refs.join(","),
             impls.join(",")
         )
     }
@@ -432,6 +456,9 @@ fn one(
     // Edges keyed by callee name; `depth` takes the max, `const_args`
     // the count at the deepest site (ties: the first in RPO).
     let mut edges: BTreeMap<String, CallEdge> = BTreeMap::new();
+    // v3 (s117): `func.addr` reference edges, deduped and name-sorted
+    // by the set itself.
+    let mut refs: BTreeSet<String> = BTreeSet::new();
     for &b in &cfg.rpo {
         let depth = loops.depth.get(&b).copied().unwrap_or(0);
         for &inst in &f.blocks[b].insts {
@@ -461,6 +488,23 @@ fn one(
                         if depth >= e.depth {
                             e.depth = depth;
                         }
+                    }
+                }
+                continue;
+            }
+            // s117 (#136): a `func.addr` naming a module function is a
+            // REFERENCE edge — the task-entry / closure-entry shape.
+            // The release emitter resolves the symbol only inside its
+            // own object, so the partitioner must see this edge or it
+            // separates shim from spawner and the release tier refuses
+            // a program the debug tier runs (the issue's asymmetry).
+            // Never folded into `calls`: there is no call site here,
+            // so nothing for the import ranking or inline budget.
+            if f.insts[inst].op == Opcode::FuncAddr {
+                if let Aux::Callee(ef) = f.insts[inst].aux {
+                    let name = &f.ext_funcs[ef].name;
+                    if by_name.contains_key(name.as_str()) {
+                        refs.insert(name.clone());
                     }
                 }
                 continue;
@@ -539,6 +583,7 @@ fn one(
             .unwrap_or_default(),
         hotness: None,
         calls: edges.into_values().collect(),
+        refs: refs.into_iter().collect(),
         impls: Vec::new(),
     }
 }

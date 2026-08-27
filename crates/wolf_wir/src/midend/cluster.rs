@@ -5,8 +5,14 @@
 //! # Clustering
 //!
 //! The deduped call graph is partitioned into clusters that lower and
-//! link in parallel. Two forces, in this order:
+//! link in parallel. One constraint, then two forces, in this order:
 //!
+//! 0. **Reference co-residency (s117, #136)** — a `func.addr` referee
+//!    (task-entry shim, s105 closure entry) is fused with its referrer
+//!    unconditionally, before affinity and exempt from the target-size
+//!    cap. This is correctness, not preference: the release emitter
+//!    resolves `func.addr` only inside its own object, and the debug
+//!    tier accepts every program the partition could otherwise break.
 //! 1. **Affinity** — hot caller/callee pairs belong together, so no
 //!    inlining win is lost to the partition in the first place.
 //!    Agglomeration walks call edges by descending weight
@@ -107,9 +113,36 @@ pub fn partition(summary: &ProgramSummary, th: &Thresholds) -> Vec<Cluster> {
         let members: Vec<String> = summary.funcs.iter().map(|f| f.name.clone()).collect();
         return vec![finish("c00", members, Vec::new(), summary)];
     }
-    // ---- 1. affinity agglomeration ------------------------------------
+    // ---- 0. reference co-residency (s117, #136) -----------------------
+    //
+    // A `func.addr` referee must land in its referrer's object: the
+    // release emitter resolves the symbol only inside its own subset,
+    // so separating them turns a running program into a refusal (task
+    // shims, s105 closure entries — any `func.addr` construct, by
+    // construction). These are CORRECTNESS edges, fused before
+    // affinity and WITHOUT the target-size cap: co-residency is
+    // required, not preferred, and a group the cap would have refused
+    // is exactly the shape that was broken (a spawner already over
+    // `cluster_target_size` still owns its shim). Deterministic: the
+    // summary is name-sorted and each `refs` list is name-sorted.
     let mut uf: Vec<usize> = (0..n).collect();
     let mut group_size: Vec<u32> = size.clone();
+    for (i, f) in summary.funcs.iter().enumerate() {
+        for r in &f.refs {
+            let Some(&j) = idx.get(r.as_str()) else {
+                continue;
+            };
+            let (ri, rj) = (find(&mut uf, i), find(&mut uf, j));
+            if ri == rj {
+                continue;
+            }
+            let (keep, gone) = if ri < rj { (ri, rj) } else { (rj, ri) };
+            uf[gone] = keep;
+            group_size[keep] += group_size[gone];
+            group_size[gone] = 0;
+        }
+    }
+    // ---- 1. affinity agglomeration ------------------------------------
     let mut edges: Vec<(u32, usize, usize)> = Vec::new();
     for (i, f) in summary.funcs.iter().enumerate() {
         for c in &f.calls {

@@ -1,0 +1,8 @@
+---
+source: crates/wolf_wir/tests/whole_program.rs
+assertion_line: 93
+expression: redacted
+---
+summary-format 3
+fn helper home=a size=2 blocks=1 flags=---S--- hash=<hash> facts=0/0/0/0/0 ret=- stores=[] hot=- calls=[] refs=[] impls=[]
+fn main home=b size=4 blocks=1 flags=-M-S--- hash=<hash> facts=0/0/0/0/0 ret=- stores=[] hot=- calls=[helper@0/2/0] refs=[] impls=[]
