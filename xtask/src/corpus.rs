@@ -266,9 +266,10 @@ fn parse_run(args: &str) -> Result<RunExpect, String> {
 }
 
 /// Decode the escape set of a `stdout="…"` directive value (s38 —
-/// multi-print expectations need real newlines): `\n`, `\t`, `\\`,
-/// `\"`. Anything else keeps the backslash literally (the directive
-/// language stays small).
+/// multi-print expectations need real newlines): `\n`, `\r`, `\t`,
+/// `\\`, `\"` (`\r` added by s111, wolf-lang#128 — protocol corpora
+/// assert CRLF). Anything else keeps the backslash literally (the
+/// directive language stays small).
 fn unescape_stdout(v: &str) -> String {
     let mut out = String::with_capacity(v.len());
     let mut chars = v.chars();
@@ -279,6 +280,7 @@ fn unescape_stdout(v: &str) -> String {
         }
         match chars.next() {
             Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
             Some('t') => out.push('\t'),
             Some('\\') => out.push('\\'),
             Some('"') => out.push('"'),
@@ -529,14 +531,29 @@ mod tests {
 
     #[test]
     fn stdout_directive_decodes_escapes() {
-        // Multi-print expectations carry real newlines (s38).
+        // Multi-print expectations carry real newlines (s38); `\r`
+        // joined the set for protocol corpora (s111, wolf-lang#128).
         let d = parse_directives(
-            "//! check: run(exit=0, stdout=\"a\\nb\\tc\\\\d\")\n//! phase: run\nfn main() {}\n",
+            "//! check: run(exit=0, stdout=\"a\\nb\\tc\\\\d\\r\\n\")\n//! phase: run\nfn main() {}\n",
         )
         .unwrap();
         let Some(Check::Run(r)) = d.check else {
             panic!("run check");
         };
-        assert_eq!(r.stdout.as_deref(), Some("a\nb\tc\\d"));
+        assert_eq!(r.stdout.as_deref(), Some("a\nb\tc\\d\r\n"));
+    }
+
+    /// #128's sharp half, pinned from this side: a header a machine
+    /// cannot parse is a NAMED error carrying the offending line —
+    /// never a silent demotion (`cargo xtask corpus` reports it
+    /// against THIS file and fails the gate; lupin's sibling-merge is
+    /// the interp track's half).
+    #[test]
+    fn unparseable_headers_are_named_errors() {
+        let err = parse_directives("//! check: run(exit=0, stdout=oops)\n").unwrap_err();
+        assert!(err.contains("line 1"), "names the line: {err}");
+        assert!(err.contains("quoted"), "names the problem: {err}");
+        let err = parse_directives("//! phase: run\n//! check: rn(exit=0)\n").unwrap_err();
+        assert!(err.contains("line 2"), "names the line: {err}");
     }
 }
