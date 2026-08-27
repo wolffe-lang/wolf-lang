@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="z=0 big=65536 range=true\n")
+//! phase: run
+//! conforms: os.random.fill
+//!
+//! The OS random source (s118, wolf-lang#143) — the edge lengths.
+//! `os_random(0)` is a valid request for no entropy: the empty list,
+//! never a trap and never a row ([os.random.fill]). A large request
+//! (64 KiB — far past the 256-byte per-call caps of getrandom's
+//! no-interrupt window and getentropy's hard limit) comes back with
+//! length exactly n and every element in `0..=255`: the fill loop owns
+//! the short-read/chunk boundary, the caller never sees a partial
+//! answer. Both properties are deterministic contract properties —
+//! nothing here samples the DISTRIBUTION of the bytes (that would be a
+//! research instrument, not a witness).
+
+fn main() -> !int {
+    let z = os_random(0)
+    let big = os_random(65536)
+    var range = true
+    for x in big {
+        if x < 0 || x > 255 { range = false }
+    }
+    print("z={z.len} big={big.len} range={range}")
+    0
+}

@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="len=32/32 range=true same=false\n")
+//! phase: run
+//! conforms: os.random, os.random.fill, os.random.checked
+//!
+//! The OS random source (s118, wolf-lang#143) — the differ-twice
+//! witness. Two 32-byte draws from `os_random` must differ. NOTE what
+//! is being asserted: draws-differ is the WEAKEST honest property a
+//! test can pin about an entropy source without becoming a statistical
+//! instrument (which a conformance witness must not be — a flaky
+//! distribution assertion would be worse than none). Two equal 32-byte
+//! draws from a working CSPRNG have probability 2^-256, so equality
+//! here means the source is broken, not unlucky. The draws are
+//! compared to EACH OTHER, never to a pinned value ([os.random.checked])
+//! — the printed verdict is deterministic even though the bytes are
+//! not, which is what makes the file ten-run stable on every lane.
+//!
+//! All three lanes make the REAL platform call (getrandom(2) at this
+//! pin): the checked machine is a host process with the same access to
+//! the kernel pool as a compiled program — no in-machine model, no
+//! refusal, because the crypto lanes (wolf-wws, std) run checked.
+
+fn main() -> !int {
+    let a = os_random(32)
+    let b = os_random(32)
+    var range = true
+    for x in a {
+        if x < 0 || x > 255 { range = false }
+    }
+    for x in b {
+        if x < 0 || x > 255 { range = false }
+    }
+    var same = a.len == b.len
+    var i = 0
+    for x in b {
+        if x != a[i] { same = false }
+        i = i + 1
+    }
+    print("len={a.len}/{b.len} range={range} same={same}")
+    0
+}
