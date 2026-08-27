@@ -220,6 +220,7 @@ memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/byte_roundtrip.lu: lowers
 net/echo_roundtrip.lu: lowers
+net/line_reader_bytes.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
 net/spawn_accept.lu: lowers
