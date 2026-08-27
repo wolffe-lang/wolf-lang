@@ -190,3 +190,72 @@ fn main() -> !int {
         }
     }
 }
+
+/// #129 (s111): the child's stdout/stderr are INHERITED, not
+/// null-wired — the child writes through to whatever the parent's
+/// stdout is. On the native tiers the compiled program runs under
+/// conform-run's pipe, so the child's bytes land in the program's own
+/// observed stdout (exactly the wws test-runner use case). On the
+/// checked lane the machine's print stream is a BUFFER the child's
+/// fd-level writes cannot enter: the child writes to conform-run's
+/// real stdout instead, AHEAD of the observation record — asserted
+/// here raw, as the documented asymmetry (capture-to-string stays
+/// the named upstream ask on #129; stdin stays null-wired, so the
+/// `cat` child sees immediate EOF and echoes nothing from it).
+#[test]
+fn spawned_child_stdout_writes_through() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s111_child_stdout");
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let entry = dir.join("s111_child_stdout.lu");
+    std::fs::write(
+        &entry,
+        r#"
+fn main() -> !int {
+    print("before")
+    var argv = List[str]()
+    (mut argv).push("/bin/sh")
+    (mut argv).push("-c")
+    (mut argv).push("echo child-through; cat")
+    let h = os_spawn(argv)?
+    let code = os_wait(h)?
+    print("after {code}")
+    0
+}
+"#,
+    )
+    .expect("write fixture");
+    for flag in ["--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            return;
+        };
+        assert_eq!(obs.verdict, "exit(0)", "{flag} verdict");
+        assert_eq!(
+            obs.stdout, "before\nchild-through\nafter 0\n",
+            "{flag}: the child's line must appear in the program's own stdout"
+        );
+    }
+    // Checked lane, raw: the child's bytes precede the observation
+    // record on the host stream (wait orders them), and the record's
+    // own stdout_inline carries only the machine's prints.
+    let out = Command::new(wolf())
+        .arg("conform-run")
+        .arg(&entry)
+        .arg("--checked")
+        .arg("--json")
+        .output()
+        .expect("wolf runs");
+    assert!(out.status.success(), "checked lane runs");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let (child, record) = text
+        .split_once('{')
+        .expect("child bytes then the JSON record");
+    assert_eq!(child, "child-through\n", "checked: write-through bytes");
+    let rec: serde_json::Value =
+        serde_json::from_str(&format!("{{{record}")).expect("record parses");
+    assert_eq!(rec["verdict"].as_str(), Some("exit(0)"));
+    assert_eq!(
+        rec["stdout_inline"].as_str(),
+        Some("before\nafter 0\n"),
+        "checked: the machine's buffered prints exclude fd-level child bytes"
+    );
+}

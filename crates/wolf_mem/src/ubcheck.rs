@@ -3892,7 +3892,9 @@ impl<'t> Machine<'t> {
     /// env/cwd/processes, D30 rows only. `env_set` writes the
     /// machine-local overlay (never the threaded host process's
     /// environment — the struct field documents the asymmetry);
-    /// `os_spawn` is argv-array only with v0 stdio null-wired; every
+    /// `os_spawn` is argv-array only; child stdout/stderr INHERIT
+    /// (write-through, #129 — the native runtime's wiring, mirrored),
+    /// stdin stays null-wired; every
     /// operation on a reaped or foreign child handle is `io`, never a
     /// trap.
     fn os_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
@@ -4031,8 +4033,13 @@ impl<'t> Machine<'t> {
                 let spawned = std::process::Command::new(prog)
                     .args(rest)
                     .stdin(std::process::Stdio::null())
-                    .stdout(std::process::Stdio::null())
-                    .stderr(std::process::Stdio::null())
+                    // Write-through (#129): the child shares the
+                    // HOST process's stdout/stderr — this machine's
+                    // buffered print stream cannot capture fd-level
+                    // writes, a documented asymmetry (capture is the
+                    // named upstream ask).
+                    .stdout(std::process::Stdio::inherit())
+                    .stderr(std::process::Stdio::inherit())
                     .spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
