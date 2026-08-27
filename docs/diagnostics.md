@@ -1755,7 +1755,7 @@ both contributions unconditionally and fold them with masks
 (`wrapping[T]` bit operations are branch-free), or hoist the decision
 onto a `public(…)` parameter if it genuinely is public.
 
-Fixtures: crates/wolf_wir/tests/snapshots/ct_tier__e1601_branch_on_secret.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__branch_secret.snap, crates/wolf_wir/tests/snapshots/ct_tier__e1601_branch_on_secret.snap
 
 ## E1602 — a memory address is derived from a secret
 
@@ -1769,7 +1769,7 @@ Index only with public values (loop counters, lengths named in
 `public(…)`), and replace secret-indexed tables with arithmetic
 selection that touches every candidate unconditionally.
 
-Fixtures: crates/wolf_wir/tests/snapshots/ct_tier__e1602_secret_index.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__index_secret.snap, crates/wolf_wir/tests/snapshots/ct_tier__e1602_secret_index.snap
 
 ## E1603 — an indirect call target depends on a secret
 
@@ -1781,7 +1781,7 @@ selection out to a caller that owns no secrets, or replace the
 dispatch with straight-line arithmetic over all candidates so that
 the same code runs whichever value the secret takes.
 
-Fixtures: crates/wolf_wir/tests/snapshots/ct_tier__e1603_secret_call_target.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__callind_secret.snap, crates/wolf_wir/tests/snapshots/ct_tier__e1603_secret_call_target.snap
 
 ## E1604 — integer division or remainder on a secret operand
 
@@ -1794,7 +1794,7 @@ become masks and shifts, and modular reductions use multiply-based
 shapes (precomputed inverses, Montgomery or Barrett reduction) that
 touch only addition, multiplication, and bit operations.
 
-Fixtures: crates/wolf_wir/tests/snapshots/ct_tier__e1604_div_by_secret.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__divmod_secret.snap, crates/wolf_wir/tests/snapshots/ct_tier__e1604_div_by_secret.snap
 
 ## E1605 — a secret argument crosses the constant-time membrane
 
@@ -1809,7 +1809,7 @@ is verified too, or keep the secret's work inside this function; a
 constant-time callee's secret parameters accept secret arguments
 freely.
 
-Fixtures: crates/wolf_wir/tests/snapshots/ct_tier__e1605_membrane.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__membrane.snap, crates/wolf_wir/tests/snapshots/ct_tier__e1605_membrane.snap
 
 ## E1606 — checked arithmetic on a secret operand
 
@@ -1823,7 +1823,7 @@ fires, because the branch still exists in the emitted code. Use
 compile branch-free, and modular wrap-around is what cryptographic
 kernels mean anyway.
 
-Fixtures: crates/wolf_wir/tests/snapshots/ct_tier__e1606_checked_on_secret.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__checked_secret.snap, crates/wolf_wir/tests/snapshots/ct_tier__e1606_checked_on_secret.snap
 
 ## E1607 — malformed consttime attribute
 
@@ -1836,7 +1836,7 @@ confusing failure at a distance. The refusal happens here instead,
 at the attribute, naming the unmatched entry; check the spelling
 against the parameter list.
 
-Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e1607_malformed_shapes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e1607_public_names_no_parameter.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__ct__public_typo.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e1607_malformed_shapes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e1607_public_names_no_parameter.snap
 
 ## W0301 — file only partially formatted: syntax errors present
 
