@@ -22,6 +22,7 @@ comptime/sandbox_fs.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_io.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_net.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_net_socket.lu: not mem-clean (pre-wir rungs own it)
+comptime/sandbox_os_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/size_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime.lu: lowers
@@ -229,6 +230,9 @@ net/spawn_accept.lu: lowers
 os/args_cwd.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
+os/random_differs.lu: lowers
+os/random_edges.lu: lowers
+os/random_negative_trap.lu: lowers
 os/signal_loopback.lu: lowers
 os/signal_supervisor.lu: lowers
 os/spawn_rows.lu: lowers

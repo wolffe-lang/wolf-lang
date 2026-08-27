@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 114] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 115] = [
     ("__wolf_rt_trap", 1, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
@@ -199,6 +199,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 114] = [
     ("__wolf_rt_os_signal_listen", 1, true),
     ("__wolf_rt_os_signal_wait", 1, true),
     ("__wolf_rt_os_signal_raise", 1, true),
+    // The OS random source (s118, #143): count in, a minted List[int]
+    // header through the out slot; nonzero rc is trap(assert) in
+    // lowering ([os.random.trap]) — the one os shim with no row.
+    ("__wolf_rt_os_random", 2, true),
     ("__wolf_rt_time_now_ms", 0, true),
     ("__wolf_rt_time_unix_ms", 0, true),
     ("__wolf_rt_time_sleep_ms", 1, false),

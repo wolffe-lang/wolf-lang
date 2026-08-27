@@ -134,6 +134,14 @@ pub const PRELUDE: &[&str] = &[
     "os_signal_listen",
     "os_signal_wait",
     "os_signal_raise",
+    // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
+    // n bytes of OS-provided entropy as a `List[int]` — the ONLY
+    // sanctioned source of cryptographic material ([os.random.sole]).
+    // No error row: failure TRAPS ([os.random.trap], never a
+    // fallback). `random_seed` above stays what it is — a typed
+    // PRNG-seed convenience, NOT an entropy API (the issue's own
+    // ruling); nothing lowers it and nothing here changes that.
+    "os_random",
     // the time builtin tier (s40, determinism-first per X12: every
     // entry is Clock-tagged and comptime-refused; the ms-integer
     // spellings are the builtin ABI — Instant/SystemTime/Duration

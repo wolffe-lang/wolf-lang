@@ -6142,6 +6142,18 @@ impl<'a> Checker<'a> {
             // itself is a value, never a trap.
             "os_signal_listen" | "os_signal_raise" => (vec![int_], rowed(self, unit, &["io"])),
             "os_signal_wait" => (vec![int_], rowed(self, int_, &["io"])),
+            // the OS random source (s118, #143): exactly n OS-provided
+            // entropy bytes as a `List[int]` (s115's byte carrier).
+            // Deliberately NO error row — the one os-tier surface
+            // whose failure TRAPS ([os.random.trap]): a row would
+            // invite the `else`-arm fallback to predictable bytes this
+            // surface exists to make impossible. `n < 0` is the
+            // [mem.str.repeat] caller-contract trap; `n == 0` is the
+            // empty list.
+            "os_random" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (vec![int_], list_int)
+            }
             // The s40 time builtin tier (X12): ms integers — monotonic
             // from an arbitrary process-local anchor, wall ms since
             // the Unix epoch, and a blocking sleep.

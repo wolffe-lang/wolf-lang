@@ -1,0 +1,20 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.random
+//!
+//! D33: no randomness at comptime — same program + target must give
+//! bit-identical comptime results on every host. `os_random` (s118,
+//! wolf-lang#143) joins `random_seed` in the Random sandbox category:
+//! OS entropy at compile time is the loudest possible violation of
+//! the determinism gate, and a wider os surface must not become a
+//! wider comptime surface.
+
+comptime fn salt() -> int {
+    let b = os_random(8)
+    b.len
+}
+
+fn main() -> !int {
+    const SALT = salt()
+    if SALT == 8 { 0 } else { 1 }
+}

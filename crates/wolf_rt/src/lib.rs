@@ -22,6 +22,12 @@ pub mod os;
 // every other binary, so the never-required posture costs nothing.
 pub mod prof;
 pub mod quarantine;
+// The OS random source (s118, #143): OS-provided entropy or a TRAP —
+// no userspace generator, no seeding, no fallback. NOT linux-gated:
+// the call has no concurrency-layer dependency, so the macOS/Windows
+// arms compile and unit-test on the host matrix today; compiled-
+// program delivery follows the backend port (`[os.random.platform]`).
+pub mod random;
 // The io reactor (s35) shares the task layer's platform posture:
 // epoll first (this campaign's floor); the kqueue/IOCP port sprints
 // widen against its interface, readiness adapted underneath.

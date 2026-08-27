@@ -1045,9 +1045,27 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // all-three unchanged — the deltas are exactly the two new files, no
 // pre-existing file moved lanes. Totals 196/215/215, union 229,
 // all-three 182. Counts measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 196), ("native", 215), ("release", 215)];
-const UNION_FLOOR: usize = 229;
-const ALL_THREE_FLOOR: usize = 182;
+//
+// s118 ratchet over 362 entries: the OS random source lands (c30's
+// second rung, #143). Three new run-phase witnesses, each THREE-lane —
+// every lane makes the real platform call (the checked machine is a
+// host process; `[os.random.checked]`), so every count moves +3:
+// `os/random_differs.lu` — two 32-byte draws differ (the weakest
+// honest property a witness can pin without becoming a statistical
+// instrument; the draws compare to each other, never to a pinned
+// byte). `os/random_edges.lu` — length 0 is the empty list, 64 KiB
+// comes back complete and in-range (the fill loop owns the short-read
+// boundary). `os/random_negative_trap.lu` — n < 0 is trap(assert) on
+// every lane ([os.random.fill]; the OS-failure trap of
+// [os.random.trap] rides the same nonzero-rc branch). The comptime
+// refusal witness (`comptime/sandbox_os_random.lu`, E0701) lands as
+// `rejected` and by design does not move coverage. No pre-existing
+// file moved lanes — the deltas are exactly the three new files.
+// Totals 199/218/218, union 232, all-three 185. Counts measured by
+// this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 199), ("native", 218), ("release", 218)];
+const UNION_FLOOR: usize = 232;
+const ALL_THREE_FLOOR: usize = 185;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

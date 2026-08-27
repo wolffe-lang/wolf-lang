@@ -171,7 +171,11 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // one Clock category (X12 — two identical builds must not
         // observe different times).
         "clock_ms" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms" => SandboxCategory::Clock,
-        "random_seed" => SandboxCategory::Random,
+        // The OS random source joins `random_seed`'s category (s118,
+        // #143): D33's determinism rule — same program + target must
+        // give bit-identical comptime results on every host, and OS
+        // entropy is the loudest possible violation of that.
+        "random_seed" | "os_random" => SandboxCategory::Random,
         _ => return None,
     })
 }

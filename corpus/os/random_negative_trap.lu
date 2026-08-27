@@ -1,0 +1,21 @@
+//! check: run(exit=trap(assert))
+//! phase: run
+//! conforms: os.random.fill, os.random.trap, conf.trap.map
+//!
+//! The OS random source (s118, wolf-lang#143) — the trap witness.
+//! `os_random(-1)` is a caller contract violation: the deterministic
+//! trap `assert` on every lane ([os.random.fill], the [mem.str.repeat]
+//! posture) — never an empty list, never a row. This file also
+//! witnesses the trap PLUMBING of [os.random.trap]: the surface has no
+//! error row at all, so the runtime's nonzero code has exactly one
+//! spelling — trap(assert) — and the OS-failure path (an entropy
+//! source the platform cannot provide) rides the SAME nonzero-rc
+//! branch witnessed here. That path itself cannot be forced
+//! deterministically from a corpus program (a host whose CSPRNG fails
+//! is not a thing a test can arrange), which is why the caller-contract
+//! trap is the honest executable witness of the shared mechanism.
+
+fn main() -> !int {
+    let b = os_random(-1)
+    b.len
+}
