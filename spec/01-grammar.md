@@ -282,7 +282,10 @@ Known at v1: `#[trusted]`, `#[noalloc]`, `#[inplace]`, `#[nopanic]`,
 `#[bounded_stack]`, `#[repr(c)]`, `#[cfg(target = "…")]`,
 `#[allow(w1301)]` (item-granular warning suppression, §9.3 — the
 arguments are diagnostic codes through the ordinary `attr_arg`
-production; no new grammar).
+production; no new grammar), and `#[consttime]` /
+`#[consttime(public(…))]` (the constant-time contract, spec/09
+`[ct.attr]` — the `public(…)` exemption also rides the ordinary
+`attr_arg` production).
 
 ---
 

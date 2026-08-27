@@ -206,6 +206,7 @@ pub fn link_check(docs: &[(&str, &str)]) -> Vec<String> {
             "conf" => Some("05-conformance.md"),
             "proto" => Some("06-differential-protocol.md"),
             "pkg" => Some("08-package.md"),
+            "ct" => Some("09-constant-time.md"),
             _ => None, // corpus-tag namespaces (str.*, err.*, …) are s06's
         }
     };
@@ -276,6 +277,7 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
                     | ("conf", "05-conformance.md")
                     | ("proto", "06-differential-protocol.md")
                     | ("pkg", "08-package.md")
+                    | ("ct", "09-constant-time.md")
             );
             if owns {
                 out.insert(anchor, file.to_string());
@@ -287,7 +289,7 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
 
 /// Registered namespaces resolve against the anchor index; reserved
 /// forward namespaces are legal-but-unresolvable ([conf.anchor.ns]).
-pub const REGISTERED_NS: [&str; 7] = ["gram", "diag", "mem", "conc", "abi", "conf", "proto"];
+pub const REGISTERED_NS: [&str; 8] = ["gram", "diag", "mem", "conc", "abi", "conf", "proto", "ct"];
 pub const FORWARD_NS: [&str; 15] = [
     "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",
     "mod", "std", "ty",
