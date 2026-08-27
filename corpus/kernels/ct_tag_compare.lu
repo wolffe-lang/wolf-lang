@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: ct.attr.fn, ct.taint.prop, ct.taint.declassify
+//! s112 flagship kernel #1: the tag-compare shape from the std AEAD's
+//! `open` (its `ct:` line calls this THE LOAD-BEARING CLAIM), rebuilt
+//! as scalar limbs — four wrapping[u64] pairs XORed and OR-folded
+//! unconditionally, and exactly ONE comparison, in the NON-consttime
+//! caller, decides the outcome ([ct.taint.declassify]'s sanctioned
+//! boundary). A byte-early-exit compare leaks the matching prefix
+//! length as time — remote-recoverable forgery — so the verifier
+//! proves this body free of secret-dependent branches, and the asm
+//! witness (crates/wolf_driver/tests/ct_asm_witness.rs) pins the
+//! release binary's body free of conditional-branch OPCODES.
+
+#[consttime]
+fn tag_diff(a0: wrapping[u64], a1: wrapping[u64], a2: wrapping[u64], a3: wrapping[u64], b0: wrapping[u64], b1: wrapping[u64], b2: wrapping[u64], b3: wrapping[u64]) -> wrapping[u64] {
+    (a0 ^ b0) | (a1 ^ b1) | (a2 ^ b2) | (a3 ^ b3)
+}
+
+fn main() -> !int {
+    let same = tag_diff(7, 9, 11, 13, 7, 9, 11, 13)
+    let diff = tag_diff(7, 9, 11, 13, 7, 9, 11, 14)
+    if same == 0 {
+        if diff == 0 { 2 } else { 0 }
+    } else {
+        1
+    }
+}

@@ -1,0 +1,25 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: ct.attr.fn, ct.taint.prop
+//! s112 flagship kernel #2: the arithmetic conditional-select (the
+//! cswap half X25519's ladder will need) — mask = 0 - bit in wrapping
+//! arithmetic, then x ^ ((x ^ y) & mask): bit 0 keeps x, bit 1 takes
+//! y, and no branch ever consults the bit. The verifier proves the
+//! body branch-free at WIR; the asm witness pins the release binary's
+//! body free of conditional-branch opcodes (LLVM may select a cmov —
+//! fine; a Jcc is the break the witness exists to catch).
+
+#[consttime]
+fn ct_select(bit: wrapping[u64], x: wrapping[u64], y: wrapping[u64]) -> wrapping[u64] {
+    x ^ ((x ^ y) & (0 - bit))
+}
+
+fn main() -> !int {
+    let keep = ct_select(0, 21, 42)
+    let other = ct_select(1, 21, 42)
+    if keep == 21 {
+        if other == 42 { 0 } else { 2 }
+    } else {
+        1
+    }
+}

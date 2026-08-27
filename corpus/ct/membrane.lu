@@ -1,0 +1,21 @@
+//! check: fail(E1605)
+//! phase: mem
+//! conforms: ct.taint.membrane
+//! s112 the membrane: a secret argument may not cross into a callee
+//! outside the constant-time contract — the callee's timing is
+//! unverified, so fail-closed means the secret does not cross. The
+//! fix the note names: mark the callee #[consttime] (its secret
+//! params then accept secrets freely — the composition witness in
+//! wolf_wir's ct suite).
+
+fn helper(v: wrapping[u64]) -> wrapping[u64] { v }
+
+#[consttime]
+fn leaky(k: wrapping[u64]) -> wrapping[u64] {
+    helper(k)
+}
+
+fn main() -> !int {
+    let r = leaky(3)
+    if r == 3 { 0 } else { 1 }
+}
