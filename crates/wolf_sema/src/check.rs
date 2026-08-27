@@ -4776,6 +4776,32 @@ impl<'a> Checker<'a> {
                 _ => None,
             };
         }
+        // A qualified element (`List[geo.Point]`, #140): an imported
+        // nominal in element position spells as a member expression
+        // (D29 — brackets hold expressions), so read the `mod.Type`
+        // shape as the two-segment type head it is. An imported struct
+        // has the same layout as a local one; the container must not
+        // care where its element type was declared.
+        if node.kind == SyntaxKind::MemberExpr {
+            let m = MemberExpr::cast(node)?;
+            let bt = PathExpr::cast(m.base()?)?.ident()?;
+            let bname = self.text(bt.span);
+            if self.lookup_local(&bname).is_some() {
+                return None;
+            }
+            let mt = m.member()?;
+            let mname = self.text(mt.span);
+            return match self.lo.resolve_type_head(
+                self.module,
+                self.file,
+                &[(bname, bt.span), (mname, mt.span)],
+            ) {
+                crate::sig::TypeHead::Item { module, name } => {
+                    Some(self.lo.named_item_type(module, &name, self.file, node))
+                }
+                _ => None,
+            };
+        }
         if node.kind != SyntaxKind::PathExpr {
             return None;
         }

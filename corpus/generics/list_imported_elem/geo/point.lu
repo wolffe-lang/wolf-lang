@@ -1,0 +1,11 @@
+//! member: true
+//!
+//! The imported element type for `main.lu`'s `List[geo.Point]` —
+//! nothing but a plain exported struct; the point is where it is
+//! declared, not what it holds.
+
+/// A pair of coordinates; carried by value, copied on read-back.
+pub struct Point {
+    pub x: int,
+    pub y: int,
+}
