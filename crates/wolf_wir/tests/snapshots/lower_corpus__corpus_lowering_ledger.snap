@@ -173,7 +173,9 @@ memory/exclusivity.lu: lowers
 memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 memory/list_elem_assign.lu: lowers
+memory/list_mixed_width_struct.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
+memory/list_session_struct.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
