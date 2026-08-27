@@ -1683,6 +1683,96 @@ the next acceptable minimum instead.
 "#);
 
 // ------------------------------------------------------------------------
+// E16xx — the constant-time tier (c28, spec/09): refusals of the WIR
+// taint verifier inside `#[consttime]` functions. Fail-closed by
+// decree: every sink class is its own code, the membrane is one-way,
+// and nothing declassifies. The codes fire before any code is
+// emitted, in every build mode and on every lane.
+// ------------------------------------------------------------------------
+
+code!(E1601, "a branch condition depends on a secret", r#"
+Inside a `#[consttime]` function every parameter not named by
+`public(…)` is secret, and anything computed from a secret is secret
+too. This condition is one of those values, so the two sides of the
+branch would take observably different time — an attacker who can
+time the function reads the secret bit by bit, which is exactly the
+class of leak the attribute promises away. Restructure the kernel so
+secret data flows through arithmetic instead of control flow: compute
+both contributions unconditionally and fold them with masks
+(`wrapping[T]` bit operations are branch-free), or hoist the decision
+onto a `public(…)` parameter if it genuinely is public.
+"#);
+
+code!(E1602, "a memory address is derived from a secret", r#"
+A load or store in this `#[consttime]` function computes its address
+or index from secret data. Which cache lines the access touches
+depends on the secret, and cache-timing measurements recover such
+indices across processes and even across cores — table lookups keyed
+by key bytes are the classic break. A bounds check guarding such an
+access reports here too: the index is the problem, not the guard.
+Index only with public values (loop counters, lengths named in
+`public(…)`), and replace secret-indexed tables with arithmetic
+selection that touches every candidate unconditionally.
+"#);
+
+code!(E1603, "an indirect call target depends on a secret", r#"
+This `#[consttime]` function chooses which function to call using
+secret data. The chosen target is observable — through timing, the
+instruction cache, and the branch predictor — so the choice itself
+leaks the secret that made it. Call targets must be public: hoist the
+selection out to a caller that owns no secrets, or replace the
+dispatch with straight-line arithmetic over all candidates so that
+the same code runs whichever value the secret takes.
+"#);
+
+code!(E1604, "integer division or remainder on a secret operand", r#"
+Hardware divide instructions take a number of cycles that depends on
+their operand values on mainstream processors, so `/` and `%` on
+secret data leak through time no matter which arithmetic profile
+spells them — there is no constant-time spelling of division to
+switch to. Constant-time kernels avoid the operation: powers of two
+become masks and shifts, and modular reductions use multiply-based
+shapes (precomputed inverses, Montgomery or Barrett reduction) that
+touch only addition, multiplication, and bit operations.
+"#);
+
+code!(E1605, "a secret argument crosses the constant-time membrane", r#"
+This call would hand secret data to a callee outside the
+constant-time contract: a function not marked `#[consttime]`, a
+runtime helper, an allocation sized by a secret, an unknown indirect
+callee, or a `public(…)` parameter of a constant-time callee. The
+verifier checks only marked functions, so the secret's timing story
+would end at that boundary — refusing the crossing is what makes the
+attribute's promise composable. Mark the callee `#[consttime]` so it
+is verified too, or keep the secret's work inside this function; a
+constant-time callee's secret parameters accept secret arguments
+freely.
+"#);
+
+code!(E1606, "checked arithmetic on a secret operand", r#"
+The default arithmetic profile guards every operation with an
+overflow trap, and a trap is a branch: whether it fires depends on
+the operand values, so checked arithmetic on secret data is a
+secret-dependent branch by construction. Inside a `#[consttime]`
+function it is refused even where a proof could show the trap never
+fires, because the branch still exists in the emitted code. Use
+`wrapping[T]` for the kernel's arithmetic — wrap-around semantics
+compile branch-free, and modular wrap-around is what cryptographic
+kernels mean anyway.
+"#);
+
+code!(E1607, "malformed consttime attribute", r#"
+The `#[consttime]` attribute's only argument form is `public(…)`
+naming parameters of the function it marks, and every name must
+match a declared parameter. A name that matches nothing would leave
+the parameter it meant to exempt secret, so the function would then
+be refused for branching on data the author believes is public — a
+confusing failure at a distance. The refusal happens here instead,
+at the attribute, naming the unmatched entry; check the spelling
+against the parameter list.
+"#);
+
+// ------------------------------------------------------------------------
 // W03xx — frontend/resolution-adjacent warnings (s67; W0301 is the
 // formatter's grandfathered s11 code). Warnings are leveled via
 // `wolf_diag::lint` — allow/warn/deny per code, per family
