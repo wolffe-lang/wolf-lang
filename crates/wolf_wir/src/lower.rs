@@ -6577,10 +6577,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             self.b.ins(op, &[v], &[dst], Aux::None).one(),
                         )))
                     }
-                    (Some(_), Some(_)) => Err(refuse(
-                        "narrowing numeric casts (range-check semantics, s27)",
-                        e.span,
-                    )),
+                    (Some(_), Some(_)) => {
+                        // Narrowing to a WRAPPING target is defined
+                        // (#131): mask-to-width is the family's whole
+                        // point — bit truncation, the committed dual
+                        // of the widening direction's extension, and
+                        // what lupin implements. The general
+                        // narrowing cast keeps its s27 range-check
+                        // question open.
+                        if matches!(self.table.kind(to), TyKind::Wrapping(_)) {
+                            return Ok(Flow::Val(Some(
+                                self.b.ins(Opcode::Itrunc, &[v], &[dst], Aux::None).one(),
+                            )));
+                        }
+                        Err(refuse(
+                            "narrowing numeric casts (range-check semantics, s27)",
+                            e.span,
+                        ))
+                    }
                     _ => Err(refuse("int↔float casts (no conversion op yet)", e.span)),
                 }
             }

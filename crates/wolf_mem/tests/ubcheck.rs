@@ -776,3 +776,22 @@ fn wrapping_u64_full_range_literal() {
         0,
     );
 }
+
+/// #131's checked twin: a cast to a WRAPPING target masks to the
+/// width (never traps) — both directions witnessed, plus the sign
+/// bit-pattern round-trip through the unsigned zero-extension.
+#[test]
+fn wrapping_narrow_cast_masks_to_width() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let a: int = 300\n    \
+             let big: int = 0x1_0000_002c\n    \
+             let neg: int = 0 - 1\n    \
+             let in_range = (a as wrapping[u32]) as int\n    \
+             let masked = (big as wrapping[u32]) as int\n    \
+             let bits = (neg as wrapping[u32]) as int\n    \
+             if in_range == 300 && masked == 44 && bits == 4294967295 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}

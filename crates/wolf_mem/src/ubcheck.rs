@@ -4581,6 +4581,14 @@ impl<'t> Machine<'t> {
                 // Numeric/adapter/identity casts are value-preserving
                 // here; out-of-range narrowing traps (X3 posture).
                 if let Value::Int(n) = v {
+                    // A WRAPPING-typed cast target wraps at its width
+                    // (#131's checked twin): mask-to-width, the
+                    // native rung's `itrunc` — never a trap. The
+                    // masked storage convention keeps sub-64-bit
+                    // values non-negative, as `arith_binop_at` does.
+                    if let Some((mask, ..)) = self.wrapping_width(e.span) {
+                        return Ok(Flow::Val(Value::Int(n & mask)));
+                    }
                     if let Some((lo, hi)) = self.prim_range(e.span)
                         && (n < lo || n > hi)
                     {

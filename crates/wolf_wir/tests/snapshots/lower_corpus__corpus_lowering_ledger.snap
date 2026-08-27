@@ -321,4 +321,5 @@ typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
 typecheck/variant_value/main.lu: lowers
+typecheck/wrap_narrow_cast.lu: lowers
 wordcount.lu: not mem-clean (pre-wir rungs own it)
