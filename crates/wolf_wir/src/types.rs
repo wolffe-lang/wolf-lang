@@ -206,6 +206,33 @@ impl TypeInterner {
     }
 }
 
+/// The f64 boundary pair for a float→int trapping conversion (D54.4,
+/// `[type.numlit.cast.trunc]`): the caller traps when
+/// `f <= lo || f >= hi || f is NaN`, otherwise truncates toward zero.
+/// The bounds sit just OUTSIDE the target's representable range, so an
+/// in-range input never traps and an out-of-range one always does.
+/// `HI+1` is a power of two (exact in f64); `LO-1` is exact for widths
+/// below 64 and taken as the next f64 below `LO` for i64 (whose `LO-1`
+/// is not representable, and nothing representable lies between). Lives
+/// here so both codegen tiers share ONE boundary and their trap edges
+/// agree byte-for-byte. `bits` is the target integer width; `signed`
+/// its signedness.
+pub fn ftoi_bounds(signed: bool, bits: u32) -> (f64, f64) {
+    let hi = if signed {
+        2f64.powi(bits as i32 - 1) // HI = 2^(bits-1) - 1  →  HI+1 = 2^(bits-1)
+    } else {
+        2f64.powi(bits as i32) // HI = 2^bits - 1  →  HI+1 = 2^bits
+    };
+    let lo = if !signed {
+        -1.0
+    } else if bits < 64 {
+        -(2f64.powi(bits as i32 - 1)) - 1.0 // LO-1, exactly representable
+    } else {
+        -(2f64.powi(63)) - 2048.0 // i64: the next f64 below -2^63
+    };
+    (lo, hi)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

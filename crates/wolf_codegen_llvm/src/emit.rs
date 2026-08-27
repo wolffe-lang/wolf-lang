@@ -1963,6 +1963,68 @@ impl<'a> Fx<'a> {
                 self.line(format!("  {t} = {mn} {from} {a} to {to}"));
                 self.vals.insert(results[0], Repr::Scalar(t));
             }
+            Opcode::Sitofp | Opcode::Uitofp => {
+                // int → float (D54.4): the free widening direction.
+                let from = self.sty(args[0])?;
+                let to = self.sty(results[0])?;
+                let a = self.op(args[0])?;
+                let mn = if op == Opcode::Sitofp {
+                    "sitofp"
+                } else {
+                    "uitofp"
+                };
+                let t = self.tmp();
+                self.line(format!("  {t} = {mn} {from} {a} to {to}"));
+                self.vals.insert(results[0], Repr::Scalar(t));
+            }
+            Opcode::FtosiChk | Opcode::FtouiChk => {
+                // float → int (D54.4): truncate toward zero, TRAP
+                // (overflow) on out-of-range or NaN. Value is the
+                // SATURATING intrinsic (no `fptosi` UB); the trap is an
+                // explicit range+NaN test into `__wolf_rt_trap`, the
+                // checked-arith machinery. The check runs in double (an
+                // f32 source `fpext`s losslessly) against the shared
+                // exact boundaries.
+                let signed = op == Opcode::FtosiChk;
+                let fty = self.sty(args[0])?; // "float" | "double"
+                let ity = self.sty(results[0])?; // "iN"
+                let a = self.op(args[0])?;
+                let check = if fty == "float" {
+                    let e = self.tmp();
+                    self.line(format!("  {e} = fpext float {a} to double"));
+                    e
+                } else {
+                    a.clone()
+                };
+                let bits: u32 = ity
+                    .strip_prefix('i')
+                    .and_then(|b| b.parse().ok())
+                    .ok_or_else(|| ice("float→int to non-integer"))?;
+                let (lo, hi) = wolf_wir::types::ftoi_bounds(signed, bits);
+                let lo_c = format!("0x{:016X}", lo.to_bits());
+                let hi_c = format!("0x{:016X}", hi.to_bits());
+                let oob_lo = self.tmp();
+                self.line(format!("  {oob_lo} = fcmp ole double {check}, {lo_c}"));
+                let oob_hi = self.tmp();
+                self.line(format!("  {oob_hi} = fcmp oge double {check}, {hi_c}"));
+                let is_nan = self.tmp();
+                self.line(format!("  {is_nan} = fcmp uno double {check}, 0.0"));
+                let b0 = self.tmp();
+                self.line(format!("  {b0} = or i1 {oob_lo}, {oob_hi}"));
+                let bad = self.tmp();
+                self.line(format!("  {bad} = or i1 {b0}, {is_nan}"));
+                self.trap_if(&bad, TrapKind::Overflow)?;
+                let suffix = if fty == "float" { "f32" } else { "f64" };
+                let mn = if signed { "fptosi" } else { "fptoui" };
+                self.intrinsic(&format!(
+                    "declare {ity} @llvm.{mn}.sat.{ity}.{suffix}({fty})"
+                ));
+                let t = self.tmp();
+                self.line(format!(
+                    "  {t} = call {ity} @llvm.{mn}.sat.{ity}.{suffix}({fty} {a})"
+                ));
+                self.vals.insert(results[0], Repr::Scalar(t));
+            }
 
             // ---- memory ----
             Opcode::PtrOff => {

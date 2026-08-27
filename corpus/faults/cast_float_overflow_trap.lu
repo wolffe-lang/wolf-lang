@@ -1,0 +1,14 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.trunc, arith.checked
+//!
+//! float→int TRAPS when the truncated value does not fit (#138, D54.4):
+//! `1e300 as int` overflows `i32`, and — like the `255+1`-on-a-`u8`
+//! event — it joins the checked-arith trap family (`trap(overflow)`),
+//! never C's UB nor a silent saturating clamp.
+
+fn main() -> !int {
+    let x: f64 = 1e300
+    let n = x as int
+    n
+}

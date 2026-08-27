@@ -223,6 +223,10 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
         | Opcode::Sext
         | Opcode::Zext
         | Opcode::Itrunc
+        | Opcode::Sitofp
+        | Opcode::Uitofp
+        | Opcode::FtosiChk
+        | Opcode::FtouiChk
         | Opcode::Load => {
             if let Some(&r) = results.first() {
                 write!(s, ".{}", m.types.display(f.value_ty(r))).unwrap();

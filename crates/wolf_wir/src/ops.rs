@@ -318,6 +318,21 @@ pub enum Opcode {
     Zext,
     /// `%r = itrunc.T %a` — truncate integer to the narrower type T.
     Itrunc,
+    /// `%r = sitofp.T %a` — signed integer to float T (D54.4, the free
+    /// widening direction: `n as f64`; round-to-nearest, no trap).
+    Sitofp,
+    /// `%r = uitofp.T %a` — unsigned integer to float T (no trap).
+    Uitofp,
+    /// `%r = ftosi.chk.T %a` — float to signed integer T, truncating
+    /// toward zero (D54.4). TRAPS (`overflow`) if the truncated value
+    /// does not fit T, or if the input is NaN — the `255+1`-on-a-`u8`
+    /// event, joining the checked-arith trap family, never C's UB nor a
+    /// silent saturating clamp.
+    FtosiChk,
+    /// `%r = ftoui.chk.T %a` — float to UNSIGNED integer T, truncating
+    /// toward zero; TRAPS (`overflow`) on out-of-range or NaN, as
+    /// `ftosi.chk`.
+    FtouiChk,
 
     // ---- memory --------------------------------------------------------
     /// `%r = ptr.off %p, %i, S` — pointer p + i*S bytes (S a positive imm).
@@ -571,6 +586,10 @@ impl Opcode {
             Opcode::Sext => "sext",
             Opcode::Zext => "zext",
             Opcode::Itrunc => "itrunc",
+            Opcode::Sitofp => "sitofp",
+            Opcode::Uitofp => "uitofp",
+            Opcode::FtosiChk => "ftosi.chk",
+            Opcode::FtouiChk => "ftoui.chk",
             Opcode::PtrOff => "ptr.off",
             Opcode::Load => "load",
             Opcode::Store => "store",

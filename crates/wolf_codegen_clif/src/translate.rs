@@ -1158,6 +1158,65 @@ impl<'a, 'b> Tx<'a, 'b> {
                 };
                 self.vals.insert(results[0], Repr::Scalar(r));
             }
+            Opcode::Sitofp | Opcode::Uitofp => {
+                // int → float (D54.4): the free widening direction, no
+                // trap. Source signedness (encoded in the opcode) picks
+                // signed vs unsigned conversion.
+                let a = self.scalar(args[0])?;
+                let ty = scalar_clif_ty(self.m, self.f.value_ty(results[0]))
+                    .ok_or_else(|| ice("int→float to non-scalar"))?;
+                let r = if op == Opcode::Sitofp {
+                    self.b.ins().fcvt_from_sint(ty, a)
+                } else {
+                    self.b.ins().fcvt_from_uint(ty, a)
+                };
+                self.vals.insert(results[0], Repr::Scalar(r));
+            }
+            Opcode::FtosiChk | Opcode::FtouiChk => {
+                // float → int (D54.4): truncate toward zero, TRAP
+                // (overflow) on out-of-range or NaN. The value is the
+                // SATURATING conversion (defined for every input, so no
+                // hardware trap); the trap is an explicit range+NaN test
+                // branching to `__wolf_rt_trap`, exactly the
+                // checked-arith machinery. The range check runs in f64
+                // (an f32 source promotes losslessly) so the boundary
+                // constants are exact.
+                let a = self.scalar(args[0])?;
+                let signed = op == Opcode::FtosiChk;
+                let int_ty = scalar_clif_ty(self.m, self.f.value_ty(results[0]))
+                    .ok_or_else(|| ice("float→int to non-scalar"))?;
+                let f64ty = cranelift_codegen::ir::types::F64;
+                let check = if self.f.value_ty(args[0]) == wolf_wir::types::F32 {
+                    self.b.ins().fpromote(f64ty, a)
+                } else {
+                    a
+                };
+                let (lo, hi) = wolf_wir::types::ftoi_bounds(signed, int_ty.bits());
+                let lo_c =
+                    self.b
+                        .ins()
+                        .f64const(cranelift_codegen::ir::immediates::Ieee64::with_bits(
+                            lo.to_bits(),
+                        ));
+                let hi_c =
+                    self.b
+                        .ins()
+                        .f64const(cranelift_codegen::ir::immediates::Ieee64::with_bits(
+                            hi.to_bits(),
+                        ));
+                let oob_lo = self.b.ins().fcmp(FloatCC::LessThanOrEqual, check, lo_c);
+                let oob_hi = self.b.ins().fcmp(FloatCC::GreaterThanOrEqual, check, hi_c);
+                let is_nan = self.b.ins().fcmp(FloatCC::Unordered, check, check);
+                let bad0 = self.b.ins().bor(oob_lo, oob_hi);
+                let bad = self.b.ins().bor(bad0, is_nan);
+                self.trap_if(bad, TrapKind::Overflow)?;
+                let r = if signed {
+                    self.b.ins().fcvt_to_sint_sat(int_ty, a)
+                } else {
+                    self.b.ins().fcvt_to_uint_sat(int_ty, a)
+                };
+                self.vals.insert(results[0], Repr::Scalar(r));
+            }
 
             // ---- memory ----
             Opcode::PtrOff => {

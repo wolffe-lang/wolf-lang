@@ -1755,6 +1755,10 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::Sext
                 | Opcode::Zext
                 | Opcode::Itrunc
+                | Opcode::Sitofp
+                | Opcode::Uitofp
+                | Opcode::FtosiChk
+                | Opcode::FtouiChk
                 | Opcode::PtrOff
                 | Opcode::Load
                 | Opcode::AggMake

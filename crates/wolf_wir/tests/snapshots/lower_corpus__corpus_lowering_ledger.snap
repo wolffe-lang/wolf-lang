@@ -57,6 +57,9 @@ errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
 faults/assert_msg_holds.lu: lowers
 faults/bounds_slice.lu: lowers
+faults/cast_float_nan_trap.lu: lowers
+faults/cast_float_overflow_trap.lu: lowers
+faults/cast_float_to_int_truncate.lu: lowers
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/overflow_add.lu: lowers
@@ -306,6 +309,7 @@ typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
 typecheck/bool_cmp.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
+typecheck/cast_int_to_float.lu: lowers
 typecheck/cast_set.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/field_typo.lu: not mem-clean (pre-wir rungs own it)
@@ -327,6 +331,15 @@ typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
 typecheck/nested_fn_capture.lu: not mem-clean (pre-wir rungs own it)
 typecheck/nested_fn_value.lu: lowers
+typecheck/numlit_ambiguity_named.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_annotation_float.lu: lowers
+typecheck/numlit_arith_through.lu: lowers
+typecheck/numlit_c2f.lu: lowers
+typecheck/numlit_compare_adopts.lu: lowers
+typecheck/numlit_div_float.lu: lowers
+typecheck/numlit_div_int.lu: lowers
+typecheck/numlit_float_to_int_refused.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_value_refused.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
