@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 785..4566 name=alpha body=Block
+FnDecl 4568..8347 name=beta body=Block
+FnDecl 8349..8400 name=apply body=Block
+FnDecl 8402..8597 name=main body=Block
