@@ -36,6 +36,8 @@ pub(crate) fn compact(f: &Function) -> CompactOut {
     let mut nf = Function::new(f.name.clone(), f.sig);
     nf.export = f.export;
     nf.src_file = f.src_file;
+    // c28: the constant-time contract survives every pass ([ct.attr.carry]).
+    nf.consttime = f.consttime.clone();
     // Callee table: copied wholesale so `ExtFunc` ids stay stable and
     // `Aux::Callee` payloads copy verbatim.
     for ef in f.ext_funcs.values() {

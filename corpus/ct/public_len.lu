@@ -1,0 +1,23 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: ct.attr.public
+//! s112: the public-param exemption working — `public(n)` licenses
+//! the loop bound while the key rides arithmetic only. Lengths and
+//! domain separators are exactly what the exemption is for; the
+//! secret never decides an edge.
+
+#[consttime(public(n))]
+fn fold(k: wrapping[u64], n: int) -> wrapping[u64] {
+    var acc: wrapping[u64] = 0
+    var i = 0
+    while i < n {
+        acc = acc | k >> i as wrapping[u64] & 1
+        i = i + 1
+    }
+    acc
+}
+
+fn main() -> !int {
+    let r = fold(4, 3)
+    if r == 1 { 0 } else { 1 }
+}

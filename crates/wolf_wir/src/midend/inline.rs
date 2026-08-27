@@ -184,6 +184,13 @@ pub(crate) fn run(
         }
     }
     let caller = &m.funcs[fid];
+    // c28 [ct.attr.barrier]: a consttime function is an inlining
+    // boundary in BOTH directions — its body is the unit the verified
+    // contract attaches to, and the membrane rule needs its call
+    // sites to stay visible. Nothing is inlined into it.
+    if caller.consttime.is_some() {
+        return Ok(false);
+    }
     let cfg = analysis::cfg(caller);
     let doms = analysis::dominators(&cfg);
     let loops = analysis::loops(caller, &cfg, &doms);
@@ -208,6 +215,9 @@ pub(crate) fn run(
             }
             let hot = scope.hotness(name);
             let callee = &m.funcs[cid];
+            if callee.consttime.is_some() {
+                continue; // c28 [ct.attr.barrier]: never dissolved into a caller
+            }
             if decide(
                 m,
                 callee,

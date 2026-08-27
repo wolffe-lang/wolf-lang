@@ -21,10 +21,11 @@ wolf_sema.workspace = true
 # instead of a copy. One authority, two readers; the alternative was
 # two whitelists that could drift apart into unsoundness.
 wolf_mem.workspace = true
+# c28: the constant-time verifier (`ct`) refuses with REAL user-facing
+# diagnostics (E1601-E1606) rather than ICE-class dumps — the tier's
+# whole point is a message a crypto author acts on. Promoted from a
+# dev-dependency; the direction is in deps-check's allowed list.
+wolf_diag.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
-# The golden-corpus and determinism gates lower only mem-clean files,
-# so the tests and the bench example (not the library) run the memory
-# checker and filter diagnostics by severity.
-wolf_diag.workspace = true

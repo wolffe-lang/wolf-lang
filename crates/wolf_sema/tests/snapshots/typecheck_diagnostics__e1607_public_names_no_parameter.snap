@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1607]: `public(nope)` names no parameter of this function
+ --> mem:///main.lu:1:20
+  |
+1 | #[consttime(public(nope))]
+  |                    ^^^^
+  |
+  = note: a parameter `public(…)` fails to name stays secret — refusing the attribute here beats
+    refusing a branch the author believes is licensed

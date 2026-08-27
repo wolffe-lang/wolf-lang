@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 782..1056 name=tag_diff attrs=1 body=Block
+FnDecl 1058..1269 name=main body=Block

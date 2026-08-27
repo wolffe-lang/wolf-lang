@@ -44,6 +44,14 @@ conc/spawn_fanout_loop.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
 conc/when_nested.lu: not mem-clean (pre-wir rungs own it)
+ct/branch_secret.lu: lowers
+ct/callind_secret.lu: lowers
+ct/checked_secret.lu: lowers
+ct/divmod_secret.lu: lowers
+ct/index_secret.lu: lowers
+ct/membrane.lu: lowers
+ct/public_len.lu: lowers
+ct/public_typo.lu: not mem-clean (pre-wir rungs own it)
 entry_no_return.lu: lowers
 errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
@@ -98,6 +106,8 @@ io/eprint.lu: lowers
 json/query.lu: lowers
 json/rows.lu: lowers
 kernels/churn_b3.lu: lowers
+kernels/ct_cswap.lu: lowers
+kernels/ct_tag_compare.lu: lowers
 kernels/guarded_stencil.lu: lowers
 kernels/hot_counter.lu: lowers
 kernels/hot_header.lu: lowers

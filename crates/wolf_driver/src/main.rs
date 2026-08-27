@@ -952,6 +952,13 @@ fn compile_native(
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
         return Ok(());
     }
+    // c28 [ct.taint.verify], first run: the constructed WIR. Refusals
+    // here are the deterministic, well-spanned ones a crypto author
+    // sees; the second run after the mid-end is the fail-closed
+    // licensing gate. (The `--emit=wir` dump above stays available —
+    // inspecting a refused program's IR is a debugging aid, emission
+    // of code is what the tier gates.)
+    ct_build_gate(sources, &module, &render)?;
     // The Tier-R mid-end (s42) and the whole-program phase (s43).
     //
     // `--release` compiles the module graph as ONE program (D4: LTO is
@@ -1070,6 +1077,16 @@ fn compile_native(
         && std::env::var("WOLF_MIDEND_DUMP").as_deref() == Ok("1")
     {
         eprintln!("{}", wolf_wir::print_module(&module));
+    }
+    // c28 [ct.taint.verify], second run: the FINAL pre-emission form.
+    // Everything the mid-end did to this module is behind us, so an
+    // optimizer transform that introduced a secret-dependent branch,
+    // index, or call is refused here fail-closed — the licensing
+    // question answered by verification, not per-pass audit. On a
+    // clean pipeline this run agrees with the first; a
+    // second-run-only refusal is a compiler finding.
+    if opts.release || std::env::var("WOLF_MIDEND").as_deref() == Ok("1") {
+        ct_build_gate(sources, &module, &render)?;
     }
     // Backend: the driver drives the TRAIT; ClifBackend is the s28
     // implementation behind it (capabilities, never identity).
@@ -2559,6 +2576,74 @@ fn checked_run(
     }
 }
 
+/// c28 — the build pipeline's constant-time gate ([ct.taint.verify]):
+/// run the taint verifier over the module and stop the build with
+/// rendered E16xx diagnostics on any refusal. Called twice — on the
+/// constructed WIR and again after the mid-end — and free for every
+/// module with no `#[consttime]` fn (the verifier walks nothing).
+fn ct_build_gate(
+    sources: &Sources,
+    module: &wolf_wir::Module,
+    render: &impl Fn(&Sources, &[Diagnostic]),
+) -> Result<(), BuildStop> {
+    let violations = wolf_wir::ct_check_module(module);
+    if violations.is_empty() {
+        return Ok(());
+    }
+    let fallback = wolf_span::Span::new(wolf_span::FileId::from_index(0), 0, 0);
+    let mut ds: Vec<Diagnostic> = violations.iter().map(|v| v.diagnostic(fallback)).collect();
+    wolf_diag::sort_diagnostics(&mut ds);
+    render(sources, &ds);
+    Err(BuildStop::Errors)
+}
+
+/// c28 — the shared constant-time gate ([ct.taint.verify]): when any
+/// fn in the package carries `#[consttime]`, lower and run the taint
+/// verifier BEFORE the run-rung lanes fork, so checked, native,
+/// release and the default ladder all refuse a violating program with
+/// the same `fail(E16xx)` at the same rung. A package the lowerer
+/// refuses keeps the honest `mem`/`unsupported` verdict — an
+/// execution lane must not run a consttime program the verifier
+/// could not see ([ct.taint.verify]'s fail-closed clause). Packages
+/// with no marked fn pay nothing: the sig scan is the whole cost.
+fn ct_gate(
+    pkg: &wolf_sema::Package,
+    tc: &wolf_sema::Typecheck,
+    mut all: Vec<Diagnostic>,
+) -> Result<Vec<Diagnostic>, (&'static str, String, Vec<Diagnostic>)> {
+    let mut ct_spans = tc
+        .sigs
+        .modules
+        .iter()
+        .flat_map(|m| m.values())
+        .filter_map(|s| match s {
+            wolf_sema::ItemSig::Fn(f) => f.consttime.as_ref().map(|c| c.span),
+            _ => None,
+        });
+    let Some(fallback) = ct_spans.next() else {
+        return Ok(all);
+    };
+    let build = wolf_wir::lower_package(pkg, tc);
+    if !build.not_yet.is_empty() {
+        report_refusal(build.not_yet.first());
+        return Err(("mem", "unsupported".to_string(), all));
+    }
+    let violations = wolf_wir::ct_check_module(&build.module);
+    if violations.is_empty() {
+        return Ok(all);
+    }
+    for v in &violations {
+        all.push(v.diagnostic(fallback));
+    }
+    wolf_diag::sort_diagnostics(&mut all);
+    let code = all
+        .iter()
+        .find(|d| d.severity == wolf_diag::Severity::Error)
+        .map(|d| d.code)
+        .expect("a ct refusal is an error");
+    Err(("wir", format!("fail({code})"), all))
+}
+
 /// The s25 `wir` rung: Braun-construct WIR from the typed HIR of a
 /// mem-clean package. Any honest refusal keeps the ladder at
 /// `mem`/`unsupported` (the conservatism ledger). A lowered module
@@ -2883,50 +2968,70 @@ fn conform_run(args: &[String]) {
                                             ("mem", format!("fail({code})"), all)
                                         } else if phase.as_deref() == Some("mem") {
                                             ("mem", "pass".to_string(), all)
-                                        } else if checked {
-                                            // The s23 miri-lite: a
-                                            // mem-clean file executes
-                                            // under the UB machine;
-                                            // refusals stay in the
-                                            // conservatism ledger.
-                                            // (It interprets the typed
-                                            // HIR directly; the wir
-                                            // rung below serves the
-                                            // default ladder.)
-                                            checked_run(
-                                                &res.package,
-                                                &tc,
-                                                &mem,
-                                                all,
-                                                &mut run_stdout,
-                                                &mut x_ext,
-                                            )
-                                        } else if native || release {
-                                            // The s28 native rung:
-                                            // machine code, executed
-                                            // (s41: --release selects
-                                            // the LLVM tier).
-                                            native_run(
-                                                Path::new(&file),
-                                                std_root.as_deref(),
-                                                release,
-                                                all,
-                                                &mut run_stdout,
-                                                seed,
-                                            )
                                         } else {
-                                            // The wir rung (s25):
-                                            // lower what typechecked
-                                            // and mem-passed; any
-                                            // refusal keeps the
-                                            // ladder at mem.
-                                            wir_rung(
-                                                &res.package,
-                                                &tc,
-                                                phase.as_deref(),
-                                                zstats,
-                                                all,
-                                            )
+                                            // c28 [ct.taint.verify]:
+                                            // the constant-time gate
+                                            // runs BEFORE the lane
+                                            // fork so every lane
+                                            // refuses a violating
+                                            // program identically —
+                                            // the checked executor
+                                            // never sees WIR, and a
+                                            // lane that cannot verify
+                                            // must not run an
+                                            // unverified secret path.
+                                            // Free when no fn carries
+                                            // the attribute.
+                                            match ct_gate(&res.package, &tc, all) {
+                                                Err(stop) => stop,
+                                                Ok(all) => {
+                                                    if checked {
+                                                        // The s23 miri-lite: a
+                                                        // mem-clean file executes
+                                                        // under the UB machine;
+                                                        // refusals stay in the
+                                                        // conservatism ledger.
+                                                        // (It interprets the typed
+                                                        // HIR directly; the wir
+                                                        // rung below serves the
+                                                        // default ladder.)
+                                                        checked_run(
+                                                            &res.package,
+                                                            &tc,
+                                                            &mem,
+                                                            all,
+                                                            &mut run_stdout,
+                                                            &mut x_ext,
+                                                        )
+                                                    } else if native || release {
+                                                        // The s28 native rung:
+                                                        // machine code, executed
+                                                        // (s41: --release selects
+                                                        // the LLVM tier).
+                                                        native_run(
+                                                            Path::new(&file),
+                                                            std_root.as_deref(),
+                                                            release,
+                                                            all,
+                                                            &mut run_stdout,
+                                                            seed,
+                                                        )
+                                                    } else {
+                                                        // The wir rung (s25):
+                                                        // lower what typechecked
+                                                        // and mem-passed; any
+                                                        // refusal keeps the
+                                                        // ladder at mem.
+                                                        wir_rung(
+                                                            &res.package,
+                                                            &tc,
+                                                            phase.as_deref(),
+                                                            zstats,
+                                                            all,
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }

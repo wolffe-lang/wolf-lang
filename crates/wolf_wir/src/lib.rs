@@ -83,6 +83,7 @@
 //! of s26 — recorded in the campaign closeout.
 
 pub mod build;
+pub mod ct;
 pub mod entity;
 pub mod facts;
 pub mod hash;
@@ -98,11 +99,12 @@ pub mod types;
 pub mod verify;
 
 pub use build::{Const, FuncBuilder, InsOut, Stats, Var};
+pub use ct::{CtSink, CtViolation, check_module as ct_check_module};
 pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
 pub use hash::sha256_hex;
 pub use ir::{
-    Aux, Block, BlockCall, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst, InstData, Mode,
-    Module, Param, SigData, SigId, Value, ValueData, ValueDef,
+    Aux, Block, BlockCall, CtContract, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst,
+    InstData, Mode, Module, Param, SigData, SigId, Value, ValueData, ValueDef,
 };
 pub use lower::{Build, SurveyReason, lower_package, lower_package_survey};
 pub use ops::{FloatCc, IntCc, Opcode};

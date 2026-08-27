@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 434..484 name=helper body=Block
+FnDecl 486..560 name=leaky attrs=1 body=Block
+FnDecl 562..635 name=main body=Block

@@ -21,6 +21,15 @@ impl FileId {
     pub fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// Rebuild a [`FileId`] from [`FileId::index`]'s value. The one
+    /// legitimate consumer is the lossless span chain THROUGH an IR
+    /// that stores the index as a plain integer (WIR's per-function
+    /// `src_file` debug aux) and needs the id back to mint diagnostic
+    /// spans against the same [`SourceMap`]. Never invent indices.
+    pub fn from_index(index: usize) -> FileId {
+        FileId(u32::try_from(index).expect("file index fits u32"))
+    }
 }
 
 /// A byte-exact half-open range `[lo, hi)` in one source file.

@@ -1,0 +1,16 @@
+//! check: fail(E1607)
+//! phase: resolve
+//! conforms: ct.attr.public
+//! s112: a `public(…)` entry naming no parameter refuses AT THE
+//! ATTRIBUTE — silently keeping the misspelled parameter secret would
+//! surface later as a refusal on a branch the author believes is
+//! licensed, a confusing failure at a distance.
+
+#[consttime(public(nope))]
+fn f(k: int) -> int {
+    0
+}
+
+fn main() -> !int {
+    f(1)
+}

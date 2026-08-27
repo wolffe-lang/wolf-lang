@@ -955,9 +955,22 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // VERDICT (exit 1 -> exit 0), not its execution reach. Totals
 // 175/190/190, union 204, all-three 161. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 175), ("native", 190), ("release", 190)];
-const UNION_FLOOR: usize = 204;
-const ALL_THREE_FLOOR: usize = 161;
+// s112 ratchet over 333 entries: the constant-time tier lands (c28).
+// Three new run-phase witnesses, each a #[consttime] fn executing on
+// ALL three lanes (the verifier gates the shared ladder pre-fork and
+// costs nothing off-attribute), so every number moves by exactly
+// three: `kernels/ct_tag_compare` (the accumulate-then-single-check
+// tag shape, scalar limbs), `kernels/ct_cswap` (the arithmetic
+// conditional-select), and `ct/public_len` (the public(…) exemption
+// driving a loop bound). The seven ct refusal witnesses land as
+// static rejections (E1601-E1607, `rejected` class) and by design do
+// not move coverage. No pre-existing file moved lanes — the
+// off-by-default proof at the coverage level. Totals 178/193/193,
+// union 207, all-three 164. Counts measured by this gate, not
+// predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 178), ("native", 193), ("release", 193)];
+const UNION_FLOOR: usize = 207;
+const ALL_THREE_FLOOR: usize = 164;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -2147,6 +2160,7 @@ fn spec_extract(check: bool) -> ExitCode {
         "05-conformance.md",
         "06-differential-protocol.md",
         "08-package.md",
+        "09-constant-time.md",
     ];
     let bodies: Vec<(String, String)> = names
         .iter()

@@ -4933,6 +4933,7 @@ impl<'a> Checker<'a> {
             generics: Vec::new(),
             comptime: false,
             trusted: None,
+            consttime: None,
         };
         self.dispatch_method(
             mname,
@@ -5058,6 +5059,7 @@ impl<'a> Checker<'a> {
             generics: Vec::new(),
             comptime: false,
             trusted: None,
+            consttime: None,
         };
         // E1101 rides on `spawn`'s argument: while the task closure
         // checks, assignments to bindings below this depth are
@@ -5223,6 +5225,7 @@ impl<'a> Checker<'a> {
             generics: Vec::new(),
             comptime: false,
             trusted: None,
+            consttime: None,
         };
         self.dispatch_method(
             mname,
@@ -5298,6 +5301,7 @@ impl<'a> Checker<'a> {
             generics: Vec::new(),
             comptime: false,
             trusted: None,
+            consttime: None,
         };
         self.dispatch_method(
             mname,
