@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="upgrade\n")
+//! phase: run
+//! conforms: os.signal.listen, os.signal.wait, conc.task.spawn, conc.task.scope
+//!
+//! Signal RECEPTION (s114, wolf-lang#126) — the wws shape. A supervisor
+//! registers interest in the UPGRADE signal (=8, SIGUSR2, the binary-
+//! swap path) and PARKS on `os_signal_wait` while a sibling task
+//! self-delivers the signal. Delivery reaches the parked waiter through
+//! the runtime's self-pipe drain and the pool's blocking compensation
+//! (c19) — no wolf code ever runs in the handler. This is exactly how
+//! wolf-wws `select`s a signal against its other work once the surface
+//! composes; here the supervisor simply waits.
+//!
+//! Lanes: native and release RUN this (the real SIGUSR2 through the
+//! task layer). The CHECKED lane refuses it BY NAME — `spawn` is
+//! structured concurrency, C1-deferred in checked execution — so it is
+//! an honest `unsupported`, never a fake pass. The deterministic
+//! sequential twin (`signal_loopback.lu`) carries the checked lane.
+
+fn main() -> !int {
+    os_signal_listen(8)?
+    var got = 0
+    scope s {
+        s.spawn(fn() { os_signal_raise(8) })
+        got = os_signal_wait(8)?
+    }
+    if got == 8 {
+        print("upgrade")
+        0
+    } else {
+        print("no")
+        1
+    }
+}
