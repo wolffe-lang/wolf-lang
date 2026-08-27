@@ -70,6 +70,8 @@ faults/overflow_field_read.lu: lowers
 faults/overflow_interp_operand.lu: lowers
 faults/repeat_negative.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
+faults/wrap_high_as_i32.lu: lowers
+faults/wrap_top_bit_as_int.lu: lowers
 ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
@@ -214,6 +216,7 @@ memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer wri
 memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
+net/byte_roundtrip.lu: lowers
 net/echo_roundtrip.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
@@ -249,6 +252,7 @@ rows/handler_diverge_trap.lu: lowers
 rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: lowers
 rows/inferred_private.lu: lowers
+rows/iter_diverging_else_bound.lu: lowers
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
@@ -348,5 +352,6 @@ typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
 typecheck/variant_value/main.lu: lowers
+typecheck/wrap_as_int_in_range.lu: lowers
 typecheck/wrap_narrow_cast.lu: lowers
 wordcount.lu: not mem-clean (pre-wir rungs own it)
