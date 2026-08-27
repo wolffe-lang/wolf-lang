@@ -378,6 +378,7 @@ dependencies = [
 name = "wolf_mem"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "wolf_ast",
  "wolf_diag",
  "wolf_sema",
