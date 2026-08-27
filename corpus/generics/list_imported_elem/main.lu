@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: generics.mono, mod.use.pub
+//! warns: W0314
+//!
+//! `List[geo.Point]()` — a prelude container whose element type is
+//! IMPORTED (#140, s116): the wolf-wws ws08 lane found that the same
+//! program with a LOCAL struct ran while the imported spelling was
+//! refused, which forced its local-row + scalar-builder workaround.
+//! The refusal never lived in monomorphization: sema's bracket-arg
+//! type reading only knew a bare ident, so the `mod.Type` member
+//! shape fell through to the generic-data refusal. An imported struct
+//! has the same layout as a local one; the container is constructed,
+//! pushed twice, and read back here across the module boundary. The
+//! local-struct twin is `generics/list_struct_elem.lu`.
+
+use geo
+
+fn main() -> !int {
+    var l = List[geo.Point]()
+    (mut l).push(geo.Point { x: 3, y: 4 })
+    (mut l).push(geo.Point { x: 10, y: 20 })
+    let p = copy l[0]
+    let q = copy l[1]
+    if p.x + p.y + q.x + q.y == 37 { 0 } else { 1 }
+}

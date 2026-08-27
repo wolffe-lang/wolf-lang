@@ -1,0 +1,63 @@
+//! check: run(exit=0, stdout="[hé][wö]")
+//! phase: run
+//! conforms: err.union, err.propagate
+//!
+//! s116 (#46): the buffered-reader fill rides s115's byte path. The
+//! issue's shape — a line protocol whose read boundary lands INSIDE a
+//! multi-byte codepoint — corrupted under the str read (`net_read`
+//! decodes at the socket, raising `utf8` with the bytes already
+//! consumed). Here the fill is `net_read_bytes(conn, 2)`: the first
+//! chunk is `104 195` — `h` plus half of `é` — and nothing is lost,
+//! because bytes buffer into a `List[int]` and DECODING moves to the
+//! protocol layer: the buffer splits at `\n` (10) and each complete
+//! line passes `str_from_utf8` whole. Two lines out (`hé`, `wö`),
+//! byte-exact, on every lane — the fill the issue said could not be
+//! written, written in wolf with no new surface.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+
+    // "hé\nwö\n" as bytes: é = 195 169, ö = 195 182.
+    var payload = List[int]()
+    (mut payload).push(104)
+    (mut payload).push(195)
+    (mut payload).push(169)
+    (mut payload).push(10)
+    (mut payload).push(119)
+    (mut payload).push(195)
+    (mut payload).push(182)
+    (mut payload).push(10)
+    net_write_bytes(cli, payload)?
+
+    let conn = net_accept(srv)?
+
+    // The fill: byte-level, max 2 — the first chunk ends inside `é`.
+    var buf = List[int]()
+    while buf.len < 8 {
+        let chunk = net_read_bytes(conn, 2)?
+        for b in chunk {
+            (mut buf).push(b)
+        }
+    }
+
+    // The protocol layer: split at `\n`, decode each COMPLETE line.
+    var line = List[int]()
+    var out = ""
+    for b in buf {
+        if b == 10 {
+            let s = str_from_utf8(line)?
+            out = "{out}[{s}]"
+            line = List[int]()
+        } else {
+            (mut line).push(b)
+        }
+    }
+    print(out)
+
+    net_close(cli)?
+    net_close(conn)?
+    net_close(srv)?
+    if out == "[hé][wö]" { 0 } else { 1 }
+}

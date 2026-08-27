@@ -1008,9 +1008,27 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // the reject path propagates (the checked-tier `return <row>` fix). No
 // pre-existing file moved lanes (full corpus 0-bad). Totals
 // 193/210/210, union 224, all-three 179. Counts measured by this gate.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 193), ("native", 210), ("release", 210)];
-const UNION_FLOOR: usize = 224;
-const ALL_THREE_FLOOR: usize = 179;
+//
+// s116 ratchet over 356 entries: c27's sixth small-debts pass. Three
+// new run-phase witnesses, each three-lane, so every count moves +3.
+// `generics/list_imported_elem/` — the #140 program:
+// `List[geo.Point]()` with an IMPORTED element type, constructed,
+// pushed, and read back across the module boundary (the refusal never
+// lived in monomorphization — sema's bracket-arg type reading only
+// knew a bare ident, so the `mod.Type` member shape fell through to
+// the generic-data refusal). `generics/list_struct_elem.lu` — its
+// LOCAL twin, the regression pin: it ran before the fix and the
+// per-file sweep shows it verdict-stable. `net/line_reader_bytes.lu`
+// — #46's buffered fill riding s115's byte path: a read boundary
+// inside `é`, buffered as bytes, decoded at the protocol layer (zero
+// compiler change; s115 made it free). The full per-file three-lane
+// sweep shows exactly ONE pre-existing file moving: the #140 witness
+// itself, refused@resolve → run on all three. Totals 196/213/213,
+// union 227, all-three 182. Counts measured by this gate, not
+// predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 196), ("native", 213), ("release", 213)];
+const UNION_FLOOR: usize = 227;
+const ALL_THREE_FLOOR: usize = 182;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

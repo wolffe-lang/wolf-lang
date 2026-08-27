@@ -81,6 +81,8 @@ generics/explicit_apply.lu: lowers
 generics/explicit_apply_arity.lu: not mem-clean (pre-wir rungs own it)
 generics/first_of_list.lu: lowers
 generics/hundred_shapes.lu: lowers
+generics/list_imported_elem/main.lu: lowers
+generics/list_struct_elem.lu: lowers
 generics/list_wrapping_elem.lu: lowers
 generics/pair_of.lu: lowers
 generics/two_instances.lu: lowers
@@ -218,6 +220,7 @@ memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/byte_roundtrip.lu: lowers
 net/echo_roundtrip.lu: lowers
+net/line_reader_bytes.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
 net/spawn_accept.lu: lowers
