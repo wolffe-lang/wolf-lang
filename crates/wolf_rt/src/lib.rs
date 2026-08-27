@@ -27,6 +27,13 @@ pub mod quarantine;
 // widen against its interface, readiness adapted underneath.
 #[cfg(target_os = "linux")]
 pub mod reactor;
+// Signal RECEPTION (s114, #126): the self-pipe/sigaction trampoline
+// and the meaning-based receive surface. Rides the task layer's
+// platform gate — the whole native concurrency floor is linux at this
+// campaign stage (reactor/net/task); macOS/BSD/Windows delivery widens
+// with the port sprints (a NAMED stop, spec `[os.signal.platform]`).
+#[cfg(target_os = "linux")]
+pub mod signal;
 pub mod str;
 pub mod time;
 // The task layer is linux-only at this campaign stage — the same
