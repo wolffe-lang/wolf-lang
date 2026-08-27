@@ -795,3 +795,87 @@ fn wrapping_narrow_cast_masks_to_width() {
         0,
     );
 }
+
+// ------------------------------ #122: rows bind at let (s111) --
+
+/// A RAW row value at `let` BINDS (D52's declared-row-first reading:
+/// rows are values) — the s108-found divergence where this machine
+/// answered `error: none`/exit 1 while native ran the handler.
+#[test]
+fn raw_row_at_let_binds_and_reaches_its_handler() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let v: int ! {none} = none\n    \
+             let w = v else 5\n    \
+             if w == 5 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// The hoisted shape from `rows/handler_diverge_trap.lu`'s header:
+/// `let p = pick(0)` binds the row, and the bound value reaches the
+/// payload handler through a parameter — the fallback runs.
+#[test]
+fn bound_row_crosses_a_call_to_its_handler() {
+    assert_exit(
+        "fn expect(v: int ! {none}, d: int) -> int {\n    \
+             let hit = v else d\n    \
+             hit\n\
+         }\n\
+         fn pick(x: int) -> int ! {none} {\n    \
+             if x < 1 { return none }\n    \
+             x\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let p = pick(0)\n    \
+             let a = expect(p, 41)\n    \
+             let q = pick(7)\n    \
+             let b = expect(q, 0)\n    \
+             if a == 41 && b == 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// `?` stays the one PROPAGATING consumer: through a `let`, a raw
+/// error under `?` unwinds to the caller instead of binding.
+#[test]
+fn qmark_still_propagates_through_let() {
+    assert_exit(
+        "fn pick(x: int) -> int ! {none} {\n    \
+             if x < 1 { return none }\n    \
+             x\n\
+         }\n\
+         fn tryit(x: int) -> int ! {none} {\n    \
+             let v = pick(x)?\n    \
+             v + 100\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let ok = tryit(5) else 0 - 1\n    \
+             let bad = tryit(0) else 0 - 1\n    \
+             if ok == 105 && bad == 0 - 1 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// The assignment sibling, measured in the same s111 sweep: a raw
+/// row value assigned to a row-typed `var` binds exactly as at
+/// `let`.
+#[test]
+fn raw_row_at_assignment_binds() {
+    assert_exit(
+        "fn pick(x: int) -> int ! {none} {\n    \
+             if x < 1 { return none }\n    \
+             x\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var w: int ! {none} = none\n    \
+             w = pick(0)\n    \
+             let z = w else 0 - 7\n    \
+             if z == 0 - 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}

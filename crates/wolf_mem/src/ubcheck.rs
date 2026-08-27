@@ -449,9 +449,20 @@ enum Stop {
 enum Flow {
     Val(Value),
     Return(Value),
-    Err(Value),
+    /// A row error unwinding. The flag is PROPAGATION (#122): `false`
+    /// for a raw row value (a raise site, a fallible call's error
+    /// half) — the shape that BINDS at `let`/`var` (D52's
+    /// declared-row-first reading; rows are values, and native and
+    /// lupin both bind here) — `true` once a `?` has explicitly
+    /// propagated it, which keeps unwinding through every binder.
+    Err(Value, bool),
     Break,
     Continue,
+}
+
+/// A raw (non-propagating) row error — see [`Flow::Err`].
+fn raise(v: Value) -> Flow {
+    Flow::Err(v, false)
 }
 
 type E<T> = Result<T, Stop>;
@@ -1475,7 +1486,7 @@ impl<'t> Machine<'t> {
             // tag value crosses to the caller — the call site rewraps
             // it as `Flow::Err` (or `main` reports it, D30's process
             // behavior).
-            Ok(Flow::Err(v)) => self.exit_scopes_to(0, true).map(|()| v),
+            Ok(Flow::Err(v, _)) => self.exit_scopes_to(0, true).map(|()| v),
             Ok(Flow::Break) | Ok(Flow::Continue) => Ok(Value::Unit),
             Err(e) => Err(e),
         };
@@ -1874,7 +1885,7 @@ impl<'t> Machine<'t> {
                                 }
                             }
                             other => {
-                                self.close_scope(matches!(other, Flow::Err(_)))?;
+                                self.close_scope(matches!(other, Flow::Err(..)))?;
                                 return Ok(other);
                             }
                         }
@@ -1885,7 +1896,7 @@ impl<'t> Machine<'t> {
                     match self.bind_decl(d.pattern(), d.init())? {
                         Flow::Val(_) => {}
                         other => {
-                            self.close_scope(matches!(other, Flow::Err(_)))?;
+                            self.close_scope(matches!(other, Flow::Err(..)))?;
                             return Ok(other);
                         }
                     }
@@ -1895,7 +1906,7 @@ impl<'t> Machine<'t> {
                     match self.bind_decl(d.pattern(), d.init())? {
                         Flow::Val(_) => {}
                         other => {
-                            self.close_scope(matches!(other, Flow::Err(_)))?;
+                            self.close_scope(matches!(other, Flow::Err(..)))?;
                             return Ok(other);
                         }
                     }
@@ -1914,7 +1925,7 @@ impl<'t> Machine<'t> {
                             }
                         }
                         other => {
-                            self.close_scope(matches!(other, Flow::Err(_)))?;
+                            self.close_scope(matches!(other, Flow::Err(..)))?;
                             return Ok(other);
                         }
                     }
@@ -1922,7 +1933,7 @@ impl<'t> Machine<'t> {
                 SyntaxKind::AssignStmt => match self.eval_assign(stmt)? {
                     Flow::Val(_) => {}
                     other => {
-                        self.close_scope(matches!(other, Flow::Err(_)))?;
+                        self.close_scope(matches!(other, Flow::Err(..)))?;
                         return Ok(other);
                     }
                 },
@@ -1941,7 +1952,7 @@ impl<'t> Machine<'t> {
                 SyntaxKind::AssumeStmt => match self.eval_assume(stmt)? {
                     Flow::Val(_) => {}
                     other => {
-                        self.close_scope(matches!(other, Flow::Err(_)))?;
+                        self.close_scope(matches!(other, Flow::Err(..)))?;
                         return Ok(other);
                     }
                 },
@@ -1964,7 +1975,15 @@ impl<'t> Machine<'t> {
 
     fn bind_decl(&mut self, pat: Option<&'t GreenNode>, init: Option<&'t GreenNode>) -> E<Flow> {
         let v = match init {
-            Some(e) => val!(self.eval(e)),
+            Some(e) => match self.eval(e)? {
+                Flow::Val(v) => v,
+                // #122: a RAW row value at `let`/`var` BINDS — the
+                // spec's reading (D52 declared-row-first; rows are
+                // values), which native and lupin already implement.
+                // Only a `?`-propagated error keeps unwinding.
+                Flow::Err(v, false) => v,
+                other => return Ok(other),
+            },
             None => Value::Uninit,
         };
         if let Some(pat) = pat {
@@ -2058,7 +2077,17 @@ impl<'t> Machine<'t> {
             return self.raw_index_write(place_expr, v, compound, stmt.span);
         }
         let v = match d.value() {
-            Some(e) => val!(self.eval(e)),
+            Some(e) => match self.eval(e)? {
+                Flow::Val(v) => v,
+                // #122's assignment sibling, measured in the same
+                // sweep: a RAW row value assigned to a row-typed
+                // place binds exactly as it does at `let` (native
+                // does); only a `?`-propagated error unwinds. The
+                // compound path below never sees rows (arith owns
+                // it).
+                Flow::Err(v, false) if !compound => v,
+                other => return Ok(other),
+            },
             None => Value::Unit,
         };
         let Some(place) = self.place_of(place_expr)? else {
@@ -2102,7 +2131,7 @@ impl<'t> Machine<'t> {
                 if e.kind == SyntaxKind::PathExpr
                     && let Some(tag) = self.raised_tag(e)
                 {
-                    return Ok(Flow::Err(Value::ErrTag {
+                    return Ok(raise(Value::ErrTag {
                         tag,
                         payload: Vec::new(),
                     }));
@@ -2202,7 +2231,12 @@ impl<'t> Machine<'t> {
                     None => Flow::Val(Value::Unit),
                 };
                 match inner {
-                    Flow::Err(err) => Ok(Flow::Err(err)),
+                    // `?` is the one PROPAGATING consumer (#122): a
+                    // row error reaching it — as a flow or as a bound
+                    // row VALUE — unwinds toward the caller (D30),
+                    // through any `let` on the way.
+                    Flow::Err(err, _) => Ok(Flow::Err(err, true)),
+                    Flow::Val(v @ Value::ErrTag { .. }) => Ok(Flow::Err(v, true)),
                     other => Ok(other),
                 }
             }
@@ -2350,7 +2384,7 @@ impl<'t> Machine<'t> {
             None => Ok(Flow::Val(Value::Unit)),
         };
         match &out {
-            Ok(Flow::Err(_)) => self.close_scope(true)?,
+            Ok(Flow::Err(..)) => self.close_scope(true)?,
             _ => self.close_scope(false)?,
         }
         self.ambient.pop();
@@ -2424,7 +2458,7 @@ impl<'t> Machine<'t> {
                 Some(body) => self.eval(body)?,
                 None => Flow::Val(Value::Unit),
             };
-            self.close_scope(matches!(out, Flow::Err(_)))?;
+            self.close_scope(matches!(out, Flow::Err(..)))?;
             return Ok(out);
         }
         Ok(Flow::Val(Value::Unit))
@@ -2580,7 +2614,7 @@ impl<'t> Machine<'t> {
                     }
                     Flow::Continue | Flow::Val(_) => {}
                     other => {
-                        self.close_scope(matches!(other, Flow::Err(_)))?;
+                        self.close_scope(matches!(other, Flow::Err(..)))?;
                         return Ok(other);
                     }
                 }
@@ -2596,8 +2630,14 @@ impl<'t> Machine<'t> {
             Some(s) => self.eval(s)?,
             None => Flow::Val(Value::Unit),
         };
+        // A bound row VALUE scrutinizes exactly like the err flow
+        // (#122: `let`-bound rows reach their handlers).
+        let scrut = match scrut {
+            Flow::Val(v @ Value::ErrTag { .. }) => raise(v),
+            other => other,
+        };
         match scrut {
-            Flow::Err(err) => {
+            Flow::Err(err, _) => {
                 self.push_scope();
                 if let Some(pat) = d.handler_pattern() {
                     if pat.kind == SyntaxKind::PathPat {
@@ -2615,7 +2655,7 @@ impl<'t> Machine<'t> {
                     Some(fb) => self.eval(fb)?,
                     None => Flow::Val(Value::Unit),
                 };
-                self.close_scope(matches!(out, Flow::Err(_)))?;
+                self.close_scope(matches!(out, Flow::Err(..)))?;
                 Ok(out)
             }
             other => Ok(other),
@@ -3231,7 +3271,7 @@ impl<'t> Machine<'t> {
     fn io_fs_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use std::io::{Read as _, Write as _};
         fn tag(t: &str) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: t.to_string(),
                 payload: Vec::new(),
             })
@@ -3670,7 +3710,7 @@ impl<'t> Machine<'t> {
     fn net_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use std::io::{Read as _, Write as _};
         fn tag(t: &str) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: t.to_string(),
                 payload: Vec::new(),
             })
@@ -3857,7 +3897,7 @@ impl<'t> Machine<'t> {
     /// trap.
     fn os_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         fn tag(t: &str) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: t.to_string(),
                 payload: Vec::new(),
             })
@@ -4095,7 +4135,7 @@ impl<'t> Machine<'t> {
     fn json_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use crate::json as jr;
         fn tag(e: jr::JsonErr) -> Flow {
-            Flow::Err(Value::ErrTag {
+            raise(Value::ErrTag {
                 tag: match e {
                     jr::JsonErr::Parse => "parse",
                     jr::JsonErr::Missing => "missing",
@@ -4173,7 +4213,7 @@ impl<'t> Machine<'t> {
     /// algorithm for the native lane, byte for byte.
     fn str_from_utf8(&mut self, argv: Vec<Value>, span: Span) -> E<Flow> {
         let utf8 = || {
-            Ok(Flow::Err(Value::ErrTag {
+            Ok(raise(Value::ErrTag {
                 tag: "utf8".to_string(),
                 payload: Vec::new(),
             }))
@@ -4905,7 +4945,7 @@ impl<'t> Machine<'t> {
                     payload.push(val!(self.eval(v)));
                 }
             }
-            return Ok(Flow::Err(Value::ErrTag { tag, payload }));
+            return Ok(raise(Value::ErrTag { tag, payload }));
         }
         // A plain user fn call.
         let Some(sig) = cs else {
@@ -4964,7 +5004,7 @@ impl<'t> Machine<'t> {
             self.pending_self_ty = Some(subject);
             let out = self.call_body(body, call_args)?;
             if let Value::ErrTag { .. } = out {
-                return Ok(Flow::Err(out));
+                return Ok(raise(out));
             }
             return Ok(Flow::Val(out));
         }
@@ -5065,7 +5105,7 @@ impl<'t> Machine<'t> {
         // A raised row tag crosses the call as the error flow — the
         // caller's `?`/`else`/`match` observes it (D30).
         if let Value::ErrTag { .. } = out {
-            return Ok(Flow::Err(out));
+            return Ok(raise(out));
         }
         Ok(Flow::Val(out))
     }
@@ -5261,7 +5301,7 @@ impl<'t> Machine<'t> {
                     // rows — absence is a row, not a trap.
                     "pop" => match self.lists[id].pop() {
                         Some(v) => Ok(Flow::Val(v)),
-                        None => Ok(Flow::Err(Value::ErrTag {
+                        None => Ok(raise(Value::ErrTag {
                             tag: "none".to_string(),
                             payload: Vec::new(),
                         })),
@@ -5275,7 +5315,7 @@ impl<'t> Machine<'t> {
                             return self.refuse("List.get with a non-int index", e.span);
                         };
                         if i < 0 || i as usize >= self.lists[id].len() {
-                            return Ok(Flow::Err(Value::ErrTag {
+                            return Ok(raise(Value::ErrTag {
                                 tag: "none".to_string(),
                                 payload: Vec::new(),
                             }));
@@ -5290,7 +5330,7 @@ impl<'t> Machine<'t> {
                         };
                         match v {
                             Some(v) => Ok(Flow::Val(v)),
-                            None => Ok(Flow::Err(Value::ErrTag {
+                            None => Ok(raise(Value::ErrTag {
                                 tag: "none".to_string(),
                                 payload: Vec::new(),
                             })),
@@ -5426,7 +5466,7 @@ impl<'t> Machine<'t> {
                             self.cells[cell].strong += 1;
                             Ok(Flow::Val(Value::Shared(cell)))
                         } else {
-                            Ok(Flow::Err(Value::ErrTag {
+                            Ok(raise(Value::ErrTag {
                                 tag: "gone".to_string(),
                                 payload: Vec::new(),
                             }))
@@ -5455,7 +5495,7 @@ impl<'t> Machine<'t> {
                     }
                 }
                 let none_miss = || {
-                    Ok(Flow::Err(Value::ErrTag {
+                    Ok(raise(Value::ErrTag {
                         tag: "none".to_string(),
                         payload: Vec::new(),
                     }))
@@ -5665,7 +5705,7 @@ impl<'t> Machine<'t> {
                 }
                 let out = self.call_body(body, call_args)?;
                 if let Value::ErrTag { .. } = out {
-                    return Ok(Flow::Err(out));
+                    return Ok(raise(out));
                 }
                 Ok(Flow::Val(out))
             }
