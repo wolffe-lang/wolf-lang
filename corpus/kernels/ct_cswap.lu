@@ -11,7 +11,7 @@
 
 #[consttime]
 fn ct_select(bit: wrapping[u64], x: wrapping[u64], y: wrapping[u64]) -> wrapping[u64] {
-    x ^ ((x ^ y) & (0 - bit))
+    x ^ (x ^ y) & 0 - bit
 }
 
 fn main() -> !int {

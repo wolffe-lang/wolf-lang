@@ -13,8 +13,17 @@
 //! release binary's body free of conditional-branch OPCODES.
 
 #[consttime]
-fn tag_diff(a0: wrapping[u64], a1: wrapping[u64], a2: wrapping[u64], a3: wrapping[u64], b0: wrapping[u64], b1: wrapping[u64], b2: wrapping[u64], b3: wrapping[u64]) -> wrapping[u64] {
-    (a0 ^ b0) | (a1 ^ b1) | (a2 ^ b2) | (a3 ^ b3)
+fn tag_diff(
+    a0: wrapping[u64],
+    a1: wrapping[u64],
+    a2: wrapping[u64],
+    a3: wrapping[u64],
+    b0: wrapping[u64],
+    b1: wrapping[u64],
+    b2: wrapping[u64],
+    b3: wrapping[u64],
+) -> wrapping[u64] {
+    a0 ^ b0 | a1 ^ b1 | a2 ^ b2 | a3 ^ b3
 }
 
 fn main() -> !int {

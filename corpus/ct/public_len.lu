@@ -11,7 +11,7 @@ fn fold(k: wrapping[u64], n: int) -> wrapping[u64] {
     var acc: wrapping[u64] = 0
     var i = 0
     while i < n {
-        acc = acc | (k >> i as wrapping[u64] & 1)
+        acc = acc | k >> i as wrapping[u64] & 1
         i = i + 1
     }
     acc
