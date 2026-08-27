@@ -579,10 +579,11 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // #51/#52 plus `os_exe` (#69); s106 the eight net entries (#118's
     // first crossing — seven s39 builtins plus `net_deadline`); s107
     // the four json kernels plus the process trio (#118's last
-    // crossing — the checked-native builtin split closes).
+    // crossing — the checked-native builtin split closes); s114 the
+    // three signal-reception entries (#126: listen/wait/raise).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        109,
+        112,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

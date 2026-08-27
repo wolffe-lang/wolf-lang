@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="reload\n")
+//! phase: run
+//! conforms: os.signal.listen, os.signal.wait, os.signal.raise
+//!
+//! Signal RECEPTION (s114, wolf-lang#126) — the deterministic loopback.
+//! The program registers interest in a signal by MEANING (reload=1,
+//! terminate=2, quit=4, upgrade=8 — the bitmask set), self-delivers it
+//! (`os_signal_raise`, the send-to-self companion to `os_kill`), then
+//! waits for it and reads back which meaning arrived. No wolf code runs
+//! in a signal handler: on the native lanes the runtime's async-signal-
+//! safe trampoline writes one byte to a self-pipe and a drain thread
+//! delivers the event to this parked wait.
+//!
+//! This runs on ALL THREE lanes: the checked machine models signals as
+//! a pure in-machine queue (listen→raise enqueues→wait dequeues), fully
+//! deterministic and never touching real OS signals; the native/release
+//! lanes deliver the real SIGHUP through the reactor's task layer. The
+//! OUTPUT is causally pinned (the program waits for exactly the signal
+//! it raised) even though real arrival TIMING is external — so the file
+//! is ten-run stable on every lane (target 4's determinism ruling:
+//! delivery is excluded from the replay stream, never recorded).
+
+fn main() -> !int {
+    os_signal_listen(1)?
+    os_signal_raise(1)?
+    let m = os_signal_wait(1)?
+    if m == 1 {
+        print("reload")
+        0
+    } else {
+        print("other")
+        1
+    }
+}

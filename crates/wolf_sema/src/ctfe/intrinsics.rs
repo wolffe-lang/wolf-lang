@@ -161,6 +161,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
             SandboxCategory::Env
         }
         "os_spawn" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,
+        // signal RECEPTION (s114, #126): process control, so `exec`
+        // like the rest of the family — comptime-refused (you cannot
+        // wait for an OS signal at compile time).
+        "os_signal_listen" | "os_signal_wait" | "os_signal_raise" => SandboxCategory::Exec,
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).

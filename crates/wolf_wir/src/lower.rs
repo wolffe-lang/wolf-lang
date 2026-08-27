@@ -7371,6 +7371,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if matches!(callee_text.as_str(), "os_spawn" | "os_wait" | "os_kill") {
             return self.lower_process_builtin(&callee_text, d, e);
         }
+        // signal RECEPTION (s114, #126): the receive side, by MEANING.
+        // `listen`/`raise` are `os_kill`-shaped (rc==0 ok else io);
+        // `wait` is `os_spawn`-shaped (rc>=0 is the delivered meaning,
+        // rc<0 the negated io code). No wolf code runs in a handler —
+        // the runtime's self-pipe trampoline is the whole handler.
+        if matches!(
+            callee_text.as_str(),
+            "os_signal_listen" | "os_signal_wait" | "os_signal_raise"
+        ) {
+            return self.lower_signal_builtin(&callee_text, d, e);
+        }
         // The s40 json builtin tier, natively (s107): the reference
         // parser stays the checked lane's (`wolf_mem::json`);
         // `wolf_rt::json` is its hand mirror (the locked graph keeps
@@ -10424,6 +10435,90 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(out)))
             }
             _ => Err(refuse("this process builtin", e.span)),
+        }
+    }
+
+    /// Signal RECEPTION (s114, wolf-lang#126) — the receive side. The
+    /// meaning set crosses as one int to `wolf_rt::signal`'s shims;
+    /// `listen`/`raise` are `os_kill`-shaped (0 ok, else the `io` tag),
+    /// `wait` is `os_spawn`-shaped (rc >= 0 is the delivered meaning,
+    /// rc < 0 the negated `io` code). Delivery emits no schedule point
+    /// (target 4: excluded from replay) — that lives in the runtime.
+    fn lower_signal_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed signal arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let set = *argv
+            .first()
+            .ok_or_else(|| refuse("a signal call with missing arguments", e.span))?;
+        match name {
+            // `os_signal_listen`/`os_signal_raise` -> () ! {io}: 0 ok,
+            // else the io tag (the os_kill shape).
+            "os_signal_listen" | "os_signal_raise" => {
+                let sym = if name == "os_signal_listen" {
+                    "__wolf_rt_os_signal_listen"
+                } else {
+                    "__wolf_rt_os_signal_raise"
+                };
+                let rc = self.rt_call(sym, &[set], Some(types::I64)).expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |zelf| {
+                        let id = zelf.b.module.tag_id("io");
+                        Ok(zelf.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // `os_signal_wait` -> int ! {io}: rc >= 0 is the delivered
+            // meaning; rc < 0 is the negated io code (the os_spawn
+            // shape, one row).
+            "os_signal_wait" => {
+                let rc = self
+                    .rt_call("__wolf_rt_os_signal_wait", &[set], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(Some(rc)),
+                    |zelf| {
+                        let id = zelf.b.module.tag_id("io");
+                        Ok(zelf.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            _ => Err(refuse("this signal builtin", e.span)),
         }
     }
 

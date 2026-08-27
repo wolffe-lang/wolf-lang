@@ -652,6 +652,19 @@ struct Machine<'t> {
     /// the real environment. Documented lane asymmetry: native
     /// `env_set` writes the compiled program's own environment.
     env_overlay: HashMap<String, String>,
+    /// Signal RECEPTION (s114, #126): the checked machine models
+    /// signals as a PURE IN-MACHINE queue (like `children`/
+    /// `env_overlay`) — it never touches real OS signals, which would
+    /// be unsound in a threaded test host (the `env_set` asymmetry).
+    /// `os_signal_listen` records the interest set here; `os_signal_
+    /// raise` enqueues a meaning if listened; `os_signal_wait` dequeues
+    /// the first matching meaning. A wait with NO pending delivery is
+    /// refused-by-name (the checked machine is single-threaded, run-to-
+    /// completion — it has no concurrency to deliver one later; the
+    /// spawn-driven witness likewise refuses at `SpawnExpr`). The
+    /// sequential loopback (listen→raise→wait) is fully modeled.
+    signal_listening: i64,
+    signal_queue: std::collections::VecDeque<i64>,
     /// The monotonic anchor (s40 `time_now_ms`): an arbitrary
     /// process-local epoch, per X12's "monotonic, never wall".
     t0: std::time::Instant,
@@ -1295,6 +1308,8 @@ impl<'t> Machine<'t> {
             socks: Vec::new(),
             sock_deadlines: HashMap::new(),
             children: Vec::new(),
+            signal_listening: 0,
+            signal_queue: std::collections::VecDeque::new(),
             args: Vec::new(),
             env_overlay: HashMap::new(),
             t0: std::time::Instant::now(),
@@ -4098,6 +4113,60 @@ impl<'t> Machine<'t> {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
+            // Signal RECEPTION (s114, #126) — modeled as a PURE
+            // IN-MACHINE queue (no real OS signals: the checked machine
+            // is a threaded test host, the `env_set` asymmetry). The
+            // meaning bitmask matches `wolf_rt::signal::meaning`
+            // (reload=1, terminate=2, quit=4, upgrade=8).
+            "os_signal_listen" => {
+                let Some(mask) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                // Record interest for the mapped meanings only (ALL = 15).
+                self.signal_listening |= mask & 0xF;
+                Ok(Flow::Val(Value::Unit))
+            }
+            "os_signal_raise" => {
+                let Some(m) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                // A single mapped meaning; an unmapped one is `io`
+                // (never a wild signal). A listened meaning becomes a
+                // queued event; an unlistened raise is delivered to the
+                // default disposition on a real host — the checked
+                // machine does not model process death, so it drops it
+                // (documented asymmetry, like `env_set`'s overlay).
+                if m != 1 && m != 2 && m != 4 && m != 8 {
+                    return Ok(tag("io"));
+                }
+                if self.signal_listening & m != 0 {
+                    self.signal_queue.push_back(m);
+                }
+                Ok(Flow::Val(Value::Unit))
+            }
+            "os_signal_wait" => {
+                let Some(mask) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let want = mask & 0xF;
+                if want == 0 {
+                    return Ok(tag("io")); // nothing could ever arrive
+                }
+                match self.signal_queue.iter().position(|&m| m & want != 0) {
+                    Some(pos) => {
+                        let m = self.signal_queue.remove(pos).expect("just found it");
+                        Ok(Flow::Val(Value::Int(m)))
+                    }
+                    // A blocking wait with no pending delivery: the
+                    // checked machine is single-threaded and run-to-
+                    // completion — it has no concurrency to deliver one
+                    // later. Refused by name (the honest ledger entry).
+                    None => self.refuse(
+                        "a blocking signal wait with no pending delivery in checked execution",
+                        span,
+                    ),
+                }
+            }
             _ => self.refuse("this os builtin", span),
         }
     }
@@ -4893,9 +4962,9 @@ impl<'t> Machine<'t> {
             // the declared D30 rows, and the comptime sandbox is the
             // one refusal site.
             "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_exit"
-            | "os_spawn" | "os_wait" | "os_kill" | "time_now_ms" | "time_unix_ms"
-            | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
-            | "str_from_utf8" => {
+            | "os_spawn" | "os_wait" | "os_kill" | "os_signal_listen" | "os_signal_wait"
+            | "os_signal_raise" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms"
+            | "json_valid" | "json_get" | "json_type" | "json_len" | "str_from_utf8" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {

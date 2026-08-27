@@ -982,9 +982,22 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // moved lanes — Group A's zero-churn proof at the coverage level.
 // Totals 187/203/203, union 217, all-three 173. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 187), ("native", 203), ("release", 203)];
-const UNION_FLOOR: usize = 217;
-const ALL_THREE_FLOOR: usize = 173;
+//
+// s114 ratchet over 348 entries: signal RECEPTION lands (c30, #126). Two
+// new run-phase witnesses. `signal_loopback.lu` — the deterministic
+// sequential loopback (listen→raise→wait) — runs on ALL three lanes:
+// the checked machine models signals as a pure in-machine queue, the
+// native/release lanes deliver the real SIGHUP through the reactor's
+// task layer (checked/native/release each +1, all-three +1, union +1).
+// `signal_supervisor.lu` — the wws shape, a parked supervisor woken by
+// a sibling's raise — reaches native/release but the checked lane
+// refuses it BY NAME (`spawn` is structured concurrency, C1-deferred),
+// so native/release each +1 more (union +1). No pre-existing file moved
+// lanes. Totals 188/205/205, union 219, all-three 174. Counts measured
+// by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 188), ("native", 205), ("release", 205)];
+const UNION_FLOOR: usize = 219;
+const ALL_THREE_FLOOR: usize = 174;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -2176,6 +2189,7 @@ fn spec_extract(check: bool) -> ExitCode {
         "08-package.md",
         "09-constant-time.md",
         "10-types.md",
+        "11-os.md",
     ];
     let bodies: Vec<(String, String)> = names
         .iter()

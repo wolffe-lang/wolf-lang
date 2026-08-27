@@ -120,6 +120,15 @@ pub const PRELUDE: &[&str] = &[
     "os_spawn",
     "os_wait",
     "os_kill",
+    // signal RECEPTION (s114, wolf-lang#126): the receive side of the
+    // process-signal world (`os_kill` is send-to-child). By MEANING —
+    // a bitmask set of reload/terminate/quit/upgrade, mapped to
+    // platform signals at the runtime boundary. `os_signal_raise` is
+    // the send-to-self companion (the deterministic loopback). `exec`-
+    // tagged with the process family; comptime-refused.
+    "os_signal_listen",
+    "os_signal_wait",
+    "os_signal_raise",
     // the time builtin tier (s40, determinism-first per X12: every
     // entry is Clock-tagged and comptime-refused; the ms-integer
     // spellings are the builtin ABI — Instant/SystemTime/Duration
