@@ -1,0 +1,15 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.numlit.value
+//!
+//! Value non-adoption stays refused (D54.3): once `let n = 0` names the
+//! value, `n` is an integer VALUE and never silently becomes a float —
+//! `let x: f64 = n` is E0401, the conversion is spelled `n as f64`
+//! (`[type.numlit.value]`). Adoption is a literal's privilege, not a
+//! value's.
+
+fn main() -> !int {
+    let n = 0
+    let x: f64 = n
+    0
+}

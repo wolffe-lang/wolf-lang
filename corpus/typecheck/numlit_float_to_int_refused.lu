@@ -1,0 +1,13 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.numlit.adopt
+//!
+//! Adoption is one-directional (D54.1): an integer literal satisfies a
+//! float expectation, but a `{float}` literal NEVER satisfies an integer
+//! one — `let n: int = 0.0` is E0401 (`[type.numlit.adopt]`). `0.0` is
+//! not an integer denotation.
+
+fn main() -> !int {
+    let n: int = 0.0
+    n
+}

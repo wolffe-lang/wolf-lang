@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="7 300 4.5")
+//! phase: run
+//! conforms: type.numlit.cast.widen
+//!
+//! int→float is the free widening direction (#138, D54.4,
+//! `[type.numlit.cast.widen]`): `i32 as f64` and `i64 as f64` convert
+//! with no trap. The `n as f64 / 2.0` shows a VALUE crossing to float
+//! by the spelled cast (`[type.numlit.value]`) then dividing as float.
+
+fn main() -> !int {
+    let a: i32 = 7
+    let b: i64 = 300
+    let n: int = 9
+    print("{a as f64} {b as f64} {n as f64 / 2.0}")
+    0
+}

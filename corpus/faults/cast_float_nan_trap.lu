@@ -1,0 +1,13 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.trunc, arith.checked
+//!
+//! A NaN fits no integer, so `(0.0 / 0.0) as int` TRAPS (#138, D54.4)
+//! rather than producing a garbage value — the same `trap(overflow)`
+//! kind as the out-of-range case.
+
+fn main() -> !int {
+    let x: f64 = 0.0 / 0.0
+    let n = x as int
+    n
+}

@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="0.5")
+//! phase: run
+//! conforms: type.numlit.propagate
+//!
+//! Division soundness, float context: `let x: f64 = 1 / 2` is `0.5` —
+//! both literals adopt `f64` BEFORE `/` runs, so it is float division,
+//! not the C integer-division footgun (`[type.numlit.propagate]`).
+
+fn main() -> !int {
+    let x: f64 = 1 / 2
+    print("{x}")
+    0
+}

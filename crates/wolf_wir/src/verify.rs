@@ -569,6 +569,28 @@ impl<'a> Verifier<'a> {
                     );
                 }
             }
+            Opcode::Sitofp | Opcode::Uitofp => {
+                // int → float (D54.4): integer source, float result.
+                self.expect_counts(inst, 1, 1)?;
+                if types.int_bits(self.f.value_ty(args[0])).is_none() {
+                    return Err(self.type_err(inst, "int→float conversion needs an integer source"));
+                }
+                if !types.is_float(self.f.value_ty(results[0])) {
+                    return Err(self.type_err(inst, "int→float conversion produces a float"));
+                }
+            }
+            Opcode::FtosiChk | Opcode::FtouiChk => {
+                // float → int (D54.4): float source, integer result; the
+                // out-of-range/NaN trap is the backend's, not a typing
+                // rule.
+                self.expect_counts(inst, 1, 1)?;
+                if !types.is_float(self.f.value_ty(args[0])) {
+                    return Err(self.type_err(inst, "float→int conversion needs a float source"));
+                }
+                if types.int_bits(self.f.value_ty(results[0])).is_none() {
+                    return Err(self.type_err(inst, "float→int conversion produces an integer"));
+                }
+            }
             Opcode::PtrOff => {
                 self.expect_counts(inst, 2, 1)?;
                 if self.f.value_ty(args[0]) != crate::types::PTR {

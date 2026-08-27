@@ -1092,6 +1092,10 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
             ("sext", Opcode::Sext),
             ("zext", Opcode::Zext),
             ("itrunc", Opcode::Itrunc),
+            ("sitofp", Opcode::Sitofp),
+            ("uitofp", Opcode::Uitofp),
+            ("ftosi.chk", Opcode::FtosiChk),
+            ("ftoui.chk", Opcode::FtouiChk),
             ("load", Opcode::Load),
             ("store", Opcode::Store),
         ];
@@ -1353,7 +1357,13 @@ fn parse_inst(
             }
             vec![types::BOOL]
         }
-        Opcode::Sext | Opcode::Zext | Opcode::Itrunc => {
+        Opcode::Sext
+        | Opcode::Zext
+        | Opcode::Itrunc
+        | Opcode::Sitofp
+        | Opcode::Uitofp
+        | Opcode::FtosiChk
+        | Opcode::FtouiChk => {
             args = parse_val_list(line, values, func)?;
             if args.len() != 1 {
                 return line.fail(format!("`{mname}` takes exactly 1 operand"));

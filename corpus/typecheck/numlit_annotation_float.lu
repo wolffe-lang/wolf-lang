@@ -1,0 +1,12 @@
+//! check: run(exit=0, stdout="0")
+//! phase: run
+//! conforms: type.numlit.adopt
+//!
+//! Annotation pins the float: a bare `{integer}` literal in a position
+//! whose expected type is `f64` resolves as `0.0` (`[type.numlit.adopt]`).
+
+fn main() -> !int {
+    let x: f64 = 0
+    print("{x}")
+    0
+}

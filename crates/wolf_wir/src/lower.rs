@@ -6640,7 +6640,45 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             e.span,
                         ))
                     }
-                    _ => Err(refuse("int↔float casts (no conversion op yet)", e.span)),
+                    _ => {
+                        // One side is a float (#138, D54.4). `int_bits`
+                        // is `Some` only for integers, so the arms:
+                        let src_int = int_bits(src).is_some();
+                        let dst_float = self.b.module.types.is_float(dst);
+                        let src_float = self.b.module.types.is_float(src);
+                        let dst_int = int_bits(dst).is_some();
+                        if src_int && dst_float {
+                            // int → float `[type.numlit.cast.widen]`: the
+                            // free widening direction, no trap. Source
+                            // signedness picks the conversion.
+                            let op = if sema_unsigned(self.table, from) {
+                                Opcode::Uitofp
+                            } else {
+                                Opcode::Sitofp
+                            };
+                            return Ok(Flow::Val(Some(
+                                self.b.ins(op, &[v], &[dst], Aux::None).one(),
+                            )));
+                        }
+                        if src_float && dst_int {
+                            // float → int `[type.numlit.cast.trunc]`:
+                            // truncate toward zero, TRAP (overflow) on
+                            // out-of-range or NaN. Target signedness
+                            // picks fptosi vs fptoui.
+                            let op = if sema_unsigned(self.table, to) {
+                                Opcode::FtouiChk
+                            } else {
+                                Opcode::FtosiChk
+                            };
+                            return Ok(Flow::Val(Some(
+                                self.b.ins(op, &[v], &[dst], Aux::None).one(),
+                            )));
+                        }
+                        // f32↔f64 width casts are a numeric-cast gap of
+                        // their own (not D54's int/float story); still
+                        // refused by name, unchanged.
+                        Err(refuse("float-width casts (`f32`↔`f64`)", e.span))
+                    }
                 }
             }
             CastKind::Raw => Err(refuse(
