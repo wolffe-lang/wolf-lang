@@ -12,5 +12,14 @@ wolf_diag.workspace = true
 wolf_ast.workspace = true
 wolf_sema.workspace = true
 
+# s118 (#143): the checked machine's `os_random` makes the REAL
+# platform entropy call (getrandom/getentropy) — the same "syscalls
+# direct (libc-level)" posture wolf_rt already carries; raw bindings
+# only, nothing at runtime beyond the one call. The locked graph keeps
+# wolf_rt out of the compiler's reach (D15), so the call is made here
+# directly rather than through the runtime.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 insta.workspace = true

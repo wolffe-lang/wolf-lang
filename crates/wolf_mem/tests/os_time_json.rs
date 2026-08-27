@@ -349,3 +349,68 @@ fn json_escapes_decode() {
         "true 1\n",
     );
 }
+
+// ------------------------------------------------------------ os_random --
+//
+// The OS random source (s118, #143). NOTE the property being asserted:
+// two draws DIFFER — the weakest honest property a unit test can
+// assert about an entropy source without becoming a statistical
+// instrument (which a unit test must not be; a flaky distribution
+// assertion is worse than none). Equal 32-byte draws from a working
+// CSPRNG have probability 2^-256: equality means broken, not unlucky.
+
+#[test]
+fn os_random_two_draws_differ_and_are_bytes() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let a = os_random(32)\n\
+         let b = os_random(32)\n\
+         var range = true\n\
+         for x in a { if x < 0 || x > 255 { range = false } }\n\
+         for x in b { if x < 0 || x > 255 { range = false } }\n\
+         var same = a.len == b.len\n\
+         var i = 0\n\
+         for x in b { if x != a[i] { same = false }\n\
+         i = i + 1 }\n\
+         print(\"len={a.len}/{b.len} range={range} same={same}\")\n\
+         0\n\
+         }\n",
+        "len=32/32 range=true same=false\n",
+    );
+}
+
+#[test]
+fn os_random_zero_and_large_lengths() {
+    // Length 0 is a valid request for no entropy (the empty list, no
+    // trap); a large request (past the 256-byte per-call platform
+    // caps) comes back complete — the fill loop owns the boundary.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let z = os_random(0)\n\
+         let big = os_random(65536)\n\
+         var range = true\n\
+         for x in big { if x < 0 || x > 255 { range = false } }\n\
+         print(\"z={z.len} big={big.len} range={range}\")\n\
+         0\n\
+         }\n",
+        "z=0 big=65536 range=true\n",
+    );
+}
+
+#[test]
+fn os_random_negative_count_traps_assert() {
+    // n < 0 is a caller-contract violation: the deterministic trap
+    // `assert` (the [mem.str.repeat] posture), ruled by
+    // [os.random.fill] — never an empty list, never a row.
+    let out = run("fn main() -> !int {\n\
+         let b = os_random(-1)\n\
+         b.len\n\
+         }\n");
+    match out.verdict {
+        Verdict::Trap(t) => {
+            assert_eq!(t.kind, "assert", "trap kind");
+            assert_eq!(t.clause, "os.random.fill", "ruling clause");
+        }
+        other => panic!("expected trap(assert), got {other:?}"),
+    }
+}

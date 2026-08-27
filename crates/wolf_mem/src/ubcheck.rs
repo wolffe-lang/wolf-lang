@@ -520,6 +520,91 @@ pub fn net_err_tag(kind: std::io::ErrorKind) -> &'static str {
     }
 }
 
+/// OS entropy for the checked lane's `os_random` (s118, #143): the
+/// HAND MIRROR of `wolf_rt::random::fill` — wolf_mem and wolf_rt may
+/// not see each other (the locked graph; D15), so the platform matrix
+/// of spec `[os.random.platform]` is implemented here directly, the
+/// [`net_err_tag`] precedent. `true` iff EVERY byte came from the
+/// platform CSPRNG; on `false` the caller traps (`[os.random.trap]`)
+/// — there is deliberately no fallback of any kind in this function.
+///
+/// Linux: `getrandom(2)` flags 0 (blocks only until the pool
+/// initializes; EINTR retries; short reads continue).
+#[cfg(target_os = "linux")]
+fn os_entropy_fill(buf: &mut [u8]) -> bool {
+    let mut done = 0usize;
+    while done < buf.len() {
+        let rest = &mut buf[done..];
+        // SAFETY: live buffer, correct length, flags 0.
+        let n = unsafe { libc::getrandom(rest.as_mut_ptr().cast(), rest.len(), 0) };
+        if n < 0 {
+            if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                continue;
+            }
+            return false;
+        }
+        done += n as usize;
+    }
+    true
+}
+
+/// macOS / FreeBSD: `getentropy(3)` in 256-byte chunks (the call's own
+/// per-request cap — a larger request is EIO by contract).
+#[cfg(any(target_os = "macos", target_os = "freebsd"))]
+fn os_entropy_fill(buf: &mut [u8]) -> bool {
+    for chunk in buf.chunks_mut(256) {
+        // SAFETY: live chunk, length <= 256 by construction.
+        if unsafe { libc::getentropy(chunk.as_mut_ptr().cast(), chunk.len()) } != 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Windows (tier-1): `BCryptGenRandom` with the system-preferred RNG —
+/// the documented modern call, declared directly against bcrypt.dll
+/// (no crate; the wolf_rt::random posture).
+#[cfg(windows)]
+fn os_entropy_fill(buf: &mut [u8]) -> bool {
+    #[link(name = "bcrypt")]
+    unsafe extern "system" {
+        fn BCryptGenRandom(
+            halgorithm: *mut core::ffi::c_void,
+            pbbuffer: *mut u8,
+            cbbuffer: u32,
+            dwflags: u32,
+        ) -> i32;
+    }
+    const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+    for chunk in buf.chunks_mut(1 << 30) {
+        // SAFETY: live chunk; length fits u32 by construction.
+        let status = unsafe {
+            BCryptGenRandom(
+                std::ptr::null_mut(),
+                chunk.as_mut_ptr(),
+                chunk.len() as u32,
+                BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+            )
+        };
+        if status != 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// The NAMED platform gap (`[os.random.platform]`): no entropy backend
+/// here yet, so `os_random` TRAPS — never a PRNG, never silence.
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "freebsd",
+    windows
+)))]
+fn os_entropy_fill(_buf: &mut [u8]) -> bool {
+    false
+}
+
 /// Accept under a deadline budget on the checked lane's v0 blocking
 /// path (s106, `net_deadline`): std's listener has no timed accept,
 /// so the emulation polls nonblocking until the budget elapses — the
@@ -4238,6 +4323,29 @@ impl<'t> Machine<'t> {
                     ),
                 }
             }
+            // The OS random source (s118, #143). The checked machine
+            // is a host process, so REAL OS entropy is available on
+            // every tier-1 host — no in-machine model (the signal
+            // asymmetry does not arise) and no refusal: the crypto
+            // lanes (wolf-wws, std) run HERE, and a checked lane
+            // without entropy would push them back into the dark.
+            // Failure is the deterministic trap `assert` ruled by
+            // [os.random.trap] — never a row, never a PRNG fallback;
+            // `n < 0` is the [mem.str.repeat] caller-contract trap.
+            "os_random" => {
+                let Some(n) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Ok(len) = usize::try_from(n) else {
+                    return self.trap("assert", "os.random.fill", span);
+                };
+                self.charge_mem(len as u64)?;
+                let mut buf = vec![0u8; len];
+                if !os_entropy_fill(&mut buf) {
+                    return self.trap("assert", "os.random.trap", span);
+                }
+                Ok(Flow::Val(self.byte_list_value(&buf)))
+            }
             _ => self.refuse("this os builtin", span),
         }
     }
@@ -5063,8 +5171,9 @@ impl<'t> Machine<'t> {
             // one refusal site.
             "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_exit"
             | "os_spawn" | "os_wait" | "os_kill" | "os_signal_listen" | "os_signal_wait"
-            | "os_signal_raise" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms"
-            | "json_valid" | "json_get" | "json_type" | "json_len" | "str_from_utf8" => {
+            | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
+            | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
+            | "str_from_utf8" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
