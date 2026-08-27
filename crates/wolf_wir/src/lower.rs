@@ -6607,6 +6607,38 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     return Err(refuse("cast on unit types", e.span));
                 };
                 if src == dst {
+                    // D56 (#135): `wrapping[T] as int` is a
+                    // value-preserving conversion, NOT the silent
+                    // bit-cast that used to lie here. A same-width
+                    // unsigned wrapping value whose top bit is set does
+                    // not fit the signed target, so it TRAPS
+                    // (overflow) — joining the D54.4 float→int trap
+                    // family (`as int` never lies). In-range values
+                    // convert unchanged; the widening unsigned→int case
+                    // already zero-extends value-preservingly below.
+                    // lupin already traps; this brings wolfc to
+                    // agreement.
+                    if matches!(self.table.kind(from), TyKind::Wrapping(_))
+                        && sema_unsigned(self.table, from)
+                        && !sema_unsigned(self.table, to)
+                    {
+                        let z = self.b.iconst(dst, 0);
+                        let fits = self
+                            .b
+                            .ins(
+                                Opcode::Icmp,
+                                &[v, z],
+                                &[types::BOOL],
+                                Aux::IntCc(IntCc::Sge),
+                            )
+                            .one();
+                        if self.trap_unless(fits, TrapKind::Overflow) {
+                            // The value is a proven out-of-range
+                            // constant: the trap is unconditional and
+                            // this path diverges.
+                            return Ok(Flow::Diverged);
+                        }
+                    }
                     return Ok(Flow::Val(Some(v)));
                 }
                 match (int_bits(src), int_bits(dst)) {
@@ -7337,6 +7369,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_connect"
                 | "net_read"
                 | "net_write"
+                | "net_read_bytes"
+                | "net_write_bytes"
                 | "net_close"
                 | "net_deadline"
         ) {
@@ -10084,22 +10118,28 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .ok_or_else(|| refuse("a net call with missing arguments", e.span))
         };
         // The wire codes, as (coarsened) row tags. `utf8` is only
-        // `net_read`'s; on every other row it coarsens like the rest.
+        // `net_read`'s and `invalid` only `net_write_bytes`'s (s115,
+        // #137); on every other row each coarsens like the rest.
         let declared = self.row_tag_names(e.span);
-        let tag_pairs: Vec<(i64, &str)> =
-            [(1, "refused"), (2, "timeout"), (3, "closed"), (4, "utf8")]
-                .into_iter()
-                .map(|(c, t)| {
-                    (
-                        c,
-                        if declared.iter().any(|d| d == t) {
-                            t
-                        } else {
-                            "io"
-                        },
-                    )
-                })
-                .collect();
+        let tag_pairs: Vec<(i64, &str)> = [
+            (1, "refused"),
+            (2, "timeout"),
+            (3, "closed"),
+            (4, "utf8"),
+            (6, "invalid"),
+        ]
+        .into_iter()
+        .map(|(c, t)| {
+            (
+                c,
+                if declared.iter().any(|d| d == t) {
+                    t
+                } else {
+                    "io"
+                },
+            )
+        })
+        .collect();
         let zero_eq = |zelf: &mut Self, rc: Value| -> Value {
             let z = zelf.b.iconst(types::I64, 0);
             zelf.b
@@ -10185,13 +10225,53 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            "net_write" | "net_close" | "net_deadline" => {
+            // s115/#137: the byte read mints a `List[int]` into the
+            // container regions and hands its header back through the
+            // out slot — the `fs_read_bytes` shape, so no `data`/`len`
+            // the caller loaded survives the shim.
+            "net_read_bytes" => {
+                let fd = arg(0)?;
+                let max = arg(1)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_net_read_bytes",
+                        &[fd, max],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "net_write" | "net_close" | "net_deadline" | "net_write_bytes" => {
                 let rc = match name {
                     "net_write" => {
                         let fd = arg(0)?;
                         let s = arg(1)?;
                         let (sp, sl) = self.str_parts(s);
                         self.rt_call("__wolf_rt_net_write", &[fd, sp, sl], Some(types::I64))
+                    }
+                    // s115/#137: the `List[int]` argument is one header
+                    // the shim READS (`rt_call_foreign`, like
+                    // `fs_write_bytes`); an out-of-range element is
+                    // `invalid` and nothing is sent.
+                    "net_write_bytes" => {
+                        let fd = arg(0)?;
+                        let hdr = arg(1)?;
+                        self.rt_call_foreign(
+                            "__wolf_rt_net_write_bytes",
+                            &[fd, hdr],
+                            None,
+                            Some(types::I64),
+                        )
                     }
                     "net_close" => {
                         let fd = arg(0)?;

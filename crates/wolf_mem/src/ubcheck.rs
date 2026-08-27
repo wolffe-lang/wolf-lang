@@ -2293,7 +2293,22 @@ impl<'t> Machine<'t> {
             SyntaxKind::ReturnExpr => {
                 let d = ReturnExpr::cast(e).expect("kind");
                 let v = match d.value() {
-                    Some(x) => val!(self.eval(x)),
+                    Some(x) => match self.eval(x)? {
+                        Flow::Val(v) => v,
+                        // #139: `return <error row>` (e.g. `return tag`)
+                        // — the value expression is itself a raise. It
+                        // must UNWIND as a returned error (propagating,
+                        // so errdefers run and it crosses the call as the
+                        // error flow), NEVER a raw row that a surrounding
+                        // `else`/`let` swallows via the #122 raw-row-binds
+                        // rule. Without this, a diverging `else` handler's
+                        // `return tag` binds the tag to the `let` and
+                        // execution falls through past it (the sc20
+                        // `reject_tampered_row` finding: the bound row
+                        // then fails to iterate at the mem tier).
+                        Flow::Err(v, _) => return Ok(Flow::Err(v, true)),
+                        other => return Ok(other),
+                    },
                     None => Value::Unit,
                 };
                 // Scopes close (defers run, LIFO) as the flow unwinds
@@ -3027,6 +3042,20 @@ impl<'t> Machine<'t> {
             };
             let unsigned = matches!(p, Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64);
             return Some((mask, bits, unsigned));
+        }
+        None
+    }
+
+    /// The width (in bits) of the expression's type when it is a
+    /// SIGNED integer prim (`int`/`i8`/`i16`/`i32`/`i64`) — the D56
+    /// target-side query for `wrapping[T] as int`.
+    fn signed_int_bits(&self, span: Span) -> Option<u32> {
+        let ctx = self.ctx();
+        let id = ctx.expr_tys.get(&span)?;
+        if let TyKind::Prim(p) = ctx.tb.table.kind(*id)
+            && matches!(p, Prim::Int | Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64)
+        {
+            return prim_bits(*p);
         }
         None
     }
@@ -3842,6 +3871,48 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 match s.write_all(payload.as_bytes()) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // s115/#137: the byte twins. No UTF-8 gate on read (bytes
+            // are bytes — a `List[int]`); the write refuses an
+            // out-of-range element as `invalid` before any syscall, the
+            // `fs_write_bytes` posture over the socket.
+            "net_read_bytes" => {
+                let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                    return Ok(tag("io"));
+                };
+                if max <= 0 {
+                    return Ok(Flow::Val(self.byte_list_value(&[])));
+                }
+                let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+                match s.read(&mut buf) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "timeout", "io"]))),
+                    Ok(0) => Ok(tag("closed")),
+                    Ok(n) => {
+                        buf.truncate(n);
+                        self.charge_mem(n as u64)?;
+                        Ok(Flow::Val(self.byte_list_value(&buf)))
+                    }
+                }
+            }
+            "net_write_bytes" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let bytes = match self.bytes_of(argv.get(1)) {
+                    None => return self.refuse("this net call shape", span),
+                    Some(Err(())) => return Ok(tag("invalid")),
+                    Some(Ok(b)) => b,
+                };
+                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                    return Ok(tag("io"));
+                };
+                match s.write_all(&bytes) {
                     Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -4705,6 +4776,35 @@ impl<'t> Machine<'t> {
                     if let Some((mask, ..)) = self.wrapping_width(e.span) {
                         return Ok(Flow::Val(Value::Int(n & mask)));
                     }
+                    // D56 (#135): `wrapping[T] as int` is a
+                    // value-preserving conversion. An unsigned wrapping
+                    // value that does not fit the signed target TRAPS
+                    // (joining the D54.4 float→int trap family) — never
+                    // the silent negative bit-cast the native rung used
+                    // to emit. lupin already traps; this brings the
+                    // checked lane to agreement. A sub-64 wrapping is
+                    // stored non-negative already; a full `u64` with the
+                    // top bit set is stored as a negative `i64` pattern,
+                    // whose unsigned value exceeds `i64::MAX`.
+                    if let Some((_, sbits, true)) = self.wrapping_width(inner.span)
+                        && let Some(tbits) = self.signed_int_bits(e.span)
+                    {
+                        let width_mask = if sbits >= 64 {
+                            u64::MAX
+                        } else {
+                            (1u64 << sbits) - 1
+                        };
+                        let uval = (n as u64) & width_mask;
+                        let smax = if tbits >= 64 {
+                            i64::MAX as u64
+                        } else {
+                            (1u64 << (tbits - 1)) - 1
+                        };
+                        if uval > smax {
+                            return self.trap("overflow", "mem.ub.defined", e.span);
+                        }
+                        return Ok(Flow::Val(Value::Int(n)));
+                    }
                     if let Some((lo, hi)) = self.prim_range(e.span)
                         && (n < lo || n > hi)
                     {
@@ -4942,7 +5042,7 @@ impl<'t> Machine<'t> {
             // The s39 net builtin tier: same posture as fs — real host
             // operations, D30 rows, comptime is the one refusal site.
             "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read" | "net_write"
-            | "net_close" | "net_deadline" => {
+            | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {

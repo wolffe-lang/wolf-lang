@@ -16,7 +16,8 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
 - `[conf.anchor.ns]` Registered namespaces and owners:
   `gram` → 01-grammar.md · `mem` → 02-memory-model.md ·
   `conc` → 03-concurrency.md · `abi` → 04-abi.md ·
-  `conf` → 05-conformance.md · `proto` → 06-differential-protocol.md.
+  `conf` → 05-conformance.md · `proto` → 06-differential-protocol.md ·
+  `pkg` → 08-package.md.
   **Reserved forward namespaces** (owned by spec documents not yet
   written; tags in them are legal, reported as *forward*): `str`, `err`,
   `task`, `proc`, `sync`, `generics`, `arith`, `ffi`, `unsafe`,
@@ -24,7 +25,10 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   registered and reserved namespaces is a CI failure. (`test` appended
   2026-08-11 by s39 for the built-in test framework's litmus tier —
   D34/D36 own the future spec document; the append is additive per
-  this clause's own contract, nothing renumbered.)
+  this clause's own contract, nothing renumbered. `pkg` appended
+  2026-08-27 by s115 for #120: 08-package.md's sixteen anchors were
+  registered in the extractor index but never admitted by this clause's
+  letter — the append reconciles the two, additive, nothing renumbered.)
 - `[conf.anchor.stable]` Anchors are **stable once published**: never
   renumbered, never reused. A deleted clause leaves a tombstone (the
   anchor with the text "*tombstone — see <replacement or rationale>*").

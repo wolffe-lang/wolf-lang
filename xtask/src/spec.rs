@@ -293,8 +293,11 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
 
 /// Registered namespaces resolve against the anchor index; reserved
 /// forward namespaces are legal-but-unresolvable ([conf.anchor.ns]).
-pub const REGISTERED_NS: [&str; 10] = [
+pub const REGISTERED_NS: [&str; 11] = [
     "gram", "diag", "mem", "conc", "abi", "conf", "proto", "ct", "type", "os",
+    // Appended 2026-08-27 by s115 (#120): 08-package.md owns the `pkg`
+    // anchors; [conf.anchor.ns] now admits them by its letter too.
+    "pkg",
 ];
 pub const FORWARD_NS: [&str; 15] = [
     "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",

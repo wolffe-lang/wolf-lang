@@ -375,6 +375,7 @@
     "type.numlit.cast": "10-types.md",
     "type.numlit.cast.trunc": "10-types.md",
     "type.numlit.cast.widen": "10-types.md",
+    "type.numlit.cast.wrap": "10-types.md",
     "type.numlit.default": "10-types.md",
     "type.numlit.kind": "10-types.md",
     "type.numlit.propagate": "10-types.md",

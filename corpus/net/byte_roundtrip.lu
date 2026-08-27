@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="bytes: 255 0 128 65\nlen=4 equal=true")
+//! phase: run
+//! conforms: err.union, err.propagate
+//!
+//! s115 (#137): the net BYTE path carries what the str path mangles.
+//! `net_write_bytes`/`net_read_bytes` move a `List[int]` with no
+//! UTF-8 gate, so a wolf server can finally carry a binary body — the
+//! `fs_read_bytes`/`fs_write_bytes` surface over the socket. The
+//! payload is deliberately un-decodable as text: a `0xFF` (255, never
+//! a valid UTF-8 lead), an embedded NUL (0), and a lone continuation
+//! byte (128, a split codepoint the str `net_read`'s decode gate
+//! would reject as `utf8`). It round-trips BYTE-EQUAL over loopback,
+//! port 0 — every byte survives. Both lanes execute this (checked
+//! `wolf_mem::ubcheck`, native/release `wolf_rt::net` since s106), so
+//! the cross-lane sha is the parity claim. Deterministic ordering:
+//! the dial completes in the backlog before accept runs.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+
+    var payload = List[int]()
+    (mut payload).push(255)
+    (mut payload).push(0)
+    (mut payload).push(128)
+    (mut payload).push(65)
+    net_write_bytes(cli, payload)?
+
+    let conn = net_accept(srv)?
+    let got = net_read_bytes(conn, 16)?
+
+    var same = got.len == payload.len
+    var i = 0
+    for b in got {
+        if b != payload[i] { same = false }
+        i = i + 1
+    }
+    var line = "bytes:"
+    for b in got {
+        line = "{line} {b}"
+    }
+    print(line)
+    print("len={got.len} equal={same}")
+
+    net_close(cli)?
+    net_close(conn)?
+    net_close(srv)?
+    0
+}

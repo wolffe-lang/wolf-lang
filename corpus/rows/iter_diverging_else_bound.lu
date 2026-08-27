@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="ok sum: 6\nreject: -99")
+//! phase: run
+//! conforms: err.union, err.else, err.propagate
+//!
+//! #139 (sc20's finding): a List bound through a DIVERGING `else`
+//! still iterates on every lane. `open` is fallible; inside `process`
+//! the bind's `else` handler diverges by returning the ENCLOSING
+//! function's tag, so past it `inner` is a plain `List[int]` at the
+//! `for` — D51/s109 made the diverging branch inhabit any type, and
+//! that must not cost the value its range/loop-licence at the checked
+//! mem tier (the reject-path twin of sc20's `reject_tampered_row`).
+//! Both paths are witnessed: the valid one iterates and sums, the
+//! forced-reject one takes the diverging `else` and never enters the
+//! loop.
+
+fn open(ok: bool) -> List[int] ! {tag} {
+    if !ok { return tag }
+    var l = List[int]()
+    (mut l).push(1)
+    (mut l).push(2)
+    (mut l).push(3)
+    l
+}
+
+fn process(ok: bool) -> int ! {tag} {
+    let inner = open(ok) else |_| { return tag }
+    var sum = 0
+    for b in inner {
+        sum = sum + b
+    }
+    sum
+}
+
+fn main() -> !int {
+    let good = process(true) else 0 - 1
+    print("ok sum: {good}")
+    let bad = process(false) else 0 - 99
+    print("reject: {bad}")
+    0
+}

@@ -1,0 +1,18 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.wrap, arith.wrapping
+//!
+//! D56 (#135): `wrapping[T] as int` is VALUE-preserving, not a silent
+//! bit-cast. A `wrapping[u64]` holding `2^63` (the top bit set) does
+//! not fit `i64`, so the cast TRAPS (overflow) — joining the D54.4
+//! float→int trap family, never the negative number the earlier
+//! lowering silently produced (the "cast that lies" D54 forbids).
+//! This is the split-verdict witness: wolfc used to bit-cast here
+//! while lupin trapped; s115 brings wolfc to agreement, so all lanes
+//! now trap.
+
+fn main() -> !int {
+    let top: wrapping[u64] = 0x8000000000000000
+    let n = top as int
+    n
+}

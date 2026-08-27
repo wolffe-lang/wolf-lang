@@ -995,9 +995,22 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // so native/release each +1 more (union +1). No pre-existing file moved
 // lanes. Totals 188/205/205, union 219, all-three 174. Counts measured
 // by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 188), ("native", 205), ("release", 205)];
-const UNION_FLOOR: usize = 219;
-const ALL_THREE_FLOOR: usize = 174;
+//
+// s115 ratchet over 353 entries: c27's fifth small-debts pass. Five new
+// run-phase witnesses, each three-lane, so every lane and both
+// intersections move +5. `net/byte_roundtrip.lu` — the #137 binary
+// round-trip (0xFF + embedded NUL + a split codepoint) over loopback,
+// byte-equal on all three lanes. `faults/wrap_top_bit_as_int.lu` and
+// `faults/wrap_high_as_i32.lu` — the D56/#135 out-of-range wrapping→int
+// TRAP at both widths, `typecheck/wrap_as_int_in_range.lu` — its
+// in-range converting twin. `rows/iter_diverging_else_bound.lu` — the
+// #139 witness: a List bound through a diverging `else` iterates, and
+// the reject path propagates (the checked-tier `return <row>` fix). No
+// pre-existing file moved lanes (full corpus 0-bad). Totals
+// 193/210/210, union 224, all-three 179. Counts measured by this gate.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 193), ("native", 210), ("release", 210)];
+const UNION_FLOOR: usize = 224;
+const ALL_THREE_FLOOR: usize = 179;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

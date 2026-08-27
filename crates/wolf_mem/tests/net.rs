@@ -88,6 +88,62 @@ fn echo_roundtrip_over_loopback() {
     );
 }
 
+/// s115 (#137): the corpus/net/byte_roundtrip.lu twin — the byte
+/// path carries bytes the str path mangles (a 0xFF, an embedded NUL,
+/// a lone continuation byte), round-tripping BYTE-EQUAL with no UTF-8
+/// gate. `net_write_bytes`/`net_read_bytes` over `List[int]`.
+#[test]
+fn byte_roundtrip_carries_binary() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             let port = net_port(srv)?\n\
+             let cli = net_connect(\"127.0.0.1:{port}\")?\n\
+             var payload = List[int]()\n\
+             (mut payload).push(255)\n\
+             (mut payload).push(0)\n\
+             (mut payload).push(128)\n\
+             (mut payload).push(65)\n\
+             net_write_bytes(cli, payload)?\n\
+             let conn = net_accept(srv)?\n\
+             let got = net_read_bytes(conn, 16)?\n\
+             var same = got.len == payload.len\n\
+             var i = 0\n\
+             for b in got {\n\
+                 if b != payload[i] { same = false }\n\
+                 i = i + 1\n\
+             }\n\
+             print(\"len={got.len} equal={same}\")\n\
+             net_close(cli)?\n\
+             net_close(conn)?\n\
+             net_close(srv)?\n\
+             0\n\
+         }\n",
+        "len=4 equal=true\n",
+    );
+}
+
+/// s115 (#137): a `List[int]` element outside `0..=255` is the
+/// `invalid` row (the `fs_write_bytes` refusal over the socket),
+/// handleable with `else`, and nothing is sent.
+#[test]
+fn write_bytes_out_of_range_is_the_invalid_row() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             let port = net_port(srv)?\n\
+             let cli = net_connect(\"127.0.0.1:{port}\")?\n\
+             var bad = List[int]()\n\
+             (mut bad).push(256)\n\
+             net_write_bytes(cli, bad) else |_| print(\"invalid\")\n\
+             net_close(cli)?\n\
+             net_close(srv)?\n\
+             0\n\
+         }\n",
+        "invalid\n",
+    );
+}
+
 // ------------------------------------------------------------ rows --
 
 /// The corpus/net/refused_row.lu twin: a dead ephemeral port is the
