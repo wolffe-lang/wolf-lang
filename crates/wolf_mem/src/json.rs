@@ -19,8 +19,15 @@
 //!   documented);
 //! - rendering: strings decode (escapes resolved), numbers render as
 //!   their SOURCE text (exactness preserved — no i64/f64 rounding is
-//!   introduced by the tier itself), `true`/`false`/`null` literally,
-//!   objects/arrays as their raw source slice.
+//!   introduced by the tier itself), `true`/`false`/`null` literally.
+//!   Containers split by ADDRESS (s111, wolf-lang#125 — found by
+//!   lupin's independent parser, is18): the ROOT renders as its raw
+//!   source slice, surrounding whitespace trimmed; a NESTED container
+//!   re-renders COMPACT (whitespace gone, strings re-encoded with the
+//!   minimal escape set + lowercase-hex control escapes) because the
+//!   DOM drops child spans. Both are valid RFC 8259 texts; the
+//!   binary has always behaved this way — the old one-mechanism doc
+//!   line was the wrong side.
 //!
 //! Errors are three honest kinds, mapped onto D30 rows by the caller:
 //! `Parse` (any RFC violation), `Missing` (a path that addresses
@@ -513,6 +520,24 @@ mod tests {
         assert!(!valid(&deep));
         let ok = "[".repeat(64) + &"]".repeat(64);
         assert!(valid(&ok));
+    }
+
+    /// wolf-lang#125 — the is18 probe shapes, pinned exactly as
+    /// lupin's independent parser measured the binary: nested
+    /// containers re-render compact (strings re-encoded), the root
+    /// answers its trimmed source slice, spaces preserved.
+    #[test]
+    fn is18_probe_shapes_are_pinned() {
+        let s = "{ \"a\" : { \"b\" : [ 1 , { \"c\" : \"x y\" } ] , \"d\" : \"e\\nf\" , \"e\" : true } }";
+        assert_eq!(
+            get(s, "a").unwrap(),
+            "{\"b\":[1,{\"c\":\"x y\"}],\"d\":\"e\\nf\",\"e\":true}"
+        );
+        assert_eq!(get("   [ 1 ]   ", "").unwrap(), "[ 1 ]");
+        assert_eq!(
+            get("[ [ ] , { } , [ 1.5e0 ] ]", "").unwrap(),
+            "[ [ ] , { } , [ 1.5e0 ] ]"
+        );
     }
 
     #[test]
