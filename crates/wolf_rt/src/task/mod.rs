@@ -107,7 +107,6 @@ pub(crate) use hooks::sched_point;
 #[cfg(test)]
 #[cfg_attr(not(target_os = "linux"), expect(unused_imports))]
 pub(crate) use hooks::test_hook;
-#[cfg_attr(not(target_os = "linux"), expect(unused_imports))]
 pub(crate) use pool::kill_teardown_check;
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{

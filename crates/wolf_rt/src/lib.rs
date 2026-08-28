@@ -35,10 +35,11 @@ pub mod random;
 pub mod reactor;
 // Signal RECEPTION (s114, #126): the self-pipe/sigaction trampoline
 // and the meaning-based receive surface. Rides the task layer's
-// platform gate — the whole native concurrency floor is linux at this
-// campaign stage (reactor/net/task); macOS/BSD/Windows delivery widens
-// with the port sprints (a NAMED stop, spec `[os.signal.platform]`).
-#[cfg(target_os = "linux")]
+// platform gate — linux at s114, macOS since s59 (`pipe` + FD_CLOEXEC
+// where pipe2 does not exist, spec `[os.signal.platform]`'s
+// pre-authorized widening); BSD/Windows delivery widens with the
+// remaining port sprints (a NAMED stop).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod signal;
 pub mod str;
 pub mod time;
