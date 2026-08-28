@@ -501,3 +501,59 @@ fn mismatched_closers_do_not_confuse_the_stack() {
     assert!(ks.contains(&InterpClose));
     assert!(ks.contains(&StrEnd { dedent: 0 }));
 }
+
+// ------------------------------------------------------- char literals
+
+#[test]
+fn char_literal_shapes_lex_clean() {
+    // `[gram.lex.char]` (s121): one scalar between single quotes —
+    // ASCII, multi-byte, the escape set (string set + `\'`), and the
+    // code-point spellings.
+    for src in [
+        "let c = 'a'\n",
+        "let c = 'é'\n",
+        "let c = '中'\n",
+        "let c = '🐺'\n",
+        "let c = '\\n'\n",
+        "let c = '\\''\n",
+        "let c = '\\\\'\n",
+        "let c = '\\\"'\n",
+        "let c = '\\0'\n",
+        "let c = '\\x7f'\n",
+        "let c = '\\u{1F43A}'\n",
+    ] {
+        assert_eq!(codes(src), Vec::<&str>::new(), "clean lex of {src:?}");
+        let ks = kinds(src);
+        assert!(ks.contains(&Char), "a Char token in {src:?}");
+    }
+}
+
+#[test]
+fn char_literal_terminates_statements() {
+    // `[gram.lex.newline]`: a char literal ends its line's statement.
+    assert_eq!(term_count("let c = 'a'\nlet d = 'b'\n"), 2);
+}
+
+#[test]
+fn char_literal_spans_are_lossless() {
+    let src = "let c = '\\u{1F43A}'\nlet d = c == '\\''\n";
+    let lexed = util::lex(src);
+    assert_eq!(lexed.reassemble(src.as_bytes()), src.as_bytes());
+}
+
+#[test]
+fn char_literal_malformed_shapes_are_error_tokens() {
+    // Each malformed shape is one E0110 and an Error token; the lexer
+    // stays total and the rest of the line still lexes.
+    for src in [
+        "let c = ''\n",            // empty
+        "let c = 'ab'\n",          // two scalars
+        "let c = 'a\n",            // unterminated at end of line
+        "let c = '\\u{D800}'\n",   // surrogate: not a scalar value
+        "let c = '\\u{110000}'\n", // beyond the last scalar value
+        "let c = 'e\\u{301}'\n",   // combining pair: two scalars
+    ] {
+        assert_eq!(codes(src), vec!["E0110"], "one E0110 for {src:?}");
+        assert!(kinds(src).contains(&Error), "an Error token for {src:?}");
+    }
+}

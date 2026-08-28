@@ -70,8 +70,8 @@
 //! # Statement termination `[gram.lex.newline]`
 //!
 //! [`TokenKind::Term`] is emitted at a newline iff the last token on the
-//! line is an identifier / `_`, a literal (`Int`, `Float`, `StrEnd`,
-//! `true`, `false`), `return` / `break` / `continue`, a closing `)` `]`
+//! line is an identifier / `_`, a literal (`Int`, `Float`, `Char`,
+//! `StrEnd`, `true`, `false`), `return` / `break` / `continue`, a closing `)` `]`
 //! `}`, or postfix `?` — unless the innermost enclosing delimiter is `(`,
 //! `[`, or an interpolation (a `{…}` block re-enables insertion whatever
 //! it is nested in), or the previous token is the `]` closing an
@@ -98,6 +98,7 @@
 //! | E0107 | stray byte / character (incl. BOM, lone `}` in a string)   |
 //! | E0108 | string/interpolation nesting deeper than [`MAX_NEST`]      |
 //! | E0109 | unterminated raw or generalized literal                    |
+//! | E0110 | malformed `char` literal (s121, `[gram.lex.char]`)         |
 
 use wolf_span::Span;
 
@@ -121,6 +122,7 @@ pub mod codes {
     pub const STRAY_BYTE: Code = c::E0107;
     pub const NESTING_TOO_DEEP: Code = c::E0108;
     pub const UNTERMINATED_RAW: Code = c::E0109;
+    pub const MALFORMED_CHAR: Code = c::E0110;
 }
 
 /// Maximum string/interpolation mode-stack depth. Deeper input gets an
@@ -211,6 +213,11 @@ pub enum TokenKind {
     Underscore,
     Int,
     Float,
+    /// `'a'` — a `char` literal (s121, `[gram.lex.char]`): one Unicode
+    /// scalar value between single quotes; escapes stay uncooked in the
+    /// span (value construction is sema work, the lexer stays
+    /// span-honest, exactly as string fragments do).
+    Char,
     Kw(Keyword),
     Punct(Punct),
     /// `#[` — the attribute opener (see crate docs).
@@ -249,6 +256,7 @@ impl TokenKind {
             | TokenKind::Underscore
             | TokenKind::Int
             | TokenKind::Float
+            | TokenKind::Char
             | TokenKind::StrEnd { .. } => true,
             TokenKind::Kw(k) => matches!(
                 k,

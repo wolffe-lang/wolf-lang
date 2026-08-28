@@ -1,0 +1,26 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0110,
+        severity: Error,
+        message: "`0x110000` is beyond `0x10FFFF`, the last Unicode scalar value",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 9,
+                hi: 19,
+            },
+            label: "this escape names no `char`",
+        },
+        secondary: [],
+        notes: [
+            "the scalar-value domain is `0..=0x10FFFF` minus the surrogate gap; nothing above it is a character.",
+        ],
+        suggestions: [],
+    },
+]

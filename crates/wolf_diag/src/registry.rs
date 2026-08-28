@@ -264,6 +264,20 @@ its body is raw (no escapes), so a `\"` does not extend it — split long
 bodies or use a fenced raw string.
 "##);
 
+code!(E0110, "a malformed `char` literal", r#"
+A `char` literal is exactly one Unicode scalar value in single quotes:
+`'a'`, `'é'`, `'\n'`, `'\''`, `'\u{1F43A}'`. The escapes are the string
+set plus `\'`. The common misses: an empty `''` (there is no "no
+character" char — use an error row or a `str`); more than one scalar
+(`'ab'`, or an accented letter typed as base + combining accent — a
+`char` is a scalar, not a grapheme; spell it precomposed or keep it in
+a `str`); a literal that never closes before the end of the line; and a
+`\u{…}` escape naming a value that is not a scalar — the UTF-16
+surrogate gap `0xD800..=0xDFFF` and anything above `0x10FFFF` name no
+character, and no wolf `char` can hold one (the same domain the
+trapping `int as char` cast enforces at run time).
+"#);
+
 // ------------------------------------------------------------------------
 // E02xx — the parser's family.
 // ------------------------------------------------------------------------
@@ -2303,8 +2317,8 @@ mod tests {
     fn frontend_codes_all_registered() {
         for c in [
             "E0001", "E0002", "E0003", "E0005", "E0006", "E0007", "E0008", "E0101", "E0102",
-            "E0103", "E0104", "E0105", "E0106", "E0107", "E0108", "E0109", "E0201", "E0202",
-            "E0203", "E0204", "E0205", "E0206", "E0207", "E0208", "E0209",
+            "E0103", "E0104", "E0105", "E0106", "E0107", "E0108", "E0109", "E0110", "E0201",
+            "E0202", "E0203", "E0204", "E0205", "E0206", "E0207", "E0208", "E0209",
         ] {
             assert!(explain(c).is_some(), "{c} missing from the registry");
         }

@@ -9,6 +9,10 @@ const ESCAPE_NOTE: &str = "the escapes wolf understands are `\\n`, `\\t`, `\\r`,
      `\\\"`, `\\xNN`, and `\\u{…}`. For a literal backslash, write `\\\\`; for text with no \
      escapes at all, use a raw string `r\"…\"`.";
 
+/// The E0110 next-step note (s121, `[gram.lex.char]`).
+const CHAR_NOTE: &str = "a `char` literal is one Unicode scalar value in single quotes: \
+     `'a'`, `'é'`, `'\\n'`, `'\\''`, `'\\u{1F43A}'`. For text, use a string literal `\"…\"`.";
+
 use crate::{
     Lexed, MAX_NEST, Punct, StrKind, Token, TokenKind, Trivia, TriviaKind, codes, keyword,
 };
@@ -310,6 +314,7 @@ impl Lexer<'_> {
         let b = self.src[self.pos];
         match b {
             b'"' => self.open_quote_string(),
+            b'\'' => self.char_literal(),
             b'0'..=b'9' => self.number(),
             b'#' => {
                 if self.peek(1) == Some(b'[') {
@@ -489,6 +494,181 @@ impl Lexer<'_> {
             TokenKind::Ident
         };
         self.emit(kind, lo, self.pos);
+    }
+
+    /// `'a'` — a `char` literal (s121, `[gram.lex.char]`): exactly one
+    /// Unicode scalar value between single quotes. The escape set is the
+    /// string set plus `\'` (`\n \t \r \\ \' \" \0 \xNN \u{1–6 hex}`);
+    /// escapes stay uncooked in the span, but a `\x`/`\u` escape naming
+    /// a value that is NOT a scalar (the surrogate gap
+    /// `0xD800..=0xDFFF`, or above `0x10FFFF`) is refused here — a
+    /// `char` that cannot be UTF-8-encoded must never be constructible
+    /// (D24). Malformed shapes — empty, unterminated at end of line or
+    /// file, more than one scalar — are E0110 with an `Error` token.
+    fn char_literal(&mut self) {
+        let lo = self.pos;
+        self.pos += 1; // opening `'`
+        let mut scalars = 0usize;
+        let mut second_at: Option<usize> = None;
+        let mut bad_value: Option<(usize, usize, u32)> = None;
+        let closed = loop {
+            match self.peek(0) {
+                None | Some(b'\n') => break false,
+                Some(b'\'') => {
+                    self.pos += 1;
+                    break true;
+                }
+                Some(b'\\') => {
+                    let esc_lo = self.pos;
+                    match self.char_escape_len() {
+                        Ok((len, value)) => {
+                            if scalars == 1 && second_at.is_none() {
+                                second_at = Some(self.pos);
+                            }
+                            self.pos += len;
+                            if let Some(v) = value
+                                && char::from_u32(v).is_none()
+                                && bad_value.is_none()
+                            {
+                                bad_value = Some((esc_lo, self.pos, v));
+                            }
+                            scalars += 1;
+                        }
+                        Err((consumed, msg)) => {
+                            self.escape_diag(esc_lo, esc_lo + consumed, msg);
+                            if scalars == 1 && second_at.is_none() {
+                                second_at = Some(self.pos);
+                            }
+                            self.pos += consumed;
+                            scalars += 1;
+                        }
+                    }
+                }
+                Some(_) => match self.decode(self.pos) {
+                    Decoded::Char(_, n) => {
+                        if scalars == 1 && second_at.is_none() {
+                            second_at = Some(self.pos);
+                        }
+                        self.pos += n;
+                        scalars += 1;
+                    }
+                    _ => {
+                        // Invalid UTF-8 inside the literal: let the
+                        // stray-byte machinery report the run (E0106);
+                        // the opener alone is the malformed literal.
+                        let span = self.span(lo, self.pos);
+                        self.diags.push(
+                            Diagnostic::error(
+                                codes::MALFORMED_CHAR,
+                                span,
+                                "this `char` literal never closes",
+                            )
+                            .with_label("opened here")
+                            .with_note(CHAR_NOTE),
+                        );
+                        self.emit(TokenKind::Error, lo, self.pos);
+                        return;
+                    }
+                },
+            }
+        };
+        let span = self.span(lo, self.pos);
+        if !closed {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::MALFORMED_CHAR,
+                    span,
+                    "this `char` literal never closes",
+                )
+                .with_label("expected a closing `'` before the end of the line")
+                .with_note(CHAR_NOTE),
+            );
+            self.emit(TokenKind::Error, lo, self.pos);
+            return;
+        }
+        if scalars == 0 {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::MALFORMED_CHAR,
+                    span,
+                    "a `char` literal cannot be empty",
+                )
+                .with_label("nothing between the quotes")
+                .with_note(CHAR_NOTE),
+            );
+            self.emit(TokenKind::Error, lo, self.pos);
+            return;
+        }
+        if scalars > 1 {
+            let at = second_at.unwrap_or(self.pos);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::MALFORMED_CHAR,
+                    span,
+                    "a `char` literal holds exactly one Unicode scalar value",
+                )
+                .with_label(format!("the second one starts at byte {}", at - lo))
+                .with_note(
+                    "a `char` is one scalar, not a grapheme: an accented letter typed \
+                     as base + combining accent is TWO scalars even when it renders as \
+                     one glyph (spell it precomposed, or keep it in a `str`). For text, \
+                     use a string literal `\"…\"`.",
+                ),
+            );
+            self.emit(TokenKind::Error, lo, self.pos);
+            return;
+        }
+        if let Some((blo, bhi, v)) = bad_value {
+            let (what, hint) = if (0xD800..=0xDFFF).contains(&v) {
+                (
+                    "a UTF-16 surrogate, not a Unicode scalar value",
+                    "surrogates (`0xD800..=0xDFFF`) exist only as UTF-16 encoding \
+                     artifacts; no `char` holds one, and no `str` encodes one (D24).",
+                )
+            } else {
+                (
+                    "beyond `0x10FFFF`, the last Unicode scalar value",
+                    "the scalar-value domain is `0..=0x10FFFF` minus the surrogate \
+                     gap; nothing above it is a character.",
+                )
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::MALFORMED_CHAR,
+                    self.span(blo, bhi),
+                    format!("`{v:#x}` is {what}"),
+                )
+                .with_label("this escape names no `char`")
+                .with_note(hint),
+            );
+            self.emit(TokenKind::Error, lo, self.pos);
+            return;
+        }
+        self.emit(TokenKind::Char, lo, self.pos);
+    }
+
+    /// Escape length (and, for `\xNN`/`\u{…}`, the named code point) at
+    /// `self.pos` inside a `char` literal. The string escape set
+    /// ([`Self::escape_len`]) plus `\'`.
+    fn char_escape_len(&self) -> Result<(usize, Option<u32>), (usize, String)> {
+        if self.peek(1) == Some(b'\'') {
+            return Ok((2, None));
+        }
+        let len = self.escape_len()?;
+        let value = match self.peek(1) {
+            Some(b'x') => {
+                let s = std::str::from_utf8(&self.src[self.pos + 2..self.pos + len]).ok();
+                s.and_then(|s| u32::from_str_radix(s, 16).ok())
+            }
+            Some(b'u') => {
+                // `\u{…}`: digits sit between `{` at +2 and the closing
+                // `}` at `len - 1` (escape_len validated the shape).
+                let s = std::str::from_utf8(&self.src[self.pos + 3..self.pos + len - 1]).ok();
+                s.and_then(|s| u32::from_str_radix(s, 16).ok())
+            }
+            _ => None,
+        };
+        Ok((len, value))
     }
 
     /// Merge and report a run of junk: invalid UTF-8 (E0106, once per

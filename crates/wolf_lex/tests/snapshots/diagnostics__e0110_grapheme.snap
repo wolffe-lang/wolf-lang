@@ -1,0 +1,26 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0110,
+        severity: Error,
+        message: "a `char` literal holds exactly one Unicode scalar value",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 13,
+            },
+            label: "the second one starts at byte 2",
+        },
+        secondary: [],
+        notes: [
+            "a `char` is one scalar, not a grapheme: an accented letter typed as base + combining accent is TWO scalars even when it renders as one glyph (spell it precomposed, or keep it in a `str`). For text, use a string literal `\"…\"`.",
+        ],
+        suggestions: [],
+    },
+]

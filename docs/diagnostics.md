@@ -196,6 +196,22 @@ Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0108.snap
 
 Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0109_generalized.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0109_raw.snap
 
+## E0110 — a malformed `char` literal
+
+A `char` literal is exactly one Unicode scalar value in single quotes:
+`'a'`, `'é'`, `'\n'`, `'\''`, `'\u{1F43A}'`. The escapes are the string
+set plus `\'`. The common misses: an empty `''` (there is no "no
+character" char — use an error row or a `str`); more than one scalar
+(`'ab'`, or an accented letter typed as base + combining accent — a
+`char` is a scalar, not a grapheme; spell it precomposed or keep it in
+a `str`); a literal that never closes before the end of the line; and a
+`\u{…}` escape naming a value that is not a scalar — the UTF-16
+surrogate gap `0xD800..=0xDFFF` and anything above `0x10FFFF` name no
+character, and no wolf `char` can hold one (the same domain the
+trapping `int as char` cast enforces at run time).
+
+Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0110_beyond.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0110_empty.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0110_grapheme.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0110_surrogate.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0110_two_scalars.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0110_unterminated.snap
+
 ## E0201 — the parser expected a different token or construct here
 
 The workhorse parse error: at this position the grammar required

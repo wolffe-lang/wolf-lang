@@ -1,0 +1,26 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0110,
+        severity: Error,
+        message: "`0xd800` is a UTF-16 surrogate, not a Unicode scalar value",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 9,
+                hi: 17,
+            },
+            label: "this escape names no `char`",
+        },
+        secondary: [],
+        notes: [
+            "surrogates (`0xD800..=0xDFFF`) exist only as UTF-16 encoding artifacts; no `char` holds one, and no `str` encodes one (D24).",
+        ],
+        suggestions: [],
+    },
+]
