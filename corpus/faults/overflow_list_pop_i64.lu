@@ -1,0 +1,20 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 at pop provenance, 64-bit width (#152): `List[int]` elements are
+//! full `int`, and the checked multiply still fires when the product
+//! leaves THAT range — the law holds at list-element provenance on
+//! every lane; there is no hole, only a width. One push away from
+//! `typecheck/numlit_list_element_width.lu`, which fits and prints.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(9223372036854775807)
+    (mut xs).push(2)
+    let a = (mut xs).pop() else 0
+    let b = (mut xs).pop() else 0
+    let m = a * b
+    print("{m}")   // unreachable: the multiply traps
+    0
+}

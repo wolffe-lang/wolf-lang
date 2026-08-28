@@ -1114,9 +1114,35 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // moved lanes — the deltas are exactly the six new files. Totals
 // 211/230/230, union 244, all-three 197. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 211), ("native", 230), ("release", 230)];
-const UNION_FLOOR: usize = 244;
-const ALL_THREE_FLOOR: usize = 197;
+// s123 ratchet over 377 entries: the compiler does not panic (#151).
+// Three new run-phase witnesses, every one a shape that CRASHED the
+// compiler before this sprint. `strings/match_str_const_scrutinee.lu`
+// — `match` over str literals with an interned-literal scrutinee, the
+// build-time-decided candidates (the Braun `use_var` panic and its
+// unreachable-block siblings). `typecheck/match_guard_const.lu` — the
+// guard that decides at build time; the checked executor still
+// refuses match guards by name ("this expression shape in checked
+// execution"), so checked moves +2 while native/release move +3.
+// `typecheck/match_chain_reuse.lu` — a chain-block constant
+// re-mentioned after the match (the [dominance] GVN-leak neighbour);
+// three-lane. Totals 213/233/233, union 247, all-three 199. Counts
+// measured by this gate, not predicted.
+// s123 second ratchet over 383 entries: E0415 and the #152 pinning.
+// Five more run-phase witnesses. `typecheck/numlit_extremes.lu` — the
+// legal signed extremes, i64::MIN through the direct `-<literal>`
+// spelling every tier now decodes in one step; three-lane.
+// `typecheck/numlit_u64_edge.lu` — `u64::MAX` runs on the native
+// tiers; the checked executor's i64 value model refuses the spelling
+// by name, so checked moves +4 while native/release move +5.
+// `typecheck/numlit_list_element_width.lu` and the two
+// `faults/overflow_list_pop_*` twins — the #152 program pinned
+// correct beside the traps at both widths; all three-lane
+// (trap(overflow) counts as an executing verdict). Totals
+// 217/238/238, union 252, all-three 203. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 217), ("native", 238), ("release", 238)];
+const UNION_FLOOR: usize = 252;
+const ALL_THREE_FLOOR: usize = 203;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

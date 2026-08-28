@@ -2367,6 +2367,24 @@ enum PatShape {
     StrTests(Vec<Vec<u8>>),
 }
 
+/// Where a `match` arm's guard re-enters the decision chain on
+/// failure (#151).
+#[derive(Clone, Copy)]
+enum ArmNext {
+    /// No re-entry edge exists: the arm is unconditionally last, and a
+    /// guard on it is refused (coverage came from this arm).
+    None,
+    /// Failure re-enters the chain at this existing block (the runtime
+    /// test chains own their `next_bb`).
+    To(Block),
+    /// The arm was selected at BUILD time, so no chain block exists
+    /// yet: create the re-entry block only if an edge to it is
+    /// actually emitted — a guard that itself decides at build time
+    /// emits none, and a pre-created block would sit predecessorless
+    /// (the unreachable-block ICE this enum exists to prevent).
+    Fresh,
+}
+
 /// How one `mut` argument reaches the callee (s26).
 enum MutArg {
     /// A local place spills to a fresh stack slot; the callee gets the
@@ -6227,7 +6245,68 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(n) = parse_int_literal(&text) else {
             return Err(refuse("this literal shape in WIR lowering", e.span));
         };
+        // Backstop (#151): sema's E0415 owns the rejection, but an
+        // unfitting payload must never reach the verifier as an
+        // `iconst` — that is the [const-range] ICE. A refusal here is
+        // a bug upstream, not a user surface.
+        if let Some((lo, hi)) = self.b.module.types.int_bounds(wty)
+            && (i128::from(n) < lo || i128::from(n) > hi)
+        {
+            return Err(refuse("a literal beyond its type's width", e.span));
+        }
         Ok(Flow::Val(Some(self.b.iconst(wty, n))))
+    }
+
+    /// The direct `-<int literal>` spelling emits the NEGATED constant
+    /// in one step (#151). Lowering the positive half first minted an
+    /// `iconst` the type cannot hold — dead after the negation fold,
+    /// but the verifier's [const-range] reads every instruction — and
+    /// `i64::MIN` has no positive spelling at all, so the two-step
+    /// route could never build it. `Ok(None)` hands anything that is
+    /// not a signed-integer literal back to the general path.
+    fn neg_literal_direct(&mut self, lit: &'t GreenNode, span: Span) -> R<Option<Value>> {
+        let Some(tok) = lit.tokens().next() else {
+            return Ok(None);
+        };
+        if tok.kind != SyntaxKind::Int {
+            return Ok(None);
+        }
+        let Some(sema_ty) = self.expr_sema_ty(lit.span) else {
+            return Ok(None);
+        };
+        let Some(wty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            sema_ty,
+            lit.span,
+        )?
+        else {
+            return Ok(None);
+        };
+        // Floats (an adopted integer literal) keep `Fneg`; unsigned
+        // keeps its own bit-pattern rules.
+        if self.b.module.types.int_bits(wty).is_none() || sema_unsigned(self.table, sema_ty) {
+            return Ok(None);
+        }
+        let text = self.text(lit.span);
+        let Some(bits) = parse_uint_literal(&text) else {
+            return Err(refuse("this literal shape in WIR lowering", lit.span));
+        };
+        let neg = -i128::from(bits);
+        let (lo, hi) = self
+            .b
+            .module
+            .types
+            .int_bounds(wty)
+            .expect("signed integers have bounds");
+        if neg < lo || neg > hi {
+            // Sema's E0415 owns this rejection; reaching here is a bug
+            // upstream, answered with a refusal, never an abort.
+            return Err(refuse("a literal beyond its type's width", span));
+        }
+        self.b.stats.fold += 1;
+        Ok(Some(self.b.iconst(wty, neg as i64)))
     }
 
     fn lower_prefix(&mut self, e: &'t GreenNode) -> R<Flow> {
@@ -6237,6 +6316,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         match d.op().map(|t| t.kind) {
             Some(SyntaxKind::Minus) => {
+                if operand.kind == SyntaxKind::LiteralExpr
+                    && let Some(v) = self.neg_literal_direct(operand, e.span)?
+                {
+                    return Ok(Flow::Val(Some(v)));
+                }
                 let v = flow_val!(self.lower_expr(operand));
                 let Some(v) = v else {
                     return Err(refuse("negation of a valueless expression", e.span));
@@ -8990,6 +9074,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (c, id)
         })
         .collect();
+        // The chain blocks do not dominate the merge: constants born
+        // in them stay out of the enclosing GVN scope (#151's
+        // dominance neighbour — same rule as `lower_match`'s chain).
+        let mut chain_gvn = 0usize;
         for (c, id) in cases {
             let k = self.b.iconst(types::I64, c);
             let eq = self
@@ -9006,9 +9094,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             self.b.ins_br(eq, merge, &[tag], next, &[]);
             self.b.seal_block(next);
             self.b.switch_to_block(next);
+            self.b.gvn_push_scope();
+            chain_gvn += 1;
         }
         let io_tag = self.b.iconst(types::I64, io_id);
         self.b.ins_jmp(merge, &[io_tag]);
+        for _ in 0..chain_gvn {
+            self.b.gvn_pop_scope();
+        }
         self.b.seal_block(merge);
         self.b.switch_to_block(merge);
         out
@@ -10779,6 +10872,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     fn code_tag_chain(&mut self, code: Value, pairs: &[(i64, &str)], fallback: &str) -> Value {
         let merge = self.b.create_block();
         let out = self.b.add_block_param(merge, types::I64);
+        // The chain blocks do not dominate the merge: constants born
+        // in them stay out of the enclosing GVN scope (#151's
+        // dominance neighbour — same rule as `lower_match`'s chain).
+        let mut chain_gvn = 0usize;
         for (c, name) in pairs {
             let id = self.b.module.tag_id(name);
             let k = self.b.iconst(types::I64, *c);
@@ -10796,10 +10893,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             self.b.ins_br(eq, merge, &[tag], next, &[]);
             self.b.seal_block(next);
             self.b.switch_to_block(next);
+            self.b.gvn_push_scope();
+            chain_gvn += 1;
         }
         let fb = self.b.module.tag_id(fallback);
         let fb_tag = self.b.iconst(types::I64, fb);
         self.b.ins_jmp(merge, &[fb_tag]);
+        for _ in 0..chain_gvn {
+            self.b.gvn_pop_scope();
+        }
         self.b.seal_block(merge);
         self.b.switch_to_block(merge);
         out
@@ -11467,6 +11569,37 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// a plain jump, so a block created for the arm that lost would sit
     /// predecessorless — the shape Braun's `use_var` panics on when a
     /// later byte load walks its memory token back through it.
+    /// The build-time verdict `str_eq_inline` would fold to, if any:
+    /// `Some(eq)` when equality is decided without emitting a test —
+    /// unequal constant lengths, or equal lengths over the same
+    /// storage value. `None` means only a runtime test can answer.
+    ///
+    /// Callers that BRANCH on a str equality must ask this first
+    /// (#151): `ins_br` on a folded condition emits the taken edge
+    /// only, so a block wired to the not-taken side would sit
+    /// predecessorless — the shape Braun's `use_var` panics on and the
+    /// verifier rejects as unreachable. `str_eq_inline` itself decides
+    /// through this same function, so the two can never drift apart.
+    fn str_eq_const(&self, ap: Value, al: Value, bp: Value, bl: Value) -> Option<bool> {
+        // Mirror the length guard's own folding: two constants, or one
+        // value read twice (`icmp_same`).
+        let len_eq = if al == bl {
+            Some(true)
+        } else {
+            match (self.b.as_int_const(al), self.b.as_int_const(bl)) {
+                (Some(a), Some(b)) => Some(a == b),
+                _ => None,
+            }
+        };
+        match len_eq {
+            // Different lengths, different strings.
+            Some(false) => Some(false),
+            // Equal lengths over the same storage: equal by identity.
+            Some(true) if ap == bp => Some(true),
+            _ => None,
+        }
+    }
+
     fn str_eq_inline(
         &mut self,
         ap: Value,
@@ -11475,9 +11608,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         bl: Value,
         want_eq: bool,
     ) -> Value {
-        // Different lengths, different strings — one compare, and it is
-        // the whole answer at a `match` arm whose literal is a
-        // different width than the scrutinee.
+        // Decided outright: unequal lengths, or equal lengths over
+        // the same storage — one verdict, and it is the whole answer
+        // at a `match` arm whose literal is a different width than
+        // the scrutinee.
+        if let Some(c) = self.str_eq_const(ap, al, bp, bl) {
+            self.b.stats.fold += 1;
+            return self.b.bconst(c == want_eq);
+        }
+        // Different lengths, different strings — one compare.
         let len_eq = self
             .b
             .ins(
@@ -11487,14 +11626,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Aux::IntCc(IntCc::Eq),
             )
             .one();
-        if let Some(c) = self.b.as_bool_const(len_eq)
-            && (!c || ap == bp)
-        {
-            // Decided outright: unequal lengths, or equal lengths over
-            // the same storage.
-            self.b.stats.fold += 1;
-            return self.b.bconst(c == want_eq);
-        }
         let merge = self.b.create_block();
         let out = self.b.add_block_param(merge, types::BOOL);
         // `yes` is what an EQUAL verdict carries out; `!=` swaps them.
@@ -14311,6 +14442,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // The merge point, created on the first arm that completes.
         let mut merge: Option<(Block, Option<Value>)> = None;
         let mut open = true; // the current block still needs a decision
+        // Every block the chain CONTINUES in after the first branch —
+        // each arm's `next_bb`, each guard's fresh re-entry — fails to
+        // dominate the merge, so values born there (candidate
+        // constants, interned literal addresses) must not leak into
+        // the enclosing GVN scope: a later mention of the same
+        // constant would reuse a definition the verifier rejects for
+        // dominance (#151's neighbour, found by its witness). One
+        // scope per continuation block, all popped before the merge.
+        let mut chain_gvn = 0usize;
         for (i, arm) in arms.iter().enumerate() {
             if !open {
                 break; // an irrefutable arm ended the chain (E0802'd)
@@ -14328,7 +14468,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         want_v,
                         merge_eu,
                         &mut merge,
-                        None,
+                        ArmNext::None,
                         e.span,
                     )?;
                     open = false;
@@ -14343,8 +14483,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             continue;
                         }
                         if arm.guard().is_some() {
-                            let next_bb = self.b.create_block();
-                            self.enter_match_arm(
+                            // The guard may itself decide at build
+                            // time, so its re-entry block is created
+                            // only if an edge to it is emitted (#151).
+                            match self.enter_match_arm(
                                 arm,
                                 sv,
                                 &[],
@@ -14352,11 +14494,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 want_v,
                                 merge_eu,
                                 &mut merge,
-                                Some(next_bb),
+                                ArmNext::Fresh,
                                 e.span,
-                            )?;
-                            self.b.seal_block(next_bb);
-                            self.b.switch_to_block(next_bb);
+                            )? {
+                                Some(nb) => {
+                                    self.b.seal_block(nb);
+                                    self.b.switch_to_block(nb);
+                                    self.b.gvn_push_scope();
+                                    chain_gvn += 1;
+                                }
+                                // No re-entry edge: the arm closes the
+                                // chain.
+                                None => open = false,
+                            }
                         } else {
                             self.enter_match_arm(
                                 arm,
@@ -14366,7 +14516,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 want_v,
                                 merge_eu,
                                 &mut merge,
-                                None,
+                                ArmNext::None,
                                 e.span,
                             )?;
                             open = false;
@@ -14382,7 +14532,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             want_v,
                             merge_eu,
                             &mut merge,
-                            None,
+                            ArmNext::None,
                             e.span,
                         )?;
                         open = false;
@@ -14404,11 +14554,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             want_v,
                             merge_eu,
                             &mut merge,
-                            Some(next_bb),
+                            ArmNext::To(next_bb),
                             e.span,
                         )?;
                         self.b.seal_block(next_bb);
                         self.b.switch_to_block(next_bb);
+                        self.b.gvn_push_scope();
+                        chain_gvn += 1;
                     }
                 }
                 PatShape::Tests(consts, binds) => {
@@ -14435,7 +14587,31 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             continue;
                         }
                         if arm.guard().is_some() {
-                            let next_bb = self.b.create_block();
+                            // The guard may itself decide at build
+                            // time, so its re-entry block is created
+                            // only if an edge to it is emitted (#151).
+                            match self.enter_match_arm(
+                                arm,
+                                sv,
+                                &binds,
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                ArmNext::Fresh,
+                                e.span,
+                            )? {
+                                Some(nb) => {
+                                    self.b.seal_block(nb);
+                                    self.b.switch_to_block(nb);
+                                    self.b.gvn_push_scope();
+                                    chain_gvn += 1;
+                                }
+                                // No re-entry edge: the arm closes the
+                                // chain.
+                                None => open = false,
+                            }
+                        } else {
                             self.enter_match_arm(
                                 arm,
                                 sv,
@@ -14444,14 +14620,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 want_v,
                                 merge_eu,
                                 &mut merge,
-                                Some(next_bb),
+                                ArmNext::None,
                                 e.span,
-                            )?;
-                            self.b.seal_block(next_bb);
-                            self.b.switch_to_block(next_bb);
-                        } else {
-                            self.enter_match_arm(
-                                arm, sv, &binds, None, want_v, merge_eu, &mut merge, None, e.span,
                             )?;
                             open = false;
                         }
@@ -14461,7 +14631,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         // Sema's totality theorem: the final test is an
                         // unconditional edge — no default arm exists.
                         self.enter_match_arm(
-                            arm, sv, &binds, None, want_v, merge_eu, &mut merge, None, e.span,
+                            arm,
+                            sv,
+                            &binds,
+                            None,
+                            want_v,
+                            merge_eu,
+                            &mut merge,
+                            ArmNext::None,
+                            e.span,
                         )?;
                         open = false;
                     } else {
@@ -14506,11 +14684,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             want_v,
                             merge_eu,
                             &mut merge,
-                            Some(next_bb),
+                            ArmNext::To(next_bb),
                             e.span,
                         )?;
                         self.b.seal_block(next_bb);
                         self.b.switch_to_block(next_bb);
+                        self.b.gvn_push_scope();
+                        chain_gvn += 1;
                     }
                 }
                 PatShape::StrTests(cands) => {
@@ -14530,20 +14710,97 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             want_v,
                             merge_eu,
                             &mut merge,
-                            None,
+                            ArmNext::None,
                             e.span,
                         )?;
                         open = false;
                         continue;
                     }
                     let (sp, sl) = self.str_parts(sv);
+                    // Build-time verdicts FIRST (#151): a scrutinee
+                    // that is itself an interned literal decides
+                    // candidates without a test, and `ins_br` on a
+                    // decided condition emits only the taken edge —
+                    // the not-taken block would sit predecessorless
+                    // while the rest of the chain is lowered into it
+                    // (the Braun `use_var` panic / unreachable-block
+                    // ICE). Decided candidates never reach the branch.
+                    let mut live: Vec<(Value, Value)> = Vec::new();
+                    let mut decided_hit = false;
+                    for bytesc in &cands {
+                        let (cp, cl) = self.str_literal_parts(bytesc);
+                        match self.str_eq_const(sp, sl, cp, cl) {
+                            // A certain candidate: the arm is taken.
+                            // Candidates are pure equality tests, so
+                            // the untested siblings are unobservable.
+                            Some(true) => {
+                                self.b.stats.fold += 1;
+                                decided_hit = true;
+                                break;
+                            }
+                            // A hopeless candidate emits no test.
+                            Some(false) => self.b.stats.fold += 1,
+                            None => live.push((cp, cl)),
+                        }
+                    }
+                    if decided_hit {
+                        // The statically selected arm — the same
+                        // posture as a constant scalar discriminant.
+                        if arm.guard().is_some() {
+                            match self.enter_match_arm(
+                                arm,
+                                sv,
+                                &[],
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                ArmNext::Fresh,
+                                e.span,
+                            )? {
+                                Some(nb) => {
+                                    self.b.seal_block(nb);
+                                    self.b.switch_to_block(nb);
+                                    self.b.gvn_push_scope();
+                                    chain_gvn += 1;
+                                }
+                                None => open = false,
+                            }
+                        } else {
+                            self.enter_match_arm(
+                                arm,
+                                sv,
+                                &[],
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                ArmNext::None,
+                                e.span,
+                            )?;
+                            open = false;
+                        }
+                        continue;
+                    }
+                    if live.is_empty() {
+                        // Every candidate decided-unequal: the arm
+                        // cannot match, and lowers to nothing.
+                        continue;
+                    }
                     let arm_bb = self.b.create_block();
                     let next_bb = self.b.create_block();
                     let mut chain_scopes = 0usize;
-                    for (k, bytesc) in cands.iter().enumerate() {
-                        let (cp, cl) = self.str_literal_parts(bytesc);
+                    for (k, &(cp, cl)) in live.iter().enumerate() {
                         let t = self.str_eq_inline(sp, sl, cp, cl, true);
-                        if k + 1 == cands.len() {
+                        // `str_eq_const` said None for every live
+                        // candidate, and `str_eq_inline` decides by
+                        // that same function — the test cannot have
+                        // folded.
+                        debug_assert!(
+                            self.b.as_bool_const(t).is_none(),
+                            "a live str candidate folded after its verdict pass"
+                        );
+                        if k + 1 == live.len() {
                             self.b.ins_br(t, arm_bb, &[], next_bb, &[]);
                         } else {
                             let more = self.b.create_block();
@@ -14567,11 +14824,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         want_v,
                         merge_eu,
                         &mut merge,
-                        Some(next_bb),
+                        ArmNext::To(next_bb),
                         e.span,
                     )?;
                     self.b.seal_block(next_bb);
                     self.b.switch_to_block(next_bb);
+                    self.b.gvn_push_scope();
+                    chain_gvn += 1;
                 }
             }
         }
@@ -14580,6 +14839,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // proved the value space covered, so this edge is
             // unreachable at runtime — the licensed trap.
             self.b.ins_trap(TrapKind::Assert);
+        }
+        for _ in 0..chain_gvn {
+            self.b.gvn_pop_scope();
         }
         match merge {
             Some((mb, param)) => {
@@ -14592,8 +14854,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     }
 
     /// Enter one arm: bind payloads (or the whole scrutinee), run the
-    /// guard (failure re-enters the chain at `next_bb`), lower the
+    /// guard (failure re-enters the chain per `next`), lower the
     /// body, and jump to the merge.
+    ///
+    /// Returns the guard's re-entry block **iff** `next` was
+    /// [`ArmNext::Fresh`] and the guard actually emitted an edge to a
+    /// newly created block — the caller must then seal it and continue
+    /// the chain there. `Ok(None)` under `Fresh` means the guard
+    /// decided at build time (or diverged): nothing can re-enter the
+    /// chain, and the caller must treat the arm as closing it.
     #[allow(clippy::too_many_arguments)]
     fn enter_match_arm(
         &mut self,
@@ -14604,9 +14873,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         want_v: bool,
         merge_eu: Option<TypeId>,
         merge: &mut Option<(Block, Option<Value>)>,
-        next_bb: Option<Block>,
+        next: ArmNext,
         span: Span,
-    ) -> R<()> {
+    ) -> R<Option<Block>> {
         self.scopes.push(ScopeFrame::default());
         self.b.gvn_push_scope();
         let result = self.enter_match_arm_inner(
@@ -14617,7 +14886,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             want_v,
             merge_eu,
             merge,
-            next_bb,
+            next,
             span,
         );
         self.b.gvn_pop_scope();
@@ -14635,9 +14904,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         want_v: bool,
         merge_eu: Option<TypeId>,
         merge: &mut Option<(Block, Option<Value>)>,
-        next_bb: Option<Block>,
+        next: ArmNext,
         span: Span,
-    ) -> R<()> {
+    ) -> R<Option<Block>> {
         // Payload bindings: field 1+slot of the scrutinee aggregate,
         // licensed by the dominating tag test.
         let sv_ty = self.b.func.value_ty(sv);
@@ -14678,37 +14947,59 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             ));
         }
         // Guard: an ordinary branch; failure re-enters the decision
-        // chain at the next candidate.
+        // chain at the next candidate. A guard that DECIDES at build
+        // time never branches (#151): `ins_br` on a constant emits the
+        // taken edge only, and the not-taken block would sit
+        // predecessorless while the caller lowers the rest of the
+        // chain into it.
+        let mut fresh: Option<Block> = None;
         if let Some(g) = arm.guard() {
-            let Some(next) = next_bb else {
+            if matches!(next, ArmNext::None) {
                 return Err(refuse(
                     "a guard on the closing unconditional arm (coverage came from it)",
                     span,
                 ));
-            };
+            }
             let gexpr = g.nodes().find(|n| wolf_ast::is_expr_kind(n.kind));
             let Some(gexpr) = gexpr else {
                 return Err(refuse("a guard without a condition", span));
             };
             match self.lower_expr(gexpr)? {
-                Flow::Val(Some(gv)) => {
-                    let body_bb = self.b.create_block();
-                    self.b.ins_br(gv, body_bb, &[], next, &[]);
-                    self.b.seal_block(body_bb);
-                    self.b.switch_to_block(body_bb);
-                }
+                Flow::Val(Some(gv)) => match self.b.as_bool_const(gv) {
+                    Some(true) => {
+                        // A decided-true guard: the body follows in
+                        // the current block; no re-entry edge exists.
+                        self.b.stats.identity += 1;
+                    }
+                    Some(false) => {
+                        // A decided-false guard: the arm's body is
+                        // dead — jump straight back to the chain and
+                        // lower nothing.
+                        self.b.stats.identity += 1;
+                        let next_bb = self.arm_next_block(next, &mut fresh);
+                        self.b.ins_jmp(next_bb, &[]);
+                        return Ok(fresh);
+                    }
+                    None => {
+                        let next_bb = self.arm_next_block(next, &mut fresh);
+                        let body_bb = self.b.create_block();
+                        self.b.ins_br(gv, body_bb, &[], next_bb, &[]);
+                        self.b.seal_block(body_bb);
+                        self.b.switch_to_block(body_bb);
+                    }
+                },
                 Flow::Val(None) => {
                     return Err(refuse("a guard without a condition value", span));
                 }
-                Flow::Diverged => return Ok(()),
+                Flow::Diverged => return Ok(fresh),
             }
         }
         let Some(body) = arm.body() else {
-            return Ok(());
+            return Ok(fresh);
         };
         let flow = self.lower_expr_w(body, want_v)?;
         match flow {
-            Flow::Diverged => Ok(()),
+            Flow::Diverged => Ok(fresh),
             Flow::Val(v) => {
                 let v = if want_v {
                     self.arm_to_merge(v, merge_eu, span)?
@@ -14737,8 +15028,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         return Err(refuse("a valueless arm in a valued match", span));
                     }
                 }
-                Ok(())
+                Ok(fresh)
             }
+        }
+    }
+
+    /// The guard's re-entry block: the chain's own under
+    /// [`ArmNext::To`]; created on first demand — and reported back
+    /// through `fresh` — under [`ArmNext::Fresh`]. [`ArmNext::None`]
+    /// is unreachable here (the guard path refuses it first).
+    fn arm_next_block(&mut self, next: ArmNext, fresh: &mut Option<Block>) -> Block {
+        match next {
+            ArmNext::To(b) => b,
+            ArmNext::Fresh => {
+                let b = self.b.create_block();
+                *fresh = Some(b);
+                b
+            }
+            ArmNext::None => unreachable!("guards on ArmNext::None are refused before this"),
         }
     }
 

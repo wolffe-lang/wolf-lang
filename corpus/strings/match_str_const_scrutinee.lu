@@ -1,0 +1,89 @@
+//! check: run(exit=0, stdout="2 1 0 3\n1 22 5\nminus\n8\n")
+//! phase: run
+//! conforms: str.views
+//!
+//! The #151 witness: `match` over str literals where the SCRUTINEE is
+//! itself an interned literal, so candidates decide at build time —
+//! by storage identity (a hit) or by constant lengths (a miss). The
+//! decided branch used to reach `ins_br`, which emits only the taken
+//! edge on a constant, and the rest of the chain was lowered into the
+//! predecessorless remainder: the Braun `use_var` panic on the lead
+//! reproducer, the unreachable-block ICE on its siblings. Every shape
+//! here crashed the compiler before s123; now each decided candidate
+//! selects its arm without emitting a test.
+
+fn main() -> !int {
+    // The lead reproducer: the mid arm decides by interned identity.
+    let a = "-"
+    let r1 = match a {
+        "+" => 1,
+        "-" => 2,
+        "*" => 3,
+        _ => 0,
+    }
+    // Arm order: first arm decided.
+    let b = "+"
+    let r2 = match b {
+        "+" => 1,
+        "-" => 2,
+        "*" => 3,
+        _ => 0,
+    }
+    // No arm decided-equal: the default carries.
+    let c = "/"
+    let r3 = match c {
+        "+" => 1,
+        "-" => 2,
+        "*" => 3,
+        _ => 0,
+    }
+    // Last literal arm decided.
+    let d = "*"
+    let r4 = match d {
+        "+" => 1,
+        "-" => 2,
+        "*" => 3,
+        _ => 0,
+    }
+    print("{r1} {r2} {r3} {r4}")
+    // An or-pattern with a decided alternative takes the arm.
+    let e = "-"
+    let r5 = match e {
+        "+" | "-" => 1,
+        "*" => 3,
+        _ => 0,
+    }
+    // Nested: the inner match lowers inside a decided outer arm.
+    let f = "x"
+    let g = "y"
+    let r6 = match f {
+        "x" => match g {
+            "y" => 22,
+            _ => 20,
+        },
+        _ => 0,
+    }
+    // The empty literal: same interned storage, decided by identity.
+    let h = ""
+    let r7 = match h {
+        "" => 5,
+        _ => 0,
+    }
+    print("{r5} {r6} {r7}")
+    // Statement position, decided mid-chain.
+    let i = "-"
+    match i {
+        "+" => print("plus"),
+        "-" => print("minus"),
+        _ => print("other"),
+    }
+    // A diverging arm body ahead of the decided arm.
+    let j = "-"
+    let r8 = match j {
+        "+" => return 7,
+        "-" => 8,
+        _ => 0,
+    }
+    print("{r8}")
+    0
+}

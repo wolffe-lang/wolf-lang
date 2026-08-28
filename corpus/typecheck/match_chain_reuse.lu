@@ -1,0 +1,47 @@
+//! check: run(exit=0, stdout="2 - 6\n2 22\n")
+//! phase: run
+//! conforms: ty.match.exhaustive
+//!
+//! #151's neighbour, found by its witness: a value born in a `match`
+//! decision-chain block — the interned literal address or the arm
+//! constant of every arm past the first — used to register in the
+//! ENCLOSING GVN scope, so a later mention of the same constant in
+//! the same function reused a definition its block never dominated
+//! (the [dominance] verify ICE). The chain continuation blocks now
+//! carry their own GVN scopes, popped at the merge: the later `let`
+//! re-emits its constant instead of reaching into the chain.
+
+fn pick(n: int) -> str {
+    if n > 0 { "-" } else { "+" }
+}
+
+fn picki(n: int) -> int {
+    if n > 0 { 22 } else { 11 }
+}
+
+fn main() -> !int {
+    // The second arm's literal is re-mentioned after the match.
+    let op = pick(1)
+    let r = match op {
+        "+" => 1,
+        "-" => 2,
+        _ => 0,
+    }
+    let d = "-"
+    let s = pick(0)
+    let q = match s {
+        "-" => 5,
+        _ => 6,
+    }
+    print("{r} {d} {q}")
+    // The scalar spelling of the same reuse.
+    let v = picki(1)
+    let r2 = match v {
+        11 => 1,
+        22 => 2,
+        _ => 0,
+    }
+    let d2 = 22
+    print("{r2} {d2}")
+    0
+}

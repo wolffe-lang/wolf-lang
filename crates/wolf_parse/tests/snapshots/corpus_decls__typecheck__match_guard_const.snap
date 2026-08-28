@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 779..816 name=gate body=Block
+FnDecl 818..1853 name=main body=Block

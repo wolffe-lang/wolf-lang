@@ -1,0 +1,16 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: type.numlit.default
+//!
+//! #151's second crash, gated: a bare binding defaults to `i32`
+//! (`[type.numlit.default]`) and the VALUE was never consulted, so the
+//! unfitting constant sailed into lowering and died on the WIR
+//! verifier's [const-range] — an ICE where a diagnostic was owed. The
+//! front end now rejects the literal by name (E0415) before lowering
+//! ever sees it.
+
+fn main() -> int {
+    let a = 9223372036854775807
+    let b = a + 1
+    if b > 0 { 1 } else { 0 }
+}

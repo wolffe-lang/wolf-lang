@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="4294967294\n")
+//! phase: run
+//! conforms: type.numlit.value, arith.checked
+//!
+//! The #152 program, pinned CORRECT. `List[int]` elements are `int` —
+//! 64-bit — so 2147483647 * 2 is 4294967294 with no overflow: X3 has
+//! nothing to catch here, and BOTH machines printing this value is
+//! both machines being right. The ledger's trap expectation conflated
+//! this program with its control (`let a = 2147483647`, whose bare
+//! literals default to `i32` and whose product traps at that width).
+//! The differential was never blind: the checked-arithmetic law at
+//! list-element provenance is witnessed by the fault twins
+//! `faults/overflow_list_pop_i32.lu` (the trap at the width where it
+//! is observable) and `faults/overflow_list_pop_i64.lu` (the trap at
+//! this file's own width, one push away).
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(2147483647)
+    (mut xs).push(2)
+    let a = (mut xs).pop() else 0
+    let b = (mut xs).pop() else 0
+    let m = a * b
+    print("{m}")
+    0
+}

@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: type.numlit.value
+//!
+//! `u64::MAX` as a literal, pinned as a RUN on the native tiers
+//! (#151): the full unsigned range is a value surface, not an
+//! overflow. The checked executor's i64 value model refuses the
+//! spelling by name ("this literal shape in checked execution") — an
+//! honest lane conservatism, not a crash.
+
+fn main() -> !int {
+    let d: u64 = 18446744073709551615
+    let w = if d > 0 { 1 } else { 0 }
+    print("{w}")
+    0
+}
