@@ -12,7 +12,7 @@ expression: lexed.dump(&bytes)
     lead  Whitespace 98..99 "\n"
     lead  InnerDocComment 99..171 "//! s120 — `chars()` (#17): code-poi…"
     lead  Whitespace 171..172 "\n"
-    lead  InnerDocComment 172..242 "//! boundary primitive; s121 (D57) t…"
+    lead  InnerDocComment 172..242 "//! boundary primitive; s121 (D58) t…"
     lead  Whitespace 242..243 "\n"
     lead  InnerDocComment 243..309 "//! walk survived the migration verb…"
     lead  Whitespace 309..310 "\n"

@@ -10,7 +10,7 @@ expression: lexed.dump(&bytes)
     lead  Whitespace 67..68 "\n"
     lead  InnerDocComment 68..71 "//!"
     lead  Whitespace 71..72 "\n"
-    lead  InnerDocComment 72..141 "//! s121 (D57) — `char` orders by sc…"
+    lead  InnerDocComment 72..141 "//! s121 (D58) — `char` orders by sc…"
     lead  Whitespace 141..142 "\n"
     lead  InnerDocComment 142..210 "//! deterministic — and honestly NOT…"
     lead  Whitespace 210..211 "\n"

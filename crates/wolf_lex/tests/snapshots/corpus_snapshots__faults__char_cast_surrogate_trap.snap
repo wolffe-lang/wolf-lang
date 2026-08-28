@@ -10,7 +10,7 @@ expression: lexed.dump(&bytes)
     lead  Whitespace 95..96 "\n"
     lead  InnerDocComment 96..99 "//!"
     lead  Whitespace 99..100 "\n"
-    lead  InnerDocComment 100..169 "//! s121 (D57) — THE fault this spri…"
+    lead  InnerDocComment 100..169 "//! s121 (D58) — THE fault this spri…"
     lead  Whitespace 169..170 "\n"
     lead  InnerDocComment 170..239 "//! gap. `0xD800..=0xDFFF` are UTF-1…"
     lead  Whitespace 239..240 "\n"

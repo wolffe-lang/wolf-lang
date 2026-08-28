@@ -1099,7 +1099,7 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // 205/224/224, union 238, all-three 191. Counts measured by this
 // gate, not predicted.
 // s121 ratchet over 374 entries: the scalar gets a type (c33-strings'
-// second sprint, D57). Six new run-phase witnesses, each three-lane,
+// second sprint, D58). Six new run-phase witnesses, each three-lane,
 // so every count moves +6; the migrated `strings/chars_walk.lu`
 // (`chars()` now yields `List[char]`) stays three-lane, so it moves
 // nothing. `strings/char_battery.lu` — literals at all four UTF-8

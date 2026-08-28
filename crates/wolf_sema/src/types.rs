@@ -42,7 +42,7 @@ pub enum Prim {
     U64,
     F32,
     F64,
-    /// A Unicode scalar value (D57, s121): `0..=0x10FFFF` excluding
+    /// A Unicode scalar value (D58, s121): `0..=0x10FFFF` excluding
     /// the surrogate gap `0xD800..=0xDFFF`. Deliberately NOT an
     /// integer type — no arithmetic, no numeric-literal adoption; the
     /// only numeric bridges are the spelled casts (`char as int`

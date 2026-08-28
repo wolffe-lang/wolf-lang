@@ -340,7 +340,7 @@ enum Value {
     Unit,
     Int(i64),
     Bool(bool),
-    /// A `char` (s121, D57): a Unicode scalar value — the host `char`
+    /// A `char` (s121, D58): a Unicode scalar value — the host `char`
     /// carries exactly the ruled domain (`0..=0x10FFFF` minus the
     /// surrogate gap), so an out-of-domain `Value::Char` is
     /// unconstructible by the same rule the compiled lanes trap on.
@@ -2961,7 +2961,7 @@ impl<'t> Machine<'t> {
                     };
                     Ok(Flow::Val(Value::Bool(out)))
                 }
-                // `char` orders by scalar value (D57) — Rust's `char`
+                // `char` orders by scalar value (D58) — Rust's `char`
                 // order IS scalar order, so the host compare is the
                 // reference the compiled lanes' i32 icmp answers to.
                 (Value::Char(a), Value::Char(b)) => {
@@ -3185,7 +3185,7 @@ impl<'t> Machine<'t> {
         if text == "false" {
             return Ok(Value::Bool(false));
         }
-        // `'a'` (s121, D57): THE shared decoder — the same cook WIR
+        // `'a'` (s121, D58): THE shared decoder — the same cook WIR
         // lowering uses, so the lanes cannot drift on an escape.
         if text.starts_with('\'') {
             return match wolf_sema::check::cook_char_literal(&text) {
@@ -3387,7 +3387,7 @@ impl<'t> Machine<'t> {
         if parsed.is_default() {
             return Ok(rendered);
         }
-        // A char hole takes the str spec surface (D57): render the
+        // A char hole takes the str spec surface (D58): render the
         // character, then fill/align/width apply to its UTF-8 bytes.
         let char_buf;
         let fv = match val {
@@ -4887,7 +4887,7 @@ impl<'t> Machine<'t> {
                     _ => self.refuse("this raw bridge shape", e.span),
                 }
             }
-            // s121 (D57): `char as int` — total; the scalar value.
+            // s121 (D58): `char as int` — total; the scalar value.
             Some(CastKind::CharToInt) => {
                 let v = val!(self.eval(inner));
                 match v {
@@ -4895,7 +4895,7 @@ impl<'t> Machine<'t> {
                     _ => self.refuse("a char cast of a non-char value", e.span),
                 }
             }
-            // s121 (D57): `int as char` — D56's trapping family. A
+            // s121 (D58): `int as char` — D56's trapping family. A
             // value outside `0..=0x10FFFF` or inside the surrogate
             // gap `0xD800..=0xDFFF` is the overflow trap, by name:
             // `char::from_u32`'s domain IS the ruled domain, so the
@@ -6194,7 +6194,7 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::F64(x), Value::F64(y)) => x == y,
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Str(x), Value::Str(y)) => x == y,
-        // `char` equality is scalar-value equality (D57), total.
+        // `char` equality is scalar-value equality (D58), total.
         (Value::Char(x), Value::Char(y)) => x == y,
         (Value::Unit, Value::Unit) => true,
         (
@@ -6393,7 +6393,7 @@ fn format_value(v: &Value) -> String {
         // layout — the s38 reference rendering (spec §7.4 candidate).
         Value::F64(x) => wolf_sema::fmtspec::f64_shortest(*x),
         Value::Str(s) => s.clone(),
-        // `{c}` prints the CHARACTER (D57), never the code point.
+        // `{c}` prints the CHARACTER (D58), never the code point.
         Value::Char(c) => c.to_string(),
         Value::Unit => "()".to_string(),
         Value::Range { start, end } => format!("{start}..{end}"),
@@ -6429,7 +6429,7 @@ fn parse_uint_literal(text: &str) -> Option<u64> {
 
 fn prim_bits(p: Prim) -> Option<u32> {
     Some(match p {
-        // `char` is 4 bytes (D57) but NOT an integer: no width for
+        // `char` is 4 bytes (D58) but NOT an integer: no width for
         // the shift/arith rails — the casts are its only bridges.
         Prim::Char => return None,
         Prim::I8 | Prim::U8 | Prim::Byte => 8,
@@ -6442,7 +6442,7 @@ fn prim_bits(p: Prim) -> Option<u32> {
 
 fn prim_size(p: Prim) -> u64 {
     // `char` has no arithmetic width (`prim_bits` is the shift rail)
-    // but a fixed 4-byte layout (D57).
+    // but a fixed 4-byte layout (D58).
     if p == Prim::Char {
         return 4;
     }

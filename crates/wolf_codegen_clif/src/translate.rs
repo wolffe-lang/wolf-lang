@@ -86,7 +86,7 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 118] = [
     ("__wolf_rt_write_i64", 3, false),
     ("__wolf_rt_write_bool", 3, false),
     ("__wolf_rt_write_f64", 3, false),
-    // s121 (D57): the char hole — the scalar widened to i64, printed
+    // s121 (D58): the char hole — the scalar widened to i64, printed
     // as its UTF-8 encoding, never the code-point number.
     ("__wolf_rt_write_char", 3, false),
     // The s40 str/List/fs families (wolf_rt::{str,list,fs}): token
@@ -99,7 +99,7 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 118] = [
     ("__wolf_rt_strbuf_i64", 3, false),
     ("__wolf_rt_strbuf_bool", 3, false),
     ("__wolf_rt_strbuf_f64", 3, false),
-    // s121 (D57): the char strbuf hole — same contract as write_char.
+    // s121 (D58): the char strbuf hole — same contract as write_char.
     ("__wolf_rt_strbuf_char", 3, false),
     ("__wolf_rt_strbuf_finish", 2, false),
     ("__wolf_rt_str_eq", 4, true),

@@ -115,7 +115,7 @@ fn e0110_unterminated() {
 #[test]
 fn e0110_surrogate_escape() {
     // The surrogate gap refused at the literal — the same domain the
-    // trapping `int as char` cast enforces at run time (D57).
+    // trapping `int as char` cast enforces at run time (D58).
     diag_snapshot("e0110_surrogate", "let c = '\\u{D800}'\n");
 }
 

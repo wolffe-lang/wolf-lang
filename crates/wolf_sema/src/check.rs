@@ -155,10 +155,10 @@ pub enum CastKind {
     /// the place; lowering emits the (data, vtable) pair
     /// (`[abi.native.dyn]`).
     Unsize,
-    /// s121 (D57) — `char as int`: TOTAL. Every scalar value fits an
+    /// s121 (D58) — `char as int`: TOTAL. Every scalar value fits an
     /// `int`; lowering is a plain zero-extension of the 32-bit scalar.
     CharToInt,
-    /// s121 (D57) — `int as char`: TRAPS (overflow, D56's family) when
+    /// s121 (D58) — `int as char`: TRAPS (overflow, D56's family) when
     /// the value is not a Unicode scalar — negative, above
     /// `0x10FFFF`, or inside the surrogate gap `0xD800..=0xDFFF`. The
     /// gap check is what keeps "every `str` is valid UTF-8" (D24) an
@@ -3499,7 +3499,7 @@ impl<'a> Checker<'a> {
             SyntaxKind::Int => self.fresh(NumKind::Integer, e.span),
             SyntaxKind::Float => self.fresh(NumKind::Float, e.span),
             SyntaxKind::TrueKw | SyntaxKind::FalseKw => self.lo.table.prim(Prim::Bool),
-            // `'a'` (s121, D57): concretely `char`, never a numeric
+            // `'a'` (s121, D58): concretely `char`, never a numeric
             // inference var — a char literal adopts nothing and
             // nothing adopts it (the casts are the only bridges).
             SyntaxKind::Char => self.lo.table.prim(Prim::Char),
@@ -3579,7 +3579,7 @@ impl<'a> Checker<'a> {
             TyKind::Prim(Prim::Str) => Some(HoleClass::Str),
             TyKind::Prim(Prim::Bool) => Some(HoleClass::Bool),
             TyKind::Prim(Prim::F32 | Prim::F64) => Some(HoleClass::Float),
-            // `{c}` prints the CHARACTER (D57), so a char hole takes
+            // `{c}` prints the CHARACTER (D58), so a char hole takes
             // the str spec surface (fill/align/width), never the
             // numeric one — `{c:x}` is the E0413 it looks like.
             TyKind::Prim(Prim::Char) => Some(HoleClass::Str),
@@ -3930,7 +3930,7 @@ impl<'a> Checker<'a> {
                     self.golden_rule_op(lhs.span, &n, &op_text);
                     return Ok(self.lo.table.prim(Prim::Bool));
                 }
-                // `char` orders by scalar value (D57): total, defined,
+                // `char` orders by scalar value (D58): total, defined,
                 // no locale — the same temperament as str's byte order.
                 if matches!(self.kind_of(lt), TyKind::Prim(Prim::Char)) {
                     let exp = Expect {
@@ -4085,7 +4085,7 @@ impl<'a> Checker<'a> {
         };
         let sk = self.kind_of(src_ty);
         let tk = self.kind_of(target);
-        // s121 (D57): the char casts — the only numeric bridges `char`
+        // s121 (D58): the char casts — the only numeric bridges `char`
         // has. `char as int` is TOTAL (every scalar fits); `int as
         // char` TRAPS on a non-scalar value (negative, > 0x10FFFF, or
         // the surrogate gap 0xD800..=0xDFFF — D56's trapping family).
@@ -4251,7 +4251,7 @@ impl<'a> Checker<'a> {
         let is_char = |k: &TyKind| matches!(k, TyKind::Prim(Prim::Char));
         d = if is_char(&sk) || is_char(&tk) {
             d.with_note(
-                "the ruled `char` bridges (D57) are exactly `char as int` (total) \
+                "the ruled `char` bridges (D58) are exactly `char as int` (total) \
                  and `int as char` (traps on a non-scalar value); cast through \
                  `int` for any other width.",
             )
@@ -5241,7 +5241,7 @@ impl<'a> Checker<'a> {
     /// `words`, `lines`) type as materialized `List`s at v0; the
     /// zero-copy iterator views arrive with the D28 protocol's
     /// builtin adoption (tracked in the s37 ledger). `chars()`
-    /// (s120, #17; typed s121, D57) yields the code points as
+    /// (s120, #17; typed s121, D58) yields the code points as
     /// `List[char]` — the scalar tier, one element per code point;
     /// `bytes()` stays the byte tier (`List[int]`), and a scalar's
     /// UTF-8 byte extent is still a function of its value, so the
@@ -5290,7 +5290,7 @@ impl<'a> Checker<'a> {
             }
             // Code-point iteration ([mem.str.chars], s120; typed s121):
             // `List[char]` — each element is the `char` primitive
-            // (D57), and its UTF-8 byte extent is a function of the
+            // (D58), and its UTF-8 byte extent is a function of the
             // scalar value (1/2/3/4 by range), so the width walk
             // survives the typing unchanged (`c as int` names the
             // scalar when the arithmetic needs it).
@@ -9152,7 +9152,7 @@ impl<'a> Checker<'a> {
             // the Int column semantics (equality splits; literals
             // never complete the column, a wildcard is required).
             // A missing-case witness may therefore print as a bare
-            // scalar number; cosmetic, noted in D57.
+            // scalar number; cosmetic, noted in D58.
             TyKind::Prim(Prim::Char) => ColTy::Int,
             TyKind::Prim(_) => ColTy::Float,
             TyKind::Wrapping(_) => ColTy::Int,
@@ -9792,7 +9792,7 @@ fn place_shaped(e: &GreenNode) -> bool {
 mod char_literal_tests {
     use super::cook_char_literal;
 
-    /// `[gram.lex.char]` / D57: THE shared decoder — every spelling
+    /// `[gram.lex.char]` / D58: THE shared decoder — every spelling
     /// of a scalar cooks to the scalar, malformed text to `None`.
     #[test]
     fn cook_covers_the_ruled_escape_set() {

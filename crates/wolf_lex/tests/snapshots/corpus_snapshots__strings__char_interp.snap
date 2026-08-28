@@ -10,7 +10,7 @@ expression: lexed.dump(&bytes)
     lead  Whitespace 101..102 "\n"
     lead  InnerDocComment 102..105 "//!"
     lead  Whitespace 105..106 "\n"
-    lead  InnerDocComment 106..173 "//! s121 (D57) — `{c}` prints the CH…"
+    lead  InnerDocComment 106..173 "//! s121 (D58) — `{c}` prints the CH…"
     lead  Whitespace 173..174 "\n"
     lead  InnerDocComment 174..237 "//! number: the hole renders as the …"
     lead  Whitespace 237..238 "\n"

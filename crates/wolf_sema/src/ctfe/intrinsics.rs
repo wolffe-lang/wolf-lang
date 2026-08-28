@@ -516,7 +516,7 @@ fn prim_size(p: Prim) -> Option<i128> {
     Some(match p {
         Prim::Bool | Prim::Byte | Prim::I8 | Prim::U8 => 1,
         Prim::I16 | Prim::U16 => 2,
-        // `char` is 4 bytes (D57: a 32-bit scalar, i32-shaped in WIR).
+        // `char` is 4 bytes (D58: a 32-bit scalar, i32-shaped in WIR).
         Prim::I32 | Prim::U32 | Prim::F32 | Prim::Char => 4,
         Prim::I64 | Prim::U64 | Prim::Int | Prim::Uint | Prim::F64 => 8,
         Prim::Str => return None,

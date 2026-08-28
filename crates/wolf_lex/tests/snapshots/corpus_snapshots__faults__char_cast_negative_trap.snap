@@ -10,7 +10,7 @@ expression: lexed.dump(&bytes)
     lead  Whitespace 95..96 "\n"
     lead  InnerDocComment 96..99 "//!"
     lead  Whitespace 99..100 "\n"
-    lead  InnerDocComment 100..171 "//! s121 (D57) — the third refusal: …"
+    lead  InnerDocComment 100..171 "//! s121 (D58) — the third refusal: …"
     lead  Whitespace 171..172 "\n"
     lead  InnerDocComment 172..238 "//! The compiled lanes fold this int…"
     lead  Whitespace 238..239 "\n"

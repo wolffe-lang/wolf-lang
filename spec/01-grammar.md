@@ -106,7 +106,7 @@ CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
 CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | '\u{' HEX_DIGIT+ '}'
 ```
 
-One Unicode scalar value between single quotes (s121, D57 —
+One Unicode scalar value between single quotes (s121, D58 —
 `[type.char]` owns the type): `'a'`, `'é'`, `'🐺'`, `'\n'`, `'\''`,
 `'\u{1F43A}'`. `CHAR_TEXT` is any single scalar other than `'`, `\`,
 or a newline. The escape set is the string set plus `\'`; `\u{…}`

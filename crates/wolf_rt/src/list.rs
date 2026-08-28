@@ -263,7 +263,7 @@ pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
     Some(unsafe { core::slice::from_raw_parts(h.data.cast::<i64>(), h.len as usize) })
 }
 
-/// The elements of a `List[char]` (s121, D57: 4-byte scalar elements,
+/// The elements of a `List[char]` (s121, D58: 4-byte scalar elements,
 /// native-endian) — [`i64_elems`]'s posture at the `char` width. The
 /// buffer's alignment is the allocator's (≥ 8), so the `u32` cast is
 /// always aligned.

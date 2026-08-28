@@ -2,7 +2,7 @@
 //! phase: run
 //! conforms: type.char.cast, mem.ub.defined
 //!
-//! s121 (D57) — THE fault this sprint exists to pin: the surrogate
+//! s121 (D58) — THE fault this sprint exists to pin: the surrogate
 //! gap. `0xD800..=0xDFFF` are UTF-16 encoding artifacts, not Unicode
 //! scalar values; a cast admitting one would mint a `char` that
 //! cannot be UTF-8-encoded and quietly break "every `str` is valid

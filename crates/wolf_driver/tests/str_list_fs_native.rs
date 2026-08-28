@@ -136,7 +136,7 @@ fn main() -> !int {
     let ls = "a\nb".lines()
     let bs = "é".bytes()
     print("{parts.len} {ws.len} {ls.len} {bs.len} {bs[0]}")
-    // [mem.str.chars] (s120, #17; typed s121, D57): `List[char]` —
+    // [mem.str.chars] (s120, #17; typed s121, D58): `List[char]` —
     // `{c}` prints the CHARACTER, `c as int` names the scalar,
     // identically on both lanes — 1-, 2- and 3-byte code points.
     let cs = "aé中".chars()
@@ -590,7 +590,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // s118 the OS random source (#143: os_random — one entry, no row,
     // nonzero rc traps); s120 the code-point iterator (#17:
     // str_chars — the materializing `chars()`, [mem.str.chars]);
-    // s121 the char print pair (D57: write_char/strbuf_char — `{c}`
+    // s121 the char print pair (D58: write_char/strbuf_char — `{c}`
     // prints the character, never the code point).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),

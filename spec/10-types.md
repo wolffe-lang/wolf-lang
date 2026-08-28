@@ -134,7 +134,7 @@ conversion, and its numeric arms are closed and total:
 
 ## §4 The `char` type `[type.char]`
 
-- `[type.char]` **`char` is a Unicode scalar value** (D57, s121): its
+- `[type.char]` **`char` is a Unicode scalar value** (D58, s121): its
   domain is `0..=0x10FFFF` **excluding** the surrogate gap
   `0xD800..=0xDFFF` — exactly the set of values UTF-8 can encode. Not a
   byte (`'é'` is one `char`, two bytes — the byte tier stays
@@ -195,4 +195,4 @@ is the value-preservation answer only for leaving the wrapping domain) —
 D54 is the literal story, D56 the wrapping escape, and the cast's numeric
 directions, no more. `char`'s method surface (classification,
 case-mapping, the checkable conversion) is std's tier over the
-primitive (D57), not this chapter's.
+primitive (D58), not this chapter's.

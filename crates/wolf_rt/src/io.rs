@@ -499,7 +499,7 @@ pub extern "C" fn __wolf_rt_write_f64(stream: i64, v: f64, spec: i64) {
     write_stream(stream, out.as_bytes());
 }
 
-/// Write a `char` to `stream` under the packed `spec` (s121, D57):
+/// Write a `char` to `stream` under the packed `spec` (s121, D58):
 /// the CHARACTER's UTF-8 encoding, never the code-point number. The
 /// scalar arrives widened to `i64` (i32 zero-extended at the call
 /// site); the compiled lanes guarantee a Unicode scalar — anything

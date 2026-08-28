@@ -2,7 +2,7 @@
 //! phase: run
 //! conforms: type.char.order
 //!
-//! s121 (D57) — `char` orders by scalar value: total, locale-free,
+//! s121 (D58) — `char` orders by scalar value: total, locale-free,
 //! deterministic — and honestly NOT collation ('z' < 'é' because
 //! 0x7A < 0xE9, however a dictionary would sort them). Equality is
 //! scalar equality, so distinct escape spellings of one scalar are

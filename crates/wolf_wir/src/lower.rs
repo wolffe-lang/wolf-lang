@@ -1450,7 +1450,7 @@ enum PrintSeg {
     /// An `f64` value (s38: reference semantics exist — the checked
     /// executor renders the same bytes).
     F64 { v: Value, spec: i64 },
-    /// A `char` value (s121, D57): prints the CHARACTER — its UTF-8
+    /// A `char` value (s121, D58): prints the CHARACTER — its UTF-8
     /// encoding — never the code-point number. The i32 scalar widens
     /// to i64 at the shim boundary like every sub-word scalar.
     Char { v: Value, spec: i64 },
@@ -1560,7 +1560,7 @@ fn wir_ty_frame(
             // operational): the bytes live in module data (literals) or
             // wherever a runtime str points; the value is the fat pair.
             Prim::Str => Ok(Some(str_ty(it))),
-            // `char` (s121, D57): a 32-bit scalar — 4 bytes, i32-shaped
+            // `char` (s121, D58): a 32-bit scalar — 4 bytes, i32-shaped
             // at every tier. The representation invariant (the value is
             // always a Unicode scalar, `<= 0x10FFFF`) means the sign
             // bit is never set, so signed compares ARE scalar-value
@@ -6170,7 +6170,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if text == "false" {
             return Ok(Flow::Val(Some(self.b.bconst(false))));
         }
-        // `'a'` (s121, D57): the scalar value as an i32 constant —
+        // `'a'` (s121, D58): the scalar value as an i32 constant —
         // cooked by THE shared decoder (`wolf_sema::check::
         // cook_char_literal`), the same one the checked executor uses.
         if text.starts_with('\'') {
@@ -6754,7 +6754,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             )),
             CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
-            // s121 (D57): `char as int` is TOTAL — the 32-bit scalar
+            // s121 (D58): `char as int` is TOTAL — the 32-bit scalar
             // zero-extends (the representation invariant keeps the
             // sign bit clear, but zext states the meaning: a scalar
             // is a non-negative code point).
@@ -6768,7 +6768,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         .one(),
                 )))
             }
-            // s121 (D57): `int as char` — D56's trapping family. Two
+            // s121 (D58): `int as char` — D56's trapping family. Two
             // rails, each an overflow trap: the value must sit in
             // `0..=0x10FFFF` (one unsigned compare — a negative int is
             // a huge unsigned one), and must miss the surrogate gap
@@ -12807,7 +12807,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "`f32` print formatting (f64 is the s38 float)",
                 expr.span,
             )),
-            // `{c}` prints the character (D57), never the number —
+            // `{c}` prints the character (D58), never the number —
             // this arm must sit before the integer catch-all.
             TyKind::Prim(Prim::Char) => Ok(PrintSeg::Char { v, spec }),
             TyKind::Prim(_) => {

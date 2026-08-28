@@ -3,7 +3,7 @@
 //! conforms: mem.str.chars, mem.str.get, type.char.cast
 //!
 //! s120 — `chars()` (#17): code-point iteration, the third leg of the
-//! boundary primitive; s121 (D57) typed it — `List[char]`, and this
+//! boundary primitive; s121 (D58) typed it — `List[char]`, and this
 //! walk survived the migration verbatim. Each element is a `char`
 //! whose UTF-8 byte extent is a function of its scalar value (1/2/3/4
 //! by range — `c as int` names the scalar for the arithmetic), so the

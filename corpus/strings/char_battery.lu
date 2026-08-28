@@ -2,7 +2,7 @@
 //! phase: run
 //! conforms: type.char, type.char.cast, mem.str.chars
 //!
-//! s121 (D57) — the multi-byte battery re-expressed over `char`: the
+//! s121 (D58) — the multi-byte battery re-expressed over `char`: the
 //! 1-byte `a`, 2-byte `é`, 3-byte `中`, 4-byte `🐺`, as literals, as
 //! `chars()` elements, and through both ruled casts. `char as int` is
 //! total (every scalar names its code point); `int as char` admits

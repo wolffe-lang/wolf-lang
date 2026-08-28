@@ -635,14 +635,14 @@ the inputs that would have decided it either way.)
 leg of the boundary-primitive family: `get` gave the recoverable
 slice, `bytes()` the byte view, and this gives the scan that advances
 by real UTF-8 width. s120 shipped it as `List[int]` and deliberately
-left the `char` type a named open item; s121 ruled the type — D57,
+left the `char` type a named open item; s121 ruled the type — D58,
 `[type.char]` — and this clause now speaks it. The width-walk
 identity below is s120's, verbatim: the byte extent was a function of
 the scalar's value before the value had a type, and it still is.)
 
 - `[mem.str.chars]` `s.chars()` yields the **Unicode scalar values**
   encoded in `s`, in string order, one per code point, as `char`s —
-  `List[char]` (D57, `[type.char]`), materialized like `bytes()` (the
+  `List[char]` (D58, `[type.char]`), materialized like `bytes()` (the
   zero-copy iterator view is the same D28 follow-on `bytes()` names).
   The elements are exactly what UTF-8 decoding of `s`'s bytes
   produces; every `str` is valid UTF-8 (`[mem.str.get]`), so the

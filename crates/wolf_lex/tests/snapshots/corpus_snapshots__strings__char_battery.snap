@@ -10,7 +10,7 @@ expression: lexed.dump(&bytes)
     lead  Whitespace 92..93 "\n"
     lead  InnerDocComment 93..96 "//!"
     lead  Whitespace 96..97 "\n"
-    lead  InnerDocComment 97..168 "//! s121 (D57) — the multi-byte batt…"
+    lead  InnerDocComment 97..168 "//! s121 (D58) — the multi-byte batt…"
     lead  Whitespace 168..169 "\n"
     lead  InnerDocComment 169..242 "//! 1-byte `a`, 2-byte `é`, 3-byte `…"
     lead  Whitespace 242..243 "\n"

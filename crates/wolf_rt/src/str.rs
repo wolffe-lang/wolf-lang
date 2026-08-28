@@ -316,7 +316,7 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_f64(handle: i64, v: f64, spec: i64) {
     }
 }
 
-/// Append a `char` hole (s121, D57): the CHARACTER's UTF-8 encoding,
+/// Append a `char` hole (s121, D58): the CHARACTER's UTF-8 encoding,
 /// never the code-point number. The scalar arrives widened to `i64`
 /// (the i32 value zero-extended at the call site, like every sub-word
 /// scalar crossing this boundary); the compiled lanes guarantee it is
@@ -758,7 +758,7 @@ pub unsafe extern "C" fn __wolf_rt_str_bytes(sp: i64, sl: i64) -> i64 {
 }
 
 /// `chars()` — code-point iteration, materialized (s120, #17,
-/// `[mem.str.chars]`; typed s121, D57): a `List[char]` with each
+/// `[mem.str.chars]`; typed s121, D58): a `List[char]` with each
 /// Unicode scalar value as a 4-byte element — `char`'s ruled layout,
 /// the i32 stride WIR walks. The elements are scalars —
 /// `0..=0x10FFFF` minus the surrogate gap, guaranteed by the `str`
@@ -983,7 +983,7 @@ mod tests {
         }
     }
 
-    /// s120 (#17, `[mem.str.chars]`; typed s121, D57): `chars()`
+    /// s120 (#17, `[mem.str.chars]`; typed s121, D58): `chars()`
     /// yields the Unicode scalar values in string order as 4-byte
     /// `char` elements — pinned against Rust's own decoder — and each
     /// scalar's UTF-8 width, a pure function of its value, advances a
