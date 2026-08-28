@@ -397,7 +397,11 @@ impl LSig {
 /// [`wolf_backend::abi`] (all classification lives THERE).
 pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, opts: &EmitOptions) -> LSig {
     let data = &m.sigs[sig];
-    let plan = abi::plan_sig(&m.types, data, conv);
+    // This tier is pinned to x86_64-linux (TARGET_TRIPLE); the gate in
+    // lib.rs refuses every other host, so the SysV plan is the one
+    // this backend can ever execute (the macOS release tier is its
+    // own c13 sprint — s59 ported the debug tier only).
+    let plan = abi::plan_sig(&m.types, data, conv, abi::CTarget::SysvX64);
     let sret_first = conv == Conv::C;
     let mut ll_params = Vec::new();
     let mut ret_comps = Vec::new();

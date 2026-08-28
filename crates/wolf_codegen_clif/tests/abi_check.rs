@@ -9,19 +9,24 @@
 //! its own layout and returns it under the same classification); the
 //! field probes prove wolf reads the same offsets C wrote.
 //!
-//! Coverage (SysV x86-64): scalars of every width and class; one- and
-//! two-eightbyte aggregates in INTEGER/SSE/mixed classes, including
-//! packed `{f32, f32}`, sub-eightbyte `{i8, i8, i8}`, interior-padding
-//! `{i16, i32}`, and nesting; MEMORY-class byval arguments; sret
-//! returns; INTEGER and SSE register exhaustion (arguments past
-//! `%r9`/`%xmm7`); the psABI wholesale-reversion of an aggregate that
-//! no longer fits in registers; and mixed positions after both.
+//! Coverage: scalars of every width and class; one- and two-eightbyte
+//! aggregates in every class mix, including packed `{f32, f32}`,
+//! sub-eightbyte `{i8, i8, i8}`, interior-padding `{i16, i32}`, and
+//! nesting; MEMORY-class arguments (byval under SysV, indirect under
+//! Apple-arm64); sret returns (`%rdi`/`%rax` under SysV, `x8` under
+//! Apple-arm64); register exhaustion in both classes; the psABI
+//! wholesale-reversion of an aggregate that no longer fits; HFAs
+//! (`{f32, f32}`, `{f64, f64}`, `{f64 × 4}` — FP registers
+//! member-wise under AAPCS64, past the 16-byte cap); and mixed
+//! positions after both. The same table compiles against whatever C
+//! compiler the HOST provides — gcc/clang speaking SysV on linux,
+//! Apple clang speaking Apple-arm64 here — which is exactly what
+//! makes it the `[abi.c.targets]` acceptance test on every ported
+//! host (the runtime-SKIP pattern below covers the rest).
 //! The wolf-CALLS-C direction rides the `c.*` import membrane
 //! (scalars — the modelled five; aggregate imports are c10's header
 //! importer). s49 replaces this fixed table with generative fuzzing;
 //! the harness CONTRACT starts here.
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
 
 use std::path::PathBuf;
 use std::process::Command;
