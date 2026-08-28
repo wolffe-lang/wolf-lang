@@ -149,10 +149,12 @@ fn all_standalone_directory_note() {
     let (code, err) = build(&dir, "main.lu");
     assert_eq!(code, 1);
     assert!(err.contains("E0301"), "{err}");
+    // The note wraps at a width the scratch path's length decides, so
+    // compare with whitespace normalized (the wrap once split
+    // "standalone entry" and the assert went red on path length alone).
+    let flat = err.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        err.contains("declares\n    itself a standalone entry")
-            || err.contains("declares itself a standalone entry")
-            || err.contains("standalone entry"),
+        flat.contains("declares itself a standalone entry"),
         "the situation is explained:\n{err}"
     );
     assert!(
