@@ -261,6 +261,16 @@ fn conform_run_verdicts_are_unchanged_by_the_site_line() {
             String::from_utf8_lossy(&out.stderr)
         );
         let rec: serde_json::Value = serde_json::from_slice(&out.stdout).expect("record parses");
+        // The release tier refuses this HOST by name (linux/x86-64
+        // only): a loud skip, not a verdict (the s59 shape shared
+        // with release_native.rs).
+        if flag == "--release"
+            && rec["verdict"] == "unsupported"
+            && String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64")
+        {
+            eprintln!("SKIP: the release tier refuses this host");
+            continue;
+        }
         assert_eq!(
             rec["verdict"].as_str(),
             Some("trap(bounds)"),
