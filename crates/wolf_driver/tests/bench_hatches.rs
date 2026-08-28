@@ -14,8 +14,6 @@
 //! a bonus (D2), so removing it may cost speed and must never cost
 //! correctness.
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

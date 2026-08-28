@@ -19,8 +19,6 @@
 //! there; the refusal and generation halves would run anywhere, and one
 //! honest gate beats two (the s51 suite's rule, kept).
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 

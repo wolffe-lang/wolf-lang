@@ -5,10 +5,8 @@
 //! task layer. (The no-background-threads half is wolf_rt's own
 //! tests/no_spawn.rs, over the lazily-initialized pool.)
 //!
-//! Off-target the whole file compiles away (native codegen is
-//! linux/x86-64 only in c06/c07 v0).
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! Hosts the native tier refuses skip loudly at runtime (the s59
+//! pattern: these tests start passing the moment a gate lifts).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -68,11 +66,20 @@ fn no_spawn_binary_has_no_scheduler_symbols() {
     assert_eq!(String::from_utf8_lossy(&run.stdout), "hello, wolf\n");
 
     let bytes = std::fs::read(&exe).expect("read exe");
-    let obj = object::File::parse(&*bytes).expect("ELF parses");
+    let obj = object::File::parse(&*bytes).expect("object parses");
     use object::{Object, ObjectSymbol};
+    // Mach-O prefixes every C-level symbol with `_`; strip it so one
+    // banned list serves both formats (s59).
+    let strip = |n: &str| -> String {
+        if matches!(obj.format(), object::BinaryFormat::MachO) {
+            n.strip_prefix('_').unwrap_or(n).to_string()
+        } else {
+            n.to_string()
+        }
+    };
     let syms: Vec<String> = obj
         .symbols()
-        .filter_map(|s| s.name().ok().map(str::to_string))
+        .filter_map(|s| s.name().ok().map(strip))
         .collect();
     // Sanity: the check can see wolf_rt symbols at all (print is
     // live in this program).

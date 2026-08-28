@@ -23,8 +23,6 @@
 //!
 //! Environment problems (no clang) SKIP loudly; refusals FAIL.
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -46,8 +44,10 @@ fn write_case(case: &str, src: &str) -> PathBuf {
     entry
 }
 
-/// The release tier's whole-module IR for one program.
-fn release_ir(case: &str, src: &str) -> String {
+/// The release tier's whole-module IR for one program; `None` (with a
+/// loud SKIP) where the tier refuses this host by name (linux/x86-64
+/// only until its own c13 sprint — the s59 pattern).
+fn release_ir(case: &str, src: &str) -> Option<String> {
     let entry = write_case(case, src);
     let out = entry.with_extension("ll");
     let res = Command::new(wolf())
@@ -59,12 +59,16 @@ fn release_ir(case: &str, src: &str) -> String {
         .arg(&out)
         .output()
         .expect("wolf runs");
+    if String::from_utf8_lossy(&res.stderr).contains("release tier targets linux/x86-64") {
+        eprintln!("SKIP: the release tier refuses this host");
+        return None;
+    }
     assert!(
         res.status.success(),
         "{case}: --emit=llvm-ir failed: {}",
         String::from_utf8_lossy(&res.stderr)
     );
-    std::fs::read_to_string(&out).expect("IR written")
+    Some(std::fs::read_to_string(&out).expect("IR written"))
 }
 
 /// Runtime symbols that must NOT appear in element-access position.
@@ -113,7 +117,9 @@ fn main() -> !int {
 
 #[test]
 fn a_list_sum_carries_no_per_element_call() {
-    let ir = release_ir("sum", SUM);
+    let Some(ir) = release_ir("sum", SUM) else {
+        return;
+    };
     assert_no_element_calls("sum", &ir);
     // What replaced it: a scaled address and a load.
     assert!(
@@ -129,7 +135,9 @@ fn a_provable_index_emits_no_bounds_check() {
     // the relation the guard already established. The check is proven,
     // not deleted: nothing here weakens the trap for an index that is
     // not proven — see the next test.
-    let ir = release_ir("sum_proven", SUM);
+    let Some(ir) = release_ir("sum_proven", SUM) else {
+        return;
+    };
     assert!(
         !ir.contains("i32 3)"),
         "no bounds trap should survive a loop whose guard proves the \
@@ -152,7 +160,9 @@ fn main() -> !int {
     0
 }
 "#;
-    let ir = release_ir("oob", src);
+    let Some(ir) = release_ir("oob", src) else {
+        return;
+    };
     assert_no_element_calls("oob", &ir);
     assert!(
         ir.contains("@__wolf_rt_trap(i32 3)"),
@@ -208,7 +218,9 @@ fn main() -> !int {
     0
 }
 "#;
-    let ir = release_ir("for_list", src);
+    let Some(ir) = release_ir("for_list", src) else {
+        return;
+    };
     assert_no_element_calls("for_list", &ir);
     assert!(
         !ir.contains("i32 3)"),
@@ -245,7 +257,9 @@ fn main() -> !int {
     0
 }
 "#;
-    let ir = release_ir("daxpy", src);
+    let Some(ir) = release_ir("daxpy", src) else {
+        return;
+    };
     assert_no_element_calls("daxpy", &ir);
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("s75")

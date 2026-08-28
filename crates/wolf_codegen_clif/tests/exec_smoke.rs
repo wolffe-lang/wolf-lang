@@ -8,8 +8,6 @@
 //! and is what `wolf build` links; the stub pins the contract from the
 //! consumer side.
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::PathBuf;
 use std::process::Command;
 
