@@ -19,7 +19,7 @@ cranelift-object = "0.134"
 # `__DWARF` (dsymutil ignores extern relocations there), so `finish`
 # patches the emitted bytes through the read API. Same version cargo
 # already unifies for cranelift-object.
-object = { version = "0.39", default-features = false, features = ["read_core", "macho", "std"] }
+object = { version = "0.39", default-features = false, features = ["read_core", "macho", "elf", "std"] }
 target-lexicon = "0.13"
 
 [dev-dependencies]

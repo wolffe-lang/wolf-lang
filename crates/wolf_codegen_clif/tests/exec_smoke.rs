@@ -441,3 +441,56 @@ fn aliased_stencil_takes_the_slow_loop() {
     };
     assert_eq!(opt, 24, "the slow loop preserves aliasing semantics (X3)");
 }
+
+/// s59 smoke witness: the characters wolf's symbol vocabulary leans on
+/// — `$` (the mangle hash separator) and `.` (`_W.traps`, `_W.str.*`,
+/// `_W.vt.*`) — survive object emission on THIS host's format with the
+/// format's own C-level decoration (Mach-O prefixes `_`; ELF does
+/// not). Apple's linker reserves `$ld$…` prefixes, so the witness is
+/// an emitted-object fact, not an assumption. The full link+execute
+/// proof is every other test in this file; this pins the SPELLING.
+#[test]
+fn mangled_symbol_characters_survive_object_emission() {
+    let text = "fn @main() -> i64 {\nb0:\n  %0 = iconst.i64 0\n  ret %0\n}\n";
+    let mut module = wolf_wir::parse_module(text).expect("wir parses");
+    wolf_wir::verify_module(&module).expect("wir verifies");
+    let shim = add_entry_shim(&mut module).expect("entry shim");
+    let mut backend = match ClifBackend::new() {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("SKIP: {e}");
+            return;
+        }
+    };
+    compile_module(
+        &mut backend,
+        &module,
+        Some(shim),
+        &mut wolf_backend::NullDebugSink,
+    )
+    .expect("compiles");
+    let mangled = wolf_backend::mangle(&module, "main", module.funcs.values().next().unwrap().sig);
+    assert!(mangled.contains('$'), "the mangle scheme separator");
+    let product = Box::new(backend).finish().expect("object emits");
+    let obj = object::File::parse(&*product.bytes).expect("object parses");
+    use object::{Object as _, ObjectSymbol as _};
+    let deco = if matches!(obj.format(), object::BinaryFormat::MachO) {
+        "_"
+    } else {
+        ""
+    };
+    let syms: Vec<String> = obj
+        .symbols()
+        .filter_map(|s| s.name().ok().map(str::to_string))
+        .collect();
+    for want in [
+        format!("{deco}{mangled}"),
+        format!("{deco}{}", wolf_codegen_clif::TRAP_TABLE_SYMBOL),
+        format!("{deco}main"),
+    ] {
+        assert!(
+            syms.iter().any(|s| *s == want),
+            "`{want}` missing from the emitted symbol table: {syms:?}"
+        );
+    }
+}
