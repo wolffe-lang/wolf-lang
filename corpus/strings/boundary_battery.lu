@@ -1,0 +1,45 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.str.get, str.views
+//!
+//! s120 — the multi-byte battery (#17): the 2-byte `é`, the 3-byte
+//! `中`, the 4-byte `🐺`, together. The byte view reads lead vs
+//! continuation bytes (a continuation is `128..192` — the two-bit
+//! test), the whole-char slices hit, and a slice landing MID-code-
+//! point is a refusal by name — the `{none}` row, never a silent
+//! half-character (D25's view semantics; the trapping twin is pinned
+//! by `slice_oob_trap.lu`). Runs under lupin too: `get` and `bytes`
+//! are on every lane, so this file is differential evidence.
+
+fn main() -> !int {
+    let s = "é中🐺"
+    let bs = s.bytes()
+    // Lead bytes at the three code-point starts: 0xC3, 0xE4, 0xF0.
+    let leads_ok = bs.len == 9 && bs[0] == 195 && bs[2] == 228 && bs[5] == 240
+    // Six continuation bytes — one for é, two for 中, three for 🐺 —
+    // and a continuation never starts a code point.
+    var conts = 0
+    for b in bs {
+        if b >= 128 && b < 192 {
+            conts = conts + 1
+        }
+    }
+    // Whole-char slices hit, bit-identical to the checked slice.
+    let two = s.get(0..2) else "?"
+    let three = s.get(2..5) else "?"
+    let four = s.get(5..9) else "?"
+    let hits_ok = two == "é" && three == "中" && four == "🐺"
+    // Mid-code-point is a refusal by name: inside each of the three
+    // sequences, from either end.
+    let m1 = s.get(0..1) else "miss"
+    let m2 = s.get(2..4) else "miss"
+    let m3 = s.get(3..5) else "miss"
+    let m4 = s.get(5..8) else "miss"
+    let m5 = s.get(6..9) else "miss"
+    let miss_ok = m1 == "miss" && m2 == "miss" && m3 == "miss" && m4 == "miss" && m5 == "miss"
+    if leads_ok && conts == 6 && hits_ok && miss_ok {
+        0
+    } else {
+        1
+    }
+}

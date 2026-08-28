@@ -284,10 +284,12 @@ rows/qmark_defer.lu: lowers
 rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers
+strings/boundary_battery.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
 strings/byte_view_lend.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
+strings/chars_walk.lu: lowers
 strings/empty_needle.lu: lowers
 strings/equality_lanes.lu: lowers
 strings/float_format.lu: lowers
