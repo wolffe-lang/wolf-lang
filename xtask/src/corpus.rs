@@ -106,10 +106,10 @@ pub struct Directives {
     /// expected to fire (sorted, deduped). Empty = must be
     /// warning-clean (the s67 `--deny-warnings` posture).
     pub warns: Vec<String>,
-    /// `member: true` — this file belongs to a multi-file module case and
-    /// is compiled through its entry file, never conform-run directly
-    /// (s12: directory = module).
-    pub member: bool,
+    /// `member:` as written: `Some(true)` / `Some(false)`, `None` when
+    /// the key is absent. Membership itself is answered by
+    /// [`is_member`](Self::is_member) (D59: plain files are members).
+    pub member: Option<bool>,
     /// `forward: <reason>` — this file's `check:` pins behaviour that is
     /// not implemented yet, and the reason names the construct the
     /// compiler stops on (s91). An intention, not an enforced rule; the
@@ -121,6 +121,18 @@ impl Directives {
     /// Every diagnostic code this header pins: the `check: fail(CODE)`
     /// rejection first, then each `warns:` code. What a reader of the
     /// corpus is entitled to look up in the catalog.
+    /// Is this file a member of its directory's module — compiled
+    /// through its entry, never conform-run directly — rather than a
+    /// runnable entry? An explicit `member:` decides; otherwise a file
+    /// with no entry machinery at all (neither `check:` nor `phase:`)
+    /// is a member by default (D59, `[conf.directive.standalone]`).
+    pub fn is_member(&self) -> bool {
+        match self.member {
+            Some(v) => v,
+            None => self.check.is_none() && self.phase.is_none(),
+        }
+    }
+
     pub fn pinned_codes(&self) -> Vec<&str> {
         let mut out = Vec::new();
         if let Some(Check::Fail(code)) = &self.check {
@@ -198,13 +210,25 @@ pub fn parse_directives(src: &str) -> Result<Directives, String> {
             }
             d.forward = Some(v.to_string());
         } else if let Some(v) = rest.strip_prefix("member:") {
+            if d.member.is_some() {
+                return Err(format!("line {lineno}: duplicate `member:` directive"));
+            }
             match v.trim() {
-                "true" => d.member = true,
-                "false" => {}
+                "true" => d.member = Some(true),
+                "false" => d.member = Some(false),
                 other => return Err(format!("line {lineno}: bad member value `{other}`")),
             }
         }
         // any other `//!` line is prose
+    }
+    // [conf.directive.member]: a member file carries neither `check:`
+    // nor `phase:` — a marked member with entry machinery is a
+    // contradiction, not a preference.
+    if d.member == Some(true) && (d.check.is_some() || d.phase.is_some()) {
+        return Err(
+            "`member: true` contradicts `check:`/`phase:` — a member file carries neither              ([conf.directive.member])"
+                .to_string(),
+        );
     }
     Ok(d)
 }

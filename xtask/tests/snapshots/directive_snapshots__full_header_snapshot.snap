@@ -24,7 +24,7 @@ Ok(
             "mem.region.freeze",
         ],
         warns: [],
-        member: false,
+        member: None,
         forward: None,
     },
 )

@@ -114,6 +114,7 @@
     "conf.directive.conforms": "05-conformance.md",
     "conf.directive.member": "05-conformance.md",
     "conf.directive.phase": "05-conformance.md",
+    "conf.directive.standalone": "05-conformance.md",
     "conf.tag": "05-conformance.md",
     "conf.tag.key": "05-conformance.md",
     "conf.tag.must": "05-conformance.md",

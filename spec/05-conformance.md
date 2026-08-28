@@ -80,6 +80,20 @@ parser contract):
   entry file must carry both. `member: false` is legal and means entry.
 - `[conf.directive.conforms]` As §2; duplicate anchors within one file
   are errors.
+- `[conf.directive.standalone]` Module formation for a single-entry
+  compilation (appended 2026-08-28 by s124, ruling D59): every `.lu`
+  file in a directory is a member of that directory's module
+  (directory = module) **except standalone entries** — files whose
+  leading `//!` block carries `member: false` or both `check:` and
+  `phase:` (the entry pair of `[conf.directive.member]`), files that
+  announce script mode (a `#!` first line or a `pkg { … }` frontmatter
+  block), and files whose name ends `_test.lu` (the test-discovery
+  pattern). An explicit `member:` key always decides. The named entry
+  of a compilation always belongs to its own root module, whatever its
+  markers. A directory whose `.lu` files are all standalone entries
+  forms no module. `member: true` remains legal and marks membership
+  explicitly — it is the default for plain files, so the marker is
+  needed only to override an entry-shaped header.
 
 ## §3 Trap & exit vocabulary `[conf.trap]`
 
