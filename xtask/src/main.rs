@@ -1164,9 +1164,27 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // crash/literal witnesses; four module-formation witnesses), so the
 // deltas compound. Counts measured by this gate on the merged tree,
 // not predicted.
+// Floors are PER-PLATFORM and MEASURED, never inherited (s59): the
+// linux numbers are linux measurements and stay untouched; each newly
+// ported host ratchets from its own first measurement.
+#[cfg(not(target_os = "macos"))]
 const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 242)];
+#[cfg(not(target_os = "macos"))]
 const UNION_FLOOR: usize = 256;
+#[cfg(not(target_os = "macos"))]
 const ALL_THREE_FLOOR: usize = 207;
+// s59, measured on macOS/aarch64 the day the gate lifted: checked and
+// native at FULL linux parity (221/242, union 256 — the port left no
+// coverage behind), release 0 — the s41 release tier refuses this
+// host BY NAME until its own c13 sprint, so its floor (and the
+// all-three intersection's) is the honest 0, ratcheted when that
+// sprint lands. Counts measured by this gate, not predicted.
+#[cfg(target_os = "macos")]
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 0)];
+#[cfg(target_os = "macos")]
+const UNION_FLOOR: usize = 256;
+#[cfg(target_os = "macos")]
+const ALL_THREE_FLOOR: usize = 0;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -1439,7 +1457,13 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         );
         fell = true;
     }
-    if all_three.len() < ALL_THREE_FLOOR {
+    // On macOS the measured all-three floor is 0 until the release
+    // tier crosses, which makes this comparison vacuously true there —
+    // clippy is right that it cannot fail YET, and the expectation
+    // deletes itself the day that floor ratchets up.
+    #[cfg_attr(target_os = "macos", expect(clippy::absurd_extreme_comparisons))]
+    let all_three_holds = all_three.len() >= ALL_THREE_FLOOR;
+    if !all_three_holds {
         eprintln!(
             "lane-coverage: all-three coverage {} is below the floor of {ALL_THREE_FLOOR} — the \
              lanes are diverging in scope, not converging",
