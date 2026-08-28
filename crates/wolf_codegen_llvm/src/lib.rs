@@ -266,6 +266,13 @@ impl Backend for LlvmBackend {
         }
     }
 
+    fn source_files(
+        &mut self,
+        files: std::collections::HashMap<u32, wolf_backend::dwarf::SourceFile>,
+    ) {
+        self.cx.site_files = files;
+    }
+
     fn declare_function(
         &mut self,
         module: &WirModule,
