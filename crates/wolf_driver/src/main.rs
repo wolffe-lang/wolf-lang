@@ -1670,24 +1670,15 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
                 .to_string(),
         )
     })?;
-    // Staging-path discipline is PER-FORMAT (s59): on macOS the
-    // linked executable EMBEDS the staging paths (the debug map's
-    // N_OSO entries), so a deterministic build needs a deterministic
-    // directory — derived from the object contents, and identical
-    // inputs may share it safely (identical writes are idempotent).
-    // Elsewhere the paths never reach the binary and a pid+nanos dir
-    // avoids even theoretical same-content races.
-    #[cfg(target_os = "macos")]
-    let dir = {
-        use std::hash::{Hash as _, Hasher as _};
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        for (name, bytes) in objects {
-            name.hash(&mut h);
-            bytes.hash(&mut h);
-        }
-        std::env::temp_dir().join(format!("wolf-link-{:016x}", h.finish()))
-    };
-    #[cfg(not(target_os = "macos"))]
+    // The staging dir is UNIQUE per link (pid + nanos): two
+    // concurrent links may stage byte-identical objects, and a shared
+    // directory hands one link's post-link cleanup the other link's
+    // inputs (the s59 content-hash scheme collided by design exactly
+    // when content was equal — measured as a raced `remove_dir_all`
+    // deleting `00-root.o` under a running `cc`). Determinism on
+    // macOS, where the binary EMBEDS staging paths in its N_OSO
+    // stabs, is restored below by `-oso_prefix` instead: normalize
+    // the path out of the binary, never pin the directory.
     let dir = std::env::temp_dir().join(format!(
         "wolf-link-{}-{}",
         std::process::id(),
@@ -1707,11 +1698,19 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     }
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let mut cmd = std::process::Command::new(&cc);
-    // macOS: zero the debug map's N_OSO timestamps (ld64 honors
-    // ZERO_AR_DATE) — the other half of deterministic links; dsymutil
-    // treats 0 as "no check" (the Rust archives already do this).
+    // macOS determinism, both halves (s59): ZERO_AR_DATE zeroes the
+    // debug map's N_OSO timestamps (ld64 honors it; dsymutil treats 0
+    // as "no check" — the Rust archives already do this), and
+    // `-oso_prefix` strips the unique staging prefix from the N_OSO
+    // paths, so cached and fresh links are bit-identical however the
+    // staging dir is named. The rt archive's path is checkout-stable
+    // and stays absolute, which is what lets dsymutil find it from
+    // any working directory.
     #[cfg(target_os = "macos")]
-    cmd.env("ZERO_AR_DATE", "1");
+    {
+        cmd.env("ZERO_AR_DATE", "1");
+        cmd.arg(format!("-Wl,-oso_prefix,{}/", dir.display()));
+    }
     cmd.arg("-o").arg(out);
     for p in &paths {
         cmd.arg(p);
@@ -1744,10 +1743,18 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     // executable — it writes a debug MAP whose entries point at the
     // staging objects, and `dsymutil` links those into `<out>.dSYM`.
     // That must happen BEFORE the staging dir is deleted or the map
-    // dangles and no debugger ever sees wolf's line tables.
+    // dangles and no debugger ever sees wolf's line tables. The
+    // `-oso_prefix` above made the staged entries RELATIVE, so
+    // dsymutil runs from the staging dir (and the out path must be
+    // absolute to survive that cwd change).
     #[cfg(target_os = "macos")]
     if matches!(&status, Ok(s) if s.success()) {
-        match std::process::Command::new("dsymutil").arg(out).status() {
+        let out_abs = std::path::absolute(out).unwrap_or_else(|_| out.to_path_buf());
+        match std::process::Command::new("dsymutil")
+            .current_dir(&dir)
+            .arg(&out_abs)
+            .status()
+        {
             Ok(s) if s.success() => {}
             Ok(s) => eprintln!(
                 "wolf build: note: `dsymutil {}` failed ({s}) — the binary runs \

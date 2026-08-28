@@ -262,3 +262,84 @@ fn hello_prints_natively() {
     assert_eq!(run.status.code(), Some(0));
     assert_eq!(String::from_utf8_lossy(&run.stdout), "hello, wolf\n");
 }
+/// Concurrent links of BYTE-IDENTICAL object sets must not interfere
+/// (the s59 regression this pins: a content-hash staging dir made two
+/// identical links share a directory, and the first finisher's
+/// post-link cleanup deleted `00-root.o` out from under the second's
+/// `cc` — surfacing as a bogus environment exit 2). The staging dir
+/// is unique per link again; determinism rides `-oso_prefix` instead
+/// and is pinned by `cache_granularity_and_determinism` above.
+///
+/// The crash itself needs a milliseconds-wide interleaving (one
+/// build's cleanup between a sibling's object write and its `cc`
+/// open), so this asserts the ISOLATION INVARIANT deterministically
+/// instead: with `TMPDIR` pointed at a test-owned directory, two
+/// simultaneous identical builds must stage under two DISTINCT
+/// `wolf-link-*` directories — the shared-dir scheme shows exactly
+/// one, every time — and both builds must succeed.
+#[test]
+// The children ARE reaped — `try_wait` returning `Some` is the reap —
+// but clippy's zombie analysis cannot see through the polling loop.
+#[allow(clippy::zombie_processes)]
+fn concurrent_identical_links_stage_in_distinct_dirs() {
+    let dir = fixture("concurrent_links");
+    // Environment probe first (the file's skip discipline).
+    if build_verbose(&dir, &[]).is_none() {
+        return;
+    }
+    let tmp = dir.join("tmp");
+    std::fs::create_dir_all(&tmp).expect("mkdir tmp");
+    let spawn = |tag: &str| {
+        Command::new(wolf())
+            .arg("build")
+            .arg(dir.join("main.lu"))
+            .arg("-o")
+            .arg(dir.join(format!("race-{tag}")))
+            .arg("--no-cache")
+            .env("TMPDIR", &tmp)
+            .spawn()
+            .expect("spawn wolf")
+    };
+    let mut a = spawn("a");
+    let mut b = spawn("b");
+    // Sample the staging dirs while both builds live. Each staging
+    // dir exists for its build's whole cc+dsymutil span, so a few-ms
+    // poll cannot miss it.
+    let mut seen = std::collections::BTreeSet::new();
+    let (mut sa, mut sb) = (None, None);
+    while sa.is_none() || sb.is_none() {
+        if let Ok(rd) = std::fs::read_dir(&tmp) {
+            for e in rd.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                if name.starts_with("wolf-link-") {
+                    seen.insert(name);
+                }
+            }
+        }
+        if sa.is_none() {
+            sa = a.try_wait().expect("poll a");
+        }
+        if sb.is_none() {
+            sb = b.try_wait().expect("poll b");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let (sa, sb) = (sa.unwrap(), sb.unwrap());
+    assert!(
+        sa.success() && sb.success(),
+        "concurrent identical links interfered (a: {sa:?}, b: {sb:?})"
+    );
+    assert!(
+        seen.len() >= 2,
+        "both builds staged under the SAME link dir ({seen:?}) — the \
+         s59 content-hash collision is back; staging must be unique \
+         per link, with determinism carried by -oso_prefix instead"
+    );
+    // Both products actually run.
+    for tag in ["a", "b"] {
+        let st = Command::new(dir.join(format!("race-{tag}")))
+            .status()
+            .expect("run product");
+        assert_eq!(st.code(), Some(0), "race-{tag}: product broken");
+    }
+}
