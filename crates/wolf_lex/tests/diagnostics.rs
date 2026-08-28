@@ -90,3 +90,36 @@ fn e0109_unterminated_generalized() {
 fn e0109_unterminated_raw() {
     diag_snapshot("e0109_raw", "let x = r#\"abc\n");
 }
+
+#[test]
+fn e0110_empty_char() {
+    diag_snapshot("e0110_empty", "let c = ''\n");
+}
+
+#[test]
+fn e0110_two_scalars() {
+    diag_snapshot("e0110_two_scalars", "let c = 'ab'\n");
+}
+
+#[test]
+fn e0110_combining_grapheme() {
+    // One glyph, two scalars — the grapheme note.
+    diag_snapshot("e0110_grapheme", "let c = 'e\u{301}'\n");
+}
+
+#[test]
+fn e0110_unterminated() {
+    diag_snapshot("e0110_unterminated", "let c = 'a\nlet d = 1\n");
+}
+
+#[test]
+fn e0110_surrogate_escape() {
+    // The surrogate gap refused at the literal — the same domain the
+    // trapping `int as char` cast enforces at run time (D58).
+    diag_snapshot("e0110_surrogate", "let c = '\\u{D800}'\n");
+}
+
+#[test]
+fn e0110_beyond_last_scalar() {
+    diag_snapshot("e0110_beyond", "let c = '\\u{110000}'\n");
+}

@@ -42,6 +42,12 @@ pub enum Prim {
     U64,
     F32,
     F64,
+    /// A Unicode scalar value (D58, s121): `0..=0x10FFFF` excluding
+    /// the surrogate gap `0xD800..=0xDFFF`. Deliberately NOT an
+    /// integer type — no arithmetic, no numeric-literal adoption; the
+    /// only numeric bridges are the spelled casts (`char as int`
+    /// total, `int as char` trapping per D56's family).
+    Char,
 }
 
 impl Prim {
@@ -65,6 +71,7 @@ impl Prim {
             "u64" => Prim::U64,
             "f32" => Prim::F32,
             "f64" => Prim::F64,
+            "char" => Prim::Char,
             _ => return None,
         })
     }
@@ -86,6 +93,7 @@ impl Prim {
             Prim::U64 => "u64",
             Prim::F32 => "f32",
             Prim::F64 => "f64",
+            Prim::Char => "char",
         }
     }
 

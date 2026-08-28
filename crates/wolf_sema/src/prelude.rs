@@ -179,8 +179,8 @@ pub const PRELUDE: &[&str] = &[
 /// Built-in type names, resolvable everywhere in type (and expression)
 /// position. Closed set for now; the real inventory is spec 02's.
 pub const BUILTIN_TYPES: &[&str] = &[
-    "bool", "str", "byte", "int", "uint", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
-    "f32", "f64", "wrapping",
+    "bool", "str", "byte", "char", "int", "uint", "i8", "i16", "i32", "i64", "u8", "u16", "u32",
+    "u64", "f32", "f64", "wrapping",
 ];
 
 /// One stub std module: its dotted path and its item names.

@@ -894,8 +894,8 @@ const STR_MEMBERS: &[(&str, &str, &str)] = &[
     ),
     (
         "chars",
-        "fn chars() -> List[int]",
-        "The code points as Unicode scalar values (s120).",
+        "fn chars() -> List[char]",
+        "The code points as `char` values (s120; typed by D58).",
     ),
     (
         "starts_with",

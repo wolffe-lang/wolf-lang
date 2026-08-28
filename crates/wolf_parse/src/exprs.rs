@@ -91,7 +91,11 @@ fn at_expr_start(p: &Parser<'_>) -> bool {
 /// operands: range ends, `return`/`break` values.)
 fn can_start_expr(k: TokenKind) -> bool {
     match k {
-        TokenKind::Ident | TokenKind::Int | TokenKind::Float | TokenKind::StrBegin(_) => true,
+        TokenKind::Ident
+        | TokenKind::Int
+        | TokenKind::Float
+        | TokenKind::Char
+        | TokenKind::StrBegin(_) => true,
         TokenKind::Punct(
             Punct::LParen
             | Punct::LBrace
@@ -835,7 +839,10 @@ fn condition_required(p: &mut Parser<'_>, ctx: Ctx, what: &str) {
 /// whether the result is path-shaped (a candidate struct-literal head).
 fn primary(p: &mut Parser<'_>, ctx: Ctx) -> Option<(CompletedMarker, bool)> {
     let cm = match p.current() {
-        TokenKind::Int | TokenKind::Float | TokenKind::Kw(Keyword::True | Keyword::False) => {
+        TokenKind::Int
+        | TokenKind::Float
+        | TokenKind::Char
+        | TokenKind::Kw(Keyword::True | Keyword::False) => {
             let m = p.start();
             p.bump();
             m.complete(p, SyntaxKind::LiteralExpr)

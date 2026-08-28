@@ -62,6 +62,9 @@ faults/bounds_slice.lu: lowers
 faults/cast_float_nan_trap.lu: lowers
 faults/cast_float_overflow_trap.lu: lowers
 faults/cast_float_to_int_truncate.lu: lowers
+faults/char_cast_negative_trap.lu: lowers
+faults/char_cast_range_trap.lu: lowers
+faults/char_cast_surrogate_trap.lu: lowers
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/overflow_add.lu: lowers
@@ -288,7 +291,10 @@ strings/boundary_battery.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
 strings/byte_view_lend.lu: lowers
+strings/char_battery.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
+strings/char_interp.lu: lowers
+strings/char_order.lu: lowers
 strings/chars_walk.lu: lowers
 strings/empty_needle.lu: lowers
 strings/equality_lanes.lu: lowers

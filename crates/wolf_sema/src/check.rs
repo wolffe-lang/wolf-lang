@@ -155,6 +155,15 @@ pub enum CastKind {
     /// the place; lowering emits the (data, vtable) pair
     /// (`[abi.native.dyn]`).
     Unsize,
+    /// s121 (D58) — `char as int`: TOTAL. Every scalar value fits an
+    /// `int`; lowering is a plain zero-extension of the 32-bit scalar.
+    CharToInt,
+    /// s121 (D58) — `int as char`: TRAPS (overflow, D56's family) when
+    /// the value is not a Unicode scalar — negative, above
+    /// `0x10FFFF`, or inside the surrogate gap `0xD800..=0xDFFF`. The
+    /// gap check is what keeps "every `str` is valid UTF-8" (D24) an
+    /// invariant: a `char` holding a surrogate could never be encoded.
+    IntToChar,
 }
 
 /// The typed HIR of one body — minimal but real: every recorded
@@ -3490,6 +3499,10 @@ impl<'a> Checker<'a> {
             SyntaxKind::Int => self.fresh(NumKind::Integer, e.span),
             SyntaxKind::Float => self.fresh(NumKind::Float, e.span),
             SyntaxKind::TrueKw | SyntaxKind::FalseKw => self.lo.table.prim(Prim::Bool),
+            // `'a'` (s121, D58): concretely `char`, never a numeric
+            // inference var — a char literal adopts nothing and
+            // nothing adopts it (the casts are the only bridges).
+            SyntaxKind::Char => self.lo.table.prim(Prim::Char),
             _ => self.error_ty(),
         }
     }
@@ -3566,6 +3579,10 @@ impl<'a> Checker<'a> {
             TyKind::Prim(Prim::Str) => Some(HoleClass::Str),
             TyKind::Prim(Prim::Bool) => Some(HoleClass::Bool),
             TyKind::Prim(Prim::F32 | Prim::F64) => Some(HoleClass::Float),
+            // `{c}` prints the CHARACTER (D58), so a char hole takes
+            // the str spec surface (fill/align/width), never the
+            // numeric one — `{c:x}` is the E0413 it looks like.
+            TyKind::Prim(Prim::Char) => Some(HoleClass::Str),
             TyKind::Prim(_) | TyKind::Wrapping(_) => Some(HoleClass::Int),
             TyKind::Var(v) => match self.vars.kind_of(v) {
                 NumKind::Integer | NumKind::IntFrozen => Some(HoleClass::Int),
@@ -3913,6 +3930,21 @@ impl<'a> Checker<'a> {
                     self.golden_rule_op(lhs.span, &n, &op_text);
                     return Ok(self.lo.table.prim(Prim::Bool));
                 }
+                // `char` orders by scalar value (D58): total, defined,
+                // no locale — the same temperament as str's byte order.
+                if matches!(self.kind_of(lt), TyKind::Prim(Prim::Char)) {
+                    let exp = Expect {
+                        ty: lt,
+                        reason: Reason::OpOperands(op_text.clone()),
+                        because: Some(lhs.span),
+                    };
+                    self.expect_unify(rhs.span, rt, &exp);
+                    return Ok(if op_kind == Some(SyntaxKind::Spaceship) {
+                        self.lo.table.prim(Prim::Int)
+                    } else {
+                        self.lo.table.prim(Prim::Bool)
+                    });
+                }
                 // `str` orders too: byte-lexicographic, total, defined
                 // (the #7 ruling — lupin's byte order, no collation).
                 if matches!(self.kind_of(lt), TyKind::Prim(Prim::Str)) {
@@ -4053,6 +4085,31 @@ impl<'a> Checker<'a> {
         };
         let sk = self.kind_of(src_ty);
         let tk = self.kind_of(target);
+        // s121 (D58): the char casts — the only numeric bridges `char`
+        // has. `char as int` is TOTAL (every scalar fits); `int as
+        // char` TRAPS on a non-scalar value (negative, > 0x10FFFF, or
+        // the surrogate gap 0xD800..=0xDFFF — D56's trapping family).
+        // Everything else against `char` falls to E0805 below.
+        if matches!(sk, TyKind::Prim(Prim::Char)) && matches!(tk, TyKind::Prim(Prim::Int)) {
+            self.casts
+                .push((e.span, src_ty, target, CastKind::CharToInt));
+            return Ok(target);
+        }
+        if matches!(tk, TyKind::Prim(Prim::Char)) {
+            let src_is_int = match &sk {
+                TyKind::Prim(Prim::Int) | TyKind::Error | TyKind::Never => true,
+                TyKind::Var(_) => {
+                    let int_ = self.lo.table.prim(Prim::Int);
+                    unify(&mut self.lo.table, &mut self.vars, src_ty, int_).is_ok()
+                }
+                _ => false,
+            };
+            if src_is_int {
+                self.casts
+                    .push((e.span, src_ty, target, CastKind::IntToChar));
+                return Ok(target);
+            }
+        }
         if numeric(&sk, &self.vars) && numeric(&tk, &self.vars) {
             // A numeric cast: constrain an inference-var source to a
             // number, result is the target.
@@ -4191,7 +4248,14 @@ impl<'a> Checker<'a> {
             format!("`{shown_s}` does not cast to `{shown_t}`"),
         )
         .with_label("outside the cast set");
-        d = if is_bool(&sk) && numeric(&tk, &self.vars) {
+        let is_char = |k: &TyKind| matches!(k, TyKind::Prim(Prim::Char));
+        d = if is_char(&sk) || is_char(&tk) {
+            d.with_note(
+                "the ruled `char` bridges (D58) are exactly `char as int` (total) \
+                 and `int as char` (traps on a non-scalar value); cast through \
+                 `int` for any other width.",
+            )
+        } else if is_bool(&sk) && numeric(&tk, &self.vars) {
             d.with_note(
                 "there is no truthiness bridge: write the value out, e.g. \
                  `if b { 1 } else { 0 }`.",
@@ -5177,11 +5241,11 @@ impl<'a> Checker<'a> {
     /// `words`, `lines`) type as materialized `List`s at v0; the
     /// zero-copy iterator views arrive with the D28 protocol's
     /// builtin adoption (tracked in the s37 ledger). `chars()`
-    /// (s120, #17) yields the code points as Unicode scalar values —
-    /// `List[int]` at v0, like `bytes()` — because a scalar's UTF-8
-    /// byte extent is a function of its value, so a scan advances by
-    /// real width with no `char` type; the type itself (ABI,
-    /// comparison, literals) stays a named spec item.
+    /// (s120, #17; typed s121, D58) yields the code points as
+    /// `List[char]` — the scalar tier, one element per code point;
+    /// `bytes()` stays the byte tier (`List[int]`), and a scalar's
+    /// UTF-8 byte extent is still a function of its value, so the
+    /// width walk survives the typing verbatim.
     #[allow(clippy::too_many_arguments)]
     fn str_method_call(
         &mut self,
@@ -5224,12 +5288,15 @@ impl<'a> Checker<'a> {
                 let ret = self.lo.table.intern(TyKind::List(int_));
                 (vec![p("self", recv_ty)], ret)
             }
-            // Code-point iteration ([mem.str.chars], s120): each
-            // element is a Unicode scalar value, and its UTF-8 byte
-            // extent is a function of that value (1/2/3/4 by range),
-            // so a scan advances by real width without a `char` type.
+            // Code-point iteration ([mem.str.chars], s120; typed s121):
+            // `List[char]` — each element is the `char` primitive
+            // (D58), and its UTF-8 byte extent is a function of the
+            // scalar value (1/2/3/4 by range), so the width walk
+            // survives the typing unchanged (`c as int` names the
+            // scalar when the arithmetic needs it).
             "chars" => {
-                let ret = self.lo.table.intern(TyKind::List(int_));
+                let char_ = self.lo.table.prim(Prim::Char);
+                let ret = self.lo.table.intern(TyKind::List(char_));
                 (vec![p("self", recv_ty)], ret)
             }
             "starts_with" | "ends_with" | "contains" => {
@@ -8768,6 +8835,16 @@ impl<'a> Checker<'a> {
             }
             Some(SyntaxKind::TrueKw) => (self.lo.table.prim(Prim::Bool), Some(Ctor::Bool(true))),
             Some(SyntaxKind::FalseKw) => (self.lo.table.prim(Prim::Bool), Some(Ctor::Bool(false))),
+            // A char literal pattern (s121): tests the scalar value —
+            // the Int ctor over the cooked code point (see `col_ty`).
+            Some(SyntaxKind::Char) => {
+                let text = self.text(tok.expect("token").span);
+                let ctor = match cook_char_literal(&text) {
+                    Some(c) => Ctor::Int(i128::from(u32::from(c))),
+                    None => Ctor::Named(text),
+                };
+                (self.lo.table.prim(Prim::Char), Some(ctor))
+            }
             _ => (self.error_ty(), None),
         };
         let exp = Expect {
@@ -9071,6 +9148,12 @@ impl<'a> Checker<'a> {
             TyKind::Prim(Prim::Bool) => ColTy::Bool,
             TyKind::Prim(Prim::Str) => ColTy::Str,
             TyKind::Prim(p) if p.is_integer() => ColTy::Int,
+            // `char` (s121): literal patterns test scalar values —
+            // the Int column semantics (equality splits; literals
+            // never complete the column, a wildcard is required).
+            // A missing-case witness may therefore print as a bare
+            // scalar number; cosmetic, noted in D58.
+            TyKind::Prim(Prim::Char) => ColTy::Int,
             TyKind::Prim(_) => ColTy::Float,
             TyKind::Wrapping(_) => ColTy::Int,
             TyKind::Tuple(ts) => {
@@ -9630,6 +9713,50 @@ fn parse_int_text(text: &str) -> Option<i128> {
     }
 }
 
+/// Cook a `char` literal's source text (`'a'`, `'\n'`, `'\u{1F43A}'`)
+/// into its scalar value — THE one decoder (s121, `[gram.lex.char]`),
+/// shared by sema, the native lowering (`wolf_wir`) and the checked
+/// executor (`wolf_mem`) so the three lanes cannot drift. The lexer
+/// already refused malformed shapes (E0110), so `None` here means a
+/// tree built from un-lexable text; callers refuse, never guess.
+///
+/// The escape set is the string set plus `\'`:
+/// `\n \t \r \\ \' \" \0 \xNN \u{1–6 hex}`.
+pub fn cook_char_literal(text: &str) -> Option<char> {
+    let inner = text.strip_prefix('\'')?.strip_suffix('\'')?;
+    let mut cs = inner.chars();
+    let first = cs.next()?;
+    let (c, rest) = if first == '\\' {
+        match cs.next()? {
+            'n' => ('\n', cs.as_str()),
+            't' => ('\t', cs.as_str()),
+            'r' => ('\r', cs.as_str()),
+            '0' => ('\0', cs.as_str()),
+            '\\' => ('\\', cs.as_str()),
+            '\'' => ('\'', cs.as_str()),
+            '"' => ('"', cs.as_str()),
+            'x' => {
+                let hex = cs.as_str().get(..2)?;
+                let v = u32::from_str_radix(hex, 16).ok()?;
+                (char::from_u32(v)?, cs.as_str().get(2..)?)
+            }
+            'u' => {
+                let body = cs.as_str().strip_prefix('{')?;
+                let close = body.find('}')?;
+                let v = u32::from_str_radix(&body[..close], 16).ok()?;
+                (char::from_u32(v)?, body.get(close + 1..)?)
+            }
+            _ => return None,
+        }
+    } else {
+        (first, cs.as_str())
+    };
+    if !rest.is_empty() {
+        return None;
+    }
+    Some(c)
+}
+
 fn single_ident(pat: &GreenNode, src: &[u8]) -> Option<String> {
     if pat.kind == SyntaxKind::IdentPat {
         let t = pat.child_token(SyntaxKind::Ident)?;
@@ -9658,5 +9785,55 @@ fn place_shaped(e: &GreenNode) -> bool {
             .is_some_and(place_shaped),
         SyntaxKind::BracketApply => e.nodes().next().is_some_and(place_shaped),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod char_literal_tests {
+    use super::cook_char_literal;
+
+    /// `[gram.lex.char]` / D58: THE shared decoder — every spelling
+    /// of a scalar cooks to the scalar, malformed text to `None`.
+    #[test]
+    fn cook_covers_the_ruled_escape_set() {
+        for (text, want) in [
+            ("'a'", 'a'),
+            ("'é'", 'é'),
+            ("'中'", '中'),
+            ("'🐺'", '🐺'),
+            ("'\\n'", '\n'),
+            ("'\\t'", '\t'),
+            ("'\\r'", '\r'),
+            ("'\\0'", '\0'),
+            ("'\\\\'", '\\'),
+            ("'\\''", '\''),
+            ("'\\\"'", '"'),
+            ("'\\x61'", 'a'),
+            ("'\\x7f'", '\u{7f}'),
+            ("'\\u{A}'", '\n'),
+            ("'\\u{E9}'", 'é'),
+            ("'\\u{1F43A}'", '🐺'),
+            ("'\\u{10FFFF}'", '\u{10FFFF}'),
+        ] {
+            assert_eq!(cook_char_literal(text), Some(want), "{text}");
+        }
+    }
+
+    #[test]
+    fn cook_refuses_malformed_text() {
+        for text in [
+            "''",            // empty
+            "'ab'",          // two scalars
+            "'a",            // unterminated
+            "a'",            // no opener
+            "'\\q'",         // unknown escape
+            "'\\x6'",        // short hex
+            "'\\u{}'",       // no digits
+            "'\\u{D800}'",   // surrogate: not a scalar
+            "'\\u{110000}'", // beyond the last scalar
+            "'e\\u{301}'",   // combining pair: two scalars
+        ] {
+            assert_eq!(cook_char_literal(text), None, "{text}");
+        }
     }
 }

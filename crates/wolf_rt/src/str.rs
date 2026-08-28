@@ -316,6 +316,32 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_f64(handle: i64, v: f64, spec: i64) {
     }
 }
 
+/// Append a `char` hole (s121, D58): the CHARACTER's UTF-8 encoding,
+/// never the code-point number. The scalar arrives widened to `i64`
+/// (the i32 value zero-extended at the call site, like every sub-word
+/// scalar crossing this boundary); the compiled lanes guarantee it is
+/// a Unicode scalar — a value that is not one is a lane bug, rendered
+/// as U+FFFD rather than UB. A spec applies the str surface
+/// (fill/align/width) to the encoded character.
+///
+/// # Safety
+///
+/// `handle` from [`__wolf_rt_strbuf_new`], unfinished.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_strbuf_char(handle: i64, v: i64, spec: i64) {
+    let c = u32::try_from(v)
+        .ok()
+        .and_then(char::from_u32)
+        .unwrap_or('\u{FFFD}');
+    let b = unsafe { buf(handle) };
+    if spec == 0 {
+        b.push(c);
+    } else {
+        let mut tmp = [0u8; 4];
+        b.push_str(&render_str_packed(c.encode_utf8(&mut tmp), spec));
+    }
+}
+
 /// Move the built bytes into the ambient region; write the `{ptr,
 /// len}` pair through `out`; drop the buffer.
 ///
@@ -732,16 +758,17 @@ pub unsafe extern "C" fn __wolf_rt_str_bytes(sp: i64, sl: i64) -> i64 {
 }
 
 /// `chars()` — code-point iteration, materialized (s120, #17,
-/// `[mem.str.chars]`): a `List[int]` with each Unicode scalar value
-/// as an i64 element, in string order. The elements are scalars —
+/// `[mem.str.chars]`; typed s121, D58): a `List[char]` with each
+/// Unicode scalar value as a 4-byte element — `char`'s ruled layout,
+/// the i32 stride WIR walks. The elements are scalars —
 /// `0..=0x10FFFF` minus the surrogate gap, guaranteed by the `str`
 /// invariant (every `str` is valid UTF-8, [mem.str.get]) — and a
 /// scalar's UTF-8 byte extent is a function of its value
 /// (`< 0x80` → 1, `< 0x800` → 2, `< 0x10000` → 3, else 4), so a
-/// caller advances a byte cursor by real width without a `char`
-/// type. Always materializes: a variable-width decode has no strided
-/// walk, so `chars()` has no view tier yet (the pre-s89 `bytes()`
-/// posture).
+/// caller advances a byte cursor by real width; `c as int` names the
+/// scalar for that arithmetic. Always materializes: a variable-width
+/// decode has no strided walk, so `chars()` has no view tier yet
+/// (the pre-s89 `bytes()` posture).
 ///
 /// # Safety
 ///
@@ -749,9 +776,9 @@ pub unsafe extern "C" fn __wolf_rt_str_bytes(sp: i64, sl: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
     let s = unsafe { view(sp, sl) };
-    let hdr = crate::list::new_list(8);
+    let hdr = crate::list::new_list(4);
     for c in s.chars() {
-        let v = [i64::from(u32::from(c))];
+        let v = [u32::from(c)];
         crate::list::push_raw(hdr, v.as_ptr().cast());
     }
     hdr as i64
@@ -956,19 +983,20 @@ mod tests {
         }
     }
 
-    /// s120 (#17, `[mem.str.chars]`): `chars()` yields the Unicode
-    /// scalar values in string order — pinned against Rust's own
-    /// decoder — and each scalar's UTF-8 width, a pure function of
-    /// its value, advances a byte cursor over exactly the offsets
-    /// `is_char_boundary` accepts, summing to the byte length. That
-    /// walk is the whole reason the primitive exists.
+    /// s120 (#17, `[mem.str.chars]`; typed s121, D58): `chars()`
+    /// yields the Unicode scalar values in string order as 4-byte
+    /// `char` elements — pinned against Rust's own decoder — and each
+    /// scalar's UTF-8 width, a pure function of its value, advances a
+    /// byte cursor over exactly the offsets `is_char_boundary`
+    /// accepts, summing to the byte length. That walk is the whole
+    /// reason the primitive exists, and it survives the typing.
     #[test]
     fn chars_are_the_scalars_in_order() {
         for s in ["", "wolf", "héllo", "é€🐺x", "a中🐺"] {
             let (sp, sl) = pair_of(s);
             let hdr = unsafe { __wolf_rt_str_chars(sp, sl) };
-            let elems = unsafe { crate::list::i64_elems(hdr) }.expect("an int list");
-            let expect: Vec<i64> = s.chars().map(|c| i64::from(u32::from(c))).collect();
+            let elems = unsafe { crate::list::u32_elems(hdr) }.expect("a char list");
+            let expect: Vec<u32> = s.chars().map(u32::from).collect();
             assert_eq!(elems, expect.as_slice(), "scalars of {s:?}");
             let mut off = 0usize;
             for &c in elems {

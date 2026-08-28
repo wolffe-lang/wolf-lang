@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.char.cast, mem.ub.defined
+//!
+//! s121 (D58) — the third refusal: a negative `int` names no scalar.
+//! The compiled lanes fold this into the range rail (one unsigned
+//! compare — a negative value is a huge unsigned one), and the
+//! checked machine's `char::from_u32` domain agrees; either way the
+//! verdict is the same `trap(overflow)`, on every lane.
+
+fn main() -> !int {
+    let n = 0 - 1
+    let c = n as char
+    if c == 'x' { 1 } else { 2 }
+}

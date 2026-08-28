@@ -373,6 +373,7 @@ fn pair_space(prev: K, next: K) -> bool {
                 | K::SelfKw
                 | K::Int
                 | K::Float
+                | K::Char
                 | K::RParen
                 | K::RBracket
                 | K::RBrace

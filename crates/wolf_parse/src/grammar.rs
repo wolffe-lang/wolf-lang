@@ -1665,7 +1665,10 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
             p.bump();
             Some(m.complete(p, SyntaxKind::WildcardPat))
         }
-        TokenKind::Int | TokenKind::Float | TokenKind::Kw(Keyword::True | Keyword::False) => {
+        TokenKind::Int
+        | TokenKind::Float
+        | TokenKind::Char
+        | TokenKind::Kw(Keyword::True | Keyword::False) => {
             let m = p.start();
             p.bump();
             Some(m.complete(p, SyntaxKind::LiteralPat))

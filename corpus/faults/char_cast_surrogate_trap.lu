@@ -1,0 +1,17 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.char.cast, mem.ub.defined
+//!
+//! s121 (D58) — THE fault this sprint exists to pin: the surrogate
+//! gap. `0xD800..=0xDFFF` are UTF-16 encoding artifacts, not Unicode
+//! scalar values; a cast admitting one would mint a `char` that
+//! cannot be UTF-8-encoded and quietly break "every `str` is valid
+//! UTF-8" (D24) everywhere downstream. So `0xD800 as char` is D56's
+//! trapping cast — `trap(overflow)`, deterministic, never UB — while
+//! both gap NEIGHBOURS convert fine (char_battery.lu pins them).
+
+fn main() -> !int {
+    let n = 0xD800
+    let c = n as char
+    if c == 'x' { 1 } else { 2 }
+}

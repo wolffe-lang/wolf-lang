@@ -99,6 +99,26 @@ whitespace between — `re"[a-z]+"`, `path"/etc/hosts"`. Desugars to a
 comptime call `IDENT.from_literal("…")`; the prefix is any identifier that
 is not a reserved keyword. Raw-mode body (no escapes/interpolation).
 
+### 1.5b Char literals `[gram.lex.char]`
+
+```ebnf
+CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
+CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | '\u{' HEX_DIGIT+ '}'
+```
+
+One Unicode scalar value between single quotes (s121, D58 —
+`[type.char]` owns the type): `'a'`, `'é'`, `'🐺'`, `'\n'`, `'\''`,
+`'\u{1F43A}'`. `CHAR_TEXT` is any single scalar other than `'`, `\`,
+or a newline. The escape set is the string set plus `\'`; `\u{…}`
+takes one to six hex digits. Malformed shapes are **E0110** with an
+`Error` token, one report each: an empty `''`; more than one scalar
+(`'ab'` — and a combining pair like `'e\u{301}'` is two scalars: a
+`char` is a scalar, not a grapheme); a literal not closed before the
+end of its line; and a `\x`/`\u` escape naming a non-scalar (the
+surrogate gap `0xD800..=0xDFFF`, or above `0x10FFFF`) — the value a
+`char` cannot hold is the value its literal cannot spell. A `char`
+literal ends its line's statement (`[gram.lex.newline]`).
+
 ### 1.6 Newline termination `[gram.lex.newline]`
 
 Go-adapted, last-token-only, **normative and byte-exact** (Track 2 must
@@ -108,7 +128,7 @@ A statement terminator is inserted at a newline iff the last token on the
 line is one of:
 
 - an identifier or `_`
-- any literal (INT, FLOAT, any string-mode end, `true`, `false`)
+- any literal (INT, FLOAT, CHAR_LIT, any string-mode end, `true`, `false`)
 - one of the keywords: `return`, `break`, `continue`
 - a closing delimiter: `)`, `]`, `}`
 - postfix `?`
@@ -375,7 +395,7 @@ primary ::= literal | path | struct_lit | '(' expr (',' expr)* ','? ')' | block
           | asm_expr | borrow_expr
 struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}'
 field_init ::= IDENT ':' expr | IDENT
-literal ::= INT | FLOAT | STRING | MULTILINE_STRING | RAW_STRING
+literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
           | GENERALIZED_STRING | 'true' | 'false'
 ```
 

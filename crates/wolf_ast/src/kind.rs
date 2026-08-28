@@ -21,6 +21,8 @@ pub enum SyntaxKind {
     Underscore,
     Int,
     Float,
+    /// `'a'` — a `char` literal (s121, `[gram.lex.char]`).
+    Char,
 
     // The 50 reserved keywords `[gram.inv.kw]`, one kind each.
     AsKw, AsmKw, AssumeKw, BorrowKw, BreakKw, ComptimeKw, ConstKw, ContinueKw,

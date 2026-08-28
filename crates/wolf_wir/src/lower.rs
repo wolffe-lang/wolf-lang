@@ -1450,6 +1450,10 @@ enum PrintSeg {
     /// An `f64` value (s38: reference semantics exist — the checked
     /// executor renders the same bytes).
     F64 { v: Value, spec: i64 },
+    /// A `char` value (s121, D58): prints the CHARACTER — its UTF-8
+    /// encoding — never the code-point number. The i32 scalar widens
+    /// to i64 at the shim boundary like every sub-word scalar.
+    Char { v: Value, spec: i64 },
 }
 
 /// The module-path-qualified WIR name of item `name` in `module`
@@ -1556,6 +1560,12 @@ fn wir_ty_frame(
             // operational): the bytes live in module data (literals) or
             // wherever a runtime str points; the value is the fat pair.
             Prim::Str => Ok(Some(str_ty(it))),
+            // `char` (s121, D58): a 32-bit scalar — 4 bytes, i32-shaped
+            // at every tier. The representation invariant (the value is
+            // always a Unicode scalar, `<= 0x10FFFF`) means the sign
+            // bit is never set, so signed compares ARE scalar-value
+            // order.
+            Prim::Char => Ok(Some(types::I32)),
             Prim::Byte => Err(refuse("byte lowering (runtime byte views, c08)", span)),
         },
         TyKind::Wrapping(inner) => {
@@ -6160,6 +6170,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if text == "false" {
             return Ok(Flow::Val(Some(self.b.bconst(false))));
         }
+        // `'a'` (s121, D58): the scalar value as an i32 constant —
+        // cooked by THE shared decoder (`wolf_sema::check::
+        // cook_char_literal`), the same one the checked executor uses.
+        if text.starts_with('\'') {
+            let Some(c) = wolf_sema::check::cook_char_literal(&text) else {
+                return Err(refuse("this char literal shape in WIR lowering", e.span));
+            };
+            let v = self.b.iconst(types::I32, i64::from(u32::from(c)));
+            return Ok(Flow::Val(Some(v)));
+        }
         let Some(sema_ty) = self.expr_sema_ty(e.span) else {
             return Err(refuse("a literal without a recorded type", e.span));
         };
@@ -6734,6 +6754,69 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             )),
             CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
+            // s121 (D58): `char as int` is TOTAL — the 32-bit scalar
+            // zero-extends (the representation invariant keeps the
+            // sign bit clear, but zext states the meaning: a scalar
+            // is a non-negative code point).
+            CastKind::CharToInt => {
+                let Some(v) = v else {
+                    return Err(refuse("cast of a valueless expression", e.span));
+                };
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                        .one(),
+                )))
+            }
+            // s121 (D58): `int as char` — D56's trapping family. Two
+            // rails, each an overflow trap: the value must sit in
+            // `0..=0x10FFFF` (one unsigned compare — a negative int is
+            // a huge unsigned one), and must miss the surrogate gap
+            // `0xD800..=0xDFFF` (after the range rail the gap is
+            // exactly `v & 0xFFFF_F800 == 0xD800`). A `char` admitting
+            // either would be un-encodable and break D24's "every
+            // `str` is valid UTF-8" downstream.
+            CastKind::IntToChar => {
+                let Some(v) = v else {
+                    return Err(refuse("cast of a valueless expression", e.span));
+                };
+                let max = self.b.iconst(types::I64, 0x10FFFF);
+                let in_range = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[v, max],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Ule),
+                    )
+                    .one();
+                if self.trap_unless(in_range, TrapKind::Overflow) {
+                    return Ok(Flow::Diverged);
+                }
+                let mask = self.b.iconst(types::I64, 0xFFFF_F800);
+                let masked = self
+                    .b
+                    .ins(Opcode::Band, &[v, mask], &[types::I64], Aux::None)
+                    .one();
+                let gap = self.b.iconst(types::I64, 0xD800);
+                let not_surrogate = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[masked, gap],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Ne),
+                    )
+                    .one();
+                if self.trap_unless(not_surrogate, TrapKind::Overflow) {
+                    return Ok(Flow::Diverged);
+                }
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Itrunc, &[v], &[types::I32], Aux::None)
+                        .one(),
+                )))
+            }
         }
     }
 
@@ -9060,6 +9143,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         PrintSeg::F64 { v, spec } => {
                             let sp = self.b.iconst(types::I64, spec);
                             self.rt_call("__wolf_rt_strbuf_f64", &[buf, v, sp], None);
+                        }
+                        PrintSeg::Char { v, spec } => {
+                            let wide = self
+                                .b
+                                .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                                .one();
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_call("__wolf_rt_strbuf_char", &[buf, wide, sp], None);
                         }
                         PrintSeg::Lit(_) => unreachable!("holes classify as values"),
                     }
@@ -12716,6 +12807,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "`f32` print formatting (f64 is the s38 float)",
                 expr.span,
             )),
+            // `{c}` prints the character (D58), never the number —
+            // this arm must sit before the integer catch-all.
+            TyKind::Prim(Prim::Char) => Ok(PrintSeg::Char { v, spec }),
             TyKind::Prim(_) => {
                 let unsigned = sema_unsigned(self.table, ty);
                 let spec = if unsigned && spec != 0 {
@@ -12928,6 +13022,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         "__wolf_rt_write_f64",
                         &[types::I64, types::F64, types::I64],
                         &[st, v, sp],
+                    );
+                }
+                PrintSeg::Char { v, spec } => {
+                    let wide = self
+                        .b
+                        .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                        .one();
+                    let st = self.b.iconst(types::I64, stream);
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_print_call(
+                        "__wolf_rt_write_char",
+                        &[types::I64, types::I64, types::I64],
+                        &[st, wide, sp],
                     );
                 }
             }
@@ -14070,6 +14177,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 if text == "false" {
                     return Ok(PatShape::BoolTest(false));
+                }
+                // A char literal arm (s121): the scalar value is the
+                // test — the scrutinee is i32-shaped, one icmp per arm,
+                // exactly the integer discipline.
+                if text.starts_with('\'') {
+                    return match wolf_sema::check::cook_char_literal(&text) {
+                        Some(c) => Ok(PatShape::Tests(vec![i64::from(u32::from(c))], vec![])),
+                        None => Err(refuse("this char literal pattern shape", pat.span)),
+                    };
                 }
                 match parse_int_literal(&text) {
                     Some(n) => Ok(PatShape::Tests(vec![n], vec![])),
