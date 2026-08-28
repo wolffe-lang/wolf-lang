@@ -1,0 +1,26 @@
+---
+source: crates/wolf_lsp/tests/completion.rs
+expression: "shaped.join(\"\\n\")"
+---
+is_empty · fn is_empty() -> bool
+get · fn get(range: Range[int]) -> str ! {none}
+bytes · fn bytes() -> List[int]
+chars · fn chars() -> List[int]
+starts_with · fn starts_with(needle: str) -> bool
+ends_with · fn ends_with(needle: str) -> bool
+contains · fn contains(needle: str) -> bool
+find · fn find(needle: str) -> int ! {none}
+rfind · fn rfind(needle: str) -> int ! {none}
+count · fn count(needle: str) -> int
+split · fn split(sep: str) -> List[str]
+words · fn words() -> List[str]
+lines · fn lines() -> List[str]
+trim · fn trim() -> str
+trim_start · fn trim_start() -> str
+trim_end · fn trim_end() -> str
+lower · fn lower() -> str
+upper · fn upper() -> str
+strip_prefix · fn strip_prefix(needle: str) -> str ! {none}
+strip_suffix · fn strip_suffix(needle: str) -> str ! {none}
+repeat · fn repeat(count: int) -> str
+replace · fn replace(from: str, to: str) -> str
