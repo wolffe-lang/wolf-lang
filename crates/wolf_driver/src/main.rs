@@ -1080,6 +1080,29 @@ fn compile_native(
             wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights.clone()))
                 .map_err(|e| refuse("wir", e))?;
         let all: Vec<wolf_wir::FuncId> = module.funcs.keys().collect();
+        // s125: trap sites in the inspectable IR too — the emitted
+        // text is the release tier's real lowering, sites included.
+        {
+            let mut files = std::collections::HashMap::new();
+            for unit in &res.package.files {
+                let idx = unit.raw.file.index() as u32;
+                let mut line_starts = vec![0u32];
+                for (i, &b) in unit.raw.src.iter().enumerate() {
+                    if b == b'\n' {
+                        line_starts.push(i as u32 + 1);
+                    }
+                }
+                files.insert(
+                    idx,
+                    wolf_backend::dwarf::SourceFile {
+                        path: unit.raw.display.clone(),
+                        line_starts,
+                    },
+                );
+            }
+            use wolf_backend::Backend as _;
+            backend.source_files(files);
+        }
         wolf_codegen_clif::compile_selected(
             &mut backend,
             &module,
@@ -1567,35 +1590,42 @@ fn compile_unit(
     } else {
         Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?)
     };
+    // The unit's source files as plain data — display path + line
+    // starts — for two consumers with one truth: the trap-site
+    // rendering (s125, every tier) and the DWARF builder (s30, the
+    // debug tier). Only THIS unit's files, as before (the object must
+    // not observe other modules' file tables — cache keys don't fold
+    // them).
+    let mut files = std::collections::HashMap::new();
+    let unit_files: std::collections::HashSet<u32> = u
+        .funcs
+        .iter()
+        .filter_map(|&f| module.funcs[f].src_file)
+        .collect();
+    for unit in &pkg.files {
+        let idx = unit.raw.file.index() as u32;
+        if !unit_files.contains(&idx) {
+            continue;
+        }
+        let mut line_starts = vec![0u32];
+        for (i, &b) in unit.raw.src.iter().enumerate() {
+            if b == b'\n' {
+                line_starts.push(i as u32 + 1);
+            }
+        }
+        files.insert(
+            idx,
+            wolf_backend::dwarf::SourceFile {
+                path: unit.raw.display.clone(),
+                line_starts,
+            },
+        );
+    }
+    backend.source_files(files.clone());
     // DWARF v0 (s30): the debug tier always carries debug info — the
     // Cranelift backend IS the debug tier (release is the LLVM tier,
     // s41). The builder collects the DebugSink stream per object.
     let mut dwarf = if backend.capabilities().dwarf_fidelity != wolf_backend::DwarfFidelity::None {
-        let mut files = std::collections::HashMap::new();
-        let unit_files: std::collections::HashSet<u32> = u
-            .funcs
-            .iter()
-            .filter_map(|&f| module.funcs[f].src_file)
-            .collect();
-        for unit in &pkg.files {
-            let idx = unit.raw.file.index() as u32;
-            if !unit_files.contains(&idx) {
-                continue;
-            }
-            let mut line_starts = vec![0u32];
-            for (i, &b) in unit.raw.src.iter().enumerate() {
-                if b == b'\n' {
-                    line_starts.push(i as u32 + 1);
-                }
-            }
-            files.insert(
-                idx,
-                wolf_backend::dwarf::SourceFile {
-                    path: unit.raw.display.clone(),
-                    line_starts,
-                },
-            );
-        }
         let comp_dir = std::env::current_dir()
             .map(|d| d.display().to_string())
             .unwrap_or_else(|_| ".".to_string());
