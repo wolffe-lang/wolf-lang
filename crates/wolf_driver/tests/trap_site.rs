@@ -18,10 +18,12 @@
 //! - both native conform-run lanes: the `trap(bounds)` verdict is
 //!   UNCHANGED — the harness tolerates (ignores) the site line.
 //!
-//! Off-target the lanes skip loudly (the s28 posture); the linux CI
-//! lane proves them.
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! No hard host cfg (the s59 posture): every lane runs wherever its
+//! tier accepts the host and skips LOUDLY by the tier's own named
+//! refusal otherwise. On linux/x86-64 and macOS/aarch64 the debug
+//! tier and both conform-run native lanes execute for real; the
+//! release tier additionally executes on linux and skips by its
+//! named `release tier targets linux/x86-64` refusal elsewhere.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -79,7 +81,9 @@ fn build_and_run(dir: &Path, release: bool) -> Option<(String, Option<i32>)> {
     if !out.status.success() {
         let msg = String::from_utf8_lossy(&out.stderr);
         assert!(
-            msg.contains("cannot compile this yet") || msg.contains("not found"),
+            msg.contains("cannot compile this yet")
+                || msg.contains("not found")
+                || msg.contains("release tier targets linux/x86-64"),
             "wolf build failed for a non-environment reason:\n{msg}"
         );
         eprintln!(
@@ -196,7 +200,9 @@ fn cached_release_rebuild_reports_the_shifted_site() {
         if !out.status.success() {
             let msg = String::from_utf8_lossy(&out.stderr);
             assert!(
-                msg.contains("cannot compile this yet") || msg.contains("not found"),
+                msg.contains("cannot compile this yet")
+                    || msg.contains("not found")
+                    || msg.contains("release tier targets linux/x86-64"),
                 "wolf build failed for a non-environment reason:\n{msg}"
             );
             eprintln!(
