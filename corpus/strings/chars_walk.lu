@@ -11,10 +11,11 @@
 //! lands on exactly the boundaries `get` accepts — over a 1-byte `a`,
 //! the 2-byte `é`, the 3-byte `中`, the 4-byte `🐺`. That identity
 //! ([mem.str.chars]) is what makes a byte-offset scanner writable in
-//! library code. Lupin 0.1.13 refuses `chars()` by name
-//! (`unsupported`) and predates the `char` type, so this file is
-//! wolfc-lane evidence until the interpreter catches up (the named
-//! wolf-interp follow-on from the s121 closeout).
+//! library code. Lupin 0.1.14 refuses `chars()` by name
+//! (`unsupported`) and its lexer still refuses `'` outright
+//! (fail(E0101), measured), so this file is wolfc-lane evidence until
+//! the interpreter catches up (the named wolf-interp follow-on from
+//! the s121 closeout).
 
 fn width(c: char) -> int {
     let n = c as int
