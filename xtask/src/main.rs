@@ -1196,32 +1196,45 @@ struct LaneObs {
     reason: Option<String>,
 }
 
-/// Run `conform-run` on one file in one lane. `Err` = the environment
-/// cannot drive this lane (exit 2: no cc/clang, no libwolf_rt.a) — the
-/// caller skips loudly rather than reporting a lane that never ran as a
-/// lane that covers nothing.
-fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, String> {
+/// Why one lane observation did not produce a record.
+enum LaneStop {
+    /// Exit 2: the environment cannot drive this lane (no cc/clang,
+    /// no libwolf_rt.a) — the caller skips LOUDLY rather than
+    /// reporting a lane that never ran as a lane that covers nothing.
+    Environment(String),
+    /// Any other failure — a crash or a malformed record is a
+    /// regression, never a skip. The exit-code asymmetry is the
+    /// point (s59): exit 2 alone means "could not run"; everything
+    /// else means "ran and broke", and a ported host must never be
+    /// silently green through the wrong branch.
+    Broken(String),
+}
+
+/// Run `conform-run` on one file in one lane.
+fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, LaneStop> {
     let mut cmd = Command::new(wolf);
     cmd.arg("conform-run").arg(file).arg("--json");
     if !flag.is_empty() {
         cmd.arg(flag);
     }
-    let out = cmd.output().map_err(|e| format!("spawn wolf: {e}"))?;
+    let out = cmd
+        .output()
+        .map_err(|e| LaneStop::Broken(format!("spawn wolf: {e}")))?;
     if out.status.code() == Some(2) {
-        return Err(format!(
+        return Err(LaneStop::Environment(format!(
             "environment cannot drive `{flag}`: {}",
             String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        )));
     }
     if !out.status.success() {
-        return Err(format!(
+        return Err(LaneStop::Broken(format!(
             "conform-run {flag} failed on {}: {}",
             file.display(),
             String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        )));
     }
-    let rec: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("bad record: {e}"))?;
+    let rec: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| LaneStop::Broken(format!("bad record: {e}")))?;
     let stderr = String::from_utf8_lossy(&out.stderr);
     let reason = stderr
         .lines()
@@ -1332,11 +1345,17 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
                     cov.observe(lane, &key, &rec);
                     per_file.entry(key.clone()).or_default().insert(lane, obs);
                 }
-                Err(e) => {
+                Err(LaneStop::Environment(e)) => {
                     // Loud skip, never a silent green: a lane that could
                     // not run is not a lane that covers nothing.
                     eprintln!("lane-coverage: SKIP — {e}");
                     return ExitCode::SUCCESS;
+                }
+                Err(LaneStop::Broken(e)) => {
+                    // A lane that RAN and broke is a regression, not a
+                    // skip (the s59 exit-code asymmetry).
+                    eprintln!("lane-coverage: {e}");
+                    return ExitCode::FAILURE;
                 }
             }
         }
