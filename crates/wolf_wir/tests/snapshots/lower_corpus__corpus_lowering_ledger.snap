@@ -73,6 +73,8 @@ faults/overflow_elem_read.lu: lowers
 faults/overflow_elem_write.lu: lowers
 faults/overflow_field_read.lu: lowers
 faults/overflow_interp_operand.lu: lowers
+faults/overflow_list_pop_i32.lu: lowers
+faults/overflow_list_pop_i64.lu: lowers
 faults/repeat_negative.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 faults/wrap_high_as_i32.lu: lowers
@@ -311,6 +313,7 @@ strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
 strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
+strings/match_str_const_scrutinee.lu: lowers
 strings/match_str_dispatch.lu: lowers
 strings/raw_fences.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
@@ -354,7 +357,9 @@ typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/main_unit_row.lu: lowers
+typecheck/match_chain_reuse.lu: lowers
 typecheck/match_exhaustive.lu: lowers
+typecheck/match_guard_const.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_narrow_scrutinee.lu: lowers
 typecheck/match_str_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
@@ -371,7 +376,11 @@ typecheck/numlit_c2f.lu: lowers
 typecheck/numlit_compare_adopts.lu: lowers
 typecheck/numlit_div_float.lu: lowers
 typecheck/numlit_div_int.lu: lowers
+typecheck/numlit_extremes.lu: lowers
+typecheck/numlit_fit.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_float_to_int_refused.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_list_element_width.lu: lowers
+typecheck/numlit_u64_edge.lu: lowers
 typecheck/numlit_value_refused.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)

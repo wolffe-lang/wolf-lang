@@ -687,6 +687,10 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
             // Exhaustiveness/reachability runs once types are final
             // (s17): E0801 errors, E0802 warnings.
             c.check_matches();
+            // Literal-fit runs once types are final too (E0415): a
+            // value the decided type cannot hold is the front end's
+            // rejection, never lowering's [const-range] ICE (#151).
+            c.check_literal_fit(node);
             // Cascade suppression: diagnostics inside parse-wrecked
             // regions stay quiet (the s10 contract).
             let mut sink = wolf_diag::Diagnostics::new();
@@ -9667,6 +9671,83 @@ impl<'a> Checker<'a> {
                         ),
                     );
                 }
+            }
+        }
+    }
+
+    /// E0415 — an integer literal whose VALUE does not fit its final
+    /// type (wolf-lang#151's second crash). Runs after
+    /// [`Self::finish_defaulting`], so a bare literal's `i32` default
+    /// is as final as an annotation. Before this pass the unfitting
+    /// constant reached lowering and died on the WIR verifier's
+    /// `[const-range]` — an ICE where a diagnostic was owed. The
+    /// direct `-<literal>` spelling is checked as the negated value,
+    /// so `-2147483648` fits `i32` while a bare `2147483648` does not;
+    /// a `wrapping[…]` type wraps its arithmetic, never its literals,
+    /// so it is checked at its scalar's width.
+    fn check_literal_fit(&mut self, node: &GreenNode) {
+        use std::collections::HashSet;
+        let types_by_span: HashMap<Span, TyId> = self.exprs.iter().copied().collect();
+        // (report span, type-lookup span, value). The prefix walk runs
+        // in preorder, so a `-<literal>`'s inner literal is consumed
+        // before the bare pass could double-report it.
+        let mut checks: Vec<(Span, Span, i128)> = Vec::new();
+        let mut consumed: HashSet<Span> = HashSet::new();
+        {
+            let src = self.src();
+            for n in crate::wave::descendants(node) {
+                match n.kind {
+                    SyntaxKind::PrefixExpr => {
+                        let Some(v) = crate::wave::literal_value(Some(n), src) else {
+                            continue;
+                        };
+                        let Some(inner) = n.nodes().next() else {
+                            continue;
+                        };
+                        consumed.insert(inner.span);
+                        // The literal's recorded type is the term's.
+                        checks.push((n.span, inner.span, v));
+                    }
+                    SyntaxKind::LiteralExpr => {
+                        if consumed.contains(&n.span) {
+                            continue;
+                        }
+                        if let Some(v) = crate::wave::literal_value(Some(n), src) {
+                            checks.push((n.span, n.span, v));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for (report, lookup, value) in checks {
+            let Some(&t) = types_by_span.get(&lookup) else {
+                continue;
+            };
+            let z = zonk(&mut self.lo.table, &self.vars, t);
+            let kind = match self.lo.table.kind(z).clone() {
+                TyKind::Wrapping(inner) => self.lo.table.kind(inner).clone(),
+                k => k,
+            };
+            let TyKind::Prim(p) = kind else { continue };
+            let Some((lo, hi)) = crate::wave::int_range(p) else {
+                continue;
+            };
+            if value < lo || value > hi {
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0415,
+                        report,
+                        format!("`{value}` does not fit `{}`", p.name()),
+                    )
+                    .with_label(format!("{} holds {lo}..={hi}", p.name()))
+                    .with_note(
+                        "an integer literal takes its type from context, and a \
+                         binding without one defaults to `i32` \
+                         ([type.numlit.default]) — annotate a type that holds \
+                         the value (`let n: i64 = …`)",
+                    ),
+                );
             }
         }
     }

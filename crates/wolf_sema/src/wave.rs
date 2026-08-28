@@ -1332,7 +1332,7 @@ fn returns_bare(body: &GreenNode, name: &str, src: &[u8]) -> bool {
 }
 
 /// Every node beneath `node`, depth-first (excluding `node` itself).
-fn descendants(node: &GreenNode) -> impl Iterator<Item = &GreenNode> {
+pub(crate) fn descendants(node: &GreenNode) -> impl Iterator<Item = &GreenNode> {
     let mut stack: Vec<&GreenNode> = node.nodes().collect();
     stack.reverse();
     std::iter::from_fn(move || {
@@ -1675,7 +1675,7 @@ pub(crate) fn check_typed_body(pkg: &Package, body: &BodyRef, tb: &TypedBody) ->
 
 /// A compile-time-known integer literal value: `LiteralExpr` or a
 /// minus-prefixed one. Handles `_` separators and `0x`/`0o`/`0b`.
-fn literal_value(e: Option<&GreenNode>, src: &[u8]) -> Option<i128> {
+pub(crate) fn literal_value(e: Option<&GreenNode>, src: &[u8]) -> Option<i128> {
     let e = e?;
     let (neg, lit) = match e.kind {
         SyntaxKind::LiteralExpr => (false, e),
@@ -1708,7 +1708,7 @@ fn literal_value(e: Option<&GreenNode>, src: &[u8]) -> Option<i128> {
 }
 
 /// The inclusive range of an integer primitive; `None` for non-ints.
-fn int_range(p: Prim) -> Option<(i128, i128)> {
+pub(crate) fn int_range(p: Prim) -> Option<(i128, i128)> {
     Some(match p {
         Prim::I8 => (i8::MIN as i128, i8::MAX as i128),
         Prim::I16 => (i16::MIN as i128, i16::MAX as i128),

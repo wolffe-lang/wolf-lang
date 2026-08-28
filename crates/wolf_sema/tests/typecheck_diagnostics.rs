@@ -445,3 +445,59 @@ fn e1607_well_formed_stays_clean() {
         ""
     );
 }
+
+// ---------------------------------------------------------- E0415 -----
+
+/// #151's second crash, at the cause: a bare binding defaults to `i32`
+/// and the value was never consulted — the unfitting constant used to
+/// sail into lowering and die on the WIR verifier's [const-range].
+#[test]
+fn e0415_default_i32_overflow() {
+    snap_one(
+        "e0415_default_i32_overflow",
+        "fn main() -> int {\n    let a = 9223372036854775807\n    let b = a + 1\n    if b > 0 { 1 } else { 0 }\n}\n",
+    );
+}
+
+/// The annotated spelling of the same hole, at a narrow width.
+#[test]
+fn e0415_annotated_narrow() {
+    snap_one(
+        "e0415_annotated_narrow",
+        "fn main() -> int {\n    let a: i16 = 40000\n    if a > 0 { 1 } else { 0 }\n}\n",
+    );
+}
+
+/// The direct `-<literal>` spelling checks the negated value, and an
+/// unsigned literal checks its value range.
+#[test]
+fn e0415_negative_and_unsigned() {
+    snap_one(
+        "e0415_negative_and_unsigned",
+        "fn main() -> int {\n    let a: i32 = -3000000000\n    let b: u8 = 256\n    if a < 0 { 1 } else { 0 }\n}\n",
+    );
+}
+
+/// `wrapping[…]` wraps its arithmetic, never its literals.
+#[test]
+fn e0415_wrapping_literal() {
+    snap_one(
+        "e0415_wrapping_literal",
+        "fn main() -> int {\n    var w: wrapping[i32] = 3000000000\n    if w < 0 { 1 } else { 0 }\n}\n",
+    );
+}
+
+/// The fitting spellings stay silent: both `i32` extremes by their
+/// legal spellings, `i64::MIN` through the minus allowance, `u64`'s
+/// full range, and a hex bit pattern at its own width.
+#[test]
+fn e0415_fitting_stays_clean() {
+    assert_eq!(
+        render_types(&[(
+            &[],
+            "main.lu",
+            "fn main() -> int {\n    let a: i32 = -2147483648\n    let b: i32 = 2147483647\n    let c: i64 = -9223372036854775808\n    let d: u64 = 18446744073709551615\n    let e: u32 = 0xFFFFFFFF\n    if a < b { 1 } else { 0 }\n}\n",
+        )]),
+        ""
+    );
+}

@@ -670,6 +670,25 @@ verdict class exits with process-wide is a separate, still-open spec
 question (#32); this code rules only the shapes.
 "#);
 
+code!(E0415, "the integer literal does not fit its type", r#"
+An integer literal takes its type from the context it is written into
+— an annotation, a parameter, the other side of an operator — and a
+literal no context decides defaults to `i32` at the end of the body
+(`[type.numlit.default]`). This code reports a literal whose VALUE
+cannot be represented in the type that was decided: `let a: i16 =
+40000`, or a bare `let a = 9223372036854775807` whose default `i32`
+holds nothing near it. The value is known exactly and the type is
+final, so the program can never mean what it says; the fix is a wider
+annotation (`let a: i64 = …`). A `wrapping[…]` type wraps its
+ARITHMETIC, not its literals — an overflowing literal is this same
+error there. The one negative allowance is the direct `-<literal>`
+spelling, which is checked as the negated value — `-2147483648` fits
+`i32` even though `2147483648` alone does not. Before this code, the
+unfitting constant sailed into lowering and died as a verifier ICE
+(`[const-range]`, wolf-lang#151) — an abort where a diagnostic was
+owed.
+"#);
+
 // ------------------------------------------------------------------------
 // E05xx — traits, checked generics, and coherence (s14).
 // ------------------------------------------------------------------------

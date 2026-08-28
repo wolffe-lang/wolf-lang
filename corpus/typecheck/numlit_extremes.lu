@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="1 1 1 1\n")
+//! phase: run
+//! conforms: type.numlit.default, type.numlit.value
+//!
+//! The legal signed extremes, pinned as RUNS (#151): both `i32` edges,
+//! and `i64::MIN` through the direct `-<literal>` spelling — which has
+//! no positive half, so the negated constant is emitted in one step
+//! (lowering the positive first minted an `iconst` the type cannot
+//! hold, dead after the fold but read by the verifier; the checked
+//! executor decodes the same spelling the same way). The unsigned
+//! edge lives in `numlit_u64_edge.lu` — the checked executor's i64
+//! value model refuses it by name.
+
+fn main() -> !int {
+    let a: i32 = -2147483648
+    let b: i32 = 2147483647
+    let c: i64 = -9223372036854775808
+    let m: i64 = -2147483648
+    let w1 = if a < 0 { 1 } else { 0 }
+    let w2 = if b > 0 { 1 } else { 0 }
+    let w3 = if c < 0 { 1 } else { 0 }
+    let w4 = if m == a as i64 { 1 } else { 0 }
+    print("{w1} {w2} {w3} {w4}")
+    0
+}
