@@ -5820,6 +5820,18 @@ impl<'t> Machine<'t> {
                         let items: Vec<Value> = s.bytes().map(|b| Value::Int(b as i64)).collect();
                         make_list(self, items)
                     }
+                    // s120 (#17, [mem.str.chars]): code-point
+                    // iteration — the Unicode scalar values in string
+                    // order; a scalar's UTF-8 byte extent is a
+                    // function of its value, so a scan advances by
+                    // real width without a `char` type.
+                    "chars" => {
+                        let items: Vec<Value> = s
+                            .chars()
+                            .map(|c| Value::Int(i64::from(u32::from(c))))
+                            .collect();
+                        make_list(self, items)
+                    }
                     "starts_with" => match needle(0) {
                         Some(n) => Ok(Flow::Val(Value::Bool(s.starts_with(&n)))),
                         None => self.refuse("starts_with without a str needle", e.span),

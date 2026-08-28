@@ -136,6 +136,10 @@ fn main() -> !int {
     let ls = "a\nb".lines()
     let bs = "é".bytes()
     print("{parts.len} {ws.len} {ls.len} {bs.len} {bs[0]}")
+    // [mem.str.chars] (s120, #17): the scalars, identically on both
+    // lanes — 1-, 2- and 3-byte code points in one string.
+    let cs = "aé中".chars()
+    print("{cs.len} {cs[0]} {cs[1]} {cs[2]}")
     // [mem.str.empty] (s71, #56): the empty-needle family is defined
     // identically on both lanes — count 0, one whole piece, identity.
     let ep = "abc".split("")
@@ -144,7 +148,7 @@ fn main() -> !int {
 }
 "#,
         "exit(0)",
-        "THE WOLF RUNS\nthe wolf runs\n13 false 15 15\ntrue true true\n4 12 1\nWolf ?\nWolf sleeps\nababab\n3 3 2 2 195\n0 1 abc abc\n",
+        "THE WOLF RUNS\nthe wolf runs\n13 false 15 15\ntrue true true\n4 12 1\nWolf ?\nWolf sleeps\nababab\n3 3 2 2 195\n3 97 233 20013\n0 1 abc abc\n",
     );
 }
 
@@ -583,10 +587,11 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // three signal-reception entries (#126: listen/wait/raise); s115
     // the two net byte twins (#137: net_read_bytes/net_write_bytes);
     // s118 the OS random source (#143: os_random — one entry, no row,
-    // nonzero rc traps).
+    // nonzero rc traps); s120 the code-point iterator (#17:
+    // str_chars — the materializing `chars()`, [mem.str.chars]).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        115,
+        116,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

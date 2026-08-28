@@ -9327,6 +9327,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .expect("list");
                 Ok(Flow::Val(Some(r)))
             }
+            // s120: `chars()` — code-point iteration ([mem.str.chars],
+            // #17), materialized as `List[int]` of Unicode scalar
+            // values in string order. Always materializes at v0: a
+            // variable-width decode has no strided walk, so there is
+            // no view tier yet (the s77 `bytes()` posture before s89
+            // gave bytes the lend).
+            "chars" => {
+                let r = self
+                    .rt_call_foreign("__wolf_rt_str_chars", &[sp, sl], None, Some(types::PTR))
+                    .expect("list");
+                Ok(Flow::Val(Some(r)))
+            }
             "starts_with" | "ends_with" | "contains" => {
                 let (np, nl) = needle(self, 0)?;
                 let mode = match mname {

@@ -5176,8 +5176,12 @@ impl<'a> Checker<'a> {
     /// are `{none}` rows, never traps. The views (`bytes`, `split`,
     /// `words`, `lines`) type as materialized `List`s at v0; the
     /// zero-copy iterator views arrive with the D28 protocol's
-    /// builtin adoption (tracked in the s37 ledger). No `chars()`
-    /// yet: it wants a `char` type, which is its own spec item.
+    /// builtin adoption (tracked in the s37 ledger). `chars()`
+    /// (s120, #17) yields the code points as Unicode scalar values —
+    /// `List[int]` at v0, like `bytes()` — because a scalar's UTF-8
+    /// byte extent is a function of its value, so a scan advances by
+    /// real width with no `char` type; the type itself (ABI,
+    /// comparison, literals) stays a named spec item.
     #[allow(clippy::too_many_arguments)]
     fn str_method_call(
         &mut self,
@@ -5217,6 +5221,14 @@ impl<'a> Checker<'a> {
             // The byte view, materialized at v0 (D25 licenses byte
             // indexing on `bytes`; `b[i]` rides List indexing).
             "bytes" => {
+                let ret = self.lo.table.intern(TyKind::List(int_));
+                (vec![p("self", recv_ty)], ret)
+            }
+            // Code-point iteration ([mem.str.chars], s120): each
+            // element is a Unicode scalar value, and its UTF-8 byte
+            // extent is a function of that value (1/2/3/4 by range),
+            // so a scan advances by real width without a `char` type.
+            "chars" => {
                 let ret = self.lo.table.intern(TyKind::List(int_));
                 (vec![p("self", recv_ty)], ret)
             }

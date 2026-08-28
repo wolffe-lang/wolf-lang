@@ -731,6 +731,32 @@ pub unsafe extern "C" fn __wolf_rt_str_bytes(sp: i64, sl: i64) -> i64 {
     hdr as i64
 }
 
+/// `chars()` — code-point iteration, materialized (s120, #17,
+/// `[mem.str.chars]`): a `List[int]` with each Unicode scalar value
+/// as an i64 element, in string order. The elements are scalars —
+/// `0..=0x10FFFF` minus the surrogate gap, guaranteed by the `str`
+/// invariant (every `str` is valid UTF-8, [mem.str.get]) — and a
+/// scalar's UTF-8 byte extent is a function of its value
+/// (`< 0x80` → 1, `< 0x800` → 2, `< 0x10000` → 3, else 4), so a
+/// caller advances a byte cursor by real width without a `char`
+/// type. Always materializes: a variable-width decode has no strided
+/// walk, so `chars()` has no view tier yet (the pre-s89 `bytes()`
+/// posture).
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
+    let s = unsafe { view(sp, sl) };
+    let hdr = crate::list::new_list(8);
+    for c in s.chars() {
+        let v = [i64::from(u32::from(c))];
+        crate::list::push_raw(hdr, v.as_ptr().cast());
+    }
+    hdr as i64
+}
+
 /// `str_from_utf8(b: List[int]) -> str ! {utf8}` — the s81 border post
 /// (wolf-lang#58), and the ONLY operation in the language that builds a
 /// `str` out of arbitrary numbers.
@@ -927,6 +953,37 @@ mod tests {
                     "boundary rule at {off} of {s:?}"
                 );
             }
+        }
+    }
+
+    /// s120 (#17, `[mem.str.chars]`): `chars()` yields the Unicode
+    /// scalar values in string order — pinned against Rust's own
+    /// decoder — and each scalar's UTF-8 width, a pure function of
+    /// its value, advances a byte cursor over exactly the offsets
+    /// `is_char_boundary` accepts, summing to the byte length. That
+    /// walk is the whole reason the primitive exists.
+    #[test]
+    fn chars_are_the_scalars_in_order() {
+        for s in ["", "wolf", "héllo", "é€🐺x", "a中🐺"] {
+            let (sp, sl) = pair_of(s);
+            let hdr = unsafe { __wolf_rt_str_chars(sp, sl) };
+            let elems = unsafe { crate::list::i64_elems(hdr) }.expect("an int list");
+            let expect: Vec<i64> = s.chars().map(|c| i64::from(u32::from(c))).collect();
+            assert_eq!(elems, expect.as_slice(), "scalars of {s:?}");
+            let mut off = 0usize;
+            for &c in elems {
+                off += match c {
+                    0..=0x7F => 1,
+                    0x80..=0x7FF => 2,
+                    0x800..=0xFFFF => 3,
+                    _ => 4,
+                };
+                assert!(
+                    s.is_char_boundary(off),
+                    "the width walk lands on a boundary at {off} of {s:?}"
+                );
+            }
+            assert_eq!(off, s.len(), "the widths sum to the byte length");
         }
     }
 
