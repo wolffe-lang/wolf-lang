@@ -6,7 +6,8 @@
 # (#87 retired the hardcoded constants that went three releases stale).
 # Update it WITH the differential ritual — the pairing test compares
 # the version below against the sibling lupin binary whenever one is
-# present, so a stale stamp fails the local gauntlet instead of
-# shipping.
-lupin-version = 0.1.13
-lupin-pin = c9da6d9
+# present (and, when that sibling is a release build, the pin too:
+# D57, a release's pin is part of its identity), so a stale stamp
+# fails the local gauntlet instead of shipping.
+lupin-version = 0.1.14
+lupin-pin = 90c90df
