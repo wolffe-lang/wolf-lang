@@ -402,7 +402,7 @@ impl Backend for ClifBackend {
         // relocate against their SECTION symbol and the emitted bytes
         // are PATCHED post-emit with the real object addresses; ELF
         // keeps plain symbol relocations for the system linker.
-        let mut macho_patches: Vec<(String, u32, u8, i64, Option<Vec<u8>>)> = Vec::new();
+        let mut macho_patches: Vec<DebugPatch> = Vec::new();
         for sec in &self.debug_sections {
             let &(id, _) = sec_ids.get(sec.name).expect("just inserted");
             for r in &sec.relocs {
@@ -444,13 +444,13 @@ impl Backend for ClifBackend {
                         }
                         DebugRelocTarget::Section(_) => None,
                     };
-                    macho_patches.push((
-                        String::from_utf8_lossy(&sec_name(sec.name)).into_owned(),
-                        r.offset,
-                        r.size,
-                        r.addend,
-                        sym_name,
-                    ));
+                    macho_patches.push(DebugPatch {
+                        section: String::from_utf8_lossy(&sec_name(sec.name)).into_owned(),
+                        offset: r.offset,
+                        size: r.size,
+                        addend: r.addend,
+                        symbol: sym_name,
+                    });
                 }
                 product
                     .object
@@ -483,17 +483,22 @@ impl Backend for ClifBackend {
     }
 }
 
-/// Resolve the collected Mach-O debug "relocations" into the emitted
-/// object's bytes (see `finish` — the Apple convention is resolved
-/// `__DWARF` addresses, no relocation entries). Each patch is
-/// `(section name, offset, size, addend, target)`: a `Some(symbol
-/// name)` target writes that symbol's object address + addend; a
-/// `None` target writes the addend alone (a DWARF section-relative
-/// offset, e.g. `DW_AT_stmt_list`).
-fn patch_macho_debug(
-    bytes: &mut [u8],
-    patches: &[(String, u32, u8, i64, Option<Vec<u8>>)],
-) -> Result<(), BackendError> {
+/// One Mach-O debug-section fix-up (see `finish`): a `Some(symbol)`
+/// target writes that symbol's final object address + addend at
+/// `section[offset..offset+size]`; a `None` target writes the addend
+/// alone (a DWARF section-relative offset, e.g. `DW_AT_stmt_list`).
+struct DebugPatch {
+    section: String,
+    offset: u32,
+    size: u8,
+    addend: i64,
+    symbol: Option<Vec<u8>>,
+}
+
+/// Resolve the collected Mach-O debug fix-ups into the emitted
+/// object's bytes (see `finish` — the Apple convention embeds
+/// resolved `__DWARF` addresses).
+fn patch_macho_debug(bytes: &mut [u8], patches: &[DebugPatch]) -> Result<(), BackendError> {
     use object::read::{Object as _, ObjectSection as _, ObjectSymbol as _};
     let ice = |m: String| BackendError::Internal(m);
     let file = object::read::macho::MachOFile64::<object::Endianness, _>::parse(&*bytes)
@@ -503,14 +508,15 @@ fn patch_macho_debug(
         sym_addrs.insert(sym.name_bytes().unwrap_or(b"").to_vec(), sym.address());
     }
     let mut writes: Vec<(usize, u8, u64)> = Vec::new();
-    for (sec, off, size, addend, target) in patches {
+    for p in patches {
+        let sec = &p.section;
         let s = file
             .section_by_name_bytes(sec.as_bytes())
             .ok_or_else(|| ice(format!("emitted object lost section {sec}")))?;
         let (file_off, file_len) = s
             .file_range()
             .ok_or_else(|| ice(format!("section {sec} has no file data")))?;
-        let value = match target {
+        let value = match &p.symbol {
             Some(name) => sym_addrs
                 .get(name)
                 .copied()
@@ -520,14 +526,14 @@ fn patch_macho_debug(
                         String::from_utf8_lossy(name)
                     ))
                 })?
-                .wrapping_add(*addend as u64),
-            None => *addend as u64,
+                .wrapping_add(p.addend as u64),
+            None => p.addend as u64,
         };
-        let at = file_off + u64::from(*off);
-        if u64::from(*off) + u64::from(*size) > file_len {
+        let at = file_off + u64::from(p.offset);
+        if u64::from(p.offset) + u64::from(p.size) > file_len {
             return Err(ice(format!("debug patch outside section {sec}")));
         }
-        writes.push((at as usize, *size, value));
+        writes.push((at as usize, p.size, value));
     }
     // (Borrow of `bytes` through `file` ends here.)
     for (at, size, value) in writes {
