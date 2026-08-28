@@ -1,24 +1,28 @@
 //! check: run(exit=0)
 //! phase: run
-//! conforms: mem.str.chars, mem.str.get
+//! conforms: mem.str.chars, mem.str.get, type.char.cast
 //!
 //! s120 — `chars()` (#17): code-point iteration, the third leg of the
-//! boundary primitive. Each element is a Unicode scalar value, and a
-//! scalar's UTF-8 byte extent is a function of its value (1/2/3/4 by
-//! range), so the walk below reconstructs the byte offsets from the
-//! scalars alone and lands on exactly the boundaries `get` accepts —
-//! over a 1-byte `a`, the 2-byte `é`, the 3-byte `中`, the 4-byte
-//! `🐺`. That identity ([mem.str.chars]) is what makes a byte-offset
-//! scanner writable in library code. Lupin 0.1.13 refuses `chars()`
-//! by name (`unsupported`), so this file is wolfc-lane evidence until
-//! the interpreter catches up.
+//! boundary primitive; s121 (D57) typed it — `List[char]`, and this
+//! walk survived the migration verbatim. Each element is a `char`
+//! whose UTF-8 byte extent is a function of its scalar value (1/2/3/4
+//! by range — `c as int` names the scalar for the arithmetic), so the
+//! walk below reconstructs the byte offsets from the chars alone and
+//! lands on exactly the boundaries `get` accepts — over a 1-byte `a`,
+//! the 2-byte `é`, the 3-byte `中`, the 4-byte `🐺`. That identity
+//! ([mem.str.chars]) is what makes a byte-offset scanner writable in
+//! library code. Lupin 0.1.13 refuses `chars()` by name
+//! (`unsupported`) and predates the `char` type, so this file is
+//! wolfc-lane evidence until the interpreter catches up (the named
+//! wolf-interp follow-on from the s121 closeout).
 
-fn width(c: int) -> int {
-    if c < 128 {
+fn width(c: char) -> int {
+    let n = c as int
+    if n < 128 {
         1
-    } else if c < 2048 {
+    } else if n < 2048 {
         2
-    } else if c < 65536 {
+    } else if n < 65536 {
         3
     } else {
         4
@@ -28,8 +32,14 @@ fn width(c: int) -> int {
 fn main() -> !int {
     let s = "aé中🐺"
     let cs = s.chars()
-    let scalars_ok = cs.len == 4 && cs[0] == 97 && cs[1] == 233 && cs[2] == 20013 && cs[3] == 128058
-    // The width walk: advance a byte cursor by each scalar's extent;
+    let scalars_ok = cs.len == 4 && cs[0] == 'a' && cs[1] == 'é' && cs[2] == '中' && cs[3] == '🐺'
+    // The typed elements still name their code points ([type.char.cast]
+    // — the total direction).
+    let codes_ok = cs[0] as int == 97 &&
+        cs[1] as int == 233 &&
+        cs[2] as int == 20013 &&
+        cs[3] as int == 128058
+    // The width walk: advance a byte cursor by each char's extent;
     // every stop is a boundary `get` accepts, and the cursor ends at
     // the byte length.
     var off = 0
@@ -43,11 +53,11 @@ fn main() -> !int {
         off = off + w
     }
     let walk_ok = off == s.len && hits == 4 && s.len == 10
-    // The edges: empty yields nothing; ASCII is one scalar per byte.
+    // The edges: empty yields nothing; ASCII is one char per byte.
     let none = "".chars()
     let ascii = "wolf".chars()
-    let edges_ok = none.len == 0 && ascii.len == 4 && ascii[0] == 119 && ascii[3] == 102
-    if scalars_ok && walk_ok && edges_ok {
+    let edges_ok = none.len == 0 && ascii.len == 4 && ascii[0] == 'w' && ascii[3] == 'f'
+    if scalars_ok && codes_ok && walk_ok && edges_ok {
         0
     } else {
         1

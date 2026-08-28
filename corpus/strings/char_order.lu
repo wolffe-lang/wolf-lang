@@ -1,0 +1,40 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: type.char.order
+//!
+//! s121 (D57) — `char` orders by scalar value: total, locale-free,
+//! deterministic — and honestly NOT collation ('z' < 'é' because
+//! 0x7A < 0xE9, however a dictionary would sort them). Equality is
+//! scalar equality, so distinct escape spellings of one scalar are
+//! one value, and a precomposed é is NOT the letter e. `match` over
+//! `char` rides the same scalar identity: literal arms test values
+//! (the integer-column discipline — literals never complete the
+//! column, so the wildcard is required), or-patterns chain, and an
+//! escape spelling in an arm hits the glyph it names.
+
+fn class(c: char) -> int {
+    match c {
+        'a' | 'e' | 'i' | 'o' | 'u' => 1,
+        '\n' => 2,
+        '🐺' => 3,
+        _ => 0,
+    }
+}
+
+fn main() -> !int {
+    // ASCII order is scalar order.
+    let asc = 'a' < 'b' && 'A' < 'a' && '0' < 'A' && ' ' < '0'
+    // Across UTF-8 widths: scalar order, not glyph or dictionary order.
+    let multi = 'z' < 'é' && 'é' < '中' && '中' < '🐺'
+    // Equality: spellings collapse, distinct scalars stay distinct.
+    let eq = 'é' == 'é' && '\n' == '\u{A}' && '\'' == '\x27' && 'é' != 'e'
+    // Reflexive edges of a total order.
+    let refl = 'a' <= 'a' && 'a' >= 'a' && !('a' < 'a') && !('a' != 'a')
+    // Dispatch over the scalar identity, every arm hit once.
+    let disp = class('e') == 1 && class('\u{A}') == 2 && class('🐺') == 3 && class('z') == 0
+    if asc && multi && eq && refl && disp {
+        0
+    } else {
+        1
+    }
+}

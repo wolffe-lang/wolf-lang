@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="wolf: 🐺é\n[é  ]\n")
+//! phase: run
+//! conforms: type.char.interp
+//!
+//! s121 (D57) — `{c}` prints the CHARACTER, never the code-point
+//! number: the hole renders as the scalar's UTF-8 encoding, in
+//! interpolation and in `print` alike. A spec on a char hole takes
+//! the str surface — here left-align at width 4, which is width in
+//! BYTES (D25): the 2-byte `é` plus two spaces. The number is
+//! spelled, not ambient: `{c as int}`.
+
+fn main() -> !int {
+    let w = '🐺'
+    let e = 'é'
+    let s = "wolf: {w}{e}"
+    if s != "wolf: 🐺é" {
+        return 1
+    }
+    // The spelled number, in the same string as the character.
+    let n = "{w as int}/{w}"
+    if n != "128058/🐺" {
+        return 2
+    }
+    print(s)
+    print("[{e:<4}]")
+    0
+}

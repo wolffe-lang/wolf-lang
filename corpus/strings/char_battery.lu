@@ -1,0 +1,40 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: type.char, type.char.cast, mem.str.chars
+//!
+//! s121 (D57) — the multi-byte battery re-expressed over `char`: the
+//! 1-byte `a`, 2-byte `é`, 3-byte `中`, 4-byte `🐺`, as literals, as
+//! `chars()` elements, and through both ruled casts. `char as int` is
+//! total (every scalar names its code point); `int as char` admits
+//! every scalar — round-trips are the identity — including the legal
+//! edges of the domain: 0, both neighbours of the surrogate gap
+//! (`0xD7FF`, `0xE000`), and the last scalar `0x10FFFF`. The gap
+//! itself and everything beyond are the trapping twins
+//! (faults/char_cast_*_trap.lu). Escape spellings name the same
+//! values as the direct glyphs ([gram.lex.char]).
+
+fn main() -> !int {
+    // Literals at every UTF-8 width; escape spellings are the same values.
+    let a = 'a'
+    let e = 'é'
+    let z = '中'
+    let w = '🐺'
+    let lits_ok = a == '\x61' && e == '\u{E9}' && z == '\u{4E2D}' && w == '\u{1F43A}'
+    // chars() yields exactly these chars, typed ([mem.str.chars]).
+    let cs = "aé中🐺".chars()
+    let list_ok = cs.len == 4 && cs[0] == a && cs[1] == e && cs[2] == z && cs[3] == w
+    // char as int: total — the code points.
+    let out_ok = a as int == 97 && e as int == 233 && z as int == 20013 && w as int == 128058
+    // int as char: every scalar converts; the round trip is identity.
+    let back_ok = 97 as char == a && 233 as char == e && 20013 as char == z && 128058 as char == w
+    // The domain's legal edges: zero, the gap's neighbours, the last
+    // scalar ([type.char.cast] — the gap edges are legal).
+    let lo_edge = 0 as char == '\0'
+    let gap_edges = 55295 as char == '\u{D7FF}' && 57344 as char == '\u{E000}'
+    let hi_edge = 1114111 as char == '\u{10FFFF}'
+    if lits_ok && list_ok && out_ok && back_ok && lo_edge && gap_edges && hi_edge {
+        0
+    } else {
+        1
+    }
+}

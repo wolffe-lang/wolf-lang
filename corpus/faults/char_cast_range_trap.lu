@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.char.cast, mem.ub.defined
+//!
+//! s121 (D57) — the other refusal by name: beyond the last scalar.
+//! `0x10FFFF` is the last Unicode scalar value; `0x110000` names no
+//! character, so `int as char` traps (D56's family — the same
+//! `trap(overflow)` the wrapping and float rows raise), while
+//! `0x10FFFF as char` itself converts (char_battery.lu pins it).
+
+fn main() -> !int {
+    let n = 0x110000
+    let c = n as char
+    if c == 'x' { 1 } else { 2 }
+}
