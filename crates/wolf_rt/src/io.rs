@@ -499,6 +499,32 @@ pub extern "C" fn __wolf_rt_write_f64(stream: i64, v: f64, spec: i64) {
     write_stream(stream, out.as_bytes());
 }
 
+/// Write a `char` to `stream` under the packed `spec` (s121, D57):
+/// the CHARACTER's UTF-8 encoding, never the code-point number. The
+/// scalar arrives widened to `i64` (i32 zero-extended at the call
+/// site); the compiled lanes guarantee a Unicode scalar — anything
+/// else is a lane bug, rendered as U+FFFD rather than UB. A spec
+/// applies the str surface to the encoded character.
+///
+/// # Safety
+///
+/// Callable from any thread at any time; takes no pointers.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_write_char(stream: i64, v: i64, spec: i64) {
+    let c = u32::try_from(v)
+        .ok()
+        .and_then(char::from_u32)
+        .unwrap_or('\u{FFFD}');
+    let mut tmp = [0u8; 4];
+    let s = c.encode_utf8(&mut tmp);
+    if spec == 0 {
+        write_stream(stream, s.as_bytes());
+    } else {
+        let out = render(Val::Str(s), &unpack(spec));
+        write_stream(stream, out.as_bytes());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

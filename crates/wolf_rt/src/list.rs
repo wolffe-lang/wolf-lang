@@ -263,6 +263,28 @@ pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
     Some(unsafe { core::slice::from_raw_parts(h.data.cast::<i64>(), h.len as usize) })
 }
 
+/// The elements of a `List[char]` (s121, D57: 4-byte scalar elements,
+/// native-endian) — [`i64_elems`]'s posture at the `char` width. The
+/// buffer's alignment is the allocator's (≥ 8), so the `u32` cast is
+/// always aligned.
+///
+/// # Safety
+///
+/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// returned slice borrows its buffer — it must not outlive a `push`
+/// that reallocates.
+#[cfg(test)]
+pub(crate) unsafe fn u32_elems<'a>(hdr: i64) -> Option<&'a [u32]> {
+    let h = unsafe { &*(hdr as *const ListHdr) };
+    if h.elem != 4 || h.len < 0 {
+        return None;
+    }
+    if h.len == 0 || h.data.is_null() {
+        return Some(&[]);
+    }
+    Some(unsafe { core::slice::from_raw_parts(h.data.cast::<u32>(), h.len as usize) })
+}
+
 /// The elements of a `List[str]` as `{ptr, len}` pairs, or `None` when
 /// the header is not a 16-byte-element list — [`i64_elems`]'s posture
 /// (s81) for the second whole-list consumer, `os_spawn`'s argv (s107):

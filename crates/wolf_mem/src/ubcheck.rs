@@ -340,6 +340,11 @@ enum Value {
     Unit,
     Int(i64),
     Bool(bool),
+    /// A `char` (s121, D57): a Unicode scalar value — the host `char`
+    /// carries exactly the ruled domain (`0..=0x10FFFF` minus the
+    /// surrogate gap), so an out-of-domain `Value::Char` is
+    /// unconstructible by the same rule the compiled lanes trap on.
+    Char(char),
     /// The executable float (s38): `f64` values under IEEE semantics —
     /// arithmetic never traps (X3 is integer law; inf/nan are values).
     /// `f32` stays an honest refusal until a use case rules its
@@ -398,6 +403,7 @@ impl Value {
             Value::Unit
                 | Value::Int(_)
                 | Value::Bool(_)
+                | Value::Char(_)
                 | Value::F64(_)
                 | Value::Str(_)
                 | Value::Range { .. }
@@ -2627,6 +2633,9 @@ impl<'t> Machine<'t> {
                 let matched = match scrut {
                     Value::Int(n) => parse_int_literal(&text) == Some(*n),
                     Value::Bool(b) => text == if *b { "true" } else { "false" },
+                    // A char arm (s121): THE shared decoder, so all
+                    // lanes agree on every escape spelling.
+                    Value::Char(c) => wolf_sema::check::cook_char_literal(&text) == Some(*c),
                     // Cook the pattern exactly as string expressions
                     // cook (escapes, brace doubling, `"""` dedent) so
                     // both lanes compare the same bytes (#54).
@@ -2952,7 +2961,19 @@ impl<'t> Machine<'t> {
                     };
                     Ok(Flow::Val(Value::Bool(out)))
                 }
-                _ => self.refuse("ordering outside integers and str", e.span),
+                // `char` orders by scalar value (D57) — Rust's `char`
+                // order IS scalar order, so the host compare is the
+                // reference the compiled lanes' i32 icmp answers to.
+                (Value::Char(a), Value::Char(b)) => {
+                    let out = match op {
+                        SyntaxKind::Lt => a < b,
+                        SyntaxKind::Gt => a > b,
+                        SyntaxKind::LtEq => a <= b,
+                        _ => a >= b,
+                    };
+                    Ok(Flow::Val(Value::Bool(out)))
+                }
+                _ => self.refuse("ordering outside integers, `char` and str", e.span),
             },
             _ => self.refuse("this operator in checked execution", e.span),
         }
@@ -3164,6 +3185,14 @@ impl<'t> Machine<'t> {
         if text == "false" {
             return Ok(Value::Bool(false));
         }
+        // `'a'` (s121, D57): THE shared decoder — the same cook WIR
+        // lowering uses, so the lanes cannot drift on an escape.
+        if text.starts_with('\'') {
+            return match wolf_sema::check::cook_char_literal(&text) {
+                Some(c) => Ok(Value::Char(c)),
+                None => self.refuse("this char literal shape in checked execution", e.span),
+            };
+        }
         // Type-driven float literals (s38): a literal the checker
         // typed `f64` is a float even when its spelling is integral
         // (`let x: f64 = 3`). `f32` refuses until its rounding story
@@ -3358,8 +3387,15 @@ impl<'t> Machine<'t> {
         if parsed.is_default() {
             return Ok(rendered);
         }
+        // A char hole takes the str spec surface (D57): render the
+        // character, then fill/align/width apply to its UTF-8 bytes.
+        let char_buf;
         let fv = match val {
             Value::Str(s) => FmtValue::Str(s),
+            Value::Char(c) => {
+                char_buf = c.to_string();
+                FmtValue::Str(&char_buf)
+            }
             Value::Bool(b) => FmtValue::Bool(*b),
             // The checked machine models every integer as its value
             // in `i64` (narrow prims range-trap on arithmetic), so
@@ -4851,6 +4887,29 @@ impl<'t> Machine<'t> {
                     _ => self.refuse("this raw bridge shape", e.span),
                 }
             }
+            // s121 (D57): `char as int` — total; the scalar value.
+            Some(CastKind::CharToInt) => {
+                let v = val!(self.eval(inner));
+                match v {
+                    Value::Char(c) => Ok(Flow::Val(Value::Int(i64::from(u32::from(c))))),
+                    _ => self.refuse("a char cast of a non-char value", e.span),
+                }
+            }
+            // s121 (D57): `int as char` — D56's trapping family. A
+            // value outside `0..=0x10FFFF` or inside the surrogate
+            // gap `0xD800..=0xDFFF` is the overflow trap, by name:
+            // `char::from_u32`'s domain IS the ruled domain, so the
+            // host check and the compiled lanes' two rails agree.
+            Some(CastKind::IntToChar) => {
+                let v = val!(self.eval(inner));
+                match v {
+                    Value::Int(n) => match u32::try_from(n).ok().and_then(char::from_u32) {
+                        Some(c) => Ok(Flow::Val(Value::Char(c))),
+                        None => self.trap("overflow", "type.char.cast", e.span),
+                    },
+                    _ => self.refuse("an int-to-char cast of a non-int value", e.span),
+                }
+            }
             Some(CastKind::Unsize) => {
                 // D47 (s98's checked twin): `place as dyn Trait`. The
                 // cast READS the place (a lend, never a move — the
@@ -5826,10 +5885,7 @@ impl<'t> Machine<'t> {
                     // function of its value, so a scan advances by
                     // real width without a `char` type.
                     "chars" => {
-                        let items: Vec<Value> = s
-                            .chars()
-                            .map(|c| Value::Int(i64::from(u32::from(c))))
-                            .collect();
+                        let items: Vec<Value> = s.chars().map(Value::Char).collect();
                         make_list(self, items)
                     }
                     "starts_with" => match needle(0) {
@@ -6138,6 +6194,8 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::F64(x), Value::F64(y)) => x == y,
         (Value::Bool(x), Value::Bool(y)) => x == y,
         (Value::Str(x), Value::Str(y)) => x == y,
+        // `char` equality is scalar-value equality (D57), total.
+        (Value::Char(x), Value::Char(y)) => x == y,
         (Value::Unit, Value::Unit) => true,
         (
             Value::Handle {
@@ -6335,6 +6393,8 @@ fn format_value(v: &Value) -> String {
         // layout — the s38 reference rendering (spec §7.4 candidate).
         Value::F64(x) => wolf_sema::fmtspec::f64_shortest(*x),
         Value::Str(s) => s.clone(),
+        // `{c}` prints the CHARACTER (D57), never the code point.
+        Value::Char(c) => c.to_string(),
         Value::Unit => "()".to_string(),
         Value::Range { start, end } => format!("{start}..{end}"),
         Value::ErrTag { tag, .. } => format!("{{{tag}}}"),
@@ -6369,6 +6429,9 @@ fn parse_uint_literal(text: &str) -> Option<u64> {
 
 fn prim_bits(p: Prim) -> Option<u32> {
     Some(match p {
+        // `char` is 4 bytes (D57) but NOT an integer: no width for
+        // the shift/arith rails — the casts are its only bridges.
+        Prim::Char => return None,
         Prim::I8 | Prim::U8 | Prim::Byte => 8,
         Prim::I16 | Prim::U16 => 16,
         Prim::I32 | Prim::U32 | Prim::F32 => 32,
@@ -6378,6 +6441,11 @@ fn prim_bits(p: Prim) -> Option<u32> {
 }
 
 fn prim_size(p: Prim) -> u64 {
+    // `char` has no arithmetic width (`prim_bits` is the shift rail)
+    // but a fixed 4-byte layout (D57).
+    if p == Prim::Char {
+        return 4;
+    }
     match prim_bits(p) {
         Some(b) => (b / 8) as u64,
         None => 1,
@@ -6396,7 +6464,9 @@ fn prim_range(p: Prim) -> Option<(i64, i64)> {
         // upper half is out of this machine's honest range.
         Prim::I64 | Prim::Int => return None,
         Prim::U64 | Prim::Uint => (0, i64::MAX),
-        Prim::Bool | Prim::Str | Prim::F32 | Prim::F64 => return None,
+        // `char`'s domain is not an interval (the surrogate gap):
+        // the IntToChar cast arm owns its check, never this table.
+        Prim::Bool | Prim::Str | Prim::F32 | Prim::F64 | Prim::Char => return None,
     })
 }
 
