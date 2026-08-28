@@ -196,6 +196,16 @@ impl DebugSink for NullDebugSink {}
 pub trait Backend {
     fn capabilities(&self) -> Capabilities;
 
+    /// Provide the source files trap sites resolve against (s125):
+    /// `wolf_span::FileId` index → display path + line-start table,
+    /// the same plain-data shape [`dwarf::DwarfBuilder`] takes. A
+    /// backend given none (the default) emits site-less traps — the
+    /// one-line `wolf-trap: <kind>` report — exactly as before s125;
+    /// with the map, trap checks whose WIR instruction carries a
+    /// srcspan into a mapped file report `  at <file>:<line>:<col>`
+    /// on the second stderr line via `__wolf_rt_trap_at`.
+    fn source_files(&mut self, _files: std::collections::HashMap<u32, dwarf::SourceFile>) {}
+
     /// Declare a function ahead of definition. `sig` indexes the
     /// module's signature table.
     fn declare_function(
