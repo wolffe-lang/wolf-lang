@@ -1085,9 +1085,22 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // three-lane — so the merged floors are the sum of both deltas
 // (+3 and +4 on every count). Measured by this gate on the merged
 // tree, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 203), ("native", 222), ("release", 222)];
-const UNION_FLOOR: usize = 236;
-const ALL_THREE_FLOOR: usize = 189;
+// s120 ratchet over 368 entries: the boundary primitive completes
+// (c33-strings' first sprint, #17). Two new run-phase witnesses, each
+// three-lane, so every count moves +2. `strings/chars_walk.lu` —
+// `chars()` yields the Unicode scalars and the width walk
+// reconstructs byte offsets that land on exactly the boundaries `get`
+// accepts ([mem.str.chars]; lupin 0.1.13 refuses `chars()` by name,
+// so the file is wolfc-lane evidence). `strings/boundary_battery.lu`
+// — the 2-byte/3-byte/4-byte battery (é/中/🐺): lead vs continuation
+// bytes through the byte view, whole-char `get` hits, and every
+// mid-code-point slice a `{none}` refusal — this one runs under lupin
+// too and agrees. No pre-existing file moved lanes. Totals
+// 205/224/224, union 238, all-three 191. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 205), ("native", 224), ("release", 224)];
+const UNION_FLOOR: usize = 238;
+const ALL_THREE_FLOOR: usize = 191;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
