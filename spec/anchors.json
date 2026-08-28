@@ -281,6 +281,7 @@
     "mem.shared.rc.3": "02-memory-model.md",
     "mem.shared.rc.4": "02-memory-model.md",
     "mem.str": "02-memory-model.md",
+    "mem.str.chars": "02-memory-model.md",
     "mem.str.empty": "02-memory-model.md",
     "mem.str.get": "02-memory-model.md",
     "mem.str.impl": "02-memory-model.md",

@@ -631,6 +631,31 @@ the inputs that would have decided it either way.)
   bytes). *History:* s89–s91 refused case (3) as E1015; s92 retired
   the refusal in favour of the copy-and-warn (#107, #108).
 
+(Appended 2026-08-27, s120 — wolf-std F-0018 / issue #17, the third
+leg of the boundary-primitive family: `get` gave the recoverable
+slice, `bytes()` the byte view, and this gives the scan that advances
+by real UTF-8 width. The `char` TYPE is deliberately not ruled here —
+a 4-byte scalar type carries ABI, comparison and literal questions of
+its own and stays a named open item — because it is not needed to
+advance: a scalar's encoded width is a function of its value.)
+
+- `[mem.str.chars]` `s.chars()` yields the **Unicode scalar values**
+  encoded in `s`, in string order, one per code point, as `int`s —
+  `List[int]` at v0, materialized like `bytes()` (the zero-copy
+  iterator view is the same D28 follow-on `bytes()` names). The
+  elements are exactly what UTF-8 decoding of `s`'s bytes produces;
+  every `str` is valid UTF-8 (`[mem.str.get]`), so the decode is
+  total — no yield is an error case, and a surrogate or out-of-range
+  value cannot appear. The **byte extent of a yielded scalar `c` is
+  determined by its value**: 1 when `c < 0x80`, 2 when `c < 0x800`,
+  3 when `c < 0x10000`, else 4. Hence the byte offset of the k-th
+  code point is the sum of the widths before it, and a cursor
+  advanced this way visits exactly the offsets `[mem.str.get]`
+  accepts as boundaries — the identity that makes a byte-offset
+  scanner writable in library code. `"".chars()` yields nothing;
+  `s.chars().len` is the code-point count, `s.len` the byte count,
+  and the two agree exactly when `s` is ASCII.
+
 ---
 
 - `[mem.dyn.unsize]` A trait object is constructed by an **explicit
