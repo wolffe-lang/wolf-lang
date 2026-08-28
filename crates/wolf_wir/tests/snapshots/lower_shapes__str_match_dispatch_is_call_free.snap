@@ -44,29 +44,29 @@ b6:
   jmp b21(%6)
 b7:
   %22 = data.addr @str.1
+  %23 = data.addr @str.2
   br %7, b8, b12(%9)
 b8:
-  %23 = iconst.i64 0
-  jmp b9(%23)
-b9(%24: i64):
-  %25 = icmp.slt %24, %6
-  br %25, b10, b12(%8)
+  %24 = iconst.i64 0
+  jmp b9(%24)
+b9(%25: i64):
+  %26 = icmp.slt %25, %6
+  br %26, b10, b12(%8)
 b10:
-  %26 = ptr.off %3, %24, 1
-  %27 = load.i8 %26, %1
-  %28 = zext.i64 %27
-  %29 = ptr.off %22, %24, 1
-  %30 = load.i8 %29, %1
-  %31 = zext.i64 %30
-  %32 = icmp.eq %28, %31
-  br %32, b11, b12(%9)
+  %27 = ptr.off %3, %25, 1
+  %28 = load.i8 %27, %1
+  %29 = zext.i64 %28
+  %30 = ptr.off %22, %25, 1
+  %31 = load.i8 %30, %1
+  %32 = zext.i64 %31
+  %33 = icmp.eq %29, %32
+  br %33, b11, b12(%9)
 b11:
-  %33 = iadd.wrap %24, %6
-  jmp b9(%33)
-b12(%34: bool):
-  br %34, b19, b13
+  %34 = iadd.wrap %25, %6
+  jmp b9(%34)
+b12(%35: bool):
+  br %35, b19, b13
 b13:
-  %35 = data.addr @str.2
   br %7, b14, b18(%9)
 b14:
   %36 = iconst.i64 0
@@ -78,7 +78,7 @@ b16:
   %39 = ptr.off %3, %37, 1
   %40 = load.i8 %39, %1
   %41 = zext.i64 %40
-  %42 = ptr.off %35, %37, 1
+  %42 = ptr.off %23, %37, 1
   %43 = load.i8 %42, %1
   %44 = zext.i64 %43
   %45 = icmp.eq %41, %44

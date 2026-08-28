@@ -1114,9 +1114,22 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // moved lanes — the deltas are exactly the six new files. Totals
 // 211/230/230, union 244, all-three 197. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 211), ("native", 230), ("release", 230)];
-const UNION_FLOOR: usize = 244;
-const ALL_THREE_FLOOR: usize = 197;
+// s123 ratchet over 377 entries: the compiler does not panic (#151).
+// Three new run-phase witnesses, every one a shape that CRASHED the
+// compiler before this sprint. `strings/match_str_const_scrutinee.lu`
+// — `match` over str literals with an interned-literal scrutinee, the
+// build-time-decided candidates (the Braun `use_var` panic and its
+// unreachable-block siblings). `typecheck/match_guard_const.lu` — the
+// guard that decides at build time; the checked executor still
+// refuses match guards by name ("this expression shape in checked
+// execution"), so checked moves +2 while native/release move +3.
+// `typecheck/match_chain_reuse.lu` — a chain-block constant
+// re-mentioned after the match (the [dominance] GVN-leak neighbour);
+// three-lane. Totals 213/233/233, union 247, all-three 199. Counts
+// measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 213), ("native", 233), ("release", 233)];
+const UNION_FLOOR: usize = 247;
+const ALL_THREE_FLOOR: usize = 199;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

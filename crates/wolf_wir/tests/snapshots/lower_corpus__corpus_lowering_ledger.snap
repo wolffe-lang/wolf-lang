@@ -305,6 +305,7 @@ strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
 strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
+strings/match_str_const_scrutinee.lu: lowers
 strings/match_str_dispatch.lu: lowers
 strings/raw_fences.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
@@ -348,7 +349,9 @@ typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/main_unit_row.lu: lowers
+typecheck/match_chain_reuse.lu: lowers
 typecheck/match_exhaustive.lu: lowers
+typecheck/match_guard_const.lu: lowers
 typecheck/match_missing.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_narrow_scrutinee.lu: lowers
 typecheck/match_str_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)

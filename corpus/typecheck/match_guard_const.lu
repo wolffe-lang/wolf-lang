@@ -1,0 +1,64 @@
+//! check: run(exit=0, stdout="10 1 10 2\n10 3 4 5\n")
+//! phase: run
+//! conforms: ty.match.exhaustive
+//!
+//! The #151 guard witness: a `match` guard that DECIDES at build time.
+//! `ins_br` on a constant condition emits only the taken edge, so the
+//! old lowering left one side predecessorless — a decided-true guard
+//! orphaned its re-entry block while later arms were lowered into it
+//! (the unreachable-block ICE), and a decided-false guard orphaned the
+//! body. Now a decided-true guard closes the chain with no re-entry
+//! edge, a decided-false guard jumps straight back without lowering
+//! the dead body, and the re-entry block is created only when an edge
+//! to it is actually emitted (`ArmNext::Fresh`). Runtime guards on
+//! decided arms keep their branch.
+
+fn gate(x: int) -> bool {
+    x > 2
+}
+
+fn main() -> !int {
+    // Decided-true guard on a decided int arm: the chain closes here.
+    let n = 1
+    let r1 = match n {
+        1 if true => 10,
+        _ => 0,
+    }
+    // Decided-false guard: the arm's body is dead, the default carries.
+    let r2 = match n {
+        1 if false => 10,
+        _ => 1,
+    }
+    // The same pair over a decided str arm.
+    let s = "-"
+    let r3 = match s {
+        "-" if true => 10,
+        _ => 0,
+    }
+    let r4 = match s {
+        "-" if false => 10,
+        _ => 2,
+    }
+    print("{r1} {r2} {r3} {r4}")
+    // Runtime guards on decided arms still branch and re-enter.
+    let r5 = match n {
+        1 if gate(3) => 10,
+        _ => 0,
+    }
+    let r6 = match n {
+        1 if gate(0) => 10,
+        _ => 3,
+    }
+    // The bool discriminant's decided path, guarded both ways.
+    let t = true
+    let r7 = match t {
+        true if true => 4,
+        _ => 0,
+    }
+    let r8 = match t {
+        true if false => 9,
+        _ => 5,
+    }
+    print("{r5} {r6} {r7} {r8}")
+    0
+}
