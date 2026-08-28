@@ -1,0 +1,27 @@
+---
+source: crates/wolf_lex/tests/corpus_snapshots.rs
+expression: lexed.dump(&bytes)
+---
+    lead  LineComment 0..68 "// Deliberately bare (#149): no `//!…"
+    lead  Whitespace 68..69 "\n"
+    lead  LineComment 69..136 "// is a member of the directory modu…"
+    lead  Whitespace 136..137 "\n"
+    lead  LineComment 137..176 "// through `pair.lu`, never on its o…"
+    lead  Whitespace 176..178 "\n\n"
+Kw(Fn) 178..180 "fn"
+    trail Whitespace 180..181 " "
+Ident 181..187 "helper"
+Punct(LParen) 187..188 "("
+Punct(RParen) 188..189 ")"
+    trail Whitespace 189..190 " "
+Punct(Arrow) 190..192 "->"
+    trail Whitespace 192..193 " "
+Ident 193..196 "int"
+    trail Whitespace 196..197 " "
+Punct(LBrace) 197..198 "{"
+    lead  Whitespace 198..203 "\n    "
+Int 203..205 "42"
+Term 205..206 "\n"
+Punct(RBrace) 206..207 "}"
+Term 207..208 "\n"
+Eof 208..208 ""

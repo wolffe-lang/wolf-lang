@@ -250,13 +250,19 @@ projects/count_dir.lu: lowers
 projects/rpn.lu: lowers
 projects/wordtree.lu: lowers
 regions.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
+resolve/bare_sibling/pair.lu: lowers
+resolve/broken_sibling/entry.lu: not mem-clean (pre-wir rungs own it)
 resolve/cycle/main.lu: not mem-clean (pre-wir rungs own it)
+resolve/dup_bare/clash.lu: not mem-clean (pre-wir rungs own it)
 resolve/dupdef/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/forward/main.lu: lowers
 resolve/leaf_twins/main.lu: lowers
 resolve/pkgvis/main.lu: lowers
+resolve/plain_subdir/main.lu: lowers
 resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers
+resolve/standalone_pair/left.lu: lowers
+resolve/standalone_pair/right.lu: lowers
 resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: lowers

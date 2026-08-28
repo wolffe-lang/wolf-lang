@@ -1,0 +1,25 @@
+---
+source: crates/wolf_lex/tests/corpus_snapshots.rs
+expression: lexed.dump(&bytes)
+---
+    lead  LineComment 0..69 "// Bare on purpose: a member by defa…"
+    lead  Whitespace 69..70 "\n"
+    lead  LineComment 70..105 "// too is the E0302 the entry pins."
+    lead  Whitespace 105..107 "\n\n"
+Kw(Fn) 107..109 "fn"
+    trail Whitespace 109..110 " "
+Ident 110..116 "helper"
+Punct(LParen) 116..117 "("
+Punct(RParen) 117..118 ")"
+    trail Whitespace 118..119 " "
+Punct(Arrow) 119..121 "->"
+    trail Whitespace 121..122 " "
+Ident 122..125 "int"
+    trail Whitespace 125..126 " "
+Punct(LBrace) 126..127 "{"
+    lead  Whitespace 127..132 "\n    "
+Int 132..133 "2"
+Term 133..134 "\n"
+Punct(RBrace) 134..135 "}"
+Term 135..136 "\n"
+Eof 136..136 ""
