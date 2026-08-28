@@ -173,6 +173,59 @@ fn checked_lane_records_the_same_site() {
     );
 }
 
+/// A line-shifting edit must move the reported site even when every
+/// body hash is unchanged (the release tier's cluster cache keys
+/// span-free canonical WIR — s125 added the site component so a
+/// cached object can never serve stale coordinates).
+#[test]
+fn cached_release_rebuild_reports_the_shifted_site() {
+    ensure_rt_staticlib();
+    let dir = scratch("trap_site_cache");
+    let src = dir.join("trap_site.lu");
+    std::fs::write(&src, SRC).expect("write witness");
+    let exe = dir.join("witness");
+    // Two cached builds: the original, then the same program shifted
+    // one line down by a comment line (bodies identical, spans moved).
+    let build = |expect_line: u64| {
+        let out = Command::new(wolf())
+            .current_dir(&dir)
+            .args(["build", "trap_site.lu", "--release", "-o"])
+            .arg(&exe)
+            .output()
+            .expect("wolf runs");
+        if !out.status.success() {
+            let msg = String::from_utf8_lossy(&out.stderr);
+            assert!(
+                msg.contains("cannot compile this yet") || msg.contains("not found"),
+                "wolf build failed for a non-environment reason:\n{msg}"
+            );
+            eprintln!(
+                "SKIP: environment cannot build the release tier: {}",
+                msg.trim()
+            );
+            return false;
+        }
+        let run = Command::new(&exe).output().expect("witness runs");
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        let line2 = stderr.lines().nth(1).unwrap_or_default();
+        assert!(
+            line2.ends_with(&format!("trap_site.lu:{expect_line}:{TRAP_COL}")),
+            "cached rebuild must resolve the shifted site (expected line \
+             {expect_line}):\n{stderr}"
+        );
+        true
+    };
+    if !build(TRAP_LINE) {
+        return;
+    }
+    std::fs::write(
+        &src,
+        format!("// shifted one line (s125 cache-key witness)\n{SRC}"),
+    )
+    .expect("rewrite witness");
+    build(TRAP_LINE + 1);
+}
+
 /// The harness parsers tolerate (and ignore) the site line: the
 /// conform-run verdict on both native lanes is the unchanged
 /// `trap(bounds)` — kind recovered from the first line alone.

@@ -1247,9 +1247,44 @@ fn compile_native(
                 continue;
             }
             let wir_text = wolf_wir::print_selected(&module, &funcs);
+            // s125: canonical WIR deliberately drops srcspans (D8), but
+            // trap SITES are codegen output resolved from them — a
+            // line-shifting edit that leaves every body hash intact
+            // must still rebuild the cluster, or a cached object serves
+            // stale `  at file:line:col` coordinates. The src component
+            // (previously "-") keys exactly the site-relevant inputs:
+            // each member's srcspan stream plus its file's display path
+            // and line-start table.
+            let mut site_acc = String::new();
+            let mut site_files: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
+            for &fid in &funcs {
+                let f = &module.funcs[fid];
+                let Some(fi) = f.src_file else { continue };
+                site_files.insert(fi);
+                site_acc.push_str(&format!("fn {} file {fi}\n", f.name));
+                for &b in &f.layout {
+                    for &i in &f.blocks[b].insts {
+                        if let Some(sp) = f.srcspan(i) {
+                            site_acc.push_str(&format!("{}..{} ", sp.lo, sp.hi));
+                        }
+                    }
+                }
+                site_acc.push('\n');
+            }
+            for fi in site_files {
+                if let Some(unit) = pkg.files.iter().find(|u| u.raw.file.index() as u32 == fi) {
+                    site_acc.push_str(&format!("file {fi} {}\n", unit.raw.display));
+                    for (i, &b) in unit.raw.src.iter().enumerate() {
+                        if b == b'\n' {
+                            site_acc.push_str(&format!("{} ", i + 1));
+                        }
+                    }
+                    site_acc.push('\n');
+                }
+            }
             let comps = KeyComps {
                 env: env_comp.clone(),
-                src: "-".to_string(),
+                src: sha256_hex(site_acc.as_bytes()),
                 deps: "-".to_string(),
                 wir: sha256_hex(format!("{wir_text}\ntags:{}", module.tags.join(",")).as_bytes()),
                 sum: format!("summary-format {} {}", wp.stats.summary_version, c.key),
