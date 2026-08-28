@@ -3,8 +3,8 @@ source: crates/wolf_codegen_clif/tests/clif_goldens.rs
 expression: t
 ---
 ;; @bump
-function u0:0(i64) system_v {
-    sig0 = (i32) system_v
+function u0:0(i64) host_cc {
+    sig0 = (i32) host_cc
     fn0 = u0:8 sig0
 
 block0(v0: i64):
@@ -24,8 +24,8 @@ block1 cold:
 }
 
 ;; @mark
-function u0:1(i64, i64) system_v {
-    sig0 = (i32) system_v
+function u0:1(i64, i64) host_cc {
+    sig0 = (i32) host_cc
     fn0 = u0:8 sig0
 
 block0(v0: i64, v1: i64):
@@ -49,7 +49,7 @@ block1 cold:
 }
 
 ;; @source
-function u0:2(i64) -> i64, i64 system_v {
+function u0:2(i64) -> i64, i64 host_cc {
     ss0 = explicit_slot 16, align = 8
     ss1 = explicit_slot 16, align = 8
 
@@ -77,13 +77,13 @@ block2:
 }
 
 ;; @tally
-function u0:3(i64, i64, i64) -> i64, i64 system_v {
+function u0:3(i64, i64, i64) -> i64, i64 host_cc {
     ss0 = explicit_slot 16, align = 8
     ss1 = explicit_slot 16, align = 8
     ss2 = explicit_slot 16, align = 8
-    sig0 = (i64) system_v
-    sig1 = (i64) -> i64, i64 system_v
-    sig2 = (i32) system_v
+    sig0 = (i64) host_cc
+    sig1 = (i64) -> i64, i64 host_cc
+    sig2 = (i32) host_cc
     fn0 = colocated u0:0 sig0
     fn1 = colocated u0:2 sig1
     fn2 = u0:8 sig2
@@ -143,9 +143,9 @@ block5 cold:
 }
 
 ;; @probe
-function u0:4(i8) -> i64 system_v {
-    sig0 = () -> i64 system_v
-    sig1 = (i64) system_v
+function u0:4(i8) -> i64 host_cc {
+    sig0 = () -> i64 host_cc
+    sig1 = (i64) host_cc
     fn0 = u0:9 sig0
     fn1 = u0:10 sig1
 
@@ -165,11 +165,11 @@ block2:
 }
 
 ;; @depth
-function u0:5() -> i64 system_v {
+function u0:5() -> i64 host_cc {
     ss0 = explicit_slot 8, align = 16
     ss1 = explicit_slot 8, align = 16
-    sig0 = (i64, i64) system_v
-    sig1 = (i32) system_v
+    sig0 = (i64, i64) host_cc
+    sig1 = (i32) host_cc
     fn0 = colocated u0:1 sig0
     fn1 = u0:8 sig1
 
@@ -206,7 +206,7 @@ block3 cold:
 }
 
 ;; @classify
-function u0:6(i64, i8) -> i64 system_v {
+function u0:6(i64, i8) -> i64 host_cc {
 block0(v0: i64, v1: i8):
     v3 = iconst.i64 0
     v4 = icmp eq v0, v3  ; v3 = 0
@@ -245,7 +245,7 @@ block8(v2: i64):
 }
 
 ;; @main
-function u0:7() -> i64 system_v {
+function u0:7() -> i64 host_cc {
     ss0 = explicit_slot 8, align = 16
     ss1 = explicit_slot 8, align = 16
     ss2 = explicit_slot 16, align = 8
@@ -255,10 +255,10 @@ function u0:7() -> i64 system_v {
     ss6 = explicit_slot 8, align = 16
     ss7 = explicit_slot 8, align = 16
     ss8 = explicit_slot 16, align = 8
-    sig0 = (i64, i64, i64) -> i64, i64 system_v
-    sig1 = (i8) -> i64 system_v
-    sig2 = () -> i64 system_v
-    sig3 = (i64, i8) -> i64 system_v
+    sig0 = (i64, i64, i64) -> i64, i64 host_cc
+    sig1 = (i8) -> i64 host_cc
+    sig2 = () -> i64 host_cc
+    sig3 = (i64, i8) -> i64 host_cc
     fn0 = colocated u0:3 sig0
     fn1 = colocated u0:4 sig1
     fn2 = colocated u0:5 sig2

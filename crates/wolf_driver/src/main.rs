@@ -1632,7 +1632,19 @@ fn compile_unit(
 /// Probe (once) for `ld.lld` on PATH; `Some("-fuse-ld=lld")` routes
 /// the link through lld (D1: lld ships with the toolchain — packaging
 /// is c13/s66's problem, the probe is v0's honest posture).
+///
+/// macOS carve-out (s59): v0 links through `cc` = Apple clang = Apple
+/// ld, whose AUTOMATIC ad-hoc code signature is the v0 codesigning
+/// story — an arm64 Mach-O executes only if signed, and Apple ld signs
+/// every output by itself. lld is never routed here even when a
+/// homebrew/rustup `ld.lld` sits on PATH; the NAMED condition for ever
+/// routing it is passing `-Wl,-adhoc_codesign` in the same motion
+/// (lld does not sign by default), which stays unbuilt until a sprint
+/// needs it.
 fn lld_fuse_flag() -> Option<&'static str> {
+    if cfg!(target_os = "macos") {
+        return None;
+    }
     use std::sync::OnceLock;
     static PROBE: OnceLock<bool> = OnceLock::new();
     let have = *PROBE.get_or_init(|| {
@@ -1681,9 +1693,15 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     for p in &paths {
         cmd.arg(p);
     }
-    // What a Rust staticlib needs from the platform (linux x86-64,
-    // the s28 target).
-    cmd.arg(&rt).args(["-lpthread", "-ldl", "-lm"]);
+    // What a Rust staticlib needs from the platform. On linux that is
+    // pthreads + libdl + libm as separate archives; on macOS every one
+    // of those lives in libSystem, which `cc` links implicitly — an
+    // explicit `-ldl` has nothing to resolve to (s59).
+    cmd.arg(&rt);
+    #[cfg(target_os = "macos")]
+    cmd.args(["-lpthread", "-lm"]);
+    #[cfg(not(target_os = "macos"))]
+    cmd.args(["-lpthread", "-ldl", "-lm"]);
     // s32 Target 1 ("a wolf binary that never spawns is a C binary"):
     // rustc emits function sections, so section GC drops every
     // wolf_rt entry point the program never calls — the no-spawn CI
@@ -1970,7 +1988,10 @@ fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
 /// interpreted instead).
 fn build(args: &[String]) {
     let cli = parse_build_cli("build", args, false);
-    if lld_fuse_flag().is_none() && cli.opts.emit == Emit::Bin {
+    // On macOS the system linker is the DESIGN (Apple ld's automatic
+    // ad-hoc signature — see `lld_fuse_flag`), so there is nothing to
+    // note; elsewhere a missing lld is worth a heads-up.
+    if !cfg!(target_os = "macos") && lld_fuse_flag().is_none() && cli.opts.emit == Emit::Bin {
         eprintln!(
             "wolf build: note: ld.lld not found on PATH — linking with the system \
              linker (lld ships with the toolchain; packaging is c13)"

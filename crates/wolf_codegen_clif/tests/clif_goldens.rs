@@ -7,9 +7,12 @@
 use wolf_backend::Backend;
 use wolf_codegen_clif::ClifBackend;
 
-/// s28 targets linux/x86-64 only (the M1 platform); other hosts skip
-/// LOUDLY — the golden content is host-independent and stays pinned by
-/// the linux CI lane.
+/// Hosts the backend refuses skip LOUDLY (the runtime-SKIP pattern —
+/// the test starts passing the moment the s59/c13 gate lifts for a
+/// host). The golden content is host-independent EXCEPT the calling-
+/// convention token cranelift prints in every signature (`system_v` on
+/// linux/x86-64, `apple_aarch64` on macOS/aarch64) — normalized to
+/// `host_cc` below so one pinned golden serves every supported host.
 fn clif_of(fixture: &str) -> Option<String> {
     let path = format!(
         "{}/tests/fixtures/{fixture}.wir",
@@ -36,6 +39,12 @@ fn clif_of(fixture: &str) -> Option<String> {
     for (name, clif) in backend.clif_texts() {
         out.push_str(&format!(";; @{name}\n{clif}\n"));
     }
+    // The one host-dependent token (see the doc above): the default
+    // calling convention's printed name. Everything else in the CLIF
+    // text is identical across the supported hosts.
+    let out = out
+        .replace("apple_aarch64", "host_cc")
+        .replace("system_v", "host_cc");
     // The object must also finish cleanly (relocatable ELF bytes).
     let product = Box::new(backend).finish().expect("object emits");
     assert!(!product.bytes.is_empty());

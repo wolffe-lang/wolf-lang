@@ -96,25 +96,36 @@ pub struct ClifBackend {
 }
 
 impl ClifBackend {
-    /// A backend for the host target. s28 is linux/x86-64 only (M1;
-    /// D35's matrix is c13) — anything else is an honest refusal.
+    /// A backend for the host target. s28 opened linux/x86-64 (M1);
+    /// s59 widens to macOS/aarch64 (c13, D35's tier-1 matrix) —
+    /// anything else is an honest refusal.
     pub fn new() -> Result<ClifBackend, BackendError> {
         let triple = target_lexicon::Triple::host();
-        if triple.architecture != target_lexicon::Architecture::X86_64
-            || triple.operating_system != target_lexicon::OperatingSystem::Linux
-        {
+        let supported = matches!(
+            (&triple.architecture, &triple.operating_system),
+            (
+                target_lexicon::Architecture::X86_64,
+                target_lexicon::OperatingSystem::Linux
+            ) | (
+                target_lexicon::Architecture::Aarch64(_),
+                target_lexicon::OperatingSystem::Darwin(_)
+            )
+        );
+        if !supported {
             return Err(BackendError::Unsupported(format!(
-                "native codegen targets linux/x86-64 only in s28 (host: {triple})"
+                "native codegen targets linux/x86-64 and macOS/aarch64 \
+                 (s28 + s59; the rest of D35's matrix is c13) — host: {triple}"
             )));
         }
         let mut flags = settings::builder();
         // Position-independent objects: host toolchains link PIE by
-        // default.
+        // default (and arm64 Mach-O is PIC-only).
         flags
             .set("is_pic", "true")
             .map_err(|e| BackendError::Internal(e.to_string()))?;
         // The debug tier keeps frame pointers (s30): frame base = %rbp
-        // for DW_OP_fbreg variable locations, and debugger stack walks
+        // (x29 on arm64 — Apple MANDATES live frame pointers) for
+        // DW_OP_fbreg variable locations, and debugger stack walks
         // work even where .eh_frame coverage is thin.
         flags
             .set("preserve_frame_pointers", "true")
@@ -186,7 +197,7 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
-        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv());
+        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         let fid = self
             .module
             .declare_function(symbol, clif_linkage(linkage), &si.clif)
@@ -221,7 +232,7 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
-        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv());
+        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         let mut ctx = self.module.make_context();
         ctx.func.signature = si.clif.clone();
         ctx.func.name = UserFuncName::user(0, id.as_u32());
