@@ -1,0 +1,15 @@
+//! check: run(exit=0, stdout="7")
+//! phase: run
+//! conforms: conf.directive.standalone, mod.dir, mod.use.pub
+//!
+//! #145's reproducer, headerless: `sub/sub.lu` carries no
+//! `member: true` and the module resolves anyway — membership is the
+//! default (D59), the marker is only an explicit override. The marked
+//! spelling of the same layout lives in `resolve/two_mod/`.
+
+use sub
+
+fn main() -> !int {
+    print("{sub.seven() + sub.zero()}")
+    0
+}

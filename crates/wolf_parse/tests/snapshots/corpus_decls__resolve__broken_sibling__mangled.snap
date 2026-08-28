@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 125..157 name=mangled body=Block
+-- diagnostics --
+E0202 [Error] 135..136 this `(` is never closed
+E0202 [Error] 139..140 this `{` is never closed

@@ -1,0 +1,26 @@
+---
+source: crates/wolf_lex/tests/corpus_snapshots.rs
+expression: lexed.dump(&bytes)
+---
+    lead  LineComment 0..68 "// Deliberately unparseable (#149 pr…"
+    lead  Whitespace 68..69 "\n"
+    lead  LineComment 69..123 "// this file produces when the direc…"
+    lead  Whitespace 123..125 "\n\n"
+Kw(Fn) 125..127 "fn"
+    trail Whitespace 127..128 " "
+Ident 128..135 "mangled"
+Punct(LParen) 135..136 "("
+    trail Whitespace 136..137 " "
+Punct(LBrace) 137..138 "{"
+Punct(LBrace) 138..139 "{"
+Punct(LBrace) 139..140 "{"
+    trail Whitespace 140..141 " "
+Ident 141..144 "not"
+    trail Whitespace 144..145 " "
+Ident 145..149 "wolf"
+    trail Whitespace 149..150 " "
+Ident 150..152 "at"
+    trail Whitespace 152..153 " "
+Ident 153..156 "all"
+Term 156..157 "\n"
+Eof 157..157 ""

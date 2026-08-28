@@ -235,7 +235,7 @@ next declaration keyword and reports the wreck once. If the code below
 this error looks fine, trust the opener: count delimiters on the
 flagged line.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__multiline_elided.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_primary.snap, crates/wolf_parse/tests/snapshots/broken_suite__call_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/broken_suite__half_typed_fn_header.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_rparen.snap, crates/wolf_parse/tests/snapshots/broken_suite__unclosed_brace_eof.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_brace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/render__render_e0202.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__multiline_elided.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_primary.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__broken_sibling__entry.snap, crates/wolf_parse/tests/snapshots/broken_suite__call_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/broken_suite__half_typed_fn_header.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_rparen.snap, crates/wolf_parse/tests/snapshots/broken_suite__unclosed_brace_eof.snap, crates/wolf_parse/tests/snapshots/corpus_decls__resolve__broken_sibling__mangled.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_brace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/render__render_e0202.snap
 
 ## E0203 — expected a declaration at the top level
 
@@ -345,11 +345,23 @@ prelude name. Most of the time this is a typo — when a near-miss exists
 the message suggests it, and applying the suggested edit fixes the
 program. If the name lives in another module, add the import: `use
 that_module` at the top of the file, then reach it as
-`that_module.name`. Names never resolve through types here — a
-capitalized name used as an error-row tag (D30) is deferred to the type
-checker rather than reported by this pass.
+`that_module.name`.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
+Modules form from directories (D32/D59): every plain `.lu` file joins
+its directory's module automatically, and a sibling directory with
+plain `.lu` files is importable with `use` — no marker needed. A file
+opts *out* of its module by being a standalone entry: a `//! member:
+false` header, a `//! check:` + `//! phase:` directive pair, a script
+(`#!` line or `pkg { … }` frontmatter), or a `_test.lu` name. When the
+name you asked for is defined in such a file, or an imported directory
+contains only such files, the message says so — the fix is to remove
+the standalone marker from the file that belongs to the module.
+
+Names never resolve through types here — a capitalized name used as an
+error-row tag (D30) is deferred to the type checker rather than
+reported by this pass.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -361,9 +373,12 @@ can pick which to keep. Rename one of them, or delete one — file
 boundaries do not create scopes, so moving a definition to a sibling
 file changes nothing. If both definitions really are different things,
 one of them probably belongs in its own subdirectory, which *is* a new
-module.
+module — and if the two files are really two separate *programs*
+sharing a directory (scratch work, exercises), mark each with
+`//! member: false`: a standalone entry is its own compilation root
+and never merges with its siblings (D59).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__clash.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__other.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
 
 ## E0303 — modules import each other in a cycle
 

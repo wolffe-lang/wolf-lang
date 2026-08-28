@@ -18,7 +18,7 @@ fn cancelled_request_answers_request_cancelled() {
     unsafe { std::env::set_var(wolf_query::TEST_SLOW_ENV, "10000") };
 
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     let text = std::fs::read_to_string(&path).unwrap();
     let uri = client.open(&path, &text);
 

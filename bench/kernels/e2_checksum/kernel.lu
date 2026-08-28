@@ -1,3 +1,7 @@
+//! member: false
+// ^ this file and `wrapping.lu` are two standalone programs in one
+// directory; without the opt-out, directory = module (D59) would
+// merge their `main`s into one E0302.
 // e2-checksum (family E) — a rolling-hash/CRC-shaped loop: multiply,
 // add, mask. Two checked ops per iteration (mul and add), both of which
 // LLVM must keep as `llvm.smul/sadd.with.overflow` unless s42's range

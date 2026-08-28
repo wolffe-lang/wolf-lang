@@ -29,7 +29,7 @@ fn wordcount_publishes_no_diagnostics() {
 #[test]
 fn broken_fixture_matches_cli_codes_and_spans() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("broken.lu");
+    let path = fixture("broken/broken.lu");
     let uri = client.open_from_disk(&path);
     let diags = client.wait_publish(&uri);
     assert_eq!(diags.len(), 1, "one diagnostic: {diags:?}");
@@ -48,7 +48,7 @@ fn broken_fixture_matches_cli_codes_and_spans() {
 #[test]
 fn overlay_edits_change_diagnostics_without_touching_disk() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     let disk_before = std::fs::read(&path).unwrap();
 
     // Open with broken text (disk is clean).
@@ -71,7 +71,7 @@ fn overlay_edits_change_diagnostics_without_touching_disk() {
 #[test]
 fn formatting_round_trip_is_byte_stable() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("unformatted.lu");
+    let path = fixture("unformatted/unformatted.lu");
     let uri = client.open_from_disk(&path);
     let _ = client.wait_publish(&uri);
 
@@ -105,7 +105,7 @@ fn formatting_round_trip_is_byte_stable() {
 #[test]
 fn document_symbols_snapshot() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("symbols.lu");
+    let path = fixture("symbols/symbols.lu");
     let uri = client.open_from_disk(&path);
     let id = client.request(
         "textDocument/documentSymbol",
@@ -140,7 +140,7 @@ fn document_symbols_snapshot() {
 #[test]
 fn hover_answers_types_and_docs() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     let uri = client.open_from_disk(&path);
     let _ = client.wait_publish(&uri);
 
@@ -224,7 +224,7 @@ fn code_action_surfaces_machine_applicable_fix() {
 fn utf16_default_and_translation() {
     let (mut client, init) = Client::start(&[]);
     assert_eq!(init["capabilities"]["positionEncoding"], "utf-16");
-    let path = fixture("unicode.lu");
+    let path = fixture("unicode/unicode.lu");
     // `let 🐺 = 1` — the emoji is not wolf syntax (E0107, probed:
     // bytes [27,31]); its range must come back in utf-16 units
     // (astral = 2), i.e. cols 8..10, where utf-8 would say 8..12.

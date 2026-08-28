@@ -40,7 +40,7 @@ release does and what it does not do, feature by feature.
 | [`spec/`](spec/) | the normative language specification: grammar, memory model, concurrency, ABI, conformance |
 | [`corpus/`](corpus/) | the conformance corpus. Every program states its own expected outcome in a `//!` header, and CI checks the claim |
 | `crates/` | the compiler, the runtime (`wolf_rt`), and the driver |
-| [`docs/`](docs/) | the diagnostic catalog, the lint triage ledger, the release notes |
+| [`docs/`](docs/) | the diagnostic catalog, the module rules, the lint triage ledger, the release notes |
 
 The reference interpreter is a separate implementation in
 [wolf-interp](https://github.com/wolffe-lang/wolf-interp). The two share no

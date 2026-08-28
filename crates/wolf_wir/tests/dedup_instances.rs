@@ -17,8 +17,7 @@ use wolf_sema::{AliasTable, DiskLoader, resolve_package_with, typecheck_package_
 fn hundred_shapes_is_one_body() {
     let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/generics/hundred_shapes.lu");
     let mut sm = wolf_span::SourceMap::new();
-    let mut loader =
-        DiskLoader::from_entry(&f, &mut sm, Box::new(|_: &[u8]| false)).expect("loader");
+    let mut loader = DiskLoader::from_entry(&f, &mut sm).expect("loader");
     let res = resolve_package_with(&mut loader, &AliasTable::default(), true).expect("resolve");
     let tc = typecheck_package_with(&res.package, true);
     assert!(tc.not_yet.is_empty() && !tc.has_errors(), "mem-clean");
@@ -61,8 +60,7 @@ fn hundred_shapes_is_one_body() {
 fn two_casts_one_vtable() {
     let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/traits/dyn_ok.lu");
     let mut sm = wolf_span::SourceMap::new();
-    let mut loader =
-        DiskLoader::from_entry(&f, &mut sm, Box::new(|_: &[u8]| false)).expect("loader");
+    let mut loader = DiskLoader::from_entry(&f, &mut sm).expect("loader");
     let res = resolve_package_with(&mut loader, &AliasTable::default(), true).expect("resolve");
     let tc = typecheck_package_with(&res.package, true);
     assert!(tc.not_yet.is_empty() && !tc.has_errors(), "mem-clean");

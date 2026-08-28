@@ -42,7 +42,12 @@ fn out_dir() -> PathBuf {
 /// and the "annotated" lane had nothing left to strip — the sentinel
 /// would have been measuring nothing against nothing, which is the one
 /// thing this test exists to refuse.
+/// The header line opts each staged variant out of module formation:
+/// every `emit` tag lands as a sibling `.lu` in one shared directory,
+/// and they are standalone programs, not one module (D59).
 const SRC: &str = "\
+//! member: false
+
 fn blend(mut out: List[int], src: List[int]) {
     var i = 0
     while i < src.len {

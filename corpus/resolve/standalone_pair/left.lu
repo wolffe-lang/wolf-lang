@@ -1,0 +1,14 @@
+//! member: false
+//! check: run(exit=0, stdout="left")
+//! phase: run
+//! conforms: conf.directive.standalone, conf.directive.member
+//!
+//! Two standalone programs share one directory (the target-4 story):
+//! this one opts out with the explicit `member: false` spelling. Both
+//! files define `main`; each runs alone because neither is a member
+//! of the other's module (D59).
+
+fn main() -> !int {
+    print("left")
+    0
+}

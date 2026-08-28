@@ -1,0 +1,13 @@
+//! check: fail(E0202)
+//! phase: parse
+//! conforms: conf.directive.standalone
+//!
+//! #149 probe 3, the one that used to be SILENT: `mangled.lu` is not
+//! parseable wolf, and before D59 `wolf build` ignored it and exited
+//! 0 while the user believed the file was part of the program. The
+//! sibling is a member now, so its parse error fails the build — a
+//! voice instead of a shrug.
+
+fn main() -> !int {
+    0
+}

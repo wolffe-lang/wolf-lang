@@ -16,7 +16,7 @@ Ok(
             "mem.tier0.borrow.1",
         ],
         warns: [],
-        member: false,
+        member: None,
         forward: Some(
             "borrow expressions",
         ),

@@ -316,10 +316,19 @@ fn corpus_cmd() -> ExitCode {
         };
         match corpus::parse_directives(&src) {
             Ok(d) => {
-                if d.member {
-                    // compiled through its module's entry file (s12)
+                if d.is_member() {
+                    // compiled through its module's entry file
+                    // (s12/D59: `member: true` or a plain file with no
+                    // entry machinery at all)
                 } else if d.phase.is_none() {
                     eprintln!("corpus: {}: missing `//! phase:` directive", f.display());
+                    bad += 1;
+                } else if d.check.is_none() {
+                    eprintln!(
+                        "corpus: {}: has `phase:` but no `check:` — an entry file carries \
+                         both ([conf.directive.member])",
+                        f.display()
+                    );
                     bad += 1;
                 } else {
                     parsed.push((f.clone(), d));
@@ -567,7 +576,7 @@ fn corpus_run_entries() -> Vec<PathBuf> {
         std::fs::read_to_string(f)
             .ok()
             .and_then(|src| corpus::parse_directives(&src).ok())
-            .is_some_and(|d| !d.member && d.phase.as_deref() == Some("run"))
+            .is_some_and(|d| !d.is_member() && d.phase.as_deref() == Some("run"))
     });
     files
 }
@@ -611,8 +620,8 @@ fn peel_cmd(args: &[String]) -> ExitCode {
         let Ok(src) = std::fs::read_to_string(f) else {
             continue;
         };
-        // Member files compile through their module's entry file (s12).
-        if corpus::parse_directives(&src).is_ok_and(|d| d.member) {
+        // Member files compile through their module's entry file (s12/D59).
+        if corpus::parse_directives(&src).is_ok_and(|d| d.is_member()) {
             continue;
         }
         let out = Command::new("target/debug/wolf")
@@ -1140,9 +1149,24 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // (trap(overflow) counts as an executing verdict). Totals
 // 217/238/238, union 252, all-three 203. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 217), ("native", 238), ("release", 238)];
-const UNION_FLOOR: usize = 252;
-const ALL_THREE_FLOOR: usize = 203;
+// s124 ratchet over 380 entries: the module explains itself (D59).
+// Four new run-phase witnesses, each three-lane, so every count moves
+// +4. `resolve/bare_sibling/pair.lu` — a directiveless sibling is a
+// member and its fn is in scope (#149 probe 1). `resolve/plain_subdir/
+// main.lu` — a subdirectory module with no `member: true` resolves
+// (#145 both ways; the marked spelling is `resolve/two_mod/`).
+// `resolve/standalone_pair/left.lu`/`right.lu` — two standalone mains
+// coexist in one directory (`member: false` and the entry pair). The
+// two fail-phase witnesses (`dup_bare`, `broken_sibling`) join the
+// rejection ledger instead. Totals 215/234/234, union 248, all-three
+// 201. Counts measured by this gate, not predicted.
+// merge (s123 + s124, 2026-08-28): disjoint witness sets (eight
+// crash/literal witnesses; four module-formation witnesses), so the
+// deltas compound. Counts measured by this gate on the merged tree,
+// not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 242)];
+const UNION_FLOOR: usize = 256;
+const ALL_THREE_FLOOR: usize = 207;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -1274,7 +1298,7 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         if d.forward.is_some() {
             forward.insert(f.display().to_string());
         }
-        !d.member
+        !d.is_member()
     });
 
     let mut cov = xtask::protocol::Coverage::default();
@@ -1991,7 +2015,7 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
             std::fs::read_to_string(f)
                 .ok()
                 .and_then(|src| corpus::parse_directives(&src).ok())
-                .is_some_and(|d| !d.member)
+                .is_some_and(|d| !d.is_member())
         });
         for _ in 0..runs {
             let t = Instant::now();
@@ -3329,7 +3353,7 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         let directives = std::fs::read_to_string(f)
             .ok()
             .and_then(|src| corpus::parse_directives(&src).ok());
-        if directives.as_ref().is_some_and(|d| d.member) {
+        if directives.as_ref().is_some_and(|d| d.is_member()) {
             continue; // compiled through its module's entry file (s12)
         }
         // A forward pin (s91) enters the conservatism ledger honestly —

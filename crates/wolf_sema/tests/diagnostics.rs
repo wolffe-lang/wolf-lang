@@ -6,9 +6,21 @@ use wolf_diag::{RenderOptions, Sources, render_human};
 use wolf_sema::{AliasTable, MemoryLoader, Resolution, resolve_package_with};
 
 fn resolve(files: &[(&[&str], &str, &str)]) -> Resolution {
+    resolve_with_standalone(files, &[])
+}
+
+/// `standalone` files are excluded from their directory's module
+/// (D59) — present only so the E0301 machinery can explain them.
+fn resolve_with_standalone(
+    files: &[(&[&str], &str, &str)],
+    standalone: &[(&[&str], &str, &str)],
+) -> Resolution {
     let mut ml = MemoryLoader::new("snap");
     for (m, n, s) in files {
         ml.add_file(m, n, s);
+    }
+    for (m, n, s) in standalone {
+        ml.add_standalone_file(m, n, s);
     }
     resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads")
 }
@@ -52,6 +64,92 @@ fn e0301_missing_module_item() {
         ),
     ]);
     insta::assert_snapshot!("e0301_member", render(&res));
+}
+
+// ---------------------------------------------------- E0301 + D59 ---
+// The module explains itself (s124): the four situations a user can
+// be in when a name or module fails to resolve, each with its own
+// note. The messages are the deliverable; these are their reviewed
+// fixtures.
+
+/// A standalone sibling defines the very name — the teachable case:
+/// the file opted out (`member: false`), and the note says so and
+/// names the fix instead of reading as a typo hunt.
+#[test]
+fn e0301_standalone_sibling_defines_the_name() {
+    let res = resolve_with_standalone(
+        &[(
+            &[],
+            "main.lu",
+            "fn main() -> !int {\n    print(\"{helper()}\")\n    0\n}\n",
+        )],
+        &[(
+            &[],
+            "b.lu",
+            "//! member: false\nfn helper() -> int {\n    42\n}\n",
+        )],
+    );
+    insta::assert_snapshot!("e0301_standalone_sibling", render(&res));
+}
+
+/// `use tools` where the directory exists but every file in it is a
+/// standalone entry (the corpus pair, here): the note explains why no
+/// module formed instead of suggesting a different spelling.
+#[test]
+fn e0301_module_all_standalone() {
+    let res = resolve_with_standalone(
+        &[(
+            &[],
+            "main.lu",
+            "use tools\n\nfn main() -> !int {\n    tools.go()\n    0\n}\n",
+        )],
+        &[(
+            &["tools"],
+            "kit.lu",
+            "//! check: run(exit=0)\n//! phase: run\nfn main() -> !int {\n    0\n}\n",
+        )],
+    );
+    insta::assert_snapshot!("e0301_all_standalone", render(&res));
+}
+
+/// No such directory at all: the default note teaches module
+/// formation (a module is a directory of `.lu` files) rather than
+/// asserting a layout rule the user may already have satisfied.
+#[test]
+fn e0301_no_such_module_teaches_formation() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "use tools\n\nfn main() -> !int {\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0301_no_module", render(&res));
+}
+
+/// `use sub.item` where a *standalone* file of `sub` defines the item:
+/// the import-side twin of the sibling case.
+#[test]
+fn e0301_item_defined_in_standalone_file() {
+    let res = resolve_with_standalone(
+        &[
+            (
+                &[],
+                "main.lu",
+                "use sub.extra_bit\n\nfn main() -> !int {\n    extra_bit()\n}\n",
+            ),
+            (
+                &["sub"],
+                "kit.lu",
+                "/// One.\npub fn one() -> int {\n    1\n}\n\
+                 /// Two.\npub fn two() -> int {\n    2\n}\n",
+            ),
+        ],
+        &[(
+            &["sub"],
+            "extra.lu",
+            "//! member: false\npub fn extra_bit() -> int {\n    2\n}\n",
+        )],
+    );
+    insta::assert_snapshot!("e0301_item_in_standalone", render(&res));
 }
 
 #[test]

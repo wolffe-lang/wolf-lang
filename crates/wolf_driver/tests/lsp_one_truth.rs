@@ -297,7 +297,7 @@ fn one_truth_wordcount_clean() {
 )]
 #[test]
 fn one_truth_broken_fixture() {
-    one_truth_check(&fixture("broken.lu"));
+    one_truth_check(&fixture("broken/broken.lu"));
 }
 
 /// Resolve-tier diagnostic with a fix-it (E0305): same code, same span.

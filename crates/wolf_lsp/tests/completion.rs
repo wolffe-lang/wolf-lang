@@ -59,7 +59,7 @@ fn initialize_advertises_completion_with_dot_trigger() {
 #[test]
 fn scope_names_and_keywords_complete_with_kinds_and_details() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     let uri = client.open_from_disk(&path);
     let _ = client.wait_publish(&uri);
 
@@ -95,7 +95,7 @@ fn scope_names_and_keywords_complete_with_kinds_and_details() {
 #[test]
 fn dot_after_str_receiver_offers_methods_mid_edit() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     let uri = client.open(&path, "fn f(s: str) -> str {\n    s.\n}\n");
     let diags = client.wait_publish(&uri);
     assert!(!diags.is_empty(), "the buffer is mid-edit broken");
@@ -125,7 +125,7 @@ fn dot_after_str_receiver_offers_methods_mid_edit() {
 #[test]
 fn struct_fields_complete_after_dot() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("symbols.lu");
+    let path = fixture("symbols/symbols.lu");
     let text = "struct Point {\n    x: int\n    y: int\n}\n\n\
                 enum Color {\n    Red\n    Blue\n}\n\n\
                 fn dist(p: Point) -> int {\n    p.\n}\n";
@@ -145,7 +145,7 @@ fn struct_fields_complete_after_dot() {
 #[test]
 fn enum_variants_complete_after_type_name_dot() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("symbols.lu");
+    let path = fixture("symbols/symbols.lu");
     let text = "enum Color {\n    Red\n    Blue\n}\n\n\
                 fn pick() -> int {\n    Color.\n}\n";
     let uri = client.open(&path, text);
@@ -182,7 +182,7 @@ fn module_members_complete_after_import_binding_dot() {
 #[test]
 fn unknown_receiver_completes_empty_not_wrong() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     let uri = client.open(&path, "fn f(x: Wumpus) -> int {\n    x.\n}\n");
     let _ = client.wait_publish(&uri);
 
@@ -197,7 +197,7 @@ fn unknown_receiver_completes_empty_not_wrong() {
 #[test]
 fn broken_buffer_still_answers_keywords_and_recovered_items() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("broken.lu");
+    let path = fixture("broken/broken.lu");
     let uri = client.open_from_disk(&path); // `lett x = 1` — parse error
     let _ = client.wait_publish(&uri);
 
@@ -215,7 +215,7 @@ fn broken_buffer_still_answers_keywords_and_recovered_items() {
 #[test]
 fn lex_dead_buffer_still_answers_a_list() {
     let (mut client, _) = Client::start(&["utf-8"]);
-    let path = fixture("typed.lu");
+    let path = fixture("typed/typed.lu");
     // The emoji is not wolf syntax: E0107 stray byte, lex rung stops.
     let uri = client.open(
         &path,

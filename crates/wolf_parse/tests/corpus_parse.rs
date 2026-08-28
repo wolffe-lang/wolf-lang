@@ -38,6 +38,17 @@ fn expected_parse_failure(src: &str) -> Option<String> {
     (num < 300).then(|| code.to_string())
 }
 
+/// The `.lu` files directly in `dir` (no recursion — a module is one
+/// directory, D32).
+fn collect_flat(dir: &Path, out: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(dir).expect("read module dir") {
+        let p = entry.expect("dir entry").path();
+        if p.is_file() && p.extension().is_some_and(|e| e == "lu") {
+            out.push(p);
+        }
+    }
+}
+
 fn count_error_nodes(node: &GreenNode) -> usize {
     let mut n = usize::from(node.kind == SyntaxKind::ErrorNode);
     for c in &node.children {
@@ -69,6 +80,7 @@ fn corpus_parse_expectations() {
     let mut sm = wolf_span::SourceMap::new();
     let mut pass = 0usize;
     let mut fail = 0usize;
+    let mut member_fail = 0usize;
     for f in &files {
         let bytes = std::fs::read(f).expect("read corpus file");
         let src = String::from_utf8_lossy(&bytes).into_owned();
@@ -77,13 +89,34 @@ fn corpus_parse_expectations() {
         wolf_ast::verify(&parse.root, &bytes)
             .unwrap_or_else(|e| panic!("verifier failed for {}: {e}", f.display()));
         match expected_parse_failure(&src) {
-            Some(code) => {
-                fail += 1;
+            Some(code) if parse.diagnostics.is_empty() => {
+                // D59 (directory = module): an entry may pin a
+                // parse-family code that fires in a MEMBER SIBLING
+                // rather than in its own bytes — the corpus witness
+                // for the once-silent unparseable sibling
+                // (corpus/resolve/broken_sibling). The pin is honest
+                // only if some sibling really fails with that code.
+                member_fail += 1;
+                let dir = f.parent().expect("corpus file has a directory");
+                let mut sibling_files = Vec::new();
+                collect_flat(dir, &mut sibling_files);
+                let sibling_fails = sibling_files.iter().any(|sib| {
+                    if sib == f {
+                        return false;
+                    }
+                    let bytes = std::fs::read(sib).expect("read sibling");
+                    let sib_file = sm.intern(sib);
+                    let p = wolf_parse::parse_file(sib_file, &bytes);
+                    p.diagnostics.iter().any(|d| d.code.as_str() == code)
+                });
                 assert!(
-                    !parse.diagnostics.is_empty(),
-                    "{} must fail with {code} but parsed clean",
+                    sibling_fails,
+                    "{} pins {code} but neither it nor a sibling fails with it",
                     f.display()
                 );
+            }
+            Some(code) => {
+                fail += 1;
                 for d in &parse.diagnostics {
                     assert_eq!(
                         d.code.as_str(),
@@ -94,14 +127,33 @@ fn corpus_parse_expectations() {
                     );
                 }
             }
-            None => {
-                pass += 1;
+            None if !parse.diagnostics.is_empty() => {
+                // The mirror of the member-sibling case: a bare MEMBER
+                // file (no directives, D59) may be deliberately
+                // unparseable when a sibling entry pins its failure —
+                // the broken_sibling witness itself.
+                member_fail += 1;
+                let dir = f.parent().expect("corpus file has a directory");
+                let mut sibling_files = Vec::new();
+                collect_flat(dir, &mut sibling_files);
+                let pinned = sibling_files.iter().any(|sib| {
+                    if sib == f {
+                        return false;
+                    }
+                    let src = std::fs::read_to_string(sib).unwrap_or_default();
+                    expected_parse_failure(&src).is_some_and(|code| {
+                        parse.diagnostics.iter().any(|d| d.code.as_str() == code)
+                    })
+                });
                 assert!(
-                    parse.diagnostics.is_empty(),
-                    "{} must parse clean; got {:?}",
+                    pinned,
+                    "{} fails to parse and no sibling entry pins it: {:?}",
                     f.display(),
                     parse.diagnostics
                 );
+            }
+            None => {
+                pass += 1;
                 assert_eq!(
                     count_error_nodes(&parse.root),
                     0,
@@ -117,9 +169,15 @@ fn corpus_parse_expectations() {
             }
         }
     }
-    // The ledger: 6 syntax-tier counter-examples exist today
+    // The ledger: 6 own-file syntax-tier counter-examples exist today
     // (E0001, E0002, E0006, E0008, E0210, and s88's E0201 bare `..` —
-    // wolf-lang#88); everything else must pass.
+    // wolf-lang#88), plus 1 member-sibling case (s124's
+    // broken_sibling, D59); everything else must pass.
     assert_eq!(fail, 6, "syntax-tier fail-file count drifted");
+    assert_eq!(
+        member_fail, 2,
+        "member-sibling fail-file count drifted (the broken_sibling \
+         entry + its deliberately unparseable member)"
+    );
     assert!(pass > 40, "expected the full corpus, saw {pass} pass files");
 }

@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: there is no module named `tools` to import
+ --> mem:///main.lu:1:5
+  |
+1 | use tools
+  |     ^^^^^ cannot be resolved
+  |
+  = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+    one (D32), and `std.…` or a package alias also resolves here.

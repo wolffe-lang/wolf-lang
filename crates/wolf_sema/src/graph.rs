@@ -7,6 +7,15 @@
 //! only when a `use` names them — so unrelated sibling directories cost
 //! nothing and cannot poison a compilation.
 //!
+//! Membership is the default (D59, s124): a plain `.lu` file joins its
+//! directory's module with no marker at all. A file opts *out* by
+//! declaring itself a **standalone entry** — its own compilation root —
+//! with `//! member: false`, with the corpus entry pair (`//! check:` +
+//! `//! phase:`, `[conf.directive.standalone]`), or by announcing
+//! script mode (a `#!` line or `pkg { … }` frontmatter, s53). Excluded
+//! files are remembered per module so diagnostics can explain a name
+//! that *would* resolve if the file had joined.
+//!
 //! This pass (pass A of s12's two-pass design) parses each loaded file,
 //! collects the per-module item table (duplicate definitions report
 //! [`wolf_diag::codes::E0302`] here, with both spans), resolves every
@@ -46,10 +55,14 @@ pub trait ModuleLoader {
         "pkg".to_string()
     }
 
-    /// The files of the module at directory path `path` (`[]` is the
-    /// package root), sorted by file name, or `None` if no such module
-    /// exists. Called at most once per path.
-    fn load_module(&mut self, path: &[String]) -> Option<Vec<RawFile>>;
+    /// The module at directory path `path` (`[]` is the package root):
+    /// its member files sorted by name, plus any standalone-entry
+    /// files the membership rule excluded (D59). `None` means the
+    /// loader has no such directory at all; a directory that exists
+    /// but contributes no members returns `Some` with empty `files`,
+    /// so the caller can say *why* no module formed. Called at most
+    /// once per path.
+    fn load_module(&mut self, path: &[String]) -> Option<LoadedModule>;
 
     /// Candidate first-segment module names under the root — suggestion
     /// fodder for unresolved imports, nothing more.
@@ -73,22 +86,116 @@ pub trait ModuleLoader {
     }
 }
 
-/// A file-participation predicate for [`DiskLoader`]: given a file's
-/// bytes, does it join the compilation? The conform harness admits only
-/// files whose header carries `member: true`.
-pub type FileFilter<'a> = Box<dyn Fn(&[u8]) -> bool + 'a>;
+/// Why a file is a *standalone entry* — its own compilation root,
+/// never a member of its directory's module (D59, s124;
+/// `[conf.directive.standalone]`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum StandaloneMark {
+    /// The header says `//! member: false`.
+    MemberFalse,
+    /// The header carries both `//! check:` and `//! phase:` — the
+    /// corpus entry pair (`[conf.directive.member]`): a conform-run
+    /// case that is its own program.
+    DirectivePair,
+    /// The file announces script mode (s53): a leading `#!` line or a
+    /// `pkg { … }` frontmatter block in the `//!` header. A script is a
+    /// single-file package; its state never touches its directory.
+    Script,
+    /// The file name ends `_test.lu` — the s39 test-discovery pattern.
+    /// Each discovered test file is its own program (`wolf test` runs
+    /// them one by one), so test files never merge with each other or
+    /// with the application module beside them.
+    TestFile,
+}
 
-/// Disk-backed loader. `from_entry` implements conform-run-style
-/// single-entry compilation: the package root is the entry file's
-/// directory, the entry's own directory is the root module, and sibling
-/// subdirectories are child modules. The `filter` decides which
-/// non-entry files participate (the conform harness admits only files
-/// marked `member: true`); `from_dir` takes every `.lu` file.
+impl StandaloneMark {
+    /// The marker as a user would spell it (diagnostic fodder).
+    pub fn describe(self) -> &'static str {
+        match self {
+            StandaloneMark::MemberFalse => "`//! member: false`",
+            StandaloneMark::DirectivePair => "a `//! check:` + `//! phase:` directive pair",
+            StandaloneMark::Script => {
+                "a script announcement (`#!` line or `pkg { … }` frontmatter)"
+            }
+            StandaloneMark::TestFile => "a `_test.lu` name (the test-discovery pattern)",
+        }
+    }
+}
+
+/// Module-formation verdict for one file (D59): `None` means the file
+/// is a member of its directory's module — the default — and
+/// `Some(mark)` names why it is a standalone entry instead.
+///
+/// An explicit `member:` key always decides. Otherwise a `_test.lu`
+/// name, a script announcement, or the corpus entry pair marks the
+/// file standalone, and everything else — including a file with no
+/// header at all — is a member (directory = module, D32). `name` is
+/// the base file name (`foo_test.lu`), not a path.
+pub fn standalone_mark(name: &str, src: &[u8]) -> Option<StandaloneMark> {
+    let text = String::from_utf8_lossy(src);
+    let mut lines = text.lines().peekable();
+    let is_script_line = lines.peek().is_some_and(|l| l.starts_with("#!"));
+    if is_script_line {
+        lines.next();
+    }
+    let mut member: Option<bool> = None;
+    let mut saw_check = false;
+    let mut saw_phase = false;
+    let mut saw_frontmatter = false;
+    for line in lines {
+        let Some(rest) = line.trim_start().strip_prefix("//!") else {
+            break;
+        };
+        let rest = rest.trim();
+        if let Some(v) = rest.strip_prefix("member:") {
+            member = Some(v.trim() == "true");
+        } else if rest.starts_with("check:") {
+            saw_check = true;
+        } else if rest.starts_with("phase:") {
+            saw_phase = true;
+        } else if rest.starts_with("pkg {") || rest.starts_with("pkg{") {
+            // The script frontmatter's opening line (s53). A cheap
+            // syntactic echo of `wolf_pkg::script::find` — sema cannot
+            // depend on wolf_pkg (crate direction), and membership only
+            // needs the announcement, not the manifest.
+            saw_frontmatter = true;
+        }
+    }
+    match member {
+        Some(true) => None,
+        Some(false) => Some(StandaloneMark::MemberFalse),
+        None if is_script_line || saw_frontmatter => Some(StandaloneMark::Script),
+        None if saw_check && saw_phase => Some(StandaloneMark::DirectivePair),
+        None if name.ends_with("_test.lu") => Some(StandaloneMark::TestFile),
+        None => None,
+    }
+}
+
+/// `standalone_mark(name, src).is_some()` — the predicate form.
+pub fn is_standalone_entry(name: &str, src: &[u8]) -> bool {
+    standalone_mark(name, src).is_some()
+}
+
+/// One loaded module as a loader hands it over: the files that form
+/// the module, plus the sibling files a standalone-entry header
+/// excluded (kept for diagnostics — a name that *would* resolve).
+#[derive(Debug, Default)]
+pub struct LoadedModule {
+    pub files: Vec<RawFile>,
+    pub excluded: Vec<RawFile>,
+}
+
+/// Disk-backed loader. `from_entry` implements single-entry
+/// compilation: the package root is the entry file's directory, the
+/// entry's own directory is the root module, and sibling
+/// subdirectories are child modules. Membership follows
+/// [`standalone_mark`] (D59): every `.lu` file joins its directory's
+/// module unless it declares itself a standalone entry; the named
+/// entry always joins the root module.
 pub struct DiskLoader<'a> {
     root: PathBuf,
     entry: Option<PathBuf>,
     sm: &'a mut SourceMap,
-    filter: FileFilter<'a>,
     /// The std tree's root directory (F-0001): `use std.X` reads
     /// `<std_root>/X/` — the tree is the namespace (D32). `None`
     /// keeps the prelude-stub `std`.
@@ -101,7 +208,7 @@ pub struct DiskLoader<'a> {
 impl<'a> DiskLoader<'a> {
     /// Entry-file mode. Returns `None` when `entry` has no parent
     /// directory or is not a file.
-    pub fn from_entry(entry: &Path, sm: &'a mut SourceMap, filter: FileFilter<'a>) -> Option<Self> {
+    pub fn from_entry(entry: &Path, sm: &'a mut SourceMap) -> Option<Self> {
         if !entry.is_file() {
             return None;
         }
@@ -110,20 +217,18 @@ impl<'a> DiskLoader<'a> {
             root,
             entry: Some(entry.to_path_buf()),
             sm,
-            filter,
             std_root: None,
             dep_roots: std::collections::BTreeMap::new(),
         })
     }
 
-    /// Whole-directory mode (`wolf interface <dir>`): every `.lu` file
-    /// participates.
+    /// Whole-directory mode (`wolf interface <dir>`): same membership
+    /// rule (D59), with no named entry.
     pub fn from_dir(dir: &Path, sm: &'a mut SourceMap) -> Self {
         DiskLoader {
             root: dir.to_path_buf(),
             entry: None,
             sm,
-            filter: Box::new(|_| true),
             std_root: None,
             dep_roots: std::collections::BTreeMap::new(),
         }
@@ -150,7 +255,7 @@ impl<'a> DiskLoader<'a> {
 }
 
 impl ModuleLoader for DiskLoader<'_> {
-    fn load_module(&mut self, path: &[String]) -> Option<Vec<RawFile>> {
+    fn load_module(&mut self, path: &[String]) -> Option<LoadedModule> {
         // A `std`-prefixed path reads from the std root (F-0001):
         // `std.X` is `<std_root>/X/`. Every `.lu` file of a std module
         // participates (a std tree is a whole package, not a conform
@@ -183,13 +288,22 @@ impl ModuleLoader for DiskLoader<'_> {
             .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "lu"))
             .collect();
         names.sort();
-        let mut out = Vec::new();
+        let mut out = LoadedModule::default();
         for p in names {
             let src = std::fs::read(&p).ok()?;
             let is_entry = self.entry.as_deref() == Some(p.as_path());
-            if !is_std && dep.is_none() && !is_entry && !(self.filter)(&src) {
-                continue;
-            }
+            // Membership (D59): the named entry always joins its own
+            // module; a std or dep tree is a whole package (every file
+            // participates); otherwise a standalone-entry header opts
+            // the file out — remembered, so diagnostics can explain.
+            let base_name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let excluded = !is_std
+                && dep.is_none()
+                && !is_entry
+                && standalone_mark(&base_name, &src).is_some();
             let file = self.sm.intern(&p);
             let base = || {
                 p.file_name()
@@ -211,9 +325,14 @@ impl ModuleLoader for DiskLoader<'_> {
             } else {
                 p.display().to_string().replace('\\', "/")
             };
-            out.push(RawFile { file, display, src });
+            let raw = RawFile { file, display, src };
+            if excluded {
+                out.excluded.push(raw);
+            } else {
+                out.files.push(raw);
+            }
         }
-        if out.is_empty() { None } else { Some(out) }
+        Some(out)
     }
 
     fn root_module_names(&mut self) -> Vec<String> {
@@ -253,10 +372,19 @@ impl ModuleLoader for DiskLoader<'_> {
 
 /// In-memory loader for tests (and, later, the resident compiler): a
 /// map from module path to named sources. Owns its [`SourceMap`].
+///
+/// The caller decides participation explicitly — [`add_file`]
+/// (Self::add_file) adds a member, [`add_standalone_file`]
+/// (Self::add_standalone_file) adds an excluded standalone entry —
+/// so in-memory tests never depend on header sniffing.
+/// One [`MemoryLoader`] file: name, bytes, and whether it is a
+/// standalone entry (excluded from the module, D59).
+type MemFile = (String, Vec<u8>, bool);
+
 #[derive(Default)]
 pub struct MemoryLoader {
     package: String,
-    modules: BTreeMap<Vec<String>, Vec<(String, Vec<u8>)>>,
+    modules: BTreeMap<Vec<String>, Vec<MemFile>>,
     sm: SourceMap,
     /// Set by [`add_std_file`](Self::add_std_file): the loader serves
     /// a real std tree, so `use std.…` skips the prelude stub.
@@ -277,7 +405,17 @@ impl MemoryLoader {
         self.modules
             .entry(module.iter().map(|s| s.to_string()).collect())
             .or_default()
-            .push((name.to_string(), src.as_bytes().to_vec()));
+            .push((name.to_string(), src.as_bytes().to_vec(), false));
+    }
+
+    /// Add one *standalone entry* to the directory at `module` (D59):
+    /// the file is excluded from the module — remembered only so the
+    /// E0301 machinery can explain a name that would resolve.
+    pub fn add_standalone_file(&mut self, module: &[&str], name: &str, src: &str) {
+        self.modules
+            .entry(module.iter().map(|s| s.to_string()).collect())
+            .or_default()
+            .push((name.to_string(), src.as_bytes().to_vec(), true));
     }
 
     /// Add one file to the std module `std.<module…>` and mark the
@@ -296,20 +434,25 @@ impl ModuleLoader for MemoryLoader {
         self.package.clone()
     }
 
-    fn load_module(&mut self, path: &[String]) -> Option<Vec<RawFile>> {
+    fn load_module(&mut self, path: &[String]) -> Option<LoadedModule> {
         let mut files = self.modules.get(path)?.clone();
         files.sort_by(|a, b| a.0.cmp(&b.0));
-        let mut out = Vec::new();
-        for (name, src) in files {
+        let mut out = LoadedModule::default();
+        for (name, src, standalone) in files {
             let virt = format!("mem://{}/{name}", path.join("/"));
             let file = self.sm.intern(Path::new(&virt));
-            out.push(RawFile {
+            let raw = RawFile {
                 file,
                 display: virt,
                 src,
-            });
+            };
+            if standalone {
+                out.excluded.push(raw);
+            } else {
+                out.files.push(raw);
+            }
         }
-        if out.is_empty() { None } else { Some(out) }
+        Some(out)
     }
 
     fn root_module_names(&mut self) -> Vec<String> {
@@ -528,6 +671,10 @@ pub struct ModuleData {
     /// Per file (parallel to `files`): the import bindings, in
     /// declaration order.
     pub bindings: Vec<Vec<Binding>>,
+    /// Sibling files a standalone-entry header kept out of this module
+    /// (D59). Never resolved or compiled — parsed lazily, only when an
+    /// E0301 wants to say a name *would* resolve if the file joined.
+    pub excluded: Vec<RawFile>,
 }
 
 impl ModuleData {
@@ -543,6 +690,27 @@ impl ModuleData {
     /// Dotted path for machine surfaces (interfaces); root is "".
     pub fn dotted(&self) -> String {
         self.path.join(".")
+    }
+
+    /// Does a standalone file this module *excluded* define `name` at
+    /// the top level? The teachable E0301 (D59): the name would
+    /// resolve if the file were a member. Parses the excluded sources
+    /// lazily — this runs only on a diagnostic's cold path.
+    pub fn excluded_definer(&self, name: &str) -> Option<(String, StandaloneMark)> {
+        for raw in &self.excluded {
+            let base = raw.display.rsplit('/').next().unwrap_or(&raw.display);
+            let Some(mark) = standalone_mark(base, &raw.src) else {
+                continue;
+            };
+            let parse = wolf_parse::parse_file(raw.file, &raw.src);
+            if collect_items(&parse.root, &raw.src)
+                .iter()
+                .any(|(n, ..)| n == name)
+            {
+                return Some((raw.display.clone(), mark));
+            }
+        }
+        None
     }
 }
 
@@ -578,6 +746,7 @@ pub fn load_package(
         loading: Vec::new(),
         chain: Vec::new(),
         diags: Vec::new(),
+        misses: BTreeMap::new(),
     };
     if st.load(&[]).is_none() {
         return Err("the package root has no wolf source files".to_string());
@@ -626,6 +795,18 @@ struct ChainEdge {
     span: Span,
 }
 
+/// Why a probed module path yielded no module — remembered so the
+/// E0301 can say which situation the user is in (D59, s124).
+enum MissReason {
+    /// The loader has no such directory at all.
+    NoDirectory,
+    /// The directory exists but holds no `.lu` files.
+    NoLuFiles,
+    /// The directory's `.lu` files all declared themselves standalone
+    /// entries; the display names are kept for the diagnostic.
+    AllStandalone(Vec<String>),
+}
+
 struct LoadState<'a> {
     loader: &'a mut dyn ModuleLoader,
     aliases: &'a AliasTable,
@@ -636,15 +817,36 @@ struct LoadState<'a> {
     loading: Vec<bool>,
     chain: Vec<ChainEdge>,
     diags: Vec<Diagnostic>,
+    /// Probed paths that formed no module, with the reason (so the
+    /// loader is asked at most once per path either way).
+    misses: BTreeMap<Vec<String>, MissReason>,
 }
 
 impl LoadState<'_> {
-    /// Load (or find) the module at `path`. `None` = no such module.
+    /// Load (or find) the module at `path`. `None` = no module forms
+    /// there; the reason lands in `misses` for the diagnostic.
     fn load(&mut self, path: &[String]) -> Option<usize> {
         if let Some(&i) = self.index.get(path) {
             return Some(i);
         }
-        let raw = self.loader.load_module(path)?;
+        if self.misses.contains_key(path) {
+            return None;
+        }
+        let Some(loaded) = self.loader.load_module(path) else {
+            self.misses.insert(path.to_vec(), MissReason::NoDirectory);
+            return None;
+        };
+        if loaded.files.is_empty() {
+            let reason = if loaded.excluded.is_empty() {
+                MissReason::NoLuFiles
+            } else {
+                MissReason::AllStandalone(
+                    loaded.excluded.iter().map(|r| r.display.clone()).collect(),
+                )
+            };
+            self.misses.insert(path.to_vec(), reason);
+            return None;
+        }
         let idx = self.modules.len();
         self.index.insert(path.to_vec(), idx);
         self.modules.push(ModuleData {
@@ -652,12 +854,13 @@ impl LoadState<'_> {
             files: Vec::new(),
             deps: BTreeSet::new(),
             bindings: Vec::new(),
+            excluded: loaded.excluded,
         });
         self.tables.push(ItemTable::default());
         self.loading.push(true);
         // Parse every file of the module.
         let mut file_indices = Vec::new();
-        for r in raw {
+        for r in loaded.files {
             let parse = wolf_parse::parse_file(r.file, &r.src);
             file_indices.push(self.files.len());
             self.files.push(SourceUnit { raw: r, parse });
@@ -819,6 +1022,7 @@ impl LoadState<'_> {
                     path_span,
                     &texts.join("."),
                     &std_suggestions(),
+                    None,
                 ));
                 return vec![poisoned(u, segments)];
             }
@@ -830,6 +1034,7 @@ impl LoadState<'_> {
                     path_span,
                     &texts.join("."),
                     &std_suggestions(),
+                    None,
                 ));
                 return vec![poisoned(u, segments)];
             }
@@ -877,6 +1082,7 @@ impl LoadState<'_> {
                     path_span,
                     &texts.join("."),
                     &std_suggestions(),
+                    None,
                 ));
                 vec![poisoned(u, segments)]
             }
@@ -912,7 +1118,7 @@ impl LoadState<'_> {
                 let path_span = segments.iter().fold(segments[0].1, |a, (_, b)| a.join(*b));
                 let cands = self.loader.std_module_names();
                 self.diags
-                    .push(unresolved_import(path_span, &texts.join("."), &cands));
+                    .push(unresolved_import(path_span, &texts.join("."), &cands, None));
                 return vec![poisoned(u, segments)];
             }
             let first_span = segments[0].1;
@@ -921,8 +1127,16 @@ impl LoadState<'_> {
             cands.extend(self.aliases.names().map(str::to_string));
             cands.sort();
             cands.dedup();
-            self.diags
-                .push(unresolved_import(first_span, &segments[0].0, &cands));
+            // Which situation is the user in (D59)? The directory may
+            // exist and still form no module — say so, instead of
+            // sending the reader hunting for a typo.
+            let reason = self.misses.get(&texts[..1]);
+            self.diags.push(unresolved_import(
+                first_span,
+                &segments[0].0,
+                &cands,
+                reason,
+            ));
             return vec![poisoned(u, segments)];
         };
         if target == importer {
@@ -951,7 +1165,7 @@ impl LoadState<'_> {
             if !rest.is_empty() {
                 let span = segments[0].1;
                 self.diags
-                    .push(unresolved_import(span, &texts.join("."), &[]));
+                    .push(unresolved_import(span, &texts.join("."), &[], None));
                 return vec![poisoned(u, segments)];
             }
             let mut out = Vec::new();
@@ -982,7 +1196,7 @@ impl LoadState<'_> {
             _ => {
                 let span = segments[0].1;
                 self.diags
-                    .push(unresolved_import(span, &texts.join("."), &[]));
+                    .push(unresolved_import(span, &texts.join("."), &[], None));
                 vec![poisoned(u, segments)]
             }
         }
@@ -1001,8 +1215,9 @@ impl LoadState<'_> {
         match self.tables[module].get(name) {
             None => {
                 let cands: Vec<String> = self.tables[module].names().map(str::to_string).collect();
-                self.diags
-                    .push(no_such_item(span, name, mod_name.trim_matches('`'), &cands));
+                let d = no_such_item(span, name, mod_name.trim_matches('`'), &cands);
+                let d = excluded_definer_notes(d, &self.modules[module], name);
+                self.diags.push(d);
                 BindTarget::Poisoned
             }
             Some(item) if item.vis == Vis::Private => {
@@ -1073,22 +1288,80 @@ fn suggestion_for(input: &str, cands: &[String]) -> Option<String> {
     wolf_diag::suggest::best_match(input, &refs).map(str::to_string)
 }
 
-fn unresolved_import(span: Span, path: &str, cands: &[String]) -> Diagnostic {
+fn unresolved_import(
+    span: Span,
+    path: &str,
+    cands: &[String],
+    reason: Option<&MissReason>,
+) -> Diagnostic {
     let mut d = Diagnostic::error(
         codes::E0301,
         span,
         format!("there is no module named `{path}` to import"),
     )
     .with_label("cannot be resolved");
-    if let Some(hit) = suggestion_for(path, cands) {
-        d = d.with_note(format!("did you mean `{hit}`?"));
-    } else {
-        d = d.with_note(
-            "a module is a sibling directory of the package root, `std.…`, or a \
-             package alias.",
-        );
+    match reason {
+        // The directory is there — the user's layout is right, and a
+        // typo suggestion would point them the wrong way. Explain why
+        // no module formed and what the next move is (D59).
+        Some(MissReason::AllStandalone(files)) => {
+            let shown: Vec<String> = files.iter().take(3).map(|f| format!("`{f}`")).collect();
+            let listed = if files.len() > shown.len() {
+                format!("{}, …", shown.join(", "))
+            } else {
+                shown.join(", ")
+            };
+            d = d
+                .with_note(format!(
+                    "the directory `{path}` exists, but every `.lu` file in it ({listed}) \
+                     declares itself a standalone entry — `//! member: false`, a \
+                     `//! check:` + `//! phase:` pair, or a script header — so no module \
+                     forms there"
+                ))
+                .with_note(
+                    "a directory's module is formed from the `.lu` files that do not opt \
+                     out (D32); remove the standalone marker from the files that belong \
+                     to the module",
+                );
+        }
+        Some(MissReason::NoLuFiles) => {
+            d = d.with_note(format!(
+                "the directory `{path}` exists but holds no `.lu` source files, so no \
+                 module forms there"
+            ));
+        }
+        Some(MissReason::NoDirectory) | None => {
+            if let Some(hit) = suggestion_for(path, cands) {
+                d = d.with_note(format!("did you mean `{hit}`?"));
+            } else {
+                d = d.with_note(
+                    "a module is a directory of `.lu` files: a sibling directory of the \
+                     package root forms one (D32), and `std.…` or a package alias also \
+                     resolves here.",
+                );
+            }
+        }
     }
     d
+}
+
+/// The teachable E0301 rider (D59): when the missing name is defined
+/// by a file the module *excluded* — a standalone entry — the message
+/// says so, and names the marker, instead of reading as a typo hunt.
+pub(crate) fn excluded_definer_notes(d: Diagnostic, module: &ModuleData, name: &str) -> Diagnostic {
+    match module.excluded_definer(name) {
+        Some((display, mark)) => d
+            .with_note(format!(
+                "`{display}` defines `{name}`, but that file carries {} — a standalone \
+                 program is its own compilation root and is not part of this module",
+                mark.describe()
+            ))
+            .with_note(
+                "every plain `.lu` file in a directory is one module (D32); remove the \
+                 standalone marker to let the file join",
+            ),
+        None => d,
+    }
 }
 
 fn no_such_item(span: Span, name: &str, module: &str, cands: &[String]) -> Diagnostic {
