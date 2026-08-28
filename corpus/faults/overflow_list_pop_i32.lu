@@ -1,0 +1,22 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: arith.checked, mem.ub.defined
+//!
+//! X3 at pop provenance (#152): an element popped OUT of a `List[i32]`
+//! still carries the checked-op wrapper into arithmetic — the product
+//! leaves `i32`'s range and traps on every lane. The sibling of
+//! `overflow_elem_read.lu` (indexing provenance), at the exact shape
+//! the #152 ledger row measured; its `List[int]` twin does NOT trap
+//! because `int` is 64-bit and the product fits
+//! (`typecheck/numlit_list_element_width.lu`).
+
+fn main() -> !int {
+    var xs = List[i32]()
+    (mut xs).push(2147483647)
+    (mut xs).push(2)
+    let a = (mut xs).pop() else 0
+    let b = (mut xs).pop() else 0
+    let m = a * b
+    print("{m}")   // unreachable: the multiply traps
+    0
+}
