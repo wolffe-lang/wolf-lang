@@ -132,10 +132,67 @@ conversion, and its numeric arms are closed and total:
   explicit unsafe-tier operation, never this `as` cast's silent default —
   the same posture as saturation on the float row.
 
+## §4 The `char` type `[type.char]`
+
+- `[type.char]` **`char` is a Unicode scalar value** (D57, s121): its
+  domain is `0..=0x10FFFF` **excluding** the surrogate gap
+  `0xD800..=0xDFFF` — exactly the set of values UTF-8 can encode. Not a
+  byte (`'é'` is one `char`, two bytes — the byte tier stays
+  `bytes()`), not a grapheme (an accented letter typed as base +
+  combining accent is two `char`s even when it renders as one glyph),
+  not a UTF-16 code unit (no wolf value holds a surrogate, ever — the
+  same D24 invariant that makes every `str` valid UTF-8). **Layout: 4
+  bytes, alignment 4** — an `i32`-shaped scalar at every tier
+  (`List[char]` strides by 4; the value crosses the runtime's C seam
+  widened to `i64` like every sub-word scalar). The representation
+  invariant — every `char` value IS a scalar — means the i32's sign
+  bit is never set, so signed machine compares are scalar-value order.
+  `char` is **not** an integer type: no arithmetic, no numeric-literal
+  adoption (`let c: char = 65` is a type error; write `65 as char`),
+  no indexing with one. The only numeric bridges are the two casts of
+  `[type.char.cast]`.
+
+- `[type.char.lit]` A `char` literal is one scalar between single
+  quotes — `'a'`, `'é'`, `'🐺'` — with the string escape set plus
+  `\'`: `\n \t \r \\ \' \" \0 \xNN \u{1–6 hex}` (grammar:
+  `[gram.lex.char]`). A `\x`/`\u` escape naming a non-scalar (the
+  surrogate gap, or above `0x10FFFF`) is refused at the literal
+  (E0110): the value a `char` cannot hold is the value its literal
+  cannot spell — the same domain the trapping cast enforces at run
+  time. Distinct spellings of one scalar are one value: `'\n'` equals
+  `'\u{A}'`.
+
+- `[type.char.order]` **`char` orders by scalar value.** Equality and
+  the comparisons (`== != < <= > >=`) are total and locale-free —
+  scalar order, not collation and not glyph order (`'z' < 'é'` because
+  `0x7A < 0xE9`). The same temperament as `[mem.str.order]`'s byte
+  order: cheap, deterministic, honest about not being a collator.
+
+- `[type.char.cast]` **`char as int` is total; `int as char` traps on
+  a non-scalar.** Every scalar fits an `int`, so the outbound cast has
+  no failure case (`'a' as int` is `97`). The inbound cast is D56's
+  trapping family (`trap(overflow)`, `[conf.trap.set]`): a value that
+  is **negative**, **above `0x10FFFF`**, or **inside the surrogate gap
+  `0xD800..=0xDFFF`** names no character, and admitting it would mint
+  a `char` that cannot be UTF-8-encoded — un-writable into any `str`
+  without breaking D24. The gap edges are legal: `0xD7FF as char` and
+  `0xE000 as char` both convert. Other widths cast through `int`; a
+  checkable conversion (a `from_int -> char ! {domain}` shape) is
+  std's to name over this primitive, never a second cast semantics.
+
+- `[type.char.interp]` **`{c}` prints the character**, never the
+  code-point number: the hole renders as the scalar's UTF-8 encoding,
+  and a format spec on a char hole takes the `str` spec surface
+  (fill/align/width — width in bytes, D25); numeric specs (`{c:x}`)
+  are the E0413 mismatch they look like. The number is spelled, not
+  ambient: `{c as int}`.
+
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
 beyond what literal adoption needs) nor the general narrowing integer
 cast's range-check question (s27's, still open — the wrapping row above
 is the value-preservation answer only for leaving the wrapping domain) —
 D54 is the literal story, D56 the wrapping escape, and the cast's numeric
-directions, no more.
+directions, no more. `char`'s method surface (classification,
+case-mapping, the checkable conversion) is std's tier over the
+primitive (D57), not this chapter's.

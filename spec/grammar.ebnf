@@ -11,6 +11,9 @@ STR_PART   ::= STR_TEXT | '{{' | '}}' | INTERP
 INTERP     ::= '{' expr FORMAT_SPEC? '}'
 FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
 
+CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
+CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | '\u{' HEX_DIGIT+ '}'
+
 unit  ::= inner_doc* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
@@ -110,7 +113,7 @@ primary ::= literal | path | struct_lit | '(' expr (',' expr)* ','? ')' | block
           | asm_expr | borrow_expr
 struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}'
 field_init ::= IDENT ':' expr | IDENT
-literal ::= INT | FLOAT | STRING | MULTILINE_STRING | RAW_STRING
+literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
           | GENERALIZED_STRING | 'true' | 'false'
 
 if_expr    ::= 'if' expr block ('else' (if_expr | block))?
