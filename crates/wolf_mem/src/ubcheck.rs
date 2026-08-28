@@ -2821,6 +2821,31 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Shared(cell)))
             }
             Some(SyntaxKind::Minus) => {
+                // The direct `-<int literal>` spelling decodes as the
+                // NEGATED value in one step (#151, mirroring WIR
+                // lowering's rule): `i64::MIN` has no positive half,
+                // so evaluating the literal first could only refuse.
+                if operand.kind == SyntaxKind::LiteralExpr
+                    && !matches!(
+                        self.expr_ty(operand.span),
+                        Some(TyKind::Prim(Prim::F64 | Prim::F32))
+                    )
+                    && self.wrapping_width(operand.span).is_none()
+                {
+                    let text = self.text(operand.span);
+                    let plain = !text.starts_with('\'') && text != "true" && text != "false";
+                    if plain && let Some(bits) = parse_uint_literal(&text) {
+                        let neg = -i128::from(bits);
+                        return match i64::try_from(neg) {
+                            Ok(m) => Ok(Flow::Val(Value::Int(m))),
+                            // Below i64::MIN: sema's E0415 owns this; a
+                            // stray arrival refuses, never aborts.
+                            Err(_) => {
+                                self.refuse("this literal shape in checked execution", e.span)
+                            }
+                        };
+                    }
+                }
                 let v = val!(self.eval(operand));
                 match v {
                     Value::Int(n) => match n.checked_neg() {

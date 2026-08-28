@@ -6245,7 +6245,68 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(n) = parse_int_literal(&text) else {
             return Err(refuse("this literal shape in WIR lowering", e.span));
         };
+        // Backstop (#151): sema's E0415 owns the rejection, but an
+        // unfitting payload must never reach the verifier as an
+        // `iconst` — that is the [const-range] ICE. A refusal here is
+        // a bug upstream, not a user surface.
+        if let Some((lo, hi)) = self.b.module.types.int_bounds(wty)
+            && (i128::from(n) < lo || i128::from(n) > hi)
+        {
+            return Err(refuse("a literal beyond its type's width", e.span));
+        }
         Ok(Flow::Val(Some(self.b.iconst(wty, n))))
+    }
+
+    /// The direct `-<int literal>` spelling emits the NEGATED constant
+    /// in one step (#151). Lowering the positive half first minted an
+    /// `iconst` the type cannot hold — dead after the negation fold,
+    /// but the verifier's [const-range] reads every instruction — and
+    /// `i64::MIN` has no positive spelling at all, so the two-step
+    /// route could never build it. `Ok(None)` hands anything that is
+    /// not a signed-integer literal back to the general path.
+    fn neg_literal_direct(&mut self, lit: &'t GreenNode, span: Span) -> R<Option<Value>> {
+        let Some(tok) = lit.tokens().next() else {
+            return Ok(None);
+        };
+        if tok.kind != SyntaxKind::Int {
+            return Ok(None);
+        }
+        let Some(sema_ty) = self.expr_sema_ty(lit.span) else {
+            return Ok(None);
+        };
+        let Some(wty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            sema_ty,
+            lit.span,
+        )?
+        else {
+            return Ok(None);
+        };
+        // Floats (an adopted integer literal) keep `Fneg`; unsigned
+        // keeps its own bit-pattern rules.
+        if self.b.module.types.int_bits(wty).is_none() || sema_unsigned(self.table, sema_ty) {
+            return Ok(None);
+        }
+        let text = self.text(lit.span);
+        let Some(bits) = parse_uint_literal(&text) else {
+            return Err(refuse("this literal shape in WIR lowering", lit.span));
+        };
+        let neg = -i128::from(bits);
+        let (lo, hi) = self
+            .b
+            .module
+            .types
+            .int_bounds(wty)
+            .expect("signed integers have bounds");
+        if neg < lo || neg > hi {
+            // Sema's E0415 owns this rejection; reaching here is a bug
+            // upstream, answered with a refusal, never an abort.
+            return Err(refuse("a literal beyond its type's width", span));
+        }
+        self.b.stats.fold += 1;
+        Ok(Some(self.b.iconst(wty, neg as i64)))
     }
 
     fn lower_prefix(&mut self, e: &'t GreenNode) -> R<Flow> {
@@ -6255,6 +6316,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         match d.op().map(|t| t.kind) {
             Some(SyntaxKind::Minus) => {
+                if operand.kind == SyntaxKind::LiteralExpr
+                    && let Some(v) = self.neg_literal_direct(operand, e.span)?
+                {
+                    return Ok(Flow::Val(Some(v)));
+                }
                 let v = flow_val!(self.lower_expr(operand));
                 let Some(v) = v else {
                     return Err(refuse("negation of a valueless expression", e.span));

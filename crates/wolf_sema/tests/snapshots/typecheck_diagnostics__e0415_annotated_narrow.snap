@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0415]: `40000` does not fit `i16`
+ --> mem:///main.lu:2:18
+  |
+2 |     let a: i16 = 40000
+  |                  ^^^^^ i16 holds -32768..=32767
+  |
+  = note: an integer literal takes its type from context, and a binding without one defaults to
+    `i32` ([type.numlit.default]) — annotate a type that holds the value (`let n: i64 = …`)
