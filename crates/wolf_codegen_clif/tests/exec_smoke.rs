@@ -489,7 +489,7 @@ fn mangled_symbol_characters_survive_object_emission() {
         format!("{deco}main"),
     ] {
         assert!(
-            syms.iter().any(|s| *s == want),
+            syms.contains(&want),
             "`{want}` missing from the emitted symbol table: {syms:?}"
         );
     }
