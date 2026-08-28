@@ -229,8 +229,9 @@ pub use check::{
 pub use coerce::Coercion;
 pub use ctfe::{Budget, CtfeStats, Engine, Fold, ValueArena, ValueKind};
 pub use graph::{
-    AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, MemoryLoader, ModuleData,
-    ModuleLoader, Package, RawFile, SourceUnit, Vis, load_package,
+    AliasTable, BindTarget, Binding, DiskLoader, ItemKind, ItemTable, LoadedModule, MemoryLoader,
+    ModuleData, ModuleLoader, Package, RawFile, SourceUnit, StandaloneMark, Vis,
+    is_standalone_entry, load_package, standalone_mark,
 };
 pub use interface::{Interface, build_interfaces, decode, encode, item_signature, pretty};
 pub use lints::{AllowScan, scan_allows};

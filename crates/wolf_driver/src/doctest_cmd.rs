@@ -157,11 +157,7 @@ pub fn run(
     // a dependency under its own module alias.
     let mut sm = wolf_span::SourceMap::new();
     let mut sources = Sources::new();
-    let mut loader = match wolf_sema::DiskLoader::from_entry(
-        &entry,
-        &mut sm,
-        Box::new(|src: &[u8]| crate::is_member_file(src)),
-    ) {
+    let mut loader = match wolf_sema::DiskLoader::from_entry(&entry, &mut sm) {
         Some(l) => l,
         None => return Outcome::Unsupported("cannot open the staged doctest".to_string()),
     };

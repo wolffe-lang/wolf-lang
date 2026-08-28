@@ -510,6 +510,10 @@ impl Resolver<'_> {
                 Applicability::Maybe,
             ));
         }
+        // The teachable case (D59): a sibling file defines the name
+        // but opted out of the module — say so instead of leaving the
+        // reader hunting for a typo.
+        let d = crate::graph::excluded_definer_notes(d, &self.pkg.modules[self.module], name);
         self.sink.push(d);
     }
 
@@ -556,8 +560,10 @@ impl Resolver<'_> {
                 None => {
                     let cands: Vec<String> =
                         self.pkg.tables[*midx].names().map(str::to_string).collect();
-                    self.sink
-                        .push(graph_no_such_item(span, member, ns_name, &cands));
+                    let d = graph_no_such_item(span, member, ns_name, &cands);
+                    let d =
+                        crate::graph::excluded_definer_notes(d, &self.pkg.modules[*midx], member);
+                    self.sink.push(d);
                 }
                 Some(item) if item.vis == Vis::Private => {
                     let mod_name = self.pkg.modules[*midx].display_name();

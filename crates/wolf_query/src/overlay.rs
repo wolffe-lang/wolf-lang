@@ -65,29 +65,14 @@ pub(crate) fn normalize(path: &Path) -> PathBuf {
     out
 }
 
-/// Does this file's `//!` header carry `member: true`? Mirrors the
-/// driver's participation rule byte-for-byte (the one-truth invariant,
-/// contract clause 5): non-entry files join a module only when marked.
-pub(crate) fn is_member_file(src: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(src);
-    for line in text.lines() {
-        let Some(rest) = line.trim_start().strip_prefix("//!") else {
-            break;
-        };
-        if let Some(v) = rest.trim().strip_prefix("member:")
-            && v.trim() == "true"
-        {
-            return true;
-        }
-    }
-    false
-}
-
 /// `wolf_sema::DiskLoader`'s single-entry semantics, reading through an
 /// [`OverlayStore`]: root = the entry file's directory, subdirectories
-/// are child modules loaded on import, non-entry files pass the
-/// `member: true` filter. Overlay-only files participate too — an
-/// unsaved new file is real to the editor and therefore to us.
+/// are child modules loaded on import, and membership follows
+/// `wolf_sema::standalone_mark` (D59) — plain files join, standalone
+/// entries stay out — mirroring the driver's participation rule
+/// byte-for-byte (the one-truth invariant, contract clause 5).
+/// Overlay-only files participate too — an unsaved new file is real to
+/// the editor and therefore to us.
 pub(crate) struct OverlayLoader<'a> {
     root: PathBuf,
     entry: PathBuf,
@@ -115,7 +100,7 @@ impl<'a> OverlayLoader<'a> {
 }
 
 impl ModuleLoader for OverlayLoader<'_> {
-    fn load_module(&mut self, path: &[String]) -> Option<Vec<RawFile>> {
+    fn load_module(&mut self, path: &[String]) -> Option<wolf_sema::LoadedModule> {
         let mut dir = self.root.clone();
         for seg in path {
             dir.push(seg);
@@ -136,23 +121,35 @@ impl ModuleLoader for OverlayLoader<'_> {
             }
         }
         names.sort();
-        let mut out = Vec::new();
+        let mut out = wolf_sema::LoadedModule::default();
         for p in names {
             let Some(src) = self.overlays.read(&p) else {
                 continue;
             };
             let is_entry = p == self.entry;
-            if !is_entry && !is_member_file(&src) {
-                continue;
-            }
+            let base = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let excluded = !is_entry && wolf_sema::is_standalone_entry(&base, &src);
             let file = self.sm.intern(&p);
-            out.push(RawFile {
+            let raw = RawFile {
                 file,
                 display: p.display().to_string().replace('\\', "/"),
                 src: src.to_vec(),
-            });
+            };
+            if excluded {
+                out.excluded.push(raw);
+            } else {
+                out.files.push(raw);
+            }
         }
-        if out.is_empty() { None } else { Some(out) }
+        // No directory and no overlays either: the module path names
+        // nothing at all (DiskLoader's `None` case).
+        if out.files.is_empty() && out.excluded.is_empty() && !dir.is_dir() {
+            return None;
+        }
+        Some(out)
     }
 
     fn root_module_names(&mut self) -> Vec<String> {

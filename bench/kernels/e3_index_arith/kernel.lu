@@ -1,3 +1,7 @@
+//! member: false
+// ^ this file and `wrapping.lu` are two standalone programs in one
+// directory; without the opt-out, directory = module (D59) would
+// merge their `main`s into one E0302.
 // e3-index-arith (family E) — SCALED index arithmetic against an opaque
 // bound, the shape s42's loop-versioning backstop exists for. `walk` is
 // self-recursive so it never inlines and `n` stays a runtime value:

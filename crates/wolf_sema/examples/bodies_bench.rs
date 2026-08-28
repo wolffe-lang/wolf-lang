@@ -16,23 +16,6 @@ use std::time::Instant;
 
 use wolf_sema::{AliasTable, DiskLoader, Resolution, resolve_package_with, typecheck_package_with};
 
-/// Corpus-header check: is this a `member: true` file (compiled through
-/// its entry, never an entry itself)?
-fn is_member_file(src: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(src);
-    for line in text.lines() {
-        let Some(rest) = line.trim_start().strip_prefix("//!") else {
-            break;
-        };
-        if let Some(v) = rest.trim().strip_prefix("member:")
-            && v.trim() == "true"
-        {
-            return true;
-        }
-    }
-    false
-}
-
 fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -43,7 +26,12 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) {
         if p.is_dir() {
             collect_entries(&p, out);
         } else if p.extension().is_some_and(|e| e == "lu")
-            && std::fs::read(&p).is_ok_and(|src| !is_member_file(&src))
+            // Corpus entries are standalone (the `check:` + `phase:`
+            // pair, D59); member files compile through their entry.
+            && std::fs::read(&p).is_ok_and(|src| wolf_sema::is_standalone_entry(
+                &p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                &src,
+            ))
         {
             out.push(p);
         }
@@ -64,9 +52,7 @@ fn main() {
     let mut packages: Vec<Resolution> = Vec::new();
     for entry in &entries {
         let mut sm = wolf_span::SourceMap::new();
-        let Some(mut loader) =
-            DiskLoader::from_entry(entry, &mut sm, Box::new(|src: &[u8]| is_member_file(src)))
-        else {
+        let Some(mut loader) = DiskLoader::from_entry(entry, &mut sm) else {
             continue;
         };
         let Ok(res) = resolve_package_with(&mut loader, &AliasTable::default(), false) else {

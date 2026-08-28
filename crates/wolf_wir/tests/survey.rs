@@ -20,26 +20,9 @@ use wolf_sema::{AliasTable, DiskLoader, Resolution, resolve_package_with, typech
 
 /// Mirrors `lower_corpus.rs` (integration tests cannot share a
 /// harness module).
-fn is_member_file(src: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(src);
-    for line in text.lines() {
-        let Some(rest) = line.trim_start().strip_prefix("//!") else {
-            break;
-        };
-        if let Some(v) = rest.trim().strip_prefix("member:")
-            && v.trim() == "true"
-        {
-            return true;
-        }
-    }
-    false
-}
-
 fn resolve(entry: &Path) -> Resolution {
     let mut sm = wolf_span::SourceMap::new();
-    let mut loader =
-        DiskLoader::from_entry(entry, &mut sm, Box::new(|src: &[u8]| is_member_file(src)))
-            .expect("entry loads");
+    let mut loader = DiskLoader::from_entry(entry, &mut sm).expect("entry loads");
     let res = resolve_package_with(&mut loader, &AliasTable::default(), true).expect("resolves");
     assert!(
         !res.diagnostics

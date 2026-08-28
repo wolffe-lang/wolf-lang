@@ -328,23 +328,6 @@ fn explain(args: &[String]) {
     println!("{}", info.explanation.trim());
 }
 
-/// Does this file's `//!` header carry `member: true` (s12: it belongs
-/// to a multi-file module case and is compiled via its entry file)?
-fn is_member_file(src: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(src);
-    for line in text.lines() {
-        let Some(rest) = line.trim_start().strip_prefix("//!") else {
-            break;
-        };
-        if let Some(v) = rest.trim().strip_prefix("member:")
-            && v.trim() == "true"
-        {
-            return true;
-        }
-    }
-    false
-}
-
 /// Split the std-root flag out of a subcommand's arguments (F-0001):
 /// `--std-root <dir>` or `--std-root=<dir>` names the directory whose
 /// subdirectories back `use std.…`. Returns the remaining arguments
@@ -409,10 +392,9 @@ fn resolve_from_entry(
     let std_root = std_root
         .map(Path::to_path_buf)
         .or_else(|| project.and_then(|p| p.std_root.clone()));
-    let mut loader =
-        wolf_sema::DiskLoader::from_entry(entry, sm, Box::new(|src: &[u8]| is_member_file(src)))
-            .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
-            .with_std_root(std_root);
+    let mut loader = wolf_sema::DiskLoader::from_entry(entry, sm)
+        .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
+        .with_std_root(std_root);
     if let Some(p) = project {
         loader = loader.with_dep_roots(p.dep_roots.clone());
     }
@@ -447,16 +429,12 @@ fn interface(args: &[String]) {
     let mut sm = wolf_span::SourceMap::new();
     let mut sources = Sources::new();
     let res = if p.is_file() {
-        let mut loader = wolf_sema::DiskLoader::from_entry(
-            p,
-            &mut sm,
-            Box::new(|src: &[u8]| is_member_file(src)),
-        )
-        .unwrap_or_else(|| {
-            eprintln!("wolf interface: cannot open package around {path}");
-            std::process::exit(2);
-        })
-        .with_std_root(std_root.clone());
+        let mut loader = wolf_sema::DiskLoader::from_entry(p, &mut sm)
+            .unwrap_or_else(|| {
+                eprintln!("wolf interface: cannot open package around {path}");
+                std::process::exit(2);
+            })
+            .with_std_root(std_root.clone());
         wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())
     } else if p.is_dir() {
         let mut loader =
@@ -543,16 +521,12 @@ fn audit_surface(args: &[String]) {
     let mut sm = wolf_span::SourceMap::new();
     let mut sources = Sources::new();
     let (res, root) = if p.is_file() {
-        let mut loader = wolf_sema::DiskLoader::from_entry(
-            p,
-            &mut sm,
-            Box::new(|src: &[u8]| is_member_file(src)),
-        )
-        .unwrap_or_else(|| {
-            eprintln!("wolf audit-surface: cannot open package around {path}");
-            std::process::exit(2);
-        })
-        .with_std_root(std_root.clone());
+        let mut loader = wolf_sema::DiskLoader::from_entry(p, &mut sm)
+            .unwrap_or_else(|| {
+                eprintln!("wolf audit-surface: cannot open package around {path}");
+                std::process::exit(2);
+            })
+            .with_std_root(std_root.clone());
         (
             wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()),
             p.parent().unwrap_or(Path::new(".")).to_path_buf(),
@@ -2895,11 +2869,12 @@ fn conform_run(args: &[String]) {
             } else if phase.as_deref() == Some("parse") {
                 ("parse", "pass".to_string(), all)
             } else {
-                // The resolve rung (s12): the module graph grows from
-                // the entry file's directory; sibling files participate
-                // when their header carries `member: true` (the corpus
-                // multi-file contract), sibling directories are child
-                // modules loaded on import.
+                // The resolve rung (s12/D59): the module graph grows
+                // from the entry file's directory; every sibling `.lu`
+                // file participates unless it declares itself a
+                // standalone entry (`member: false`, the `check:` +
+                // `phase:` pair, or a script header). Sibling
+                // directories are child modules loaded on import.
                 match resolve_from_entry(
                     Path::new(&file),
                     &mut sm,

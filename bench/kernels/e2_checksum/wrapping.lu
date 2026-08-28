@@ -1,3 +1,7 @@
+//! member: false
+// ^ this file and `kernel.lu` are two standalone programs in one
+// directory; without the opt-out, directory = module (D59) would
+// merge their `main`s into one E0302.
 // e2-checksum, WRAPPING variant (family E, X3 tracker). Identical
 // arithmetic over `wrapping[int]`; the only difference from kernel.lu is
 // that no overflow check exists.

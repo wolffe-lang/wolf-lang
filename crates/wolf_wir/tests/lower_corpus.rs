@@ -17,21 +17,6 @@ use std::path::{Path, PathBuf};
 use wolf_sema::{AliasTable, DiskLoader, Resolution, resolve_package_with, typecheck_package_with};
 use wolf_wir::{lower_package, print_module, verify_module};
 
-fn is_member_file(src: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(src);
-    for line in text.lines() {
-        let Some(rest) = line.trim_start().strip_prefix("//!") else {
-            break;
-        };
-        if let Some(v) = rest.trim().strip_prefix("member:")
-            && v.trim() == "true"
-        {
-            return true;
-        }
-    }
-    false
-}
-
 fn corpus_root() -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
     p.canonicalize().unwrap_or(p)
@@ -47,7 +32,12 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) {
         if p.is_dir() {
             collect_entries(&p, out);
         } else if p.extension().is_some_and(|e| e == "lu")
-            && std::fs::read(&p).is_ok_and(|src| !is_member_file(&src))
+            // Corpus entries are standalone files (the `check:` +
+            // `phase:` pair, D59); members compile through their entry.
+            && std::fs::read(&p).is_ok_and(|src| wolf_sema::is_standalone_entry(
+                &p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                &src,
+            ))
         {
             out.push(p);
         }
@@ -56,8 +46,7 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) {
 
 fn resolve(entry: &Path) -> Option<Resolution> {
     let mut sm = wolf_span::SourceMap::new();
-    let mut loader =
-        DiskLoader::from_entry(entry, &mut sm, Box::new(|src: &[u8]| is_member_file(src)))?;
+    let mut loader = DiskLoader::from_entry(entry, &mut sm)?;
     let res = resolve_package_with(&mut loader, &AliasTable::default(), true).ok()?;
     if res
         .diagnostics
