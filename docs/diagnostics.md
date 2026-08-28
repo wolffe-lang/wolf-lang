@@ -235,7 +235,7 @@ next declaration keyword and reports the wreck once. If the code below
 this error looks fine, trust the opener: count delimiters on the
 flagged line.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__multiline_elided.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_primary.snap, crates/wolf_parse/tests/snapshots/broken_suite__call_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/broken_suite__half_typed_fn_header.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_rparen.snap, crates/wolf_parse/tests/snapshots/broken_suite__unclosed_brace_eof.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_brace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/render__render_e0202.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__multiline_elided.snap, crates/wolf_diag/tests/snapshots/render_snapshots__multiline_primary.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__broken_sibling__entry.snap, crates/wolf_parse/tests/snapshots/broken_suite__call_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/broken_suite__half_typed_fn_header.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_rparen.snap, crates/wolf_parse/tests/snapshots/broken_suite__unclosed_brace_eof.snap, crates/wolf_parse/tests/snapshots/corpus_decls__resolve__broken_sibling__mangled.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_brace.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0202_unclosed_paren.snap, crates/wolf_parse/tests/snapshots/render__render_e0202.snap
 
 ## E0203 — expected a declaration at the top level
 
@@ -378,7 +378,7 @@ sharing a directory (scratch work, exercises), mark each with
 `//! member: false`: a standalone entry is its own compilation root
 and never merges with its siblings (D59).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__clash.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__other.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
 
 ## E0303 — modules import each other in a cycle
 
