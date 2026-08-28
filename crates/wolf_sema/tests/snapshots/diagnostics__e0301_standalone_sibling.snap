@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: nothing named `helper` is in scope
+ --> mem:///main.lu:2:13
+  |
+2 |     print("{helper()}")
+  |             ^^^^^^ not found
+  |
+  = note: `mem:///b.lu` defines `helper`, but that file carries `//! member: false` — a standalone
+    program is its own compilation root and is not part of this module
+  = note: every plain `.lu` file in a directory is one module (D32); remove the standalone marker
+    to let the file join

@@ -398,9 +398,21 @@ prelude name. Most of the time this is a typo — when a near-miss exists
 the message suggests it, and applying the suggested edit fixes the
 program. If the name lives in another module, add the import: `use
 that_module` at the top of the file, then reach it as
-`that_module.name`. Names never resolve through types here — a
-capitalized name used as an error-row tag (D30) is deferred to the type
-checker rather than reported by this pass.
+`that_module.name`.
+
+Modules form from directories (D32/D59): every plain `.lu` file joins
+its directory's module automatically, and a sibling directory with
+plain `.lu` files is importable with `use` — no marker needed. A file
+opts *out* of its module by being a standalone entry: a `//! member:
+false` header, a `//! check:` + `//! phase:` directive pair, a script
+(`#!` line or `pkg { … }` frontmatter), or a `_test.lu` name. When the
+name you asked for is defined in such a file, or an imported directory
+contains only such files, the message says so — the fix is to remove
+the standalone marker from the file that belongs to the module.
+
+Names never resolve through types here — a capitalized name used as an
+error-row tag (D30) is deferred to the type checker rather than
+reported by this pass.
 "#);
 
 code!(E0302, "the same name is defined twice in one module", r#"
@@ -412,7 +424,10 @@ can pick which to keep. Rename one of them, or delete one — file
 boundaries do not create scopes, so moving a definition to a sibling
 file changes nothing. If both definitions really are different things,
 one of them probably belongs in its own subdirectory, which *is* a new
-module.
+module — and if the two files are really two separate *programs*
+sharing a directory (scratch work, exercises), mark each with
+`//! member: false`: a standalone entry is its own compilation root
+and never merges with its siblings (D59).
 "#);
 
 code!(E0303, "modules import each other in a cycle", r#"

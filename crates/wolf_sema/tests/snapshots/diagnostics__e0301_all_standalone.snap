@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: there is no module named `tools` to import
+ --> mem:///main.lu:1:5
+  |
+1 | use tools
+  |     ^^^^^ cannot be resolved
+  |
+  = note: the directory `tools` exists, but every `.lu` file in it (`mem://tools/kit.lu`) declares
+    itself a standalone entry — `//! member: false`, a `//! check:` + `//! phase:` pair, or
+    a script header — so no module forms there
+  = note: a directory's module is formed from the `.lu` files that do not opt out (D32); remove
+    the standalone marker from the files that belong to the module
