@@ -1149,9 +1149,6 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // (trap(overflow) counts as an executing verdict). Totals
 // 217/238/238, union 252, all-three 203. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 217), ("native", 238), ("release", 238)];
-const UNION_FLOOR: usize = 252;
-const ALL_THREE_FLOOR: usize = 203;
 // s124 ratchet over 380 entries: the module explains itself (D59).
 // Four new run-phase witnesses, each three-lane, so every count moves
 // +4. `resolve/bare_sibling/pair.lu` — a directiveless sibling is a
@@ -1163,9 +1160,6 @@ const ALL_THREE_FLOOR: usize = 203;
 // two fail-phase witnesses (`dup_bare`, `broken_sibling`) join the
 // rejection ledger instead. Totals 215/234/234, union 248, all-three
 // 201. Counts measured by this gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 215), ("native", 234), ("release", 234)];
-const UNION_FLOOR: usize = 248;
-const ALL_THREE_FLOOR: usize = 201;
 // merge (s123 + s124, 2026-08-28): disjoint witness sets (eight
 // crash/literal witnesses; four module-formation witnesses), so the
 // deltas compound. Counts measured by this gate on the merged tree,
