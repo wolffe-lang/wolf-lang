@@ -15,6 +15,7 @@ pub(crate) fn syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Underscore => SyntaxKind::Underscore,
         TokenKind::Int => SyntaxKind::Int,
         TokenKind::Float => SyntaxKind::Float,
+        TokenKind::Char => SyntaxKind::Char,
         TokenKind::Kw(k) => keyword_kind(k),
         TokenKind::Punct(p) => punct_kind(p),
         TokenKind::PoundBracket => SyntaxKind::PoundBracket,
