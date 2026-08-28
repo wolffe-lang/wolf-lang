@@ -1098,9 +1098,25 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // too and agrees. No pre-existing file moved lanes. Totals
 // 205/224/224, union 238, all-three 191. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 205), ("native", 224), ("release", 224)];
-const UNION_FLOOR: usize = 238;
-const ALL_THREE_FLOOR: usize = 191;
+// s121 ratchet over 374 entries: the scalar gets a type (c33-strings'
+// second sprint, D57). Six new run-phase witnesses, each three-lane,
+// so every count moves +6; the migrated `strings/chars_walk.lu`
+// (`chars()` now yields `List[char]`) stays three-lane, so it moves
+// nothing. `strings/char_battery.lu` — literals at all four UTF-8
+// widths, escape spellings, both casts, and the domain's legal edges
+// (0, 0xD7FF, 0xE000, 0x10FFFF). `strings/char_order.lu` — scalar
+// order and equality plus match-over-char dispatch.
+// `strings/char_interp.lu` — `{c}` prints the character (stdout
+// pinned; a spec takes the str surface). `faults/char_cast_
+// surrogate_trap.lu` / `_range_trap.lu` / `_negative_trap.lu` — the
+// three `int as char` refusals by name, trap(overflow) on every lane
+// (the surrogate gap is the D24-critical one). No pre-existing file
+// moved lanes — the deltas are exactly the six new files. Totals
+// 211/230/230, union 244, all-three 197. Counts measured by this
+// gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 211), ("native", 230), ("release", 230)];
+const UNION_FLOOR: usize = 244;
+const ALL_THREE_FLOOR: usize = 197;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
