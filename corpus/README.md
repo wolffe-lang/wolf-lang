@@ -5,6 +5,17 @@ Programs the compiler must grow into; each file's `//!` header directives
 `cargo xtask corpus`. Seeded at sprint s02. Canonical phase list: none,
 lex, parse, resolve, typecheck, mem, wir, run.
 
+## Membership (D59, `[conf.directive.standalone]`)
+
+A file with no directives at all is a **member** of its directory's
+module — compiled through the directory's entry files, never
+conform-run on its own (that is the language rule: directory = module,
+and plain files join by default). A file is an *entry* when it carries
+both `check:` and `phase:`; `member: true` marks membership explicitly
+(now redundant for plain files), and `member: false` marks a
+standalone entry. `corpus/resolve/bare_sibling/` is the witness for
+the bare form. See `docs/modules.md` for the user-facing rules.
+
 ## Rules and forward pins
 
 A `check: fail(CODE)` header is a claim that the compiler **enforces**
