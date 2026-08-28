@@ -222,12 +222,13 @@ fn format_is_idempotent() {
 }
 
 /// The contract version is the s57 handshake surface. It moved to 2
-/// when the doc-comment model joined the surface (s53): `wolf doc` and
-/// hover read doc comments through one module, so the daemon that
-/// implements this contract implements that too.
+/// when the doc-comment model joined the surface (s53), and to 3 when
+/// the completion query joined it (s122) — the daemon that implements
+/// this contract implements the incomplete-buffer completion
+/// semantics too.
 #[test]
-fn contract_version_is_two() {
-    assert_eq!(wolf_query::CONTRACT_VERSION, 2);
+fn contract_version_is_three() {
+    assert_eq!(wolf_query::CONTRACT_VERSION, 3);
 }
 
 /// The one doc-comment model, from the query side: the same `///` block
@@ -266,4 +267,73 @@ fn docs_query_is_the_model_hover_reads() {
         .expect("not cancelled")
         .expect("hovers");
     assert_eq!(hover.doc.as_deref(), Some(doc.text.as_str()));
+}
+
+/// The completion query at the contract level (s122): name position
+/// answers keywords + scope names on a buffer that does not parse;
+/// member position types the receiver through the repaired-text
+/// ladder; an untypeable receiver answers the empty list, never an
+/// error.
+#[test]
+fn completion_query_incomplete_buffer_contract() {
+    use wolf_query::CompletionKind;
+    let pkg = Pkg::new(
+        "completion",
+        &[("main.lu", "fn main() -> int {\n    0\n}\n")],
+    );
+    let path = pkg.path("main.lu");
+    let host = QueryHost::new();
+
+    // Mid-edit member position: a trailing "s." — the buffer does
+    // not parse.
+    let text = b"fn greet(s: str) -> str {\n    s.\n}\n".to_vec();
+    host.apply_change(Change::Open {
+        path: path.clone(),
+        text,
+    });
+    let snapshot = host.snapshot();
+    let dot = "fn greet(s: str) -> str {\n    s.".len() as u32;
+    let items = snapshot.completions(&path, dot).unwrap().expect("readable");
+    assert!(
+        items.iter().any(|c| c.label == "contains"
+            && c.kind == CompletionKind::Method
+            && c.detail.as_deref() == Some("fn contains(needle: str) -> bool")),
+        "str members answer through the repair: {:?}",
+        items.iter().map(|c| &c.label).collect::<Vec<_>>()
+    );
+
+    // Same broken buffer, name position: keywords + the enclosing
+    // param, from the resilient tree.
+    let name_pos = "fn greet(s: str) -> str {\n  ".len() as u32;
+    let items = snapshot
+        .completions(&path, name_pos)
+        .unwrap()
+        .expect("readable");
+    assert!(
+        items
+            .iter()
+            .any(|c| c.label == "let" && c.kind == CompletionKind::Keyword)
+    );
+    assert!(
+        items.iter().any(|c| c.label == "s"
+            && c.kind == CompletionKind::Variable
+            && c.detail.as_deref() == Some("s: str")),
+        "param with annotation detail"
+    );
+    assert!(
+        items
+            .iter()
+            .any(|c| c.label == "greet" && c.kind == CompletionKind::Function)
+    );
+    drop(snapshot);
+
+    // An untypeable receiver: empty, honestly.
+    host.apply_change(Change::Edit {
+        path: path.clone(),
+        text: b"fn f(x: Wumpus) -> int {\n    x.\n}\n".to_vec(),
+    });
+    let snapshot = host.snapshot();
+    let dot = "fn f(x: Wumpus) -> int {\n    x.".len() as u32;
+    let items = snapshot.completions(&path, dot).unwrap().expect("readable");
+    assert!(items.is_empty(), "never a guess: {:?}", items.len());
 }

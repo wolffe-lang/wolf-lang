@@ -108,16 +108,16 @@ pub struct FormatResult {
 /// The memoized per-entry analysis (v0 execution model: computed at
 /// most once per entry per revision; see the crate docs).
 pub(crate) struct PackageAnalysis {
-    files: Vec<SourceFile>,
-    diagnostics: Vec<Diagnostic>,
-    phase: &'static str,
+    pub(crate) files: Vec<SourceFile>,
+    pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) phase: &'static str,
     /// Present from the resolve rung down (even when errors stop the
     /// ladder there — hover and def-of answer on what resolved).
-    resolution: Option<wolf_sema::Resolution>,
+    pub(crate) resolution: Option<wolf_sema::Resolution>,
     /// Present when the resolve rung passed clean; its diagnostics are
     /// withheld from `diagnostics` while any body is `NotYetCheckable`
     /// (the CLI's conservatism ledger, mirrored).
-    typecheck: Option<wolf_sema::Typecheck>,
+    pub(crate) typecheck: Option<wolf_sema::Typecheck>,
 }
 
 fn first_error(ds: &[Diagnostic]) -> bool {
@@ -128,7 +128,7 @@ impl Snapshot {
     /// Compute (or reuse) the package analysis around `entry`,
     /// mirroring the CLI's phase ladder exactly. `None` when the entry
     /// is unreadable.
-    fn analysis(&self, entry: &Path) -> Option<Arc<PackageAnalysis>> {
+    pub(crate) fn analysis(&self, entry: &Path) -> Option<Arc<PackageAnalysis>> {
         let key = crate::overlay::normalize(entry);
         let entry = key.as_path();
         if let Some(hit) = self
@@ -148,8 +148,22 @@ impl Snapshot {
     }
 
     fn compute_analysis(&self, entry: &Path) -> Option<PackageAnalysis> {
+        self.compute_analysis_from(entry, &self.overlays)
+    }
+
+    /// The same phase ladder, read through an explicit overlay set.
+    /// The completion query analyzes *repaired* text (the `.partial`
+    /// at the cursor deleted) through a patched clone of the
+    /// snapshot's overlays; those results are never cached — the
+    /// repair is per-request. Everything else is byte-identical to
+    /// the memoized path.
+    pub(crate) fn compute_analysis_from(
+        &self,
+        entry: &Path,
+        overlays: &crate::overlay::OverlayStore,
+    ) -> Option<PackageAnalysis> {
         self.begin();
-        let text = self.file_text(entry)?;
+        let text = overlays.read(entry)?;
         let mut sm = SourceMap::new();
         let id = sm.intern(entry);
         let entry_file = SourceFile {
@@ -188,7 +202,7 @@ impl Snapshot {
         self.checkpoint();
 
         // Rung 3: resolve the single-entry package through the overlay.
-        let mut loader = OverlayLoader::new(entry, &self.overlays, &mut sm)?;
+        let mut loader = OverlayLoader::new(entry, overlays, &mut sm)?;
         let res =
             wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()).ok()?;
         let files: Vec<SourceFile> = res
@@ -430,7 +444,7 @@ impl Snapshot {
 // ------------------------------------------------------- tree helpers --
 
 /// Position of `entry` within the loaded package's file list.
-fn file_index(res: &wolf_sema::Resolution, entry: &Path) -> Option<usize> {
+pub(crate) fn file_index(res: &wolf_sema::Resolution, entry: &Path) -> Option<usize> {
     let entry_display = crate::overlay::normalize(entry)
         .display()
         .to_string()
@@ -443,7 +457,7 @@ fn file_index(res: &wolf_sema::Resolution, entry: &Path) -> Option<usize> {
 
 /// The (decl ordinal, member ordinal) coordinates `BodyRef` uses, for
 /// the item containing `offset`.
-fn decl_at(root: &GreenNode, offset: u32) -> Option<(usize, Option<usize>)> {
+pub(crate) fn decl_at(root: &GreenNode, offset: u32) -> Option<(usize, Option<usize>)> {
     let (decl, node) = root
         .nodes()
         .filter(|n| n.kind.is_item())
@@ -669,7 +683,7 @@ fn symbol_of(node: &GreenNode, src: &[u8], nested: bool) -> Option<DocSymbol> {
     }
 }
 
-fn pattern_idents(node: &GreenNode) -> impl Iterator<Item = &GreenToken> {
+pub(crate) fn pattern_idents(node: &GreenNode) -> impl Iterator<Item = &GreenToken> {
     // Flat walk: identifier tokens anywhere inside the pattern.
     fn collect<'a>(n: &'a GreenNode, out: &mut Vec<&'a GreenToken>) {
         for child in &n.children {

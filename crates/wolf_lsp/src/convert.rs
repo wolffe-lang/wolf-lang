@@ -6,10 +6,11 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use lsp_types::{
-    CodeAction, CodeActionKind, DiagnosticRelatedInformation, DiagnosticSeverity, DocumentSymbol,
-    Location, NumberOrString, Range, SymbolKind as LspSymbolKind, TextEdit, Url, WorkspaceEdit,
+    CodeAction, CodeActionKind, CompletionItem, CompletionItemKind, DiagnosticRelatedInformation,
+    DiagnosticSeverity, DocumentSymbol, Location, NumberOrString, Range,
+    SymbolKind as LspSymbolKind, TextEdit, Url, WorkspaceEdit,
 };
-use wolf_query::{DiagnosticsBatch, DocSymbol, SymbolKind};
+use wolf_query::{Completion, CompletionKind, DiagnosticsBatch, DocSymbol, SymbolKind};
 use wolf_span::{LineIndex, Span};
 
 use crate::positions::{Encoding, offset_to_position};
@@ -171,6 +172,44 @@ pub fn code_actions_for(
         }
     }
     out
+}
+
+fn lsp_completion_kind(kind: CompletionKind) -> CompletionItemKind {
+    match kind {
+        CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+        CompletionKind::Function => CompletionItemKind::FUNCTION,
+        CompletionKind::Method => CompletionItemKind::METHOD,
+        CompletionKind::Variable => CompletionItemKind::VARIABLE,
+        CompletionKind::Field => CompletionItemKind::FIELD,
+        CompletionKind::Struct => CompletionItemKind::STRUCT,
+        CompletionKind::Enum => CompletionItemKind::ENUM,
+        CompletionKind::Variant => CompletionItemKind::ENUM_MEMBER,
+        CompletionKind::Trait => CompletionItemKind::INTERFACE,
+        CompletionKind::TypeAlias => CompletionItemKind::CLASS,
+        CompletionKind::Const => CompletionItemKind::CONSTANT,
+        CompletionKind::Module => CompletionItemKind::MODULE,
+    }
+}
+
+/// Completion candidates, converted: `kind` always (editors sort and
+/// icon on it), `detail` carrying the signature or typing, doc text
+/// as markdown (the same prose hover renders).
+pub fn completion_items(items: &[Completion]) -> Vec<CompletionItem> {
+    items
+        .iter()
+        .map(|c| CompletionItem {
+            label: c.label.clone(),
+            kind: Some(lsp_completion_kind(c.kind)),
+            detail: c.detail.clone(),
+            documentation: c.doc.as_ref().map(|d| {
+                lsp_types::Documentation::MarkupContent(lsp_types::MarkupContent {
+                    kind: lsp_types::MarkupKind::Markdown,
+                    value: d.clone(),
+                })
+            }),
+            ..CompletionItem::default()
+        })
+        .collect()
 }
 
 fn lsp_symbol_kind(kind: SymbolKind) -> LspSymbolKind {

@@ -7,16 +7,24 @@
 //! [`wolf_query::Snapshot`], so editor diagnostics and CLI builds are
 //! one truth by construction.
 //!
-//! # v0 capability set
+//! # Capability set
 //!
 //! `positionEncoding` (utf-8 preferred / utf-16 default / utf-32),
 //! full-text sync with didSave, `publishDiagnostics` on
 //! open/change(debounced)/save, `textDocument/hover` (typed subset),
 //! `textDocument/documentSymbol`, `textDocument/formatting`
 //! (whole-document, via the one formatter), `textDocument/codeAction`
-//! (machine-applicable fix-its as quickfixes), `$/cancelRequest`
-//! honored into the query layer. Definition/references/completion are
-//! Milestones C/D on the c11 schedule.
+//! (machine-applicable fix-its as quickfixes),
+//! `textDocument/completion` (s122: keywords, in-scope names, member
+//! completion after `.` — trigger character `.`, which is both member
+//! access and the module path separator; the incomplete-buffer
+//! contract lives in `wolf_query::Snapshot::completions`),
+//! `$/cancelRequest` honored into the query layer.
+//!
+//! **Still absent, refused by name** (MethodNotFound with the method
+//! named — never faked, per the track's rule): goto-definition,
+//! references, signature help, semantic tokens, inlay hints, rename,
+//! range formatting, the pull-diagnostics model.
 //!
 //! Transport is rust-analyzer's `lsp-server` (L1: framing, handshake,
 //! IO threads — the parts with sharp edges — and no policy). The main

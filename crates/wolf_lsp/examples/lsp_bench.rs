@@ -112,6 +112,13 @@ fn main() {
                 "context": { "diagnostics": [] },
             }),
         ),
+        // s122: name-position completion (warm memoized analysis —
+        // the common keystroke path once diagnostics have run).
+        (
+            "completion",
+            "textDocument/completion",
+            json!({ "textDocument": doc, "position": { "line": 18, "character": 7 } }),
+        ),
     ];
 
     let commit = git_short_sha();
@@ -134,6 +141,61 @@ fn main() {
                 "{}",
                 json!({
                     "bench": format!("wordcount/{name}"),
+                    "track": "lsp",
+                    "lang": "wolf",
+                    "metric": metric,
+                    "value": value,
+                    "unit": "ms",
+                    "commit": commit,
+                    "config": "v0-nonresident",
+                })
+            );
+        }
+    }
+
+    // s122: member-position completion under mid-edit conditions —
+    // each run sends a didChange (a broken `total.` inserted in
+    // `main`) and then completes after the dot, so the sample carries
+    // the full keystroke path: overlay write + repaired-text ladder.
+    {
+        let anchor = "    var total = Map[str, int]()\n";
+        let member_text = text.replace(anchor, &format!("{anchor}    total.\n"));
+        assert_ne!(member_text, text, "wordcount anchor line present");
+        let dot_line = member_text
+            .lines()
+            .position(|l| l.trim() == "total.")
+            .expect("inserted line") as u64;
+        let mut samples: Vec<f64> = Vec::with_capacity(runs);
+        for i in 0..runs {
+            send(Message::Notification(Notification::new(
+                "textDocument/didChange".to_string(),
+                json!({
+                    "textDocument": { "uri": uri, "version": 2 + i as i64 },
+                    "contentChanges": [ { "text": member_text } ],
+                }),
+            )));
+            let started = Instant::now();
+            let id = request(
+                "textDocument/completion",
+                json!({
+                    "textDocument": doc,
+                    "position": { "line": dot_line, "character": 10 },
+                }),
+            );
+            wait_response(id);
+            samples.push(started.elapsed().as_secs_f64() * 1000.0);
+        }
+        samples.sort_by(|a, b| a.total_cmp(b));
+        let p = |q: f64| samples[((samples.len() - 1) as f64 * q) as usize];
+        for (metric, value) in [
+            ("latency_p50_ms", p(0.5)),
+            ("latency_p95_ms", p(0.95)),
+            ("latency_max_ms", *samples.last().unwrap()),
+        ] {
+            println!(
+                "{}",
+                json!({
+                    "bench": "wordcount/completionMember",
                     "track": "lsp",
                     "lang": "wolf",
                     "metric": metric,

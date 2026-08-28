@@ -49,11 +49,13 @@
 //! between lex/parse/resolve/typecheck); the resident daemon tightens
 //! granularity without changing the contract.
 
+mod completions;
 pub mod docs;
 mod host;
 mod overlay;
 mod queries;
 
+pub use completions::{Completion, CompletionKind};
 pub use docs::{
     Directive, DocComment, DocFence, DocItem, DocModule, DocPackage, doc_package, resolve_links,
 };
@@ -70,7 +72,13 @@ pub use queries::{
 /// version names a surface rather than a compatibility promise, so it
 /// moves. `wolf doc` and hover now read doc comments through one
 /// module, which is the clause-5 "one truth" rule applied to prose.
-pub const CONTRACT_VERSION: u32 = 2;
+///
+/// v3 (s122): [`Snapshot::completions`] joins the surface — additive.
+/// Its incomplete-buffer contract (answer from what the frontend
+/// recovered; repaired-text re-analysis for member position; the
+/// empty list, never an error, when a receiver cannot be typed) is
+/// part of the surface the s57 daemon must honor.
+pub const CONTRACT_VERSION: u32 = 3;
 
 /// Test-only knob: when set to a number of milliseconds, every query
 /// sleeps that long at its first checkpoint (in small cancellable

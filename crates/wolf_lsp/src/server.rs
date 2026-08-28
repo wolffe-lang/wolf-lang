@@ -24,9 +24,10 @@ use std::time::{Duration, Instant};
 use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestId, Response};
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
-    CodeActionOrCommand, CodeActionProviderCapability, HoverProviderCapability, InitializeParams,
-    OneOf, PublishDiagnosticsParams, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit, Url,
+    CodeActionOrCommand, CodeActionProviderCapability, CompletionOptions, HoverProviderCapability,
+    InitializeParams, OneOf, PublishDiagnosticsParams, SaveOptions, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TextDocumentSyncSaveOptions, TextEdit, Url,
 };
 use wolf_query::{Cancelled, Change, QueryHost, Snapshot};
 use wolf_span::{LineIndex, Span};
@@ -210,6 +211,13 @@ fn server_capabilities(enc: Encoding) -> ServerCapabilities {
         document_symbol_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         code_action_provider: Some(CodeActionProviderCapability::Simple(true)),
+        // s122: completion. `.` is wolf's member access AND its module
+        // path separator (dotted paths), so one trigger character
+        // serves both. No resolve step: items arrive fully formed.
+        completion_provider: Some(CompletionOptions {
+            trigger_characters: Some(vec![".".to_string()]),
+            ..Default::default()
+        }),
         ..Default::default()
     }
 }
@@ -466,6 +474,7 @@ fn handle_request(cx: &Cx, snapshot: &Snapshot, req: &Request) -> Result<Respons
         "textDocument/documentSymbol" => document_symbol(cx, snapshot, id, &req.params),
         "textDocument/formatting" => formatting(cx, snapshot, id, &req.params),
         "textDocument/codeAction" => code_action(cx, snapshot, id, &req.params),
+        "textDocument/completion" => completion(cx, snapshot, id, &req.params),
         _ => Ok(Response::new_err(
             id,
             ErrorCode::MethodNotFound as i32,
@@ -520,6 +529,26 @@ fn hover(
         range: Some(convert::range_of(&text, &index, h.span, cx.enc)),
     };
     Ok(Response::new_ok(id, hover))
+}
+
+/// s122 — `textDocument/completion`. The query owns the semantics
+/// (the incomplete-buffer contract included); this fn is pure wire
+/// shape. The response is a plain `CompletionItem[]`, always complete
+/// (no server-side truncation, so no `isIncomplete` list wrapper).
+fn completion(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, _text, _index, offset)) = text_position(cx, snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let result = snapshot.completions(&path, offset)?;
+    let Some(items) = result else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    Ok(Response::new_ok(id, convert::completion_items(&items)))
 }
 
 fn document_symbol(
