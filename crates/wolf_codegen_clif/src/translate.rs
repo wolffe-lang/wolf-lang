@@ -54,8 +54,13 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 118] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 119] = [
     ("__wolf_rt_trap", 1, false),
+    // s125: the sited trap — kind, then the site as immediates the
+    // per-site cold block materializes: file path rodata (ptr, len)
+    // and 1-based line/col. First stderr line byte-identical to
+    // `__wolf_rt_trap`'s; the site is its own additive line.
+    ("__wolf_rt_trap_at", 5, false),
     ("__wolf_rt_region_new", 0, true),
     ("__wolf_rt_region_alloc", 2, true),
     ("__wolf_rt_region_free", 1, false),
@@ -490,14 +495,27 @@ struct Tx<'a, 'b> {
     /// WIR data index → object data id. Lazily defined on first
     /// reference, so an object carries exactly the data it uses.
     data_ids: &'a mut HashMap<u32, cranelift_module::DataId>,
+    /// Source files trap sites resolve against (s125) — FileId index →
+    /// path + line starts; empty means every trap stays site-less.
+    site_files: &'a HashMap<u32, wolf_backend::dwarf::SourceFile>,
+    /// Per-file rodata path symbols defined so far (module-level, like
+    /// `data_ids`): FileId index → object data id for the path bytes.
+    site_file_data: &'a mut HashMap<u32, cranelift_module::DataId>,
+    /// The srcspan `lo` of the instruction being translated (s125):
+    /// what a trap check emitted from it names as its site.
+    cur_span_lo: Option<u32>,
     blocks: HashMap<WBlock, cranelift_codegen::ir::Block>,
     vals: HashMap<wolf_wir::ir::Value, Repr>,
     /// Slots owned by aggregate-typed block params of non-entry blocks.
     param_slots: HashMap<(WBlock, usize), cranelift_codegen::ir::StackSlot>,
     /// sret addresses (entry params), in aggregate-result order.
     sret: Vec<CValue>,
-    /// Lazily created per-kind trap blocks.
-    trap_blocks: HashMap<i32, cranelift_codegen::ir::Block>,
+    /// Lazily created cold trap blocks, one per (kind, site) — the
+    /// s125 trade: sites split the old per-kind sharing so the cold
+    /// body can materialize `  at file:line:col`; checks from the same
+    /// statement still share ((kind, line, col) dedup). Site-less
+    /// checks keep the shared per-kind block.
+    trap_blocks: HashMap<(i32, Option<(u64, u64)>), cranelift_codegen::ir::Block>,
     /// FuncRefs imported into this function, by callee name, with the
     /// convention their calls lower under.
     fref_cache: HashMap<String, (cranelift_codegen::ir::FuncRef, Conv)>,
@@ -541,6 +559,8 @@ pub(crate) fn translate_function(
     rt: &mut HashMap<&'static str, cranelift_module::FuncId>,
     imports: &mut HashMap<String, cranelift_module::FuncId>,
     data_ids: &mut HashMap<u32, cranelift_module::DataId>,
+    site_files: &HashMap<u32, wolf_backend::dwarf::SourceFile>,
+    site_file_data: &mut HashMap<u32, cranelift_module::DataId>,
 ) -> Result<Vec<(String, DebugTy, StackSlot, bool)>, BackendError> {
     let mut tx = Tx {
         b,
@@ -552,6 +572,9 @@ pub(crate) fn translate_function(
         rt,
         imports,
         data_ids,
+        site_files,
+        site_file_data,
+        cur_span_lo: None,
         blocks: HashMap::new(),
         vals: HashMap::new(),
         param_slots: HashMap::new(),
@@ -747,11 +770,15 @@ impl<'a, 'b> Tx<'a, 'b> {
                 // s30: the WIR span rides into the machine buffer as a
                 // Cranelift srcloc (bits = span lo; the byte-exact s07
                 // chain ends in .debug_line).
-                let loc = match self.f.srcspan(inst) {
+                let sp = self.f.srcspan(inst);
+                let loc = match sp {
                     Some(sp) => SourceLoc::new(sp.lo),
                     None => SourceLoc::default(),
                 };
                 self.b.set_srcloc(loc);
+                // s125: a trap check emitted from this instruction
+                // names this span's start as its site.
+                self.cur_span_lo = sp.map(|sp| sp.lo);
                 self.inst(inst)?;
                 for rv in self.results_of(inst) {
                     self.debug_spill(rv);
@@ -811,29 +838,91 @@ impl<'a, 'b> Tx<'a, 'b> {
         self.f.vpool.get(self.f.insts[inst].results)
     }
 
-    /// The (empty, cold) trap block for one kind. Bodies are emitted
-    /// at the end of translation ([`Tx::fill_trap_blocks`]) — the
-    /// frontend forbids switching away from an unfilled block, so they
-    /// cannot be filled mid-instruction.
-    fn trap_block(&mut self, code: i32) -> cranelift_codegen::ir::Block {
-        if let Some(&tb) = self.trap_blocks.get(&code) {
+    /// The trap SITE the instruction being translated names (s125):
+    /// its srcspan start resolved to 1-based line:col through the
+    /// backend's source-file table. `None` — no span, no known file,
+    /// or no table (tests, synthetic functions) — keeps the trap
+    /// site-less.
+    fn cur_trap_site(&self) -> Option<(u64, u64)> {
+        let file = self.f.src_file?;
+        let sf = self.site_files.get(&file)?;
+        Some(sf.line_col(self.cur_span_lo?))
+    }
+
+    /// The rodata symbol holding this function's source-file path
+    /// (`_W.site.<idx>`, defined once per object): (data id, byte
+    /// length). Only called when the site resolved, so the file is in
+    /// the table.
+    fn site_file_symbol(&mut self) -> Result<(cranelift_module::DataId, usize), BackendError> {
+        let idx = self
+            .f
+            .src_file
+            .ok_or_else(|| ice("trap site without a src file"))?;
+        let path = &self
+            .site_files
+            .get(&idx)
+            .ok_or_else(|| ice("trap site names an unmapped file"))?
+            .path;
+        let len = path.len();
+        if let Some(&did) = self.site_file_data.get(&idx) {
+            return Ok((did, len));
+        }
+        let sym = format!("_W.site.{idx}");
+        let did = self
+            .om
+            .declare_data(&sym, cranelift_module::Linkage::Local, false, false)
+            .map_err(|e| ice(e.to_string()))?;
+        let mut desc = cranelift_module::DataDescription::new();
+        desc.define(path.clone().into_bytes().into_boxed_slice());
+        self.om
+            .define_data(did, &desc)
+            .map_err(|e| ice(e.to_string()))?;
+        self.site_file_data.insert(idx, did);
+        Ok((did, len))
+    }
+
+    /// The (empty, cold) trap block for one (kind, site). Bodies are
+    /// emitted at the end of translation ([`Tx::fill_trap_blocks`]) —
+    /// the frontend forbids switching away from an unfilled block, so
+    /// they cannot be filled mid-instruction.
+    fn trap_block(&mut self, code: i32, site: Option<(u64, u64)>) -> cranelift_codegen::ir::Block {
+        if let Some(&tb) = self.trap_blocks.get(&(code, site)) {
             return tb;
         }
         let tb = self.b.create_block();
         self.b.set_cold_block(tb);
-        self.trap_blocks.insert(code, tb);
+        self.trap_blocks.insert((code, site), tb);
         tb
     }
 
-    /// Emit every pending trap block's body: call
-    /// `__wolf_rt_trap(code)` (reports the kind, never returns), then
+    /// Emit every pending trap block's body: call the trap reporter —
+    /// `__wolf_rt_trap_at(code, file, len, line, col)` for a sited
+    /// block, `__wolf_rt_trap(code)` for a site-less one (both report
+    /// the kind on the byte-identical first line, never return) — then
     /// a CLIF trap for the unreachable tail.
     fn fill_trap_blocks(&mut self) -> Result<(), BackendError> {
-        for (code, tb) in std::mem::take(&mut self.trap_blocks) {
+        let mut pending: Vec<_> = std::mem::take(&mut self.trap_blocks).into_iter().collect();
+        // Deterministic emission order (HashMap iteration is not).
+        pending.sort_by_key(|&(k, _)| k);
+        for ((code, site), tb) in pending {
             self.b.switch_to_block(tb);
-            let fref = self.rt_ref("__wolf_rt_trap")?;
             let c = self.b.ins().iconst(ctypes::I32, code as i64);
-            self.b.ins().call(fref, &[c]);
+            match site {
+                Some((line, col)) => {
+                    let (did, len) = self.site_file_symbol()?;
+                    let gv = self.om.declare_data_in_func(did, self.b.func);
+                    let fref = self.rt_ref("__wolf_rt_trap_at")?;
+                    let p = self.b.ins().symbol_value(ctypes::I64, gv);
+                    let l = self.b.ins().iconst(ctypes::I64, len as i64);
+                    let ln = self.b.ins().iconst(ctypes::I64, line as i64);
+                    let cl = self.b.ins().iconst(ctypes::I64, col as i64);
+                    self.b.ins().call(fref, &[c, p, l, ln, cl]);
+                }
+                None => {
+                    let fref = self.rt_ref("__wolf_rt_trap")?;
+                    self.b.ins().call(fref, &[c]);
+                }
+            }
             self.b
                 .ins()
                 .trap(TrapCode::user(code as u8).ok_or_else(|| ice("trap code 0"))?);
@@ -841,11 +930,12 @@ impl<'a, 'b> Tx<'a, 'b> {
         Ok(())
     }
 
-    /// Branch to the `kind` trap block when `cond` is nonzero, and
-    /// continue in a fresh block otherwise.
+    /// Branch to the (kind, current site) trap block when `cond` is
+    /// nonzero, and continue in a fresh block otherwise.
     fn trap_if(&mut self, cond: CValue, kind: TrapKind) -> Result<(), BackendError> {
         let code = trap_code(kind);
-        let tb = self.trap_block(code);
+        let site = self.cur_trap_site();
+        let tb = self.trap_block(code, site);
         let cont = self.b.create_block();
         let empty: [BlockArg; 0] = [];
         self.b
@@ -878,7 +968,8 @@ impl<'a, 'b> Tx<'a, 'b> {
                     // I8); the f64 write shim takes a real f64; every
                     // other shim param is a pointer/size/packed-spec
                     // i64.
-                    let ty = if name == "__wolf_rt_trap" && i == 0 {
+                    let ty = if (name == "__wolf_rt_trap" || name == "__wolf_rt_trap_at") && i == 0
+                    {
                         ctypes::I32
                     } else if (name == "__wolf_rt_print_bool" && i == 0)
                         || ((name == "__wolf_rt_write_bool" || name == "__wolf_rt_strbuf_bool")
@@ -1697,9 +1788,26 @@ impl<'a, 'b> Tx<'a, 'b> {
                     _ => TrapKind::Assert,
                 };
                 let code = trap_code(kind);
-                let fref = self.rt_ref("__wolf_rt_trap")?;
                 let c = self.b.ins().iconst(ctypes::I32, code as i64);
-                self.b.ins().call(fref, &[c]);
+                // s125: an unconditional trap is already cold where it
+                // stands — report its site inline, same immediates as
+                // a sited cold block.
+                match self.cur_trap_site() {
+                    Some((line, col)) => {
+                        let (did, len) = self.site_file_symbol()?;
+                        let gv = self.om.declare_data_in_func(did, self.b.func);
+                        let fref = self.rt_ref("__wolf_rt_trap_at")?;
+                        let p = self.b.ins().symbol_value(ctypes::I64, gv);
+                        let l = self.b.ins().iconst(ctypes::I64, len as i64);
+                        let ln = self.b.ins().iconst(ctypes::I64, line as i64);
+                        let cl = self.b.ins().iconst(ctypes::I64, col as i64);
+                        self.b.ins().call(fref, &[c, p, l, ln, cl]);
+                    }
+                    None => {
+                        let fref = self.rt_ref("__wolf_rt_trap")?;
+                        self.b.ins().call(fref, &[c]);
+                    }
+                }
                 self.b
                     .ins()
                     .trap(TrapCode::user(code as u8).ok_or_else(|| ice("trap code 0"))?);
