@@ -4,8 +4,6 @@
 //! interpreter produce (D2: tiers behaviorally identical; X3: checked
 //! arithmetic traps identically in release, only the speed changes).
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 mod common;
 
 use common::{add_plain_entry_shim, fixture, module_ir, run_ir};

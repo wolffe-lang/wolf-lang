@@ -96,25 +96,36 @@ pub struct ClifBackend {
 }
 
 impl ClifBackend {
-    /// A backend for the host target. s28 is linux/x86-64 only (M1;
-    /// D35's matrix is c13) — anything else is an honest refusal.
+    /// A backend for the host target. s28 opened linux/x86-64 (M1);
+    /// s59 widens to macOS/aarch64 (c13, D35's tier-1 matrix) —
+    /// anything else is an honest refusal.
     pub fn new() -> Result<ClifBackend, BackendError> {
         let triple = target_lexicon::Triple::host();
-        if triple.architecture != target_lexicon::Architecture::X86_64
-            || triple.operating_system != target_lexicon::OperatingSystem::Linux
-        {
+        let supported = matches!(
+            (&triple.architecture, &triple.operating_system),
+            (
+                target_lexicon::Architecture::X86_64,
+                target_lexicon::OperatingSystem::Linux
+            ) | (
+                target_lexicon::Architecture::Aarch64(_),
+                target_lexicon::OperatingSystem::Darwin(_)
+            )
+        );
+        if !supported {
             return Err(BackendError::Unsupported(format!(
-                "native codegen targets linux/x86-64 only in s28 (host: {triple})"
+                "native codegen targets linux/x86-64 and macOS/aarch64 \
+                 (s28 + s59; the rest of D35's matrix is c13) — host: {triple}"
             )));
         }
         let mut flags = settings::builder();
         // Position-independent objects: host toolchains link PIE by
-        // default.
+        // default (and arm64 Mach-O is PIC-only).
         flags
             .set("is_pic", "true")
             .map_err(|e| BackendError::Internal(e.to_string()))?;
         // The debug tier keeps frame pointers (s30): frame base = %rbp
-        // for DW_OP_fbreg variable locations, and debugger stack walks
+        // (x29 on arm64 — Apple MANDATES live frame pointers) for
+        // DW_OP_fbreg variable locations, and debugger stack walks
         // work even where .eh_frame coverage is thin.
         flags
             .set("preserve_frame_pointers", "true")
@@ -186,7 +197,7 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
-        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv());
+        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         let fid = self
             .module
             .declare_function(symbol, clif_linkage(linkage), &si.clif)
@@ -221,7 +232,7 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
-        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv());
+        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         let mut ctx = self.module.make_context();
         ctx.func.signature = si.clif.clone();
         ctx.func.name = UserFuncName::user(0, id.as_u32());
@@ -344,16 +355,30 @@ impl Backend for ClifBackend {
             RelocationEncoding, RelocationFlags, RelocationKind, SymbolFlags, SymbolKind,
             SymbolScope,
         };
+        // Section naming is format-aware (s59): ELF spells DWARF
+        // sections `.debug_*`; Mach-O spells them `__debug_*` inside
+        // the `__DWARF` segment (which `segment_name(Debug)` already
+        // provides). The generic Absolute relocations below translate
+        // to ARM64_RELOC_UNSIGNED there — verified on the emitted
+        // objects.
+        let is_macho = product.object.format() == cranelift_object::object::BinaryFormat::MachO;
+        let sec_name = |name: &str| -> Vec<u8> {
+            if is_macho {
+                format!("__{}", name.trim_start_matches('.')).into_bytes()
+            } else {
+                name.as_bytes().to_vec()
+            }
+        };
         let mut sec_ids = HashMap::new();
         for sec in &self.debug_sections {
             let id = product.object.add_section(
                 product.object.segment_name(StandardSegment::Debug).to_vec(),
-                sec.name.as_bytes().to_vec(),
+                sec_name(sec.name),
                 cranelift_object::object::SectionKind::Debug,
             );
             product.object.set_section_data(id, sec.data.clone(), 1);
             let sym = product.object.add_symbol(Symbol {
-                name: sec.name.as_bytes().to_vec(),
+                name: sec_name(sec.name),
                 value: 0,
                 size: 0,
                 kind: SymbolKind::Section,
@@ -364,6 +389,20 @@ impl Backend for ClifBackend {
             });
             sec_ids.insert(sec.name, (id, sym));
         }
+        // Mach-O (s59): dsymutil consumes debug relocations in the
+        // APPLE ASSEMBLER convention — SECTION-BASED (non-extern)
+        // entries whose embedded bytes hold the target's final object
+        // address; it derives the covering symbol from that address,
+        // validates against the debug map, and rewrites to the linked
+        // address. Extern (symbol) relocations there are a trap: the
+        // validate and rewrite passes disagree about whether the
+        // embedded value is symbol-relative, so any nonzero function
+        // offset lands wrong (measured both ways on this host's
+        // dsymutil, not theorized). So on Mach-O function targets
+        // relocate against their SECTION symbol and the emitted bytes
+        // are PATCHED post-emit with the real object addresses; ELF
+        // keeps plain symbol relocations for the system linker.
+        let mut macho_patches: Vec<DebugPatch> = Vec::new();
         for sec in &self.debug_sections {
             let &(id, _) = sec_ids.get(sec.name).expect("just inserted");
             for r in &sec.relocs {
@@ -385,13 +424,41 @@ impl Backend for ClifBackend {
                         }
                     },
                 };
+                let mut reloc_symbol = symbol;
+                if is_macho {
+                    // A function target embeds the symbol's final
+                    // object address (looked up by name post-emit) and
+                    // relocates against its SECTION symbol; a section
+                    // target embeds the DWARF section-relative OFFSET
+                    // — the addend alone (`None` marks it).
+                    let sym_name = match r.target {
+                        DebugRelocTarget::Func(_) => {
+                            let sym = product.object.symbol(symbol);
+                            let name = sym.name.clone();
+                            if let cranelift_object::object::write::SymbolSection::Section(sid) =
+                                sym.section
+                            {
+                                reloc_symbol = product.object.section_symbol(sid);
+                            }
+                            Some(name)
+                        }
+                        DebugRelocTarget::Section(_) => None,
+                    };
+                    macho_patches.push(DebugPatch {
+                        section: String::from_utf8_lossy(&sec_name(sec.name)).into_owned(),
+                        offset: r.offset,
+                        size: r.size,
+                        addend: r.addend,
+                        symbol: sym_name,
+                    });
+                }
                 product
                     .object
                     .add_relocation(
                         id,
                         Relocation {
                             offset: u64::from(r.offset),
-                            symbol,
+                            symbol: reloc_symbol,
                             addend: r.addend,
                             flags: RelocationFlags::Generic {
                                 kind: RelocationKind::Absolute,
@@ -403,14 +470,77 @@ impl Backend for ClifBackend {
                     .map_err(|e| BackendError::Internal(e.to_string()))?;
             }
         }
-        let bytes = product
+        let mut bytes = product
             .emit()
             .map_err(|e| BackendError::Internal(e.to_string()))?;
+        if !macho_patches.is_empty() {
+            patch_macho_debug(&mut bytes, &macho_patches)?;
+        }
         Ok(ObjectProduct {
             bytes,
             symbols: self.symbols,
         })
     }
+}
+
+/// One Mach-O debug-section fix-up (see `finish`): a `Some(symbol)`
+/// target writes that symbol's final object address + addend at
+/// `section[offset..offset+size]`; a `None` target writes the addend
+/// alone (a DWARF section-relative offset, e.g. `DW_AT_stmt_list`).
+struct DebugPatch {
+    section: String,
+    offset: u32,
+    size: u8,
+    addend: i64,
+    symbol: Option<Vec<u8>>,
+}
+
+/// Resolve the collected Mach-O debug fix-ups into the emitted
+/// object's bytes (see `finish` — the Apple convention embeds
+/// resolved `__DWARF` addresses).
+fn patch_macho_debug(bytes: &mut [u8], patches: &[DebugPatch]) -> Result<(), BackendError> {
+    use object::read::{Object as _, ObjectSection as _, ObjectSymbol as _};
+    let ice = |m: String| BackendError::Internal(m);
+    let file = object::read::macho::MachOFile64::<object::Endianness, _>::parse(&*bytes)
+        .map_err(|e| ice(format!("re-parse emitted Mach-O: {e}")))?;
+    let mut sym_addrs: HashMap<Vec<u8>, u64> = HashMap::new();
+    for sym in file.symbols() {
+        sym_addrs.insert(sym.name_bytes().unwrap_or(b"").to_vec(), sym.address());
+    }
+    let mut writes: Vec<(usize, u8, u64)> = Vec::new();
+    for p in patches {
+        let sec = &p.section;
+        let s = file
+            .section_by_name_bytes(sec.as_bytes())
+            .ok_or_else(|| ice(format!("emitted object lost section {sec}")))?;
+        let (file_off, file_len) = s
+            .file_range()
+            .ok_or_else(|| ice(format!("section {sec} has no file data")))?;
+        let value = match &p.symbol {
+            Some(name) => sym_addrs
+                .get(name)
+                .copied()
+                .ok_or_else(|| {
+                    ice(format!(
+                        "emitted object lost symbol {}",
+                        String::from_utf8_lossy(name)
+                    ))
+                })?
+                .wrapping_add(p.addend as u64),
+            None => p.addend as u64,
+        };
+        let at = file_off + u64::from(p.offset);
+        if u64::from(p.offset) + u64::from(p.size) > file_len {
+            return Err(ice(format!("debug patch outside section {sec}")));
+        }
+        writes.push((at as usize, p.size, value));
+    }
+    // (Borrow of `bytes` through `file` ends here.)
+    for (at, size, value) in writes {
+        let le = value.to_le_bytes();
+        bytes[at..at + size as usize].copy_from_slice(&le[..size as usize]);
+    }
+    Ok(())
 }
 
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in

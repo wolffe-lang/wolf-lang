@@ -1,4 +1,5 @@
-//! The io reactor (s35) — one lazy epoll instance plus a timer wheel,
+//! The io reactor (s35; kqueue port s59) — one lazy readiness set
+//! (epoll on linux, kqueue on macOS) plus a timer wheel,
 //! composing the task layer (s32 park/blocking-compensation, s34 kill
 //! teardown) with the net syscall floor (net.rs, the s39 v0 tier).
 //!
@@ -58,15 +59,15 @@
 //! # Lanes, precisely
 //!
 //! The NATIVE runtime (this crate, linked into compiled programs)
-//! routes net waits through this module — linux, this campaign's
-//! platform posture, same gate as the task layer. The CHECKED lane
+//! routes net waits through this module — linux and macOS, the task
+//! layer's gate (s28/s59). The CHECKED lane
 //! (`wolf_mem::ubcheck`'s net tier) keeps its v0 blocking-syscall
 //! path: the checked machine is single-stepping a program under a
 //! deterministic budget and owes no scheduling; its io story joins
 //! the simulated reactor in s36, against this module's seam. Other
-//! hosts keep v0 blocking net (the kqueue/IOCP port sprints widen
-//! against this interface, readiness adapted underneath — never the
-//! other way around).
+//! hosts keep v0 blocking net (the IOCP port sprint widens against
+//! this interface, readiness adapted underneath — never the other
+//! way around; kqueue crossed exactly that way at s59).
 //!
 //! # Cancellation
 //!
@@ -89,6 +90,237 @@ use std::sync::{Arc, Condvar, Mutex, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::task::{SchedEvent, blocking, current_scope, kill_teardown_check, sched_point};
+
+/// The platform poller behind the reactor: one kernel readiness set,
+/// one wake channel, one blocking wait. Everything above this seam —
+/// the waiter table, the timer wheel, cancellation, the `io.arrive`
+/// schedule point — is shared verbatim across platforms; this is the
+/// WHOLE per-OS surface (the s35 module doc's promised kqueue seam,
+/// cashed at s59).
+///
+/// - **linux**: epoll (oneshot interests) + an eventfd wake token.
+/// - **macOS**: kqueue (`EV_ONESHOT` interests keyed on (fd, filter))
+///   + an `EVFILT_USER` wake event (`EV_CLEAR` self-resets, so there
+///   is nothing to drain).
+#[cfg(target_os = "linux")]
+mod sys {
+    use super::{Interest, RawFd};
+
+    /// Reserved epoll user-data for the wake eventfd.
+    const WAKE_TOKEN: u64 = u64::MAX;
+
+    pub struct Poller {
+        epfd: RawFd,
+        wakefd: RawFd,
+    }
+
+    impl Poller {
+        pub fn new() -> Poller {
+            // SAFETY: plain fd creation; results checked below.
+            let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
+            assert!(epfd >= 0, "epoll_create1 failed");
+            // SAFETY: plain fd creation; result checked below.
+            let wakefd = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC | libc::EFD_NONBLOCK) };
+            assert!(wakefd >= 0, "eventfd failed");
+            let mut ev = libc::epoll_event {
+                events: libc::EPOLLIN as u32,
+                u64: WAKE_TOKEN,
+            };
+            // SAFETY: valid epfd/wakefd and a live event struct.
+            let rc = unsafe { libc::epoll_ctl(epfd, libc::EPOLL_CTL_ADD, wakefd, &mut ev) };
+            assert_eq!(rc, 0, "epoll_ctl(wakefd) failed");
+            Poller { epfd, wakefd }
+        }
+
+        /// Arm an fd interest (oneshot) under `token`. `false` when
+        /// the fd cannot be registered (forged/foreign).
+        pub fn arm(&self, fd: RawFd, interest: Interest, token: u64) -> bool {
+            let want = match interest {
+                Interest::Read => libc::EPOLLIN,
+                Interest::Write => libc::EPOLLOUT,
+            };
+            let mut ev = libc::epoll_event {
+                events: (want | libc::EPOLLRDHUP | libc::EPOLLONESHOT) as u32,
+                u64: token,
+            };
+            // SAFETY: valid epfd and a live event struct; fd is the
+            // caller's open descriptor.
+            let rc = unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_ADD, fd, &mut ev) };
+            if rc == 0 {
+                return true;
+            }
+            if std::io::Error::last_os_error().raw_os_error() == Some(libc::EEXIST) {
+                // A previous oneshot on this fd is still in the set
+                // (resolution raced the DEL): re-arm in place. One
+                // pending wait per fd at a time is the v1 contract.
+                // SAFETY: as above.
+                let rc = unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_MOD, fd, &mut ev) };
+                return rc == 0;
+            }
+            false
+        }
+
+        /// Remove `fd` from the set (resolution cleanup; a raced or
+        /// already-gone fd is fine — the set self-heals under oneshot).
+        pub fn del(&self, fd: RawFd) {
+            // SAFETY: valid epfd; DEL takes no event struct.
+            unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_DEL, fd, std::ptr::null_mut()) };
+        }
+
+        /// Kick the poller out of its wait.
+        pub fn wake(&self) {
+            let one: u64 = 1;
+            // SAFETY: valid eventfd; 8-byte write is the contract.
+            unsafe { libc::write(self.wakefd, (&raw const one).cast(), 8) };
+        }
+
+        /// Block up to `timeout_ms` (-1 = until an event); hand every
+        /// delivered completion token to `deliver`.
+        pub fn wait(&self, timeout_ms: i32, mut deliver: impl FnMut(u64)) {
+            // SAFETY: zeroed epoll_event array is a valid buffer.
+            let mut events: [libc::epoll_event; 64] = unsafe { std::mem::zeroed() };
+            // SAFETY: valid epfd and a live, correctly-sized buffer.
+            let n = unsafe { libc::epoll_wait(self.epfd, events.as_mut_ptr(), 64, timeout_ms) };
+            if n < 0 {
+                return; // EINTR: the caller loops.
+            }
+            for ev in &events[..n as usize] {
+                if ev.u64 == WAKE_TOKEN {
+                    // Drain the level-triggered eventfd.
+                    let mut buf: u64 = 0;
+                    // SAFETY: valid nonblocking eventfd; 8-byte read
+                    // is the contract, EAGAIN ends the drain.
+                    unsafe { libc::read(self.wakefd, (&raw mut buf).cast(), 8) };
+                    continue;
+                }
+                deliver(ev.u64);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod sys {
+    use super::{Interest, RawFd};
+
+    /// The `EVFILT_USER` wake event's ident (arbitrary; the user
+    /// filter namespaces idents separately from fds).
+    const WAKE_IDENT: usize = 0;
+
+    pub struct Poller {
+        kq: RawFd,
+    }
+
+    impl Poller {
+        pub fn new() -> Poller {
+            // SAFETY: plain kqueue creation; result checked below.
+            let kq = unsafe { libc::kqueue() };
+            assert!(kq >= 0, "kqueue failed");
+            // The wake channel: an EV_CLEAR user event — triggering it
+            // wakes the wait, retrieval auto-resets it (no drain).
+            let ev = libc::kevent {
+                ident: WAKE_IDENT,
+                filter: libc::EVFILT_USER,
+                flags: libc::EV_ADD | libc::EV_CLEAR,
+                fflags: 0,
+                data: 0,
+                udata: std::ptr::null_mut(),
+            };
+            // SAFETY: valid kq and a live changelist of one.
+            let rc = unsafe { libc::kevent(kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
+            assert_eq!(rc, 0, "kevent(EVFILT_USER add) failed");
+            Poller { kq }
+        }
+
+        /// Arm an fd interest (oneshot) under `token`. kqueue keys
+        /// events on (ident, filter), and `EV_ADD` on an existing pair
+        /// updates it in place — the epoll EEXIST re-arm dance does
+        /// not arise. `EV_RECEIPT` returns the change's own result so
+        /// a forged/foreign fd answers `false` here instead of
+        /// surfacing later.
+        pub fn arm(&self, fd: RawFd, interest: Interest, token: u64) -> bool {
+            let filter = match interest {
+                Interest::Read => libc::EVFILT_READ,
+                Interest::Write => libc::EVFILT_WRITE,
+            };
+            let ev = libc::kevent {
+                ident: fd as usize,
+                filter,
+                flags: libc::EV_ADD | libc::EV_ONESHOT | libc::EV_RECEIPT,
+                fflags: 0,
+                data: 0,
+                udata: token as usize as *mut libc::c_void,
+            };
+            let mut out: libc::kevent = unsafe { std::mem::zeroed() };
+            // SAFETY: valid kq, one-entry changelist, one-entry
+            // receipt buffer.
+            let rc = unsafe { libc::kevent(self.kq, &ev, 1, &mut out, 1, std::ptr::null()) };
+            rc == 1 && (out.flags & libc::EV_ERROR) != 0 && out.data == 0
+        }
+
+        /// Remove `fd`'s interests (both filters; ENOENT for the one
+        /// not armed — or already delivered under EV_ONESHOT — is the
+        /// self-healing no-op, exactly epoll's raced-DEL posture).
+        pub fn del(&self, fd: RawFd) {
+            for filter in [libc::EVFILT_READ, libc::EVFILT_WRITE] {
+                let ev = libc::kevent {
+                    ident: fd as usize,
+                    filter,
+                    flags: libc::EV_DELETE,
+                    fflags: 0,
+                    data: 0,
+                    udata: std::ptr::null_mut(),
+                };
+                // SAFETY: valid kq and a live changelist of one.
+                unsafe { libc::kevent(self.kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
+            }
+        }
+
+        /// Kick the poller out of its wait (NOTE_TRIGGER on the user
+        /// event).
+        pub fn wake(&self) {
+            let ev = libc::kevent {
+                ident: WAKE_IDENT,
+                filter: libc::EVFILT_USER,
+                flags: 0,
+                fflags: libc::NOTE_TRIGGER,
+                data: 0,
+                udata: std::ptr::null_mut(),
+            };
+            // SAFETY: valid kq and a live changelist of one.
+            unsafe { libc::kevent(self.kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
+        }
+
+        /// Block up to `timeout_ms` (-1 = until an event); hand every
+        /// delivered completion token to `deliver`.
+        pub fn wait(&self, timeout_ms: i32, mut deliver: impl FnMut(u64)) {
+            // SAFETY: zeroed kevent array is a valid receive buffer.
+            let mut events: [libc::kevent; 64] = unsafe { std::mem::zeroed() };
+            let ts;
+            let tsp = if timeout_ms < 0 {
+                std::ptr::null()
+            } else {
+                ts = libc::timespec {
+                    tv_sec: (timeout_ms / 1000) as libc::time_t,
+                    tv_nsec: i64::from(timeout_ms % 1000) * 1_000_000,
+                };
+                &ts as *const libc::timespec
+            };
+            // SAFETY: valid kq and a live, correctly-sized buffer.
+            let n =
+                unsafe { libc::kevent(self.kq, std::ptr::null(), 0, events.as_mut_ptr(), 64, tsp) };
+            if n < 0 {
+                return; // EINTR: the caller loops.
+            }
+            for ev in &events[..n as usize] {
+                if ev.filter == libc::EVFILT_USER {
+                    continue; // the wake event; EV_CLEAR already reset it
+                }
+                deliver(ev.udata as usize as u64);
+            }
+        }
+    }
+}
 
 /// What a submitted wait is interested in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,9 +345,6 @@ pub enum IoWait {
     /// the task terminates instead — callers never see this then).
     Cancelled,
 }
-
-/// The wake token: reserved epoll user-data for the eventfd.
-const WAKE_TOKEN: u64 = u64::MAX;
 
 /// One parked waiter's completion cell.
 struct WaitCell {
@@ -159,8 +388,7 @@ struct State {
 }
 
 struct Reactor {
-    epfd: RawFd,
-    wakefd: RawFd,
+    sys: sys::Poller,
     next_token: AtomicU64,
     state: Mutex<State>,
 }
@@ -175,32 +403,16 @@ pub fn initialized() -> bool {
     REACTOR.get().is_some()
 }
 
-/// Lazy init: first submission creates the epoll set, the wake
-/// eventfd, and the one reactor thread.
+/// Lazy init: first submission creates the platform poller (epoll or
+/// kqueue) with its wake channel, and the one reactor thread.
 fn reactor() -> &'static Reactor {
-    let r = REACTOR.get_or_init(|| {
-        // SAFETY: plain fd creation; results checked below.
-        let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
-        assert!(epfd >= 0, "epoll_create1 failed");
-        // SAFETY: plain fd creation; result checked below.
-        let wakefd = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC | libc::EFD_NONBLOCK) };
-        assert!(wakefd >= 0, "eventfd failed");
-        let mut ev = libc::epoll_event {
-            events: libc::EPOLLIN as u32,
-            u64: WAKE_TOKEN,
-        };
-        // SAFETY: valid epfd/wakefd and a live event struct.
-        let rc = unsafe { libc::epoll_ctl(epfd, libc::EPOLL_CTL_ADD, wakefd, &mut ev) };
-        assert_eq!(rc, 0, "epoll_ctl(wakefd) failed");
-        Reactor {
-            epfd,
-            wakefd,
-            next_token: AtomicU64::new(0),
-            state: Mutex::new(State {
-                waiters: HashMap::new(),
-                timers: BinaryHeap::new(),
-            }),
-        }
+    let r = REACTOR.get_or_init(|| Reactor {
+        sys: sys::Poller::new(),
+        next_token: AtomicU64::new(0),
+        state: Mutex::new(State {
+            waiters: HashMap::new(),
+            timers: BinaryHeap::new(),
+        }),
     });
     THREAD.call_once(|| {
         std::thread::Builder::new()
@@ -215,58 +427,23 @@ impl Reactor {
     /// Arm an fd interest (oneshot) under `token`. `false` when the
     /// fd cannot be registered (forged/foreign) — the caller resolves
     /// the wait as Ready so the following syscall surfaces the real
-    /// error row itself.
+    /// error row itself. The registration mechanics are the platform
+    /// poller's ([`sys::Poller::arm`]).
     fn arm(&self, fd: RawFd, interest: Interest, token: u64) -> bool {
-        let want = match interest {
-            Interest::Read => libc::EPOLLIN,
-            Interest::Write => libc::EPOLLOUT,
-        };
-        let mut ev = libc::epoll_event {
-            events: (want | libc::EPOLLRDHUP | libc::EPOLLONESHOT) as u32,
-            u64: token,
-        };
-        // SAFETY: valid epfd and a live event struct; fd is the
-        // caller's open descriptor.
-        let rc = unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_ADD, fd, &mut ev) };
-        if rc == 0 {
-            return true;
-        }
-        if std::io::Error::last_os_error().raw_os_error() == Some(libc::EEXIST) {
-            // A previous oneshot on this fd is still in the set
-            // (resolution raced the DEL): re-arm in place. One
-            // pending wait per fd at a time is the v1 contract (the
-            // net table is single-owner; the multi-interest widening
-            // is the port sprints').
-            // SAFETY: as above.
-            let rc = unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_MOD, fd, &mut ev) };
-            return rc == 0;
-        }
-        false
+        self.sys.arm(fd, interest, token)
     }
 
-    /// Remove `fd` from the epoll set (resolution cleanup; a raced
-    /// or already-gone fd is fine — the set is self-healing under
-    /// oneshot).
+    /// Remove `fd` from the readiness set (resolution cleanup; a
+    /// raced or already-gone fd is fine — the set is self-healing
+    /// under oneshot).
     fn del(&self, fd: RawFd) {
-        // SAFETY: valid epfd; DEL takes no event struct.
-        unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_DEL, fd, std::ptr::null_mut()) };
+        self.sys.del(fd);
     }
 
-    /// Kick the reactor thread out of `epoll_wait` (a new earliest
+    /// Kick the reactor thread out of its kernel wait (a new earliest
     /// deadline needs a shorter sleep).
     fn wake(&self) {
-        let one: u64 = 1;
-        // SAFETY: valid eventfd; 8-byte write is the eventfd
-        // contract.
-        unsafe { libc::write(self.wakefd, (&raw const one).cast(), 8) };
-    }
-
-    /// Drain the wake eventfd (level-triggered; must be emptied).
-    fn drain_wake(&self) {
-        let mut buf: u64 = 0;
-        // SAFETY: valid nonblocking eventfd; 8-byte read is the
-        // contract, EAGAIN ends the drain.
-        unsafe { libc::read(self.wakefd, (&raw mut buf).cast(), 8) };
+        self.sys.wake();
     }
 
     /// Milliseconds until the earliest LIVE deadline (stale timer
@@ -307,26 +484,15 @@ impl Reactor {
     }
 }
 
-/// The reactor thread: one `epoll_wait` loop delivering completions
-/// and firing timers. Lives for the process once io has happened
-/// (idle cost: one thread asleep in the kernel, zero when no io ever
+/// The reactor thread: one kernel-wait loop (`epoll_wait` /
+/// `kevent`, behind [`sys::Poller::wait`]) delivering completions and
+/// firing timers. Lives for the process once io has happened (idle
+/// cost: one thread asleep in the kernel, zero when no io ever
 /// happens — D15's lazy contract).
 fn reactor_main(r: &'static Reactor) {
-    // SAFETY: zeroed epoll_event array is a valid receive buffer.
-    let mut events: [libc::epoll_event; 64] = unsafe { std::mem::zeroed() };
     loop {
         let timeout = r.next_timeout_ms();
-        // SAFETY: valid epfd and a live, correctly-sized buffer.
-        let n = unsafe { libc::epoll_wait(r.epfd, events.as_mut_ptr(), 64, timeout) };
-        if n < 0 {
-            continue; // EINTR: re-arm.
-        }
-        for ev in &events[..n as usize] {
-            let token = ev.u64;
-            if token == WAKE_TOKEN {
-                r.drain_wake();
-                continue;
-            }
+        r.sys.wait(timeout, |token| {
             // Claim the wait; a missing token is a stale oneshot
             // whose waiter already resolved (cancel/timeout race) —
             // dropped, correctly.
@@ -341,7 +507,7 @@ fn reactor_main(r: &'static Reactor) {
                 sched_point(SchedEvent::IoArrive { token });
                 w.cell.complete(IoWait::Ready);
             }
-        }
+        });
         r.fire_due_timers();
     }
 }
@@ -497,9 +663,14 @@ mod tests {
     impl Pipe {
         fn new() -> Pipe {
             let mut fds = [0i32; 2];
-            // SAFETY: plain pipe2 creation; checked below.
+            // SAFETY: plain pipe creation; checked below (pipe2 on
+            // linux for atomic CLOEXEC; macOS has no pipe2 and a
+            // test pipe outlives no exec anyway).
+            #[cfg(target_os = "linux")]
             let rc = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
-            assert_eq!(rc, 0, "pipe2 failed");
+            #[cfg(not(target_os = "linux"))]
+            let rc = unsafe { libc::pipe(fds.as_mut_ptr()) };
+            assert_eq!(rc, 0, "pipe failed");
             Pipe {
                 r: fds[0],
                 w: fds[1],

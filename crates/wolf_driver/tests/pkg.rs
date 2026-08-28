@@ -18,8 +18,6 @@
 //! compiles away (the refusal tests would run anywhere, but one
 //! honest gate beats two).
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 

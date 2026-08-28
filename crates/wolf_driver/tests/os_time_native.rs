@@ -9,10 +9,8 @@
 //! the HONEST refusal shape of the checked-lane-only families
 //! (json, the process trio) on the native rung.
 //!
-//! Off-target the whole file compiles away (native codegen is
-//! linux/x86-64 only at this tier).
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! Hosts the native tier refuses skip loudly at runtime (the s59
+//! pattern: these tests start passing the moment a gate lifts).
 
 use std::path::Path;
 use std::process::Command;

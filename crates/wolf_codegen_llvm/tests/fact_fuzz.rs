@@ -19,8 +19,6 @@
 //! This same stripped-lowering control is the s44 metadata-drop
 //! sentinel's substrate (D42 ruling 3).
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 mod common;
 
 use common::{add_plain_entry_shim, module_ir, run_ir};

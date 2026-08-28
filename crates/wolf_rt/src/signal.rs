@@ -26,16 +26,13 @@
 //!
 //! # Platform matrix (spec `[os.signal.platform]`)
 //!
-//! - **Linux (here):** `sigaction` trampoline → self-pipe → drain
-//!   thread. Full set. This module is the running implementation, and
-//!   it rides the task layer's platform gate (`#[cfg(target_os =
-//!   "linux")]`) exactly like `reactor`/`net`/`task` — the native
-//!   concurrency floor is Linux at this campaign stage (s28).
-//! - **macOS / BSD:** the same POSIX self-pipe trampoline (or `kqueue`
-//!   `EVFILT_SIGNAL` / a `sigwait` thread) widens here with the task
-//!   layer's port sprints — the whole native concurrency layer is
-//!   Linux-gated today, and signal reception follows the port, it does
-//!   not lead it. A NAMED stop, not silence.
+//! - **Linux / macOS (here):** `sigaction` trampoline → self-pipe →
+//!   drain thread. Full set. One platform seam: linux creates the pipe
+//!   with `pipe2(O_CLOEXEC)`, macOS with `pipe` + two
+//!   `fcntl(FD_CLOEXEC)` (no pipe2 there — the s59 widening
+//!   `[os.signal.platform]` pre-authorized). The module rides the task
+//!   layer's platform gate, which covers both since s59; FreeBSD joins
+//!   with s61 (same POSIX shape, or `kqueue` `EVFILT_SIGNAL`).
 //! - **Windows (tier-1):** POSIX signals do not exist; the meaning
 //!   abstraction maps to `SetConsoleCtrlHandler` — CTRL_C / CTRL_BREAK
 //!   / CTRL_CLOSE → TERMINATE / QUIT / TERMINATE. RELOAD (SIGHUP) and
@@ -184,9 +181,25 @@ static READER: Once = Once::new();
 fn hub() -> &'static Hub {
     let h = HUB.get_or_init(|| {
         let mut fds = [0i32; 2];
-        // SAFETY: plain pipe creation; result checked.
+        // SAFETY: plain pipe creation; result checked. Linux gets the
+        // atomic-CLOEXEC pipe2; macOS has no pipe2, so it is `pipe` +
+        // two `fcntl(F_SETFD, FD_CLOEXEC)` — the exact widening
+        // `[os.signal.platform]` pre-authorized (s59). The set-race
+        // window pipe2 closes (a concurrent fork+exec between pipe and
+        // fcntl) does not arise here: the hub initializes once, under
+        // OnceLock, before any wolf code could spawn a process off it.
+        #[cfg(target_os = "linux")]
         let rc = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
-        assert!(rc == 0, "signal self-pipe (pipe2) failed");
+        #[cfg(not(target_os = "linux"))]
+        let rc = unsafe {
+            let rc = libc::pipe(fds.as_mut_ptr());
+            if rc == 0 {
+                libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC);
+                libc::fcntl(fds[1], libc::F_SETFD, libc::FD_CLOEXEC);
+            }
+            rc
+        };
+        assert!(rc == 0, "signal self-pipe failed");
         // Write end nonblocking: the handler must never block.
         // SAFETY: our own fd; standard nonblocking flip.
         unsafe {

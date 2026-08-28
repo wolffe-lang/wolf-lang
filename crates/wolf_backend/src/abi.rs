@@ -55,14 +55,25 @@
 //!
 //! # Per-target seam (c13)
 //!
-//! Only `x86_64-linux-sysv` is implemented. The module boundary IS the
-//! c13 seam; the deltas, per report 06's ABI table, are documented as
-//! stubs:
-//! - **aapcs64** (linux aarch64): 8 GP + 8 FP argument registers,
-//!   composites ≤ 16 bytes in registers, HFA/HVA classes, indirect
-//!   `x8` result pointer for large returns.
-//! - **apple-arm64**: aapcs64 minus stack-slot padding rules
-//!   (arguments pack), `char` signedness and varargs deltas.
+//! The module boundary IS the c13 seam ([`CTarget`]). Implemented:
+//! - **sysv-x64** (linux/freebsd x86-64): the s29 classification
+//!   above.
+//! - **apple-arm64** (macOS aarch64, s59): AAPCS64 with the Apple
+//!   deltas — 8 GP + 8 FP argument registers; composites ≤ 16 bytes
+//!   in GP registers; HFAs (1–4 same-type float members) in FP
+//!   registers member-wise, exempt from the 16-byte cap; larger
+//!   composites indirect (pointer to a caller-owned copy, never
+//!   byval); `x8` sret not drawn from the argument eight; argument
+//!   packing (stack args at natural alignment) executed by
+//!   cranelift's `AppleAarch64` convention. Register-exhaustion
+//!   corners a backend cannot express are refusal-by-shape
+//!   ([`SigPlan::refusals`]) — loud, never silently wrong. `char`
+//!   signedness and varargs deltas stay c10's (varargs refused).
+//!
+//! Still documented stubs, per report 06's ABI table:
+//! - **aapcs64** (linux aarch64): apple-arm64 minus the packing rule
+//!   and with C.8's even-register alignment — ~80% shared with the
+//!   s59 plan (the follow-on files against the s59 contract).
 //! - **win64**: 4 register slots shared across GP/XMM, shadow space
 //!   for C calls (never for wolf-native — `[abi.native.call]`),
 //!   aggregates > 8 bytes by reference.
@@ -100,16 +111,44 @@ use crate::layout;
 /// module path into every symbol (issue #26) — a mangling change IS a
 /// symbol-contract change, and the s29 rule says any such change must
 /// invalidate stale objects at link grain rather than let two schemes
-/// coexist in one link.
-pub const CONVENTION_VERSION: &str = "wolf-abi-1";
+/// coexist in one link. s59 bumped to `wolf-abi-2` when the plan
+/// became per-target (macOS/aarch64 joins; `[abi.c.targets]`): the
+/// convention now carries target-dependent lowering, so objects from
+/// different toolchain pins must refuse to link rather than meet a
+/// plan they were not compiled under (the D7 letter).
+pub const CONVENTION_VERSION: &str = "wolf-abi-2";
 
 /// Which convention a signature crosses under.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Conv {
     /// `wolf-abi-0`: internal calls (mangled symbols).
     Wolf,
-    /// SysV x86-64 C: the explicit membrane (`extern "c"` / `export`).
+    /// The platform C convention — SysV on x86-64 linux, Apple-arm64
+    /// (AAPCS64 + Apple deltas) on macOS aarch64 ([`CTarget`]) — the
+    /// explicit membrane (`extern "c"` / `export`).
     C,
+}
+
+/// The per-target C lowering contract a plan executes against
+/// (spec/04 `[abi.c.targets]`; the c13 seam this module's doc
+/// promised, first cashed at s59). The WOLF plan is target-uniform —
+/// both sides of an internal call come from this compiler — so the
+/// target only steers [`Conv::C`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CTarget {
+    /// SysV AMD64 classification (linux/freebsd x86-64) — the s29
+    /// implementation.
+    SysvX64,
+    /// AAPCS64 with the Apple deltas (macOS aarch64), s59: 8 GP + 8
+    /// FP argument registers; composites ≤ 16 bytes in GP registers;
+    /// HFAs (1–4 same-type float members) in FP registers, one per
+    /// member, even past 16 bytes; larger composites INDIRECT (a
+    /// pointer to a caller-owned copy — never SysV's byval stack);
+    /// the `x8` indirect-result register NOT drawn from the argument
+    /// eight. Apple's argument-packing rule (stack arguments at
+    /// natural alignment, not 8-byte slots) is executed by
+    /// cranelift's `AppleAarch64` convention underneath the plan.
+    AppleArm64,
 }
 
 /// Register class of one eightbyte (SysV vocabulary; wolf-native v0
@@ -173,6 +212,12 @@ pub struct SigPlan {
     pub conv: Conv,
     pub params: Vec<ParamPass>,
     pub rets: Vec<RetPass>,
+    /// Shapes this target's contract reaches but the executing
+    /// backend cannot express — refusal-by-shape, NEVER a silently
+    /// wrong lowering (s59's HFA-exhaustion clause). Empty on every
+    /// plan the backends execute; a backend seeing an entry refuses
+    /// the whole signature by name.
+    pub refusals: Vec<String>,
 }
 
 impl SigPlan {
@@ -260,13 +305,193 @@ pub fn classify_units(types: &TypeInterner, ty: TypeId) -> Option<Vec<Unit>> {
     Some(units)
 }
 
-/// Plan one signature under one convention. Tokens erase; scalars pass
-/// direct; aggregates split or go to memory per the module contract.
+/// AAPCS64 HFA detection (`[abi.c.targets]`, s59): a Homogeneous
+/// Floating-point Aggregate — every scalar leaf the SAME float type,
+/// 1 to 4 of them, packed back-to-back (same-type floats under
+/// natural layout always are) — passes/returns in FP registers, one
+/// per member, EXEMPT from the 16-byte composite cap ({f64 × 4} rides
+/// v0–v3). `Some(units)` with one Sse unit per member, else `None`.
+/// (HVAs — vector members — cannot be spelled in the v0 type
+/// universe; nothing to detect.)
+fn hfa_units(types: &TypeInterner, ty: TypeId) -> Option<Vec<Unit>> {
+    let mut leaves = Vec::new();
+    scalar_leaves(types, ty, 0, &mut leaves);
+    if leaves.is_empty() || leaves.len() > 4 {
+        return None;
+    }
+    let (_, c0, size) = leaves[0];
+    if c0 != RegClass::Sse {
+        return None;
+    }
+    let homogeneous = leaves
+        .iter()
+        .enumerate()
+        .all(|(i, &(off, c, sz))| c == RegClass::Sse && sz == size && off == i as u32 * size);
+    if !homogeneous {
+        return None;
+    }
+    // The aggregate's own size must be exactly the members' (no
+    // trailing padding — true for same-type float members, asserted
+    // rather than assumed).
+    if layout::layout_of(types, ty)?.size != leaves.len() as u32 * size {
+        return None;
+    }
+    Some(
+        leaves
+            .iter()
+            .map(|&(off, _, sz)| Unit {
+                offset: off,
+                class: RegClass::Sse,
+                bytes: sz as u8,
+            })
+            .collect(),
+    )
+}
+
+/// [`classify_units`] with every unit forced INTEGER — the AAPCS64
+/// rule for a non-HFA composite ≤ 16 bytes: the WHOLE thing rides GP
+/// registers, float fields included (contrast SysV's per-eightbyte
+/// SSE classification).
+fn gp_units(types: &TypeInterner, ty: TypeId) -> Option<Vec<Unit>> {
+    Some(
+        classify_units(types, ty)?
+            .into_iter()
+            .map(|u| Unit {
+                class: RegClass::Int,
+                ..u
+            })
+            .collect(),
+    )
+}
+
+/// The [`Conv::C`] plan for [`CTarget::AppleArm64`] (`[abi.c.targets]`
+/// Apple-arm64, s59). Register budget: 8 GP + 8 FP; `x8` (the
+/// indirect-result register) is NOT drawn from the argument eight, so
+/// an sret consumes nothing here (the SysV `%rdi` delta). Composites:
+/// HFA → FP registers (member-wise); ≤ 16 bytes → GP registers;
+/// larger → INDIRECT (a pointer to a caller-owned copy — AAPCS64
+/// B.4, not SysV byval). The exhaustion corners — a composite whose
+/// registers are spent goes to the stack AS A WHOLE under C, a shape
+/// cranelift's arm64 surface cannot express — are refusal-by-shape:
+/// recorded in [`SigPlan::refusals`], loud at the backend, never
+/// silently wrong.
+fn plan_sig_c_arm64(types: &TypeInterner, sig: &SigData) -> SigPlan {
+    let mut refusals = Vec::new();
+    let rets: Vec<RetPass> = sig
+        .results
+        .iter()
+        .map(|&r| {
+            if types.is_token(r) {
+                RetPass::Token
+            } else if is_agg(types, r) {
+                debug_assert!(
+                    !matches!(types.get(r), TypeData::Eu { .. }),
+                    "error unions never cross the C membrane (E1201)"
+                );
+                if let Some(units) = hfa_units(types, r) {
+                    // v0–v3: cranelift returns up to 8 per class.
+                    RetPass::Split(units)
+                } else if let Some(units) = gp_units(types, r) {
+                    // x0/x1.
+                    RetPass::Split(units)
+                } else {
+                    // Memory via x8 (StructReturn — no GP argument
+                    // register consumed).
+                    RetPass::Sret {
+                        disc_in_reg: matches!(types.get(r), TypeData::Eu { .. }),
+                    }
+                }
+            } else {
+                RetPass::Direct(r)
+            }
+        })
+        .collect();
+    let mut gp_left: i32 = 8;
+    let mut fp_left: i32 = 8;
+    let params = sig
+        .params
+        .iter()
+        .map(|p| {
+            if types.is_token(p.ty) {
+                return ParamPass::Token;
+            }
+            if is_agg(types, p.ty) {
+                debug_assert!(
+                    !matches!(types.get(p.ty), TypeData::Eu { .. }),
+                    "error unions never cross the C membrane (E1201)"
+                );
+                if let Some(units) = hfa_units(types, p.ty) {
+                    let n = units.len() as i32;
+                    if n <= fp_left {
+                        fp_left -= n;
+                        return ParamPass::Split(units);
+                    }
+                    // C copies the whole HFA to the stack once FP
+                    // registers are spent; inexpressible here — the
+                    // named refusal-by-shape (witnessed in tests).
+                    refusals.push(format!(
+                        "an HFA argument past FP-register exhaustion \
+                         ({n} float member(s), {fp_left} register(s) left) — \
+                         AAPCS64 stacks the whole aggregate, which this \
+                         backend cannot express (s59 named refusal)"
+                    ));
+                    return ParamPass::Memory;
+                }
+                if let Some(units) = gp_units(types, p.ty) {
+                    let n = units.len() as i32;
+                    if n <= gp_left {
+                        gp_left -= n;
+                        return ParamPass::Split(units);
+                    }
+                    refusals.push(format!(
+                        "a composite argument past GP-register exhaustion \
+                         ({n} eightbyte(s), {gp_left} register(s) left) — \
+                         AAPCS64 stacks the whole aggregate, which this \
+                         backend cannot express (s59 named refusal)"
+                    ));
+                    return ParamPass::Memory;
+                }
+                // > 16 bytes, non-HFA: indirect — the pointer is an
+                // ordinary GP scalar (stack-spilled like one when the
+                // registers are gone, which matches C).
+                gp_left -= 1;
+                return ParamPass::Memory;
+            }
+            match scalar_class(types, p.ty) {
+                Some(RegClass::Int) => gp_left -= 1,
+                Some(RegClass::Sse) => fp_left -= 1,
+                None => {}
+            }
+            ParamPass::Direct(p.ty)
+        })
+        .collect();
+    SigPlan {
+        conv: Conv::C,
+        params,
+        rets,
+        refusals,
+    }
+}
+
+/// Plan one signature under one convention for one C target. Tokens
+/// erase; scalars pass direct; aggregates split or go to memory per
+/// the module contract. `target` steers [`Conv::C`] only — the wolf
+/// plan is target-uniform (both sides of an internal call come from
+/// this compiler; cranelift's default convention carries the units
+/// consistently on either host).
 ///
 /// Panics (debug builds) when an error union meets [`Conv::C`]: rows
 /// never cross the membrane (`[abi.err.row]` — the front end rejects
 /// with E1201 before any backend runs).
-pub fn plan_sig(types: &TypeInterner, sig: &SigData, conv: Conv) -> SigPlan {
+pub fn plan_sig(types: &TypeInterner, sig: &SigData, conv: Conv, target: CTarget) -> SigPlan {
+    if conv == Conv::C && target == CTarget::AppleArm64 {
+        return plan_sig_c_arm64(types, sig);
+    }
+    plan_sig_sysv(types, sig, conv)
+}
+
+/// The s29 plan: wolf-abi (any target) and SysV x86-64 C.
+fn plan_sig_sysv(types: &TypeInterner, sig: &SigData, conv: Conv) -> SigPlan {
     let plan_agg = |ty: TypeId| -> Option<Vec<Unit>> {
         if conv == Conv::C {
             debug_assert!(
@@ -345,7 +570,12 @@ pub fn plan_sig(types: &TypeInterner, sig: &SigData, conv: Conv) -> SigPlan {
             }
         })
         .collect();
-    SigPlan { conv, params, rets }
+    SigPlan {
+        conv,
+        params,
+        rets,
+        refusals: Vec::new(),
+    }
 }
 
 /// The libc import subset the WIR lowerer emits today (the is04
@@ -375,7 +605,7 @@ mod tests {
             ],
             vec![types::I64],
         );
-        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf, CTarget::SysvX64);
         assert_eq!(
             plan.params,
             vec![
@@ -478,7 +708,7 @@ mod tests {
         assert_eq!(classify_units(&m.types, big), None);
         let sig = m.make_sig(vec![Param::val(big)], vec![big]);
         for conv in [Conv::Wolf, Conv::C] {
-            let plan = plan_sig(&m.types, &m.sigs[sig], conv);
+            let plan = plan_sig(&m.types, &m.sigs[sig], conv, CTarget::SysvX64);
             assert_eq!(plan.params, vec![ParamPass::Memory]);
             assert_eq!(plan.rets, vec![RetPass::Sret { disc_in_reg: false }]);
         }
@@ -491,7 +721,7 @@ mod tests {
         // tag first (`?` branches on %rax).
         let small = m.types.eu(Some(types::I64), vec![]);
         let sig = m.make_sig(vec![], vec![small]);
-        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf, CTarget::SysvX64);
         let RetPass::Split(units) = &plan.rets[0] else {
             panic!("small eu returns in registers, got {:?}", plan.rets[0]);
         };
@@ -501,7 +731,7 @@ mod tests {
         // register.
         let big = m.types.eu(Some(types::I64), vec![types::I64]);
         let sig = m.make_sig(vec![], vec![big]);
-        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf, CTarget::SysvX64);
         assert_eq!(plan.rets, vec![RetPass::Sret { disc_in_reg: true }]);
         assert!(plan.has_sret());
     }
@@ -516,9 +746,9 @@ mod tests {
         let mut params = vec![Param::val(types::I64); 5];
         params.push(Param::val(ll));
         let sig = m.make_sig(params, vec![types::I64]);
-        let c = plan_sig(&m.types, &m.sigs[sig], Conv::C);
+        let c = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::SysvX64);
         assert_eq!(c.params[5], ParamPass::Memory);
-        let w = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf);
+        let w = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf, CTarget::SysvX64);
         assert!(matches!(w.params[5], ParamPass::Split(_)));
         // A C sret consumes `%rdi`: four scalars + sret leave one reg.
         let big = m
@@ -527,7 +757,7 @@ mod tests {
         let mut params = vec![Param::val(types::I64); 4];
         params.push(Param::val(ll));
         let sig = m.make_sig(params, vec![big]);
-        let c = plan_sig(&m.types, &m.sigs[sig], Conv::C);
+        let c = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::SysvX64);
         assert_eq!(c.rets[0], RetPass::Sret { disc_in_reg: false });
         assert_eq!(c.params[4], ParamPass::Memory);
     }
@@ -538,11 +768,146 @@ mod tests {
         let sig = m.make_sig(vec![Param::val(types::I64)], vec![types::I64]);
         let now = crate::mangle_versioned(&m, "f", sig, CONVENTION_VERSION);
         assert_eq!(now, crate::mangle(&m, "f", sig));
-        let bumped = crate::mangle_versioned(&m, "f", sig, "wolf-abi-2");
+        let bumped = crate::mangle_versioned(&m, "f", sig, "wolf-abi-3");
         assert_ne!(
             now, bumped,
             "a convention bump must invalidate every symbol (D7)"
         );
+    }
+
+    /// The Apple-arm64 C plan (s59, `[abi.c.targets]`): HFAs ride FP
+    /// registers member-wise (the 16-byte cap does not apply); mixed
+    /// composites ≤ 16 bytes ride GP registers WHOLLY (float fields
+    /// included — the delta from SysV's per-eightbyte SSE classes);
+    /// larger composites go indirect; the `x8` sret consumes no
+    /// argument register.
+    #[test]
+    fn apple_arm64_hfa_and_gp_classification() {
+        let mut m = Module::new();
+        // {f64, f64, f64, f64}: HFA-4 — v0..v3 BOTH directions
+        // (SysV: 32 bytes = MEMORY/sret; the load-bearing delta).
+        let d4 = m.types.intern(TypeData::Agg(vec![
+            types::F64,
+            types::F64,
+            types::F64,
+            types::F64,
+        ]));
+        let sig = m.make_sig(vec![Param::val(d4)], vec![d4]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        assert!(plan.refusals.is_empty());
+        let ParamPass::Split(units) = &plan.params[0] else {
+            panic!("HFA-4 param rides registers, got {:?}", plan.params[0]);
+        };
+        assert_eq!(units.len(), 4);
+        assert!(
+            units
+                .iter()
+                .enumerate()
+                .all(|(i, u)| u.class == RegClass::Sse && u.bytes == 8 && u.offset == i as u32 * 8)
+        );
+        assert!(
+            matches!(&plan.rets[0], RetPass::Split(us) if us.len() == 4),
+            "HFA-4 RETURNS in v0..v3 too, got {:?}",
+            plan.rets[0]
+        );
+        // {f32, f32}: HFA-2 as two s-registers, NOT one merged
+        // eightbyte (SysV packs both floats into one SSE eightbyte —
+        // the other load-bearing delta).
+        let ff = m.types.intern(TypeData::Agg(vec![types::F32, types::F32]));
+        let sig = m.make_sig(vec![Param::val(ff)], vec![ff]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        let ParamPass::Split(units) = &plan.params[0] else {
+            panic!("HFA-2 rides registers");
+        };
+        assert_eq!(units.len(), 2, "one register PER MEMBER");
+        assert!(
+            units
+                .iter()
+                .all(|u| u.class == RegClass::Sse && u.bytes == 4)
+        );
+        assert_eq!(units[1].offset, 4);
+        // {f64, i64}: mixed — NOT an HFA; ≤ 16 bytes ⇒ two GP
+        // registers, the float field in x-regs (SysV would put it in
+        // SSE).
+        let di = m.types.intern(TypeData::Agg(vec![types::F64, types::I64]));
+        let sig = m.make_sig(vec![Param::val(di)], vec![di]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        let ParamPass::Split(units) = &plan.params[0] else {
+            panic!("mixed 16-byte composite rides GP registers");
+        };
+        assert!(units.iter().all(|u| u.class == RegClass::Int));
+        // {i64, i64, i64}: 24 bytes, not an HFA ⇒ INDIRECT param
+        // (pointer), sret return via x8.
+        let lll = m
+            .types
+            .intern(TypeData::Agg(vec![types::I64, types::I64, types::I64]));
+        let sig = m.make_sig(vec![Param::val(lll)], vec![lll]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        assert_eq!(plan.params[0], ParamPass::Memory);
+        assert_eq!(plan.rets[0], RetPass::Sret { disc_in_reg: false });
+        // {f64 × 5}: 40 bytes and NOT an HFA (5 members) ⇒ indirect.
+        let d5 = m.types.intern(TypeData::Agg(vec![types::F64; 5]));
+        let sig = m.make_sig(vec![Param::val(d5)], vec![]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        assert_eq!(plan.params[0], ParamPass::Memory);
+        assert!(plan.refusals.is_empty());
+    }
+
+    /// `x8` is NOT drawn from the argument eight (the sret delta from
+    /// SysV's `%rdi`): eight GP scalars still all ride registers when
+    /// the result goes out through x8.
+    #[test]
+    fn apple_arm64_sret_consumes_no_argument_register() {
+        let mut m = Module::new();
+        let big = m
+            .types
+            .intern(TypeData::Agg(vec![types::I64, types::I64, types::I64]));
+        let ll = m.types.intern(TypeData::Agg(vec![types::I64, types::I64]));
+        // 6 scalars + a 2-eightbyte composite = exactly 8 GP regs —
+        // legal ONLY because x8 is separate (SysV demotes here).
+        let mut params = vec![Param::val(types::I64); 6];
+        params.push(Param::val(ll));
+        let sig = m.make_sig(params, vec![big]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        assert_eq!(plan.rets[0], RetPass::Sret { disc_in_reg: false });
+        assert!(
+            matches!(&plan.params[6], ParamPass::Split(us) if us.len() == 2),
+            "the composite still fits: x8 consumed nothing"
+        );
+        assert!(plan.refusals.is_empty());
+    }
+
+    /// The named refusal-by-shape (s59): a composite argument past its
+    /// register class's exhaustion is copied to the stack AS A WHOLE
+    /// under AAPCS64 — a shape the executing backend cannot express —
+    /// so the plan records a refusal instead of lowering it wrong.
+    /// Loud either way, never silently divergent (the contract's
+    /// HFA/HVA clause).
+    #[test]
+    fn apple_arm64_register_exhaustion_refuses_by_shape() {
+        let mut m = Module::new();
+        // 7 GP scalars leave one register; a 2-eightbyte composite
+        // must NOT split across x7 and the stack.
+        let ll = m.types.intern(TypeData::Agg(vec![types::I64, types::I64]));
+        let mut params = vec![Param::val(types::I64); 7];
+        params.push(Param::val(ll));
+        let sig = m.make_sig(params, vec![]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        assert_eq!(plan.refusals.len(), 1, "{:?}", plan.refusals);
+        assert!(plan.refusals[0].contains("GP-register exhaustion"));
+        // 7 FP scalars leave one v-register; an HFA-2 must not split.
+        let ff = m.types.intern(TypeData::Agg(vec![types::F32, types::F32]));
+        let mut params = vec![Param::val(types::F64); 7];
+        params.push(Param::val(ff));
+        let sig = m.make_sig(params, vec![]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::AppleArm64);
+        assert_eq!(plan.refusals.len(), 1, "{:?}", plan.refusals);
+        assert!(plan.refusals[0].contains("HFA argument past FP-register exhaustion"));
+        // The wolf convention never rations registers: the same
+        // signatures plan clean internally on the same target.
+        let sig2 = m.make_sig(vec![Param::val(ll); 12], vec![]);
+        let plan = plan_sig(&m.types, &m.sigs[sig2], Conv::Wolf, CTarget::AppleArm64);
+        assert!(plan.refusals.is_empty());
     }
 
     #[test]

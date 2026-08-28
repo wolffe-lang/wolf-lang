@@ -12,8 +12,6 @@
 //! Off-target (or without clang/cc) the lanes skip loudly; the linux
 //! CI lane provisions both, so a silent skip there is a lane bug.
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -84,6 +82,15 @@ fn lane(file: &Path, flag: &str) -> Option<(String, String)> {
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
+    // The release tier refuses this HOST by name (linux/x86-64 only
+    // until its own c13 sprint): a loud skip, not a verdict (s59).
+    if flag == "--release"
+        && rec["verdict"] == "unsupported"
+        && String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64")
+    {
+        eprintln!("SKIP: the release tier refuses this host");
+        return None;
+    }
     Some((
         rec["verdict"].as_str().unwrap_or("").to_string(),
         rec["stdout_sha256"].as_str().unwrap_or("").to_string(),

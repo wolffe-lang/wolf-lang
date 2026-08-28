@@ -16,8 +16,6 @@
 //! Behavior is pinned alongside every IR assertion: debug and release
 //! must print the same answer (facts change codegen, never results).
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -52,6 +50,12 @@ fn release_ir(dir: &Path) -> Option<String> {
             "SKIP (environment): {}",
             String::from_utf8_lossy(&st.stderr)
         );
+        return None;
+    }
+    if String::from_utf8_lossy(&st.stderr).contains("release tier targets linux/x86-64") {
+        // The tier's own named host refusal (linux/x86-64 only until
+        // its c13 sprint) — a loud skip, never a verdict (s59).
+        eprintln!("SKIP: the release tier refuses this host");
         return None;
     }
     assert!(

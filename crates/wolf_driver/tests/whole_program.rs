@@ -26,8 +26,6 @@
 //! Environment problems (no cc/clang, no rt lib) SKIP loudly (exit 2
 //! from `wolf build`); refusals and compile errors FAIL.
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -84,6 +82,12 @@ fn build(dir: &Path, out: &str, extra: &[&str]) -> Option<Vec<(String, String)>>
         Some(0) => {}
         Some(2) => {
             eprintln!("SKIP: environment cannot build natively: {}", stderr.trim());
+            return None;
+        }
+        _ if stderr.contains("release tier targets linux/x86-64") => {
+            // The tier's named host refusal (linux/x86-64 only until
+            // its own c13 sprint) — a loud skip (s59).
+            eprintln!("SKIP: the release tier refuses this host");
             return None;
         }
         other => panic!("wolf build failed (exit {other:?}): {stderr}"),
@@ -249,6 +253,11 @@ fn codegen_report_dumps_the_frozen_summary() {
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     if out.status.code() == Some(2) {
         eprintln!("SKIP: environment cannot build natively: {}", stderr.trim());
+        return;
+    }
+    if stderr.contains("release tier targets linux/x86-64") {
+        // The tier's named host refusal — a loud skip (s59).
+        eprintln!("SKIP: the release tier refuses this host");
         return;
     }
     assert_eq!(out.status.code(), Some(0), "{stderr}");

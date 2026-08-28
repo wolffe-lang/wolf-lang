@@ -40,7 +40,7 @@ use cranelift_frontend::FunctionBuilder;
 use cranelift_module::Module as _;
 use cranelift_object::ObjectModule;
 
-use wolf_backend::abi::{self, Conv, ParamPass, RegClass, RetPass, Unit};
+use wolf_backend::abi::{self, CTarget, Conv, ParamPass, RegClass, RetPass, Unit};
 use wolf_backend::layout::{self, Layout};
 use wolf_backend::{BackendError, DebugTy};
 use wolf_wir::ir::{Aux, Block as WBlock, Function as WFunction, Module as WModule, SigId};
@@ -253,8 +253,14 @@ pub(crate) enum Slot {
     Split(Vec<Unit>),
     /// Aggregate by pointer (wolf-native MEMORY class).
     Ref,
-    /// Aggregate byval on the stack (C MEMORY class), by size.
+    /// Aggregate byval on the stack (C MEMORY class, SysV x86-64),
+    /// by size.
     CStruct(u32),
+    /// Aggregate INDIRECT (C MEMORY class, Apple-arm64 — AAPCS64
+    /// B.4): a plain pointer to a caller-owned copy of `size` bytes.
+    /// The callee reads through the pointer; the call site copies the
+    /// value to a fresh slot first (the callee owns the copy).
+    CIndirect(u32),
     /// Effect token: erased, crosses as nothing.
     Token,
 }
@@ -327,12 +333,34 @@ fn unit_clif_ty(u: &Unit) -> cranelift_codegen::ir::Type {
     }
 }
 
+/// The [`CTarget`] a calling convention executes against — how this
+/// backend names its host to the abi module's per-target seam (s59).
+pub(crate) fn c_target(cc: CallConv) -> CTarget {
+    match cc {
+        CallConv::AppleAarch64 => CTarget::AppleArm64,
+        _ => CTarget::SysvX64,
+    }
+}
+
 /// Build the CLIF signature + slot map for one WIR signature under one
 /// convention, executing the shared plan from [`wolf_backend::abi`]
 /// (where ALL classification lives — this function is mechanical).
-pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, cc: CallConv) -> SigInfo {
+/// `Err` when the plan records a refusal-by-shape (s59: the
+/// register-exhaustion corners the target's C contract reaches but
+/// this backend cannot express) — loud, never silently wrong.
+pub(crate) fn sig_info(
+    m: &WModule,
+    sig: SigId,
+    conv: Conv,
+    cc: CallConv,
+) -> Result<SigInfo, BackendError> {
     let data = &m.sigs[sig];
-    let plan = abi::plan_sig(&m.types, data, conv);
+    let plan = abi::plan_sig(&m.types, data, conv, c_target(cc));
+    if let Some(why) = plan.refusals.first() {
+        return Err(BackendError::Unsupported(format!(
+            "C-membrane signature shape: {why}"
+        )));
+    }
     let mut clif = Signature::new(cc);
     let sret_first = conv == Conv::C;
     let mut rets = Vec::with_capacity(data.results.len());
@@ -394,13 +422,26 @@ pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, cc: CallConv) -> Sig
                 }
                 Conv::C => {
                     let size = layout::layout_of(&m.types, p.ty).expect("sized param").size;
-                    clif.params.push(AbiParam::special(
-                        ctypes::I64,
-                        cranelift_codegen::ir::ArgumentPurpose::StructArgument(
-                            size.next_multiple_of(8),
-                        ),
-                    ));
-                    params.push(Slot::CStruct(size));
+                    match c_target(cc) {
+                        CTarget::SysvX64 => {
+                            // psABI MEMORY: byval on the stack —
+                            // cranelift's StructArgument does the copy.
+                            clif.params.push(AbiParam::special(
+                                ctypes::I64,
+                                cranelift_codegen::ir::ArgumentPurpose::StructArgument(
+                                    size.next_multiple_of(8),
+                                ),
+                            ));
+                            params.push(Slot::CStruct(size));
+                        }
+                        CTarget::AppleArm64 => {
+                            // AAPCS64 B.4: indirect — a plain pointer
+                            // parameter (cranelift's arm64 has no
+                            // StructArgument; C does not want one).
+                            clif.params.push(AbiParam::new(ctypes::I64));
+                            params.push(Slot::CIndirect(size));
+                        }
+                    }
                 }
             },
         }
@@ -414,12 +455,12 @@ pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, cc: CallConv) -> Sig
             }
         }
     }
-    SigInfo {
+    Ok(SigInfo {
         params,
         rets,
         clif,
         sret_first,
-    }
+    })
 }
 
 /// How a WIR value exists in CLIF.
@@ -641,7 +682,7 @@ impl<'a, 'b> Tx<'a, 'b> {
                     }
                     self.vals.insert(wv, Repr::Addr(addr));
                 }
-                Slot::Ref | Slot::CStruct(_) => {
+                Slot::Ref | Slot::CStruct(_) | Slot::CIndirect(_) => {
                     self.vals.insert(wv, Repr::Addr(cparams[next]));
                     next += 1;
                 }
@@ -1419,7 +1460,20 @@ impl<'a, 'b> Tx<'a, 'b> {
                         } else {
                             // s98: a vtable — pointer-sized slots, each
                             // a function relocation ([abi.native.dyn]).
-                            desc.define_zeroinit(d.funcs.len() * 8);
+                            // REAL zero bytes, not `define_zeroinit`:
+                            // zeroinit is Init::Zeros, which
+                            // cranelift-object places in BSS — and a
+                            // relocation into a zero-fill section is
+                            // malformed (Apple's ld SEGFAULTS on it;
+                            // found the day the s59 gate lifted). With
+                            // byte contents the table lands in
+                            // read-only-data-with-relocs, where a
+                            // vtable belongs on every format.
+                            desc.define(vec![0u8; d.funcs.len() * 8].into_boxed_slice());
+                            // Pointer-slot alignment (Apple ld warns
+                            // on the default 1 and unaligned function
+                            // pointers are wrong everywhere).
+                            desc.set_align(8);
                             for (i, fname) in d.funcs.iter().enumerate() {
                                 let Some(entry) = self.funcs.get(fname) else {
                                     return Err(nyi(format!(
@@ -1473,7 +1527,7 @@ impl<'a, 'b> Tx<'a, 'b> {
                     // an address is just the import without the call.
                     let sig = target.sig;
                     let cc = self.om.isa().default_call_conv();
-                    let si_w = sig_info(self.m, sig, Conv::Wolf, cc);
+                    let si_w = sig_info(self.m, sig, Conv::Wolf, cc)?;
                     let symbol = wolf_backend::mangle(self.m, &callee, sig);
                     let fid = match self.imports.get(callee.as_str()) {
                         Some(&fid) => fid,
@@ -1598,7 +1652,7 @@ impl<'a, 'b> Tx<'a, 'b> {
                     self.f.sig,
                     self.conv,
                     self.om.isa().default_call_conv(),
-                );
+                )?;
                 let mut scalars: Vec<CValue> = Vec::new();
                 let mut sret_i = 0usize;
                 for (&rv, slot) in args.iter().zip(si.rets.iter()) {
@@ -1905,7 +1959,7 @@ impl<'a, 'b> Tx<'a, 'b> {
             // The explicit membrane (D19): the WIR name's `c.`
             // namespace IS the seam; the linker symbol is the plain C
             // name, declared with the SysV plan.
-            let si_c = sig_info(self.m, sig, Conv::C, cc);
+            let si_c = sig_info(self.m, sig, Conv::C, cc)?;
             let fid = match self.imports.get(callee) {
                 Some(&fid) => fid,
                 None => {
@@ -1929,7 +1983,7 @@ impl<'a, 'b> Tx<'a, 'b> {
             // wolf plan. The mangle folds name + rendered sig +
             // convention version, so the import and the defining
             // object's export agree structurally (D7 at link grain).
-            let si_w = sig_info(self.m, sig, Conv::Wolf, cc);
+            let si_w = sig_info(self.m, sig, Conv::Wolf, cc)?;
             let symbol = wolf_backend::mangle(self.m, callee, sig);
             let fid = match self.imports.get(callee) {
                 Some(&fid) => fid,
@@ -1951,7 +2005,7 @@ impl<'a, 'b> Tx<'a, 'b> {
                  modelled c.* set are c10's header importer)"
             )));
         };
-        let si = sig_info(self.m, sig, conv, cc);
+        let si = sig_info(self.m, sig, conv, cc)?;
         self.emit_call_body(CallTarget::Direct(fref), &si, sig, args, results)
     }
 
@@ -1966,7 +2020,7 @@ impl<'a, 'b> Tx<'a, 'b> {
         results: &[wolf_wir::ir::Value],
     ) -> Result<(), BackendError> {
         let cc = self.om.isa().default_call_conv();
-        let si = sig_info(self.m, sig, Conv::Wolf, cc);
+        let si = sig_info(self.m, sig, Conv::Wolf, cc)?;
         let callee = self.scalar(args[0])?;
         let sigref = self.b.import_signature(si.clif.clone());
         self.emit_call_body(
@@ -2020,6 +2074,18 @@ impl<'a, 'b> Tx<'a, 'b> {
                 // C byval struct args take the ADDRESS as the CLIF
                 // value; Cranelift performs the stack copy.
                 Slot::Ref | Slot::CStruct(_) => cargs.push(self.addr(av)?),
+                // Apple-arm64 indirect (AAPCS64 B.4): the CALLEE owns
+                // the pointed-at memory, so pass the address of a
+                // fresh caller-side copy, never the SSA value's own
+                // bytes.
+                Slot::CIndirect(size) => {
+                    let size = *size;
+                    let src = self.addr(av)?;
+                    let slot = self.new_slot(Layout { size, align: 8 });
+                    let dst = self.b.ins().stack_addr(ctypes::I64, slot, 0);
+                    self.copy_bytes(dst, src, size);
+                    cargs.push(dst);
+                }
             }
         }
         if !si.sret_first {

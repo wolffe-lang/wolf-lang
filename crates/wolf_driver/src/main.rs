@@ -1632,7 +1632,19 @@ fn compile_unit(
 /// Probe (once) for `ld.lld` on PATH; `Some("-fuse-ld=lld")` routes
 /// the link through lld (D1: lld ships with the toolchain — packaging
 /// is c13/s66's problem, the probe is v0's honest posture).
+///
+/// macOS carve-out (s59): v0 links through `cc` = Apple clang = Apple
+/// ld, whose AUTOMATIC ad-hoc code signature is the v0 codesigning
+/// story — an arm64 Mach-O executes only if signed, and Apple ld signs
+/// every output by itself. lld is never routed here even when a
+/// homebrew/rustup `ld.lld` sits on PATH; the NAMED condition for ever
+/// routing it is passing `-Wl,-adhoc_codesign` in the same motion
+/// (lld does not sign by default), which stays unbuilt until a sprint
+/// needs it.
 fn lld_fuse_flag() -> Option<&'static str> {
+    if cfg!(target_os = "macos") {
+        return None;
+    }
     use std::sync::OnceLock;
     static PROBE: OnceLock<bool> = OnceLock::new();
     let have = *PROBE.get_or_init(|| {
@@ -1658,6 +1670,24 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
                 .to_string(),
         )
     })?;
+    // Staging-path discipline is PER-FORMAT (s59): on macOS the
+    // linked executable EMBEDS the staging paths (the debug map's
+    // N_OSO entries), so a deterministic build needs a deterministic
+    // directory — derived from the object contents, and identical
+    // inputs may share it safely (identical writes are idempotent).
+    // Elsewhere the paths never reach the binary and a pid+nanos dir
+    // avoids even theoretical same-content races.
+    #[cfg(target_os = "macos")]
+    let dir = {
+        use std::hash::{Hash as _, Hasher as _};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for (name, bytes) in objects {
+            name.hash(&mut h);
+            bytes.hash(&mut h);
+        }
+        std::env::temp_dir().join(format!("wolf-link-{:016x}", h.finish()))
+    };
+    #[cfg(not(target_os = "macos"))]
     let dir = std::env::temp_dir().join(format!(
         "wolf-link-{}-{}",
         std::process::id(),
@@ -1677,13 +1707,24 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     }
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let mut cmd = std::process::Command::new(&cc);
+    // macOS: zero the debug map's N_OSO timestamps (ld64 honors
+    // ZERO_AR_DATE) — the other half of deterministic links; dsymutil
+    // treats 0 as "no check" (the Rust archives already do this).
+    #[cfg(target_os = "macos")]
+    cmd.env("ZERO_AR_DATE", "1");
     cmd.arg("-o").arg(out);
     for p in &paths {
         cmd.arg(p);
     }
-    // What a Rust staticlib needs from the platform (linux x86-64,
-    // the s28 target).
-    cmd.arg(&rt).args(["-lpthread", "-ldl", "-lm"]);
+    // What a Rust staticlib needs from the platform. On linux that is
+    // pthreads + libdl + libm as separate archives; on macOS every one
+    // of those lives in libSystem, which `cc` links implicitly — an
+    // explicit `-ldl` has nothing to resolve to (s59).
+    cmd.arg(&rt);
+    #[cfg(target_os = "macos")]
+    cmd.args(["-lpthread", "-lm"]);
+    #[cfg(not(target_os = "macos"))]
+    cmd.args(["-lpthread", "-ldl", "-lm"]);
     // s32 Target 1 ("a wolf binary that never spawns is a C binary"):
     // rustc emits function sections, so section GC drops every
     // wolf_rt entry point the program never calls — the no-spawn CI
@@ -1699,6 +1740,26 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     let status = cmd
         .status()
         .map_err(|e| BuildStop::Environment(format!("cannot run `{cc}`: {e}")));
+    // macOS (s59): Apple's static link does NOT copy DWARF into the
+    // executable — it writes a debug MAP whose entries point at the
+    // staging objects, and `dsymutil` links those into `<out>.dSYM`.
+    // That must happen BEFORE the staging dir is deleted or the map
+    // dangles and no debugger ever sees wolf's line tables.
+    #[cfg(target_os = "macos")]
+    if matches!(&status, Ok(s) if s.success()) {
+        match std::process::Command::new("dsymutil").arg(out).status() {
+            Ok(s) if s.success() => {}
+            Ok(s) => eprintln!(
+                "wolf build: note: `dsymutil {}` failed ({s}) — the binary runs \
+                 but carries no linked debug info (.dSYM)",
+                out.display()
+            ),
+            Err(e) => eprintln!(
+                "wolf build: note: cannot run `dsymutil`: {e} — the binary runs \
+                 but carries no linked debug info (.dSYM)"
+            ),
+        }
+    }
     let _ = std::fs::remove_dir_all(&dir);
     let status = status?;
     if !status.success() {
@@ -1970,7 +2031,10 @@ fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
 /// interpreted instead).
 fn build(args: &[String]) {
     let cli = parse_build_cli("build", args, false);
-    if lld_fuse_flag().is_none() && cli.opts.emit == Emit::Bin {
+    // On macOS the system linker is the DESIGN (Apple ld's automatic
+    // ad-hoc signature — see `lld_fuse_flag`), so there is nothing to
+    // note; elsewhere a missing lld is worth a heads-up.
+    if !cfg!(target_os = "macos") && lld_fuse_flag().is_none() && cli.opts.emit == Emit::Bin {
         eprintln!(
             "wolf build: note: ld.lld not found on PATH — linking with the system \
              linker (lld ships with the toolchain; packaging is c13)"

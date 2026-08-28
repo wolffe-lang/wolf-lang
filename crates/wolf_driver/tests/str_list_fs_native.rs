@@ -10,10 +10,8 @@
 //! rows. Native refusals FAIL here — this file is the anti-regression
 //! gate for exactly the refusal family #40 closed.
 //!
-//! Off-target the whole file compiles away (native codegen is
-//! linux/x86-64 only at this tier).
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! Hosts the native tier refuses skip loudly at runtime (the s59
+//! pattern: these tests start passing the moment a gate lifts).
 
 use std::path::Path;
 use std::process::Command;

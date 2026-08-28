@@ -22,10 +22,8 @@
 //! the json witnesses did not survive contact with lupin's own
 //! source; the delta is recorded in the sprint closeout.
 //!
-//! Off-target the whole file compiles away (native codegen is
-//! linux/x86-64 only at this tier).
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! Hosts the native tier refuses skip loudly at runtime (the s59
+//! pattern: these tests start passing the moment a gate lifts).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -71,6 +69,15 @@ fn lane(path: &Path, flag: &str) -> Option<Obs> {
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
+    // The release tier refuses this HOST by name (linux/x86-64 only
+    // until its own c13 sprint): a loud skip, not a verdict (s59).
+    if flag == "--release"
+        && rec["verdict"] == "unsupported"
+        && String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64")
+    {
+        eprintln!("SKIP: the release tier refuses this host");
+        return None;
+    }
     Some(Obs {
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),

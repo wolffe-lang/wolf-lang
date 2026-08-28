@@ -147,7 +147,9 @@ impl LlvmBackend {
     pub fn with_options(opts: EmitOptions) -> Result<LlvmBackend, BackendError> {
         if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             return Err(BackendError::Unsupported(
-                "the release tier targets linux/x86-64 only in s41 (c13 owns the matrix)"
+                "the release tier targets linux/x86-64 only in s41 (c13 owns the \
+                 matrix; the debug tier crossed to macOS/aarch64 at s59 — the \
+                 release tier follows as its own c13 sprint)"
                     .to_string(),
             ));
         }

@@ -20,8 +20,6 @@
 //! `wolf build` is the environment signal, per the s30 test contract);
 //! refusals and compile errors FAIL. Off-target the file compiles away.
 
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -153,11 +151,18 @@ fn cache_granularity_and_determinism() {
     // 4. Determinism: cached rebuild ≡ --no-cache rebuild, byte for
     //    byte (CI's fuzz-an-edit oracle seed).
     let cached = std::fs::read(dir.join("prog")).expect("read cached binary");
+    // The fresh build keeps the SAME basename in a sibling directory:
+    // Mach-O's linker signature folds the output's basename in as the
+    // code-signing identifier, so `prog-fresh` could never be
+    // bit-identical to `prog` on macOS however deterministic the
+    // build (s59); a same-named output compares the real property.
+    let fresh_dir = dir.join("fresh");
+    std::fs::create_dir_all(&fresh_dir).expect("mkdir fresh");
     let out = Command::new(wolf())
         .arg("build")
         .arg(dir.join("main.lu"))
         .arg("-o")
-        .arg(dir.join("prog-fresh"))
+        .arg(fresh_dir.join("prog"))
         .arg("--no-cache")
         .output()
         .expect("wolf runs");
@@ -167,7 +172,7 @@ fn cache_granularity_and_determinism() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    let fresh = std::fs::read(dir.join("prog-fresh")).expect("read fresh binary");
+    let fresh = std::fs::read(fresh_dir.join("prog")).expect("read fresh binary");
     assert_eq!(
         cached, fresh,
         "cached and --no-cache builds must be bit-identical"

@@ -63,6 +63,25 @@ jobs:
           name: bench-smoke
           path: bench-results/
 
+  native-macos:
+    # s59: the native tier's second platform. The same gauntlet, on the
+    # host the compiler came home to — Apple clang links (automatic
+    # ad-hoc signing), lldb drives the debug transcripts, kqueue serves
+    # the reactor. The release-tier gates (bench-gates, the --release
+    # suites) skip loudly by the tier's NAMED host refusal; they stay
+    # pinned by the linux lane above.
+    name: native gauntlet (macOS aarch64)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: full gauntlet (fmt, clippy, test, corpus, abi-check, debug-check, lane-coverage)
+        run: cargo xtask ci
+
   fuzz-smoke:
     name: fuzz smoke (60s/target)
     runs-on: ubuntu-latest

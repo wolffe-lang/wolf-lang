@@ -29,22 +29,26 @@ pub mod quarantine;
 // program delivery follows the backend port (`[os.random.platform]`).
 pub mod random;
 // The io reactor (s35) shares the task layer's platform posture:
-// epoll first (this campaign's floor); the kqueue/IOCP port sprints
-// widen against its interface, readiness adapted underneath.
-#[cfg(target_os = "linux")]
+// epoll on linux (the campaign floor), kqueue on macOS since s59 —
+// the port promised by the reactor's interface, readiness adapted
+// underneath (`Interest`/`Ready` unchanged). IOCP (windows, s60)
+// widens next.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod reactor;
 // Signal RECEPTION (s114, #126): the self-pipe/sigaction trampoline
 // and the meaning-based receive surface. Rides the task layer's
-// platform gate — the whole native concurrency floor is linux at this
-// campaign stage (reactor/net/task); macOS/BSD/Windows delivery widens
-// with the port sprints (a NAMED stop, spec `[os.signal.platform]`).
-#[cfg(target_os = "linux")]
+// platform gate — linux at s114, macOS since s59 (`pipe` + FD_CLOEXEC
+// where pipe2 does not exist, spec `[os.signal.platform]`'s
+// pre-authorized widening); BSD/Windows delivery widens with the
+// remaining port sprints (a NAMED stop).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod signal;
 pub mod str;
 pub mod time;
-// The task layer is linux-only at this campaign stage — the same
-// platform posture as native codegen (s28: M1 targets linux/x86-64;
-// mmap/pthread stack plumbing uses linux-specific surface). Other
-// hosts compile wolf_rt without it; the fan-out's port sprints widen.
-#[cfg(target_os = "linux")]
+// The task layer opened on linux (s28's platform posture) and crossed
+// to macOS at s59: the stack plumbing (mmap/madvise/guard-fault
+// reporting) already carried macOS arms, and the pool is POSIX
+// pthreads. Other hosts compile wolf_rt without it; the remaining
+// port sprints (windows s60, freebsd s61) widen this gate.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod task;

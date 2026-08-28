@@ -18,11 +18,10 @@
 //! are `#[consttime]`, so the release tier emits them `noinline`
 //! ([ct.attr.barrier]) and their symbols survive to the disassembly.
 //!
-//! Off-target the whole file compiles away; a host that cannot link
-//! release binaries or has no objdump SKIPs loudly (environment,
-//! never a verdict) — the same posture as no_spawn_binary.rs.
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! A host that cannot drive the release tier (it refuses everything
+//! but linux/x86-64 today), cannot link release binaries, or has no
+//! objdump SKIPs loudly at runtime (the s59 pattern — environment or
+//! named refusal, never a verdict).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -58,6 +57,12 @@ fn build_release(case: &str, kernel: &str) -> Option<PathBuf> {
         .arg(&exe)
         .output()
         .expect("wolf runs");
+    if String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64") {
+        // The tier's named host refusal (linux/x86-64 only until its
+        // own c13 sprint) — a loud skip (s59).
+        eprintln!("SKIP: the release tier refuses this host");
+        return None;
+    }
     match out.status.code() {
         Some(0) => Some(exe),
         Some(2) => {

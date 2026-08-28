@@ -286,7 +286,7 @@ fn debug_check() -> ExitCode {
         ],
     );
     if ok {
-        eprintln!("debug-check: debug sections + gdb transcripts green");
+        eprintln!("debug-check: debug sections + debugger transcripts green");
         ExitCode::SUCCESS
     } else {
         eprintln!("debug-check: debuggability regression");
@@ -1164,9 +1164,27 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // crash/literal witnesses; four module-formation witnesses), so the
 // deltas compound. Counts measured by this gate on the merged tree,
 // not predicted.
+// Floors are PER-PLATFORM and MEASURED, never inherited (s59): the
+// linux numbers are linux measurements and stay untouched; each newly
+// ported host ratchets from its own first measurement.
+#[cfg(not(target_os = "macos"))]
 const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 242)];
+#[cfg(not(target_os = "macos"))]
 const UNION_FLOOR: usize = 256;
+#[cfg(not(target_os = "macos"))]
 const ALL_THREE_FLOOR: usize = 207;
+// s59, measured on macOS/aarch64 the day the gate lifted: checked and
+// native at FULL linux parity (221/242, union 256 — the port left no
+// coverage behind), release 0 — the s41 release tier refuses this
+// host BY NAME until its own c13 sprint, so its floor (and the
+// all-three intersection's) is the honest 0, ratcheted when that
+// sprint lands. Counts measured by this gate, not predicted.
+#[cfg(target_os = "macos")]
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 0)];
+#[cfg(target_os = "macos")]
+const UNION_FLOOR: usize = 256;
+#[cfg(target_os = "macos")]
+const ALL_THREE_FLOOR: usize = 0;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -1178,32 +1196,45 @@ struct LaneObs {
     reason: Option<String>,
 }
 
-/// Run `conform-run` on one file in one lane. `Err` = the environment
-/// cannot drive this lane (exit 2: no cc/clang, no libwolf_rt.a) — the
-/// caller skips loudly rather than reporting a lane that never ran as a
-/// lane that covers nothing.
-fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, String> {
+/// Why one lane observation did not produce a record.
+enum LaneStop {
+    /// Exit 2: the environment cannot drive this lane (no cc/clang,
+    /// no libwolf_rt.a) — the caller skips LOUDLY rather than
+    /// reporting a lane that never ran as a lane that covers nothing.
+    Environment(String),
+    /// Any other failure — a crash or a malformed record is a
+    /// regression, never a skip. The exit-code asymmetry is the
+    /// point (s59): exit 2 alone means "could not run"; everything
+    /// else means "ran and broke", and a ported host must never be
+    /// silently green through the wrong branch.
+    Broken(String),
+}
+
+/// Run `conform-run` on one file in one lane.
+fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, LaneStop> {
     let mut cmd = Command::new(wolf);
     cmd.arg("conform-run").arg(file).arg("--json");
     if !flag.is_empty() {
         cmd.arg(flag);
     }
-    let out = cmd.output().map_err(|e| format!("spawn wolf: {e}"))?;
+    let out = cmd
+        .output()
+        .map_err(|e| LaneStop::Broken(format!("spawn wolf: {e}")))?;
     if out.status.code() == Some(2) {
-        return Err(format!(
+        return Err(LaneStop::Environment(format!(
             "environment cannot drive `{flag}`: {}",
             String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        )));
     }
     if !out.status.success() {
-        return Err(format!(
+        return Err(LaneStop::Broken(format!(
             "conform-run {flag} failed on {}: {}",
             file.display(),
             String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        )));
     }
-    let rec: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("bad record: {e}"))?;
+    let rec: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| LaneStop::Broken(format!("bad record: {e}")))?;
     let stderr = String::from_utf8_lossy(&out.stderr);
     let reason = stderr
         .lines()
@@ -1314,11 +1345,17 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
                     cov.observe(lane, &key, &rec);
                     per_file.entry(key.clone()).or_default().insert(lane, obs);
                 }
-                Err(e) => {
+                Err(LaneStop::Environment(e)) => {
                     // Loud skip, never a silent green: a lane that could
                     // not run is not a lane that covers nothing.
                     eprintln!("lane-coverage: SKIP — {e}");
                     return ExitCode::SUCCESS;
+                }
+                Err(LaneStop::Broken(e)) => {
+                    // A lane that RAN and broke is a regression, not a
+                    // skip (the s59 exit-code asymmetry).
+                    eprintln!("lane-coverage: {e}");
+                    return ExitCode::FAILURE;
                 }
             }
         }
@@ -1439,7 +1476,13 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         );
         fell = true;
     }
-    if all_three.len() < ALL_THREE_FLOOR {
+    // On macOS the measured all-three floor is 0 until the release
+    // tier crosses, which makes this comparison vacuously true there —
+    // clippy is right that it cannot fail YET, and the expectation
+    // deletes itself the day that floor ratchets up.
+    #[cfg_attr(target_os = "macos", expect(clippy::absurd_extreme_comparisons))]
+    let all_three_holds = all_three.len() >= ALL_THREE_FLOOR;
+    if !all_three_holds {
         eprintln!(
             "lane-coverage: all-three coverage {} is below the floor of {ALL_THREE_FLOOR} — the \
              lanes are diverging in scope, not converging",

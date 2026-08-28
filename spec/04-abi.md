@@ -116,10 +116,19 @@ AAPCS64, win64, Apple arm64 deltas).
   is a compile error with a fix-it naming the nearest compatible shape
   (E1201).
 - `[abi.c.targets]` Per-target lowering contracts, by name: SysV AMD64
-  classification (linux/freebsd x86-64), AAPCS64 (linux aarch64),
-  Apple-arm64 deltas (macOS), win64 (windows x86-64). The s49
-  differential fuzzer against the platform C compiler is each
-  contract's acceptance test.
+  classification (linux/freebsd x86-64; the s29 implementation),
+  **Apple-arm64 (macOS aarch64; implemented s59)** — AAPCS64 with the
+  Apple deltas: 8 GP + 8 FP argument registers; composites ≤ 16 bytes
+  whole in GP registers; HFAs (1–4 same-type float members) member-wise
+  in FP registers, exempt from the 16-byte cap; larger composites
+  indirect via a caller-owned copy; the `x8` indirect-result register
+  not drawn from the argument eight; stack arguments packed at natural
+  alignment. Register-exhaustion shapes the backend cannot express are
+  refused BY SHAPE, loudly — never lowered divergently. Still contracts
+  to fill: AAPCS64 (linux aarch64 — ~80% shared with the Apple plan),
+  win64 (windows x86-64). The s49 differential against the platform C
+  compiler is each contract's acceptance test (Apple clang on macOS
+  since s59).
 - `[abi.c.panic]` A wolf fault reaching an `extern "c"` or `export`
   boundary **aborts the process** (after the fault report). There is no
   `c-unwind` at v1; C frames are never unwound (`[conc.cancel.c]`).

@@ -1116,6 +1116,7 @@ dependencies = [
  "cranelift-module",
  "cranelift-object",
  "insta",
+ "object",
  "target-lexicon",
  "wolf_backend",
  "wolf_rt",

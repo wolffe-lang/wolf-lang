@@ -6,7 +6,7 @@
 
 const CHILD_ENV: &str = "WOLF_RT_TEST_OVERFLOW_CHILD";
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn overflow_forever(depth: usize) -> usize {
     // Touch the frame page-by-page in address order so the descent
     // cannot leap the guard (rustc's stack probes help; this makes
@@ -22,7 +22,7 @@ fn overflow_forever(depth: usize) -> usize {
     below + buf[0] as usize
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn main() {
     if std::env::var(CHILD_ENV).is_ok() {
         // Child: overflow inside a named task. Never returns 0.
@@ -53,10 +53,11 @@ pub fn main() {
     println!("stack_overflow: ok (named deterministic fault)");
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub fn main() {
     // The pooled-stack guard machinery is unix; the subprocess
-    // assertion is pinned on the linux lane (macOS shares the
-    // handler; windows is the recorded VirtualAlloc delta).
+    // assertion runs on the linux and macOS lanes (the handler is
+    // shared — SIGBUS is the macOS delivery; windows is the recorded
+    // VirtualAlloc delta).
     println!("stack_overflow: SKIP (linux-only assertion)");
 }

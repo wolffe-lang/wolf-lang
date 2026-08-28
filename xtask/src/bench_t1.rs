@@ -1495,6 +1495,19 @@ pub fn bench_gates() -> ExitCode {
         eprintln!("bench-gates: clang unavailable — the release tier's gates are skipped");
         return ExitCode::SUCCESS;
     }
+    // Both deterministic gates ride the RELEASE tier (`--emit=llvm-ir`
+    // and the clang-built C baselines), which refuses every host but
+    // linux/x86-64 by name (s41; the s59 crossing ported the DEBUG
+    // tier only — the release tier is its own c13 sprint). The same
+    // skip-loudly posture as a missing clang: the gates stay pinned by
+    // the linux CI lane, and a silent skip THERE is a lane bug.
+    if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        eprintln!(
+            "bench-gates: the release tier refuses this host (linux/x86-64 only, s41) — \
+             the IR-volume and vectorization gates are pinned by the linux lane; SKIP"
+        );
+        return ExitCode::SUCCESS;
+    }
     let dir = Path::new("target/bench-gates");
     std::fs::create_dir_all(dir).expect("mkdir bench-gates");
     let wolf = Path::new("target/debug/wolf");

@@ -96,9 +96,10 @@ pub use conc_abi::{
     CANCEL_TAG,
 };
 pub use hooks::{ChanPhase, SchedEvent, SchedRng, kind_code, seed_spec};
-// The reactor (crate::reactor, s35) composes with the task layer
-// through these crate-internal seams: the one sched_point site rule
-// and the kill-teardown discipline hold there too.
+// The reactor (crate::reactor, s35) and signal (s114) compose with
+// the task layer through these crate-internal seams: the one
+// sched_point site rule and the kill-teardown discipline hold there
+// too.
 pub(crate) use hooks::sched_point;
 #[cfg(test)]
 pub(crate) use hooks::test_hook;
