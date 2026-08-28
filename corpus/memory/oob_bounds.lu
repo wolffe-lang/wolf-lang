@@ -1,7 +1,11 @@
 //! check: run(exit=trap(bounds))
 //! phase: run
-//! conforms: mem.ub.defined
+//! conforms: mem.ub.defined, conf.trap.report
 //! Out-of-bounds indexing traps in every profile (D25/X3 posture).
+//! The native rung recovers this verdict through the s125 two-line
+//! report — kind on the parsed first line, site on the tolerated
+//! second (`[conf.trap.report]`; shape pinned by the driver's
+//! trap_site witness).
 
 fn main() -> !int {
     var xs = List[int]()
