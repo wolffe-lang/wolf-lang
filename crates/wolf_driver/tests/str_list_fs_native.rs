@@ -589,10 +589,11 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // nonzero rc traps); s120 the code-point iterator (#17:
     // str_chars — the materializing `chars()`, [mem.str.chars]);
     // s121 the char print pair (D58: write_char/strbuf_char — `{c}`
-    // prints the character, never the code point).
+    // prints the character, never the code point); s125 the sited trap
+    // (`trap_at` — the second stderr line naming file:line:col).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        118,
+        119,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

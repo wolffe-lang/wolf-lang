@@ -94,9 +94,33 @@ pub fn trap_kind_name(code: i32) -> &'static str {
     }
 }
 
+/// Render the trap report (s125). The FIRST line is the machine
+/// contract and stays byte-identical to what it has been since s28 —
+/// `wolf-trap: <kind>` with the whole remainder as the kind (both
+/// harness parsers take it that way), so the site goes on its OWN
+/// line:
+///
+/// ```text
+/// wolf-trap: bounds
+///   at exmpl.lu:3:13
+/// ```
+///
+/// The site line is additive and optional (a site-less trap prints
+/// exactly the one line it always did); parsers that only want the
+/// kind ignore it by construction — it does not start with the
+/// `wolf-trap:` prefix.
+fn write_trap_report(w: &mut impl std::io::Write, kind: i32, site: Option<(&str, u64, u64)>) {
+    let _ = writeln!(w, "wolf-trap: {}", trap_kind_name(kind));
+    if let Some((file, line, col)) = site {
+        let _ = writeln!(w, "  at {file}:{line}:{col}");
+    }
+}
+
 /// A deterministic fault fired (X3). Reports the kind on stderr in the
 /// machine-readable form `wolf-trap: <kind>` and exits with
-/// [`TRAP_EXIT_CODE`]. Never returns.
+/// [`TRAP_EXIT_CODE`]. Never returns. Codegen emits this form for
+/// sites with no source coordinates (synthetic functions, spanless
+/// instructions); user-code sites carry them via [`__wolf_rt_trap_at`].
 ///
 /// # Safety
 ///
@@ -104,11 +128,45 @@ pub fn trap_kind_name(code: i32) -> &'static str {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
     let mut err = std::io::stderr().lock();
-    let _ = writeln!(err, "wolf-trap: {}", trap_kind_name(kind));
+    write_trap_report(&mut err, kind, None);
     let _ = err.flush();
     // The fault path dumps too (s45): the counters up to the trap are
     // exactly the execution that happened, and a program that traps is
     // the one you most want a profile of. No-op in a normal build.
+    crate::prof::dump_on_exit();
+    std::process::exit(TRAP_EXIT_CODE)
+}
+
+/// [`__wolf_rt_trap`] with the trap SITE (s125): the first stderr line
+/// is byte-identical to the site-less form (the harness ABI), and a
+/// second line names where — `  at <file>:<line>:<col>`, 1-based,
+/// pointing at the statement whose check fired (the WIR srcspan the
+/// trap check carries). `file`/`file_len` name rodata bytes the
+/// backend interned per source file; a null/empty file degrades to the
+/// one-line report rather than inventing a site.
+///
+/// # Safety
+///
+/// `file` must be null or point at `file_len` readable bytes that live
+/// for the call (compiled wolf code passes rodata).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_trap_at(
+    kind: i32,
+    file: *const u8,
+    file_len: i64,
+    line: i64,
+    col: i64,
+) -> ! {
+    let mut err = std::io::stderr().lock();
+    if file.is_null() || file_len <= 0 {
+        write_trap_report(&mut err, kind, None);
+    } else {
+        // SAFETY: caller contract — `file_len` readable bytes.
+        let bytes = unsafe { core::slice::from_raw_parts(file, file_len as usize) };
+        let name = String::from_utf8_lossy(bytes);
+        write_trap_report(&mut err, kind, Some((&name, line as u64, col as u64)));
+    }
+    let _ = err.flush();
     crate::prof::dump_on_exit();
     std::process::exit(TRAP_EXIT_CODE)
 }
@@ -725,6 +783,30 @@ mod tests {
         POOLS.with(|p| retire_chunk_into(&mut p.borrow_mut().chunks, new_chunk(CHUNK_MIN)));
         let mut pooled = take_chunk(CHUNK_MIN);
         assert_eq!(pooled.as_mut_ptr().addr() % ALIGN, 0);
+    }
+
+    /// s125: the trap report's two-line contract. The FIRST line is a
+    /// parsed ABI (both harness drivers `strip_prefix("wolf-trap:")`
+    /// and take the whole remainder as the kind) — it must stay
+    /// byte-identical whether or not a site rides along; the site is
+    /// its own additive line.
+    #[test]
+    fn trap_report_first_line_is_byte_identical_with_and_without_site() {
+        let mut bare = Vec::new();
+        write_trap_report(&mut bare, trap_code::BOUNDS, None);
+        assert_eq!(bare, b"wolf-trap: bounds\n");
+
+        let mut sited = Vec::new();
+        write_trap_report(&mut sited, trap_code::BOUNDS, Some(("exmpl.lu", 3, 13)));
+        assert_eq!(sited, b"wolf-trap: bounds\n  at exmpl.lu:3:13\n");
+        // The machine line is the same bytes in both renderings.
+        assert_eq!(
+            sited.split(|&b| b == b'\n').next(),
+            bare.split(|&b| b == b'\n').next()
+        );
+        // And the site line never matches the kind parser's prefix.
+        let site_line = sited.split(|&b| b == b'\n').nth(1).unwrap();
+        assert!(!site_line.starts_with(b"wolf-trap:"));
     }
 
     #[test]

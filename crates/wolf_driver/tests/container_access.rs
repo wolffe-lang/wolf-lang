@@ -139,7 +139,7 @@ fn a_provable_index_emits_no_bounds_check() {
         return;
     };
     assert!(
-        !ir.contains("i32 3)"),
+        !ir.contains("i32 3)") && !ir.contains("i32 3,"),
         "no bounds trap should survive a loop whose guard proves the \
          index:\n{ir}"
     );
@@ -165,7 +165,7 @@ fn main() -> !int {
     };
     assert_no_element_calls("oob", &ir);
     assert!(
-        ir.contains("@__wolf_rt_trap(i32 3)"),
+        ir.contains("@__wolf_rt_trap_at(i32 3,") || ir.contains("@__wolf_rt_trap(i32 3)"),
         "the bounds trap must survive an index nothing bounds:\n{ir}"
     );
 
@@ -223,7 +223,7 @@ fn main() -> !int {
     };
     assert_no_element_calls("for_list", &ir);
     assert!(
-        !ir.contains("i32 3)"),
+        !ir.contains("i32 3)") && !ir.contains("i32 3,"),
         "`for` over a List needs no bounds check — the header test is \
          the proof:\n{ir}"
     );

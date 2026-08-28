@@ -55,8 +55,11 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    /// 1-based (line, column) of a byte offset.
-    fn line_col(&self, offset: u32) -> (u64, u64) {
+    /// 1-based (line, column) of a byte offset. Public since s125: the
+    /// trap-site rendering (`__wolf_rt_trap_at`'s immediates) resolves
+    /// through the same table the line program does, so the site a
+    /// trap names and the line a debugger shows can never disagree.
+    pub fn line_col(&self, offset: u32) -> (u64, u64) {
         let line = match self.line_starts.binary_search(&offset) {
             Ok(l) => l,
             Err(i) => i.saturating_sub(1),

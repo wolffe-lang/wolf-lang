@@ -131,7 +131,37 @@ read-mode write barrier, D39), `region-fault`
   modes, permitted elsewhere).
 - `[conf.trap.exit]` A trap terminates the process with a nonzero,
   implementation-specified exit status; conforming tools compare the
-  *kind*, never the status number.
+  *kind*, never the status number. The statuses in force are
+  documented facts of each implementation, not comparison surface:
+  the native tier exits 134 (`wolf_rt`'s `TRAP_EXIT_CODE`, 128+SIGABRT
+  by convention, deterministic — never a real signal), the reference
+  interpreter exits 3. (Appended 2026-08-28, s125: the divergence had
+  been implicit since s28 and every "predict the exit code" exercise
+  tripped over it — #150.)
+- `[conf.trap.report]` A compiled program reports its trap on stderr
+  in a fixed shape. The FIRST line is the machine contract:
+  `wolf-trap: <kind>` — everything after the prefix, trimmed, is the
+  kind, one name from `[conf.trap.set]`, and nothing else may appear
+  on this line (harness parsers take the remainder wholesale; one
+  added byte corrupts every trap verdict). When the implementation
+  knows the trap's source coordinates, a SECOND line names them:
+  `  at <file>:<line>:<col>` — two leading spaces, the file's display
+  path, then 1-based line and column of the trap SITE — the statement
+  whose check fired, never the enclosing function declaration. The
+  site line is additive and optional in both directions: conforming
+  parsers recover the kind from the first line alone, tolerate the
+  site line's presence or absence, and never require it. Further
+  report information, if any tier ever adds it, goes on further
+  lines — line one is closed. (Added 2026-08-28, s125.)
+- `[conf.trap.render]` The reference interpreter renders the same
+  fault as its one human diagnostic line — kind, message, clause,
+  and the location spelled `line:col` in the SAME span grammar its
+  static diagnostics use (one span spelling per tool; raw byte
+  offsets remain available through `--json`, `[proto.record.ext]`'s
+  trap span). Exit status per `[conf.trap.exit]`. (Added 2026-08-28,
+  s125; the interpreter's line:col rendering lands in wolf-interp
+  from this clause — the independence doctrine — as the sequenced
+  follow-on after lupin 0.1.15.)
 - `[conf.trap.assert]` `assert` is an **intrinsic** — one name in both
   tiers: comptime witness (a failing comptime `assert` is a compile
   error) and runtime user trap (the `assert` kind of

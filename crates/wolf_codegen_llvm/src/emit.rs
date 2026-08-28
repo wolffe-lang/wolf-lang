@@ -190,6 +190,10 @@ pub(crate) struct ModuleCx {
     pub intrinsics: BTreeSet<String>,
     /// Metadata nodes; id = index.
     pub meta: Vec<String>,
+    /// Source files trap sites resolve against (s125): FileId index →
+    /// path + line starts. Empty (the default) keeps every trap
+    /// site-less — the pre-s125 one-line report.
+    pub site_files: HashMap<u32, wolf_backend::dwarf::SourceFile>,
     /// The cold-branch `!prof` node, minted on first use.
     prof_cold: Option<usize>,
     /// Measured `!prof` nodes, interned by their (then, else) weights
@@ -206,6 +210,7 @@ impl ModuleCx {
             global_names: HashSet::new(),
             intrinsics: BTreeSet::new(),
             meta: Vec::new(),
+            site_files: HashMap::new(),
             prof_cold: None,
             prof_weights: BTreeMap::new(),
         }
@@ -554,8 +559,15 @@ pub(crate) struct Fx<'a> {
     param_slots: HashMap<(WBlock, usize), String>,
     tmp: u32,
     nslot: u32,
-    /// Per-kind cold trap blocks (BTreeMap: deterministic render).
-    trap_blocks: BTreeMap<i32, String>,
+    /// Cold trap blocks, one per (kind, site) — the s125 trade: a
+    /// sited block materializes `  at file:line:col` immediates, so
+    /// sites split the old per-kind sharing (checks from the same
+    /// statement still dedup); site-less checks keep the shared
+    /// per-kind block. BTreeMap: deterministic render.
+    trap_blocks: BTreeMap<(i32, Option<(u64, u64)>), String>,
+    /// The srcspan `lo` of the instruction being emitted (s125): what
+    /// a trap check emitted from it names as its site.
+    cur_span_lo: Option<u32>,
     /// Fact indexes over this function's values.
     deref: HashMap<WValue, u64>,
     range: HashMap<WValue, (i128, i128)>,
@@ -671,6 +683,7 @@ pub(crate) fn emit_function(
         tmp: 0,
         nslot: 0,
         trap_blocks: BTreeMap::new(),
+        cur_span_lo: None,
         deref: HashMap::new(),
         range: HashMap::new(),
         aligned_buf: HashSet::new(),
@@ -1401,6 +1414,13 @@ impl<'a> Fx<'a> {
             "__wolf_rt_trap" => {
                 "declare void @__wolf_rt_trap(i32) cold noreturn nounwind".to_string()
             }
+            // s125: the sited trap — kind, file path rodata (ptr,
+            // len), 1-based line/col. First stderr line byte-identical
+            // to `__wolf_rt_trap`'s; the site is its own line.
+            "__wolf_rt_trap_at" => {
+                "declare void @__wolf_rt_trap_at(i32, ptr, i64, i64, i64) cold noreturn nounwind"
+                    .to_string()
+            }
             "__wolf_rt_region_new" => "declare ptr @__wolf_rt_region_new() nounwind".to_string(),
             "__wolf_rt_region_alloc" => {
                 // The bump allocator's contract: fresh, 16-aligned
@@ -1430,19 +1450,84 @@ impl<'a> Fx<'a> {
 
     // ---- trap machinery ----------------------------------------------------
 
+    /// The trap SITE the instruction being emitted names (s125): its
+    /// srcspan start resolved to 1-based line:col through the module's
+    /// source-file table. `None` — no span, no known file, or no table
+    /// (tests, synthetic functions) — keeps the trap site-less.
+    fn cur_trap_site(&self) -> Option<(u64, u64)> {
+        let file = self.f.src_file?;
+        let sf = self.cx.site_files.get(&file)?;
+        Some(sf.line_col(self.cur_span_lo?))
+    }
+
+    /// The rodata global holding this function's source-file path
+    /// (`_W.site.<idx>`, defined once per module): (symbol, byte
+    /// length). Only called when the site resolved, so the file is in
+    /// the table.
+    fn site_file_global(&mut self) -> Result<(String, usize), BackendError> {
+        let idx = self
+            .f
+            .src_file
+            .ok_or_else(|| ice("trap site without a src file"))?;
+        let path = self
+            .cx
+            .site_files
+            .get(&idx)
+            .ok_or_else(|| ice("trap site names an unmapped file"))?
+            .path
+            .clone();
+        let sym = format!("_W.site.{idx}");
+        if self.cx.global_names.insert(sym.clone()) {
+            let line = format!(
+                "@\"{sym}\" = private unnamed_addr constant [{} x i8] {}, align 1",
+                path.len().max(1),
+                bytes_const(path.as_bytes()),
+            );
+            self.cx.globals.push(line);
+        }
+        Ok((sym, path.len()))
+    }
+
+    /// The sited-or-not trap reporter call for one cold body: the
+    /// per-site immediates and `__wolf_rt_trap_at` when a site is
+    /// known, the plain per-kind `__wolf_rt_trap` otherwise.
+    fn trap_call_line(
+        &mut self,
+        code: i32,
+        site: Option<(u64, u64)>,
+    ) -> Result<String, BackendError> {
+        match site {
+            Some((line, col)) => {
+                self.rt_builtin("__wolf_rt_trap_at")?;
+                let (sym, len) = self.site_file_global()?;
+                Ok(format!(
+                    "  call void @__wolf_rt_trap_at(i32 {code}, ptr @\"{sym}\", i64 {len}, \
+                     i64 {line}, i64 {col})"
+                ))
+            }
+            None => {
+                self.rt_builtin("__wolf_rt_trap")?;
+                Ok(format!("  call void @__wolf_rt_trap(i32 {code})"))
+            }
+        }
+    }
+
     fn trap_block(&mut self, code: i32) -> Result<String, BackendError> {
-        if let Some(l) = self.trap_blocks.get(&code) {
+        let site = self.cur_trap_site();
+        if let Some(l) = self.trap_blocks.get(&(code, site)) {
             return Ok(l.clone());
         }
-        self.rt_builtin("__wolf_rt_trap")?;
-        let label = format!("trap{code}");
-        self.trap_blocks.insert(code, label.clone());
+        let label = match site {
+            Some((line, col)) => format!("trap{code}.{line}.{col}"),
+            None => format!("trap{code}"),
+        };
+        self.trap_blocks.insert((code, site), label.clone());
         Ok(label)
     }
 
-    /// Branch to the kind's cold trap block when `cond` (an i1) is
-    /// true; continue in a fresh block. The trap arc gets cold weights
-    /// (the uniform rule).
+    /// Branch to the (kind, current site) cold trap block when `cond`
+    /// (an i1) is true; continue in a fresh block. The trap arc gets
+    /// cold weights (the uniform rule).
     fn trap_if(&mut self, cond: &str, kind: TrapKind) -> Result<(), BackendError> {
         let tb = self.trap_block(trap_code(kind))?;
         self.tmp += 1;
@@ -1757,11 +1842,13 @@ impl<'a> Fx<'a> {
             }
         }
 
-        // Cold out-of-line trap bodies (the uniform rule).
-        for (code, label) in std::mem::take(&mut self.trap_blocks) {
+        // Cold out-of-line trap bodies (the uniform rule; one per
+        // (kind, site) since s125).
+        for ((code, site), label) in std::mem::take(&mut self.trap_blocks) {
             let idx = self.new_block(label);
             self.cur = idx;
-            self.line(format!("  call void @__wolf_rt_trap(i32 {code})"));
+            let call = self.trap_call_line(code, site)?;
+            self.line(call);
             self.line("  unreachable".to_string());
         }
         Ok(())
@@ -1772,6 +1859,9 @@ impl<'a> Fx<'a> {
     fn inst(&mut self, inst: wolf_wir::ir::Inst) -> Result<(), BackendError> {
         let data = self.f.insts[inst];
         let op = data.op;
+        // s125: a trap check emitted from this instruction names this
+        // span's start as its site.
+        self.cur_span_lo = self.f.srcspan(inst).map(|sp| sp.lo);
         let args = self.args_of(inst);
         let results = self.results_of(inst);
         match op {
@@ -2471,11 +2561,11 @@ impl<'a> Fx<'a> {
                     Aux::Trap(k) => k,
                     _ => TrapKind::Assert,
                 };
-                self.rt_builtin("__wolf_rt_trap")?;
-                self.line(format!(
-                    "  call void @__wolf_rt_trap(i32 {})",
-                    trap_code(kind)
-                ));
+                // s125: an unconditional trap is already cold where it
+                // stands — report its site inline.
+                let site = self.cur_trap_site();
+                let call = self.trap_call_line(trap_code(kind), site)?;
+                self.line(call);
                 self.line("  unreachable".to_string());
             }
         }

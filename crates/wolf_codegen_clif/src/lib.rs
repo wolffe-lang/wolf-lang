@@ -85,6 +85,13 @@ pub struct ClifBackend {
     /// Module data blobs defined so far (s31 str/data): WIR data index
     /// → object data id, lazily defined on first `data.addr`.
     data_ids: HashMap<u32, cranelift_module::DataId>,
+    /// Source files trap sites resolve against (s125): FileId index →
+    /// path + line starts. Empty (the default) keeps every trap
+    /// site-less — the pre-s125 one-line report.
+    site_files: HashMap<u32, wolf_backend::dwarf::SourceFile>,
+    /// Per-file rodata path symbols (`_W.site.<idx>`) defined so far,
+    /// lazily on the first trap site in that file.
+    site_file_data: HashMap<u32, cranelift_module::DataId>,
     symbols: Vec<SymbolInfo>,
     /// CLIF text of every defined function, in definition order — the
     /// golden-snapshot surface (lowering changes are reviewed diffs).
@@ -152,6 +159,8 @@ impl ClifBackend {
             rt: HashMap::new(),
             imports: HashMap::new(),
             data_ids: HashMap::new(),
+            site_files: HashMap::new(),
+            site_file_data: HashMap::new(),
             symbols: Vec::new(),
             clif_texts: Vec::new(),
             debug_sections: Vec::new(),
@@ -179,6 +188,10 @@ impl Backend for ClifBackend {
             supports_in_place_patching: false,
             dwarf_fidelity: DwarfFidelity::Lines,
         }
+    }
+
+    fn source_files(&mut self, files: HashMap<u32, wolf_backend::dwarf::SourceFile>) {
+        self.site_files = files;
     }
 
     fn declare_function(
@@ -250,6 +263,8 @@ impl Backend for ClifBackend {
                 &mut self.rt,
                 &mut self.imports,
                 &mut self.data_ids,
+                &self.site_files,
+                &mut self.site_file_data,
             )?;
         }
         let symbol = self

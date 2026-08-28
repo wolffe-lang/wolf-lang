@@ -123,6 +123,8 @@
     "conf.trap.assert": "05-conformance.md",
     "conf.trap.exit": "05-conformance.md",
     "conf.trap.map": "05-conformance.md",
+    "conf.trap.render": "05-conformance.md",
+    "conf.trap.report": "05-conformance.md",
     "conf.trap.set": "05-conformance.md",
     "ct.attr": "09-constant-time.md",
     "ct.attr.barrier": "09-constant-time.md",
