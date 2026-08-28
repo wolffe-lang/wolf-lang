@@ -1460,7 +1460,20 @@ impl<'a, 'b> Tx<'a, 'b> {
                         } else {
                             // s98: a vtable — pointer-sized slots, each
                             // a function relocation ([abi.native.dyn]).
-                            desc.define_zeroinit(d.funcs.len() * 8);
+                            // REAL zero bytes, not `define_zeroinit`:
+                            // zeroinit is Init::Zeros, which
+                            // cranelift-object places in BSS — and a
+                            // relocation into a zero-fill section is
+                            // malformed (Apple's ld SEGFAULTS on it;
+                            // found the day the s59 gate lifted). With
+                            // byte contents the table lands in
+                            // read-only-data-with-relocs, where a
+                            // vtable belongs on every format.
+                            desc.define(vec![0u8; d.funcs.len() * 8].into_boxed_slice());
+                            // Pointer-slot alignment (Apple ld warns
+                            // on the default 1 and unaligned function
+                            // pointers are wrong everywhere).
+                            desc.set_align(8);
                             for (i, fname) in d.funcs.iter().enumerate() {
                                 let Some(entry) = self.funcs.get(fname) else {
                                     return Err(nyi(format!(
