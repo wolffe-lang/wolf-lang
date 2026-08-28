@@ -117,8 +117,12 @@ fn standalone_sibling_note_names_the_marker() {
     let (code, err) = build(&dir, "a.lu");
     assert_eq!(code, 1);
     assert!(err.contains("E0301"), "{err}");
+    // The note wraps at a width the scratch path's length decides, so
+    // compare with whitespace normalized (the wrap once split
+    // "defines `helper`" and the assert went red on path length alone).
+    let flat = err.split_whitespace().collect::<Vec<_>>().join(" ");
     assert!(
-        err.contains("b.lu`") && err.contains("defines `helper`"),
+        err.contains("b.lu`") && flat.contains("defines `helper`"),
         "the defining file is named:\n{err}"
     );
     assert!(err.contains("member: false"), "the marker is named:\n{err}");
