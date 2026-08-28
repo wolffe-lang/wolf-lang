@@ -286,7 +286,7 @@ fn debug_check() -> ExitCode {
         ],
     );
     if ok {
-        eprintln!("debug-check: debug sections + gdb transcripts green");
+        eprintln!("debug-check: debug sections + debugger transcripts green");
         ExitCode::SUCCESS
     } else {
         eprintln!("debug-check: debuggability regression");

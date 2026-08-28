@@ -13,10 +13,12 @@
 //! 3. **Issue #26 end to end**: two modules sharing an item name
 //!    compile natively and run (module-qualified mangling).
 //!
-//! Off-target the whole file compiles away (native codegen is
-//! linux/x86-64 only in c06).
-
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+//! Platforms (s59): the runtime-SKIP pattern — `wolf build` exits 2
+//! where the environment cannot link, and each transcript runs under
+//! the debugger its host actually has: gdb on linux (not viable on
+//! Apple Silicon), lldb on macOS. The ledger looks in the executable
+//! on ELF hosts and in the linked `.dSYM` on Mach-O (Apple's static
+//! link writes a debug map; `wolf build` runs dsymutil).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -74,20 +76,40 @@ fn build_fixture(case: &str, src: &str) -> Option<PathBuf> {
     }
 }
 
-/// Gate 1 — the ledger: wolf's own DWARF is in the binary.
+/// Gate 1 — the ledger: wolf's own DWARF is in the binary (ELF), or
+/// in the `.dSYM` dsymutil linked from the debug map (Mach-O — the
+/// executable itself never carries DWARF there).
 #[test]
 fn executable_carries_wolf_debug_sections() {
     let Some(exe) = build_fixture("dwarf_sections", DEBUGGABLE) else {
         return;
     };
-    let bytes = std::fs::read(&exe).expect("read exe");
-    let obj = object::File::parse(&*bytes).expect("ELF parses");
+    let debug_artifact = if cfg!(target_os = "macos") {
+        let dsym = exe.with_extension("dSYM");
+        let dwarf_dir = dsym.join("Contents/Resources/DWARF");
+        let entry = std::fs::read_dir(&dwarf_dir)
+            .unwrap_or_else(|e| panic!("no .dSYM after a debug build ({}): {e}", dsym.display()))
+            .next()
+            .expect(".dSYM DWARF entry")
+            .expect("readable dir entry");
+        entry.path()
+    } else {
+        exe.clone()
+    };
+    let bytes = std::fs::read(&debug_artifact).expect("read debug artifact");
+    let obj = object::File::parse(&*bytes).expect("object parses");
     use object::{Object, ObjectSection};
     let mut names = Vec::new();
     let mut wolf_producer = false;
     let mut line_nonempty = false;
     for sec in obj.sections() {
-        let name = sec.name().unwrap_or("").to_string();
+        // Mach-O spells DWARF sections `__debug_*`; normalize to the
+        // ELF spelling so one assertion serves both formats.
+        let name = sec
+            .name()
+            .unwrap_or("")
+            .replace("__debug_", ".debug_")
+            .to_string();
         // The producer lands inline in .debug_info (gimli writes DIE
         // strings as DW_FORM_string) — but accept .debug_str too.
         if (name == ".debug_info" || name == ".debug_str")
@@ -291,5 +313,108 @@ fn gdb_steps_hello_lu() {
     assert!(
         text.contains("exited normally"),
         "program did not exit 0 under gdb:\n{text}"
+    );
+}
+
+/// Gate 2, the lldb half (s59 — gdb is not viable on Apple Silicon):
+/// the same stepping fixture under an lldb batch session. The s30
+/// floor and then some: a breakpoint lands with file:line, parameters
+/// and locals read their true values, `next` walks source lines, and
+/// the backtrace shows helper → main with wolf source coordinates.
+/// SKIPs loudly where lldb is absent; the macOS CI lane has it.
+#[test]
+fn lldb_breaks_steps_and_prints() {
+    if Command::new("lldb").arg("--version").output().is_err() {
+        eprintln!("SKIP: lldb not installed (required on the macOS CI lane)");
+        return;
+    }
+    let Some(exe) = build_fixture("dwarf_lldb", DEBUGGABLE) else {
+        return;
+    };
+    let out = Command::new("lldb")
+        .arg("-b")
+        .args(["-o", "breakpoint set --name helper"])
+        .args(["-o", "run"])
+        .args(["-o", "frame variable a b"])
+        .args(["-o", "next"])
+        .args(["-o", "frame variable s"])
+        .args(["-o", "bt"])
+        .args(["-o", "continue"])
+        .arg(&exe)
+        .output()
+        .expect("lldb runs");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    // The breakpoint resolves through wolf's DWARF (file:line, not a
+    // bare symbol+offset) and stops with readable parameters…
+    assert!(
+        text.contains("helper(a=3, b=4) at debuggable.lu:2"),
+        "break helper did not land with file:line and params:\n{text}"
+    );
+    assert!(text.contains("(long) a = 3"), "a != 3:\n{text}");
+    assert!(text.contains("(long) b = 4"), "b != 4:\n{text}");
+    // …stepping follows the line table…
+    assert!(
+        text.contains("at debuggable.lu:3"),
+        "next did not reach line 3:\n{text}"
+    );
+    assert!(text.contains("(long) s = 7"), "s != 7:\n{text}");
+    // …and the backtrace walks helper → main with wolf coordinates.
+    assert!(
+        text.contains("main at debuggable.lu:9"),
+        "bt did not show the wolf main frame with file:line:\n{text}"
+    );
+    assert!(
+        text.contains("exited with status = 0"),
+        "the continued program did not exit 0:\n{text}"
+    );
+}
+
+/// Gate 4, the lldb half: `corpus/hello.lu` — a breakpoint by source
+/// line through wolf's line table, the stepped print line, and the
+/// program's real output under the debugger.
+#[test]
+fn lldb_steps_hello_lu() {
+    if Command::new("lldb").arg("--version").output().is_err() {
+        eprintln!("SKIP: lldb not installed (required on the macOS CI lane)");
+        return;
+    }
+    let hello = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/hello.lu");
+    let src = std::fs::read_to_string(&hello).expect("corpus/hello.lu");
+    let Some(exe) = build_fixture("dwarf_lldb_hello", &src) else {
+        return;
+    };
+    let out = Command::new("lldb")
+        .arg("-b")
+        .args(["-o", "breakpoint set --file debuggable.lu --line 10"])
+        .args(["-o", "run"])
+        .args(["-o", "bt"])
+        .args(["-o", "continue"])
+        .arg(&exe)
+        .output()
+        .expect("lldb runs");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        text.contains("at debuggable.lu:10"),
+        "the source-line breakpoint did not land:\n{text}"
+    );
+    assert!(
+        text.contains("main at debuggable.lu:10"),
+        "bt frame 0 (wolf main with file:line) wrong:\n{text}"
+    );
+    assert!(
+        text.contains("hello, wolf"),
+        "continued program did not print:\n{text}"
+    );
+    assert!(
+        text.contains("exited with status = 0"),
+        "program did not exit 0 under lldb:\n{text}"
     );
 }

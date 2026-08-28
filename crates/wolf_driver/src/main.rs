@@ -1717,6 +1717,26 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     let status = cmd
         .status()
         .map_err(|e| BuildStop::Environment(format!("cannot run `{cc}`: {e}")));
+    // macOS (s59): Apple's static link does NOT copy DWARF into the
+    // executable — it writes a debug MAP whose entries point at the
+    // staging objects, and `dsymutil` links those into `<out>.dSYM`.
+    // That must happen BEFORE the staging dir is deleted or the map
+    // dangles and no debugger ever sees wolf's line tables.
+    #[cfg(target_os = "macos")]
+    if matches!(&status, Ok(s) if s.success()) {
+        match std::process::Command::new("dsymutil").arg(out).status() {
+            Ok(s) if s.success() => {}
+            Ok(s) => eprintln!(
+                "wolf build: note: `dsymutil {}` failed ({s}) — the binary runs \
+                 but carries no linked debug info (.dSYM)",
+                out.display()
+            ),
+            Err(e) => eprintln!(
+                "wolf build: note: cannot run `dsymutil`: {e} — the binary runs \
+                 but carries no linked debug info (.dSYM)"
+            ),
+        }
+    }
     let _ = std::fs::remove_dir_all(&dir);
     let status = status?;
     if !status.success() {

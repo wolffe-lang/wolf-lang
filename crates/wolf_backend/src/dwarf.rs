@@ -311,10 +311,19 @@ impl DwarfBuilder {
                     );
                     die.set(constants::DW_AT_decl_line, AttributeValue::Udata(line));
                 }
-                // Debug tier: frame pointers on, frame base = %rbp
-                // (DWARF reg 6 on x86-64 — the only s30 target).
+                // Debug tier: frame pointers on, frame base = the
+                // host's frame-pointer register — DWARF reg 6 (%rbp)
+                // on x86-64, reg 29 (x29) on aarch64. Host-cfg is the
+                // honest spelling here: this builder describes code
+                // the clif backend generated for the HOST (its own
+                // gate enforces that), so the two can never disagree.
+                let fp_reg = if cfg!(target_arch = "aarch64") {
+                    gimli::Register(29)
+                } else {
+                    gimli::Register(6)
+                };
                 let mut fb = Expression::new();
-                fb.op_reg(gimli::Register(6));
+                fb.op_reg(fp_reg);
                 die.set(constants::DW_AT_frame_base, AttributeValue::Exprloc(fb));
             }
             for v in &f.vars {

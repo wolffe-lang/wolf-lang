@@ -355,16 +355,30 @@ impl Backend for ClifBackend {
             RelocationEncoding, RelocationFlags, RelocationKind, SymbolFlags, SymbolKind,
             SymbolScope,
         };
+        // Section naming is format-aware (s59): ELF spells DWARF
+        // sections `.debug_*`; Mach-O spells them `__debug_*` inside
+        // the `__DWARF` segment (which `segment_name(Debug)` already
+        // provides). The generic Absolute relocations below translate
+        // to ARM64_RELOC_UNSIGNED there — verified on the emitted
+        // objects.
+        let is_macho = product.object.format() == cranelift_object::object::BinaryFormat::MachO;
+        let sec_name = |name: &str| -> Vec<u8> {
+            if is_macho {
+                format!("__{}", name.trim_start_matches('.')).into_bytes()
+            } else {
+                name.as_bytes().to_vec()
+            }
+        };
         let mut sec_ids = HashMap::new();
         for sec in &self.debug_sections {
             let id = product.object.add_section(
                 product.object.segment_name(StandardSegment::Debug).to_vec(),
-                sec.name.as_bytes().to_vec(),
+                sec_name(sec.name),
                 cranelift_object::object::SectionKind::Debug,
             );
             product.object.set_section_data(id, sec.data.clone(), 1);
             let sym = product.object.add_symbol(Symbol {
-                name: sec.name.as_bytes().to_vec(),
+                name: sec_name(sec.name),
                 value: 0,
                 size: 0,
                 kind: SymbolKind::Section,
@@ -375,6 +389,20 @@ impl Backend for ClifBackend {
             });
             sec_ids.insert(sec.name, (id, sym));
         }
+        // Mach-O (s59): dsymutil consumes debug relocations in the
+        // APPLE ASSEMBLER convention — SECTION-BASED (non-extern)
+        // entries whose embedded bytes hold the target's final object
+        // address; it derives the covering symbol from that address,
+        // validates against the debug map, and rewrites to the linked
+        // address. Extern (symbol) relocations there are a trap: the
+        // validate and rewrite passes disagree about whether the
+        // embedded value is symbol-relative, so any nonzero function
+        // offset lands wrong (measured both ways on this host's
+        // dsymutil, not theorized). So on Mach-O function targets
+        // relocate against their SECTION symbol and the emitted bytes
+        // are PATCHED post-emit with the real object addresses; ELF
+        // keeps plain symbol relocations for the system linker.
+        let mut macho_patches: Vec<(String, u32, u8, i64, Option<Vec<u8>>)> = Vec::new();
         for sec in &self.debug_sections {
             let &(id, _) = sec_ids.get(sec.name).expect("just inserted");
             for r in &sec.relocs {
@@ -396,13 +424,41 @@ impl Backend for ClifBackend {
                         }
                     },
                 };
+                let mut reloc_symbol = symbol;
+                if is_macho {
+                    // A function target embeds the symbol's final
+                    // object address (looked up by name post-emit) and
+                    // relocates against its SECTION symbol; a section
+                    // target embeds the DWARF section-relative OFFSET
+                    // — the addend alone (`None` marks it).
+                    let sym_name = match r.target {
+                        DebugRelocTarget::Func(_) => {
+                            let sym = product.object.symbol(symbol);
+                            let name = sym.name.clone();
+                            if let cranelift_object::object::write::SymbolSection::Section(sid) =
+                                sym.section
+                            {
+                                reloc_symbol = product.object.section_symbol(sid);
+                            }
+                            Some(name)
+                        }
+                        DebugRelocTarget::Section(_) => None,
+                    };
+                    macho_patches.push((
+                        String::from_utf8_lossy(&sec_name(sec.name)).into_owned(),
+                        r.offset,
+                        r.size,
+                        r.addend,
+                        sym_name,
+                    ));
+                }
                 product
                     .object
                     .add_relocation(
                         id,
                         Relocation {
                             offset: u64::from(r.offset),
-                            symbol,
+                            symbol: reloc_symbol,
                             addend: r.addend,
                             flags: RelocationFlags::Generic {
                                 kind: RelocationKind::Absolute,
@@ -414,14 +470,71 @@ impl Backend for ClifBackend {
                     .map_err(|e| BackendError::Internal(e.to_string()))?;
             }
         }
-        let bytes = product
+        let mut bytes = product
             .emit()
             .map_err(|e| BackendError::Internal(e.to_string()))?;
+        if !macho_patches.is_empty() {
+            patch_macho_debug(&mut bytes, &macho_patches)?;
+        }
         Ok(ObjectProduct {
             bytes,
             symbols: self.symbols,
         })
     }
+}
+
+/// Resolve the collected Mach-O debug "relocations" into the emitted
+/// object's bytes (see `finish` — the Apple convention is resolved
+/// `__DWARF` addresses, no relocation entries). Each patch is
+/// `(section name, offset, size, addend, target)`: a `Some(symbol
+/// name)` target writes that symbol's object address + addend; a
+/// `None` target writes the addend alone (a DWARF section-relative
+/// offset, e.g. `DW_AT_stmt_list`).
+fn patch_macho_debug(
+    bytes: &mut [u8],
+    patches: &[(String, u32, u8, i64, Option<Vec<u8>>)],
+) -> Result<(), BackendError> {
+    use object::read::{Object as _, ObjectSection as _, ObjectSymbol as _};
+    let ice = |m: String| BackendError::Internal(m);
+    let file = object::read::macho::MachOFile64::<object::Endianness, _>::parse(&*bytes)
+        .map_err(|e| ice(format!("re-parse emitted Mach-O: {e}")))?;
+    let mut sym_addrs: HashMap<Vec<u8>, u64> = HashMap::new();
+    for sym in file.symbols() {
+        sym_addrs.insert(sym.name_bytes().unwrap_or(b"").to_vec(), sym.address());
+    }
+    let mut writes: Vec<(usize, u8, u64)> = Vec::new();
+    for (sec, off, size, addend, target) in patches {
+        let s = file
+            .section_by_name_bytes(sec.as_bytes())
+            .ok_or_else(|| ice(format!("emitted object lost section {sec}")))?;
+        let (file_off, file_len) = s
+            .file_range()
+            .ok_or_else(|| ice(format!("section {sec} has no file data")))?;
+        let value = match target {
+            Some(name) => sym_addrs
+                .get(name)
+                .copied()
+                .ok_or_else(|| {
+                    ice(format!(
+                        "emitted object lost symbol {}",
+                        String::from_utf8_lossy(name)
+                    ))
+                })?
+                .wrapping_add(*addend as u64),
+            None => *addend as u64,
+        };
+        let at = file_off + u64::from(*off);
+        if u64::from(*off) + u64::from(*size) > file_len {
+            return Err(ice(format!("debug patch outside section {sec}")));
+        }
+        writes.push((at as usize, *size, value));
+    }
+    // (Borrow of `bytes` through `file` ends here.)
+    for (at, size, value) in writes {
+        let le = value.to_le_bytes();
+        bytes[at..at + size as usize].copy_from_slice(&le[..size as usize]);
+    }
+    Ok(())
 }
 
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
