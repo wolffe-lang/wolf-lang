@@ -1,15 +1,15 @@
-//! Linux-only (the reactor's platform posture, same as the task
+//! Linux+macOS (the reactor's platform posture, same as the task
 //! layer): the real body lives in linux_only/no_io.rs — a
 //! subdirectory so cargo does not treat it as its own target;
 //! elsewhere this target is an empty main.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "linux_only/no_io.rs"]
 mod imp;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn main() {
     imp::main()
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn main() {}

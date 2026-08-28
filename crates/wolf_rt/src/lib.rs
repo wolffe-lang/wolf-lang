@@ -29,9 +29,11 @@ pub mod quarantine;
 // program delivery follows the backend port (`[os.random.platform]`).
 pub mod random;
 // The io reactor (s35) shares the task layer's platform posture:
-// epoll first (this campaign's floor); the kqueue/IOCP port sprints
-// widen against its interface, readiness adapted underneath.
-#[cfg(target_os = "linux")]
+// epoll on linux (the campaign floor), kqueue on macOS since s59 —
+// the port promised by the reactor's interface, readiness adapted
+// underneath (`Interest`/`Ready` unchanged). IOCP (windows, s60)
+// widens next.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod reactor;
 // Signal RECEPTION (s114, #126): the self-pipe/sigaction trampoline
 // and the meaning-based receive surface. Rides the task layer's
