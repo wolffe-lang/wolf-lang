@@ -1670,6 +1670,24 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
                 .to_string(),
         )
     })?;
+    // Staging-path discipline is PER-FORMAT (s59): on macOS the
+    // linked executable EMBEDS the staging paths (the debug map's
+    // N_OSO entries), so a deterministic build needs a deterministic
+    // directory — derived from the object contents, and identical
+    // inputs may share it safely (identical writes are idempotent).
+    // Elsewhere the paths never reach the binary and a pid+nanos dir
+    // avoids even theoretical same-content races.
+    #[cfg(target_os = "macos")]
+    let dir = {
+        use std::hash::{Hash as _, Hasher as _};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for (name, bytes) in objects {
+            name.hash(&mut h);
+            bytes.hash(&mut h);
+        }
+        std::env::temp_dir().join(format!("wolf-link-{:016x}", h.finish()))
+    };
+    #[cfg(not(target_os = "macos"))]
     let dir = std::env::temp_dir().join(format!(
         "wolf-link-{}-{}",
         std::process::id(),
@@ -1689,6 +1707,11 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     }
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let mut cmd = std::process::Command::new(&cc);
+    // macOS: zero the debug map's N_OSO timestamps (ld64 honors
+    // ZERO_AR_DATE) — the other half of deterministic links; dsymutil
+    // treats 0 as "no check" (the Rust archives already do this).
+    #[cfg(target_os = "macos")]
+    cmd.env("ZERO_AR_DATE", "1");
     cmd.arg("-o").arg(out);
     for p in &paths {
         cmd.arg(p);
