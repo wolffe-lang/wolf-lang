@@ -1,0 +1,4 @@
+// Deliberately unparseable (#149 probe 3); the entry pins the E0202
+// this file produces when the directory module forms.
+
+fn mangled( {{{ not wolf at all

@@ -1,0 +1,14 @@
+//! check: run(exit=0, stdout="42")
+//! phase: run
+//! conforms: conf.directive.standalone, mod.dir
+//!
+//! #149's decisive probe, as a witness: `helper.lu` beside this file
+//! carries not one directive, and D59 forms the directory module
+//! anyway — `helper` is in scope with no `use`, because a plain `.lu`
+//! file is a member by default and file boundaries create no scopes
+//! (D32).
+
+fn main() -> !int {
+    print("{helper()}")
+    0
+}

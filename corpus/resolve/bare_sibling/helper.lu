@@ -1,0 +1,7 @@
+// Deliberately bare (#149): no `//!` header at all. A plain sibling
+// is a member of the directory module (D59) — this file compiles
+// through `pair.lu`, never on its own.
+
+fn helper() -> int {
+    42
+}

@@ -1,0 +1,12 @@
+//! check: run(exit=0, stdout="right")
+//! phase: run
+//! conforms: conf.directive.standalone, conf.directive.member
+//!
+//! The other standalone program: no `member:` key at all — the
+//! `check:` + `phase:` entry pair alone is the standalone mark
+//! ([conf.directive.member]), exactly the corpus's own mechanism.
+
+fn main() -> !int {
+    print("right")
+    0
+}

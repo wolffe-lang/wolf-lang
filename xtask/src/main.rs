@@ -1123,9 +1123,20 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // moved lanes — the deltas are exactly the six new files. Totals
 // 211/230/230, union 244, all-three 197. Counts measured by this
 // gate, not predicted.
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 211), ("native", 230), ("release", 230)];
-const UNION_FLOOR: usize = 244;
-const ALL_THREE_FLOOR: usize = 197;
+// s124 ratchet over 380 entries: the module explains itself (D59).
+// Four new run-phase witnesses, each three-lane, so every count moves
+// +4. `resolve/bare_sibling/pair.lu` — a directiveless sibling is a
+// member and its fn is in scope (#149 probe 1). `resolve/plain_subdir/
+// main.lu` — a subdirectory module with no `member: true` resolves
+// (#145 both ways; the marked spelling is `resolve/two_mod/`).
+// `resolve/standalone_pair/left.lu`/`right.lu` — two standalone mains
+// coexist in one directory (`member: false` and the entry pair). The
+// two fail-phase witnesses (`dup_bare`, `broken_sibling`) join the
+// rejection ledger instead. Totals 215/234/234, union 248, all-three
+// 201. Counts measured by this gate, not predicted.
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 215), ("native", 234), ("release", 234)];
+const UNION_FLOOR: usize = 248;
+const ALL_THREE_FLOOR: usize = 201;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

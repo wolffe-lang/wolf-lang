@@ -1,0 +1,6 @@
+// Bare on purpose: a member by default (D59). Defining `helper` here
+// too is the E0302 the entry pins.
+
+fn helper() -> int {
+    2
+}

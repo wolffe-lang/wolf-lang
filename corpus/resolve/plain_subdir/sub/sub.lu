@@ -1,0 +1,13 @@
+// No `//!` header at all — the point of the witness (#145): a plain
+// file in a sibling directory forms that directory's module by
+// default (D59).
+
+/// Seven, the number the issue printed.
+pub fn seven() -> int {
+    7
+}
+
+/// Zero, so the module holds more than one item.
+pub fn zero() -> int {
+    0
+}
