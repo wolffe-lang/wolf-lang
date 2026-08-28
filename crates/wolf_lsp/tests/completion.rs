@@ -230,3 +230,35 @@ fn lex_dead_buffer_still_answers_a_list() {
     );
     client.shutdown();
 }
+
+/// Latency probe on the largest corpus file — report-only, not a CI
+/// gate (the JSONL gate rides examples/lsp_bench.rs). Run manually:
+/// `cargo test -p wolf_lsp --release --test completion -- --ignored --nocapture`
+#[test]
+#[ignore = "latency probe; report-only, run with --ignored --nocapture"]
+fn member_completion_latency_probe_large_file() {
+    let (mut client, _) = Client::start(&["utf-8"]);
+    let path = support::corpus("conc/spawn_cluster_split.lu");
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    let base_lines = text.lines().count() as u32;
+    text.push_str("\nfn probe_zz(s: str) -> str {\n    s.\n}\n");
+    let uri = client.open(&path, &text);
+    let _ = client.wait_publish(&uri);
+
+    let mut samples: Vec<f64> = Vec::new();
+    for _ in 0..30 {
+        let t = std::time::Instant::now();
+        let items = complete_at(&mut client, &uri, base_lines + 2, 6);
+        samples.push(t.elapsed().as_secs_f64() * 1000.0);
+        assert!(!items.is_empty(), "str members on the appended receiver");
+    }
+    samples.sort_by(|a, b| a.total_cmp(b));
+    println!(
+        "member completion, {} bytes, cold repair each request: p50={:.3}ms p95={:.3}ms max={:.3}ms",
+        text.len(),
+        samples[samples.len() / 2],
+        samples[(samples.len() - 1) * 95 / 100],
+        samples.last().unwrap()
+    );
+    client.shutdown();
+}
