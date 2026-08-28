@@ -96,12 +96,18 @@ pub use conc_abi::{
     CANCEL_TAG,
 };
 pub use hooks::{ChanPhase, SchedEvent, SchedRng, kind_code, seed_spec};
-// The reactor (crate::reactor, s35) composes with the task layer
-// through these crate-internal seams: the one sched_point site rule
-// and the kill-teardown discipline hold there too.
+// The reactor (crate::reactor, s35) and signal (s114) compose with
+// the task layer through these crate-internal seams: the one
+// sched_point site rule and the kill-teardown discipline hold there
+// too. On hosts where those consumers have not crossed yet the
+// expectations below keep clippy honest and DELETE THEMSELVES the
+// moment the port lands (an unfulfilled `expect` is denied).
+#[cfg_attr(not(target_os = "linux"), expect(unused_imports))]
 pub(crate) use hooks::sched_point;
 #[cfg(test)]
+#[cfg_attr(not(target_os = "linux"), expect(unused_imports))]
 pub(crate) use hooks::test_hook;
+#[cfg_attr(not(target_os = "linux"), expect(unused_imports))]
 pub(crate) use pool::kill_teardown_check;
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{

@@ -15,9 +15,33 @@ fn os_thread_count() -> usize {
     std::fs::read_dir("/proc/self/task").map_or(1, |d| d.count())
 }
 
-#[cfg(not(target_os = "linux"))]
+/// macOS: `proc_pidinfo(PROC_PIDTASKINFO)` — the task's thread count
+/// straight from the kernel (no /proc here), so the no-background-
+/// threads assertions have real teeth on this host too (s59).
+#[cfg(target_os = "macos")]
 fn os_thread_count() -> usize {
-    1 // No /proc equivalent asserted off-linux; the lazily-init
+    // SAFETY: zeroed out-struct of the exact size the call contracts.
+    unsafe {
+        let mut ti: libc::proc_taskinfo = std::mem::zeroed();
+        let sz = size_of::<libc::proc_taskinfo>() as i32;
+        let n = libc::proc_pidinfo(
+            std::process::id() as i32,
+            libc::PROC_PIDTASKINFO,
+            0,
+            (&raw mut ti).cast(),
+            sz,
+        );
+        if n == sz {
+            ti.pti_threadnum as usize
+        } else {
+            1
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn os_thread_count() -> usize {
+    1 // No /proc equivalent asserted elsewhere; the lazily-init
     // assertions below still run.
 }
 

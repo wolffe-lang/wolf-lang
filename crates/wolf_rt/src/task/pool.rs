@@ -554,6 +554,21 @@ mod os {
     use super::super::stack::TaskStack;
     use std::sync::{Mutex, OnceLock};
 
+    // POSIX `pthread_attr_setstack` exists on macOS (pthread.h) but
+    // the libc crate does not bind it for apple targets (it carries
+    // only the deprecated setstackaddr/setstacksize pair) — declared
+    // here directly, s59.
+    #[cfg(target_os = "macos")]
+    unsafe extern "C" {
+        fn pthread_attr_setstack(
+            attr: *mut libc::pthread_attr_t,
+            stackaddr: *mut libc::c_void,
+            stacksize: libc::size_t,
+        ) -> libc::c_int;
+    }
+    #[cfg(not(target_os = "macos"))]
+    use libc::pthread_attr_setstack;
+
     struct Store {
         free: Vec<TaskStack>,
         retired: Vec<(libc::pthread_t, TaskStack)>,
@@ -622,7 +637,7 @@ mod os {
         unsafe {
             let mut attr: libc::pthread_attr_t = std::mem::zeroed();
             libc::pthread_attr_init(&mut attr);
-            libc::pthread_attr_setstack(&mut attr, lo.cast(), len);
+            pthread_attr_setstack(&mut attr, lo.cast(), len);
             let mut tid: libc::pthread_t = std::mem::zeroed();
             let rc = libc::pthread_create(&mut tid, &attr, thread_entry, boot.cast());
             libc::pthread_attr_destroy(&mut attr);

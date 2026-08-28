@@ -42,9 +42,10 @@ pub mod reactor;
 pub mod signal;
 pub mod str;
 pub mod time;
-// The task layer is linux-only at this campaign stage — the same
-// platform posture as native codegen (s28: M1 targets linux/x86-64;
-// mmap/pthread stack plumbing uses linux-specific surface). Other
-// hosts compile wolf_rt without it; the fan-out's port sprints widen.
-#[cfg(target_os = "linux")]
+// The task layer opened on linux (s28's platform posture) and crossed
+// to macOS at s59: the stack plumbing (mmap/madvise/guard-fault
+// reporting) already carried macOS arms, and the pool is POSIX
+// pthreads. Other hosts compile wolf_rt without it; the remaining
+// port sprints (windows s60, freebsd s61) widen this gate.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod task;
