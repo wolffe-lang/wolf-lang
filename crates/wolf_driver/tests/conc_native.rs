@@ -85,12 +85,19 @@ fn native_tier(file: &str, seed: Option<u64>, midend: bool, release: bool) -> Op
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
-    // The release tier refuses this HOST by name (linux/x86-64 +
-    // macOS/aarch64 since s127): a loud skip, not a verdict — the
-    // parity stays pinned by the lanes that run it (s59 pattern).
+    // Either tier refusing this HOST by name (linux/x86-64 + macOS/
+    // aarch64; windows and freebsd are still c13's) is a loud skip,
+    // not a verdict — the parity stays pinned by the lanes that run
+    // it (s59 pattern). The debug tier's refusal reaches here as a
+    // conform-run `unsupported` record, exactly like the release one.
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if rec["verdict"] == "unsupported" && stderr.contains("native codegen targets") {
+        eprintln!("SKIP: the native tier refuses this host");
+        return None;
+    }
     if release
         && rec["verdict"] == "unsupported"
-        && String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64")
+        && stderr.contains("release tier targets linux/x86-64")
     {
         eprintln!("SKIP: the release tier refuses this host");
         return None;
