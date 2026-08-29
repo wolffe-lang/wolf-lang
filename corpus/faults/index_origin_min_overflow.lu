@@ -1,0 +1,18 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: gram.expr.index.origin
+//!
+//! The 1-origin shift is one CHECKED subtraction (X3): the single
+//! index value with no representable predecessor — int.min — traps
+//! `overflow` before the bounds question is asked. Priced and
+//! accepted in D61; every other out-of-range index traps `bounds`.
+
+#![index(1)]
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(10)
+    let i = 0 - 9223372036854775807 - 1
+    let v = xs[i]                  // TRAP overflow: i - 1 has no home
+    v
+}

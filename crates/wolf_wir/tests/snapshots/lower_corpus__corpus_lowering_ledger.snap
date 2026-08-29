@@ -67,6 +67,8 @@ faults/char_cast_range_trap.lu: lowers
 faults/char_cast_surrogate_trap.lu: lowers
 faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
+faults/index_origin_min_overflow.lu: lowers
+faults/index_origin_zero.lu: lowers
 faults/overflow_add.lu: lowers
 faults/overflow_call_result.lu: lowers
 faults/overflow_elem_read.lu: lowers
@@ -101,6 +103,11 @@ grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
 grammar/else_chain.lu: lowers
 grammar/else_default.lu: not mem-clean (pre-wir rungs own it)
+grammar/index_origin_bad.lu: not mem-clean (pre-wir rungs own it)
+grammar/index_origin_closure.lu: lowers
+grammar/index_origin_file.lu: lowers
+grammar/index_origin_misplaced.lu: not mem-clean (pre-wir rungs own it)
+grammar/index_origin_scopes.lu: lowers
 grammar/intdot_exponent.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
@@ -142,6 +149,7 @@ lints/else_comparison.lu: lowers
 lints/float_zero_minus.lu: lowers
 lints/get_prefix.lu: lowers
 lints/get_without_row.lu: lowers
+lints/index_origin_get.lu: lowers
 lints/match_str_arm_unreachable.lu: lowers
 lints/mut_in_interp.lu: lowers
 lints/mut_param_unwritten.lu: lowers

@@ -1,0 +1,59 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 410..477
+  FnDecl 410..433
+    FnKw 410..412 "fn"
+    Ident 413..414 "f"
+    ParamList 414..416
+      LParen 414..415 "("
+      RParen 415..416 ")"
+    RetType 417..423
+      Arrow 417..419 "->"
+      PathType 420..423
+        Path 420..423
+          Ident 420..423 "int"
+    Block 424..433
+      LBrace 424..425 "{"
+      ExprStmt 430..432
+        LiteralExpr 430..431
+          Int 430..431 "1"
+        Term 431..432 "\n"
+      RBrace 432..433 "}"
+  Term 433..434 "\n"
+  InnerAttribute 435..447
+    PoundBangBracket 435..438 "#!["
+    AttrItem 438..446
+      Path 438..443
+        Ident 438..443 "index"
+      AttrInput 443..446
+        LParen 443..444 "("
+        Int 444..445 "1"
+        RParen 445..446 ")"
+    RBracket 446..447 "]"
+  FnDecl 449..476
+    FnKw 449..451 "fn"
+    Ident 452..456 "main"
+    ParamList 456..458
+      LParen 456..457 "("
+      RParen 457..458 ")"
+    RetType 459..466
+      Arrow 459..461 "->"
+      ErrorUnionType 462..466
+        Not 462..463 "!"
+        PathType 463..466
+          Path 463..466
+            Ident 463..466 "int"
+    Block 467..476
+      LBrace 467..468 "{"
+      ExprStmt 473..475
+        LiteralExpr 473..474
+          Int 473..474 "0"
+        Term 474..475 "\n"
+      RBrace 475..476 "}"
+  Term 476..477 "\n"
+  Eof 477..477 ""
+== diagnostics ==
+E0211 [Error] 435..438 a file-wide `#![…]` attribute must be the first thing in its file — move it above the first declaration

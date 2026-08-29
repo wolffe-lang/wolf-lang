@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="10 30 wolf ish wolfish wolf wolfis 3 20")
+//! phase: run
+//! conforms: gram.attr.index, gram.expr.index.origin
+//!
+//! `#![index(1)]` — the file-wide origin marker (D61): subscripts
+//! count from 1, subscript-position ranges are INCLUSIVE, and the
+//! rest of the language does not move. Every table row of
+//! `[gram.expr.index.origin]` in one file: `xs[1]` is the first
+//! element, `xs[xs.len]` the last, `s[1..4]` and `s[1..=4]` the same
+//! four bytes, `s[1..s.len]` the WHOLE string (the 0-origin tail
+//! idiom, retargeted by the coupling), `s[..^1]` end-relative and
+//! unmoved, `.len` origin-free, the bare `for` range unmoved (1..3
+//! still iterates twice), and `.get` still 0-based.
+
+#![index(1)]
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(10)
+    (mut xs).push(20)
+    (mut xs).push(30)
+    let first = xs[1]
+    let last = xs[xs.len]
+    let s = "wolfish"
+    let head = s[1..4]
+    let tail = s[5..]
+    let all = s[1..s.len]
+    let same = s[1..=4]
+    let drop_last = s[..^1]
+    var total = 0
+    for i in 1..3 { total += i }
+    var j = 1
+    let zero_based = xs.get(j) else { 0 - 1 }
+    print("{first} {last} {head} {tail} {all} {same} {drop_last} {total} {zero_based}")
+    0
+}

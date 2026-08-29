@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 410..433 name=f body=Block
+InnerAttribute 435..447
+FnDecl 449..476 name=main body=Block
+-- diagnostics --
+E0211 [Error] 435..438 a file-wide `#![…]` attribute must be the first thing in its file — move it above the first declaration

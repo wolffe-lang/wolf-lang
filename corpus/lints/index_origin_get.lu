@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: run
+//! warns: W0317
+//! conforms: gram.expr.index.origin
+//!
+//! The kindness lint (D61): `.get` is origin-free — method arguments
+//! never shift — so a literal index fed to `.get` inside a 1-origin
+//! scope is usually a subscript habit carried over, off by one.
+//! W0317 marks the literal; a non-literal index warns nothing.
+
+#![index(1)]
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(5)
+    let a = xs.get(1) else { 0 - 1 }
+    var j = 0
+    let b = xs.get(j) else { 0 - 1 }
+    if a == 0 - 1 && b == 5 { 0 } else { 1 }
+}

@@ -1,0 +1,19 @@
+//! check: fail(E0211)
+//! phase: lex
+//! conforms: gram.attr.index
+//!
+//! A file-wide `#![…]` attribute speaks for the whole file, so it is
+//! legal only as the file's first non-trivia construct — a marker
+//! below the first declaration would be easy to miss while it
+//! silently changed how every subscript above it reads. The scoped
+//! spelling for one statement is the outer form, `#[index(1)]`.
+
+fn f() -> int {
+    1
+}
+
+#![index(1)]
+
+fn main() -> !int {
+    0
+}

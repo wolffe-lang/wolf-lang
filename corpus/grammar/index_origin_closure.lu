@@ -1,0 +1,20 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.attr.index, gram.expr.index.origin
+//!
+//! The marker is lexically scoped, full stop: a closure defined
+//! inside a 1-origin scope keeps origin 1 for its own body's
+//! subscripts — it is textually inside — whatever calls it, from
+//! wherever. (The checked executor still refuses capturing closures;
+//! the native rung executes this witness.)
+
+#![index(1)]
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(7)
+    (mut xs).push(8)
+    let f = fn(i) xs[i]
+    let got = f(1)
+    if got == 7 { 0 } else { 1 }
+}

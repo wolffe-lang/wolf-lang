@@ -1,0 +1,18 @@
+//! check: run(exit=trap(bounds))
+//! phase: run
+//! conforms: gram.expr.index.origin, mem.ub.defined
+//!
+//! In a 1-origin scope there is no index 0: `xs[0]` lowers to `-1`
+//! and the ordinary bounds check refuses it — out of range BY THE
+//! SHIFT (D61). The trap is the same `bounds` kind as any other
+//! out-of-range subscript; the report carries kind + site
+//! (`[conf.trap.report]`), never a renumbered index.
+
+#![index(1)]
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(10)
+    let v = xs[0]                  // TRAP bounds
+    v
+}

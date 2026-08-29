@@ -1,0 +1,343 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 445..925
+  FnDecl 445..924
+    FnKw 445..447 "fn"
+    Ident 448..452 "main"
+    ParamList 452..454
+      LParen 452..453 "("
+      RParen 453..454 ")"
+    RetType 455..462
+      Arrow 455..457 "->"
+      ErrorUnionType 458..462
+        Not 458..459 "!"
+        PathType 459..462
+          Path 459..462
+            Ident 459..462 "int"
+    Block 463..924
+      LBrace 463..464 "{"
+      VarDecl 469..490
+        VarKw 469..472 "var"
+        IdentPat 473..475
+          Ident 473..475 "xs"
+        Eq 476..477 "="
+        CallExpr 478..489
+          BracketApply 478..487
+            PathExpr 478..482
+              Ident 478..482 "List"
+            ArgList 482..487
+              LBracket 482..483 "["
+              Arg 483..486
+                PathExpr 483..486
+                  Ident 483..486 "int"
+              RBracket 486..487 "]"
+          ArgList 487..489
+            LParen 487..488 "("
+            RParen 488..489 ")"
+        Term 489..490 "\n"
+      ExprStmt 494..512
+        CallExpr 494..511
+          MemberExpr 494..507
+            ParenExpr 494..502
+              LParen 494..495 "("
+              MutKw 495..498 "mut"
+              PathExpr 499..501
+                Ident 499..501 "xs"
+              RParen 501..502 ")"
+            Dot 502..503 "."
+            Ident 503..507 "push"
+          ArgList 507..511
+            LParen 507..508 "("
+            Arg 508..510
+              LiteralExpr 508..510
+                Int 508..510 "10"
+            RParen 510..511 ")"
+        Term 511..512 "\n"
+      ExprStmt 516..534
+        CallExpr 516..533
+          MemberExpr 516..529
+            ParenExpr 516..524
+              LParen 516..517 "("
+              MutKw 517..520 "mut"
+              PathExpr 521..523
+                Ident 521..523 "xs"
+              RParen 523..524 ")"
+            Dot 524..525 "."
+            Ident 525..529 "push"
+          ArgList 529..533
+            LParen 529..530 "("
+            Arg 530..532
+              LiteralExpr 530..532
+                Int 530..532 "20"
+            RParen 532..533 ")"
+        Term 533..534 "\n"
+      VarDecl 538..550
+        VarKw 538..541 "var"
+        IdentPat 542..545
+          Ident 542..545 "sum"
+        Eq 546..547 "="
+        LiteralExpr 548..549
+          Int 548..549 "0"
+        Term 549..550 "\n"
+      VarDecl 554..567
+        VarKw 554..557 "var"
+        IdentPat 558..561
+          Ident 558..561 "msg"
+        Eq 562..563 "="
+        StringExpr 564..566
+          StrBegin 564..565 "\""
+          StrEnd 565..566 "\""
+        Term 566..567 "\n"
+      ExprStmt 571..813
+        Attribute 571..582
+          PoundBracket 571..573 "#["
+          AttrItem 573..581
+            Path 573..578
+              Ident 573..578 "index"
+            AttrInput 578..581
+              LParen 578..579 "("
+              Int 579..580 "1"
+              RParen 580..581 ")"
+          RBracket 581..582 "]"
+        Block 587..812
+          LBrace 587..588 "{"
+          AssignStmt 597..610
+            PathExpr 597..600
+              Ident 597..600 "sum"
+            PlusEq 601..603 "+="
+            BracketApply 604..609
+              PathExpr 604..606
+                Ident 604..606 "xs"
+              ArgList 606..609
+                LBracket 606..607 "["
+                Arg 607..608
+                  LiteralExpr 607..608
+                    Int 607..608 "1"
+                RBracket 608..609 "]"
+            Term 609..610 "\n"
+          ExprStmt 618..675
+            Attribute 618..629
+              PoundBracket 618..620 "#["
+              AttrItem 620..628
+                Path 620..625
+                  Ident 620..625 "index"
+                AttrInput 625..628
+                  LParen 625..626 "("
+                  Int 626..627 "0"
+                  RParen 627..628 ")"
+              RBracket 628..629 "]"
+            Block 638..674
+              LBrace 638..639 "{"
+              AssignStmt 652..665
+                PathExpr 652..655
+                  Ident 652..655 "sum"
+                PlusEq 656..658 "+="
+                BracketApply 659..664
+                  PathExpr 659..661
+                    Ident 659..661 "xs"
+                  ArgList 661..664
+                    LBracket 661..662 "["
+                    Arg 662..663
+                      LiteralExpr 662..663
+                        Int 662..663 "0"
+                    RBracket 663..664 "]"
+                Term 664..665 "\n"
+              RBrace 673..674 "}"
+            Term 674..675 "\n"
+          AssignStmt 683..696
+            PathExpr 683..686
+              Ident 683..686 "sum"
+            PlusEq 687..689 "+="
+            BracketApply 690..695
+              PathExpr 690..692
+                Ident 690..692 "xs"
+              ArgList 692..695
+                LBracket 692..693 "["
+                Arg 693..694
+                  LiteralExpr 693..694
+                    Int 693..694 "2"
+                RBracket 694..695 "]"
+            Term 695..696 "\n"
+          VarDecl 704..725
+            VarKw 704..707 "var"
+            IdentPat 708..710
+              Ident 708..710 "ys"
+            Eq 711..712 "="
+            CallExpr 713..724
+              BracketApply 713..722
+                PathExpr 713..717
+                  Ident 713..717 "List"
+                ArgList 717..722
+                  LBracket 717..718 "["
+                  Arg 718..721
+                    PathExpr 718..721
+                      Ident 718..721 "int"
+                  RBracket 721..722 "]"
+              ArgList 722..724
+                LParen 722..723 "("
+                RParen 723..724 ")"
+            Term 724..725 "\n"
+          ExprStmt 733..750
+            CallExpr 733..749
+              MemberExpr 733..746
+                ParenExpr 733..741
+                  LParen 733..734 "("
+                  MutKw 734..737 "mut"
+                  PathExpr 738..740
+                    Ident 738..740 "ys"
+                  RParen 740..741 ")"
+                Dot 741..742 "."
+                Ident 742..746 "push"
+              ArgList 746..749
+                LParen 746..747 "("
+                Arg 747..748
+                  LiteralExpr 747..748
+                    Int 747..748 "7"
+                RParen 748..749 ")"
+            Term 749..750 "\n"
+          ExprStmt 758..775
+            CallExpr 758..774
+              MemberExpr 758..771
+                ParenExpr 758..766
+                  LParen 758..759 "("
+                  MutKw 759..762 "mut"
+                  PathExpr 763..765
+                    Ident 763..765 "ys"
+                  RParen 765..766 ")"
+                Dot 766..767 "."
+                Ident 767..771 "push"
+              ArgList 771..774
+                LParen 771..772 "("
+                Arg 772..773
+                  LiteralExpr 772..773
+                    Int 772..773 "8"
+                RParen 773..774 ")"
+            Term 774..775 "\n"
+          AssignStmt 783..807
+            PathExpr 783..786
+              Ident 783..786 "msg"
+            Eq 787..788 "="
+            StringExpr 789..806
+              StrBegin 789..790 "\""
+              Interp 790..797
+                InterpOpen 790..791 "{"
+                BracketApply 791..796
+                  PathExpr 791..793
+                    Ident 791..793 "ys"
+                  ArgList 793..796
+                    LBracket 793..794 "["
+                    Arg 794..795
+                      LiteralExpr 794..795
+                        Int 794..795 "1"
+                    RBracket 795..796 "]"
+                InterpClose 796..797 "}"
+              StrFragment 797..798 "-"
+              Interp 798..805
+                InterpOpen 798..799 "{"
+                BracketApply 799..804
+                  PathExpr 799..801
+                    Ident 799..801 "ys"
+                  ArgList 801..804
+                    LBracket 801..802 "["
+                    Arg 802..803
+                      LiteralExpr 802..803
+                        Int 802..803 "2"
+                    RBracket 803..804 "]"
+                InterpClose 804..805 "}"
+              StrEnd 805..806 "\""
+            Term 806..807 "\n"
+          RBrace 811..812 "}"
+        Term 812..813 "\n"
+      AssignStmt 817..830
+        PathExpr 817..820
+          Ident 817..820 "sum"
+        PlusEq 821..823 "+="
+        BracketApply 824..829
+          PathExpr 824..826
+            Ident 824..826 "xs"
+          ArgList 826..829
+            LBracket 826..827 "["
+            Arg 827..828
+              LiteralExpr 827..828
+                Int 827..828 "0"
+            RBracket 828..829 "]"
+        Term 829..830 "\n"
+      LetDecl 834..852
+        LetKw 834..837 "let"
+        IdentPat 838..839
+          Ident 838..839 "s"
+        Eq 840..841 "="
+        StringExpr 842..851
+          StrBegin 842..843 "\""
+          StrFragment 843..850 "wolfish"
+          StrEnd 850..851 "\""
+        Term 851..852 "\n"
+      LetDecl 856..888
+        Attribute 856..867
+          PoundBracket 856..858 "#["
+          AttrItem 858..866
+            Path 858..863
+              Ident 858..863 "index"
+            AttrInput 863..866
+              LParen 863..864 "("
+              Int 864..865 "1"
+              RParen 865..866 ")"
+          RBracket 866..867 "]"
+        LetKw 872..875 "let"
+        IdentPat 876..877
+          Ident 876..877 "w"
+        Eq 878..879 "="
+        BracketApply 880..887
+          PathExpr 880..881
+            Ident 880..881 "s"
+          ArgList 881..887
+            LBracket 881..882 "["
+            Arg 882..886
+              RangeExpr 882..886
+                LiteralExpr 882..883
+                  Int 882..883 "1"
+                DotDot 883..885 ".."
+                LiteralExpr 885..886
+                  Int 885..886 "1"
+            RBracket 886..887 "]"
+        Term 887..888 "\n"
+      ExprStmt 892..917
+        CallExpr 892..916
+          PathExpr 892..897
+            Ident 892..897 "print"
+          ArgList 897..916
+            LParen 897..898 "("
+            Arg 898..915
+              StringExpr 898..915
+                StrBegin 898..899 "\""
+                Interp 899..904
+                  InterpOpen 899..900 "{"
+                  PathExpr 900..903
+                    Ident 900..903 "sum"
+                  InterpClose 903..904 "}"
+                StrFragment 904..905 " "
+                Interp 905..908
+                  InterpOpen 905..906 "{"
+                  PathExpr 906..907
+                    Ident 906..907 "w"
+                  InterpClose 907..908 "}"
+                StrFragment 908..909 " "
+                Interp 909..914
+                  InterpOpen 909..910 "{"
+                  PathExpr 910..913
+                    Ident 910..913 "msg"
+                  InterpClose 913..914 "}"
+                StrEnd 914..915 "\""
+            RParen 915..916 ")"
+        Term 916..917 "\n"
+      ExprStmt 921..923
+        LiteralExpr 921..922
+          Int 921..922 "0"
+        Term 922..923 "\n"
+      RBrace 923..924 "}"
+  Term 924..925 "\n"
+  Eof 925..925 ""
+== diagnostics ==

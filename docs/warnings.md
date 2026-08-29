@@ -246,6 +246,19 @@ descendants closes the loop. Move the shared items down into the
 child (or into a sibling both can import) so the dependency runs one
 way, parent to child.
 
+## W0317 — a `.get` index inside a 1-origin scope still counts from 0
+
+`#[index(1)]` shifts subscripts — `xs[i]` — but never method
+arguments: `xs.get(i)` counts from 0 in every scope, because a
+method's meaning cannot depend on where its call was written
+([gram.expr.index.origin]). Inside a 1-origin scope the two spellings
+therefore disagree by one, and a literal index fed to `.get` there is
+usually a subscript habit carried over. Use the subscript form
+(`xs[i]`, which traps out of range) or the `else` handling of
+`.get`'s miss with the 0-based index spelled deliberately; this
+warning marks the literal so the off-by-one is a choice, not an
+accident.
+
 ## W0401 — this literal does not fit the type it is cast to
 
 The value of this literal is known at compile time, and it lies
