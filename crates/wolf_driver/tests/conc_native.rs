@@ -477,6 +477,12 @@ fn wolf_test_schedules_explores_a_native_body() {
         eprintln!("SKIP: environment cannot run the native test lane");
         return;
     }
+    // A host the native tier refuses by name (windows/freebsd until
+    // c13 reaches them) has no schedule lane to explore — loud skip.
+    if stderr.contains("native codegen targets") {
+        eprintln!("SKIP: the native tier refuses this host");
+        return;
+    }
     assert!(
         stdout.contains("[native, 4 schedule(s)]"),
         "the native schedule lane must run: {stdout} {stderr}"
