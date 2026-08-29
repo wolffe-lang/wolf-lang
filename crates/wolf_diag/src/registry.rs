@@ -386,6 +386,17 @@ mode to get a plain parenthesized expression, or complete the method
 call the receiver was written for ([gram.expr.primary]).
 "#);
 
+code!(E0211, "a file-wide attribute that is not first in its file", r#"
+A `#![…]` attribute speaks for the whole file, so it must be the
+first thing in the file — before any declaration, above even the
+outer `#[…]` attributes of the first item. Only a `#!` interpreter
+line on line one may precede it. Anywhere else the marker would be
+easy to miss while it silently changed how the file reads, so the
+grammar refuses it there. Move it to the top of the file; if you
+meant to mark one statement or block, the outer form `#[…]` on that
+statement is the scoped spelling ([gram.attr.index]).
+"#);
+
 // ------------------------------------------------------------------------
 // E03xx — name resolution's family (s12).
 // ------------------------------------------------------------------------
@@ -1221,6 +1232,20 @@ When the arguments alone already pin every parameter, the explicit
 form is optional — `pick(xs, 0)` infers the same instantiation.
 "#);
 
+code!(E0813, "an origin marker that is not `index(0)` or `index(1)`", r#"
+The origin marker decides whether subscripts in its scope count from
+0 or from 1, and those are the only two origins: it is written
+`#[index(0)]` or `#[index(1)]` on a statement, or `#![index(0)]` /
+`#![index(1)]` for the whole file ([gram.attr.index]). This code
+fires when the marker's argument is anything else — another number,
+a missing argument, several arguments, or the `index = …` spelling —
+and when a file-wide `#![…]` attribute names something other than
+`index`, which is the only file-wide attribute there is. Write
+`index(1)` to count from one, `index(0)` to restore the default, or
+delete the marker — no marker means 0, exactly as if the feature did
+not exist.
+"#);
+
 code!(E0811, "the type does not implement the trait it is cast to", r#"
 `v as dyn Trait` erases a concrete type behind the coherence-unique
 impl of `Trait` for that type — the vtable the object dispatches
@@ -2009,6 +2034,19 @@ child (or into a sibling both can import) so the dependency runs one
 way, parent to child.
 "#);
 
+code!(W0317, "a `.get` index inside a 1-origin scope still counts from 0", r#"
+`#[index(1)]` shifts subscripts — `xs[i]` — but never method
+arguments: `xs.get(i)` counts from 0 in every scope, because a
+method's meaning cannot depend on where its call was written
+([gram.expr.index.origin]). Inside a 1-origin scope the two spellings
+therefore disagree by one, and a literal index fed to `.get` there is
+usually a subscript habit carried over. Use the subscript form
+(`xs[i]`, which traps out of range) or the `else` handling of
+`.get`'s miss with the 0-based index spelled deliberately; this
+warning marks the literal so the off-by-one is a choice, not an
+accident.
+"#);
+
 // ------------------------------------------------------------------------
 // W04xx — typing-adjacent warnings (mirror of the E04xx family).
 // ------------------------------------------------------------------------
@@ -2352,7 +2390,8 @@ mod tests {
         for c in [
             "E0001", "E0002", "E0003", "E0005", "E0006", "E0007", "E0008", "E0101", "E0102",
             "E0103", "E0104", "E0105", "E0106", "E0107", "E0108", "E0109", "E0110", "E0201",
-            "E0202", "E0203", "E0204", "E0205", "E0206", "E0207", "E0208", "E0209",
+            "E0202", "E0203", "E0204", "E0205", "E0206", "E0207", "E0208", "E0209", "E0210",
+            "E0211",
         ] {
             assert!(explain(c).is_some(), "{c} missing from the registry");
         }
