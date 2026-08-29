@@ -479,7 +479,9 @@ fn wolf_test_schedules_explores_a_native_body() {
     }
     // A host the native tier refuses by name (windows/freebsd until
     // c13 reaches them) has no schedule lane to explore — loud skip.
-    if stderr.contains("native codegen targets") {
+    // Under `--json` the refusal is the test record's `detail` on
+    // stdout, not a stderr line.
+    if stderr.contains("native codegen targets") || stdout.contains("native codegen targets") {
         eprintln!("SKIP: the native tier refuses this host");
         return;
     }
