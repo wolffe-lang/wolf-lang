@@ -4965,6 +4965,32 @@ impl<'a> Checker<'a> {
                 (vec![pm("self", recv_ty)], r)
             }
             (TyKind::List(t), "get") => {
+                // W0317 (D61 kindness): `.get` is origin-free, so a
+                // literal index fed to it inside a 1-origin scope is
+                // usually a subscript habit carried over, off by one.
+                if self.sigs.origins.origin_at(e.span) == 1
+                    && let Some(arg) = args
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .find_map(wolf_ast::Arg::value)
+                    && arg.kind == SyntaxKind::LiteralExpr
+                    && arg.child_token(SyntaxKind::Int).is_some()
+                {
+                    self.diags.push(
+                        Diagnostic::warning(
+                            codes::W0317,
+                            arg.span,
+                            "`.get` counts from 0, even inside this `index(1)` scope",
+                        )
+                        .with_label("a 0-based index")
+                        .with_note(
+                            "the origin marker shifts subscripts (`xs[i]`) but never \
+                             method arguments — `xs[1]` and `xs.get(1)` name different \
+                             elements here. Use the subscript form, or spell the \
+                             0-based index deliberately.",
+                        ),
+                    );
+                }
                 let int_ = self.lo.table.prim(Prim::Int);
                 let row = self
                     .lo

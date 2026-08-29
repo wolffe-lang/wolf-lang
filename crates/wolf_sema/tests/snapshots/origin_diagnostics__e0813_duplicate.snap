@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/origin_diagnostics.rs
+expression: "render_scan(\"fn f() -> int {\\n    #[index(1), index(0)]\\n    let x = 1\\n    x\\n}\\n\")"
+---
+error[E0813]: this scope already chose its origin
+ --> mem:///main.lu:2:17
+  |
+2 |     #[index(1), index(0)]
+  |       -------- the origin was chosen here
+  |                 ^^^^^^^^ second `index` marker
+  |
+  = note: one marker per statement; nest a block to switch origins inside it.

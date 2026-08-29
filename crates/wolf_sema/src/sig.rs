@@ -233,6 +233,12 @@ pub struct SigTables {
     /// but never serialized or hashed (private items are not
     /// interface surface).
     pub sealed: Vec<(usize, String, String)>,
+    /// The origin-marker regions (s126, D61 `[gram.attr.index]`):
+    /// which subscript sites count from 1. Scanned once here so both
+    /// executing lanes (WIR lowering, checked executor) and the body
+    /// checker read one map; its E0813 diagnostics ride
+    /// `diagnostics`.
+    pub origins: crate::origin::OriginMap,
 }
 
 impl SigTables {
@@ -263,7 +269,11 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // The s14 layer: trait declarations, impls, coherence, dyn use
     // checks — all elaborating into the same base table.
     let (traits, impls) = crate::traits::build(&mut lower);
-    let diagnostics = lower.diags;
+    let mut diagnostics = lower.diags;
+    // The origin-marker scan (s126): syntax-only, so it rides
+    // signature elaboration and every later consumer reads one map.
+    let origin_scan = crate::origin::scan_origins(pkg);
+    diagnostics.extend(origin_scan.diagnostics);
     let mut sigs = SigTables {
         table: lower.table,
         modules,
@@ -272,6 +282,7 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
         impls,
         diagnostics,
         sealed: Vec::new(),
+        origins: origin_scan.map,
     };
     // The s15 layer: seal every inferred row to its concrete tag set
     // (cycle-aware fixpoint over each module's call graph) and reject

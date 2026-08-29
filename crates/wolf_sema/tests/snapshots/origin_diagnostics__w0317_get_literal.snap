@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/origin_diagnostics.rs
+expression: "render(&res, &warns)"
+---
+warning[W0317]: `.get` counts from 0, even inside this `index(1)` scope
+ --> mem:///main.lu:5:12
+  |
+5 |     xs.get(1) else { 0 - 1 }
+  |            ^ a 0-based index
+  |
+  = note: the origin marker shifts subscripts (`xs[i]`) but never method arguments — `xs[1]` and
+    `xs.get(1)` name different elements here. Use the subscript form, or spell the 0-based
+    index deliberately.

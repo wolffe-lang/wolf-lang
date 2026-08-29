@@ -1,0 +1,11 @@
+---
+source: crates/wolf_sema/tests/origin_diagnostics.rs
+expression: "render_scan(\"#![consttime]\\nfn f() -> int {\\n    1\\n}\\n\")"
+---
+error[E0813]: `consttime` is not a file-wide attribute — the only one is `index`
+ --> mem:///main.lu:1:4
+  |
+1 | #![consttime]
+  |    ^^^^^^^^^ not a file-wide attribute
+  |
+  = note: the file-wide form chooses the subscript origin: `#![index(0)]` or `#![index(1)]`.
