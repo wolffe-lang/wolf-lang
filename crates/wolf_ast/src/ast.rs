@@ -422,6 +422,18 @@ impl<'a> Attribute<'a> {
 }
 
 ast_node!(
+    /// `#![attr, …]` — the file-wide attribute (`[gram.attr.index]`);
+    /// a direct child of the source file, before any item.
+    InnerAttribute
+);
+
+impl<'a> InnerAttribute<'a> {
+    pub fn items(self) -> impl Iterator<Item = AttrItem<'a>> {
+        self.0.nodes().filter_map(AttrItem::cast)
+    }
+}
+
+ast_node!(
     /// One `path attr_input?` inside an attribute.
     AttrItem
 );
