@@ -128,6 +128,24 @@ fn e0204_malformed_attribute() {
 }
 
 #[test]
+fn e0211_inner_attribute_after_first_item() {
+    snap(
+        "e0211_inner_attr_misplaced",
+        "fn f() { }\n#![index(1)]\nfn g() { }\n",
+        codes::MISPLACED_INNER_ATTRIBUTE,
+    );
+}
+
+#[test]
+fn e0211_inner_attribute_in_statement_position() {
+    snap(
+        "e0211_inner_attr_in_block",
+        "fn f() {\n    #![index(1)]\n    let x = 1\n}\n",
+        codes::MISPLACED_INNER_ATTRIBUTE,
+    );
+}
+
+#[test]
 fn e0205_malformed_generics() {
     snap(
         "e0205_bad_generics",

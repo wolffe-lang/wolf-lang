@@ -43,6 +43,8 @@
 //! | E0207 | expected a pattern                                          |
 //! | E0208 | assignment used as an expression                            |
 //! | E0209 | negative integer literal used as an index (D25 `^` hint)    |
+//! | E0210 | moded receiver outside receiver position                    |
+//! | E0211 | file-wide `#![…]` attribute not first in its file           |
 
 use wolf_ast::GreenNode;
 use wolf_diag::Diagnostic;
@@ -79,6 +81,7 @@ pub mod codes {
     pub const ASSIGN_IN_EXPR: Code = c::E0208;
     pub const NEGATIVE_INDEX: Code = c::E0209;
     pub const RECEIVER_MODE: Code = c::E0210;
+    pub const MISPLACED_INNER_ATTRIBUTE: Code = c::E0211;
 }
 
 /// The result of parsing: a complete lossless tree and the parse-tier
