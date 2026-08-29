@@ -365,9 +365,23 @@ impl Snapshot {
             .iter()
             .filter(|(s, _)| s.lo <= offset && offset < s.hi)
             .min_by_key(|(s, _)| s.hi - s.lo)?;
+        // A subscript inside a 1-origin scope states the mode (D61,
+        // `[gram.attr.index]`): the shift is invisible in the source,
+        // so the hover is where it becomes visible.
+        let doc = if tc.sigs.origins.origin_at(*span) == 1
+            && bracket_apply_with_span(&unit.parse.root, *span)
+        {
+            Some(
+                "Subscripts here count from 1 — an `index(1)` origin marker \
+                 is in force (`[gram.attr.index]`)."
+                    .to_string(),
+            )
+        } else {
+            None
+        };
         Some(HoverResult {
             text: render(*ty),
-            doc: None,
+            doc,
             span: *span,
         })
     }
@@ -457,6 +471,17 @@ pub(crate) fn file_index(res: &wolf_sema::Resolution, entry: &Path) -> Option<us
 
 /// The (decl ordinal, member ordinal) coordinates `BodyRef` uses, for
 /// the item containing `offset`.
+/// Is there a `BracketApply` node with exactly this span? The hover's
+/// answering expression is a subscript precisely when there is.
+fn bracket_apply_with_span(node: &GreenNode, span: Span) -> bool {
+    if node.kind == SyntaxKind::BracketApply && node.span == span {
+        return true;
+    }
+    node.nodes()
+        .filter(|c| c.span.lo <= span.lo && span.hi <= c.span.hi)
+        .any(|c| bracket_apply_with_span(c, span))
+}
+
 pub(crate) fn decl_at(root: &GreenNode, offset: u32) -> Option<(usize, Option<usize>)> {
     let (decl, node) = root
         .nodes()
