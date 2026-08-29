@@ -15,15 +15,27 @@
 mod common;
 
 use common::{fixture, module_ir};
-use wolf_codegen_llvm::{EmitOptions, fuzzgen};
+use wolf_codegen_llvm::{EmitOptions, ReleaseTarget, fuzzgen};
 use wolf_wir::entity::EntityRef;
 use wolf_wir::facts::{DerefSize, FactData, FactKind, Just, Theorem};
 use wolf_wir::ir::{Aux, Function, Mode, Module, Param};
 use wolf_wir::ops::Opcode;
 use wolf_wir::types::{self, RegionId};
 
+/// Goldens pin the LINUX target on every host (s127): the snapshots
+/// are one truth everywhere, and running them on macOS IS the
+/// linux-emission-unchanged witness — the pre-s127 snapshots must
+/// stay byte-identical under cross-emission. The header of the HOST
+/// target is pinned separately in `tests/target_header.rs`.
+fn linux_opts() -> EmitOptions {
+    EmitOptions {
+        target: Some(ReleaseTarget::LinuxX64),
+        ..EmitOptions::default()
+    }
+}
+
 fn ir_of(m: &Module) -> Option<String> {
-    module_ir(m, None, EmitOptions::default())
+    module_ir(m, None, linux_opts())
 }
 
 fn ir_of_fixture(name: &str) -> Option<String> {
@@ -452,7 +464,7 @@ fn strip_lane_is_stripped() {
             None,
             EmitOptions {
                 strip_facts: true,
-                ..EmitOptions::default()
+                ..linux_opts()
             },
         ) else {
             return;

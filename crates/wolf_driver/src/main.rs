@@ -1579,6 +1579,9 @@ fn emit_opts(
     wolf_codegen_llvm::EmitOptions {
         strip_facts: std::env::var("WOLF_STRIP_FACTS").as_deref() == Ok("1"),
         branch_weights,
+        // The host target (s127): the backend resolves `None` to the
+        // host and refuses unsupported hosts by name.
+        target: None,
     }
 }
 

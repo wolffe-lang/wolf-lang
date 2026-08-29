@@ -78,9 +78,10 @@ fn intdot_range_runs() {
 }
 
 /// The finished-object path (Backend::finish → clang -c): relocatable
-/// bytes come back non-empty and ELF-shaped.
+/// bytes come back non-empty and shaped like the host's object format
+/// (ELF on linux, Mach-O on macOS — s127).
 #[test]
-fn object_emission_produces_elf() {
+fn object_emission_produces_native_object() {
     use wolf_backend::Backend;
     let mut m = fixture("region_infer_tree_transform");
     let shim = add_plain_entry_shim(&mut m);
@@ -111,7 +112,12 @@ fn object_emission_produces_elf() {
     }
     let product = Box::new(backend).finish().expect("object emits");
     assert!(product.bytes.len() > 64);
-    assert_eq!(&product.bytes[..4], b"\x7fELF");
+    if cfg!(target_os = "macos") {
+        // MH_MAGIC_64 (0xfeedfacf), little-endian on disk.
+        assert_eq!(&product.bytes[..4], b"\xcf\xfa\xed\xfe");
+    } else {
+        assert_eq!(&product.bytes[..4], b"\x7fELF");
+    }
 }
 
 /// s104 witness (a), release tier: the aliasing case. Same fixture as

@@ -108,11 +108,69 @@ pub use emit::{BranchWeights, EmitOptions};
 /// (bump policy in the crate docs).
 pub const CLANG_MIN_MAJOR: u32 = 15;
 
-/// The target datalayout/triple this tier emits (s41 is linux/x86-64
-/// only, like the debug tier at s28; the matrix is c13).
-const TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
-const DATALAYOUT: &str =
-    "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128";
+/// The targets this tier emits for (c13: linux/x86-64 since s41,
+/// macOS/aarch64 since s127). Each carries the exact module-header
+/// constants — the triple and datalayout written into every emitted
+/// module. The datalayout is the classic silent-miscompile site, so
+/// neither string is hand-composed: the linux pair is s41's verbatim
+/// (and must never move — the linux goldens pin it byte-for-byte);
+/// the macOS pair is taken from Apple clang's own emission for this
+/// host (clang 21, 2026-08), and `tests/target_header.rs` re-derives
+/// it from the host clang on every macOS run so drift is loud.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ReleaseTarget {
+    /// x86-64 linux (SysV): the s41 target.
+    LinuxX64,
+    /// macOS/aarch64 (AAPCS64 + Apple deltas): the s127 target.
+    MacosArm64,
+}
+
+impl ReleaseTarget {
+    /// The host's target, when this tier supports the host.
+    pub fn host() -> Option<ReleaseTarget> {
+        if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+            Some(ReleaseTarget::LinuxX64)
+        } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+            Some(ReleaseTarget::MacosArm64)
+        } else {
+            None
+        }
+    }
+
+    /// The `target triple` header line's value. The macOS triple is
+    /// deliberately UNVERSIONED (`arm64-apple-macosx`, not clang's
+    /// versioned `…macosx26.0.0`): emission stays byte-identical
+    /// across machines, and clang applies its own default deployment
+    /// target at object emission (witnessed end-to-end: the object
+    /// links, ad-hoc signs, and runs).
+    pub fn triple(self) -> &'static str {
+        match self {
+            ReleaseTarget::LinuxX64 => "x86_64-unknown-linux-gnu",
+            ReleaseTarget::MacosArm64 => "arm64-apple-macosx",
+        }
+    }
+
+    /// The `target datalayout` header line's value (provenance above).
+    pub fn datalayout(self) -> &'static str {
+        match self {
+            ReleaseTarget::LinuxX64 => {
+                "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
+            }
+            ReleaseTarget::MacosArm64 => {
+                "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"
+            }
+        }
+    }
+
+    /// The C-membrane lowering contract this target's plans execute
+    /// against ([`wolf_backend::abi::CTarget`]).
+    pub(crate) fn ctarget(self) -> wolf_backend::abi::CTarget {
+        match self {
+            ReleaseTarget::LinuxX64 => wolf_backend::abi::CTarget::SysvX64,
+            ReleaseTarget::MacosArm64 => wolf_backend::abi::CTarget::AppleArm64,
+        }
+    }
+}
 
 /// The LLVM implementation of the backend trait.
 pub struct LlvmBackend {
@@ -126,6 +184,9 @@ pub struct LlvmBackend {
     /// Data globals defined through [`Backend::define_data`].
     data_globals: Vec<String>,
     symbols: Vec<SymbolInfo>,
+    /// The emission target (host-derived unless the options pinned
+    /// one — the cross-emission witness surface).
+    target: ReleaseTarget,
     clang: String,
     /// The optimization level handed to clang (`-O2` per the contract;
     /// s42 shrinks what we hand the pipeline, s44 measures it).
@@ -134,25 +195,31 @@ pub struct LlvmBackend {
 
 impl LlvmBackend {
     /// A release backend for the host target with the default fact
-    /// emission. s41 is linux/x86-64 only; anything else — including a
-    /// missing or too-old system LLVM — is an HONEST refusal naming
-    /// the requirement (D33: system LLVM is a documented toolchain
-    /// requirement, provisioned by the CI lane, never a build script).
+    /// emission. The tier serves linux/x86-64 (s41) and macOS/aarch64
+    /// (s127); any other host — or a missing or too-old system LLVM —
+    /// is an HONEST refusal naming the requirement (D33: system LLVM
+    /// is a documented toolchain requirement, provisioned by the CI
+    /// lane, never a build script).
     pub fn new() -> Result<LlvmBackend, BackendError> {
         Self::with_options(EmitOptions::default())
     }
 
     /// [`LlvmBackend::new`] with explicit emission options (the fuzz
-    /// rig's metadata-stripped control lane).
-    pub fn with_options(opts: EmitOptions) -> Result<LlvmBackend, BackendError> {
-        if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-            return Err(BackendError::Unsupported(
-                "the release tier targets linux/x86-64 only in s41 (c13 owns the \
-                 matrix; the debug tier crossed to macOS/aarch64 at s59 — the \
-                 release tier follows as its own c13 sprint)"
-                    .to_string(),
-            ));
-        }
+    /// rig's metadata-stripped control lane; the goldens' pinned
+    /// cross-emission target).
+    pub fn with_options(mut opts: EmitOptions) -> Result<LlvmBackend, BackendError> {
+        let target = match opts.target.or_else(ReleaseTarget::host) {
+            Some(t) => t,
+            None => {
+                return Err(BackendError::Unsupported(
+                    "the release tier targets linux/x86-64 and macOS/aarch64 \
+                     (s41 + s127; c13 owns the matrix) — this host is neither, \
+                     and further platforms follow as their own sprints"
+                        .to_string(),
+                ));
+            }
+        };
+        opts.target = Some(target);
         let clang = clang_binary();
         match clang_major(&clang) {
             Some(v) if v >= CLANG_MIN_MAJOR => {}
@@ -177,6 +244,7 @@ impl LlvmBackend {
             func_irs: Vec::new(),
             data_globals: Vec::new(),
             symbols: Vec::new(),
+            target,
             clang,
             opt: "-O2",
         })
@@ -189,8 +257,11 @@ impl LlvmBackend {
         let mut out = String::new();
         out.push_str("; wolf release tier (s41) - WIR -> LLVM IR\n");
         out.push_str("source_filename = \"wolf\"\n");
-        out.push_str(&format!("target datalayout = \"{DATALAYOUT}\"\n"));
-        out.push_str(&format!("target triple = \"{TARGET_TRIPLE}\"\n\n"));
+        out.push_str(&format!(
+            "target datalayout = \"{}\"\n",
+            self.target.datalayout()
+        ));
+        out.push_str(&format!("target triple = \"{}\"\n\n", self.target.triple()));
         for g in &self.cx.globals {
             out.push_str(g);
             out.push('\n');
