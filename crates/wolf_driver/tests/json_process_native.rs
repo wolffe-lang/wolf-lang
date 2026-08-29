@@ -156,6 +156,14 @@ fn spawn_rows_agree_on_every_lane() {
 /// the checked twins in `crates/wolf_mem/tests/os_time_json.rs`.
 #[test]
 fn live_spawn_wait_kill_agrees_ten_times() {
+    // The fixture's platform floor, stated loud: the checked lane
+    // runs on every host since s59, and a host without `/bin/sh`
+    // (windows) cannot spawn the child at all — that is the
+    // environment, not the verdict.
+    if !Path::new("/bin/sh").exists() {
+        eprintln!("SKIP: no /bin/sh on this host — the live-child fixture's platform floor");
+        return;
+    }
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s107_live_child");
     std::fs::create_dir_all(&dir).expect("mkdir");
     let entry = dir.join("s107_live_child.lu");
@@ -211,6 +219,10 @@ fn main() -> !int {
 /// `cat` child sees immediate EOF and echoes nothing from it).
 #[test]
 fn spawned_child_stdout_writes_through() {
+    if !Path::new("/bin/sh").exists() {
+        eprintln!("SKIP: no /bin/sh on this host — the child-stdout fixture's platform floor");
+        return;
+    }
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s111_child_stdout");
     std::fs::create_dir_all(&dir).expect("mkdir");
     let entry = dir.join("s111_child_stdout.lu");
