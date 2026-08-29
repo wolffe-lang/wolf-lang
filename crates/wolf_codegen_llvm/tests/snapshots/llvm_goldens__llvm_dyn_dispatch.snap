@@ -7,7 +7,7 @@ source_filename = "wolf"
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
-define internal i64 @"_Werased_get$831442242b4ef4b9"(ptr %p0) nounwind {
+define internal i64 @"_Werased_get$0a15b77f8879633a"(ptr %p0) nounwind {
 b0:
   %t1 = load i64, ptr %p0, align 8, !alias.scope !2
   %t2 = call { i64, i1 } @llvm.sadd.with.overflow.i64(i64 %t1, i64 2)
@@ -21,7 +21,7 @@ trap1:
   unreachable
 }
 
-define internal i64 @"_Wdispatch$cf051063e88f4b52"(i64 %p0, i64 %p1) nounwind {
+define internal i64 @"_Wdispatch$a1496798ce351f6f"(i64 %p0, i64 %p1) nounwind {
 b0:
   %slot1 = alloca [16 x i8], align 8
   store i64 %p0, ptr %slot1, align 1
@@ -35,12 +35,12 @@ b0:
   ret i64 %t6
 }
 
-define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+define internal i64 @"_Wmain$70962f7628a8b469"() nounwind {
 b0:
   %slot1 = alloca [8 x i8], align 16
   %slot2 = alloca [8 x i8], align 16
   %slot3 = alloca [16 x i8], align 8
-  store ptr @"_Werased_get$831442242b4ef4b9", ptr %slot1, align 8, !alias.scope !10, !noalias !11
+  store ptr @"_Werased_get$0a15b77f8879633a", ptr %slot1, align 8, !alias.scope !10, !noalias !11
   store i64 40, ptr %slot2, align 8, !alias.scope !12, !noalias !13
   store ptr %slot2, ptr %slot3, align 8
   %t1 = getelementptr i8, ptr %slot3, i64 8
@@ -48,7 +48,7 @@ b0:
   %t2 = load i64, ptr %slot3, align 1
   %t3 = getelementptr i8, ptr %slot3, i64 8
   %t4 = load i64, ptr %t3, align 1
-  %t5 = call i64 @"_Wdispatch$cf051063e88f4b52"(i64 %t2, i64 %t4)
+  %t5 = call i64 @"_Wdispatch$a1496798ce351f6f"(i64 %t2, i64 %t4)
   ret i64 %t5
 }
 

@@ -7,7 +7,7 @@ source_filename = "wolf"
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
-define internal i64 @"_WV.norm$dd74aa86acb928c5"(ptr noalias noundef dereferenceable(24) %p0) nounwind {
+define internal i64 @"_WV.norm$a47a7bbf7399d048"(ptr noalias noundef dereferenceable(24) %p0) nounwind {
 b0:
   %slot1 = alloca [24 x i8], align 8
   %slot2 = alloca [24 x i8], align 8
@@ -45,13 +45,13 @@ trap1:
   unreachable
 }
 
-define internal void @"_WV.set_x$84f3cbb04cbd3927"(ptr noalias noundef dereferenceable(24) %p0, i64 %p1) nounwind {
+define internal void @"_WV.set_x$8681ce1e431b08e6"(ptr noalias noundef dereferenceable(24) %p0, i64 %p1) nounwind {
 b0:
   store i64 %p1, ptr %p0, align 8, !alias.scope !6
   ret void
 }
 
-define internal void @"_Wswap_fields$0c5c9488fa716bf8"(ptr noalias noundef dereferenceable(8) %p0, ptr noalias noundef dereferenceable(8) %p1) nounwind {
+define internal void @"_Wswap_fields$e8ab3317aeeeccd7"(ptr noalias noundef dereferenceable(8) %p0, ptr noalias noundef dereferenceable(8) %p1) nounwind {
 b0:
   %t1 = load i64, ptr %p0, align 8, !alias.scope !10, !noalias !11
   %t2 = load i64, ptr %p1, align 8, !alias.scope !12, !noalias !13
@@ -60,7 +60,7 @@ b0:
   ret void
 }
 
-define internal i64 @"_Weat$9752258b14112037"(ptr readonly %p0) nounwind {
+define internal i64 @"_Weat$6a3d4267a79ba254"(ptr readonly %p0) nounwind {
 b0:
   %t1 = load i64, ptr %p0, align 8
   %t2 = getelementptr i8, ptr %p0, i64 8
@@ -83,7 +83,7 @@ trap1:
   unreachable
 }
 
-define internal i64 @"_Wmain$dbe2e40bdb9f7daa"() nounwind {
+define internal i64 @"_Wmain$70962f7628a8b469"() nounwind {
 b0:
   %slot1 = alloca [24 x i8], align 8
   %slot2 = alloca [24 x i8], align 8
@@ -144,7 +144,7 @@ b0:
   %t21 = getelementptr i8, ptr %slot3, i64 8
   %t22 = load i64, ptr %t21, align 8
   store i64 %t22, ptr %slot5, align 8, !alias.scope !23, !noalias !24
-  call void @"_Wswap_fields$0c5c9488fa716bf8"(ptr %slot4, ptr %slot5)
+  call void @"_Wswap_fields$e8ab3317aeeeccd7"(ptr %slot4, ptr %slot5)
   %t23 = load i64, ptr %slot4, align 8, !alias.scope !21, !noalias !22
   %t24 = getelementptr i8, ptr %slot3, i64 16
   %t25 = load i64, ptr %t24, align 8
@@ -211,7 +211,7 @@ b0:
   %t67 = getelementptr i8, ptr %slot9, i64 24
   %t68 = load i64, ptr %t67, align 8
   store i64 %t68, ptr %slot11, align 8, !alias.scope !27, !noalias !28
-  call void @"_Wswap_fields$0c5c9488fa716bf8"(ptr %slot10, ptr %slot11)
+  call void @"_Wswap_fields$e8ab3317aeeeccd7"(ptr %slot10, ptr %slot11)
   %t69 = load i64, ptr %slot10, align 8, !alias.scope !25, !noalias !26
   %t70 = getelementptr i8, ptr %slot9, i64 8
   %t71 = load i64, ptr %t70, align 8
@@ -285,7 +285,7 @@ b0:
   %t119 = load i64, ptr %t118, align 8
   %t120 = getelementptr i8, ptr %slot16, i64 16
   store i64 %t119, ptr %t120, align 8, !alias.scope !29, !noalias !30
-  %t121 = call i64 @"_WV.norm$dd74aa86acb928c5"(ptr %slot16)
+  %t121 = call i64 @"_WV.norm$a47a7bbf7399d048"(ptr %slot16)
   %t122 = load i64, ptr %slot16, align 8, !alias.scope !29, !noalias !30
   %t123 = load i64, ptr %t117, align 8, !alias.scope !29, !noalias !30
   %t124 = load i64, ptr %t120, align 8, !alias.scope !29, !noalias !30
@@ -333,7 +333,7 @@ cont148:
   %t154 = load i64, ptr %t153, align 8
   %t155 = getelementptr i8, ptr %slot19, i64 16
   store i64 %t154, ptr %t155, align 8, !alias.scope !31, !noalias !32
-  call void @"_WV.set_x$84f3cbb04cbd3927"(ptr %slot19, i64 %t154)
+  call void @"_WV.set_x$8681ce1e431b08e6"(ptr %slot19, i64 %t154)
   %t156 = load i64, ptr %slot19, align 8, !alias.scope !31, !noalias !32
   %t157 = load i64, ptr %t152, align 8, !alias.scope !31, !noalias !32
   %t158 = load i64, ptr %t155, align 8, !alias.scope !31, !noalias !32
@@ -363,7 +363,7 @@ cont148:
   store i64 %t171, ptr %t174, align 1
   %t175 = getelementptr i8, ptr %t168, i64 16
   store i64 %t173, ptr %t175, align 1
-  %t176 = call i64 @"_Weat$9752258b14112037"(ptr %slot21)
+  %t176 = call i64 @"_Weat$6a3d4267a79ba254"(ptr %slot21)
   %t177 = getelementptr i8, ptr %slot21, i64 24
   %t178 = getelementptr i8, ptr %t177, i64 8
   %t179 = load i64, ptr %t178, align 8
