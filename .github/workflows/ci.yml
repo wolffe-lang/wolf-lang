@@ -64,12 +64,15 @@ jobs:
           path: bench-results/
 
   native-macos:
-    # s59: the native tier's second platform. The same gauntlet, on the
-    # host the compiler came home to — Apple clang links (automatic
-    # ad-hoc signing), lldb drives the debug transcripts, kqueue serves
-    # the reactor. The release-tier gates (bench-gates, the --release
-    # suites) skip loudly by the tier's NAMED host refusal; they stay
-    # pinned by the linux lane above.
+    # s59: the native tier's second platform; s127 lit the RELEASE tier
+    # on it too. The same gauntlet, on the host the compiler came home
+    # to — Apple clang compiles the release tier's IR and links
+    # (automatic ad-hoc signing), lldb drives the debug transcripts,
+    # kqueue serves the reactor. The --release suites (release_native,
+    # exec_parity, fact_fuzz, trap_site, whole_program, pgo,
+    # ct_asm_witness, struct-layout) now EXECUTE here; bench-gates
+    # alone keeps its named skip — its ceilings are linux/x86-64
+    # measurements (rig-pinned, D5).
     name: native gauntlet (macOS aarch64)
     runs-on: macos-latest
     timeout-minutes: 30
@@ -79,6 +82,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: clang version floor (the release tier requires >= 15)
+        run: clang --version
       - name: full gauntlet (fmt, clippy, test, corpus, abi-check, debug-check, lane-coverage)
         run: cargo xtask ci
 
