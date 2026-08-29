@@ -101,7 +101,7 @@ use crate::task::{SchedEvent, blocking, current_scope, kill_teardown_check, sche
 /// - **linux**: epoll (oneshot interests) + an eventfd wake token.
 /// - **macOS**: kqueue (`EV_ONESHOT` interests keyed on (fd, filter))
 ///   + an `EVFILT_USER` wake event (`EV_CLEAR` self-resets, so there
-///   is nothing to drain).
+///     is nothing to drain).
 #[cfg(target_os = "linux")]
 mod sys {
     use super::{Interest, RawFd};
