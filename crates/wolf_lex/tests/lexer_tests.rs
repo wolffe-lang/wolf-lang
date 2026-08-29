@@ -464,6 +464,44 @@ fn shebang_is_trivia_at_byte_zero_only() {
 }
 
 #[test]
+fn inner_attribute_opener_beats_shebang_at_byte_zero() {
+    // `#![…]` at byte 0 is the file-wide attribute opener, never a
+    // shebang — real interpreter lines start `#!/` ([gram.attr.index]).
+    let lexed = lex("#![index(1)]\nfn f()\n");
+    assert!(!lexed.has_errors(), "{:?}", lexed.diagnostics);
+    assert_eq!(lexed.tokens[0].kind, PoundBangBracket);
+    assert!(
+        lexed.tokens[0]
+            .leading
+            .iter()
+            .all(|t| t.kind != wolf_lex::TriviaKind::Shebang),
+        "no shebang trivia on `#![`"
+    );
+    // The closing `]` suppresses Term exactly as an outer attribute's.
+    let ks = kinds("#![index(1)]\nfn f()\n");
+    let close = ks.iter().position(|k| *k == p(Punct::RBracket)).unwrap();
+    assert_eq!(
+        ks[close + 1],
+        kw(Keyword::Fn),
+        "no Term after `#![…]`'s `]`"
+    );
+    // A shebang below an interpreter line still lexes: the marker rides
+    // line two, after the shebang trivia.
+    let both = lex("#!/usr/bin/env -S wolf run\n#![index(1)]\nfn f()\n");
+    assert!(!both.has_errors(), "{:?}", both.diagnostics);
+    assert_eq!(both.tokens[0].kind, PoundBangBracket);
+    assert!(
+        both.tokens[0]
+            .leading
+            .iter()
+            .any(|t| t.kind == wolf_lex::TriviaKind::Shebang),
+        "the interpreter line stays trivia above the marker"
+    );
+    // A mid-file `#!` without `[` is still the stray-byte error.
+    assert_eq!(codes("x\n#! nope\n"), vec!["E0107"]);
+}
+
+#[test]
 fn eof_token_owns_dangling_trivia() {
     let lexed = lex("x\n// tail comment\n");
     let eof = lexed.tokens.last().unwrap();

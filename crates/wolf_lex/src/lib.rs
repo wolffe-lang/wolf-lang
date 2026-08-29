@@ -222,6 +222,10 @@ pub enum TokenKind {
     Punct(Punct),
     /// `#[` — the attribute opener (see crate docs).
     PoundBracket,
+    /// `#![` — the file-wide (inner) attribute opener (`[gram.attr.index]`).
+    /// One dedicated token for the same reason as `#[`; a `#!` at byte 0
+    /// NOT followed by `[` is still the shebang line.
+    PoundBangBracket,
     /// Statement terminator: inserted (spans the newline, or zero-width
     /// at EOF) or explicit (spans the `;`).
     Term,

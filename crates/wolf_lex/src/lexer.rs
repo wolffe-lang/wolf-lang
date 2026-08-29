@@ -282,8 +282,15 @@ impl Lexer<'_> {
                 // `#!` at byte 0: the script interpreter line (s53).
                 // Trivia, so `wolf run script.lu` lexes an executable
                 // file unchanged and the formatter round-trips it. One
-                // offset only — a `#!` on line 2 stays E0107.
-                Some(b'#') if self.pos == 0 && self.peek(1) == Some(b'!') => {
+                // offset only — a `#!` on line 2 stays E0107 — and only
+                // when the next byte is not `[`: `#![…]` at byte 0 is
+                // the file-wide attribute opener, never a shebang
+                // (real interpreter lines start `#!/`).
+                Some(b'#')
+                    if self.pos == 0
+                        && self.peek(1) == Some(b'!')
+                        && self.peek(2) != Some(b'[') =>
+                {
                     let start = self.pos;
                     while self.peek(0).is_some_and(|b| b != b'\n') {
                         self.pos += 1;
@@ -321,6 +328,16 @@ impl Lexer<'_> {
                     let lo = self.pos;
                     self.pos += 2;
                     self.emit(TokenKind::PoundBracket, lo, self.pos);
+                    self.frames.push(Frame::Bracket { attr: true });
+                } else if self.peek(1) == Some(b'!') && self.peek(2) == Some(b'[') {
+                    // `#![` — the file-wide attribute opener. Lexed
+                    // anywhere so the parser owns the "first thing in
+                    // the file" rule (E0211) with a real span to point
+                    // at; the closing `]` suppresses `Term` exactly as
+                    // an outer attribute's does.
+                    let lo = self.pos;
+                    self.pos += 3;
+                    self.emit(TokenKind::PoundBangBracket, lo, self.pos);
                     self.frames.push(Frame::Bracket { attr: true });
                 } else {
                     self.stray();
