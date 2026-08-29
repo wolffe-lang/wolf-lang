@@ -1496,15 +1496,19 @@ pub fn bench_gates() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     // Both deterministic gates ride the RELEASE tier (`--emit=llvm-ir`
-    // and the clang-built C baselines), which refuses every host but
-    // linux/x86-64 by name (s41; the s59 crossing ported the DEBUG
-    // tier only — the release tier is its own c13 sprint). The same
-    // skip-loudly posture as a missing clang: the gates stay pinned by
-    // the linux CI lane, and a silent skip THERE is a lane bug.
+    // and the clang-built C baselines). The tier itself runs on
+    // macOS/aarch64 since s127, but the gates' CEILINGS and geomean
+    // history are MEASUREMENTS of the linux/x86-64 lane (D5: gates
+    // are rig-pinned; the bench rituals live on wolf-bench-i7) — an
+    // arm64 lowering has its own volumes and its own asm shapes, and
+    // holding it to another rig's numbers would gate noise, not
+    // regressions. Named skip off that rig, same posture as a missing
+    // clang: the gates stay pinned by the linux CI lane, and a silent
+    // skip THERE is a lane bug.
     if !cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         eprintln!(
-            "bench-gates: the release tier refuses this host (linux/x86-64 only, s41) — \
-             the IR-volume and vectorization gates are pinned by the linux lane; SKIP"
+            "bench-gates: the IR-volume and vectorization ceilings are linux/x86-64 \
+             measurements (rig-pinned, D5) — pinned by the linux CI lane; SKIP on this host"
         );
         return ExitCode::SUCCESS;
     }
