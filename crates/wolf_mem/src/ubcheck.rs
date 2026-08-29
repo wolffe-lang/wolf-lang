@@ -775,6 +775,23 @@ impl<'t> Machine<'t> {
         Err(Stop::Trap(TrapInfo { kind, clause, span }))
     }
 
+    /// The origin governing a subscript spelled at `site` (D61,
+    /// `[gram.attr.index]`) — 0 everywhere in an unmarked package.
+    fn origin_at(&self, site: Span) -> u8 {
+        self.tc.sigs.origins.origin_at(site)
+    }
+
+    /// The 1-origin index shift (D61 `[gram.expr.index.origin]`),
+    /// mirroring the WIR lowering's `isub.chk`: `int.min` traps
+    /// `overflow`; every other index shifts down by one and the
+    /// ordinary bounds check answers for it.
+    fn shift_origin(&self, i: i64, site: Span) -> E<i64> {
+        match i.checked_sub(1) {
+            Some(v) => Ok(v),
+            None => self.trap("overflow", "mem.ub.defined", site),
+        }
+    }
+
     /// The concrete nominal a checked expression's TYPE names, seen
     /// through this frame's generic bindings: `Nominal` directly,
     /// `Self` through `self_tys`, any other rigid through
@@ -1773,10 +1790,19 @@ impl<'t> Machine<'t> {
                 }
                 let mut place = base;
                 match idx_val {
-                    Some(Value::Int(i)) => place.path.push(PStep::ListIdx {
-                        index: i,
-                        span: e.span,
-                    }),
+                    Some(Value::Int(i)) => {
+                        // The origin shift (D61) — the place spelling
+                        // shifts exactly as the read form.
+                        let i = if self.origin_at(e.span) == 1 {
+                            self.shift_origin(i, e.span)?
+                        } else {
+                            i
+                        };
+                        place.path.push(PStep::ListIdx {
+                            index: i,
+                            span: e.span,
+                        })
+                    }
                     Some(Value::Handle { index, generation }) => place.path.push(PStep::PoolIdx {
                         index,
                         generation,
@@ -2286,6 +2312,11 @@ impl<'t> Machine<'t> {
                     let isp = ix.span;
                     let Value::Int(i) = val!(self.eval(ix)) else {
                         return self.refuse("indexing a List with a non-int", e.span);
+                    };
+                    let i = if self.origin_at(e.span) == 1 {
+                        self.shift_origin(i, e.span)?
+                    } else {
+                        i
                     };
                     let step = [PStep::ListIdx {
                         index: i,
@@ -4729,9 +4760,18 @@ impl<'t> Machine<'t> {
             .find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))
             .map(|t| t.span.lo)
             .unwrap_or(rn.span.hi);
+        // The origin shift (D61 `[gram.expr.index.origin]`): under
+        // origin 1 a spelled plain START endpoint shifts down by one
+        // (checked), a spelled plain END endpoint is inclusive — the
+        // 0-based exclusive bound numerically, so `..=` adds nothing —
+        // and `^n` endpoints, open sides, and their `..=` interaction
+        // resolve exactly as in origin 0. Mirrors `range_endpoints`.
+        let origin = self.origin_at(e.span);
         let mut lo = 0i64;
         let mut hi = len;
+        let mut plain_hi_spelled = false;
         for ep in d.endpoints() {
+            let plain = ep.kind != SyntaxKind::FromEndExpr;
             let resolved = if ep.kind == SyntaxKind::FromEndExpr {
                 let inner = wolf_ast::FromEndExpr::cast(ep).and_then(|f| f.expr());
                 let Some(inner) = inner else {
@@ -4748,12 +4788,17 @@ impl<'t> Machine<'t> {
                 n
             };
             if ep.span.lo < dots {
-                lo = resolved;
+                lo = if plain && origin == 1 {
+                    self.shift_origin(resolved, ep.span)?
+                } else {
+                    resolved
+                };
             } else {
                 hi = resolved;
+                plain_hi_spelled = plain;
             }
         }
-        if d.is_inclusive() {
+        if d.is_inclusive() && !(origin == 1 && plain_hi_spelled) {
             hi += 1;
         }
         if lo < 0 || hi < lo || hi > len {

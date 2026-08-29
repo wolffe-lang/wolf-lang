@@ -341,7 +341,14 @@ fn pair_space(prev: K, next: K) -> bool {
     // Openers and member dots are tight on the right.
     if matches!(
         prev,
-        K::LParen | K::LBracket | K::Dot | K::PoundBracket | K::DotDot | K::DotDotEq | K::Star
+        K::LParen
+            | K::LBracket
+            | K::Dot
+            | K::PoundBracket
+            | K::PoundBangBracket
+            | K::DotDot
+            | K::DotDotEq
+            | K::Star
     ) {
         return false;
     }
@@ -1356,14 +1363,18 @@ impl<'a> Fmt<'a> {
             | K::UseDecl
             | K::ImportCDecl => self.decl(n, out),
 
-            K::Attribute => {
-                // `#[a, b]` — tight to the brackets, spaced list.
+            K::Attribute | K::InnerAttribute => {
+                // `#[a, b]` / `#![a, b]` — tight to the brackets,
+                // spaced list.
                 let mut prev: Option<K> = None;
                 for c in &n.children {
                     match c {
                         Child::Token(t) => {
                             if let Some(p) = prev {
-                                if t.kind == K::Comma || p == K::PoundBracket {
+                                if t.kind == K::Comma
+                                    || p == K::PoundBracket
+                                    || p == K::PoundBangBracket
+                                {
                                     // tight
                                 } else if pair_space(p, t.kind) {
                                     out.push(Doc::text(" "));

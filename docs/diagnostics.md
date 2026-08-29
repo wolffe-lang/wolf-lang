@@ -336,6 +336,19 @@ call the receiver was written for ([gram.expr.primary]).
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__receiver_moded.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__receiver_moded.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__receiver_moded.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0210_moded_receiver.snap
 
+## E0211 — a file-wide attribute that is not first in its file
+
+A `#![…]` attribute speaks for the whole file, so it must be the
+first thing in the file — before any declaration, above even the
+outer `#[…]` attributes of the first item. Only a `#!` interpreter
+line on line one may precede it. Anywhere else the marker would be
+easy to miss while it silently changed how the file reads, so the
+grammar refuses it there. Move it to the top of the file; if you
+meant to mark one statement or block, the outer form `#[…]` on that
+statement is the scoped spelling ([gram.attr.index]).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__index_origin_misplaced.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__index_origin_misplaced.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__index_origin_misplaced.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0211_inner_attr_in_block.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0211_inner_attr_misplaced.snap
+
 ## E0301 — nothing with this name is in scope
 
 Wolf could not find anything with this name: it is not a local binding,
@@ -1283,6 +1296,22 @@ form is optional — `pick(xs, 0)` infers the same instantiation.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__generics__explicit_apply_arity.snap
 
+## E0813 — an origin marker that is not `index(0)` or `index(1)`
+
+The origin marker decides whether subscripts in its scope count from
+0 or from 1, and those are the only two origins: it is written
+`#[index(0)]` or `#[index(1)]` on a statement, or `#![index(0)]` /
+`#![index(1)]` for the whole file ([gram.attr.index]). This code
+fires when the marker's argument is anything else — another number,
+a missing argument, several arguments, or the `index = …` spelling —
+and when a file-wide `#![…]` attribute names something other than
+`index`, which is the only file-wide attribute there is. Write
+`index(1)` to count from one, `index(0)` to restore the default, or
+delete the marker — no marker means 0, exactly as if the feature did
+not exist.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__index_origin_bad.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_duplicate.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_no_origin.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_origin_seven.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_unknown_inner.snap
+
 ## E1001 — this value was moved away (or never given one) before this use
 
 In wolf, assignment and argument passing *move* a value: after
@@ -2097,6 +2126,21 @@ child (or into a sibling both can import) so the dependency runs one
 way, parent to child.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__ancestor_import__main.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0316_ancestor_import.snap
+
+## W0317 — a `.get` index inside a 1-origin scope still counts from 0
+
+`#[index(1)]` shifts subscripts — `xs[i]` — but never method
+arguments: `xs.get(i)` counts from 0 in every scope, because a
+method's meaning cannot depend on where its call was written
+([gram.expr.index.origin]). Inside a 1-origin scope the two spellings
+therefore disagree by one, and a literal index fed to `.get` there is
+usually a subscript habit carried over. Use the subscript form
+(`xs[i]`, which traps out of range) or the `else` handling of
+`.get`'s miss with the 0-based index spelled deliberately; this
+warning marks the literal so the off-by-one is a choice, not an
+accident.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__index_origin_get.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__w0317_get_literal.snap
 
 ## W0401 — this literal does not fit the type it is cast to
 

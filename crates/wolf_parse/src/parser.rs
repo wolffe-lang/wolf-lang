@@ -279,7 +279,7 @@ impl<'a> Parser<'a> {
 
     pub(crate) fn at_decl_start(&self) -> bool {
         match self.current() {
-            TokenKind::PoundBracket => true,
+            TokenKind::PoundBracket | TokenKind::PoundBangBracket => true,
             TokenKind::Kw(k) => is_decl_keyword(k),
             _ => false,
         }
@@ -606,7 +606,7 @@ impl<'a> Parser<'a> {
             }
             if shield == 0 {
                 match k {
-                    TokenKind::PoundBracket => break,
+                    TokenKind::PoundBracket | TokenKind::PoundBangBracket => break,
                     TokenKind::Kw(kw) if is_decl_keyword(kw) => break,
                     TokenKind::Punct(Punct::RBrace) if stop_at_rbrace => break,
                     _ => {}

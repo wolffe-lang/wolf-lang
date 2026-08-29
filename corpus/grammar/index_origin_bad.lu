@@ -1,0 +1,14 @@
+//! check: fail(E0813)
+//! phase: resolve
+//! conforms: gram.attr.index
+//!
+//! 0 and 1 are the origins — `#[index(7)]` and friends are refused
+//! (D61 rejected arbitrary origins), and the faulty marker takes no
+//! effect: one mistake is one diagnostic, never a scope of shifted
+//! subscripts.
+
+#![index(7)]
+
+fn main() -> !int {
+    0
+}

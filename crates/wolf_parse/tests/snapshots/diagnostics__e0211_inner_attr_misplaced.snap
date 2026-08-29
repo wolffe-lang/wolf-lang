@@ -1,0 +1,22 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0211,
+    severity: Error,
+    message: "a file-wide `#![…]` attribute must be the first thing in its file — move it above the first declaration",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 11,
+            hi: 14,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [],
+    suggestions: [],
+}

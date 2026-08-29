@@ -101,6 +101,33 @@ fn attributes_generic_syntax() {
     assert!(items[0].input().is_some(), "cfg(...) has input");
 }
 
+#[test]
+fn inner_attribute_heads_the_file() {
+    // `#![index(1)]` — the file-wide form, first non-trivia construct
+    // ([gram.attr.index]); the annotated items follow untouched.
+    let src = "#![index(1)]\nfn f() { }\n";
+    let root = clean(src);
+    let inner = root
+        .nodes()
+        .find_map(wolf_ast::InnerAttribute::cast)
+        .expect("inner attribute");
+    let item = inner.items().next().expect("attr item");
+    assert_eq!(text(src, item.path().expect("path").syntax().span), "index");
+    assert!(item.input().is_some(), "index(1) has input");
+    assert!(
+        root.nodes().any(|n| FnDecl::cast(n).is_some()),
+        "fn follows"
+    );
+    // Below a shebang is still "first" — the interpreter line is trivia.
+    let src2 = "#!/usr/bin/env -S wolf run\n#![index(1)]\nfn f() { }\n";
+    let root2 = clean(src2);
+    assert!(
+        root2
+            .nodes()
+            .any(|n| wolf_ast::InnerAttribute::cast(n).is_some())
+    );
+}
+
 // ------------------------------------------------------------ functions --
 
 #[test]

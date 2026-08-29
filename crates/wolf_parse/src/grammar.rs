@@ -17,10 +17,25 @@ use wolf_span::Span;
 
 pub(crate) fn source_file(p: &mut Parser<'_>) {
     let m = p.start();
+    // The file header: `#![…]` file-wide attributes are legal only
+    // here, before the first declaration (`[gram.attr.index]`).
+    loop {
+        crate::exprs::eat_terms_checked(p);
+        if p.at(TokenKind::PoundBangBracket) {
+            inner_attribute(p, false);
+        } else {
+            break;
+        }
+    }
     loop {
         crate::exprs::eat_terms_checked(p);
         if p.at_eof() {
             break;
+        }
+        if p.at(TokenKind::PoundBangBracket) {
+            // Past the header: parsed for recovery, refused by position.
+            inner_attribute(p, true);
+            continue;
         }
         let before = p.pos();
         item(p, false);
@@ -1188,13 +1203,41 @@ pub(crate) fn attribute(p: &mut Parser<'_>) {
     let m = p.start();
     let opener = p.current_span();
     p.bump(); // `#[`
+    attr_list_tail(p, opener, "#[");
+    m.complete(p, SyntaxKind::Attribute);
+}
+
+/// `#![' attr (',' attr)* ']` — the file-wide attribute
+/// (`[gram.attr.index]`). Legal only as the very first construct of a
+/// file (after the shebang); `misplaced` marks every other position and
+/// reports E0211 while still parsing the node, so one mistake is one
+/// diagnostic.
+pub(crate) fn inner_attribute(p: &mut Parser<'_>, misplaced: bool) {
+    let m = p.start();
+    let opener = p.current_span();
+    if misplaced {
+        p.error(
+            codes::MISPLACED_INNER_ATTRIBUTE,
+            opener,
+            "a file-wide `#![…]` attribute must be the first thing in its \
+             file — move it above the first declaration",
+        );
+    }
+    p.bump(); // `#![`
+    attr_list_tail(p, opener, "#![");
+    m.complete(p, SyntaxKind::InnerAttribute);
+}
+
+/// The shared `attr (',' attr)* ']'` tail of both attribute forms;
+/// `opener_text` names the opener in the unclosed-delimiter report.
+fn attr_list_tail(p: &mut Parser<'_>, opener: Span, opener_text: &'static str) {
     loop {
         if p.at_punct(Punct::RBracket) {
             p.bump();
             break;
         }
         if p.at_eof() || p.at_decl_start() || p.at_punct(Punct::LBrace) {
-            unclosed(p, opener, "#[");
+            unclosed(p, opener, opener_text);
             break;
         }
         let before = p.pos();
@@ -1216,11 +1259,10 @@ pub(crate) fn attribute(p: &mut Parser<'_>) {
             p.bump();
         }
         if p.pos() == before {
-            unclosed(p, opener, "#[");
+            unclosed(p, opener, opener_text);
             break;
         }
     }
-    m.complete(p, SyntaxKind::Attribute);
 }
 
 /// `path attr_input?`.

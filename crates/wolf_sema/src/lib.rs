@@ -212,6 +212,7 @@ pub mod graph;
 pub mod interface;
 pub(crate) mod letcheck;
 pub mod lints;
+pub mod origin;
 pub mod prelude;
 pub mod resolve;
 pub mod rewrite;
@@ -235,6 +236,7 @@ pub use graph::{
 };
 pub use interface::{Interface, build_interfaces, decode, encode, item_signature, pretty};
 pub use lints::{AllowScan, scan_allows};
+pub use origin::{OriginMap, OriginScan, scan_origins};
 pub use resolve::{Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_package_with};
 pub use sig::{BoundRef, GenericSig, ItemSig, SigTables, build_sigs, module_bindings};
 pub use traits::{DynReport, ImplDef, TraitDef, TraitRef};

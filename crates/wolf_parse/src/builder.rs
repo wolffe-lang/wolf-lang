@@ -19,6 +19,7 @@ pub(crate) fn syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Kw(k) => keyword_kind(k),
         TokenKind::Punct(p) => punct_kind(p),
         TokenKind::PoundBracket => SyntaxKind::PoundBracket,
+        TokenKind::PoundBangBracket => SyntaxKind::PoundBangBracket,
         TokenKind::Term => SyntaxKind::Term,
         TokenKind::StrBegin(_) => SyntaxKind::StrBegin,
         TokenKind::StrFragment => SyntaxKind::StrFragment,

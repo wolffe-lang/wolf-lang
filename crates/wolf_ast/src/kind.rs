@@ -48,6 +48,8 @@ pub enum SyntaxKind {
 
     /// `#[`, the attribute opener.
     PoundBracket,
+    /// `#![`, the file-wide (inner) attribute opener.
+    PoundBangBracket,
     /// Statement terminator (inserted newline or explicit `;`).
     Term,
 
@@ -73,6 +75,9 @@ pub enum SyntaxKind {
 
     // Item pieces.
     Attribute, AttrItem, AttrInput, Visibility, Path, UseGroup,
+    /// `#![attr, …]` — the file-wide attribute (`[gram.attr.index]`);
+    /// a direct child of `SourceFile`, position-enforced by the parser.
+    InnerAttribute,
     GenericParamList, GenericParam, TypeBound,
     ParamList, Param, ViewSet, RetType,
     StructDef, EnumDef, StructField, EnumVariant,

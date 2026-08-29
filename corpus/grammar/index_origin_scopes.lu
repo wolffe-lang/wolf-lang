@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="50 w 7-8")
+//! phase: run
+//! conforms: gram.attr.index, gram.expr.index.origin
+//!
+//! The statement form: `#[index(1)]` scopes the annotated statement's
+//! full lexical extent, `#[index(0)]` restores the default inside it,
+//! the innermost marker wins, and code textually outside is
+//! untouched. Interpolations are expression positions, so `"{ys[1]}"`
+//! inside the 1-origin block reads the first element.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(10)
+    (mut xs).push(20)
+    var sum = 0
+    var msg = ""
+    #[index(1)]
+    {
+        sum += xs[1]
+        #[index(0)]
+        {
+            sum += xs[0]
+        }
+        sum += xs[2]
+        var ys = List[int]()
+        (mut ys).push(7)
+        (mut ys).push(8)
+        msg = "{ys[1]}-{ys[2]}"
+    }
+    sum += xs[0]
+    let s = "wolfish"
+    #[index(1)]
+    let w = s[1..1]
+    print("{sum} {w} {msg}")
+    0
+}

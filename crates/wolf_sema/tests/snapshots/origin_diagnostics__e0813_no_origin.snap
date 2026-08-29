@@ -1,0 +1,11 @@
+---
+source: crates/wolf_sema/tests/origin_diagnostics.rs
+expression: "render_scan(\"fn f() -> int {\\n    #[index]\\n    let x = 1\\n    x\\n}\\n\")"
+---
+error[E0813]: the subscript origin is `0` or `1`
+ --> mem:///main.lu:2:7
+  |
+2 |     #[index]
+  |       ^^^^^ no origin named
+  |
+  = note: write `index(1)` to count from one, or `index(0)` to restore the default.

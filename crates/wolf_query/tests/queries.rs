@@ -139,6 +139,49 @@ fn type_at_position_honest_subset() {
     );
 }
 
+/// Hover on a subscript inside a 1-origin scope states the mode (D61,
+/// `[gram.attr.index]`); outside it, and on non-subscript expressions
+/// inside it, no note.
+#[test]
+fn type_at_subscript_states_the_origin() {
+    let pkg = Pkg::new(
+        "origin-hover",
+        &[(
+            "main.lu",
+            "#![index(1)]\n\nfn f() -> int {\n    var xs = List[int]()\n    (mut xs).push(7)\n    \
+             let a = xs[1]\n    a + 0\n}\n",
+        )],
+    );
+    let path = pkg.path("main.lu");
+    let host = QueryHost::new();
+    let snapshot = host.snapshot();
+    let src = std::fs::read(&path).unwrap();
+    let off = |needle: &str| -> u32 {
+        let text = String::from_utf8(src.clone()).unwrap();
+        text.find(needle).unwrap() as u32
+    };
+    // Hovering the subscript `xs[1]` (its `[`): the note rides along.
+    let h = snapshot
+        .type_at(&path, off("xs[1]") + 2)
+        .unwrap()
+        .expect("subscript answers");
+    assert!(
+        h.doc.as_deref().is_some_and(|d| d.contains("count from 1")),
+        "subscript hover states the origin: {:?}",
+        h.doc
+    );
+    // A non-subscript expression in the same scope: no note.
+    let h = snapshot
+        .type_at(&path, off("a + 0") + 4)
+        .unwrap()
+        .expect("expr answers");
+    assert!(
+        h.doc.is_none(),
+        "no origin note off subscripts: {:?}",
+        h.doc
+    );
+}
+
 /// Def-of-symbol from s12 resolution: locals, module items, and
 /// import bindings.
 #[test]

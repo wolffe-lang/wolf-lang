@@ -9111,7 +9111,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// default to the edges, `^n` counts from the end, `..=` bumps the
     /// upper bound — the SAME resolution as the checked executor's
     /// `eval_str_slice`, before any domain question is asked.
-    fn range_endpoints(&mut self, rn: &'t GreenNode, len: Value) -> R<(Value, Value)> {
+    ///
+    /// `origin` is the subscript site's origin (D61
+    /// `[gram.expr.index.origin]`); method-position ranges (`.get`)
+    /// always pass 0. Under origin 1 a spelled plain START endpoint
+    /// shifts down by one (checked), a spelled plain END endpoint is
+    /// inclusive — numerically the 0-based exclusive bound, so it
+    /// lowers unchanged and `..=` adds nothing — and `^n` endpoints,
+    /// open sides, and their `..=` interaction resolve exactly as in
+    /// origin 0.
+    /// `Ok(None)` means an origin shift folded to its overflow trap —
+    /// the block is filled and the caller diverges.
+    fn range_endpoints(
+        &mut self,
+        rn: &'t GreenNode,
+        len: Value,
+        origin: u8,
+    ) -> R<Option<(Value, Value)>> {
         let d = RangeExpr::cast(rn).ok_or_else(|| refuse("this index shape", rn.span))?;
         let dots = rn
             .tokens()
@@ -9120,7 +9136,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .unwrap_or(rn.span.hi);
         let mut lo = self.b.iconst(types::I64, 0);
         let mut hi = len;
+        let mut plain_hi_spelled = false;
         for ep in d.endpoints() {
+            let plain = ep.kind != SyntaxKind::FromEndExpr;
             let resolved = if ep.kind == SyntaxKind::FromEndExpr {
                 let inner = FromEndExpr::cast(ep).and_then(|f| f.expr());
                 let Some(inner) = inner else {
@@ -9143,19 +9161,46 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             };
             if ep.span.lo < dots {
-                lo = resolved;
+                lo = if plain && origin == 1 {
+                    match self.shift_origin(resolved) {
+                        Some(v) => v,
+                        None => return Ok(None),
+                    }
+                } else {
+                    resolved
+                };
             } else {
                 hi = resolved;
+                plain_hi_spelled = plain;
             }
         }
-        if d.is_inclusive() {
+        if d.is_inclusive() && !(origin == 1 && plain_hi_spelled) {
             let one = self.b.iconst(types::I64, 1);
             hi = self
                 .b
                 .ins(Opcode::IaddWrap, &[hi, one], &[types::I64], Aux::None)
                 .one();
         }
-        Ok((lo, hi))
+        Ok(Some((lo, hi)))
+    }
+
+    /// The 1-origin index shift (D61): one CHECKED subtraction, so a
+    /// constant folds to nothing and `int.min` traps `overflow` — the
+    /// X3 posture, priced in the ruling. `index(1)`'s `xs[0]` becomes
+    /// `-1` here and the ordinary bounds check refuses it. `None`
+    /// means the subtraction folded to the trap and the block is
+    /// filled — the caller's control flow diverged.
+    fn shift_origin(&mut self, idx: Value) -> Option<Value> {
+        let one = self.b.iconst(types::I64, 1);
+        self.b
+            .ins(Opcode::IsubChk, &[idx, one], &[types::I64], Aux::None)
+            .value()
+    }
+
+    /// The origin governing a subscript spelled at `site` (D61,
+    /// `[gram.attr.index]`) — 0 everywhere in an unmarked package.
+    fn origin_at(&self, site: Span) -> u8 {
+        self.sigs.origins.origin_at(site)
     }
 
     /// A string episode in VALUE position: a literal-only string
@@ -9484,7 +9529,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(rn) = arg_exprs.first() else {
                     return Err(refuse("`get` without a range", e.span));
                 };
-                let (lo, hi) = self.range_endpoints(rn, sl)?;
+                // Method position: `.get` is origin-free (D61) — 0
+                // whatever scope the call sits in.
+                let Some((lo, hi)) = self.range_endpoints(rn, sl, 0)? else {
+                    return Ok(Flow::Diverged);
+                };
                 let eu = self.eu_ty_of(e.span)?;
                 // s77: the domain inline, the pair by arithmetic — the
                 // recoverable spelling of the SAME test `s[a..b]` traps
@@ -11106,6 +11155,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// recoverable forms, with the miss spelled `trap(bounds)`.
     fn lower_index(&mut self, e: &'t GreenNode) -> R<Flow> {
         let d = BracketApply::cast(e).ok_or_else(|| refuse("this index shape", e.span))?;
+        let origin = self.origin_at(e.span);
         let Some(recv) = d.callee() else {
             return Err(refuse("an index without a receiver", e.span));
         };
@@ -11129,6 +11179,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let Some(idx) = flow_val!(self.lower_expr(ix)) else {
                 return Err(refuse("a valueless List index", ix.span));
             };
+            let idx = if origin == 1 {
+                match self.shift_origin(idx) {
+                    Some(v) => v,
+                    None => return Ok(Flow::Diverged),
+                }
+            } else {
+                idx
+            };
             if self.list_bounds_trap(idx, n) {
                 return Ok(Flow::Diverged);
             }
@@ -11147,7 +11205,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .filter_map(Arg::value)
                     .find(|v| v.kind == SyntaxKind::RangeExpr)
                     .ok_or_else(|| refuse("str indexing outside range slices (D25)", e.span))?;
-                let (lo, hi) = self.range_endpoints(rn, sl)?;
+                let Some((lo, hi)) = self.range_endpoints(rn, sl, origin)? else {
+                    return Ok(Flow::Diverged);
+                };
                 // s77: the domain inline (no `str_get` call), the trap
                 // spelling of the same test `get` reports as `{none}`.
                 let hit = self.str_slice_domain(sp, sl, lo, hi);
@@ -11184,6 +11244,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .ok_or_else(|| refuse("an index without an operand", e.span))?;
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {
                     return Err(refuse("a valueless List index", ix.span));
+                };
+                let idx = if origin == 1 {
+                    match self.shift_origin(idx) {
+                        Some(v) => v,
+                        None => return Ok(Flow::Diverged),
+                    }
+                } else {
+                    idx
                 };
                 // s75: the check the caller owns, then a plain load.
                 let n = self.list_len_of(hdr);
@@ -11251,6 +11319,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .ok_or_else(|| refuse("an index without an operand", span))?;
         let Some(idx) = flow_val!(self.lower_expr(ix)) else {
             return Err(refuse("a valueless List index", ix.span));
+        };
+        // The origin shift (D61) applies to the place spelling exactly
+        // as to the read form — once, before the statement's one check.
+        let idx = if self.origin_at(place.span) == 1 {
+            match self.shift_origin(idx) {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
+        } else {
+            idx
         };
         let Some(vx) = d.value() else {
             return Ok(Flow::Val(None));

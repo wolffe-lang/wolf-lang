@@ -377,6 +377,13 @@ fn stmt(p: &mut Parser<'_>) {
         TokenKind::Kw(Keyword::Import) => grammar::import_c_item(p, m),
         TokenKind::Kw(Keyword::Defer | Keyword::Errdefer) => defer_stmt(p, m),
         TokenKind::Kw(Keyword::Assume) => assume_stmt(p, m),
+        // A `#![…]` in statement position: the file-wide form belongs at
+        // the top of the file; the scoped spelling here is `#[…]`.
+        // Parsed for recovery, refused by position (E0211).
+        TokenKind::PoundBangBracket => {
+            grammar::inner_attribute(p, true);
+            m.complete(p, SyntaxKind::ErrorNode);
+        }
         TokenKind::Kw(Keyword::Else) => {
             // E0005: the inserted terminator after `}` orphaned this
             // `else` ([gram.amb.else] — `} else` must share the line).

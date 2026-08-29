@@ -14,7 +14,7 @@ FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
 CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
 CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | '\u{' HEX_DIGIT+ '}'
 
-unit  ::= inner_doc* item*
+unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
             | impl_item | use_item | import_c_item | const_item
@@ -56,6 +56,7 @@ impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item
 
 attribute ::= '#[' attr (',' attr)* ']'
+inner_attribute ::= '#![' attr (',' attr)* ']'
 attr      ::= path attr_input?
 attr_input ::= '(' attr_arg (',' attr_arg)* ')' | '=' literal
 attr_arg  ::= attr | literal   /* `key = "v"` is attr with '=' input */
