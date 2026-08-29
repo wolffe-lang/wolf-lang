@@ -18,10 +18,16 @@
 //! are `#[consttime]`, so the release tier emits them `noinline`
 //! ([ct.attr.barrier]) and their symbols survive to the disassembly.
 //!
-//! A host that cannot drive the release tier (it refuses everything
-//! but linux/x86-64 today), cannot link release binaries, or has no
-//! objdump SKIPs loudly at runtime (the s59 pattern — environment or
-//! named refusal, never a verdict).
+//! The witness is per-target where the machine is (s127): the symbol
+//! carries Mach-O's `_` prefix on macOS, the disassembly format is
+//! GNU objdump's on linux and llvm-objdump's on macOS, and the
+//! conditional-transfer opcode set is the Jcc family on x86-64 and
+//! the `b.cond`/`cbz`/`tbz` family on aarch64.
+//!
+//! A host that cannot drive the release tier (its named refusal),
+//! cannot link release binaries, or has no objdump SKIPs loudly at
+//! runtime (the s59 pattern — environment or named refusal, never a
+//! verdict).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -58,8 +64,8 @@ fn build_release(case: &str, kernel: &str) -> Option<PathBuf> {
         .output()
         .expect("wolf runs");
     if String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64") {
-        // The tier's named host refusal (linux/x86-64 only until its
-        // own c13 sprint) — a loud skip (s59).
+        // The tier's named host refusal (linux/x86-64 + macOS/aarch64
+        // since s127; the message names both) — a loud skip (s59).
         eprintln!("SKIP: the release tier refuses this host");
         return None;
     }
@@ -92,7 +98,14 @@ fn witness_body(exe: &Path, stem: &str) -> Option<Vec<String>> {
         }
     };
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    let label = format!("<_W{stem}$");
+    // Mach-O symbols carry the `_` prefix at object grain (s59), so
+    // the disassembly label does too.
+    let prefix = if cfg!(target_os = "macos") {
+        "<__W"
+    } else {
+        "<_W"
+    };
+    let label = format!("{prefix}{stem}$");
     let mut body = Vec::new();
     let mut inside = false;
     for line in text.lines() {
@@ -107,9 +120,16 @@ fn witness_body(exe: &Path, stem: &str) -> Option<Vec<String>> {
             if line.trim().is_empty() {
                 break;
             }
-            // "  1690:\t48 89 c8             \tmov    %rcx,%rax"
-            if let Some(insn) = line.splitn(3, '\t').nth(2)
-                && let Some(mnemonic) = insn.split_whitespace().next()
+            // GNU objdump: "  1690:\t48 89 c8             \tmov    %rcx,%rax"
+            // llvm-objdump: "1000002d8: d1000408    \tsub\tx8, x0, #0x1"
+            // Either way the mnemonic is the first token of the first
+            // tab field past the address that starts with a letter
+            // (the encoding-bytes field never does).
+            if let Some(mnemonic) = line
+                .split('\t')
+                .skip(1)
+                .filter_map(|f| f.split_whitespace().next())
+                .find(|t| t.starts_with(|c: char| c.is_ascii_alphabetic()))
             {
                 body.push(mnemonic.to_string());
             }
@@ -123,12 +143,20 @@ fn witness_body(exe: &Path, stem: &str) -> Option<Vec<String>> {
     Some(body)
 }
 
-/// Every x86-64 conditional transfer: the Jcc family (everything
-/// spelled `j*` except the unconditional `jmp*`) plus the LOOP family
-/// and the legacy `jcxz` shapes (matched by the `j*` rule).
+/// Every conditional transfer on the HOST'S architecture. x86-64: the
+/// Jcc family (everything spelled `j*` except the unconditional
+/// `jmp*`) plus the LOOP family and the legacy `jcxz` shapes (matched
+/// by the `j*` rule). aarch64: the `b.cond` family plus the
+/// compare-and-branch/test-and-branch forms (`cbz`/`cbnz`/
+/// `tbz`/`tbnz`); `csel`/`ccmp` are conditional but branch-FREE, which
+/// is the point.
 fn is_conditional_branch(mnemonic: &str) -> bool {
-    (mnemonic.starts_with('j') && mnemonic != "jmp" && mnemonic != "jmpq")
-        || mnemonic.starts_with("loop")
+    if cfg!(target_arch = "aarch64") {
+        mnemonic.starts_with("b.") || matches!(mnemonic, "cbz" | "cbnz" | "tbz" | "tbnz")
+    } else {
+        (mnemonic.starts_with('j') && mnemonic != "jmp" && mnemonic != "jmpq")
+            || mnemonic.starts_with("loop")
+    }
 }
 
 fn assert_branch_free(case: &str, body: &[String]) {
@@ -152,9 +180,15 @@ fn tag_compare_release_body_is_branch_free() {
     let Some(body) = witness_body(&exe, "tag_diff") else {
         return;
     };
-    // Anti-vacuity: the fold's work is really in this body.
+    // Anti-vacuity: the fold's work is really in this body (x86
+    // spells it xor/or, aarch64 eor/orr).
+    let (xor_m, or_m) = if cfg!(target_arch = "aarch64") {
+        ("eor", "orr")
+    } else {
+        ("xor", "or")
+    };
     assert!(
-        body.iter().any(|m| m == "xor") && body.iter().any(|m| m == "or"),
+        body.iter().any(|m| m == xor_m) && body.iter().any(|m| m == or_m),
         "the XOR/OR fold must be present: {body:?}"
     );
     assert_branch_free("ct_tag_compare", &body);
@@ -171,10 +205,14 @@ fn cswap_release_body_is_branch_free() {
         return;
     };
     // Anti-vacuity: the arithmetic select's mask really is arithmetic
-    // (cmov is acceptable; the mask shape is what today's LLVM picks).
+    // (x86: the mask shape or cmov; aarch64: the and/eor mask or a
+    // csel — all branch-free).
     assert!(
-        body.iter()
-            .any(|m| m == "and" || m == "xor" || m.starts_with("cmov")),
+        body.iter().any(|m| m == "and"
+            || m == "xor"
+            || m == "eor"
+            || m.starts_with("cmov")
+            || m.starts_with("csel")),
         "the arithmetic select must be present: {body:?}"
     );
     assert_branch_free("ct_cswap", &body);

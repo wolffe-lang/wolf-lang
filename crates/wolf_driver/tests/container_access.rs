@@ -46,7 +46,7 @@ fn write_case(case: &str, src: &str) -> PathBuf {
 
 /// The release tier's whole-module IR for one program; `None` (with a
 /// loud SKIP) where the tier refuses this host by name (linux/x86-64
-/// only until its own c13 sprint — the s59 pattern).
+/// + macOS/aarch64 since s127 — the s59 pattern).
 fn release_ir(case: &str, src: &str) -> Option<String> {
     let entry = write_case(case, src);
     let out = entry.with_extension("ll");

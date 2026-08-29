@@ -155,6 +155,26 @@ pub struct EmitOptions {
     /// silenced by `strip_facts`, since `!prof` is a fact channel like
     /// any other (the s79 sentinel prices it).
     pub branch_weights: Option<BranchWeights>,
+    /// The emission target. `None` — the default and the production
+    /// case — resolves to the HOST at backend construction (s127).
+    /// `Some` pins a target explicitly: the goldens' cross-emission
+    /// surface, where every host emits the LINUX modules the snapshots
+    /// pin byte-for-byte (the linux-emission-unchanged witness). A
+    /// pinned target bypasses the host gate for EMISSION; nothing
+    /// links or runs off-host.
+    pub target: Option<crate::ReleaseTarget>,
+}
+
+impl EmitOptions {
+    /// The C-membrane contract the plans execute against. Resolved at
+    /// backend construction (`target` is always `Some` by then); the
+    /// host fallback only serves options no backend resolved.
+    pub(crate) fn ctarget(&self) -> abi::CTarget {
+        match self.target.or_else(crate::ReleaseTarget::host) {
+            Some(t) => t.ctarget(),
+            None => abi::CTarget::SysvX64,
+        }
+    }
 }
 
 /// Trap codes shared with `wolf_rt` (the single authority — see the
@@ -358,8 +378,13 @@ pub(crate) enum Slot {
     Split(Vec<Unit>),
     /// Wolf MEMORY-class aggregate: by pointer.
     Ref,
-    /// C MEMORY-class aggregate: byval, (size, align).
+    /// C MEMORY-class aggregate, SysV: byval, (size, align).
     CStruct(u32, u32),
+    /// C MEMORY-class aggregate, AAPCS64 B.4 (s127): INDIRECT — a
+    /// plain pointer to a CALLER-OWNED copy, (size, align). Never
+    /// byval: the callee owns (and may write) its copy, so the call
+    /// site copies out of the SSA slot first.
+    CIndirect(u32, u32),
     Token,
 }
 
@@ -399,14 +424,26 @@ impl LSig {
 }
 
 /// Build the LLVM signature view, executing the shared plan from
-/// [`wolf_backend::abi`] (all classification lives THERE).
-pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, opts: &EmitOptions) -> LSig {
+/// [`wolf_backend::abi`] (all classification lives THERE) for the
+/// options' emission target (s127: SysV on linux/x86-64, Apple-arm64
+/// on macOS/aarch64 — the target steers `Conv::C` only, the wolf plan
+/// is target-uniform). A plan carrying a refusal-by-shape (the s59
+/// register-exhaustion corners) refuses the whole signature by name —
+/// loud, never silently wrong (the clif tier's exact posture).
+pub(crate) fn sig_info(
+    m: &WModule,
+    sig: SigId,
+    conv: Conv,
+    opts: &EmitOptions,
+) -> Result<LSig, BackendError> {
     let data = &m.sigs[sig];
-    // This tier is pinned to x86_64-linux (TARGET_TRIPLE); the gate in
-    // lib.rs refuses every other host, so the SysV plan is the one
-    // this backend can ever execute (the macOS release tier is its
-    // own c13 sprint — s59 ported the debug tier only).
-    let plan = abi::plan_sig(&m.types, data, conv, abi::CTarget::SysvX64);
+    let ctarget = opts.ctarget();
+    let plan = abi::plan_sig(&m.types, data, conv, ctarget);
+    if let Some(why) = plan.refusals.first() {
+        return Err(BackendError::Unsupported(format!(
+            "C-membrane signature shape: {why}"
+        )));
+    }
     let sret_first = conv == Conv::C;
     let mut ll_params = Vec::new();
     let mut ret_comps = Vec::new();
@@ -495,24 +532,37 @@ pub(crate) fn sig_info(m: &WModule, sig: SigId, conv: Conv, opts: &EmitOptions) 
                 }
                 Conv::C => {
                     let l = layout::layout_of(&m.types, p.ty).expect("sized param");
-                    ll_params.push(format!(
-                        "ptr byval([{} x i8]) align {}",
-                        l.size.next_multiple_of(8),
-                        l.align.max(8)
-                    ));
-                    params.push(Slot::CStruct(l.size, l.align));
+                    match ctarget {
+                        abi::CTarget::SysvX64 => {
+                            // psABI MEMORY class: byval on the stack.
+                            ll_params.push(format!(
+                                "ptr byval([{} x i8]) align {}",
+                                l.size.next_multiple_of(8),
+                                l.align.max(8)
+                            ));
+                            params.push(Slot::CStruct(l.size, l.align));
+                        }
+                        abi::CTarget::AppleArm64 => {
+                            // AAPCS64 B.4: > 16-byte composites cross
+                            // INDIRECT — a pointer to a caller-owned
+                            // copy, never SysV's byval (clang emits the
+                            // same shape for this triple).
+                            ll_params.push("ptr".to_string());
+                            params.push(Slot::CIndirect(l.size, l.align));
+                        }
+                    }
                 }
             },
         }
     }
     ll_params.extend(sret_trailing);
-    LSig {
+    Ok(LSig {
         params,
         rets,
         ll_params,
         ret_comps,
         sret_first,
-    }
+    })
 }
 
 /// How a WIR value exists in the IR text.
@@ -631,7 +681,7 @@ pub(crate) fn emit_function(
 ) -> Result<String, BackendError> {
     let conv = if f.export { Conv::C } else { Conv::Wolf };
     let opts = cx.opts.clone();
-    let si = sig_info(m, f.sig, conv, &opts);
+    let si = sig_info(m, f.sig, conv, &opts)?;
     // PGO block counts for THIS body, positional over the canonical
     // order. Silenced by `strip_facts` with every other fact channel.
     //
@@ -1787,7 +1837,7 @@ impl<'a> Fx<'a> {
                     }
                     self.vals.insert(wv, Repr::Addr(slot));
                 }
-                Slot::Ref | Slot::CStruct(..) => {
+                Slot::Ref | Slot::CStruct(..) | Slot::CIndirect(..) => {
                     self.vals.insert(wv, Repr::Addr(format!("%p{next}")));
                     next += 1;
                 }
@@ -2502,7 +2552,7 @@ impl<'a> Fx<'a> {
                 }
             }
             Opcode::Ret => {
-                let si = sig_info(self.m, self.f.sig, self.conv, &self.cx.opts.clone());
+                let si = sig_info(self.m, self.f.sig, self.conv, &self.cx.opts.clone())?;
                 let mut comps: Vec<(String, String)> = Vec::new();
                 let mut sret_i = 0usize;
                 for (&rv, slot) in args.iter().zip(si.rets.iter()) {
@@ -2825,7 +2875,7 @@ impl<'a> Fx<'a> {
                  modelled c.* set are c10's header importer)"
             )));
         };
-        let si = sig_info(self.m, sig, conv, &self.cx.opts.clone());
+        let si = sig_info(self.m, sig, conv, &self.cx.opts.clone())?;
         // Declare the callee if this module does not define it.
         let mut extra = String::new();
         if matches!(callee, "__wolf_rt_main_err" | "__wolf_rt_os_exit") {
@@ -2852,7 +2902,7 @@ impl<'a> Fx<'a> {
         args: &[WValue],
         results: &[WValue],
     ) -> Result<(), BackendError> {
-        let si = sig_info(self.m, sig, Conv::Wolf, &self.cx.opts.clone());
+        let si = sig_info(self.m, sig, Conv::Wolf, &self.cx.opts.clone())?;
         let callee = self.op(args[0])?;
         self.emit_call_body(&callee, &si, sig, &args[1..], results)
     }
@@ -2901,6 +2951,21 @@ impl<'a> Fx<'a> {
                     (*align).max(8),
                     self.addr(av)?
                 )),
+                Slot::CIndirect(size, align) => {
+                    // AAPCS64 B.4 (s127): the callee owns — and may
+                    // write — the copy behind the pointer, so the SSA
+                    // slot is copied out first; byval would be SysV's
+                    // convention, not this target's.
+                    let (size, align) = (*size, *align);
+                    let copy = self.new_slot(wolf_backend::layout::Layout { size, align });
+                    let src = self.addr(av)?;
+                    self.intrinsic("declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)");
+                    self.line(format!(
+                        "  call void @llvm.memcpy.p0.p0.i64(ptr {copy}, ptr {src}, \
+                         i64 {size}, i1 false)"
+                    ));
+                    cargs.push(format!("ptr {copy}"));
+                }
             }
         }
         if !si.sret_first {
@@ -3005,7 +3070,7 @@ impl<'a> Fx<'a> {
                         next += 1;
                     }
                     Slot::Split(units) => next += units.len(),
-                    Slot::Ref | Slot::CStruct(..) => next += 1,
+                    Slot::Ref | Slot::CStruct(..) | Slot::CIndirect(..) => next += 1,
                 }
             }
         }

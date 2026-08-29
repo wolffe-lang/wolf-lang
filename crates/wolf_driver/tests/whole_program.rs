@@ -85,8 +85,8 @@ fn build(dir: &Path, out: &str, extra: &[&str]) -> Option<Vec<(String, String)>>
             return None;
         }
         _ if stderr.contains("release tier targets linux/x86-64") => {
-            // The tier's named host refusal (linux/x86-64 only until
-            // its own c13 sprint) — a loud skip (s59).
+            // The tier's named host refusal (linux/x86-64 +
+            // macOS/aarch64 since s127) — a loud skip (s59).
             eprintln!("SKIP: the release tier refuses this host");
             return None;
         }
@@ -160,14 +160,22 @@ fn release_clusters_and_the_coarse_cache() {
     assert_eq!(stale.len(), cold.len(), "one live object per cluster");
 
     // Semantic edit: the cluster recompiles, and the miss reason names
-    // the s43 key component.
+    // the responsible key component. Since s125 the cluster's `src`
+    // component carries the site tables (path + line starts) of every
+    // file the cluster lowers — the span-key staleness fix — so an
+    // edit INSIDE the cluster is attributed to `source changed` (src
+    // is checked before sum; this fixture is a single cluster, on
+    // every machine — D4 clustering is machine-independent). The
+    // summary/cluster component still drives misses whose source did
+    // not move — pgo.rs's `a_profile_is_an_input_and_keys_the_rebuild`
+    // holds that path through its toolchain/profile component.
     std::fs::write(dir.join("beta/beta.lu"), BETA_SEMANTIC).expect("edit beta");
     let edited = build(&dir, "prog", &["--release"]).expect("env ok");
     assert!(
         edited
             .iter()
-            .any(|(_, v)| v.contains("summary/cluster changed")),
-        "the summary/cluster component drives the miss: {edited:?}"
+            .any(|(_, v)| v.contains("source changed") || v.contains("summary/cluster changed")),
+        "the edit's key component drives the miss: {edited:?}"
     );
     let run = Command::new(dir.join("prog")).output().expect("runs");
     assert_eq!(run.status.code(), Some(1), "the edit reached the binary");
@@ -204,9 +212,17 @@ fn release_clusters_and_the_coarse_cache() {
 fn release_builds_are_reproducible() {
     ensure_rt_staticlib();
     let dir = fixture("wp_reproducible");
+    // Same basename (`prog`) in sibling directories: the Mach-O linker
+    // signature folds the output basename in as the code-signing
+    // identifier (s59; incremental.rs pins the same property), so
+    // differently named outputs could never be bit-identical on macOS
+    // however deterministic the build.
     for (a, b) in [("r1", "r2"), ("r3", "r4")] {
+        for sub in [a, b] {
+            std::fs::create_dir_all(dir.join(sub)).expect("mkdir");
+        }
         let _ = std::fs::remove_dir_all(dir.join(".lu-cache"));
-        if build(&dir, a, &["--release"]).is_none() {
+        if build(&dir, &format!("{a}/prog"), &["--release"]).is_none() {
             return;
         }
         let _ = std::fs::remove_dir_all(dir.join(".lu-cache"));
@@ -215,7 +231,7 @@ fn release_builds_are_reproducible() {
             .arg("build")
             .arg(dir.join("main.lu"))
             .arg("-o")
-            .arg(dir.join(b))
+            .arg(dir.join(b).join("prog"))
             .arg("--release")
             .env("RAYON_NUM_THREADS", "1")
             .output()
@@ -226,8 +242,8 @@ fn release_builds_are_reproducible() {
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
-        let x = std::fs::read(dir.join(a)).expect("read a");
-        let y = std::fs::read(dir.join(b)).expect("read b");
+        let x = std::fs::read(dir.join(a).join("prog")).expect("read a");
+        let y = std::fs::read(dir.join(b).join("prog")).expect("read b");
         assert_eq!(
             x, y,
             "two clean release builds must be byte-identical ({a} vs {b}, different thread counts)"

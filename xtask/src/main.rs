@@ -1175,16 +1175,18 @@ const UNION_FLOOR: usize = 256;
 const ALL_THREE_FLOOR: usize = 207;
 // s59, measured on macOS/aarch64 the day the gate lifted: checked and
 // native at FULL linux parity (221/242, union 256 — the port left no
-// coverage behind), release 0 — the s41 release tier refuses this
-// host BY NAME until its own c13 sprint, so its floor (and the
-// all-three intersection's) is the honest 0, ratcheted when that
-// sprint lands. Counts measured by this gate, not predicted.
+// coverage behind), release honestly 0 (the s41 tier refused this
+// host by name until its own c13 sprint).
+// s127, measured the day the RELEASE gate lifted: release 242 and
+// all-three 207 — full linux parity; the release tier executes every
+// corpus entry here that it executes there. Counts measured by this
+// gate on this host, not predicted and not inherited.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 0)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 242)];
 #[cfg(target_os = "macos")]
 const UNION_FLOOR: usize = 256;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 0;
+const ALL_THREE_FLOOR: usize = 207;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
@@ -1476,11 +1478,6 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         );
         fell = true;
     }
-    // On macOS the measured all-three floor is 0 until the release
-    // tier crosses, which makes this comparison vacuously true there —
-    // clippy is right that it cannot fail YET, and the expectation
-    // deletes itself the day that floor ratchets up.
-    #[cfg_attr(target_os = "macos", expect(clippy::absurd_extreme_comparisons))]
     let all_three_holds = all_three.len() >= ALL_THREE_FLOOR;
     if !all_three_holds {
         eprintln!(

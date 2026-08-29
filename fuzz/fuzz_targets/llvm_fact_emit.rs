@@ -39,6 +39,8 @@ fn emit(m: &wolf_wir::Module, strip_facts: bool) -> String {
             // separate channel with its own lane, and leaving them on
             // would make the strip differential compare two things.
             branch_weights: None,
+            // Host target (the backend refuses unsupported hosts).
+            target: None,
         })
         .expect("backend");
     for (id, f) in m.funcs.iter() {

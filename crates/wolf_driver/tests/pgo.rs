@@ -140,8 +140,8 @@ fn build(dir: &Path, out: &str, extra: &[&str]) -> Option<String> {
             None
         }
         _ if stderr.contains("release tier targets linux/x86-64") => {
-            // The tier's named host refusal (linux/x86-64 only until
-            // its own c13 sprint) — a loud skip (s59).
+            // The tier's named host refusal (linux/x86-64 +
+            // macOS/aarch64 since s127) — a loud skip (s59).
             eprintln!("SKIP: the release tier refuses this host");
             None
         }
@@ -243,9 +243,12 @@ fn measured_branch_weights_reach_the_llvm_ir() {
     // Without a profile: only the two SEMANTIC cold nodes exist (trap
     // arcs and error arcs, report 10 delta 3), and they are the fixed
     // 1-vs-2000 shape.
+    // The filter matches the METADATA spelling `!"branch_weights"`, not
+    // the bare word: the s125 site-path globals embed this fixture's
+    // absolute path, and its directory name contains `branch_weights`.
     build(&dir, "plain.ll", &["--emit=llvm-ir"]).expect("built once already");
     let plain = std::fs::read_to_string(dir.join("plain.ll")).expect("ir");
-    for line in plain.lines().filter(|l| l.contains("branch_weights")) {
+    for line in plain.lines().filter(|l| l.contains("!\"branch_weights\"")) {
         assert!(
             line.contains("i32 1, i32 2000"),
             "an unprofiled build's only weights are the semantic cold ones: {line}"
@@ -257,7 +260,7 @@ fn measured_branch_weights_reach_the_llvm_ir() {
     let pgo = std::fs::read_to_string(dir.join("pgo.ll")).expect("ir");
     let measured: Vec<&str> = pgo
         .lines()
-        .filter(|l| l.contains("branch_weights") && !l.contains("i32 1, i32 2000"))
+        .filter(|l| l.contains("!\"branch_weights\"") && !l.contains("i32 1, i32 2000"))
         .collect();
     assert!(
         !measured.is_empty(),
@@ -282,7 +285,7 @@ fn measured_branch_weights_reach_the_llvm_ir() {
     assert!(o.status.success(), "stripped build: {:?}", o.status);
     let stripped = std::fs::read_to_string(dir.join("strip.ll")).expect("ir");
     assert!(
-        !stripped.contains("branch_weights"),
+        !stripped.contains("!\"branch_weights\""),
         "!prof is a fact channel and WOLF_STRIP_FACTS silences it too"
     );
 }
@@ -298,7 +301,15 @@ fn measured_branch_weights_reach_the_llvm_ir() {
 fn no_profile_is_a_normal_build_and_a_stale_one_is_the_same_binary() {
     ensure_rt_staticlib();
     let dir = fixture("pgo_never_required", MAIN);
-    let Some(stderr) = build(&dir, "plain", &["--no-cache"]) else {
+    // Byte-identity compares SAME-NAMED outputs in sibling directories:
+    // Mach-O's linker signature folds the output basename in as the
+    // code-signing identifier (s59; incremental.rs pins the same
+    // property), so differently named outputs could never be
+    // bit-identical on macOS however deterministic the build.
+    for sub in ["plain", "stale"] {
+        std::fs::create_dir_all(dir.join(sub)).expect("mkdir");
+    }
+    let Some(stderr) = build(&dir, "plain/prog", &["--no-cache"]) else {
         return;
     };
     for word in ["profile", "PGO", "wprof"] {
@@ -317,7 +328,7 @@ fn no_profile_is_a_normal_build_and_a_stale_one_is_the_same_binary() {
     )
     .expect("write stale profile");
     let arg = format!("--profile={}", stale.display());
-    let stderr = build(&dir, "stale", &["--no-cache", &arg]).expect("built once already");
+    let stderr = build(&dir, "stale/prog", &["--no-cache", &arg]).expect("built once already");
     assert!(
         stderr.contains("1 of 1 profile record(s) no longer match"),
         "one summary line, counted:\n{stderr}"
@@ -327,8 +338,8 @@ fn no_profile_is_a_normal_build_and_a_stale_one_is_the_same_binary() {
         "and it says exactly what a fully stale profile means:\n{stderr}"
     );
     assert_eq!(
-        sha(&dir.join("plain")),
-        sha(&dir.join("stale")),
+        sha(&dir.join("plain/prog")),
+        sha(&dir.join("stale/prog")),
         "a fully stale profile produces the no-profile build, byte for byte"
     );
 }
@@ -528,16 +539,21 @@ fn a_profile_is_an_input_and_keys_the_rebuild() {
     let wprof = dir.join("default.wprof");
     let use_arg = format!("--profile={}", wprof.display());
 
-    // Cold with the profile, then warm with the same profile.
-    build(&dir, "a", &[&use_arg]).expect("builds");
-    let warm = build(&dir, "b", &[&use_arg]).expect("builds");
+    // Cold with the profile, then warm with the same profile. Same
+    // basename in sibling directories: the Mach-O code-signing
+    // identifier is the output basename (s59; see incremental.rs).
+    for sub in ["a", "b"] {
+        std::fs::create_dir_all(dir.join(sub)).expect("mkdir");
+    }
+    build(&dir, "a/prog", &[&use_arg]).expect("builds");
+    let warm = build(&dir, "b/prog", &[&use_arg]).expect("builds");
     assert!(
         warm.contains("reused"),
         "the same profile hits the cache:\n{warm}"
     );
     assert_eq!(
-        sha(&dir.join("a")),
-        sha(&dir.join("b")),
+        sha(&dir.join("a/prog")),
+        sha(&dir.join("b/prog")),
         "a cached hit is byte-identical to the cold build"
     );
 

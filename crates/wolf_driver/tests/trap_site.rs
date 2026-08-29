@@ -20,10 +20,10 @@
 //!
 //! No hard host cfg (the s59 posture): every lane runs wherever its
 //! tier accepts the host and skips LOUDLY by the tier's own named
-//! refusal otherwise. On linux/x86-64 and macOS/aarch64 the debug
-//! tier and both conform-run native lanes execute for real; the
-//! release tier additionally executes on linux and skips by its
-//! named `release tier targets linux/x86-64` refusal elsewhere.
+//! refusal otherwise. On linux/x86-64 and macOS/aarch64 (s127) EVERY
+//! lane — debug, release, and both conform-run native lanes —
+//! executes for real; elsewhere the release steps skip by the tier's
+//! named `release tier targets …` refusal.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

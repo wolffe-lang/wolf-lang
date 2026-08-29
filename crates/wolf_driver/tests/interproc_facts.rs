@@ -53,8 +53,8 @@ fn release_ir(dir: &Path) -> Option<String> {
         return None;
     }
     if String::from_utf8_lossy(&st.stderr).contains("release tier targets linux/x86-64") {
-        // The tier's own named host refusal (linux/x86-64 only until
-        // its c13 sprint) — a loud skip, never a verdict (s59).
+        // The tier's own named host refusal (linux/x86-64 +
+        // macOS/aarch64 since s127) — a loud skip, never a verdict (s59).
         eprintln!("SKIP: the release tier refuses this host");
         return None;
     }

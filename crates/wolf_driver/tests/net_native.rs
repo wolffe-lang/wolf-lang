@@ -65,8 +65,8 @@ fn lane(file: &str, flag: &str) -> Option<Obs> {
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
-    // The release tier refuses this HOST by name (linux/x86-64 only
-    // until its own c13 sprint): a loud skip, not a verdict (s59).
+    // The release tier refuses this HOST by name (linux/x86-64 +
+    // macOS/aarch64 since s127): a loud skip, not a verdict (s59).
     if flag == "--release"
         && rec["verdict"] == "unsupported"
         && String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64")

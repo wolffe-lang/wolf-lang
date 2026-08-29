@@ -85,9 +85,9 @@ fn native_tier(file: &str, seed: Option<u64>, midend: bool, release: bool) -> Op
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
-    // The release tier refuses this HOST by name (linux/x86-64 only
-    // until its own c13 sprint): a loud skip, not a verdict — the
-    // parity stays pinned by the linux lane (s59 pattern).
+    // The release tier refuses this HOST by name (linux/x86-64 +
+    // macOS/aarch64 since s127): a loud skip, not a verdict — the
+    // parity stays pinned by the lanes that run it (s59 pattern).
     if release
         && rec["verdict"] == "unsupported"
         && String::from_utf8_lossy(&out.stderr).contains("release tier targets linux/x86-64")
