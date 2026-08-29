@@ -31,10 +31,14 @@ directives live here). `/// …` outer doc comment (documents the next item).
 No block comments (nesting arguments lose to simplicity + lexer speed).
 
 **Shebang** `[gram.lex.shebang]`: a line beginning `#!` at byte offset 0 —
-and at no other offset — is trivia, consumed to the end of the line. It
+and at no other offset — is trivia, consumed to the end of the line,
+unless the byte after `#!` is `[`: `#![` is the file-wide attribute
+opener (`[gram.attr.index]`), one dedicated token, at byte 0 or below
+the shebang line (real interpreter lines start `#!/`). The shebang
 carries no meaning to the language; it exists so an executable script is
-an ordinary translation unit. Elsewhere `#` opens an attribute or is a
-stray byte.
+an ordinary translation unit. Elsewhere `#[` opens an attribute, `#![`
+opens a file-wide attribute (legal only at the top of the file — E0211
+anywhere else), and any other `#` is a stray byte.
 
 ### 1.3 Identifiers `[gram.lex.ident]`
 
@@ -181,7 +185,7 @@ hit. Both implementations enforce identical rail values
 ### 2.1 Unit `[gram.item.unit]`
 
 ```ebnf
-unit  ::= inner_doc* item*
+unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
             | impl_item | use_item | import_c_item | const_item
@@ -292,6 +296,7 @@ items; variants and rows read like alternatives.
 
 ```ebnf
 attribute ::= '#[' attr (',' attr)* ']'
+inner_attribute ::= '#![' attr (',' attr)* ']'
 attr      ::= path attr_input?
 attr_input ::= '(' attr_arg (',' attr_arg)* ')' | '=' literal
 attr_arg  ::= attr | literal   /* `key = "v"` is attr with '=' input */
@@ -302,10 +307,38 @@ Known at v1: `#[trusted]`, `#[noalloc]`, `#[inplace]`, `#[nopanic]`,
 `#[bounded_stack]`, `#[repr(c)]`, `#[cfg(target = "…")]`,
 `#[allow(w1301)]` (item-granular warning suppression, §9.3 — the
 arguments are diagnostic codes through the ordinary `attr_arg`
-production; no new grammar), and `#[consttime]` /
+production; no new grammar), `#[consttime]` /
 `#[consttime(public(…))]` (the constant-time contract, spec/09
 `[ct.attr]` — the `public(…)` exemption also rides the ordinary
-`attr_arg` production).
+`attr_arg` production), and `#[index(0)]` / `#[index(1)]` (the origin
+marker, `[gram.attr.index]`).
+
+**The origin marker** `[gram.attr.index]` (D61, s126): the marker
+decides whether subscripts in its lexical scope count from 0 or from 1
+(`[gram.expr.index.origin]` has the semantics). Two spellings, one
+attribute name:
+
+- **File-wide**: `#![index(0)]` / `#![index(1)]` — the
+  `inner_attribute` form, legal ONLY as the first non-trivia construct
+  of the file: after the shebang and any `//!` header lines, before
+  every declaration and before the first item's own `#[…]` attributes.
+  Anywhere else it is refused (E0211), parsed but never in force. The
+  inner form is strict from birth: at v1 `index` is the only file-wide
+  attribute, and an inner attribute naming anything else is an error
+  (E0813) — a file-wide marker an implementation silently skipped
+  would silently change how every subscript in the file reads.
+- **Statement/item**: `#[index(0)]` / `#[index(1)]` in the ordinary
+  attribute position, scoped to the annotated node's full lexical
+  extent. Nesting is legal; the innermost marker wins; `#[index(0)]`
+  inside a 1-origin scope restores the default.
+- **Argument**: exactly one, the integer literal `0` or `1` through
+  the ordinary `attr_arg` production. Anything else — another number,
+  no argument, several, the `=` input form, or a second `index` item
+  on the same node — is E0813, and the faulty marker takes no effect
+  (one mistake is one diagnostic, never a scope of shifted
+  subscripts).
+- **Absent marker = origin 0**, exactly today's language: a file with
+  no marker is byte-for-byte unchanged in meaning and lowering.
 
 ---
 
@@ -436,6 +469,52 @@ position without parens (`[gram.amb.structlit]`).
   (Ruled 2026-08-26, D52 / issue #38.) Files: `rows/tag_arg_position.lu`,
   `rows/tag_let_position.lu`, `rows/tag_shadow_local.lu`,
   `rows/negative/tag_undeclared_arg.lu` (counter).
+
+### 3.3b The subscript origin `[gram.expr.index.origin]`
+
+(D61, s126.) The origin marker (`[gram.attr.index]`) is a purely
+lexical, purely frontend property of ORDINAL subscript positions. It
+never crosses a call, never enters a type, never reaches the ABI: an
+index VALUE is just an int; only the meaning of the spelling at the
+subscript site shifts. Inside an `index(1)` scope:
+
+| form | meaning under `index(1)` |
+|---|---|
+| `xs[i]` | element i, 1-based — lowers to the checked `xs[i-1]`; `xs[1]` is the first element and folds to zero runtime cost; `xs[0]` is out of range BY THE SHIFT and the ordinary bounds check refuses it |
+| `s[a..b]` | elements a through b INCLUSIVE — lowers to `(a-1)..b` |
+| `s[a..=b]` | the same set as `s[a..b]`; redundant-but-legal |
+| `s[..b]` / `s[a..]` | start through element b (lowers `..b`) / element a through the end (lowers `(a-1)..`) |
+| `s[^n]`, `s[..^n]`, `..=^n` | UNCHANGED — end-relative is origin-free, `^1` is already "last", in every position and after `..=` |
+| `xs.len` | unchanged — a count has no origin |
+| bare ranges (`for i in 1..5`, range values) | unchanged — the mode never changes arithmetic values, so `for i in 1..xs.len { xs[i] }` in a 1-origin scope iterates one short unless spelled `1..=xs.len`; iterate `for x in xs` instead |
+| `.get(i)`, `.get(a..b)` | unchanged, 0-based (W0317 warns on a literal index fed to `.get` inside a 1-origin scope) |
+| map keys, pool handles | unchanged — keys and handles are values, not positions |
+| raw-pointer subscripts (unsafe tier) | unchanged — the unsafe tier speaks the machine's 0-based offsets, the same posture as the ABI |
+| generic application `e[T]` (D29) | not a subscript |
+| interpolations (`"{xs[i]}"`), closure bodies | IN the textually enclosing scope — the marker is lexical, full stop, whatever calls what |
+
+**The coupling**: every 1-based culture pairs 1-basing with inclusive
+ranges, so `index(1)` makes subscript-position ranges inclusive. A
+spelled plain END endpoint is numerically the 0-based exclusive bound
+and lowers unchanged; only a spelled plain START endpoint shifts down
+by one; `^n` endpoints and open sides resolve exactly as in origin 0.
+Worked, against `s.len == 5`: first element `s[0]` ↔ `s[1]`; last
+`s[s.len - 1]` ↔ `s[s.len]` (or `s[^1]`, both modes); full slice
+`s[0..s.len]` ↔ `s[1..s.len]`; empty-at-front `s[0..0]` ↔ `s[1..0]`
+(and anything shorter is `bounds` after lowering, exactly as `b < a`
+is in origin 0). The 0-origin idiom `s[1..s.len]` (tail without the
+first byte) is, under `index(1)`, the whole string.
+
+**The shift**: applied at subscript lowering, after sema resolves the
+brackets as ordinal indexing. A constant index folds; a dynamic index
+gains one CHECKED subtraction — an index of int.min in a 1-origin
+scope traps `overflow` before the bounds question (X3), every other
+out-of-domain index traps `bounds` as today. Traps render per
+`[conf.trap.report]` / `[conf.trap.render]`; an implementation whose
+human-facing trap text renders an index number renders the writer's
+spelling for spans inside a 1-origin scope. Files:
+`grammar/index_origin_file.lu`, `grammar/index_origin_scopes.lu`,
+`faults/index_origin_zero.lu`.
 
 ### 3.4 Control flow as expressions `[gram.expr.flow]`
 
