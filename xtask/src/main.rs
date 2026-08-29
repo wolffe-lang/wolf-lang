@@ -1181,12 +1181,32 @@ const ALL_THREE_FLOOR: usize = 207;
 // all-three 207 — full linux parity; the release tier executes every
 // corpus entry here that it executes there. Counts measured by this
 // gate on this host, not predicted and not inherited.
+// s126 ratchet over 397 entries, RE-MEASURED on macOS/aarch64 on the
+// tree that carries s127's release tier (the branch's own measurement
+// predated it; a rebase re-measures, never inherits): the index
+// chooses its origin (D61). Six new run-phase witnesses.
+// `grammar/index_origin_file.lu` — the file-wide marker, every
+// `[gram.expr.index.origin]` table row, stdout pinned; three-lane.
+// `grammar/index_origin_scopes.lu` — the statement form, nested
+// restore, innermost-wins, interpolation; three-lane.
+// `grammar/index_origin_closure.lu` — the lexical-scope closure
+// witness; the checked executor still refuses capturing closures by
+// name, so checked moves +5 while native/release move +6.
+// `faults/index_origin_zero.lu` — `xs[0]` under `index(1)` traps
+// bounds BY THE SHIFT; three-lane. `faults/index_origin_min_
+// overflow.lu` — the checked shift's int.min corner traps overflow;
+// three-lane. `lints/index_origin_get.lu` — `.get` is origin-free,
+// W0317 pinned; three-lane. The two fail-phase witnesses
+// (`index_origin_misplaced` E0211, `index_origin_bad` E0813) join
+// the rejection ledger (115 → 117). No pre-existing file moved
+// lanes. Totals 226/248/248, union 262, all-three 212. Counts
+// measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 242)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 226), ("native", 248), ("release", 248)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 256;
+const UNION_FLOOR: usize = 262;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 207;
+const ALL_THREE_FLOOR: usize = 212;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
