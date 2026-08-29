@@ -125,8 +125,24 @@ pub fn ensure_git(
     ));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(store).map_err(|e| format!("create {}: {e}", store.display()))?;
+    // The clone must be byte-stable against the HOST's git config: an
+    // autocrlf=true checkout (the windows default) rewrites LF to
+    // CRLF and the tree no longer hashes to what the publisher's
+    // ledger witnessed — a false E1506 from config, not tampering.
     let out = std::process::Command::new("git")
-        .args(["clone", "--quiet", "--depth", "1", "--branch", tag, url])
+        .args([
+            "-c",
+            "core.autocrlf=false",
+            "-c",
+            "core.eol=lf",
+            "clone",
+            "--quiet",
+            "--depth",
+            "1",
+            "--branch",
+            tag,
+            url,
+        ])
         .arg(&tmp)
         .output()
         .map_err(|e| format!("cannot run `git`: {e}"))?;
