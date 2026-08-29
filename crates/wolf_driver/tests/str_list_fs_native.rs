@@ -16,6 +16,13 @@
 use std::path::Path;
 use std::process::Command;
 
+/// A host path spelled for embedding in a wolf string literal:
+/// forward slashes only — a windows backslash path would not lex
+/// (`\a` is no escape), and the OS accepts `/` at the API level.
+fn lu_path(p: &Path) -> String {
+    p.display().to_string().replace('\\', "/")
+}
+
 fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
@@ -260,7 +267,7 @@ fn main() -> !int {{
     0
 }}
 "#,
-        p = path.display()
+        p = lu_path(&path)
     );
     parity(
         "s40_fs_roundtrip",
@@ -354,7 +361,7 @@ fn main() -> !int {{
     0
 }}
 "#,
-        p = dir.display()
+        p = lu_path(&dir)
     );
     parity(
         "s90_fs_surface",
@@ -390,25 +397,25 @@ fn the_s90_rows_carry_the_same_tags_on_both_lanes() {
     for (case, body, tag) in [
         (
             "s90_row_invalid_mode",
-            format!("let fd = fs_open_mode(\"{p}\", 42)?", p = file.display()),
+            format!("let fd = fs_open_mode(\"{p}\", 42)?", p = lu_path(&file)),
             "invalid",
         ),
         (
             "s90_row_invalid_byte",
             format!(
                 "var b = List[int]()\n    (mut b).push(300)\n    fs_write_bytes(\"{p}\", b)?",
-                p = file.display()
+                p = lu_path(&file)
             ),
             "invalid",
         ),
         (
             "s90_row_exists",
-            format!("fs_create_dir(\"{p}\")?", p = dir.display()),
+            format!("fs_create_dir(\"{p}\")?", p = lu_path(&dir)),
             "exists",
         ),
         (
             "s90_row_dir_not_found",
-            format!("let ns = fs_read_dir(\"{p}/nope\")?", p = dir.display()),
+            format!("let ns = fs_read_dir(\"{p}/nope\")?", p = lu_path(&dir)),
             "not_found",
         ),
         (
@@ -417,7 +424,7 @@ fn the_s90_rows_carry_the_same_tags_on_both_lanes() {
                 "let fd = fs_open_mode(\"{p}\", 0)?\n    \
                  let first = fs_read_chunk(fd, 64)?\n    \
                  let second = fs_read_chunk(fd, 64)?",
-                p = file.display()
+                p = lu_path(&file)
             ),
             "eof",
         ),
@@ -453,7 +460,7 @@ fn main() -> !int {{
     0
 }}
 "#,
-        p = file.display()
+        p = lu_path(&file)
     );
     parity("s90_zero_read", &src, "exit(0)", "text io bytes=0\n");
 }
