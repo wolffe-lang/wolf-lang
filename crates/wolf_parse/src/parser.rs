@@ -308,6 +308,13 @@ impl<'a> Parser<'a> {
             TokenKind::Punct(p @ (Punct::LParen | Punct::LBracket | Punct::LBrace)) => {
                 self.frames.push(p);
             }
+            // `#[` / `#![` open a bracket the lexer suppresses
+            // terminators inside; the frame mirror must agree, or an
+            // unclosed attribute leaves every later line's missing
+            // terminator unfolded (the s126 blast-radius wreck).
+            TokenKind::PoundBracket | TokenKind::PoundBangBracket => {
+                self.frames.push(Punct::LBracket);
+            }
             TokenKind::Punct(Punct::RParen) => {
                 if self.frames.last() == Some(&Punct::LParen) {
                     self.frames.pop();
