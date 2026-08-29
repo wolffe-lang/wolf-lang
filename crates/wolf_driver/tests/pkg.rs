@@ -312,7 +312,11 @@ fn git_dep_pins_and_tamper_fails_e1506() {
     git(&["add", "."]);
     git(&["commit", "--quiet", "-m", "util fixture"]);
     git(&["tag", "v0.2.0"]);
-    let url = format!("file://{}", repo.display());
+    // A file URL wants forward slashes (RFC 8089) — and a backslash
+    // path written into wolf.pkg would not re-lex (\a is no escape);
+    // wolf add writing a manifest it cannot re-read is filed as its
+    // own hardening row.
+    let url = format!("file://{}", repo.display().to_string().replace('\\', "/"));
 
     // add --git: fetches into the store, pins into wolf.sum.
     let app = dir.join("app");
@@ -396,7 +400,11 @@ fn vendor_builds_offline_and_vendor_tamper_fails_e1506() {
     git_in(&repo, &["add", "."]);
     git_in(&repo, &["commit", "--quiet", "-m", "util fixture"]);
     git_in(&repo, &["tag", "v0.2.0"]);
-    let url = format!("file://{}", repo.display());
+    // A file URL wants forward slashes (RFC 8089) — and a backslash
+    // path written into wolf.pkg would not re-lex (\a is no escape);
+    // wolf add writing a manifest it cannot re-read is filed as its
+    // own hardening row.
+    let url = format!("file://{}", repo.display().to_string().replace('\\', "/"));
 
     let app = dir.join("app");
     std::fs::remove_file(app.join("wolf.pkg")).expect("fresh app");
@@ -492,7 +500,11 @@ fn diamond_with_two_majors_resolves_and_sum_is_byte_stable() {
     git_in(&repo, &["add", "."]);
     git_in(&repo, &["commit", "--quiet", "-m", "v2"]);
     git_in(&repo, &["tag", "v2.0.0"]);
-    let url = format!("file://{}", repo.display());
+    // A file URL wants forward slashes (RFC 8089) — and a backslash
+    // path written into wolf.pkg would not re-lex (\a is no escape);
+    // wolf add writing a manifest it cannot re-read is filed as its
+    // own hardening row.
+    let url = format!("file://{}", repo.display().to_string().replace('\\', "/"));
 
     let app = dir.join("app");
     std::fs::remove_file(app.join("wolf.pkg")).expect("fresh app");
@@ -612,7 +624,11 @@ fn publish_log_round_trip_and_tamper_fails() {
     git_in(&repo, &["add", "."]);
     git_in(&repo, &["commit", "--quiet", "-m", "published util"]);
     git_in(&repo, &["tag", "v0.2.0"]);
-    let url = format!("file://{}", repo.display());
+    // A file URL wants forward slashes (RFC 8089) — and a backslash
+    // path written into wolf.pkg would not re-lex (\a is no escape);
+    // wolf add writing a manifest it cannot re-read is filed as its
+    // own hardening row.
+    let url = format!("file://{}", repo.display().to_string().replace('\\', "/"));
     let app = dir.join("app");
     std::fs::remove_file(app.join("wolf.pkg")).expect("fresh app");
     let env: &[(&str, &str)] = &[
