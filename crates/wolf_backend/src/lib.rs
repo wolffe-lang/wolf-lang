@@ -60,6 +60,13 @@ pub enum BackendError {
     /// the driver reports the construct and keeps the file's phase
     /// honest.
     Unsupported(String),
+    /// The tier cannot run on THIS host or toolchain (a target D35's
+    /// matrix has not reached, a missing or too-old clang) — an
+    /// environment fact like an absent `cc`, never a verdict about
+    /// the program: the driver exits 2 and every lane skips loudly.
+    /// Classifying this as `Unsupported` made a windows host read as
+    /// "this program refuses" (the s59 flip's blind spot).
+    Environment(String),
     /// A backend invariant broke — a compiler bug (ICE), never a
     /// verdict.
     Internal(String),
@@ -69,6 +76,7 @@ impl std::fmt::Display for BackendError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BackendError::Unsupported(s) => write!(f, "unsupported: {s}"),
+            BackendError::Environment(s) => write!(f, "environment: {s}"),
             BackendError::Internal(s) => write!(f, "internal: {s}"),
         }
     }

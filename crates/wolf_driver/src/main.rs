@@ -1066,6 +1066,7 @@ fn compile_native(
     // implementation behind it (capabilities, never identity).
     let refuse = |phase: &'static str, e: wolf_backend::BackendError| match e {
         wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused { phase, reason },
+        wolf_backend::BackendError::Environment(reason) => BuildStop::Environment(reason),
         wolf_backend::BackendError::Internal(msg) => {
             eprintln!("wolf build: ICE: backend: {msg}");
             std::process::exit(2);
@@ -1615,6 +1616,7 @@ fn compile_unit(
             phase: "wir",
             reason,
         },
+        wolf_backend::BackendError::Environment(reason) => BuildStop::Environment(reason),
         wolf_backend::BackendError::Internal(msg) => {
             eprintln!("wolf build: ICE: backend: {msg}");
             std::process::exit(2);

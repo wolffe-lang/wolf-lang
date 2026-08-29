@@ -119,9 +119,10 @@ impl ClifBackend {
             )
         );
         if !supported {
-            return Err(BackendError::Unsupported(format!(
-                "native codegen targets linux/x86-64 and macOS/aarch64 \
-                 (s28 + s59; the rest of D35's matrix is c13) — host: {triple}"
+            return Err(BackendError::Environment(format!(
+                "this host cannot run the native tier: native codegen targets \
+                 linux/x86-64 and macOS/aarch64 (s28 + s59; the rest of D35's \
+                 matrix is c13) — host: {triple}"
             )));
         }
         let mut flags = settings::builder();

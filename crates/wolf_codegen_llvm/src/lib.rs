@@ -211,10 +211,11 @@ impl LlvmBackend {
         let target = match opts.target.or_else(ReleaseTarget::host) {
             Some(t) => t,
             None => {
-                return Err(BackendError::Unsupported(
-                    "the release tier targets linux/x86-64 and macOS/aarch64 \
-                     (s41 + s127; c13 owns the matrix) — this host is neither, \
-                     and further platforms follow as their own sprints"
+                return Err(BackendError::Environment(
+                    "this host cannot run the release tier: the release tier targets \
+                     linux/x86-64 and macOS/aarch64 (s41 + s127; c13 owns the matrix) \
+                     — this host is neither, and further platforms follow as their \
+                     own sprints"
                         .to_string(),
                 ));
             }
@@ -224,13 +225,13 @@ impl LlvmBackend {
         match clang_major(&clang) {
             Some(v) if v >= CLANG_MIN_MAJOR => {}
             Some(v) => {
-                return Err(BackendError::Unsupported(format!(
+                return Err(BackendError::Environment(format!(
                     "`{clang}` is LLVM {v}; the release tier requires clang >= {CLANG_MIN_MAJOR} \
                      (system LLVM is a toolchain requirement — see wolf_codegen_llvm docs)"
                 )));
             }
             None => {
-                return Err(BackendError::Unsupported(format!(
+                return Err(BackendError::Environment(format!(
                     "`{clang}` not found — the release tier requires clang >= {CLANG_MIN_MAJOR} \
                      on PATH (or WOLF_CLANG); system LLVM is a documented toolchain \
                      requirement, never a build script (D33)"
