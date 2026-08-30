@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="5 3 4 3\nb a b b\nc\nd\ne\nf\nb\nc\nd\ne\nf")
+//! phase: run
+//! conforms: mem.list.slice, gram.amb.brackets
+//!
+//! List slicing (#171, the sc24 endpoint surface on List): open ends
+//! default to the edges (`cs[1..]`, `cs[..3]`), `^n` counts from the
+//! end, closed ranges slice too, and a slice VALUE iterates by `for`
+//! — through a fresh List, so the source stays whole. Byte-identical
+//! to lupin 0.1.16 (its copy semantics are the reference, measured).
+
+fn main() -> !int {
+    let s = "abcdef"
+    let cs = s.chars()
+    let a = cs[1..]
+    let b = cs[..3]
+    let c = cs[1..^1]
+    let d = cs[1..4]
+    print("{a.len} {b.len} {c.len} {d.len}")
+    print("{a[0]} {b[0]} {c[0]} {d[0]}")
+    for ch in cs[2..] { print("{ch}") }
+    let rest = cs[1..cs.len]
+    for ch in rest { print("{ch}") }
+    0
+}

@@ -70,6 +70,8 @@ faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/index_origin_min_overflow.lu: lowers
 faults/index_origin_zero.lu: lowers
+faults/list_slice_oob.lu: lowers
+faults/list_slice_reversed.lu: lowers
 faults/overflow_add.lu: lowers
 faults/overflow_call_result.lu: lowers
 faults/overflow_elem_read.lu: lowers
@@ -198,6 +200,8 @@ memory/list_elem_assign.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
 memory/list_session_struct.lu: lowers
+memory/list_slice.lu: lowers
+memory/list_slice_edges.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
@@ -320,6 +324,10 @@ strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/char_interp.lu: lowers
 strings/char_order.lu: lowers
 strings/chars_walk.lu: lowers
+strings/concat_int_str.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_mix_char.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_mix_int.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_plus.lu: lowers
 strings/empty_needle.lu: lowers
 strings/equality_lanes.lu: lowers
 strings/float_format.lu: lowers

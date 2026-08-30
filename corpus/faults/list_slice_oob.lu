@@ -1,0 +1,14 @@
+//! check: run(exit=trap(bounds))
+//! phase: run
+//! conforms: mem.list.slice, mem.ub.defined
+//!
+//! A List slice outside `lo <= hi <= len` faults `bounds` (#171):
+//! `cs[2..8]` over six elements traps on every lane — lupin's own
+//! verdict (measured: `range 2..8 is outside a 6-element List`).
+
+fn main() -> !int {
+    let cs = "abcdef".chars()
+    let bad = cs[2..8]
+    print("{bad.len}")
+    0
+}

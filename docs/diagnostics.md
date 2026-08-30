@@ -565,14 +565,18 @@ Each operator family in wolf works on a fixed family of types:
 arithmetic (`+ - * / %`) on numbers, ordering (`< <= > >= <=>`) on
 numbers and on `str` (byte-lexicographic — lupin's byte order, no
 collation), logic (`&& || !`) on `bool` exactly, bitwise and shifts on
-integer types. This operand is outside the operator's family. Two
-classics: wolf has no truthiness, so `if x` on a number must be
-written as a comparison (`x != 0`); and `+` does not join strings —
-interpolation does (`"{first}{second}"`), which formats any primitive
-and never surprises you with a numeric `+` overload. Operators on
-user types come from traits, and need the trait in scope.
+integer types. `+` and `+=` also join two `str`s (D62): `s + u` is
+exactly `"{s}{u}"` — a fresh `str` per application, interpolation's
+cost, so `std.strbuf` stays the builder for heavy loops. This operand
+is outside the operator's family. Two classics: wolf has no
+truthiness, so `if x` on a number must be written as a comparison
+(`x != 0`); and `+` never mixes `str` with another type — the
+conversion is spelled inside an interpolation hole (`t += "{count}"`),
+which formats any primitive and never surprises you with a numeric
+`+` overload. Operators on user types come from traits, and need the
+trait in scope.
 
-Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_string_plus.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_int_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_char.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_int_plus_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_compound_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_char.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_int.snap
 
 ## E0410 — a `let` binding cannot be assigned again
 

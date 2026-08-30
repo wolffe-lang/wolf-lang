@@ -233,6 +233,7 @@
     "mem.iter.impl": "02-memory-model.md",
     "mem.iter.range": "02-memory-model.md",
     "mem.iter.trait": "02-memory-model.md",
+    "mem.list.slice": "02-memory-model.md",
     "mem.model": "02-memory-model.md",
     "mem.model.alloc": "02-memory-model.md",
     "mem.model.granule": "02-memory-model.md",
@@ -396,7 +397,11 @@
     "type.numlit.default": "10-types.md",
     "type.numlit.kind": "10-types.md",
     "type.numlit.propagate": "10-types.md",
-    "type.numlit.value": "10-types.md"
+    "type.numlit.value": "10-types.md",
+    "type.str": "10-types.md",
+    "type.str.concat": "10-types.md",
+    "type.str.concat.cost": "10-types.md",
+    "type.str.concat.mix": "10-types.md"
   },
   "version": 1
 }

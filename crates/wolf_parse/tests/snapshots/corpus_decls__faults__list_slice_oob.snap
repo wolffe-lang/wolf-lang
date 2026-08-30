@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+FnDecl 301..404 name=main body=Block

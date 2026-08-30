@@ -1219,12 +1219,27 @@ const ALL_THREE_FLOOR: usize = 207;
 // (`destructure_partial_move`, E1001) joins the rejection ledger.
 // Totals 230/252/252, union 266, all-three 216. Counts measured by
 // this gate, not predicted.
+// s128 item 3 ratchet over 408 entries: D62 lands (#172) — `+`/`+=`
+// on two strs is interpolation-append. One new run witness
+// (`strings/concat_plus.lu`: the legal chain, `+=` in every spelling
+// the program needs) runs three-lane, so every count moves +1; the
+// three mix pins (`concat_mix_int`/`concat_mix_char`/`concat_int_str`,
+// E0409) join the rejection ledger. Totals 231/253/253, union 267,
+// all-three 217. Counts measured by this gate, not predicted.
+// s128 item 4 ratchet over 412 entries: List slicing lands (#171,
+// `[mem.list.slice]`). Four new run-phase witnesses, each three-lane
+// — `memory/list_slice.lu` (open/`^n`/closed forms + `for` over a
+// slice value), `memory/list_slice_edges.lu` (the empty edges and
+// double-`^n`), and the two `faults/` bounds twins (oob, reversed —
+// traps are runs) — so every count moves +4. Totals 235/257/257,
+// union 271, all-three 221. Counts measured by this gate, not
+// predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 230), ("native", 252), ("release", 252)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 235), ("native", 257), ("release", 257)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 266;
+const UNION_FLOOR: usize = 271;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 216;
+const ALL_THREE_FLOOR: usize = 221;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
