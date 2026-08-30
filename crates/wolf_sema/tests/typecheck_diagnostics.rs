@@ -215,12 +215,26 @@ fn e0408_missing_struct_field() {
 
 // ---------------------------------------------------------- E0409 -----
 
-/// Catalog case: `+` does not join strings — interpolation does.
+/// D62 (s128): `first + "lf"` on two strs is LEGAL now —
+/// interpolation-append. The mixes keep E0409, each with the
+/// interpolation-hole note and its cost-model neighbor.
 #[test]
-fn e0409_string_plus_string() {
+fn e0409_str_plus_mixes() {
     snap_one(
-        "e0409_string_plus",
-        "fn main() -> !int {\n    let first = \"wo\"\n    let both = first + \"lf\"\n    0\n}\n",
+        "e0409_str_plus_int",
+        "fn main() -> !int {\n    let s = \"wo\"\n    let t = s + 1\n    0\n}\n",
+    );
+    snap_one(
+        "e0409_str_plus_char",
+        "fn main() -> !int {\n    let s = \"wo\"\n    let t = s + 'c'\n    0\n}\n",
+    );
+    snap_one(
+        "e0409_int_plus_str",
+        "fn main() -> !int {\n    let s = \"wo\"\n    let t = 1 + s\n    0\n}\n",
+    );
+    snap_one(
+        "e0409_str_compound_int",
+        "fn main() -> !int {\n    var s = \"wo\"\n    s += 1\n    0\n}\n",
     );
 }
 

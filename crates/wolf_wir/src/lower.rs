@@ -6663,6 +6663,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         wty: TypeId,
         span: Span,
     ) -> R<Option<Value>> {
+        // D62 (s128): `+` whose result type is an aggregate is the
+        // two-`str` join — the ONLY aggregate sema admits into an
+        // arithmetic op — and it desugars onto the interpolation
+        // path's strbuf (no new runtime surface). Every `+=` place
+        // shape funnels through here too, so local/member/index
+        // compounds get the same lowering.
+        if op == SyntaxKind::Plus && matches!(self.b.module.types.get(wty), types::TypeData::Agg(_))
+        {
+            return Ok(Some(self.str_concat(a, b, span)?));
+        }
         if wty == types::F32 || wty == types::F64 {
             let fop = match op {
                 SyntaxKind::Plus => Opcode::Fadd,
@@ -9401,6 +9411,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.rt_call_slot("__wolf_rt_strbuf_finish", &[buf], slot, region, None);
         let v = self.load_str_slot(slot, region, e.span)?;
         Ok(Flow::Val(Some(v)))
+    }
+
+    /// D62 (s128): `a + b` on two `str`s is precisely `"{a}{b}"` — the
+    /// SAME strbuf path interpolation materializes through (`[type.str]`;
+    /// no new runtime surface). A fresh `str` per application, by
+    /// design: the cost model is interpolation's, and `std.strbuf`
+    /// stays the builder for heavy loops.
+    fn str_concat(&mut self, a: Value, b: Value, span: Span) -> R<Value> {
+        let buf = self
+            .rt_call("__wolf_rt_strbuf_new", &[], Some(types::PTR))
+            .expect("strbuf handle");
+        let sp = self.b.iconst(types::I64, 0);
+        let (pa, la) = self.str_parts(a);
+        self.rt_call("__wolf_rt_strbuf_str", &[buf, pa, la, sp], None);
+        let (pb, lb) = self.str_parts(b);
+        self.rt_call("__wolf_rt_strbuf_str", &[buf, pb, lb, sp], None);
+        let (region, slot) = self.rt_slot(16);
+        self.rt_call_slot("__wolf_rt_strbuf_finish", &[buf], slot, region, None);
+        self.load_str_slot(slot, region, span)
     }
 
     /// `[mem.str.get]`'s domain, INLINE (s77) — the test

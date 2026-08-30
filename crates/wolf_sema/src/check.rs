@@ -1640,12 +1640,33 @@ impl<'a> Checker<'a> {
                 "wolf has no truthiness: write the comparison out, e.g. `x != 0`.".to_string(),
             );
         }
-        if op == "+" && matches!(self.kind_of(found), TyKind::Prim(Prim::Str)) {
-            d = d.with_note(
-                "join strings with interpolation instead: \"{first}{second}\".".to_string(),
-            );
-        }
         self.diags.push(d);
+    }
+
+    /// E0409, the D62 mixed-operand face: `+`/`+=` joins two `str`s
+    /// and nothing else — the conversion is spelled inside an
+    /// interpolation hole, and the cost model rides as the note's
+    /// neighbor so `+=` in a loop is never mistaken for an amortized
+    /// push.
+    fn report_str_plus_mix(&mut self, op: &str, span: Span, other: TyId) {
+        let o = self.show(other);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0409,
+                span,
+                format!("`{op}` cannot join `str` and `{o}`"),
+            )
+            .with_label(format!("this is `{o}`"))
+            .with_note(format!(
+                "`{op}` joins two `str`s (D62). Spell the conversion inside an \
+                 interpolation hole: `t += \"{{count}}\"` formats any primitive."
+            ))
+            .with_note(
+                "each `+` builds a fresh `str` — interpolation's cost model; \
+                 `std.strbuf` is the builder for heavy loops."
+                    .to_string(),
+            ),
+        );
     }
 
     // ---------------------------------------------- error rows (s15) ---
@@ -3231,6 +3252,21 @@ impl<'a> Checker<'a> {
             && op_kind != SyntaxKind::Eq
         {
             let op_text = a.op().map(|t| self.text(t.span)).unwrap_or_default();
+            // D62 (s128): `s += u` is `s = s + u` — legal exactly when
+            // both are `str`; mixes keep E0409 with the
+            // interpolation-hole note.
+            if op_kind == SyntaxKind::PlusEq
+                && matches!(self.kind_of(place_ty), TyKind::Prim(Prim::Str))
+            {
+                if let Some(v) = a.value() {
+                    let vt = self.synth_expr(v)?;
+                    let sp = self.lo.table.prim(Prim::Str);
+                    if unify(&mut self.lo.table, &mut self.vars, vt, sp).is_err() {
+                        self.report_str_plus_mix("+=", v.span, vt);
+                    }
+                }
+                return Ok(());
+            }
             let (kind, needs) = match op_kind {
                 SyntaxKind::PlusEq
                 | SyntaxKind::MinusEq
@@ -4011,6 +4047,26 @@ impl<'a> Checker<'a> {
                 if let Some(n) = self.rigid_name(lt) {
                     self.golden_rule_op(lhs.span, &n, &op_text);
                     return Ok(self.error_ty());
+                }
+                // D62 (s128): `s + u` is legal exactly when BOTH are
+                // `str` and means `"{s}{u}"` — a builtin on the
+                // builtin type, like `==` on `str`; no trait bridge
+                // (D49 untouched). The three mixes keep E0409.
+                if op_kind == Some(SyntaxKind::Plus) {
+                    let l_str = matches!(self.kind_of(lt), TyKind::Prim(Prim::Str));
+                    let r_str = matches!(self.kind_of(rt), TyKind::Prim(Prim::Str));
+                    if l_str && r_str {
+                        return Ok(self.lo.table.prim(Prim::Str));
+                    }
+                    if l_str || r_str {
+                        let (span, other) = if l_str {
+                            (rhs.span, rt)
+                        } else {
+                            (lhs.span, lt)
+                        };
+                        self.report_str_plus_mix("+", span, other);
+                        return Ok(self.error_ty());
+                    }
                 }
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {

@@ -3119,6 +3119,13 @@ impl<'t> Machine<'t> {
         ty_span: Span,
     ) -> E<Value> {
         match (l, r) {
+            // D62 (s128): `+` on two strs is `"{s}{u}"` — UTF-8
+            // concatenation, a fresh str per application. Sema admits
+            // no mix, so a non-str pair here falls through to the
+            // modelled-surface refusal.
+            (Value::Str(a), Value::Str(b)) if op == SyntaxKind::Plus => {
+                Ok(Value::Str(format!("{a}{b}")))
+            }
             (Value::Int(a), Value::Int(b)) => {
                 // Wrapping types wrap at their width; checked prims
                 // trap (X3).

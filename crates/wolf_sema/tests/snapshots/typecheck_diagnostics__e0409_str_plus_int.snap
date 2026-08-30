@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+assertion_line: 37
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0409]: `+` cannot join `str` and `{integer}`
+ --> mem:///main.lu:3:17
+  |
+3 |     let t = s + 1
+  |                 ^ this is `{integer}`
+  |
+  = note: `+` joins two `str`s (D62). Spell the conversion inside an interpolation hole: `t +=
+    "{count}"` formats any primitive.
+  = note: each `+` builds a fresh `str` — interpolation's cost model; `std.strbuf` is the builder
+    for heavy loops.
