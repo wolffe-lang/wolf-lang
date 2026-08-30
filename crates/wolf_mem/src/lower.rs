@@ -1888,6 +1888,46 @@ impl<'t> Lowerer<'t> {
                     self.raw_index(e, false)?;
                     return Ok(Val::none());
                 }
+                // s128 (#171): `cs[a..b]` — a List slice is a FRESH
+                // List built from a READ of the source (lupin's copy
+                // semantics, measured): the receiver is read, never
+                // moved, and the value is a new allocation in the
+                // ambient region — a CallResult-shaped site, exactly
+                // like `chars()`.
+                if e.kind == SyntaxKind::BracketApply
+                    && let Some(bapp) = wolf_ast::BracketApply::cast(e)
+                    && let Some(recv) = bapp.callee()
+                    && self
+                        .expr_ty(recv.span)
+                        .is_some_and(|t| matches!(t.kind(), TyKind::List(_)))
+                    && let Some(rn) = bapp
+                        .args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .filter_map(wolf_ast::Arg::value)
+                        .find(|v| v.kind == SyntaxKind::RangeExpr)
+                {
+                    if let Some((rp, _)) = self.as_place(recv) {
+                        self.emit_read(rp, recv.span);
+                    } else {
+                        self.eval_value(recv)?;
+                    }
+                    if let Some(d) = wolf_ast::RangeExpr::cast(rn) {
+                        for ep in d.endpoints() {
+                            let inner = if ep.kind == SyntaxKind::FromEndExpr {
+                                wolf_ast::FromEndExpr::cast(ep).and_then(|f| f.expr())
+                            } else {
+                                Some(ep)
+                            };
+                            if let Some(x) = inner {
+                                self.eval_value(x)?;
+                            }
+                        }
+                    }
+                    let ty = self.rendered_expr_ty(e.span);
+                    let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+                    return Ok(Val::site(site, e.span));
+                }
                 if let Some((place, _)) = self.as_place(e) {
                     // A `Copy` use duplicates a region-free scalar:
                     // no site flows (this is what keeps a Copy field

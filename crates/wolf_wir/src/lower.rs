@@ -11373,6 +11373,89 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .filter_map(Arg::value)
                     .next()
                     .ok_or_else(|| refuse("an index without an operand", e.span))?;
+                // s128 (#171): `cs[a..b]` and the open/`^n` forms
+                // SLICE — the endpoints resolve exactly as str slices
+                // do (sc24 semantics, `range_endpoints`), the domain
+                // is `lo <=u hi <=u len` (lupin's bounds trap,
+                // measured), and the value is a FRESH List (lupin's
+                // copy semantics, measured): a new header, each
+                // element pushed from the source buffer in order.
+                if ix.kind == SyntaxKind::RangeExpr {
+                    let n = self.list_len_of(hdr);
+                    let Some((lo, hi)) = self.range_endpoints(ix, n, origin)? else {
+                        return Ok(Flow::Diverged);
+                    };
+                    let lo_ok = self
+                        .b
+                        .ins(
+                            Opcode::Icmp,
+                            &[lo, hi],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Ule),
+                        )
+                        .one();
+                    let hi_ok = self
+                        .b
+                        .ins(
+                            Opcode::Icmp,
+                            &[hi, n],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Ule),
+                        )
+                        .one();
+                    let ok = self
+                        .b
+                        .ins(Opcode::Band, &[lo_ok, hi_ok], &[types::BOOL], Aux::None)
+                        .one();
+                    if self.trap_unless(ok, TrapKind::Bounds) {
+                        return Ok(Flow::Diverged);
+                    }
+                    let esize = self.list_stride(ewty, e.span)?;
+                    let sz = self.b.iconst(types::I64, esize as i64);
+                    let out = self
+                        .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
+                        .expect("hdr");
+                    let header = self.b.create_block();
+                    let iparam = self.b.add_block_param(header, types::I64);
+                    self.b.ins_jmp(header, &[lo]);
+                    self.b.switch_to_block(header);
+                    self.b.gvn_push_scope();
+                    let cond = self
+                        .b
+                        .ins(
+                            Opcode::Icmp,
+                            &[iparam, hi],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Slt),
+                        )
+                        .one();
+                    let body_bb = self.b.create_block();
+                    let exit = self.b.create_block();
+                    self.b.ins_br(cond, body_bb, &[], exit, &[]);
+                    self.b.seal_block(body_bb);
+                    self.b.seal_block(exit);
+                    self.b.switch_to_block(body_bb);
+                    self.b.gvn_push_scope();
+                    // The source pointer is re-read inside the body
+                    // (the push may not touch it, but a hoisted copy
+                    // is a bug waiting for growth-aliasing; LICM lifts
+                    // the load when it is safe).
+                    let data = self.list_data(hdr);
+                    let p = self.list_elem_addr(data, iparam, esize);
+                    let r = self.foreign_buf_region();
+                    self.rt_call_foreign("__wolf_rt_list_push", &[out], Some((p, r)), None);
+                    let one = self.b.iconst(types::I64, 1);
+                    let inext = self
+                        .b
+                        .ins(Opcode::IaddWrap, &[iparam, one], &[types::I64], Aux::None)
+                        .one();
+                    self.b.ins_jmp(header, &[inext]);
+                    self.b.gvn_pop_scope();
+                    self.b.seal_block(header);
+                    self.b.switch_to_block(exit);
+                    self.b.gvn_pop_scope();
+                    return Ok(Flow::Val(Some(out)));
+                }
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {
                     return Err(refuse("a valueless List index", ix.span));
                 };

@@ -2334,6 +2334,18 @@ impl<'t> Machine<'t> {
                 {
                     return self.eval_str_slice(e);
                 }
+                // s128 (#171) — `cs[a..b]` List slicing, same endpoint
+                // surface, fresh-List value.
+                if let Some(recv) = b.callee()
+                    && matches!(self.expr_ty(recv.span), Some(TyKind::List(_)))
+                    && b.args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .filter_map(Arg::value)
+                        .any(|v| v.kind == SyntaxKind::RangeExpr)
+                {
+                    return self.eval_list_slice(e);
+                }
                 if let Some(place) = self.place_of(e)? {
                     let v = self.read_place(&place, e.span)?;
                     return Ok(Flow::Val(v));
@@ -4783,32 +4795,14 @@ impl<'t> Machine<'t> {
     /// `bounds` trap, never UB and never a garbled slice. The
     /// recoverable twin is `s.get(a..b) -> str ! {none}` (a method,
     /// below).
-    fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
-        let b = BracketApply::cast(e).expect("kind");
-        let Some(recv) = b.callee() else {
-            return self.refuse("a slice without a receiver", e.span);
-        };
-        let sv = if let Some(place) = self.place_of(recv)? {
-            self.read_place(&place, recv.span)?
-        } else {
-            val!(self.eval(recv))
-        };
-        let Value::Str(s) = sv else {
-            return self.refuse("str slicing of a non-str", e.span);
-        };
-        let mut range_node = None;
-        for a in b.args().into_iter().flat_map(|l| l.args()) {
-            if let Some(v) = Arg::value(a)
-                && v.kind == SyntaxKind::RangeExpr
-            {
-                range_node = Some(v);
-            }
-        }
-        let Some(rn) = range_node else {
-            return self.refuse("this str index shape in checked execution", e.span);
-        };
+    /// Resolve a subscript-position range against `len` — the shared
+    /// endpoint surface of `str` (sc24) and `List` (s128, #171)
+    /// slices: open sides default to the edges, `^n` counts from the
+    /// end, the D61 origin shift applies to spelled plain endpoints,
+    /// and `lo <= hi <= len` traps `bounds` otherwise. The in-domain
+    /// answer rides back as `Value::Range { lo, hi }`.
+    fn slice_bounds(&mut self, rn: &'t GreenNode, len: i64, at: Span) -> E<Flow> {
         let d = RangeExpr::cast(rn).expect("kind");
-        let len = s.len() as i64;
         // Which side of the dots each endpoint sits on decides which
         // bound it names — open sides default to the edges.
         let dots = rn
@@ -4822,7 +4816,7 @@ impl<'t> Machine<'t> {
         // 0-based exclusive bound numerically, so `..=` adds nothing —
         // and `^n` endpoints, open sides, and their `..=` interaction
         // resolve exactly as in origin 0. Mirrors `range_endpoints`.
-        let origin = self.origin_at(e.span);
+        let origin = self.origin_at(at);
         let mut lo = 0i64;
         let mut hi = len;
         let mut plain_hi_spelled = false;
@@ -4858,9 +4852,77 @@ impl<'t> Machine<'t> {
             hi += 1;
         }
         if lo < 0 || hi < lo || hi > len {
-            return self.trap("bounds", "mem.ub.defined", e.span);
+            return self.trap("bounds", "mem.ub.defined", at);
         }
-        let (a, z) = (lo as usize, hi as usize);
+        Ok(Flow::Val(Value::Range { start: lo, end: hi }))
+    }
+
+    /// `cs[a..b]` (s128, #171): the List slice — the same endpoint
+    /// surface as str slices, the same `bounds` trap, and a FRESH
+    /// List as the value (copy semantics — lupin's, measured).
+    fn eval_list_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let b = BracketApply::cast(e).expect("kind");
+        let Some(recv) = b.callee() else {
+            return self.refuse("a slice without a receiver", e.span);
+        };
+        let lv = if let Some(place) = self.place_of(recv)? {
+            self.read_place(&place, recv.span)?
+        } else {
+            val!(self.eval(recv))
+        };
+        let Value::List(id) = lv else {
+            return self.refuse("List slicing of a non-List", e.span);
+        };
+        let rn = b
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .find(|v| v.kind == SyntaxKind::RangeExpr);
+        let Some(rn) = rn else {
+            return self.refuse("this List index shape in checked execution", e.span);
+        };
+        let len = self.lists[id].len() as i64;
+        let bounds = self.slice_bounds(rn, len, e.span)?;
+        let Flow::Val(Value::Range { start, end }) = bounds else {
+            return Ok(bounds);
+        };
+        let items: Vec<Value> = self.lists[id][start as usize..end as usize].to_vec();
+        self.charge_mem(16 * items.len() as u64 + 16)?;
+        let nid = self.lists.len();
+        self.lists.push(items);
+        Ok(Flow::Val(Value::List(nid)))
+    }
+
+    fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let b = BracketApply::cast(e).expect("kind");
+        let Some(recv) = b.callee() else {
+            return self.refuse("a slice without a receiver", e.span);
+        };
+        let sv = if let Some(place) = self.place_of(recv)? {
+            self.read_place(&place, recv.span)?
+        } else {
+            val!(self.eval(recv))
+        };
+        let Value::Str(s) = sv else {
+            return self.refuse("str slicing of a non-str", e.span);
+        };
+        let mut range_node = None;
+        for a in b.args().into_iter().flat_map(|l| l.args()) {
+            if let Some(v) = Arg::value(a)
+                && v.kind == SyntaxKind::RangeExpr
+            {
+                range_node = Some(v);
+            }
+        }
+        let Some(rn) = range_node else {
+            return self.refuse("this str index shape in checked execution", e.span);
+        };
+        let bounds = self.slice_bounds(rn, s.len() as i64, e.span)?;
+        let Flow::Val(Value::Range { start, end }) = bounds else {
+            return Ok(bounds);
+        };
+        let (a, z) = (start as usize, end as usize);
         if !s.is_char_boundary(a) || !s.is_char_boundary(z) {
             return self.trap("bounds", "mem.ub.defined", e.span);
         }

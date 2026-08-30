@@ -4656,6 +4656,22 @@ impl<'a> Checker<'a> {
         let recv_ty = self.synth_expr(recv)?;
         let elem = match self.kind_of(recv_ty) {
             TyKind::List(elem) => {
+                // s128 (#171): `cs[a..b]` — and the open/`^n` endpoint
+                // forms — SLICE, with the same endpoint surface str
+                // slices got in sc24. The value is a fresh List of the
+                // same element (lupin's copy semantics, measured).
+                let single = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|a| a.args())
+                    .filter_map(Arg::value)
+                    .collect::<Vec<_>>();
+                if let [one] = single.as_slice()
+                    && one.kind == SyntaxKind::RangeExpr
+                {
+                    self.check_slice_endpoints(one, "List slicing")?;
+                    return Ok(recv_ty);
+                }
                 let int_ = self.lo.table.prim(Prim::Int);
                 self.check_index_arg(d.args(), int_, "List index")?;
                 elem
@@ -4708,25 +4724,7 @@ impl<'a> Checker<'a> {
             });
         };
         if one.kind == SyntaxKind::RangeExpr {
-            let d = RangeExpr::cast(one).expect("kind");
-            for ep in d.endpoints() {
-                let inner = if ep.kind == SyntaxKind::FromEndExpr {
-                    FromEndExpr::cast(ep).and_then(|f| f.expr())
-                } else {
-                    Some(ep)
-                };
-                if let Some(x) = inner {
-                    let exp = Expect {
-                        ty: int_,
-                        reason: Reason::ArgOfCall {
-                            callee: "str slicing".to_string(),
-                            index: 0,
-                        },
-                        because: None,
-                    };
-                    self.check_expr(x, &exp)?;
-                }
-            }
+            self.check_slice_endpoints(one, "str slicing")?;
             return Ok(str_);
         }
         // `s[^n]` — a single end-relative position is still character
@@ -4775,6 +4773,34 @@ impl<'a> Checker<'a> {
             ),
         );
         Ok(self.error_ty())
+    }
+
+    /// Every endpoint of a subscript-position range types as `int`;
+    /// `^n` checks its inner expression; open ends check nothing —
+    /// the D25 slice surface, shared by `str` (sc24) and `List`
+    /// (s128, #171).
+    fn check_slice_endpoints(&mut self, rn: &GreenNode, what: &str) -> R<()> {
+        let int_ = self.lo.table.prim(Prim::Int);
+        let d = RangeExpr::cast(rn).expect("kind");
+        for ep in d.endpoints() {
+            let inner = if ep.kind == SyntaxKind::FromEndExpr {
+                FromEndExpr::cast(ep).and_then(|f| f.expr())
+            } else {
+                Some(ep)
+            };
+            if let Some(x) = inner {
+                let exp = Expect {
+                    ty: int_,
+                    reason: Reason::ArgOfCall {
+                        callee: what.to_string(),
+                        index: 0,
+                    },
+                    because: None,
+                };
+                self.check_expr(x, &exp)?;
+            }
+        }
+        Ok(())
     }
 
     /// The single index argument of a container `e[…]`, checked
