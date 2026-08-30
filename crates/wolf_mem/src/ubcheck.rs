@@ -61,9 +61,9 @@ use std::collections::HashMap;
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, BorrowExpr, BracketApply, CallExpr, CastExpr, DeferStmt,
-    ElseExpr, ExprStmt, FieldInit, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchExpr,
-    MemberExpr, ParenExpr, PrefixExpr, RangeExpr, RegionBlock, ReturnExpr, StringExpr, StructLit,
-    SyntaxKind, TupleExpr, UnsafeBlock, VarDecl, WhileExpr, is_pattern_kind,
+    ElseExpr, ExprStmt, FieldInit, ForExpr, GreenNode, IfExpr, InBlock, MatchExpr, MemberExpr,
+    ParenExpr, PrefixExpr, RangeExpr, RegionBlock, ReturnExpr, StringExpr, StructLit, SyntaxKind,
+    TupleExpr, UnsafeBlock, WhileExpr, is_pattern_kind,
 };
 use wolf_diag::{Diagnostic, codes};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
@@ -2023,23 +2023,16 @@ impl<'t> Machine<'t> {
                         }
                     }
                 }
-                SyntaxKind::LetDecl => {
-                    let d = LetDecl::cast(stmt).expect("kind");
-                    match self.bind_decl(d.pattern(), d.init())? {
-                        Flow::Val(_) => {}
-                        other => {
-                            self.close_scope(matches!(other, Flow::Err(..)))?;
-                            return Ok(other);
-                        }
-                    }
-                }
-                SyntaxKind::VarDecl => {
-                    let d = VarDecl::cast(stmt).expect("kind");
-                    match self.bind_decl(d.pattern(), d.init())? {
-                        Flow::Val(_) => {}
-                        other => {
-                            self.close_scope(matches!(other, Flow::Err(..)))?;
-                            return Ok(other);
+                SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+                    // A comma group binds in sequence, left to right
+                    // (D63).
+                    for b in wolf_ast::binding_binders(stmt) {
+                        match self.bind_decl(b.pattern, b.init)? {
+                            Flow::Val(_) => {}
+                            other => {
+                                self.close_scope(matches!(other, Flow::Err(..)))?;
+                                return Ok(other);
+                            }
                         }
                     }
                 }

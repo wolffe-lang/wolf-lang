@@ -46,9 +46,9 @@ use std::collections::HashMap;
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, BracketApply, BreakExpr, CallExpr, CastExpr, ConstDecl,
-    DeferStmt, ElseExpr, ExprStmt, ForExpr, FromEndExpr, GreenNode, IfExpr, LetDecl, LoopExpr,
-    MatchArm, MatchExpr, ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr,
-    SyntaxKind, TryExpr, VarDecl, WhileExpr,
+    DeferStmt, ElseExpr, ExprStmt, ForExpr, FromEndExpr, GreenNode, IfExpr, LoopExpr, MatchArm,
+    MatchExpr, ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr, SyntaxKind,
+    TryExpr, WhileExpr,
 };
 use wolf_mem::byteview::{Lend, Lender};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
@@ -3033,13 +3033,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
-            SyntaxKind::LetDecl => {
-                let d = LetDecl::cast(stmt).expect("kind");
-                self.lower_binding(d.pattern(), d.init(), stmt.span)
-            }
-            SyntaxKind::VarDecl => {
-                let d = VarDecl::cast(stmt).expect("kind");
-                self.lower_binding(d.pattern(), d.init(), stmt.span)
+            SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+                // A comma group lowers as the sequence of single
+                // bindings, left to right (D63).
+                let mut last = Flow::Val(None);
+                for b in wolf_ast::binding_binders(stmt) {
+                    match self.lower_binding(b.pattern, b.init, b.node.span)? {
+                        Flow::Val(v) => last = Flow::Val(v),
+                        other => return Ok(other),
+                    }
+                }
+                Ok(last)
             }
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(stmt).expect("kind");

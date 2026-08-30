@@ -21,9 +21,9 @@ use wolf_ast::FreezeExpr;
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, CallExpr, CastExpr, DeferStmt, ElseExpr, ExprStmt,
-    FieldInit, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchExpr, MemberExpr, ParamMode,
-    ParenExpr, PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr,
-    StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_pattern_kind,
+    FieldInit, ForExpr, GreenNode, IfExpr, InBlock, MatchExpr, MemberExpr, ParamMode, ParenExpr,
+    PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit,
+    SyntaxKind, TupleExpr, WhileExpr, is_pattern_kind,
 };
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
@@ -3873,25 +3873,24 @@ impl<'t> Lowerer<'t> {
     }
 
     fn lower_let(&mut self, stmt: &'t GreenNode) -> R<()> {
-        let d = LetDecl::cast(stmt).expect("kind");
-        let (has_init, val) = match d.init() {
-            Some(init) => (true, self.eval_value(init)?),
-            None => (false, Val::none()),
-        };
-        if let Some(pat) = d.pattern() {
-            self.bind_pattern_inits(pat, has_init, &val);
-        }
-        Ok(())
+        self.lower_binders(stmt)
     }
 
     fn lower_var(&mut self, stmt: &'t GreenNode) -> R<()> {
-        let d = VarDecl::cast(stmt).expect("kind");
-        let (has_init, val) = match d.init() {
-            Some(init) => (true, self.eval_value(init)?),
-            None => (false, Val::none()),
-        };
-        if let Some(pat) = d.pattern() {
-            self.bind_pattern_inits(pat, has_init, &val);
+        self.lower_binders(stmt)
+    }
+
+    /// Every binder of a `let`/`var`, in source order — a comma group
+    /// is the sequence of single bindings (D63).
+    fn lower_binders(&mut self, stmt: &'t GreenNode) -> R<()> {
+        for b in wolf_ast::binding_binders(stmt) {
+            let (has_init, val) = match b.init {
+                Some(init) => (true, self.eval_value(init)?),
+                None => (false, Val::none()),
+            };
+            if let Some(pat) = b.pattern {
+                self.bind_pattern_inits(pat, has_init, &val);
+            }
         }
         Ok(())
     }
