@@ -1,0 +1,16 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 56
+expression: render_mem(src)
+---
+error[E1001]: `p.0.n` is used here after its value moved away
+ --> mem:///main.lu:6:13
+  |
+4 |     let (x, _) = p
+  |          - `p.0` moved here
+5 |     let b = p.1.n
+6 |     let c = p.0.n
+  |             ^^^^^ used after the move
+  |
+  = note: `p.0.n` is part of `p.0`; moving one empties the other. Disjoint fields stay usable.
+  = note: re-initializing the place (assigning to it) also makes it usable again.

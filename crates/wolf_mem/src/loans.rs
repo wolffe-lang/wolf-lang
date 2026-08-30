@@ -371,6 +371,7 @@ mod tests {
                     sites: Vec::new(),
                     entry: BlockId(0),
                     exit: BlockId(0),
+                    pattern_moves: Default::default(),
                 },
             }
         }

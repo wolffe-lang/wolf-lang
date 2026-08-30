@@ -2099,6 +2099,17 @@ impl<'t> Machine<'t> {
     }
 
     fn bind_decl(&mut self, pat: Option<&'t GreenNode>, init: Option<&'t GreenNode>) -> E<Flow> {
+        // s128 (#173): a tuple pattern over a PLACE moves each bound
+        // element out of its own sub-place (partial moves — the static
+        // tier's element story, mirrored dynamically); `_` leaves its
+        // element untouched, so the source stays element-wise live.
+        if let (Some(pat), Some(e)) = (pat, init)
+            && pat.kind == SyntaxKind::TuplePat
+            && let Some(base) = self.place_of(e)?
+        {
+            self.bind_tuple_from_place(pat, &base)?;
+            return Ok(Flow::Val(Value::Unit));
+        }
         let v = match init {
             Some(e) => match self.eval(e)? {
                 Flow::Val(v) => v,
@@ -2155,7 +2166,52 @@ impl<'t> Machine<'t> {
         Ok(())
     }
 
+    /// Element-wise destructure of a tuple PLACE (s128, #173): each
+    /// bound element is taken from `base.i` — a copy for Copy values,
+    /// a partial move otherwise; wildcards touch nothing; nested tuple
+    /// patterns recurse into deeper sub-places.
+    fn bind_tuple_from_place(&mut self, pat: &'t GreenNode, base: &Place) -> E<()> {
+        let subs: Vec<&'t GreenNode> = pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+        for (i, sub) in subs.iter().enumerate() {
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let mut ep = base.clone();
+            ep.path.push(PStep::Field(i.to_string()));
+            if sub.kind == SyntaxKind::TuplePat {
+                self.bind_tuple_from_place(sub, &ep)?;
+                continue;
+            }
+            let v = self.take_value(&ep, sub.span)?;
+            self.bind_pattern(sub, v)?;
+        }
+        Ok(())
+    }
+
     fn bind_pattern(&mut self, pat: &'t GreenNode, v: Value) -> E<()> {
+        // s128 (#173): tuple patterns bind element-wise — `_`
+        // discards, nested tuples recurse. Tuples arrive as the
+        // positional Struct value the TupleExpr evaluator builds.
+        if pat.kind == SyntaxKind::TuplePat {
+            let subs: Vec<&'t GreenNode> =
+                pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+            let Value::Struct { fields } = v else {
+                return self.refuse(
+                    "a tuple pattern over a non-tuple value in checked execution",
+                    pat.span,
+                );
+            };
+            if fields.len() != subs.len() {
+                return self.refuse(
+                    "a tuple pattern with a mismatched arity in checked execution",
+                    pat.span,
+                );
+            }
+            for (sub, (_, ev)) in subs.iter().zip(fields) {
+                self.bind_pattern(sub, ev)?;
+            }
+            return Ok(());
+        }
         let mut binds = Vec::new();
         collect_binding_spans(pat, &mut binds);
         if binds.is_empty() {

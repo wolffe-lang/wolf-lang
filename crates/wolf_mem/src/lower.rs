@@ -296,6 +296,10 @@ pub(crate) struct Lowerer<'t> {
     promoted: Vec<RegionId>,
     /// Any placement demand failed (E1004/E1010 fired).
     conflicted: bool,
+    /// Move sites that are binding patterns (s128 #173): E1001 skips
+    /// the `copy`-at-the-move fix-it there (`copy` is not pattern
+    /// grammar).
+    pattern_moves: Vec<Span>,
     /// `ρ_static`, once demanded (fn bodies; item initializers use it
     /// as their ambient).
     static_region: Option<RegionId>,
@@ -3884,6 +3888,18 @@ impl<'t> Lowerer<'t> {
     /// is the sequence of single bindings (D63).
     fn lower_binders(&mut self, stmt: &'t GreenNode) -> R<()> {
         for b in wolf_ast::binding_binders(stmt) {
+            // s128 (#173): a tuple pattern over a PLACE initializer
+            // moves each bound element out of its own sub-place —
+            // partial moves per the tier-0 discipline; `_` leaves its
+            // element untouched.
+            if let (Some(pat), Some(init)) = (b.pattern, b.init)
+                && pat.kind == SyntaxKind::TuplePat
+                && !self.is_raw_index(init)
+                && let Some((place, ty)) = self.as_place(init)
+            {
+                self.bind_tuple_from_place(pat, place, ty);
+                continue;
+            }
             let (has_init, val) = match b.init {
                 Some(init) => (true, self.eval_value(init)?),
                 None => (false, Val::none()),
@@ -3893,6 +3909,60 @@ impl<'t> Lowerer<'t> {
             }
         }
         Ok(())
+    }
+
+    /// `let (x, y) = p` where `p` names a place: every element place
+    /// is interned first (the move analysis expands partial residue
+    /// over the interned universe), then each BOUND element is
+    /// consumed from its own sub-place — a copy for Copy elements, a
+    /// move otherwise — and bound as a single binding. Nested tuple
+    /// patterns recurse; `_` elements are interned but never touched.
+    fn bind_tuple_from_place(
+        &mut self,
+        pat: &'t GreenNode,
+        base: PlaceId,
+        base_ty: Option<Ty<'t>>,
+    ) {
+        let subs: Vec<&'t GreenNode> = pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+        let elems = base_ty.and_then(|t| self.fields_of(t));
+        let base_place = self.places.get(base).clone();
+        let mut eplaces = Vec::with_capacity(subs.len());
+        let n = subs.len().max(elems.as_ref().map(|e| e.len()).unwrap_or(0));
+        for i in 0..n {
+            let ety = elems.as_ref().and_then(|e| e.get(i)).map(|(_, t)| *t);
+            let mut proj = base_place.proj.clone();
+            proj.push(Proj::Field(i.to_string()));
+            let ep = self.places.intern(
+                Place {
+                    base: base_place.base.clone(),
+                    proj,
+                },
+                ety.map(|t| is_copy(t, 0)).unwrap_or(false),
+            );
+            eplaces.push((ep, ety));
+        }
+        for (i, sub) in subs.iter().enumerate() {
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let Some(&(ep, ety)) = eplaces.get(i) else {
+                continue;
+            };
+            if sub.kind == SyntaxKind::TuplePat {
+                self.bind_tuple_from_place(sub, ep, ety);
+                continue;
+            }
+            let val = if self.places.is_copy(ep) {
+                Val::none()
+            } else {
+                self.val_of_place(ep, sub.span)
+            };
+            if !self.places.is_copy(ep) {
+                self.pattern_moves.push(sub.span);
+            }
+            self.use_value(ep, sub.span);
+            self.bind_pattern_inits(sub, true, &val);
+        }
     }
 
     /// A local `const` binds like a `let` (its comptime evaluation is
@@ -4097,6 +4167,7 @@ impl<'t> Lowerer<'t> {
             lent_region: Vec::new(),
             promoted: Vec::new(),
             conflicted: false,
+            pattern_moves: Default::default(),
             static_region: None,
             open_stack: Vec::new(),
             region_parent: HashMap::new(),
@@ -4248,6 +4319,7 @@ impl<'t> Lowerer<'t> {
                 sites: self.sites,
                 entry: BlockId(0),
                 exit: BlockId(1),
+                pattern_moves: self.pattern_moves,
             },
             diags: self.diags,
             regions,

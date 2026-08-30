@@ -879,3 +879,32 @@ fn raw_row_at_assignment_binds() {
         0,
     );
 }
+
+/// s128 (#173): a tuple pattern over a place moves each BOUND element
+/// out of its own sub-place — `_` leaves its element live, so the
+/// checked executor reads it after the destructure without a trap.
+#[test]
+fn tuple_destructure_moves_elements_not_the_whole() {
+    assert_exit(
+        "struct Inner { n: int }\n\
+         fn main() -> !int {\n    \
+             var p = (Inner { n: 1 }, Inner { n: 2 })\n    \
+             let (x, _) = p\n    \
+             let b = p.1.n\n    \
+             if x.n + b == 3 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}
+
+/// Nested tuples and `_` discards bind element-wise (s128, #173).
+#[test]
+fn tuple_destructure_nested_and_wildcards() {
+    assert_exit(
+        "fn main() -> !int {\n    \
+             let (a, (b, _), c) = (1, (2, 3), 4)\n    \
+             if a + b + c == 7 { 0 } else { 1 }\n\
+         }\n",
+        0,
+    );
+}

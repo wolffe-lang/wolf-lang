@@ -1254,3 +1254,20 @@ fn clean_write_after_a_dyn_pairs_last_use() {
          }\n",
     );
 }
+
+#[test]
+fn e1001_tuple_destructure_moves_elements() {
+    // s128 (#173): `let (x, _) = p` moves p.0 ONLY — p.1 stays
+    // usable, whole-p and p.0 reuse are the error.
+    snap(
+        "e1001_tuple_destructure",
+        "struct Inner { n: int }\n\
+         fn main() -> !int {\n    \
+             var p = (Inner { n: 1 }, Inner { n: 2 })\n    \
+             let (x, _) = p\n    \
+             let b = p.1.n\n    \
+             let c = p.0.n\n    \
+             x.n + b + c\n\
+         }\n",
+    );
+}

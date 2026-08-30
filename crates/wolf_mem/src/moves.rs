@@ -243,13 +243,17 @@ fn report(cfg: &Cfg, use_span: Span, place: PlaceId, why: Emptied, moved: PlaceI
             "{both}; moving one empties the other. Disjoint fields stay usable."
         ));
     }
-    d.with_suggestion(Suggestion::new(
-        "to keep the original, copy it at the move".to_string(),
-        vec![(
-            Span::new(why.span.file, why.span.lo, why.span.lo),
-            "copy ".to_string(),
-        )],
-        Applicability::Maybe,
-    ))
-    .with_note("re-initializing the place (assigning to it) also makes it usable again.")
+    // A destructure's element move happens at a binding PATTERN, where
+    // `copy` is not grammar (s128 #173) — the fix-it would not parse.
+    if !cfg.pattern_moves.contains(&why.span) {
+        d = d.with_suggestion(Suggestion::new(
+            "to keep the original, copy it at the move".to_string(),
+            vec![(
+                Span::new(why.span.file, why.span.lo, why.span.lo),
+                "copy ".to_string(),
+            )],
+            Applicability::Maybe,
+        ));
+    }
+    d.with_note("re-initializing the place (assigning to it) also makes it usable again.")
 }
