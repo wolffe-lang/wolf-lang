@@ -699,8 +699,11 @@ fn symbol_of(node: &GreenNode, src: &[u8], nested: bool) -> Option<DocSymbol> {
             } else {
                 SymbolKind::Var
             };
-            // Binding names live in the pattern; take its identifiers.
-            let pat = node.nodes().find(|n| wolf_ast::is_pattern_kind(n.kind))?;
+            // Binding names live in the pattern; take the first
+            // binder's first identifier (a comma group has several —
+            // D63).
+            let binders = wolf_ast::binding_binders(node);
+            let pat = binders.iter().find_map(|b| b.pattern)?;
             let first = pattern_idents(pat).next()?;
             Some(leaf(text(first), kind, first.span))
         }

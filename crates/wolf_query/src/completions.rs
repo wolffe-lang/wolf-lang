@@ -330,20 +330,21 @@ fn bindings_in_scope(node: &GreenNode, src: &[u8], cursor: usize, bag: &mut Bag)
 }
 
 fn push_binding(n: &GreenNode, src: &[u8], bag: &mut Bag) {
-    let ty = n
-        .nodes()
-        .find(|c| wolf_ast::is_type_kind(c.kind))
-        .map(|t| node_text(t, src));
-    let Some(pat) = n.nodes().find(|c| wolf_ast::is_pattern_kind(c.kind)) else {
-        return;
-    };
-    for tok in pattern_idents(pat) {
-        let label = String::from_utf8_lossy(tok.text(src)).into_owned();
-        let mut c = Completion::new(label.clone(), CompletionKind::Variable);
-        if let Some(ty) = &ty {
-            c = c.detail(format!("{label}: {ty}"));
+    // Every binder of the declaration (a comma group has several —
+    // D63), each with its own ascription.
+    for b in wolf_ast::binding_binders(n) {
+        let ty = b.ty.map(|t| node_text(t, src));
+        let Some(pat) = b.pattern else {
+            continue;
+        };
+        for tok in pattern_idents(pat) {
+            let label = String::from_utf8_lossy(tok.text(src)).into_owned();
+            let mut c = Completion::new(label.clone(), CompletionKind::Variable);
+            if let Some(ty) = &ty {
+                c = c.detail(format!("{label}: {ty}"));
+            }
+            bag.push(c);
         }
-        bag.push(c);
     }
 }
 
@@ -641,12 +642,15 @@ fn declared_annotation(
         for c in n.nodes() {
             let is_binding = matches!(c.kind, SyntaxKind::LetDecl | SyntaxKind::VarDecl);
             if is_binding && c.span.hi as usize <= dot {
-                let names_match = c
-                    .nodes()
-                    .find(|p| wolf_ast::is_pattern_kind(p.kind))
-                    .is_some_and(|p| pattern_idents(p).any(|t| t.text(src) == name.as_bytes()));
-                if names_match && let Some(ty) = c.nodes().find(|t| wolf_ast::is_type_kind(t.kind))
-                {
+                // The binder that names `name` (a comma group has
+                // several — D63) carries the ascription that counts.
+                let owner_ty = wolf_ast::binding_binders(c).into_iter().find_map(|b| {
+                    let named = b
+                        .pattern
+                        .is_some_and(|p| pattern_idents(p).any(|t| t.text(src) == name.as_bytes()));
+                    if named { b.ty } else { None }
+                });
+                if let Some(ty) = owner_ty {
                     *hit = Some(node_text(ty, src));
                 }
             } else if c.span.lo as usize <= dot && dot <= c.span.hi as usize {
