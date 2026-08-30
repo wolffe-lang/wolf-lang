@@ -199,6 +199,7 @@
     "gram.lex": "01-grammar.md",
     "gram.lex.char": "01-grammar.md",
     "gram.lex.comment": "01-grammar.md",
+    "gram.lex.ident": "01-grammar.md",
     "gram.lex.newline": "01-grammar.md",
     "gram.lex.number": "01-grammar.md",
     "gram.lex.rails": "01-grammar.md",

@@ -237,9 +237,16 @@ pub fn link_check(docs: &[(&str, &str)]) -> Vec<String> {
 }
 
 /// All `[a.b.c]`-shaped anchors in a document (dotted, lowercase-alnum).
+///
+/// F-0100 (#170/#177): a `[` that does not open an anchor — a bare
+/// literal in prose, like s126's ``the byte after `#!` is `[`:`` — must
+/// not consume the scan up to some LATER `]`. The old scanner paired
+/// every `[` with the next `]` and resumed past it, so a bare `[`
+/// swallowed the following real anchor whole (`[gram.lex.ident]`'s only
+/// occurrence in 01-grammar.md, twice). Now the scan resumes just after
+/// a non-anchor `[`, so every candidate `[` is examined on its own.
 fn anchors_in(body: &str) -> Vec<String> {
     let mut out = Vec::new();
-    let bytes = body.as_bytes();
     let mut i = 0;
     while let Some(open) = body[i..].find('[').map(|o| i + o) {
         let Some(close) = body[open..].find(']').map(|c| open + c) else {
@@ -253,9 +260,11 @@ fn anchors_in(body: &str) -> Vec<String> {
             });
         if dotted {
             out.push(inner.to_string());
+            i = close + 1;
+        } else {
+            i = open + 1;
         }
-        i = close + 1;
-        if i >= bytes.len() {
+        if i >= body.len() {
             break;
         }
     }
@@ -322,6 +331,30 @@ mod tests {
         let a = got.find("A ::=").unwrap();
         let b = got.find("B ::=").unwrap();
         assert!(a < b);
+    }
+
+    /// F-0100 (#170/#177): the exact shape that swallowed
+    /// `[gram.lex.ident]` — a bare `` `[` `` literal in prose ahead of a
+    /// real anchor. The bare bracket must not pair with the anchor's `]`.
+    #[test]
+    fn a_bare_bracket_literal_does_not_swallow_the_next_anchor() {
+        let md = "unless the byte after `#!` is `[`: `#![` is the opener\n\
+                  (`[gram.attr.index]`), one token. Elsewhere `#[` opens an\n\
+                  attribute, `#![` opens a file-wide attribute.\n\n\
+                  ### 1.3 Identifiers `[gram.lex.ident]`\n";
+        let got = anchors_in(md);
+        assert!(got.contains(&"gram.attr.index".to_string()), "{got:?}");
+        assert!(got.contains(&"gram.lex.ident".to_string()), "{got:?}");
+    }
+
+    /// The healed scanner still takes each real anchor once and moves on:
+    /// adjacent anchors, an unclosed trailing `[`, and a `[` at EOF.
+    #[test]
+    fn anchor_scan_edges_hold() {
+        assert_eq!(anchors_in("[a.b][c.d]"), ["a.b", "c.d"]);
+        assert_eq!(anchors_in("[not an anchor] then [mem.a.1]"), ["mem.a.1"]);
+        assert_eq!(anchors_in("tail ["), Vec::<String>::new());
+        assert_eq!(anchors_in("[x.y] trailing [unclosed"), ["x.y"]);
     }
 
     #[test]
