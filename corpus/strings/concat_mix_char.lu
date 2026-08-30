@@ -1,0 +1,13 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.str.concat.mix
+//!
+//! D62's second mix pin: `str + char` stays E0409 — a char joins a
+//! str through a hole (`"{s}{c}"`), never by `+`.
+
+fn main() -> !int {
+    let s = "ab"
+    let t = s + 'c'
+    print(t)
+    0
+}

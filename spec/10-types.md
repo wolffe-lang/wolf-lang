@@ -187,6 +187,31 @@ conversion, and its numeric arms are closed and total:
   are the E0413 mismatch they look like. The number is spelled, not
   ambient: `{c as int}`.
 
+## §5 `str` concatenation `[type.str]`
+
+- `[type.str.concat]` **`+` and `+=` on two `str`s are
+  interpolation-append** (D62, ruled from live dogfooding — the
+  interpreter's behavior is the language): `s + u` is legal exactly
+  when BOTH operands are `str`, and means precisely `"{s}{u}"` — a
+  new `str` whose bytes are the operands' bytes in order (UTF-8
+  concatenation is closed; no boundary can be violated). `+` chains
+  left-associatively; `s += u` is `s = s + u`, in every place shape
+  an assignment admits. This is a builtin operator on the builtin
+  type, like `==` on `str` — NOT a trait bridge (no `Add` trait
+  opens; D49's bridge shape is untouched).
+
+- `[type.str.concat.mix]` **Mixed operands stay E0409** — `str + int`,
+  `str + char`, `int + str`, and their `+=` forms. The conversion is
+  spelled where it always was: inside an interpolation hole
+  (`t += "{count}"`). Interpolation remains the general surface and
+  is unchanged; `+` is its two-`str` special case, not a replacement.
+
+- `[type.str.concat.cost]` **The cost model is interpolation's**: a
+  fresh `str` per application — the compiler lowers `+` onto the same
+  strbuf path an interpolated string materializes through, so `+=` in
+  a loop is quadratic, never an amortized push. `std.strbuf` is the
+  builder. The diagnostics say so beside the refusal note.
+
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
 beyond what literal adoption needs) nor the general narrowing integer

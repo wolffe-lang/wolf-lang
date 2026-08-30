@@ -1,0 +1,13 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.str.concat.mix
+//!
+//! D62's third mix pin: `int + str` stays E0409 from the left too —
+//! `+` never coerces either side toward `str`.
+
+fn main() -> !int {
+    let s = "ab"
+    let t = 1 + s
+    print(t)
+    0
+}

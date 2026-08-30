@@ -1,0 +1,14 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.str.concat.mix
+//!
+//! D62's first mix pin: `str + int` stays E0409 on both machines —
+//! the conversion is spelled inside an interpolation hole
+//! (`"{s}{n}"`), never by `+`.
+
+fn main() -> !int {
+    let s = "ab"
+    let t = s + 1
+    print(t)
+    0
+}

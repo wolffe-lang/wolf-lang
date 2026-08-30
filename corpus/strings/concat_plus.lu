@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="abcdef xab xab6 a1b2")
+//! phase: run
+//! conforms: type.str.concat, type.str.concat.cost
+//!
+//! D62: `+`/`+=` on two strs is interpolation-append — `s + u` is
+//! precisely `"{s}{u}"`, chaining left-associatively; `s += u` is
+//! `s = s + u`. The compiler lowers onto the SAME strbuf path
+//! interpolation materializes through (a fresh str per application —
+//! `std.strbuf` is the builder for loops). The interpolation-built
+//! operand shows `+=` and holes composing.
+
+fn main() -> !int {
+    let s = "ab"
+    let t = s + "cd" + "ef"
+    var u = "x"
+    u += s
+    let saved = u
+    u += "{t.len}"
+    var acc = ""
+    acc += "a" + "1"
+    acc += "b" + "2"
+    print("{t} {saved} {u} {acc}")
+    0
+}
