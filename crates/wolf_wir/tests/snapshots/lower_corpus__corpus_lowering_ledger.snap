@@ -116,7 +116,7 @@ grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/interp_nested.lu: lowers
 grammar/let_group.lu: lowers
 grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
-grammar/let_group_destructure.lu: refused — destructuring bindings (tuple/struct patterns, c06)
+grammar/let_group_destructure.lu: lowers
 grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
@@ -185,6 +185,9 @@ memory/closure_kill_list.lu: lowers
 memory/closure_region_capture.lu: refused — a region captured by a closure (open it in the enclosing frame — c25 closeout)
 memory/closure_value_paths.lu: lowers
 memory/defer_order.lu: lowers
+memory/destructure_bind.lu: lowers
+memory/destructure_partial_live.lu: lowers
+memory/destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)

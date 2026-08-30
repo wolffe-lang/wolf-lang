@@ -1325,7 +1325,7 @@ where the move happens — `copy a` produces an independent value of
 any type — or give the name a new value first: assigning to a
 moved-from place makes it live again.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1002 — this needs exclusive access, but the value is in use here
 

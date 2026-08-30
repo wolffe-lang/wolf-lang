@@ -1,12 +1,11 @@
 //! check: run(exit=0, stdout="1 4 5 6")
-//! phase: mem
+//! phase: run
 //! conforms: gram.item.let
 //!
 //! D63 with a destructuring binder in the group: `(x, y) = pair()`
 //! rides between two plain binders, and the binder after it reads a
-//! destructured name. Honest through `mem` today — the lowering half
-//! of destructuring bindings is #173 (c06); this file flips to
-//! `phase: run` when it lands.
+//! destructured name. Waited at `mem` for one item; #173's landing
+//! (s128 item 2) flipped it to `phase: run`.
 
 fn pair() -> (int, int) { (4, 5) }
 

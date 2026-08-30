@@ -1,0 +1,19 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.move.2, gram.item.let
+//!
+//! The partial-move fault twin (#173): the destructure moved `p.0`,
+//! so reading `p.0.n` afterwards is use-after-move — while the
+//! sibling read of `p.1.n` on the line before stays legal.
+//! Dynamically this is lupin's use-after-move trap, the
+//! [conf.trap.map] pairing for E1001.
+
+struct Inner { n: int }
+
+fn main() -> !int {
+    var p = (Inner { n: 1 }, Inner { n: 2 })
+    let (x, _) = p
+    let b = p.1.n
+    let c = p.0.n
+    x.n + b + c
+}

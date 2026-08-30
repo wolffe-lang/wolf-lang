@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="1 2")
+//! phase: run
+//! conforms: gram.item.let, mem.tier0.move.2
+//!
+//! The element-move half of #173, witnessed at RUN time: `let (x, _)
+//! = p` moves `p.0` ONLY — `p.1` is untouched and stays readable
+//! after the destructure, per the tier-0 partial-move discipline
+//! (each element its own place). lupin 0.1.16 still moves the whole
+//! tuple here (traps use-after-move on `p.1`) — the interpreter's
+//! element-wise half rides is28 beside its D63 group; recorded with
+//! the s128 landing.
+
+struct Inner { n: int }
+
+fn main() -> !int {
+    var p = (Inner { n: 1 }, Inner { n: 2 })
+    let (x, _) = p
+    let b = p.1.n
+    print("{x.n} {b}")
+    0
+}

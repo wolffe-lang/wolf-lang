@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="34 wolf 34 3 7 1 2 3 5 6")
+//! phase: run
+//! conforms: gram.item.let, mem.tier0.move.1
+//!
+//! Destructuring bindings (#173, the c06 residue paid): tuple
+//! patterns in `let`/`var` bind element-wise — from a call result,
+//! from a tuple literal, from a named place; `_` discards its
+//! element; nested tuples recurse. Three-lane, and lupin runs the
+//! same program to the same bytes.
+
+fn pair() -> (int, str) { (34, "wolf") }
+
+fn main() -> !int {
+    let (x, y) = pair()
+    var (i, c) = (0, 1)
+    i += x
+    c += 2
+    let (a, _) = (7, 8)
+    let (p, (q, r)) = (1, (2, 3))
+    let t = (5, 6)
+    let (m, n) = t
+    print("{x} {y} {i} {c} {a} {p} {q} {r} {m} {n}")
+    0
+}

@@ -1210,12 +1210,21 @@ const ALL_THREE_FLOOR: usize = 207;
 // `let_group_destructure` waits at `mem` for #173's landing. Totals
 // 227/249/249, union 263, all-three 213. Counts measured by this
 // gate, not predicted.
+// s128 item 2 ratchet over 404 entries: destructuring bindings land
+// (#173). Two new run witnesses (`memory/destructure_bind.lu`,
+// `memory/destructure_partial_live.lu`) run three-lane, and
+// `grammar/let_group_destructure.lu` — parked at `mem` by item 1 —
+// now runs on every lane too, so every count moves +3 (one parked
+// file moved lanes, two are population). The partial-move fault twin
+// (`destructure_partial_move`, E1001) joins the rejection ledger.
+// Totals 230/252/252, union 266, all-three 216. Counts measured by
+// this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 227), ("native", 249), ("release", 249)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 230), ("native", 252), ("release", 252)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 263;
+const UNION_FLOOR: usize = 266;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 213;
+const ALL_THREE_FLOOR: usize = 216;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
