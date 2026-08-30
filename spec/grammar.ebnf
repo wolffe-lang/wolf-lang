@@ -36,8 +36,9 @@ view_set  ::= '.' '{' IDENT (',' IDENT)* '}'
 fn_ret    ::= '->' ret_type
 ret_type  ::= type ('!' error_row)?   /* `-> !T` parses via type's '!' type */
 
-let_item ::= 'let' pattern (':' type)? '=' expr TERM
-var_item ::= 'var' pattern (':' type)? '=' expr TERM
+let_item ::= 'let' binder (',' binder)* TERM
+var_item ::= 'var' binder (',' binder)* TERM
+binder ::= pattern (':' type)? '=' expr
 const_item ::= 'const' IDENT (':' type)? '=' expr TERM
 
 type_item   ::= 'type' IDENT generics? '=' type_def TERM?

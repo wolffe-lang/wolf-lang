@@ -240,13 +240,32 @@ Counter-example: `fn f(x: mut int)` does not parse — modes precede the
 ### 2.4 Bindings & constants `[gram.item.let]`
 
 ```ebnf
-let_item ::= 'let' pattern (':' type)? '=' expr TERM
-var_item ::= 'var' pattern (':' type)? '=' expr TERM
+let_item ::= 'let' binder (',' binder)* TERM
+var_item ::= 'var' binder (',' binder)* TERM
+binder ::= pattern (':' type)? '=' expr
 const_item ::= 'const' IDENT (':' type)? '=' expr TERM
 ```
 
 `let` immutable, `var` mutable, `const` comptime-evaluated. Item-level and
 statement-level share the grammar. `let (a, b) = pair` destructures.
+
+**Comma groups** (D63): one keyword may carry several *complete* binders
+— `var i = 0, c = 1`, `let a: int = 1, (x, y) = pair()` — each with its
+own pattern, optional ascription, and initializer. Unambiguous by
+construction: every binder has its own `=`, call arguments are
+bracketed, and wolf has no unparenthesized tuple expressions, so a
+comma at statement depth can only begin the next binder. Semantics are
+exactly the sequence of single bindings, left to right — a later
+binder may read an earlier one. `wolf fmt` keeps a group on one line
+when it fits and breaks one-binder-per-line when it does not; the
+group is never rewritten into separate statements (D34).
+
+Refused by name: one initializer for several names (`var i, c = 0` —
+E0201; the note offers `var (i, c) = (0, 0)` and `var i = 0, c = 0`);
+a binder without an initializer (`var i, c` — bindings always
+initialize); Python's bare tuple (`let a, b = 1, 2` — E0201 by name:
+it needs unparenthesized tuple expressions on both sides, which wolf
+does not have; the tuple pattern with two parens covers the use).
 
 ### 2.5 Types `[gram.item.type]`
 

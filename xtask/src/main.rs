@@ -1201,12 +1201,45 @@ const ALL_THREE_FLOOR: usize = 207;
 // the rejection ledger (115 → 117). No pre-existing file moved
 // lanes. Totals 226/248/248, union 262, all-three 212. Counts
 // measured by this gate, not predicted.
+// s128 ratchet over 401 entries: comma-grouped binders (D63). One new
+// run-phase witness — `grammar/let_group.lu`, the D63 group with a
+// later binder reading an earlier one — runs on every lane, so every
+// count moves +1 (a POPULATION change; no pre-existing file moved
+// lanes). The two refusal teach-notes (`let_group_one_init`,
+// `let_group_bare_tuple`) join the rejection ledger, and
+// `let_group_destructure` waits at `mem` for #173's landing. Totals
+// 227/249/249, union 263, all-three 213. Counts measured by this
+// gate, not predicted.
+// s128 item 2 ratchet over 404 entries: destructuring bindings land
+// (#173). Two new run witnesses (`memory/destructure_bind.lu`,
+// `memory/destructure_partial_live.lu`) run three-lane, and
+// `grammar/let_group_destructure.lu` — parked at `mem` by item 1 —
+// now runs on every lane too, so every count moves +3 (one parked
+// file moved lanes, two are population). The partial-move fault twin
+// (`destructure_partial_move`, E1001) joins the rejection ledger.
+// Totals 230/252/252, union 266, all-three 216. Counts measured by
+// this gate, not predicted.
+// s128 item 3 ratchet over 408 entries: D62 lands (#172) — `+`/`+=`
+// on two strs is interpolation-append. One new run witness
+// (`strings/concat_plus.lu`: the legal chain, `+=` in every spelling
+// the program needs) runs three-lane, so every count moves +1; the
+// three mix pins (`concat_mix_int`/`concat_mix_char`/`concat_int_str`,
+// E0409) join the rejection ledger. Totals 231/253/253, union 267,
+// all-three 217. Counts measured by this gate, not predicted.
+// s128 item 4 ratchet over 412 entries: List slicing lands (#171,
+// `[mem.list.slice]`). Four new run-phase witnesses, each three-lane
+// — `memory/list_slice.lu` (open/`^n`/closed forms + `for` over a
+// slice value), `memory/list_slice_edges.lu` (the empty edges and
+// double-`^n`), and the two `faults/` bounds twins (oob, reversed —
+// traps are runs) — so every count moves +4. Totals 235/257/257,
+// union 271, all-three 221. Counts measured by this gate, not
+// predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 226), ("native", 248), ("release", 248)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 235), ("native", 257), ("release", 257)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 262;
+const UNION_FLOOR: usize = 271;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 212;
+const ALL_THREE_FLOOR: usize = 221;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

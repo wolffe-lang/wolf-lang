@@ -24,8 +24,8 @@ use std::collections::HashMap;
 
 use wolf_ast::{
     Arg, AssignStmt, BinExpr, Block, BracketApply, CallExpr, ConstDecl, ExprStmt, FieldInit,
-    FnDecl, IfExpr, LetDecl, MemberExpr, ParenExpr, PathExpr, PrefixExpr, StringExpr, StructLit,
-    SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_expr_kind, is_type_kind,
+    FnDecl, IfExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr, StringExpr, StructLit, SyntaxKind,
+    TupleExpr, WhileExpr, is_expr_kind, is_type_kind,
 };
 use wolf_span::Span;
 
@@ -1212,19 +1212,25 @@ impl<'a> Engine<'a> {
                 }
             }
             SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
-                let parts = match node.kind {
-                    SyntaxKind::LetDecl => LetDecl::cast(node).map(|d| (d.pattern(), d.init())),
-                    _ => VarDecl::cast(node).map(|d| (d.pattern(), d.init())),
-                };
-                let Some((Some(pat), Some(init))) = parts else {
-                    gap!(node.span, "a binding without an initializer at comptime");
-                };
-                let Some(name) = single_ident_name(pat, self.src(file)) else {
-                    gap!(node.span, "a pattern binding at comptime");
-                };
+                // Binders schedule right to left on the work stack so
+                // they EVALUATE left to right (D63: a group is the
+                // sequence of single bindings).
+                let binders = wolf_ast::binding_binders(node);
+                let mut steps = Vec::new();
+                for b in &binders {
+                    let (Some(pat), Some(init)) = (b.pattern, b.init) else {
+                        gap!(node.span, "a binding without an initializer at comptime");
+                    };
+                    let Some(name) = single_ident_name(pat, self.src(file)) else {
+                        gap!(node.span, "a pattern binding at comptime");
+                    };
+                    steps.push((name, init));
+                }
                 let frame = frames.last_mut().expect("frame");
-                frame.work.push(Step::Bind { name });
-                frame.work.push(Step::Eval(init));
+                for (name, init) in steps.into_iter().rev() {
+                    frame.work.push(Step::Bind { name });
+                    frame.work.push(Step::Eval(init));
+                }
             }
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(node);

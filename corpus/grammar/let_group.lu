@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="2 6 2 5\n10 wolf")
+//! phase: run
+//! conforms: gram.item.let
+//!
+//! D63: one `let`/`var` carries several complete binders — each with
+//! its own pattern, optional ascription, and initializer. Semantics
+//! are the sequence of single bindings, left to right: `b = a + 3`
+//! reads the `a` bound one comma earlier, and the `var` names stay
+//! independently mutable afterwards.
+
+fn main() -> !int {
+    var i = 0, c = 1
+    let a = 2, b = a + 3
+    i += a
+    c += b
+    print("{i} {c} {a} {b}")
+    let n: int = 10, s: str = "wolf"
+    print("{n} {s}")
+    0
+}

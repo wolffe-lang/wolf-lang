@@ -305,6 +305,10 @@ pub struct Cfg {
     pub entry: BlockId,
     /// The single normal/error exit (nothing is analyzed past it).
     pub exit: BlockId,
+    /// Move sites that ARE binding patterns (a destructure's element
+    /// moves, s128 #173): the `copy`-at-the-move fix-it does not parse
+    /// there, so E1001 skips it.
+    pub pattern_moves: Vec<wolf_span::Span>,
 }
 
 impl Cfg {

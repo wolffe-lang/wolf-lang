@@ -1,0 +1,14 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.item.let
+//!
+//! D63 refusal: one initializer for several names. `var i, c = 0`
+//! leaves `i` without its own `=`; the note offers both spellings —
+//! destructure (`var (i, c) = (0, 0)`) or one initializer per name
+//! (`var i = 0, c = 0`).
+
+fn main() -> !int {
+    var i, c = 0
+    print("{i} {c}")
+    0
+}

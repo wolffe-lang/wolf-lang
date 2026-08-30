@@ -46,9 +46,9 @@ use std::collections::HashMap;
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, BracketApply, BreakExpr, CallExpr, CastExpr, ConstDecl,
-    DeferStmt, ElseExpr, ExprStmt, ForExpr, FromEndExpr, GreenNode, IfExpr, LetDecl, LoopExpr,
-    MatchArm, MatchExpr, ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr,
-    SyntaxKind, TryExpr, VarDecl, WhileExpr,
+    DeferStmt, ElseExpr, ExprStmt, ForExpr, FromEndExpr, GreenNode, IfExpr, LoopExpr, MatchArm,
+    MatchExpr, ParamMode, ParenExpr, PrefixExpr, RangeExpr, ReturnExpr, StringExpr, SyntaxKind,
+    TryExpr, WhileExpr,
 };
 use wolf_mem::byteview::{Lend, Lender};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
@@ -3033,13 +3033,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
-            SyntaxKind::LetDecl => {
-                let d = LetDecl::cast(stmt).expect("kind");
-                self.lower_binding(d.pattern(), d.init(), stmt.span)
-            }
-            SyntaxKind::VarDecl => {
-                let d = VarDecl::cast(stmt).expect("kind");
-                self.lower_binding(d.pattern(), d.init(), stmt.span)
+            SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+                // A comma group lowers as the sequence of single
+                // bindings, left to right (D63).
+                let mut last = Flow::Val(None);
+                for b in wolf_ast::binding_binders(stmt) {
+                    match self.lower_binding(b.pattern, b.init, b.node.span)? {
+                        Flow::Val(v) => last = Flow::Val(v),
+                        other => return Ok(other),
+                    }
+                }
+                Ok(last)
             }
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(stmt).expect("kind");
@@ -3123,11 +3127,109 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
+            // s128 (#173): tuple patterns land; struct patterns have
+            // no grammar yet and every other pattern kind is refutable
+            // (sema's E0806 owns those).
+            SyntaxKind::TuplePat => {
+                let Some(init) = init else {
+                    return Err(refuse(
+                        "uninitialized bindings (definite-assignment lowering)",
+                        span,
+                    ));
+                };
+                let Some(sema_ty) = self.expr_sema_ty(init.span) else {
+                    return Err(refuse("a binding without a recorded type", span));
+                };
+                let Some(v) = flow_val!(self.lower_expr(init)) else {
+                    return Err(refuse("a typed binding of a valueless expression", span));
+                };
+                self.bind_tuple_value(pat, v, sema_ty, span)?;
+                Ok(Flow::Val(None))
+            }
             _ => Err(refuse(
                 "destructuring bindings (tuple/struct patterns, c06)",
                 pat.span,
             )),
         }
+    }
+
+    /// `let (x, y) = …` (s128, #173): the aggregate is evaluated ONCE,
+    /// then each bound element is extracted by `agg.get` — element-wise
+    /// moves per the tier-0 discipline (the mem rung already tracked
+    /// each element as its own place). `_` elements extract nothing;
+    /// nested tuple patterns recurse.
+    fn bind_tuple_value(
+        &mut self,
+        pat: &'t GreenNode,
+        agg: Value,
+        sema_ty: TyId,
+        span: Span,
+    ) -> R<()> {
+        let stripped = self.strip_sema(sema_ty);
+        let TyKind::Tuple(elem_tys) = self.table.kind(stripped).clone() else {
+            return Err(refuse("a tuple pattern over a non-tuple type", pat.span));
+        };
+        let subs: Vec<&'t GreenNode> = pat
+            .nodes()
+            .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+            .collect();
+        if subs.len() != elem_tys.len() {
+            return Err(refuse("a tuple pattern with a mismatched arity", pat.span));
+        }
+        let agg_ty = self.b.func.value_ty(agg);
+        let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
+            return Err(refuse("a tuple binding of a non-aggregate value", span));
+        };
+        if fields.len() != subs.len() {
+            return Err(refuse("a tuple binding with a mismatched layout", span));
+        }
+        for (i, sub) in subs.iter().enumerate() {
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let elem_sema = elem_tys[i];
+            let fty = fields[i];
+            let ev = self
+                .b
+                .ins(Opcode::AggGet, &[agg], &[fty], Aux::Int(i as i64))
+                .one();
+            match sub.kind {
+                SyntaxKind::TuplePat => self.bind_tuple_value(sub, ev, elem_sema, span)?,
+                SyntaxKind::IdentPat => {
+                    if matches!(
+                        self.table.kind(self.strip_sema(elem_sema)),
+                        TyKind::RegionTy
+                    ) {
+                        return Err(refuse("a region inside a destructured tuple", sub.span));
+                    }
+                    let name = self.text(sub.span);
+                    let var = self.b.declare_var(fty);
+                    if self.straight_line {
+                        self.b.mark_single_block(var);
+                    }
+                    self.b.def_var(var, ev);
+                    self.b.func.add_debug_var(name.clone(), ev, false);
+                    let bind = LocalBind::Val {
+                        var,
+                        wrapping: matches!(self.table.kind(elem_sema), TyKind::Wrapping(_)),
+                        unsigned: sema_unsigned(self.table, elem_sema),
+                        wir_ty: fty,
+                    };
+                    self.scopes
+                        .last_mut()
+                        .expect("scope")
+                        .binds
+                        .push((name, bind));
+                }
+                _ => {
+                    return Err(refuse(
+                        "this pattern shape in a destructuring binding (c06)",
+                        sub.span,
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn lower_binding_named(
@@ -6561,6 +6663,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         wty: TypeId,
         span: Span,
     ) -> R<Option<Value>> {
+        // D62 (s128): `+` whose result type is an aggregate is the
+        // two-`str` join — the ONLY aggregate sema admits into an
+        // arithmetic op — and it desugars onto the interpolation
+        // path's strbuf (no new runtime surface). Every `+=` place
+        // shape funnels through here too, so local/member/index
+        // compounds get the same lowering.
+        if op == SyntaxKind::Plus && matches!(self.b.module.types.get(wty), types::TypeData::Agg(_))
+        {
+            return Ok(Some(self.str_concat(a, b, span)?));
+        }
         if wty == types::F32 || wty == types::F64 {
             let fop = match op {
                 SyntaxKind::Plus => Opcode::Fadd,
@@ -9301,6 +9413,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(Some(v)))
     }
 
+    /// D62 (s128): `a + b` on two `str`s is precisely `"{a}{b}"` — the
+    /// SAME strbuf path interpolation materializes through (`[type.str]`;
+    /// no new runtime surface). A fresh `str` per application, by
+    /// design: the cost model is interpolation's, and `std.strbuf`
+    /// stays the builder for heavy loops.
+    fn str_concat(&mut self, a: Value, b: Value, span: Span) -> R<Value> {
+        let buf = self
+            .rt_call("__wolf_rt_strbuf_new", &[], Some(types::PTR))
+            .expect("strbuf handle");
+        let sp = self.b.iconst(types::I64, 0);
+        let (pa, la) = self.str_parts(a);
+        self.rt_call("__wolf_rt_strbuf_str", &[buf, pa, la, sp], None);
+        let (pb, lb) = self.str_parts(b);
+        self.rt_call("__wolf_rt_strbuf_str", &[buf, pb, lb, sp], None);
+        let (region, slot) = self.rt_slot(16);
+        self.rt_call_slot("__wolf_rt_strbuf_finish", &[buf], slot, region, None);
+        self.load_str_slot(slot, region, span)
+    }
+
     /// `[mem.str.get]`'s domain, INLINE (s77) — the test
     /// `__wolf_rt_str_get` makes, spelled in WIR so a slice costs no
     /// call. Two halves, exactly the shim's:
@@ -11242,6 +11373,89 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .filter_map(Arg::value)
                     .next()
                     .ok_or_else(|| refuse("an index without an operand", e.span))?;
+                // s128 (#171): `cs[a..b]` and the open/`^n` forms
+                // SLICE — the endpoints resolve exactly as str slices
+                // do (sc24 semantics, `range_endpoints`), the domain
+                // is `lo <=u hi <=u len` (lupin's bounds trap,
+                // measured), and the value is a FRESH List (lupin's
+                // copy semantics, measured): a new header, each
+                // element pushed from the source buffer in order.
+                if ix.kind == SyntaxKind::RangeExpr {
+                    let n = self.list_len_of(hdr);
+                    let Some((lo, hi)) = self.range_endpoints(ix, n, origin)? else {
+                        return Ok(Flow::Diverged);
+                    };
+                    let lo_ok = self
+                        .b
+                        .ins(
+                            Opcode::Icmp,
+                            &[lo, hi],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Ule),
+                        )
+                        .one();
+                    let hi_ok = self
+                        .b
+                        .ins(
+                            Opcode::Icmp,
+                            &[hi, n],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Ule),
+                        )
+                        .one();
+                    let ok = self
+                        .b
+                        .ins(Opcode::Band, &[lo_ok, hi_ok], &[types::BOOL], Aux::None)
+                        .one();
+                    if self.trap_unless(ok, TrapKind::Bounds) {
+                        return Ok(Flow::Diverged);
+                    }
+                    let esize = self.list_stride(ewty, e.span)?;
+                    let sz = self.b.iconst(types::I64, esize as i64);
+                    let out = self
+                        .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
+                        .expect("hdr");
+                    let header = self.b.create_block();
+                    let iparam = self.b.add_block_param(header, types::I64);
+                    self.b.ins_jmp(header, &[lo]);
+                    self.b.switch_to_block(header);
+                    self.b.gvn_push_scope();
+                    let cond = self
+                        .b
+                        .ins(
+                            Opcode::Icmp,
+                            &[iparam, hi],
+                            &[types::BOOL],
+                            Aux::IntCc(IntCc::Slt),
+                        )
+                        .one();
+                    let body_bb = self.b.create_block();
+                    let exit = self.b.create_block();
+                    self.b.ins_br(cond, body_bb, &[], exit, &[]);
+                    self.b.seal_block(body_bb);
+                    self.b.seal_block(exit);
+                    self.b.switch_to_block(body_bb);
+                    self.b.gvn_push_scope();
+                    // The source pointer is re-read inside the body
+                    // (the push may not touch it, but a hoisted copy
+                    // is a bug waiting for growth-aliasing; LICM lifts
+                    // the load when it is safe).
+                    let data = self.list_data(hdr);
+                    let p = self.list_elem_addr(data, iparam, esize);
+                    let r = self.foreign_buf_region();
+                    self.rt_call_foreign("__wolf_rt_list_push", &[out], Some((p, r)), None);
+                    let one = self.b.iconst(types::I64, 1);
+                    let inext = self
+                        .b
+                        .ins(Opcode::IaddWrap, &[iparam, one], &[types::I64], Aux::None)
+                        .one();
+                    self.b.ins_jmp(header, &[inext]);
+                    self.b.gvn_pop_scope();
+                    self.b.seal_block(header);
+                    self.b.switch_to_block(exit);
+                    self.b.gvn_pop_scope();
+                    return Ok(Flow::Val(Some(out)));
+                }
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {
                     return Err(refuse("a valueless List index", ix.span));
                 };

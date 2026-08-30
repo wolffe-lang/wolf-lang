@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 354
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -69,6 +70,8 @@ faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/index_origin_min_overflow.lu: lowers
 faults/index_origin_zero.lu: lowers
+faults/list_slice_oob.lu: lowers
+faults/list_slice_reversed.lu: lowers
 faults/overflow_add.lu: lowers
 faults/overflow_call_result.lu: lowers
 faults/overflow_elem_read.lu: lowers
@@ -113,6 +116,10 @@ grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
 grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/interp_nested.lu: lowers
+grammar/let_group.lu: lowers
+grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
+grammar/let_group_destructure.lu: lowers
+grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
@@ -180,6 +187,9 @@ memory/closure_kill_list.lu: lowers
 memory/closure_region_capture.lu: refused — a region captured by a closure (open it in the enclosing frame — c25 closeout)
 memory/closure_value_paths.lu: lowers
 memory/defer_order.lu: lowers
+memory/destructure_bind.lu: lowers
+memory/destructure_partial_live.lu: lowers
+memory/destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/div_zero.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
@@ -190,6 +200,8 @@ memory/list_elem_assign.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
 memory/list_session_struct.lu: lowers
+memory/list_slice.lu: lowers
+memory/list_slice_edges.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
@@ -312,6 +324,10 @@ strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/char_interp.lu: lowers
 strings/char_order.lu: lowers
 strings/chars_walk.lu: lowers
+strings/concat_int_str.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_mix_char.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_mix_int.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_plus.lu: lowers
 strings/empty_needle.lu: lowers
 strings/equality_lanes.lu: lowers
 strings/float_format.lu: lowers

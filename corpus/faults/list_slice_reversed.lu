@@ -1,0 +1,14 @@
+//! check: run(exit=trap(bounds))
+//! phase: run
+//! conforms: mem.list.slice, mem.ub.defined
+//!
+//! The reversed range is the same domain fault (#171): `cs[4..2]`
+//! traps `bounds` — never an empty slice, never a backwards walk
+//! (lupin 0.1.16 measured, same verdict).
+
+fn main() -> !int {
+    let cs = "abcdef".chars()
+    let bad = cs[4..2]
+    print("{bad.len}")
+    0
+}

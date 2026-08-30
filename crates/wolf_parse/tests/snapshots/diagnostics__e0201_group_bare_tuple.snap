@@ -1,0 +1,25 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+assertion_line: 23
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 15,
+            hi: 15,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [
+        "a comma groups complete bindings, each with its own `=`: `let a = 1, b = 2`. To unpack one value into several names, destructure with parens on both sides: `let (a, b) = (1, 2)`.",
+    ],
+    suggestions: [],
+}

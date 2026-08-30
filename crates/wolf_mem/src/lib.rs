@@ -309,8 +309,28 @@ fn lower_body(
             let params = fn_params(pkg, sigs, body, outer)?;
             Some(lowerer.lower_fn(&body.name, params, block))
         }
-        SyntaxKind::ConstDecl | SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+        SyntaxKind::ConstDecl => {
             let init = node.nodes().find(|n| is_expr_kind(n.kind))?;
+            Some(lowerer.lower_init(&body.name, init))
+        }
+        SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+            // The binder that declares THIS name — a comma group
+            // carries several, each its own body (D63).
+            let src = &pkg.files[body.file].raw.src;
+            let binders = wolf_ast::binding_binders(node);
+            let owner = binders
+                .iter()
+                .find(|b| {
+                    b.pattern.is_some_and(|p| {
+                        p.tokens().any(|t| {
+                            t.kind == SyntaxKind::Ident
+                                && &src[t.span.lo as usize..t.span.hi as usize]
+                                    == body.name.as_bytes()
+                        })
+                    })
+                })
+                .or(binders.first())?;
+            let init = owner.init?;
             Some(lowerer.lower_init(&body.name, init))
         }
         _ => None,

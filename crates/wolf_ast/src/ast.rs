@@ -365,21 +365,100 @@ ast_node!(
 );
 common_item_accessors!(VarDecl);
 
+ast_node!(
+    /// One `pattern (':' type)? '=' expr` member of a comma-grouped
+    /// `let`/`var` (D63, `[gram.item.let]`). Present only when the
+    /// declaration carries two or more binders.
+    Binder
+);
+
+impl<'a> Binder<'a> {
+    pub fn pattern(self) -> Option<&'a GreenNode> {
+        first_pattern(self.0)
+    }
+
+    /// The `: T` ascription, if any.
+    pub fn ty(self) -> Option<&'a GreenNode> {
+        first_type(self.0)
+    }
+
+    /// The `= …` initializer expression.
+    pub fn init(self) -> Option<&'a GreenNode> {
+        first_expr(self.0)
+    }
+}
+
+/// One binder of a `let`/`var`, shape-agnostic: `node` is the
+/// `Binder` node when the declaration is a comma group, or the whole
+/// declaration when it is flat. Semantics of a group are the sequence
+/// of single bindings, left to right (D63).
+#[derive(Clone, Copy, Debug)]
+pub struct BinderParts<'a> {
+    pub node: &'a GreenNode,
+    pub pattern: Option<&'a GreenNode>,
+    pub ty: Option<&'a GreenNode>,
+    pub init: Option<&'a GreenNode>,
+}
+
+/// Every binder of a `let`/`var` declaration node, in source order —
+/// the kind-agnostic spelling of [`LetDecl::binders`]/
+/// [`VarDecl::binders`] for callers holding a matched `GreenNode`.
+pub fn binding_binders(node: &GreenNode) -> Vec<BinderParts<'_>> {
+    debug_assert!(matches!(
+        node.kind,
+        SyntaxKind::LetDecl | SyntaxKind::VarDecl
+    ));
+    binder_parts(node)
+}
+
+fn binder_parts(node: &GreenNode) -> Vec<BinderParts<'_>> {
+    let groups: Vec<&GreenNode> = node
+        .nodes()
+        .filter(|n| n.kind == SyntaxKind::Binder)
+        .collect();
+    if groups.is_empty() {
+        vec![BinderParts {
+            node,
+            pattern: first_pattern(node),
+            ty: first_type(node),
+            init: first_expr(node),
+        }]
+    } else {
+        groups
+            .into_iter()
+            .map(|b| BinderParts {
+                node: b,
+                pattern: first_pattern(b),
+                ty: first_type(b),
+                init: first_expr(b),
+            })
+            .collect()
+    }
+}
+
 macro_rules! binding_accessors {
     ($name:ident) => {
         impl<'a> $name<'a> {
+            /// The first (or only) binder's pattern. A comma group has
+            /// more — walk `binders()` to see every one.
             pub fn pattern(self) -> Option<&'a GreenNode> {
-                first_pattern(self.0)
+                self.binders().first().and_then(|b| b.pattern)
             }
 
-            /// The `: T` ascription, if any.
+            /// The first (or only) binder's `: T` ascription, if any.
             pub fn ty(self) -> Option<&'a GreenNode> {
-                first_type(self.0)
+                self.binders().first().and_then(|b| b.ty)
             }
 
-            /// The `= …` initializer expression.
+            /// The first (or only) binder's `= …` initializer.
             pub fn init(self) -> Option<&'a GreenNode> {
-                first_expr(self.0)
+                self.binders().first().and_then(|b| b.init)
+            }
+
+            /// Every binder in source order (D63): the single flat
+            /// binder, or each `Binder` member of a comma group.
+            pub fn binders(self) -> Vec<BinderParts<'a>> {
+                binder_parts(self.0)
             }
         }
     };

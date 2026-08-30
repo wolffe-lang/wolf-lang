@@ -1423,7 +1423,7 @@ fn if_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
 fn for_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
     p.bump(); // for
-    if !grammar::pattern(p) {
+    if grammar::pattern(p).is_none() {
         p.error(
             codes::EXPECTED_PATTERN,
             p.here(),
@@ -1534,7 +1534,7 @@ fn match_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
 /// `pattern ('if' expr)? '=>' (expr | block) arm_sep?`.
 fn match_arm(p: &mut Parser<'_>, ctx: Ctx) {
     let a = p.start();
-    if !grammar::pattern(p) {
+    if grammar::pattern(p).is_none() {
         if !p.arm_error_reported {
             p.arm_error_reported = true;
             p.error(
@@ -1841,7 +1841,7 @@ fn select_arm(p: &mut Parser<'_>, ctx: Ctx) {
             p.missing();
         }
     } else {
-        if !grammar::pattern(p) {
+        if grammar::pattern(p).is_none() {
             if !p.arm_error_reported {
                 p.arm_error_reported = true;
                 p.error(

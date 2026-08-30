@@ -21,9 +21,9 @@ use wolf_ast::FreezeExpr;
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, CallExpr, CastExpr, DeferStmt, ElseExpr, ExprStmt,
-    FieldInit, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchExpr, MemberExpr, ParamMode,
-    ParenExpr, PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr,
-    StructLit, SyntaxKind, TupleExpr, VarDecl, WhileExpr, is_pattern_kind,
+    FieldInit, ForExpr, GreenNode, IfExpr, InBlock, MatchExpr, MemberExpr, ParamMode, ParenExpr,
+    PathExpr, PrefixExpr, RangeExpr, RegionBlock, RegionValue, ReturnExpr, StringExpr, StructLit,
+    SyntaxKind, TupleExpr, WhileExpr, is_pattern_kind,
 };
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
@@ -296,6 +296,10 @@ pub(crate) struct Lowerer<'t> {
     promoted: Vec<RegionId>,
     /// Any placement demand failed (E1004/E1010 fired).
     conflicted: bool,
+    /// Move sites that are binding patterns (s128 #173): E1001 skips
+    /// the `copy`-at-the-move fix-it there (`copy` is not pattern
+    /// grammar).
+    pattern_moves: Vec<Span>,
     /// `ρ_static`, once demanded (fn bodies; item initializers use it
     /// as their ambient).
     static_region: Option<RegionId>,
@@ -1883,6 +1887,46 @@ impl<'t> Lowerer<'t> {
                 if self.is_raw_index(e) {
                     self.raw_index(e, false)?;
                     return Ok(Val::none());
+                }
+                // s128 (#171): `cs[a..b]` — a List slice is a FRESH
+                // List built from a READ of the source (lupin's copy
+                // semantics, measured): the receiver is read, never
+                // moved, and the value is a new allocation in the
+                // ambient region — a CallResult-shaped site, exactly
+                // like `chars()`.
+                if e.kind == SyntaxKind::BracketApply
+                    && let Some(bapp) = wolf_ast::BracketApply::cast(e)
+                    && let Some(recv) = bapp.callee()
+                    && self
+                        .expr_ty(recv.span)
+                        .is_some_and(|t| matches!(t.kind(), TyKind::List(_)))
+                    && let Some(rn) = bapp
+                        .args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .filter_map(wolf_ast::Arg::value)
+                        .find(|v| v.kind == SyntaxKind::RangeExpr)
+                {
+                    if let Some((rp, _)) = self.as_place(recv) {
+                        self.emit_read(rp, recv.span);
+                    } else {
+                        self.eval_value(recv)?;
+                    }
+                    if let Some(d) = wolf_ast::RangeExpr::cast(rn) {
+                        for ep in d.endpoints() {
+                            let inner = if ep.kind == SyntaxKind::FromEndExpr {
+                                wolf_ast::FromEndExpr::cast(ep).and_then(|f| f.expr())
+                            } else {
+                                Some(ep)
+                            };
+                            if let Some(x) = inner {
+                                self.eval_value(x)?;
+                            }
+                        }
+                    }
+                    let ty = self.rendered_expr_ty(e.span);
+                    let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+                    return Ok(Val::site(site, e.span));
                 }
                 if let Some((place, _)) = self.as_place(e) {
                     // A `Copy` use duplicates a region-free scalar:
@@ -3873,27 +3917,92 @@ impl<'t> Lowerer<'t> {
     }
 
     fn lower_let(&mut self, stmt: &'t GreenNode) -> R<()> {
-        let d = LetDecl::cast(stmt).expect("kind");
-        let (has_init, val) = match d.init() {
-            Some(init) => (true, self.eval_value(init)?),
-            None => (false, Val::none()),
-        };
-        if let Some(pat) = d.pattern() {
-            self.bind_pattern_inits(pat, has_init, &val);
+        self.lower_binders(stmt)
+    }
+
+    fn lower_var(&mut self, stmt: &'t GreenNode) -> R<()> {
+        self.lower_binders(stmt)
+    }
+
+    /// Every binder of a `let`/`var`, in source order — a comma group
+    /// is the sequence of single bindings (D63).
+    fn lower_binders(&mut self, stmt: &'t GreenNode) -> R<()> {
+        for b in wolf_ast::binding_binders(stmt) {
+            // s128 (#173): a tuple pattern over a PLACE initializer
+            // moves each bound element out of its own sub-place —
+            // partial moves per the tier-0 discipline; `_` leaves its
+            // element untouched.
+            if let (Some(pat), Some(init)) = (b.pattern, b.init)
+                && pat.kind == SyntaxKind::TuplePat
+                && !self.is_raw_index(init)
+                && let Some((place, ty)) = self.as_place(init)
+            {
+                self.bind_tuple_from_place(pat, place, ty);
+                continue;
+            }
+            let (has_init, val) = match b.init {
+                Some(init) => (true, self.eval_value(init)?),
+                None => (false, Val::none()),
+            };
+            if let Some(pat) = b.pattern {
+                self.bind_pattern_inits(pat, has_init, &val);
+            }
         }
         Ok(())
     }
 
-    fn lower_var(&mut self, stmt: &'t GreenNode) -> R<()> {
-        let d = VarDecl::cast(stmt).expect("kind");
-        let (has_init, val) = match d.init() {
-            Some(init) => (true, self.eval_value(init)?),
-            None => (false, Val::none()),
-        };
-        if let Some(pat) = d.pattern() {
-            self.bind_pattern_inits(pat, has_init, &val);
+    /// `let (x, y) = p` where `p` names a place: every element place
+    /// is interned first (the move analysis expands partial residue
+    /// over the interned universe), then each BOUND element is
+    /// consumed from its own sub-place — a copy for Copy elements, a
+    /// move otherwise — and bound as a single binding. Nested tuple
+    /// patterns recurse; `_` elements are interned but never touched.
+    fn bind_tuple_from_place(
+        &mut self,
+        pat: &'t GreenNode,
+        base: PlaceId,
+        base_ty: Option<Ty<'t>>,
+    ) {
+        let subs: Vec<&'t GreenNode> = pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+        let elems = base_ty.and_then(|t| self.fields_of(t));
+        let base_place = self.places.get(base).clone();
+        let mut eplaces = Vec::with_capacity(subs.len());
+        let n = subs.len().max(elems.as_ref().map(|e| e.len()).unwrap_or(0));
+        for i in 0..n {
+            let ety = elems.as_ref().and_then(|e| e.get(i)).map(|(_, t)| *t);
+            let mut proj = base_place.proj.clone();
+            proj.push(Proj::Field(i.to_string()));
+            let ep = self.places.intern(
+                Place {
+                    base: base_place.base.clone(),
+                    proj,
+                },
+                ety.map(|t| is_copy(t, 0)).unwrap_or(false),
+            );
+            eplaces.push((ep, ety));
         }
-        Ok(())
+        for (i, sub) in subs.iter().enumerate() {
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let Some(&(ep, ety)) = eplaces.get(i) else {
+                continue;
+            };
+            if sub.kind == SyntaxKind::TuplePat {
+                self.bind_tuple_from_place(sub, ep, ety);
+                continue;
+            }
+            let val = if self.places.is_copy(ep) {
+                Val::none()
+            } else {
+                self.val_of_place(ep, sub.span)
+            };
+            if !self.places.is_copy(ep) {
+                self.pattern_moves.push(sub.span);
+            }
+            self.use_value(ep, sub.span);
+            self.bind_pattern_inits(sub, true, &val);
+        }
     }
 
     /// A local `const` binds like a `let` (its comptime evaluation is
@@ -4098,6 +4207,7 @@ impl<'t> Lowerer<'t> {
             lent_region: Vec::new(),
             promoted: Vec::new(),
             conflicted: false,
+            pattern_moves: Default::default(),
             static_region: None,
             open_stack: Vec::new(),
             region_parent: HashMap::new(),
@@ -4249,6 +4359,7 @@ impl<'t> Lowerer<'t> {
                 sites: self.sites,
                 entry: BlockId(0),
                 exit: BlockId(1),
+                pattern_moves: self.pattern_moves,
             },
             diags: self.diags,
             regions,

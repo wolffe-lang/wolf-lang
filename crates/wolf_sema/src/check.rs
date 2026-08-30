@@ -1640,12 +1640,33 @@ impl<'a> Checker<'a> {
                 "wolf has no truthiness: write the comparison out, e.g. `x != 0`.".to_string(),
             );
         }
-        if op == "+" && matches!(self.kind_of(found), TyKind::Prim(Prim::Str)) {
-            d = d.with_note(
-                "join strings with interpolation instead: \"{first}{second}\".".to_string(),
-            );
-        }
         self.diags.push(d);
+    }
+
+    /// E0409, the D62 mixed-operand face: `+`/`+=` joins two `str`s
+    /// and nothing else — the conversion is spelled inside an
+    /// interpolation hole, and the cost model rides as the note's
+    /// neighbor so `+=` in a loop is never mistaken for an amortized
+    /// push.
+    fn report_str_plus_mix(&mut self, op: &str, span: Span, other: TyId) {
+        let o = self.show(other);
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0409,
+                span,
+                format!("`{op}` cannot join `str` and `{o}`"),
+            )
+            .with_label(format!("this is `{o}`"))
+            .with_note(format!(
+                "`{op}` joins two `str`s (D62). Spell the conversion inside an \
+                 interpolation hole: `t += \"{{count}}\"` formats any primitive."
+            ))
+            .with_note(
+                "each `+` builds a fresh `str` — interpolation's cost model; \
+                 `std.strbuf` is the builder for heavy loops."
+                    .to_string(),
+            ),
+        );
     }
 
     // ---------------------------------------------- error rows (s15) ---
@@ -3013,10 +3034,25 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            SyntaxKind::LetDecl => self
-                .check_binding_stmt(LetDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
-            SyntaxKind::VarDecl => self
-                .check_binding_stmt(VarDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
+            // A comma group checks as the sequence of single bindings,
+            // left to right — a later binder may read an earlier one
+            // (D63).
+            SyntaxKind::LetDecl => {
+                if let Some(d) = LetDecl::cast(s) {
+                    for b in d.binders() {
+                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node)?;
+                    }
+                }
+                Ok(())
+            }
+            SyntaxKind::VarDecl => {
+                if let Some(d) = VarDecl::cast(s) {
+                    for b in d.binders() {
+                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node)?;
+                    }
+                }
+                Ok(())
+            }
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(s);
                 let name = d.and_then(|c| c.name());
@@ -3216,6 +3252,21 @@ impl<'a> Checker<'a> {
             && op_kind != SyntaxKind::Eq
         {
             let op_text = a.op().map(|t| self.text(t.span)).unwrap_or_default();
+            // D62 (s128): `s += u` is `s = s + u` — legal exactly when
+            // both are `str`; mixes keep E0409 with the
+            // interpolation-hole note.
+            if op_kind == SyntaxKind::PlusEq
+                && matches!(self.kind_of(place_ty), TyKind::Prim(Prim::Str))
+            {
+                if let Some(v) = a.value() {
+                    let vt = self.synth_expr(v)?;
+                    let sp = self.lo.table.prim(Prim::Str);
+                    if unify(&mut self.lo.table, &mut self.vars, vt, sp).is_err() {
+                        self.report_str_plus_mix("+=", v.span, vt);
+                    }
+                }
+                return Ok(());
+            }
             let (kind, needs) = match op_kind {
                 SyntaxKind::PlusEq
                 | SyntaxKind::MinusEq
@@ -3997,6 +4048,26 @@ impl<'a> Checker<'a> {
                     self.golden_rule_op(lhs.span, &n, &op_text);
                     return Ok(self.error_ty());
                 }
+                // D62 (s128): `s + u` is legal exactly when BOTH are
+                // `str` and means `"{s}{u}"` — a builtin on the
+                // builtin type, like `==` on `str`; no trait bridge
+                // (D49 untouched). The three mixes keep E0409.
+                if op_kind == Some(SyntaxKind::Plus) {
+                    let l_str = matches!(self.kind_of(lt), TyKind::Prim(Prim::Str));
+                    let r_str = matches!(self.kind_of(rt), TyKind::Prim(Prim::Str));
+                    if l_str && r_str {
+                        return Ok(self.lo.table.prim(Prim::Str));
+                    }
+                    if l_str || r_str {
+                        let (span, other) = if l_str {
+                            (rhs.span, rt)
+                        } else {
+                            (lhs.span, lt)
+                        };
+                        self.report_str_plus_mix("+", span, other);
+                        return Ok(self.error_ty());
+                    }
+                }
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "numbers", lt);
@@ -4585,6 +4656,22 @@ impl<'a> Checker<'a> {
         let recv_ty = self.synth_expr(recv)?;
         let elem = match self.kind_of(recv_ty) {
             TyKind::List(elem) => {
+                // s128 (#171): `cs[a..b]` — and the open/`^n` endpoint
+                // forms — SLICE, with the same endpoint surface str
+                // slices got in sc24. The value is a fresh List of the
+                // same element (lupin's copy semantics, measured).
+                let single = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|a| a.args())
+                    .filter_map(Arg::value)
+                    .collect::<Vec<_>>();
+                if let [one] = single.as_slice()
+                    && one.kind == SyntaxKind::RangeExpr
+                {
+                    self.check_slice_endpoints(one, "List slicing")?;
+                    return Ok(recv_ty);
+                }
                 let int_ = self.lo.table.prim(Prim::Int);
                 self.check_index_arg(d.args(), int_, "List index")?;
                 elem
@@ -4637,25 +4724,7 @@ impl<'a> Checker<'a> {
             });
         };
         if one.kind == SyntaxKind::RangeExpr {
-            let d = RangeExpr::cast(one).expect("kind");
-            for ep in d.endpoints() {
-                let inner = if ep.kind == SyntaxKind::FromEndExpr {
-                    FromEndExpr::cast(ep).and_then(|f| f.expr())
-                } else {
-                    Some(ep)
-                };
-                if let Some(x) = inner {
-                    let exp = Expect {
-                        ty: int_,
-                        reason: Reason::ArgOfCall {
-                            callee: "str slicing".to_string(),
-                            index: 0,
-                        },
-                        because: None,
-                    };
-                    self.check_expr(x, &exp)?;
-                }
-            }
+            self.check_slice_endpoints(one, "str slicing")?;
             return Ok(str_);
         }
         // `s[^n]` — a single end-relative position is still character
@@ -4704,6 +4773,34 @@ impl<'a> Checker<'a> {
             ),
         );
         Ok(self.error_ty())
+    }
+
+    /// Every endpoint of a subscript-position range types as `int`;
+    /// `^n` checks its inner expression; open ends check nothing —
+    /// the D25 slice surface, shared by `str` (sc24) and `List`
+    /// (s128, #171).
+    fn check_slice_endpoints(&mut self, rn: &GreenNode, what: &str) -> R<()> {
+        let int_ = self.lo.table.prim(Prim::Int);
+        let d = RangeExpr::cast(rn).expect("kind");
+        for ep in d.endpoints() {
+            let inner = if ep.kind == SyntaxKind::FromEndExpr {
+                FromEndExpr::cast(ep).and_then(|f| f.expr())
+            } else {
+                Some(ep)
+            };
+            if let Some(x) = inner {
+                let exp = Expect {
+                    ty: int_,
+                    reason: Reason::ArgOfCall {
+                        callee: what.to_string(),
+                        index: 0,
+                    },
+                    because: None,
+                };
+                self.check_expr(x, &exp)?;
+            }
+        }
+        Ok(())
     }
 
     /// The single index argument of a container `e[…]`, checked

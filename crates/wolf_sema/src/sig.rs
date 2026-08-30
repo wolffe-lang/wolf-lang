@@ -558,9 +558,18 @@ impl<'a> Lower<'a> {
                 })
             }
             SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
-                let ty = node
-                    .nodes()
-                    .find(|n| is_type_kind(n.kind))
+                // The binder that declares THIS name — a comma group
+                // carries several, each with its own ascription (D63);
+                // a flat declaration is its own single binder.
+                let binders = wolf_ast::binding_binders(node);
+                let owner = binders
+                    .iter()
+                    .find(|b| {
+                        b.node.span.lo <= item.name_span.lo && item.name_span.hi <= b.node.span.hi
+                    })
+                    .or(binders.first());
+                let ty = owner
+                    .and_then(|b| b.ty)
                     .map(|t| self.lower_type(module, file, &[], t));
                 if ty.is_none() {
                     self.missing_annotation(item, node, item.kind);

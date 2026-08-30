@@ -193,13 +193,9 @@ impl Wave<'_> {
     /// A `let`/`var`/`const` at any level: W0304 on its names, and
     /// (when `declare`) push the bindings for the capture lints.
     fn binding_decl(&mut self, node: &GreenNode, declare: bool) {
-        let (pat, is_var, what) = match node.kind {
-            SyntaxKind::LetDecl => (
-                LetDecl::cast(node).and_then(|d| d.pattern()),
-                false,
-                "`let`",
-            ),
-            SyntaxKind::VarDecl => (VarDecl::cast(node).and_then(|d| d.pattern()), true, "`var`"),
+        let (is_var, what) = match node.kind {
+            SyntaxKind::LetDecl => (false, "`let`"),
+            SyntaxKind::VarDecl => (true, "`var`"),
             SyntaxKind::ConstDecl => {
                 if let Some(t) = ConstDecl::cast(node).and_then(|d| d.name()) {
                     self.shadow_check(t.span, "`const` binding");
@@ -212,7 +208,12 @@ impl Wave<'_> {
             }
             _ => return,
         };
-        if let Some(pat) = pat {
+        // Every binder of the declaration (a comma group has several —
+        // D63).
+        for pat in wolf_ast::binding_binders(node)
+            .into_iter()
+            .filter_map(|b| b.pattern)
+        {
             for (name, span) in pattern_names(pat, self.src) {
                 if prelude::shadow_hazard(&name) {
                     let kind = if prelude::is_builtin_type(&name) {

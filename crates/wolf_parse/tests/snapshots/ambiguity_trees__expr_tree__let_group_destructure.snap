@@ -1,0 +1,133 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+assertion_line: 34
+expression: out
+---
+== tree ==
+SourceFile 340..475
+  FnDecl 340..374
+    FnKw 340..342 "fn"
+    Ident 343..347 "pair"
+    ParamList 347..349
+      LParen 347..348 "("
+      RParen 348..349 ")"
+    RetType 350..363
+      Arrow 350..352 "->"
+      TupleType 353..363
+        LParen 353..354 "("
+        PathType 354..357
+          Path 354..357
+            Ident 354..357 "int"
+        Comma 357..358 ","
+        PathType 359..362
+          Path 359..362
+            Ident 359..362 "int"
+        RParen 362..363 ")"
+    Block 364..374
+      LBrace 364..365 "{"
+      ExprStmt 366..372
+        TupleExpr 366..372
+          LParen 366..367 "("
+          LiteralExpr 367..368
+            Int 367..368 "4"
+          Comma 368..369 ","
+          LiteralExpr 370..371
+            Int 370..371 "5"
+          RParen 371..372 ")"
+      RBrace 373..374 "}"
+  Term 374..375 "\n"
+  FnDecl 376..474
+    FnKw 376..378 "fn"
+    Ident 379..383 "main"
+    ParamList 383..385
+      LParen 383..384 "("
+      RParen 384..385 ")"
+    RetType 386..393
+      Arrow 386..388 "->"
+      ErrorUnionType 389..393
+        Not 389..390 "!"
+        PathType 390..393
+          Path 390..393
+            Ident 390..393 "int"
+    Block 394..474
+      LBrace 394..395 "{"
+      LetDecl 400..438
+        LetKw 400..403 "let"
+        Binder 404..409
+          IdentPat 404..405
+            Ident 404..405 "a"
+          Eq 406..407 "="
+          LiteralExpr 408..409
+            Int 408..409 "1"
+        Comma 409..410 ","
+        Binder 411..426
+          TuplePat 411..417
+            LParen 411..412 "("
+            IdentPat 412..413
+              Ident 412..413 "x"
+            Comma 413..414 ","
+            IdentPat 415..416
+              Ident 415..416 "y"
+            RParen 416..417 ")"
+          Eq 418..419 "="
+          CallExpr 420..426
+            PathExpr 420..424
+              Ident 420..424 "pair"
+            ArgList 424..426
+              LParen 424..425 "("
+              RParen 425..426 ")"
+        Comma 426..427 ","
+        Binder 428..437
+          IdentPat 428..429
+            Ident 428..429 "b"
+          Eq 430..431 "="
+          BinExpr 432..437
+            PathExpr 432..433
+              Ident 432..433 "a"
+            Plus 434..435 "+"
+            PathExpr 436..437
+              Ident 436..437 "y"
+        Term 437..438 "\n"
+      ExprStmt 442..467
+        CallExpr 442..466
+          PathExpr 442..447
+            Ident 442..447 "print"
+          ArgList 447..466
+            LParen 447..448 "("
+            Arg 448..465
+              StringExpr 448..465
+                StrBegin 448..449 "\""
+                Interp 449..452
+                  InterpOpen 449..450 "{"
+                  PathExpr 450..451
+                    Ident 450..451 "a"
+                  InterpClose 451..452 "}"
+                StrFragment 452..453 " "
+                Interp 453..456
+                  InterpOpen 453..454 "{"
+                  PathExpr 454..455
+                    Ident 454..455 "x"
+                  InterpClose 455..456 "}"
+                StrFragment 456..457 " "
+                Interp 457..460
+                  InterpOpen 457..458 "{"
+                  PathExpr 458..459
+                    Ident 458..459 "y"
+                  InterpClose 459..460 "}"
+                StrFragment 460..461 " "
+                Interp 461..464
+                  InterpOpen 461..462 "{"
+                  PathExpr 462..463
+                    Ident 462..463 "b"
+                  InterpClose 463..464 "}"
+                StrEnd 464..465 "\""
+            RParen 465..466 ")"
+        Term 466..467 "\n"
+      ExprStmt 471..473
+        LiteralExpr 471..472
+          Int 471..472 "0"
+        Term 472..473 "\n"
+      RBrace 473..474 "}"
+  Term 474..475 "\n"
+  Eof 475..475 ""
+== diagnostics ==

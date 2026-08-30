@@ -61,9 +61,9 @@ use std::collections::HashMap;
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, BorrowExpr, BracketApply, CallExpr, CastExpr, DeferStmt,
-    ElseExpr, ExprStmt, FieldInit, ForExpr, GreenNode, IfExpr, InBlock, LetDecl, MatchExpr,
-    MemberExpr, ParenExpr, PrefixExpr, RangeExpr, RegionBlock, ReturnExpr, StringExpr, StructLit,
-    SyntaxKind, TupleExpr, UnsafeBlock, VarDecl, WhileExpr, is_pattern_kind,
+    ElseExpr, ExprStmt, FieldInit, ForExpr, GreenNode, IfExpr, InBlock, MatchExpr, MemberExpr,
+    ParenExpr, PrefixExpr, RangeExpr, RegionBlock, ReturnExpr, StringExpr, StructLit, SyntaxKind,
+    TupleExpr, UnsafeBlock, WhileExpr, is_pattern_kind,
 };
 use wolf_diag::{Diagnostic, codes};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
@@ -2023,23 +2023,16 @@ impl<'t> Machine<'t> {
                         }
                     }
                 }
-                SyntaxKind::LetDecl => {
-                    let d = LetDecl::cast(stmt).expect("kind");
-                    match self.bind_decl(d.pattern(), d.init())? {
-                        Flow::Val(_) => {}
-                        other => {
-                            self.close_scope(matches!(other, Flow::Err(..)))?;
-                            return Ok(other);
-                        }
-                    }
-                }
-                SyntaxKind::VarDecl => {
-                    let d = VarDecl::cast(stmt).expect("kind");
-                    match self.bind_decl(d.pattern(), d.init())? {
-                        Flow::Val(_) => {}
-                        other => {
-                            self.close_scope(matches!(other, Flow::Err(..)))?;
-                            return Ok(other);
+                SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
+                    // A comma group binds in sequence, left to right
+                    // (D63).
+                    for b in wolf_ast::binding_binders(stmt) {
+                        match self.bind_decl(b.pattern, b.init)? {
+                            Flow::Val(_) => {}
+                            other => {
+                                self.close_scope(matches!(other, Flow::Err(..)))?;
+                                return Ok(other);
+                            }
                         }
                     }
                 }
@@ -2106,6 +2099,17 @@ impl<'t> Machine<'t> {
     }
 
     fn bind_decl(&mut self, pat: Option<&'t GreenNode>, init: Option<&'t GreenNode>) -> E<Flow> {
+        // s128 (#173): a tuple pattern over a PLACE moves each bound
+        // element out of its own sub-place (partial moves — the static
+        // tier's element story, mirrored dynamically); `_` leaves its
+        // element untouched, so the source stays element-wise live.
+        if let (Some(pat), Some(e)) = (pat, init)
+            && pat.kind == SyntaxKind::TuplePat
+            && let Some(base) = self.place_of(e)?
+        {
+            self.bind_tuple_from_place(pat, &base)?;
+            return Ok(Flow::Val(Value::Unit));
+        }
         let v = match init {
             Some(e) => match self.eval(e)? {
                 Flow::Val(v) => v,
@@ -2162,7 +2166,52 @@ impl<'t> Machine<'t> {
         Ok(())
     }
 
+    /// Element-wise destructure of a tuple PLACE (s128, #173): each
+    /// bound element is taken from `base.i` — a copy for Copy values,
+    /// a partial move otherwise; wildcards touch nothing; nested tuple
+    /// patterns recurse into deeper sub-places.
+    fn bind_tuple_from_place(&mut self, pat: &'t GreenNode, base: &Place) -> E<()> {
+        let subs: Vec<&'t GreenNode> = pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+        for (i, sub) in subs.iter().enumerate() {
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let mut ep = base.clone();
+            ep.path.push(PStep::Field(i.to_string()));
+            if sub.kind == SyntaxKind::TuplePat {
+                self.bind_tuple_from_place(sub, &ep)?;
+                continue;
+            }
+            let v = self.take_value(&ep, sub.span)?;
+            self.bind_pattern(sub, v)?;
+        }
+        Ok(())
+    }
+
     fn bind_pattern(&mut self, pat: &'t GreenNode, v: Value) -> E<()> {
+        // s128 (#173): tuple patterns bind element-wise — `_`
+        // discards, nested tuples recurse. Tuples arrive as the
+        // positional Struct value the TupleExpr evaluator builds.
+        if pat.kind == SyntaxKind::TuplePat {
+            let subs: Vec<&'t GreenNode> =
+                pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+            let Value::Struct { fields } = v else {
+                return self.refuse(
+                    "a tuple pattern over a non-tuple value in checked execution",
+                    pat.span,
+                );
+            };
+            if fields.len() != subs.len() {
+                return self.refuse(
+                    "a tuple pattern with a mismatched arity in checked execution",
+                    pat.span,
+                );
+            }
+            for (sub, (_, ev)) in subs.iter().zip(fields) {
+                self.bind_pattern(sub, ev)?;
+            }
+            return Ok(());
+        }
         let mut binds = Vec::new();
         collect_binding_spans(pat, &mut binds);
         if binds.is_empty() {
@@ -2284,6 +2333,18 @@ impl<'t> Machine<'t> {
                     && matches!(self.expr_ty(recv.span), Some(TyKind::Prim(Prim::Str)))
                 {
                     return self.eval_str_slice(e);
+                }
+                // s128 (#171) — `cs[a..b]` List slicing, same endpoint
+                // surface, fresh-List value.
+                if let Some(recv) = b.callee()
+                    && matches!(self.expr_ty(recv.span), Some(TyKind::List(_)))
+                    && b.args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .filter_map(Arg::value)
+                        .any(|v| v.kind == SyntaxKind::RangeExpr)
+                {
+                    return self.eval_list_slice(e);
                 }
                 if let Some(place) = self.place_of(e)? {
                     let v = self.read_place(&place, e.span)?;
@@ -3070,6 +3131,13 @@ impl<'t> Machine<'t> {
         ty_span: Span,
     ) -> E<Value> {
         match (l, r) {
+            // D62 (s128): `+` on two strs is `"{s}{u}"` — UTF-8
+            // concatenation, a fresh str per application. Sema admits
+            // no mix, so a non-str pair here falls through to the
+            // modelled-surface refusal.
+            (Value::Str(a), Value::Str(b)) if op == SyntaxKind::Plus => {
+                Ok(Value::Str(format!("{a}{b}")))
+            }
             (Value::Int(a), Value::Int(b)) => {
                 // Wrapping types wrap at their width; checked prims
                 // trap (X3).
@@ -4727,32 +4795,14 @@ impl<'t> Machine<'t> {
     /// `bounds` trap, never UB and never a garbled slice. The
     /// recoverable twin is `s.get(a..b) -> str ! {none}` (a method,
     /// below).
-    fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
-        let b = BracketApply::cast(e).expect("kind");
-        let Some(recv) = b.callee() else {
-            return self.refuse("a slice without a receiver", e.span);
-        };
-        let sv = if let Some(place) = self.place_of(recv)? {
-            self.read_place(&place, recv.span)?
-        } else {
-            val!(self.eval(recv))
-        };
-        let Value::Str(s) = sv else {
-            return self.refuse("str slicing of a non-str", e.span);
-        };
-        let mut range_node = None;
-        for a in b.args().into_iter().flat_map(|l| l.args()) {
-            if let Some(v) = Arg::value(a)
-                && v.kind == SyntaxKind::RangeExpr
-            {
-                range_node = Some(v);
-            }
-        }
-        let Some(rn) = range_node else {
-            return self.refuse("this str index shape in checked execution", e.span);
-        };
+    /// Resolve a subscript-position range against `len` — the shared
+    /// endpoint surface of `str` (sc24) and `List` (s128, #171)
+    /// slices: open sides default to the edges, `^n` counts from the
+    /// end, the D61 origin shift applies to spelled plain endpoints,
+    /// and `lo <= hi <= len` traps `bounds` otherwise. The in-domain
+    /// answer rides back as `Value::Range { lo, hi }`.
+    fn slice_bounds(&mut self, rn: &'t GreenNode, len: i64, at: Span) -> E<Flow> {
         let d = RangeExpr::cast(rn).expect("kind");
-        let len = s.len() as i64;
         // Which side of the dots each endpoint sits on decides which
         // bound it names — open sides default to the edges.
         let dots = rn
@@ -4766,7 +4816,7 @@ impl<'t> Machine<'t> {
         // 0-based exclusive bound numerically, so `..=` adds nothing —
         // and `^n` endpoints, open sides, and their `..=` interaction
         // resolve exactly as in origin 0. Mirrors `range_endpoints`.
-        let origin = self.origin_at(e.span);
+        let origin = self.origin_at(at);
         let mut lo = 0i64;
         let mut hi = len;
         let mut plain_hi_spelled = false;
@@ -4802,9 +4852,77 @@ impl<'t> Machine<'t> {
             hi += 1;
         }
         if lo < 0 || hi < lo || hi > len {
-            return self.trap("bounds", "mem.ub.defined", e.span);
+            return self.trap("bounds", "mem.ub.defined", at);
         }
-        let (a, z) = (lo as usize, hi as usize);
+        Ok(Flow::Val(Value::Range { start: lo, end: hi }))
+    }
+
+    /// `cs[a..b]` (s128, #171): the List slice — the same endpoint
+    /// surface as str slices, the same `bounds` trap, and a FRESH
+    /// List as the value (copy semantics — lupin's, measured).
+    fn eval_list_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let b = BracketApply::cast(e).expect("kind");
+        let Some(recv) = b.callee() else {
+            return self.refuse("a slice without a receiver", e.span);
+        };
+        let lv = if let Some(place) = self.place_of(recv)? {
+            self.read_place(&place, recv.span)?
+        } else {
+            val!(self.eval(recv))
+        };
+        let Value::List(id) = lv else {
+            return self.refuse("List slicing of a non-List", e.span);
+        };
+        let rn = b
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .find(|v| v.kind == SyntaxKind::RangeExpr);
+        let Some(rn) = rn else {
+            return self.refuse("this List index shape in checked execution", e.span);
+        };
+        let len = self.lists[id].len() as i64;
+        let bounds = self.slice_bounds(rn, len, e.span)?;
+        let Flow::Val(Value::Range { start, end }) = bounds else {
+            return Ok(bounds);
+        };
+        let items: Vec<Value> = self.lists[id][start as usize..end as usize].to_vec();
+        self.charge_mem(16 * items.len() as u64 + 16)?;
+        let nid = self.lists.len();
+        self.lists.push(items);
+        Ok(Flow::Val(Value::List(nid)))
+    }
+
+    fn eval_str_slice(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let b = BracketApply::cast(e).expect("kind");
+        let Some(recv) = b.callee() else {
+            return self.refuse("a slice without a receiver", e.span);
+        };
+        let sv = if let Some(place) = self.place_of(recv)? {
+            self.read_place(&place, recv.span)?
+        } else {
+            val!(self.eval(recv))
+        };
+        let Value::Str(s) = sv else {
+            return self.refuse("str slicing of a non-str", e.span);
+        };
+        let mut range_node = None;
+        for a in b.args().into_iter().flat_map(|l| l.args()) {
+            if let Some(v) = Arg::value(a)
+                && v.kind == SyntaxKind::RangeExpr
+            {
+                range_node = Some(v);
+            }
+        }
+        let Some(rn) = range_node else {
+            return self.refuse("this str index shape in checked execution", e.span);
+        };
+        let bounds = self.slice_bounds(rn, s.len() as i64, e.span)?;
+        let Flow::Val(Value::Range { start, end }) = bounds else {
+            return Ok(bounds);
+        };
+        let (a, z) = (start as usize, end as usize);
         if !s.is_char_boundary(a) || !s.is_char_boundary(z) {
             return self.trap("bounds", "mem.ub.defined", e.span);
         }

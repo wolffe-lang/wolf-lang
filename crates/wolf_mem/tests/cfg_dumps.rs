@@ -357,6 +357,7 @@ mod fuzz {
             sites,
             entry: BlockId(0),
             exit: BlockId(n_blocks as u32 - 1),
+            pattern_moves: Default::default(),
         }
     }
 

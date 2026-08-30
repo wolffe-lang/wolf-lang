@@ -312,21 +312,25 @@ impl Resolver<'_> {
             }
             SyntaxKind::LetDecl => {
                 if let Some(d) = LetDecl::cast(node) {
-                    if let Some(t) = d.ty() {
-                        self.resolve_type(t);
-                    }
-                    if let Some(e) = d.init() {
-                        self.resolve_expr(e);
+                    for b in d.binders() {
+                        if let Some(t) = b.ty {
+                            self.resolve_type(t);
+                        }
+                        if let Some(e) = b.init {
+                            self.resolve_expr(e);
+                        }
                     }
                 }
             }
             SyntaxKind::VarDecl => {
                 if let Some(d) = VarDecl::cast(node) {
-                    if let Some(t) = d.ty() {
-                        self.resolve_type(t);
-                    }
-                    if let Some(e) = d.init() {
-                        self.resolve_expr(e);
+                    for b in d.binders() {
+                        if let Some(t) = b.ty {
+                            self.resolve_type(t);
+                        }
+                        if let Some(e) = b.init {
+                            self.resolve_expr(e);
+                        }
                     }
                 }
             }
@@ -608,27 +612,33 @@ impl Resolver<'_> {
             | SyntaxKind::AssumeStmt => self.resolve_child_exprs(stmt),
             SyntaxKind::LetDecl => {
                 if let Some(d) = LetDecl::cast(stmt) {
-                    if let Some(t) = d.ty() {
-                        self.resolve_type(t);
-                    }
-                    if let Some(e) = d.init() {
-                        self.resolve_expr(e);
-                    }
-                    if let Some(p) = d.pattern() {
-                        self.bind_pattern(p);
+                    // Binders in order (D63): a later initializer may
+                    // read an earlier binder's names.
+                    for b in d.binders() {
+                        if let Some(t) = b.ty {
+                            self.resolve_type(t);
+                        }
+                        if let Some(e) = b.init {
+                            self.resolve_expr(e);
+                        }
+                        if let Some(p) = b.pattern {
+                            self.bind_pattern(p);
+                        }
                     }
                 }
             }
             SyntaxKind::VarDecl => {
                 if let Some(d) = VarDecl::cast(stmt) {
-                    if let Some(t) = d.ty() {
-                        self.resolve_type(t);
-                    }
-                    if let Some(e) = d.init() {
-                        self.resolve_expr(e);
-                    }
-                    if let Some(p) = d.pattern() {
-                        self.bind_pattern(p);
+                    for b in d.binders() {
+                        if let Some(t) = b.ty {
+                            self.resolve_type(t);
+                        }
+                        if let Some(e) = b.init {
+                            self.resolve_expr(e);
+                        }
+                        if let Some(p) = b.pattern {
+                            self.bind_pattern(p);
+                        }
                     }
                 }
             }

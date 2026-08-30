@@ -1,0 +1,14 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.item.let
+//!
+//! D63 refusal, by name: Python's bare tuple `let a, b = 1, 2` is not
+//! adopted — it needs unparenthesized tuple expressions on both
+//! sides. The note points at the two-paren destructuring spelling
+//! `let (a, b) = (1, 2)` and at one initializer per name.
+
+fn main() -> !int {
+    let a, b = 1, 2
+    print("{a} {b}")
+    0
+}

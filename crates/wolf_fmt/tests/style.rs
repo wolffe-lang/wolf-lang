@@ -337,3 +337,34 @@ fn file_ends_with_exactly_one_newline() {
     check("fn main() { 0 }", "fn main() { 0 }\n");
     check("fn main() { 0 }\n\n\n", "fn main() { 0 }\n");
 }
+
+// ------------------------------------------- [gram.item.let] groups ----
+
+#[test]
+fn binding_group_fits_on_one_line() {
+    // D63/D34: a comma group is ONE statement; spacing is `a = 1, b = 2`.
+    check(
+        "fn main() {\n    var i=0,c=1\n    let a = 2  ,  b = a + 3\n}\n",
+        "fn main() {\n    var i = 0, c = 1\n    let a = 2, b = a + 3\n}\n",
+    );
+}
+
+#[test]
+fn binding_group_breaks_one_binder_per_line() {
+    // Over 100 columns the group breaks one-binder-per-line with a
+    // continuation indent — never into separate statements.
+    let src = "fn main() {\n    let quite_a_long_name = compute_something(1, 2, 3), another_long_name = compute_something(4, 5, 6), third_one = 9\n}\n";
+    check(
+        src,
+        "fn main() {\n    let quite_a_long_name = compute_something(1, 2, 3),\n        another_long_name = compute_something(4, 5, 6),\n        third_one = 9\n}\n",
+    );
+}
+
+#[test]
+fn binding_group_never_splits_into_statements() {
+    // A fitting multi-line spelling collapses back to the group.
+    check(
+        "fn main() {\n    let a = 1,\n        b = 2\n}\n",
+        "fn main() {\n    let a = 1, b = 2\n}\n",
+    );
+}

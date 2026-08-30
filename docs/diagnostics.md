@@ -222,7 +222,7 @@ zero-width placeholder and continues, so one miss does not cascade into
 a screenful. Fix the flagged spot first: later errors in the same
 region may be echoes of this one.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__range_bare.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range_inclusive.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__mock_sema_two_files.snap, crates/wolf_diag/tests/snapshots/render_snapshots__two_secondaries.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__let_group_bare_tuple.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__let_group_one_init.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__let_group_bare_tuple.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__let_group_one_init.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__range_bare.snap, crates/wolf_parse/tests/snapshots/broken_suite__expr_typo.snap, crates/wolf_parse/tests/snapshots/broken_suite__match_missing_arrow.snap, crates/wolf_parse/tests/snapshots/broken_suite__missing_lbrace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__let_group_bare_tuple.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__let_group_one_init.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__range_bare.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_bare_range_inclusive.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_group_bare_tuple.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_group_one_init_many_names.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_group_uninitialized.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_init.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0201_missing_name.snap, crates/wolf_parse/tests/snapshots/render__render_interp_span.snap
 
 ## E0202 — an opening delimiter is never closed
 
@@ -565,14 +565,18 @@ Each operator family in wolf works on a fixed family of types:
 arithmetic (`+ - * / %`) on numbers, ordering (`< <= > >= <=>`) on
 numbers and on `str` (byte-lexicographic — lupin's byte order, no
 collation), logic (`&& || !`) on `bool` exactly, bitwise and shifts on
-integer types. This operand is outside the operator's family. Two
-classics: wolf has no truthiness, so `if x` on a number must be
-written as a comparison (`x != 0`); and `+` does not join strings —
-interpolation does (`"{first}{second}"`), which formats any primitive
-and never surprises you with a numeric `+` overload. Operators on
-user types come from traits, and need the trait in scope.
+integer types. `+` and `+=` also join two `str`s (D62): `s + u` is
+exactly `"{s}{u}"` — a fresh `str` per application, interpolation's
+cost, so `std.strbuf` stays the builder for heavy loops. This operand
+is outside the operator's family. Two classics: wolf has no
+truthiness, so `if x` on a number must be written as a comparison
+(`x != 0`); and `+` never mixes `str` with another type — the
+conversion is spelled inside an interpolation hole (`t += "{count}"`),
+which formats any primitive and never surprises you with a numeric
+`+` overload. Operators on user types come from traits, and need the
+trait in scope.
 
-Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_string_plus.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_int_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_char.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_int_plus_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_compound_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_char.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_int.snap
 
 ## E0410 — a `let` binding cannot be assigned again
 
@@ -1325,7 +1329,7 @@ where the move happens — `copy a` produces an independent value of
 any type — or give the name a new value first: assigning to a
 moved-from place makes it live again.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1002 — this needs exclusive access, but the value is in use here
 

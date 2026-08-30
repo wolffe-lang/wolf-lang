@@ -1,0 +1,69 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+assertion_line: 34
+expression: out
+---
+== tree ==
+SourceFile 303..369
+  FnDecl 303..368
+    FnKw 303..305 "fn"
+    Ident 306..310 "main"
+    ParamList 310..312
+      LParen 310..311 "("
+      RParen 311..312 ")"
+    RetType 313..320
+      Arrow 313..315 "->"
+      ErrorUnionType 316..320
+        Not 316..317 "!"
+        PathType 317..320
+          Path 317..320
+            Ident 317..320 "int"
+    Block 321..368
+      LBrace 321..322 "{"
+      VarDecl 327..340
+        VarKw 327..330 "var"
+        Binder 331..332
+          IdentPat 331..332
+            Ident 331..332 "i"
+          Missing 332..332 ""
+        Comma 332..333 ","
+        Binder 334..339
+          IdentPat 334..335
+            Ident 334..335 "c"
+          Eq 336..337 "="
+          LiteralExpr 338..339
+            Int 338..339 "0"
+        Term 339..340 "\n"
+      ExprStmt 344..361
+        CallExpr 344..360
+          PathExpr 344..349
+            Ident 344..349 "print"
+          ArgList 349..360
+            LParen 349..350 "("
+            Arg 350..359
+              StringExpr 350..359
+                StrBegin 350..351 "\""
+                Interp 351..354
+                  InterpOpen 351..352 "{"
+                  PathExpr 352..353
+                    Ident 352..353 "i"
+                  InterpClose 353..354 "}"
+                StrFragment 354..355 " "
+                Interp 355..358
+                  InterpOpen 355..356 "{"
+                  PathExpr 356..357
+                    Ident 356..357 "c"
+                  InterpClose 357..358 "}"
+                StrEnd 358..359 "\""
+            RParen 359..360 ")"
+        Term 360..361 "\n"
+      ExprStmt 365..367
+        LiteralExpr 365..366
+          Int 365..366 "0"
+        Term 366..367 "\n"
+      RBrace 367..368 "}"
+  Term 368..369 "\n"
+  Eof 369..369 ""
+== diagnostics ==
+E0201 [Error] 332..332 this binding has no value — expected `=` and an initializer
+    note one initializer cannot serve several names. Destructure — `var (i, c) = (0, 0)` — or give each name its own value: `var i = 0, c = 0`.

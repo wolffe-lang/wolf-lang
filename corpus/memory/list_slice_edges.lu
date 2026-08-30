@@ -1,0 +1,17 @@
+//! check: run(exit=0, stdout="0 0 0 2 d")
+//! phase: run
+//! conforms: mem.list.slice
+//!
+//! The slice domain's edges (#171, matching lupin 0.1.16 measured):
+//! `cs[3..3]`, `cs[..^len]`, and `cs[len..]` are legal empty slices;
+//! both endpoints may be end-relative (`cs[^3..^1]`).
+
+fn main() -> !int {
+    let cs = "abcdef".chars()
+    let f = cs[3..3]
+    let g = cs[..^6]
+    let h = cs[6..]
+    let k = cs[^3..^1]
+    print("{f.len} {g.len} {h.len} {k.len} {k[0]}")
+    0
+}

@@ -100,6 +100,12 @@ pub enum SyntaxKind {
     // Patterns `[gram.pat]`.
     WildcardPat, LiteralPat, IdentPat, PathPat, TuplePat, OrPat, BindingPat,
 
+    /// One `pattern (':' type)? '=' expr` member of a comma-grouped
+    /// `let`/`var` (D63). Present only when the declaration carries
+    /// two or more binders; a single-binder declaration keeps its
+    /// flat shape.
+    Binder,
+
     // Statements `[gram.expr.block]` (s09).
     /// `expr TERM` (or a trailing block expression — no `Term` child).
     ExprStmt,

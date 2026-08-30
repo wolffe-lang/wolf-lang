@@ -444,6 +444,23 @@ adopt that design and give `for` its desugar.)
 - `[mem.iter.impl]` `List[T]` and `Pool[T]` adopt `Iter` builtin-side
   (std surface); user types implement the trait **by name** — no
   structural conformance.
+- `[mem.list.slice]` **`cs[a..b]` slices a `List`** (s128, #171): the
+  subscript-position range takes the same endpoint surface `str`
+  slices got in sc24 — open sides default to the edges (`cs[1..]`,
+  `cs[..n]`), `^n` counts from the end (`cs[a..^b]`, both ends may be
+  end-relative), `..=` is inclusive, and the D61 origin marker shifts
+  spelled plain endpoints exactly as it does for `str`. The domain is
+  `lo <= hi <= len`; outside it the slice faults `bounds`
+  (`[mem.ub.defined]`), the reversed range included. The value is a
+  **fresh `List[T]`** — the elements copied in order, the source
+  untouched (a read, never a move; the interpreter's copy semantics,
+  measured at lupin 0.1.16). A slice is therefore an allocation into
+  the ambient region (`[mem.region.create.3]`), unlike the `str`
+  slice's zero-copy view — element storage has an owner, a borrowed
+  window into it does not exist at tier 0. A `for` over a slice value
+  iterates the fresh `List` by `[mem.iter.impl]`; nothing new is
+  ruled. The full-open `[..]` spelling stays refused at the grammar
+  (`[gram.expr.primary]` requires an endpoint — lupin's letter).
 
 ### `str` ordering `[mem.str]`
 

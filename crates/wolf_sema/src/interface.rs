@@ -716,10 +716,19 @@ fn render_item_sig(pkg: &Package, module: usize, item: &crate::graph::Item) -> S
             } else {
                 "var"
             };
-            let ty = node
-                .nodes()
-                .find(|n| is_type_kind(n.kind))
-                .map(|t| render_type(&ctx, t));
+            // The binder that declares THIS name (a comma group has
+            // several — D63); fall back to the first.
+            let binders = wolf_ast::binding_binders(node);
+            let owner = binders
+                .iter()
+                .find(|b| {
+                    b.pattern.is_some_and(|p| {
+                        p.tokens()
+                            .any(|t| t.kind == SyntaxKind::Ident && ctx.text(t.span) == item.name)
+                    })
+                })
+                .or(binders.first());
+            let ty = owner.and_then(|b| b.ty).map(|t| render_type(&ctx, t));
             match ty {
                 Some(t) => format!("{kw} {}: {t}", item.name),
                 None => format!("{kw} {}", item.name),

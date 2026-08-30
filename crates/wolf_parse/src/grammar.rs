@@ -639,15 +639,45 @@ fn error_row(p: &mut Parser<'_>) {
 
 // ------------------------------------------------------------- bindings --
 
-pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: SyntaxKind) {
-    p.bump(); // let/var/const
-    let mut binder_ok = true;
-    if kw == Keyword::Const {
-        binder_ok = name_token(p, "constant");
-    } else if !pattern(p) {
-        p.error(codes::EXPECTED_PATTERN, p.here(), "expected a pattern");
-        p.missing();
-        binder_ok = false;
+/// The shape one binder of a `let`/`var` group parsed with — the
+/// group-end report (D63's two teach-notes) is decided over the whole
+/// sequence, so each binder records what it saw.
+struct BinderShape {
+    /// A pattern was parsed (a missing one already got its report).
+    ok: bool,
+    has_init: bool,
+    /// The "pattern" was a bare literal (`2` in `let a, b = 1, 2`) —
+    /// the bare-tuple tell.
+    lit_pat: bool,
+    /// The truncation was already reported inline (the single-binder
+    /// recovery path ran).
+    reported: bool,
+    /// Where the `=` should have been (zero-width).
+    eq_site: Span,
+}
+
+/// One `pattern (':' type)? ('=' expr)?` of a `let`/`var`. A missing
+/// `=` before a `,` — and, inside a group, before the statement's end
+/// — is *deferred* to the caller: the right report depends on the
+/// whole group (D63). The zero-width `Missing` placeholder is still
+/// inserted here so the tree keeps its shape. Every other truncation
+/// keeps the single-binder recovery unchanged.
+fn binder(p: &mut Parser<'_>, in_group: bool) -> BinderShape {
+    let mut shape = BinderShape {
+        ok: true,
+        has_init: false,
+        lit_pat: false,
+        reported: false,
+        eq_site: p.here(),
+    };
+    match pattern(p) {
+        Some(cm) => shape.lit_pat = cm.kind() == SyntaxKind::LiteralPat,
+        None => {
+            p.error(codes::EXPECTED_PATTERN, p.here(), "expected a pattern");
+            p.missing();
+            shape.ok = false;
+            shape.reported = true;
+        }
     }
     if p.at_punct(Punct::Colon) {
         p.bump();
@@ -656,28 +686,167 @@ pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: Syn
     if p.at_punct(Punct::Eq) {
         p.bump();
         crate::exprs::expr_required(p);
+        shape.has_init = true;
+        return shape;
+    }
+    shape.eq_site = p.here();
+    let at_stmt_end =
+        p.at(TokenKind::Term) || p.at_eof() || p.at_decl_start() || p.at_punct(Punct::RBrace);
+    if p.at_punct(Punct::Comma) {
+        // A group separator: this binder ends valueless; the caller
+        // owns the report.
+        p.missing();
+    } else if in_group && at_stmt_end {
+        // The group's last binder is valueless (`var i, c`): defer,
+        // and fold the follow-up missing-terminator diagnostic.
+        p.missing();
+        p.fold_line_end();
     } else {
         // One report per truncated binding: a missing binder was
         // already diagnosed above.
-        if binder_ok {
+        if shape.ok {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.here(),
                 "this binding has no value — expected `=` and an initializer",
             );
         }
+        shape.reported = true;
         p.missing();
         // ...and fold the follow-up missing-terminator diagnostic.
         p.fold_line_end();
-        if !p.at(TokenKind::Term) && !p.at_eof() && !p.at_decl_start() && !p.at_punct(Punct::RBrace)
-        {
+        if !at_stmt_end {
             p.recover_until(true, |k| {
                 k == TokenKind::Term || k == TokenKind::Punct(Punct::Eq)
             });
             if p.at_punct(Punct::Eq) {
                 p.bump();
                 crate::exprs::expr_required(p);
+                shape.has_init = true;
             }
+        }
+    }
+    shape
+}
+
+/// The group-end report for deferred valueless binders (D63's refusal
+/// ladder): the bare tuple by name, one-initializer-for-several-names
+/// with both spellings, or the production's plain letter.
+fn group_report(p: &mut Parser<'_>, kw: Keyword, shapes: &[BinderShape]) {
+    let kw = if kw == Keyword::Var { "var" } else { "let" };
+    let deferred: Vec<usize> = shapes
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.ok && !s.has_init && !s.reported)
+        .map(|(i, _)| i)
+        .collect();
+    if deferred.is_empty() {
+        return;
+    }
+    let Some(first_init) = shapes.iter().position(|s| s.has_init) else {
+        // `var i, c` — no initializer anywhere: the production's
+        // letter, unchanged. One report per valueless binder.
+        for &i in &deferred {
+            p.error(
+                codes::EXPECTED_TOKEN,
+                shapes[i].eq_site,
+                "this binding has no value — expected `=` and an initializer",
+            );
+        }
+        return;
+    };
+    if let Some(&after) = deferred.iter().find(|&&i| i > first_init) {
+        // `let a, b = 1, 2` — the bare tuple, refused by name. One
+        // report covers the whole shape; its note carries both fixes,
+        // so the leading valueless binders stay unreported.
+        p.push_diag(
+            wolf_diag::Diagnostic::error(
+                codes::EXPECTED_TOKEN,
+                shapes[after].eq_site,
+                format!("this value has no name — `{kw} a, b = 1, 2` (the bare tuple) is not wolf"),
+            )
+            .with_note(format!(
+                "a comma groups complete bindings, each with its own `=`: \
+                 `{kw} a = 1, b = 2`. To unpack one value into several names, \
+                 destructure with parens on both sides: `{kw} (a, b) = (1, 2)`.",
+            )),
+        );
+        return;
+    }
+    // `var i, c = 0` — one initializer cannot serve several names.
+    for &i in &deferred {
+        p.push_diag(
+            wolf_diag::Diagnostic::error(
+                codes::EXPECTED_TOKEN,
+                shapes[i].eq_site,
+                "this binding has no value — expected `=` and an initializer",
+            )
+            .with_note(format!(
+                "one initializer cannot serve several names. Destructure — \
+                 `{kw} (i, c) = (0, 0)` — or give each name its own value: \
+                 `{kw} i = 0, c = 0`.",
+            )),
+        );
+    }
+}
+
+pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: SyntaxKind) {
+    p.bump(); // let/var/const
+    if kw == Keyword::Const {
+        // `const` binds one name — no comma group (D63 is let/var).
+        let binder_ok = name_token(p, "constant");
+        if p.at_punct(Punct::Colon) {
+            p.bump();
+            type_required(p);
+        }
+        if p.at_punct(Punct::Eq) {
+            p.bump();
+            crate::exprs::expr_required(p);
+        } else {
+            // One report per truncated binding: a missing binder was
+            // already diagnosed above.
+            if binder_ok {
+                p.error(
+                    codes::EXPECTED_TOKEN,
+                    p.here(),
+                    "this binding has no value — expected `=` and an initializer",
+                );
+            }
+            p.missing();
+            // ...and fold the follow-up missing-terminator diagnostic.
+            p.fold_line_end();
+            if !p.at(TokenKind::Term)
+                && !p.at_eof()
+                && !p.at_decl_start()
+                && !p.at_punct(Punct::RBrace)
+            {
+                p.recover_until(true, |k| {
+                    k == TokenKind::Term || k == TokenKind::Punct(Punct::Eq)
+                });
+                if p.at_punct(Punct::Eq) {
+                    p.bump();
+                    crate::exprs::expr_required(p);
+                }
+            }
+        }
+    } else {
+        // `let`/`var`: binder (',' binder)* — D63. A single binder
+        // keeps the flat shape; a comma wraps every binder in its own
+        // `Binder` node.
+        let first_m = p.start();
+        let first = binder(p, false);
+        if p.at_punct(Punct::Comma) {
+            first_m.complete(p, SyntaxKind::Binder);
+            let mut shapes = vec![first];
+            while p.at_punct(Punct::Comma) {
+                p.bump();
+                let bm = p.start();
+                shapes.push(binder(p, true));
+                bm.complete(p, SyntaxKind::Binder);
+            }
+            group_report(p, kw, &shapes);
+        } else {
+            first_m.abandon(p);
         }
     }
     if p.at(TokenKind::Term) {
@@ -1675,12 +1844,12 @@ fn type_arg_pending(p: &mut Parser<'_>) {
 
 // ------------------------------------------------------------- patterns --
 
-/// `[gram.pat]`, or-patterns wrapped via `precede`. Returns false if no
-/// pattern can start here (nothing emitted).
-pub(crate) fn pattern(p: &mut Parser<'_>) -> bool {
-    let Some(first) = pattern_atom(p) else {
-        return false;
-    };
+/// `[gram.pat]`, or-patterns wrapped via `precede`. Returns `None` if
+/// no pattern can start here (nothing emitted); otherwise the
+/// completed pattern node (callers key shape decisions — the D63
+/// bare-tuple teach-note — off its kind).
+pub(crate) fn pattern(p: &mut Parser<'_>) -> Option<crate::parser::CompletedMarker> {
+    let first = pattern_atom(p)?;
     if p.at_punct(Punct::Pipe) {
         let m = first.precede(p);
         while p.at_punct(Punct::Pipe) {
@@ -1695,9 +1864,9 @@ pub(crate) fn pattern(p: &mut Parser<'_>) -> bool {
                 break;
             }
         }
-        m.complete(p, SyntaxKind::OrPat);
+        return Some(m.complete(p, SyntaxKind::OrPat));
     }
-    true
+    Some(first)
 }
 
 pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::CompletedMarker> {
@@ -1734,7 +1903,7 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
                     break;
                 }
                 let before = p.pos();
-                if !pattern(p) {
+                if pattern(p).is_none() {
                     if !p.arm_error_reported {
                         p.arm_error_reported = true;
                         p.error(
@@ -1824,7 +1993,7 @@ fn pattern_payload(p: &mut Parser<'_>) {
             break;
         }
         let before = p.pos();
-        if !pattern(p) {
+        if pattern(p).is_none() {
             if !p.arm_error_reported {
                 p.arm_error_reported = true;
                 p.error(
