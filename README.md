@@ -13,13 +13,14 @@ Wolf is pre-alpha. The surface still moves.
 
 ## What runs today
 
-v0.1.0 is tagged, under the codename wolfgang. The codenames go on like that.
+v0.2.0 is tagged, under the codename wolfgang. The codenames go on like that.
 
-It ships the debug tier: `wolf build` and `wolf run` compile `.lu` source to
+It ships both tiers: `wolf build` and `wolf run` compile `.lu` source to
 native machine code through the compiler's own backend, with no LLVM in the
-loop. `wolf build --release` goes through LLVM instead. That tier compiles and
-runs, and both tiers agree on every corpus program that runs. The optimizer
-behind it is campaign c09 and that work is not finished.
+loop, and `wolf build --release` goes through LLVM instead. The tiers agree
+on every corpus program that runs, on linux x86-64 and macOS aarch64 alike,
+and the release tier's M2 gate — the thirteen-kernel suite against naive
+`clang -O3` — is declared held.
 
 ```sh
 cargo build --release -p wolf_driver
@@ -36,8 +37,9 @@ the one above included — answers `version+dev.<commit>`, so an off-tag build
 never claims to be the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and says `+dev.unknown`.
 
+[`CHANGELOG.md`](CHANGELOG.md) tells v0.2.0 by campaign;
 [`docs/release/NOTES-v0.1.0.md`](docs/release/NOTES-v0.1.0.md) says what the
-release does and what it does not do, feature by feature.
+first release was, feature by feature.
 
 ## Where things are
 
