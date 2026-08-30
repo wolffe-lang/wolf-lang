@@ -31,6 +31,54 @@ mod test_cmd;
 /// test fails the gauntlet when the sibling lupin disagrees with it.
 const PAIRING: &str = include_str!("../PAIRING");
 
+/// The build's git commit (short sha), stamped as a compile-time env by
+/// the invocation that built the binary — `cargo xtask dist` and the
+/// release pipeline — never by a build script (D33 bans them; lupin's
+/// r02 build.rs shape is adopted with the probe moved into the builder).
+/// Absent means unstamped: a plain `cargo build` is a dev build that
+/// cannot name its commit, and says so.
+const BUILD_COMMIT: Option<&str> = option_env!("WOLF_COMMIT");
+
+/// D57 (r03): true only when the builder stamped this build as made
+/// exactly at this crate version's own `v{version}` release tag
+/// (`WOLF_RELEASE=v{version}`, set by xtask's tag probe) AND the commit
+/// is known. A stale stamp for some other version claims nothing.
+fn build_is_release() -> bool {
+    option_env!("WOLF_RELEASE") == Some(concat!("v", env!("CARGO_PKG_VERSION")))
+        && BUILD_COMMIT.is_some()
+}
+
+/// The version token this build answers for itself — `--version`'s first
+/// word after the command name, and the observation record's
+/// `impl_version` (r03 target 3: the record carries the commit identity).
+///
+/// D57: a build made exactly at its own release tag prints the bare
+/// crate version; every other build — trunk, branch, or no stamp at
+/// all — carries `+dev.<commit>` and never claims the release.
+/// Unverifiable is dev: no stamp means no release claim.
+fn version_identity(version: &str, commit: Option<&str>, release: bool) -> String {
+    if release {
+        version.to_string()
+    } else {
+        format!("{version}+dev.{}", commit.unwrap_or("unknown"))
+    }
+}
+
+/// `--version`'s first line: `wolf <identity> (wolfgang[, pin <commit>])`.
+/// The pin clause names the wolf-lang commit the binary was built from,
+/// in the exact `pin <hex>` shape wolf-std's doctor already parses from
+/// a first line — so provenance becomes verifiable from the binary
+/// itself (retiring the sc24-era "trusted from acquisition" WARN at
+/// wolf-std's next bump). Additive: name and version tokens keep their
+/// r01 positions. An unstamped build has no pin clause to offer.
+fn own_version_line(version: &str, commit: Option<&str>, release: bool) -> String {
+    let identity = version_identity(version, commit, release);
+    match commit {
+        Some(c) => format!("wolf {identity} (wolfgang, pin {c})"),
+        None => format!("wolf {identity} (wolfgang)"),
+    }
+}
+
 /// (version, pin) out of [`PAIRING`]. Panics on a malformed file —
 /// a build whose own version output cannot be trusted should not run.
 fn pairing() -> (String, String) {
@@ -54,11 +102,17 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         // D38: the compiler is named wolfgang; the command stays `wolf`.
+        // First line: the build's own identity (D57, r03) — bare version
+        // only at the release tag, `+dev.<commit>` everywhere else, and
+        // the build commit as a doctor-parseable pin clause when known.
         // Second line: the release pairing (r01 criteria row 7) — lupin is
         // the reference interpreter this release was differentially tested
-        // against. LUPIN_PIN_SHA is stamped by the integrator at tag time.
+        // against, read from the one PAIRING file (#87).
         Some("--version") => {
-            println!("wolf {} (wolfgang)", env!("CARGO_PKG_VERSION"));
+            println!(
+                "{}",
+                own_version_line(env!("CARGO_PKG_VERSION"), BUILD_COMMIT, build_is_release())
+            );
             let (lupin_version, lupin_pin) = pairing();
             println!("paired with lupin {lupin_version} (reference interpreter), pin {lupin_pin}");
         }
@@ -3292,8 +3346,13 @@ fn conform_run(args: &[String]) {
     let mut record = serde_json::json!({
         "protocol": 1,
         "impl": "wolfgang",
-        "impl_version": env!("CARGO_PKG_VERSION"),
-        "commit": option_env!("WOLF_COMMIT").unwrap_or("unknown"),
+        // r03: `impl_version` carries the D57 build identity — bare at
+        // the release tag, `+dev.<commit>` off it — so a record names
+        // which wolfgang made it even where `commit` alone goes stale
+        // in downstream quotation. `commit` stays: [proto.record.fields]
+        // requires it, and it is the machine-comparable half.
+        "impl_version": version_identity(env!("CARGO_PKG_VERSION"), BUILD_COMMIT, build_is_release()),
+        "commit": BUILD_COMMIT.unwrap_or("unknown"),
         "file": file.replace('\\', "/"),
         "phase_reached": phase_reached,
         // s73: true exactly when a --seed reached a native execution
@@ -3309,4 +3368,44 @@ fn conform_run(args: &[String]) {
         record[k] = v;
     }
     println!("{record}");
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::{own_version_line, version_identity};
+
+    /// D57 in both directions — the release direction and the dev
+    /// direction each exercised, so the honesty logic's teeth are felt
+    /// on every run (the pairing gate's own discipline).
+    #[test]
+    fn a_release_build_prints_the_bare_version() {
+        assert_eq!(version_identity("0.2.0", Some("abc1234"), true), "0.2.0");
+        assert_eq!(
+            own_version_line("0.2.0", Some("abc1234"), true),
+            "wolf 0.2.0 (wolfgang, pin abc1234)"
+        );
+    }
+
+    #[test]
+    fn an_off_tag_build_never_claims_the_release() {
+        assert_eq!(
+            version_identity("0.2.0", Some("abc1234"), false),
+            "0.2.0+dev.abc1234"
+        );
+        assert_eq!(
+            own_version_line("0.2.0", Some("abc1234"), false),
+            "wolf 0.2.0+dev.abc1234 (wolfgang, pin abc1234)"
+        );
+    }
+
+    #[test]
+    fn an_unstamped_build_is_dev_with_no_pin_clause() {
+        // Unverifiable is dev (D57): no stamp, no release claim, and no
+        // pin clause the doctor could mistakenly verify against.
+        assert_eq!(version_identity("0.2.0", None, false), "0.2.0+dev.unknown");
+        assert_eq!(
+            own_version_line("0.2.0", None, false),
+            "wolf 0.2.0+dev.unknown (wolfgang)"
+        );
+    }
 }

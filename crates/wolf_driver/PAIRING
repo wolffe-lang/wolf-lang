@@ -9,5 +9,5 @@
 # present (and, when that sibling is a release build, the pin too:
 # D57, a release's pin is part of its identity), so a stale stamp
 # fails the local gauntlet instead of shipping.
-lupin-version = 0.1.16
-lupin-pin = e561c6f
+lupin-version = 0.1.17
+lupin-pin = addcd7f

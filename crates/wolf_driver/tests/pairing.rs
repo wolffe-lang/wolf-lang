@@ -237,3 +237,48 @@ fn a_full_sha_pairing_pin_matches_the_short_spelling() {
     );
     assert!(verdict.is_ok(), "{verdict:?}");
 }
+
+/// Layer 4 (r03, D57): the FIRST line tells the build's own truth.
+/// `wolf <identity> (wolfgang[, pin <commit>])` — a bare identity is a
+/// release claim and must carry its pin clause; a `+dev.<commit>`
+/// identity is any off-tag or unstamped build. Shape-checked in both
+/// directions so the suite passes on a dev tree and on the tag build
+/// alike, while a malformed line fails everywhere.
+#[test]
+fn the_first_version_line_tells_the_build_truth() {
+    let out = Command::new(env!("CARGO_BIN_EXE_wolf"))
+        .arg("--version")
+        .output()
+        .expect("wolf --version runs");
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next().expect("a first line");
+    let rest = first
+        .strip_prefix(concat!("wolf ", env!("CARGO_PKG_VERSION")))
+        .unwrap_or_else(|| panic!("line 1 opens with the crate version: {first}"));
+    let (suffix, tail) = rest
+        .split_once(" (wolfgang")
+        .unwrap_or_else(|| panic!("line 1 names wolfgang (D38): {first}"));
+    let pin = tail
+        .strip_suffix(')')
+        .unwrap_or_else(|| panic!("line 1 closes its parenthesis: {first}"))
+        .strip_prefix(", pin ");
+    let hexish = |s: &str| s.len() == 7 && s.chars().all(|c| c.is_ascii_hexdigit());
+    if suffix.is_empty() {
+        // The bare version is a release claim (D57): only a stamped
+        // build makes it, and a stamped build knows its commit.
+        let pin = pin.unwrap_or_else(|| panic!("a release build names its pin: {first}"));
+        assert!(hexish(pin), "{first}");
+    } else {
+        let commit = suffix
+            .strip_prefix("+dev.")
+            .unwrap_or_else(|| panic!("an off-tag build spells `+dev.<commit>`: {first}"));
+        match pin {
+            // A stamped dev build: the pin clause repeats the commit.
+            Some(p) => {
+                assert!(hexish(commit) && p == commit, "{first}");
+            }
+            // Unstamped: no commit to claim, and none claimed.
+            None => assert_eq!(commit, "unknown", "{first}"),
+        }
+    }
+}
