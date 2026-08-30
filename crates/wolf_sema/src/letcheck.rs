@@ -56,17 +56,20 @@ pub(crate) fn module_globals(pkg: &Package, module: usize) -> Vec<Bind> {
     for &fi in &pkg.modules[module].files {
         let src = &pkg.files[fi].raw.src;
         for item in pkg.files[fi].parse.root.nodes() {
-            let (pat, let_kw) = match item.kind {
+            let (binders, let_kw) = match item.kind {
                 SyntaxKind::LetDecl => (
-                    LetDecl::cast(item).and_then(|d| d.pattern()),
+                    LetDecl::cast(item).map(|d| d.binders()).unwrap_or_default(),
                     item.tokens()
                         .find(|t| t.kind == SyntaxKind::LetKw)
                         .map(|t| t.span),
                 ),
-                SyntaxKind::VarDecl => (VarDecl::cast(item).and_then(|d| d.pattern()), None),
+                SyntaxKind::VarDecl => (
+                    VarDecl::cast(item).map(|d| d.binders()).unwrap_or_default(),
+                    None,
+                ),
                 _ => continue,
             };
-            if let Some(pat) = pat {
+            for pat in binders.iter().filter_map(|b| b.pattern) {
                 for (name, _) in pattern_names(pat, src) {
                     out.push((name, let_kw));
                 }
@@ -157,25 +160,33 @@ impl Walk<'_> {
     fn stmt(&mut self, s: &GreenNode) {
         match s.kind {
             SyntaxKind::LetDecl => {
-                let d = LetDecl::cast(s);
-                if let Some(init) = d.and_then(|d| d.init()) {
-                    self.expr(init);
-                }
                 let let_kw = s
                     .tokens()
                     .find(|t| t.kind == SyntaxKind::LetKw)
                     .map(|t| t.span);
-                if let Some(pat) = d.and_then(|d| d.pattern()) {
-                    self.declare_pattern(pat, let_kw);
+                if let Some(d) = LetDecl::cast(s) {
+                    // Binders in order (D63): each initializer may read
+                    // the names declared before it.
+                    for b in d.binders() {
+                        if let Some(init) = b.init {
+                            self.expr(init);
+                        }
+                        if let Some(pat) = b.pattern {
+                            self.declare_pattern(pat, let_kw);
+                        }
+                    }
                 }
             }
             SyntaxKind::VarDecl => {
-                let d = VarDecl::cast(s);
-                if let Some(init) = d.and_then(|d| d.init()) {
-                    self.expr(init);
-                }
-                if let Some(pat) = d.and_then(|d| d.pattern()) {
-                    self.declare_pattern(pat, None);
+                if let Some(d) = VarDecl::cast(s) {
+                    for b in d.binders() {
+                        if let Some(init) = b.init {
+                            self.expr(init);
+                        }
+                        if let Some(pat) = b.pattern {
+                            self.declare_pattern(pat, None);
+                        }
+                    }
                 }
             }
             SyntaxKind::ConstDecl => {

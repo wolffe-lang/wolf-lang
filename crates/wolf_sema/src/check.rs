@@ -3013,10 +3013,25 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
-            SyntaxKind::LetDecl => self
-                .check_binding_stmt(LetDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
-            SyntaxKind::VarDecl => self
-                .check_binding_stmt(VarDecl::cast(s).map(|d| (d.pattern(), d.ty(), d.init())), s),
+            // A comma group checks as the sequence of single bindings,
+            // left to right — a later binder may read an earlier one
+            // (D63).
+            SyntaxKind::LetDecl => {
+                if let Some(d) = LetDecl::cast(s) {
+                    for b in d.binders() {
+                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node)?;
+                    }
+                }
+                Ok(())
+            }
+            SyntaxKind::VarDecl => {
+                if let Some(d) = VarDecl::cast(s) {
+                    for b in d.binders() {
+                        self.check_binding_stmt(Some((b.pattern, b.ty, b.init)), b.node)?;
+                    }
+                }
+                Ok(())
+            }
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(s);
                 let name = d.and_then(|c| c.name());

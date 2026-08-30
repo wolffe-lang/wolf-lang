@@ -1532,9 +1532,7 @@ pub(crate) fn pattern_names(node: &GreenNode, src: &[u8]) -> Vec<(String, Span)>
 /// Collect the top-level items of one file: (name, kind, vis, name
 /// span, decl index among item nodes).
 fn collect_items(root: &GreenNode, src: &[u8]) -> Vec<(String, ItemKind, Vis, Span, usize)> {
-    use wolf_ast::{
-        ConstDecl, EnumDecl, FnDecl, LetDecl, StructDecl, TraitDecl, TypeDecl, VarDecl,
-    };
+    use wolf_ast::{ConstDecl, EnumDecl, FnDecl, StructDecl, TraitDecl, TypeDecl};
     let mut out = Vec::new();
     for (decl, node) in root.nodes().filter(|n| n.kind.is_item()).enumerate() {
         let vis = item_vis(node);
@@ -1564,16 +1562,20 @@ fn collect_items(root: &GreenNode, src: &[u8]) -> Vec<(String, ItemKind, Vis, Sp
                 ItemKind::Const,
             ),
             SyntaxKind::LetDecl => {
-                if let Some(pat) = LetDecl::cast(node).and_then(|d| d.pattern()) {
-                    for (name, span) in pattern_names(pat, src) {
-                        out.push((name, ItemKind::Let, vis, span, decl));
+                for b in wolf_ast::binding_binders(node) {
+                    if let Some(pat) = b.pattern {
+                        for (name, span) in pattern_names(pat, src) {
+                            out.push((name, ItemKind::Let, vis, span, decl));
+                        }
                     }
                 }
             }
             SyntaxKind::VarDecl => {
-                if let Some(pat) = VarDecl::cast(node).and_then(|d| d.pattern()) {
-                    for (name, span) in pattern_names(pat, src) {
-                        out.push((name, ItemKind::Var, vis, span, decl));
+                for b in wolf_ast::binding_binders(node) {
+                    if let Some(pat) = b.pattern {
+                        for (name, span) in pattern_names(pat, src) {
+                            out.push((name, ItemKind::Var, vis, span, decl));
+                        }
                     }
                 }
             }
