@@ -1201,12 +1201,21 @@ const ALL_THREE_FLOOR: usize = 207;
 // the rejection ledger (115 → 117). No pre-existing file moved
 // lanes. Totals 226/248/248, union 262, all-three 212. Counts
 // measured by this gate, not predicted.
+// s128 ratchet over 401 entries: comma-grouped binders (D63). One new
+// run-phase witness — `grammar/let_group.lu`, the D63 group with a
+// later binder reading an earlier one — runs on every lane, so every
+// count moves +1 (a POPULATION change; no pre-existing file moved
+// lanes). The two refusal teach-notes (`let_group_one_init`,
+// `let_group_bare_tuple`) join the rejection ledger, and
+// `let_group_destructure` waits at `mem` for #173's landing. Totals
+// 227/249/249, union 263, all-three 213. Counts measured by this
+// gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 226), ("native", 248), ("release", 248)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 227), ("native", 249), ("release", 249)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 262;
+const UNION_FLOOR: usize = 263;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 212;
+const ALL_THREE_FLOOR: usize = 213;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

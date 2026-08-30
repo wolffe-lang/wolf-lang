@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 354
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -113,6 +114,10 @@ grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
 grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/interp_nested.lu: lowers
+grammar/let_group.lu: lowers
+grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
+grammar/let_group_destructure.lu: refused — destructuring bindings (tuple/struct patterns, c06)
+grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)

@@ -1,0 +1,74 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+assertion_line: 34
+expression: out
+---
+== tree ==
+SourceFile 335..404
+  FnDecl 335..403
+    FnKw 335..337 "fn"
+    Ident 338..342 "main"
+    ParamList 342..344
+      LParen 342..343 "("
+      RParen 343..344 ")"
+    RetType 345..352
+      Arrow 345..347 "->"
+      ErrorUnionType 348..352
+        Not 348..349 "!"
+        PathType 349..352
+          Path 349..352
+            Ident 349..352 "int"
+    Block 353..403
+      LBrace 353..354 "{"
+      LetDecl 359..375
+        LetKw 359..362 "let"
+        Binder 363..364
+          IdentPat 363..364
+            Ident 363..364 "a"
+          Missing 364..364 ""
+        Comma 364..365 ","
+        Binder 366..371
+          IdentPat 366..367
+            Ident 366..367 "b"
+          Eq 368..369 "="
+          LiteralExpr 370..371
+            Int 370..371 "1"
+        Comma 371..372 ","
+        Binder 373..374
+          LiteralPat 373..374
+            Int 373..374 "2"
+          Missing 374..374 ""
+        Term 374..375 "\n"
+      ExprStmt 379..396
+        CallExpr 379..395
+          PathExpr 379..384
+            Ident 379..384 "print"
+          ArgList 384..395
+            LParen 384..385 "("
+            Arg 385..394
+              StringExpr 385..394
+                StrBegin 385..386 "\""
+                Interp 386..389
+                  InterpOpen 386..387 "{"
+                  PathExpr 387..388
+                    Ident 387..388 "a"
+                  InterpClose 388..389 "}"
+                StrFragment 389..390 " "
+                Interp 390..393
+                  InterpOpen 390..391 "{"
+                  PathExpr 391..392
+                    Ident 391..392 "b"
+                  InterpClose 392..393 "}"
+                StrEnd 393..394 "\""
+            RParen 394..395 ")"
+        Term 395..396 "\n"
+      ExprStmt 400..402
+        LiteralExpr 400..401
+          Int 400..401 "0"
+        Term 401..402 "\n"
+      RBrace 402..403 "}"
+  Term 403..404 "\n"
+  Eof 404..404 ""
+== diagnostics ==
+E0201 [Error] 374..374 this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf
+    note a comma groups complete bindings, each with its own `=`: `let a = 1, b = 2`. To unpack one value into several names, destructure with parens on both sides: `let (a, b) = (1, 2)`.
