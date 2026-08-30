@@ -30,6 +30,12 @@ cargo build --release -p wolf_driver
 hello, wolf
 ```
 
+`wolf --version` tells the truth about the build it names (D57): a build made
+exactly at its release tag prints the bare version, and every other build —
+the one above included — answers `version+dev.<commit>`, so an off-tag build
+never claims to be the release. `cargo xtask dist` stamps the commit; a plain
+`cargo build` cannot verify one and says `+dev.unknown`.
+
 [`docs/release/NOTES-v0.1.0.md`](docs/release/NOTES-v0.1.0.md) says what the
 release does and what it does not do, feature by feature.
 

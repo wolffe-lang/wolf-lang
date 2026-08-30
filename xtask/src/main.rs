@@ -3587,6 +3587,49 @@ fn differ_cmd(args: &[String]) -> ExitCode {
 /// binary and stage a versioned archive under target/dist/. The release
 /// workflow runs this per-OS on the tier-1 matrix; c13 fills in substance
 /// (real cross-compilation, signing).
+/// The D57 build stamp, computed by the BUILDER (D33 bans build scripts,
+/// so the probe lupin keeps in build.rs lives here): `WOLF_COMMIT` is
+/// HEAD's short sha, and `WOLF_RELEASE=v{version}` rides along only when
+/// that exact release tag points at HEAD. `wolf --version` and the
+/// observation record's `impl_version` read both at compile time — a
+/// build made any other way (plain `cargo build`, a tarball) is
+/// unstamped and prints `+dev.unknown`: unverifiable is dev.
+fn version_stamp() -> Vec<(&'static str, String)> {
+    let commit = git_short_sha();
+    let mut stamp = Vec::new();
+    if commit != "unknown" {
+        stamp.push(("WOLF_COMMIT", commit));
+    }
+    if let Some(tag) = release_stamp(&git_tags_at_head(), env!("CARGO_PKG_VERSION")) {
+        stamp.push(("WOLF_RELEASE", tag));
+    }
+    stamp
+}
+
+/// The release decision, pure: the stamp is granted only when the tag
+/// list at HEAD contains exactly `v{version}` — this workspace's own
+/// release tag, no other spelling.
+fn release_stamp(tags_at_head: &[String], version: &str) -> Option<String> {
+    let tag = format!("v{version}");
+    tags_at_head.contains(&tag).then_some(tag)
+}
+
+fn git_tags_at_head() -> Vec<String> {
+    Command::new("git")
+        .args(["tag", "--points-at", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn dist() -> ExitCode {
     let host = rustc_host_triple();
     let version = env!("CARGO_PKG_VERSION");
@@ -3596,20 +3639,26 @@ fn dist() -> ExitCode {
     // first tarballs shipped that way (#62). The third is the C
     // importer worker (s46): the compiler locates it *next to itself*,
     // so an archive without it is one where `import c` cannot work.
-    if !run_ok(
-        "cargo",
-        &[
-            "build",
-            "--release",
-            "-p",
-            "wolf_driver",
-            "-p",
-            "wolf_rt",
-            "-p",
-            "wolf_cimport",
-            "--quiet",
-        ],
-    ) {
+    // The dist build carries the D57 stamp: this is the build that
+    // ships, so it is the one whose `--version` must tell the truth —
+    // bare at the release tag (release.yml checks the tag out, so the
+    // probe sees it), `+dev.<sha>` anywhere else.
+    let mut build = Command::new("cargo");
+    build.args([
+        "build",
+        "--release",
+        "-p",
+        "wolf_driver",
+        "-p",
+        "wolf_rt",
+        "-p",
+        "wolf_cimport",
+        "--quiet",
+    ]);
+    for (k, v) in version_stamp() {
+        build.env(k, v);
+    }
+    if !build.status().map(|s| s.success()).unwrap_or(false) {
         eprintln!("dist: release build failed");
         return ExitCode::FAILURE;
     }
@@ -3947,5 +3996,30 @@ fn deps_check() -> ExitCode {
     } else {
         eprintln!("deps-check: crate graph direction ok");
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod version_stamp_tests {
+    use super::release_stamp;
+
+    /// D57's grant and refusals: only this workspace's own `v{version}`
+    /// tag at HEAD earns the release stamp.
+    #[test]
+    fn the_release_stamp_needs_the_exact_tag() {
+        let tags = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            release_stamp(&tags(&["v0.2.0"]), "0.2.0"),
+            Some("v0.2.0".into())
+        );
+        // Other tags at HEAD do not confuse the probe.
+        assert_eq!(
+            release_stamp(&tags(&["nightly", "v0.2.0"]), "0.2.0"),
+            Some("v0.2.0".into())
+        );
+        // A different version's tag is not this build's release.
+        assert_eq!(release_stamp(&tags(&["v0.1.0"]), "0.2.0"), None);
+        // No tags at HEAD: a trunk build, dev by definition.
+        assert_eq!(release_stamp(&[], "0.2.0"), None);
     }
 }
