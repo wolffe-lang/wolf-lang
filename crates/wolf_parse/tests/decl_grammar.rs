@@ -409,6 +409,45 @@ fn binding_patterns() {
     );
 }
 
+#[test]
+fn binding_comma_group() {
+    // D63: several complete binders under one keyword, each with its
+    // own pattern, optional type, and initializer.
+    let src = "var i = 0, c = 1\nlet a: int = 1, (x, y) = pair, b = a\n";
+    let root = clean(src);
+    let v = root.nodes().find_map(VarDecl::cast).expect("var");
+    let bs = v.binders();
+    assert_eq!(bs.len(), 2);
+    assert_eq!(bs[0].pattern.expect("pattern").kind, SyntaxKind::IdentPat);
+    assert!(bs[0].init.is_some());
+    assert!(bs[1].init.is_some());
+    // The flat accessors read the first binder.
+    assert_eq!(v.pattern().expect("pattern").kind, SyntaxKind::IdentPat);
+    let l = root.nodes().find_map(LetDecl::cast).expect("let");
+    let lb = l.binders();
+    assert_eq!(lb.len(), 3);
+    assert_eq!(lb[0].ty.expect("ascription").kind, SyntaxKind::PathType);
+    assert!(lb[1].ty.is_none());
+    assert_eq!(lb[1].pattern.expect("pattern").kind, SyntaxKind::TuplePat);
+    assert!(lb[2].init.is_some());
+}
+
+#[test]
+fn binding_single_stays_flat() {
+    // A single binder keeps the pre-D63 flat shape — no `Binder` node.
+    let src = "let a = 1\nvar v: int = 2\n";
+    let root = clean(src);
+    for decl in root.nodes() {
+        assert!(
+            decl.nodes().all(|n| n.kind != SyntaxKind::Binder),
+            "flat binding grew a Binder node"
+        );
+    }
+    let l = root.nodes().find_map(LetDecl::cast).expect("let");
+    assert_eq!(l.binders().len(), 1);
+    assert!(l.binders()[0].init.is_some());
+}
+
 // ---------------------------------------------------------------- types --
 
 fn let_ty(src: &str) -> SyntaxKind {

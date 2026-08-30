@@ -1,0 +1,25 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+assertion_line: 23
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "this binding has no value — expected `=` and an initializer",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 5,
+            hi: 5,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [
+        "one initializer cannot serve several names. Destructure — `var (i, c) = (0, 0)` — or give each name its own value: `var i = 0, c = 0`.",
+    ],
+    suggestions: [],
+}

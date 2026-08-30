@@ -74,6 +74,29 @@ fn e0201_expected_token() {
     );
 }
 
+/// D63's two refusal teach-notes: one initializer for several names
+/// offers both spellings; the Python bare tuple is refused by name.
+#[test]
+fn e0201_binding_group_teach_notes() {
+    snap(
+        "e0201_group_one_init_many_names",
+        "var i, c = 0\n",
+        codes::EXPECTED_TOKEN,
+    );
+    snap(
+        "e0201_group_bare_tuple",
+        "let a, b = 1, 2\n",
+        codes::EXPECTED_TOKEN,
+    );
+    // A group with no initializer anywhere keeps the production's
+    // plain letter — no teach-note.
+    snap(
+        "e0201_group_uninitialized",
+        "var i, c\n",
+        codes::EXPECTED_TOKEN,
+    );
+}
+
 /// The endpoint rule is one-sided: only the TRAILING endpoint is
 /// optional, so `a..`, `..b` and `a..b` all parse clean. Pinned beside
 /// the refusal so a future tightening cannot quietly take them too.
