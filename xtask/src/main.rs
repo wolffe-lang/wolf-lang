@@ -3673,12 +3673,22 @@ fn dist() -> ExitCode {
     std::fs::create_dir_all(&stage).expect("mkdir dist stage");
     std::fs::copy(Path::new("target/release").join(exe), stage.join(exe))
         .expect("stage wolf binary");
-    let rt = Path::new("target/release").join("libwolf_rt.a");
+    // The staticlib's name is the target's: rustc emits `wolf_rt.lib`
+    // on MSVC and `libwolf_rt.a` everywhere else. The windows archive
+    // stages it under the MSVC name today for the day s60 teaches the
+    // driver to link there — v0.2.0's windows dist failed hunting the
+    // unix spelling (the first tag since s59 added this guard).
+    let rt_name = if host.contains("windows") {
+        "wolf_rt.lib"
+    } else {
+        "libwolf_rt.a"
+    };
+    let rt = Path::new("target/release").join(rt_name);
     if !rt.exists() {
-        eprintln!("dist: libwolf_rt.a missing — the archive would not link");
+        eprintln!("dist: {rt_name} missing — the archive would not link");
         return ExitCode::FAILURE;
     }
-    std::fs::copy(&rt, stage.join("libwolf_rt.a")).expect("stage runtime lib");
+    std::fs::copy(&rt, stage.join(rt_name)).expect("stage runtime lib");
     // The C importer worker rides along: `wolf` finds it beside itself,
     // and never links it (s46, D33).
     let worker_exe = if host.contains("windows") {
