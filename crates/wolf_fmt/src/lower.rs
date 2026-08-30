@@ -2429,6 +2429,64 @@ impl<'a> Fmt<'a> {
                 }
             }
             K::TraitDecl | K::ImplDecl => self.container_decl(n, out),
+            K::LetDecl | K::VarDecl if n.nodes().any(|m| m.kind == K::Binder) => {
+                // A comma-grouped binding (D63) stays ONE statement
+                // (D34): flat when it fits, one binder per line when it
+                // does not, never rewritten into separate statements.
+                let mut header = true;
+                let mut prev: Option<K> = None;
+                let mut list: Vec<Doc> = Vec::new();
+                for c in &n.children {
+                    match c {
+                        Child::Token(t) => {
+                            if matches!(t.kind, K::Term | K::Missing) {
+                                self.tok_trivia_only(t, &mut list);
+                                continue;
+                            }
+                            if t.kind == K::Comma {
+                                self.tok(t, &mut list);
+                                list.push(Doc::Line);
+                                prev = None;
+                                continue;
+                            }
+                            let dst: &mut Vec<Doc> = if header { &mut *out } else { &mut list };
+                            if let Some(p) = prev
+                                && pair_space(p, t.kind)
+                            {
+                                dst.push(Doc::text(" "));
+                            }
+                            self.tok(t, dst);
+                            prev = Some(t.kind);
+                        }
+                        Child::Node(m) => match m.kind {
+                            K::Attribute => {
+                                self.node(m, out, Ctx::Free);
+                                out.push(Doc::Hardline);
+                                prev = None;
+                            }
+                            K::Binder => {
+                                if header {
+                                    header = false;
+                                    out.push(Doc::text(" "));
+                                }
+                                self.node(m, &mut list, Ctx::Free);
+                                prev = None;
+                            }
+                            _ => {
+                                let dst: &mut Vec<Doc> = if header { &mut *out } else { &mut list };
+                                if let (Some(p), Some(f)) = (prev, first_token(m).map(|t| t.kind))
+                                    && pair_space(p, f)
+                                {
+                                    dst.push(Doc::text(" "));
+                                }
+                                self.node(m, dst, Ctx::Free);
+                                prev = last_token(m).map(|t| t.kind);
+                            }
+                        },
+                    }
+                }
+                out.push(Doc::Group(vec![Doc::Indent(list)]));
+            }
             _ => {
                 // Generic declaration walk: attributes on their own
                 // lines, everything else by pair spacing; `TypeDecl`
