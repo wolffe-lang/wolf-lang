@@ -3127,11 +3127,109 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
+            // s128 (#173): tuple patterns land; struct patterns have
+            // no grammar yet and every other pattern kind is refutable
+            // (sema's E0806 owns those).
+            SyntaxKind::TuplePat => {
+                let Some(init) = init else {
+                    return Err(refuse(
+                        "uninitialized bindings (definite-assignment lowering)",
+                        span,
+                    ));
+                };
+                let Some(sema_ty) = self.expr_sema_ty(init.span) else {
+                    return Err(refuse("a binding without a recorded type", span));
+                };
+                let Some(v) = flow_val!(self.lower_expr(init)) else {
+                    return Err(refuse("a typed binding of a valueless expression", span));
+                };
+                self.bind_tuple_value(pat, v, sema_ty, span)?;
+                Ok(Flow::Val(None))
+            }
             _ => Err(refuse(
                 "destructuring bindings (tuple/struct patterns, c06)",
                 pat.span,
             )),
         }
+    }
+
+    /// `let (x, y) = …` (s128, #173): the aggregate is evaluated ONCE,
+    /// then each bound element is extracted by `agg.get` — element-wise
+    /// moves per the tier-0 discipline (the mem rung already tracked
+    /// each element as its own place). `_` elements extract nothing;
+    /// nested tuple patterns recurse.
+    fn bind_tuple_value(
+        &mut self,
+        pat: &'t GreenNode,
+        agg: Value,
+        sema_ty: TyId,
+        span: Span,
+    ) -> R<()> {
+        let stripped = self.strip_sema(sema_ty);
+        let TyKind::Tuple(elem_tys) = self.table.kind(stripped).clone() else {
+            return Err(refuse("a tuple pattern over a non-tuple type", pat.span));
+        };
+        let subs: Vec<&'t GreenNode> = pat
+            .nodes()
+            .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+            .collect();
+        if subs.len() != elem_tys.len() {
+            return Err(refuse("a tuple pattern with a mismatched arity", pat.span));
+        }
+        let agg_ty = self.b.func.value_ty(agg);
+        let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
+            return Err(refuse("a tuple binding of a non-aggregate value", span));
+        };
+        if fields.len() != subs.len() {
+            return Err(refuse("a tuple binding with a mismatched layout", span));
+        }
+        for (i, sub) in subs.iter().enumerate() {
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let elem_sema = elem_tys[i];
+            let fty = fields[i];
+            let ev = self
+                .b
+                .ins(Opcode::AggGet, &[agg], &[fty], Aux::Int(i as i64))
+                .one();
+            match sub.kind {
+                SyntaxKind::TuplePat => self.bind_tuple_value(sub, ev, elem_sema, span)?,
+                SyntaxKind::IdentPat => {
+                    if matches!(
+                        self.table.kind(self.strip_sema(elem_sema)),
+                        TyKind::RegionTy
+                    ) {
+                        return Err(refuse("a region inside a destructured tuple", sub.span));
+                    }
+                    let name = self.text(sub.span);
+                    let var = self.b.declare_var(fty);
+                    if self.straight_line {
+                        self.b.mark_single_block(var);
+                    }
+                    self.b.def_var(var, ev);
+                    self.b.func.add_debug_var(name.clone(), ev, false);
+                    let bind = LocalBind::Val {
+                        var,
+                        wrapping: matches!(self.table.kind(elem_sema), TyKind::Wrapping(_)),
+                        unsigned: sema_unsigned(self.table, elem_sema),
+                        wir_ty: fty,
+                    };
+                    self.scopes
+                        .last_mut()
+                        .expect("scope")
+                        .binds
+                        .push((name, bind));
+                }
+                _ => {
+                    return Err(refuse(
+                        "this pattern shape in a destructuring binding (c06)",
+                        sub.span,
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn lower_binding_named(
