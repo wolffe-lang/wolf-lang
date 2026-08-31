@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- Match arms accept the full product pattern domain (s130): tuple and
+  struct patterns, `@`-bindings, literals at product depth, and
+  products nested through enum/row payloads (`Pair(a, 0)`,
+  `Dot(Point { x, y: 0 })`) now compile on both native tiers and
+  execute on the checked lane; exhaustiveness and the redundant-arm
+  warning already reasoned over products and now have running
+  witnesses. Two shapes stay refused by name on the native pipe: an
+  enum/row test inside a product (deep trees) and a str literal inside
+  a product.
+- A match arm still takes the WHOLE scrutinee when it binds a
+  non-`Copy` piece — the field-wise partial-move story remains a
+  `let`-binder rule; the new `E1001` witness pins the boundary and the
+  diagnostic's `copy` suggestion is the sanctioned idiom.
+- Checked-lane fixes: arm guards evaluate their condition (previously
+  an honest refusal), and a qualified constructor's dotted tag
+  (`Pairs.Pair`) matches bare-name arms the way the native tiers
+  compare tag ids.
+- Release-tier fix: a type-blind peephole rule could fold a bool
+  `bxor x, x` into an integer constant and ICE the verifier; boolean
+  results now fold to `bconst`.
+
 ## 0.2.0 — 2026-08-30
 
 WOLFGANG TELLS THE TRUTH. v0.1.0 was an identity claim that shipped
