@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 615..781 name=classify body=Block
+FnDecl 783..994 name=main body=Block

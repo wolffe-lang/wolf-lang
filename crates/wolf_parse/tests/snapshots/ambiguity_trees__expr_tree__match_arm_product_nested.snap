@@ -1,0 +1,631 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 707..1701
+  StructDecl 707..747
+    StructKw 707..713 "struct"
+    Ident 714..719 "Point"
+    LBrace 720..721 "{"
+    StructField 726..733
+      Ident 726..727 "x"
+      Colon 727..728 ":"
+      PathType 729..732
+        Path 729..732
+          Ident 729..732 "int"
+      Comma 732..733 ","
+    StructField 738..745
+      Ident 738..739 "y"
+      Colon 739..740 ":"
+      PathType 741..744
+        Path 741..744
+          Ident 741..744 "int"
+      Comma 744..745 ","
+    RBrace 746..747 "}"
+  Term 747..748 "\n"
+  EnumDecl 749..794
+    EnumKw 749..753 "enum"
+    Ident 754..759 "Pairs"
+    LBrace 760..761 "{"
+    EnumVariant 766..771
+      Ident 766..771 "Empty"
+    Comma 771..772 ","
+    EnumVariant 777..791
+      Ident 777..781 "Pair"
+      LParen 781..782 "("
+      PathType 782..785
+        Path 782..785
+          Ident 782..785 "int"
+      Comma 785..786 ","
+      PathType 787..790
+        Path 787..790
+          Ident 787..790 "int"
+      RParen 790..791 ")"
+    Comma 791..792 ","
+    RBrace 793..794 "}"
+  Term 794..795 "\n"
+  EnumDecl 796..834
+    EnumKw 796..800 "enum"
+    Ident 801..805 "Dots"
+    LBrace 806..807 "{"
+    EnumVariant 812..815
+      Ident 812..815 "Nil"
+    Comma 815..816 ","
+    EnumVariant 821..831
+      Ident 821..824 "Dot"
+      LParen 824..825 "("
+      PathType 825..830
+        Path 825..830
+          Ident 825..830 "Point"
+      RParen 830..831 ")"
+    Comma 831..832 ","
+    RBrace 833..834 "}"
+  Term 834..835 "\n"
+  EnumDecl 836..879
+    EnumKw 836..840 "enum"
+    Ident 841..846 "Wraps"
+    LBrace 847..848 "{"
+    EnumVariant 853..857
+      Ident 853..857 "Zero"
+    Comma 857..858 ","
+    EnumVariant 863..876
+      Ident 863..864 "S"
+      LParen 864..865 "("
+      TupleType 865..875
+        LParen 865..866 "("
+        PathType 866..869
+          Path 866..869
+            Ident 866..869 "int"
+        Comma 869..870 ","
+        PathType 871..874
+          Path 871..874
+            Ident 871..874 "int"
+        RParen 874..875 ")"
+      RParen 875..876 ")"
+    Comma 876..877 ","
+    RBrace 878..879 "}"
+  Term 879..880 "\n"
+  FnDecl 881..1014
+    FnKw 881..883 "fn"
+    Ident 884..893 "pair_arms"
+    ParamList 893..903
+      LParen 893..894 "("
+      Param 894..902
+        Ident 894..895 "s"
+        Colon 895..896 ":"
+        PathType 897..902
+          Path 897..902
+            Ident 897..902 "Pairs"
+      RParen 902..903 ")"
+    RetType 904..910
+      Arrow 904..906 "->"
+      PathType 907..910
+        Path 907..910
+          Ident 907..910 "int"
+    Block 911..1014
+      LBrace 911..912 "{"
+      ExprStmt 917..1013
+        MatchExpr 917..1012
+          MatchKw 917..922 "match"
+          PathExpr 923..924
+            Ident 923..924 "s"
+          LBrace 925..926 "{"
+          MatchArm 935..946
+            IdentPat 935..940
+              Ident 935..940 "Empty"
+            FatArrow 941..943 "=>"
+            LiteralExpr 944..945
+              Int 944..945 "0"
+            Comma 945..946 ","
+          MatchArm 955..977
+            PathPat 955..965
+              Path 955..959
+                Ident 955..959 "Pair"
+              LParen 959..960 "("
+              IdentPat 960..961
+                Ident 960..961 "a"
+              Comma 961..962 ","
+              LiteralPat 963..964
+                Int 963..964 "0"
+              RParen 964..965 ")"
+            FatArrow 966..968 "=>"
+            BinExpr 969..976
+              PathExpr 969..970
+                Ident 969..970 "a"
+              Star 971..972 "*"
+              LiteralExpr 973..976
+                Int 973..976 "100"
+            Comma 976..977 ","
+          MatchArm 986..1006
+            PathPat 986..996
+              Path 986..990
+                Ident 986..990 "Pair"
+              LParen 990..991 "("
+              IdentPat 991..992
+                Ident 991..992 "a"
+              Comma 992..993 ","
+              IdentPat 994..995
+                Ident 994..995 "b"
+              RParen 995..996 ")"
+            FatArrow 997..999 "=>"
+            BinExpr 1000..1005
+              PathExpr 1000..1001
+                Ident 1000..1001 "a"
+              Plus 1002..1003 "+"
+              PathExpr 1004..1005
+                Ident 1004..1005 "b"
+            Comma 1005..1006 ","
+          RBrace 1011..1012 "}"
+        Term 1012..1013 "\n"
+      RBrace 1013..1014 "}"
+  Term 1014..1015 "\n"
+  FnDecl 1016..1202
+    FnKw 1016..1018 "fn"
+    Ident 1019..1027 "dot_arms"
+    ParamList 1027..1036
+      LParen 1027..1028 "("
+      Param 1028..1035
+        Ident 1028..1029 "s"
+        Colon 1029..1030 ":"
+        PathType 1031..1035
+          Path 1031..1035
+            Ident 1031..1035 "Dots"
+      RParen 1035..1036 ")"
+    RetType 1037..1043
+      Arrow 1037..1039 "->"
+      PathType 1040..1043
+        Path 1040..1043
+          Ident 1040..1043 "int"
+    Block 1044..1202
+      LBrace 1044..1045 "{"
+      ExprStmt 1050..1201
+        MatchExpr 1050..1200
+          MatchKw 1050..1055 "match"
+          PathExpr 1056..1057
+            Ident 1056..1057 "s"
+          LBrace 1058..1059 "{"
+          MatchArm 1068..1078
+            IdentPat 1068..1071
+              Ident 1068..1071 "Nil"
+            FatArrow 1072..1074 "=>"
+            PrefixExpr 1075..1077
+              Minus 1075..1076 "-"
+              LiteralExpr 1076..1077
+                Int 1076..1077 "5"
+            Comma 1077..1078 ","
+          MatchArm 1087..1115
+            PathPat 1087..1109
+              Path 1087..1090
+                Ident 1087..1090 "Dot"
+              LParen 1090..1091 "("
+              StructPat 1091..1108
+                Path 1091..1096
+                  Ident 1091..1096 "Point"
+                LBrace 1097..1098 "{"
+                FieldPat 1099..1100
+                  IdentPat 1099..1100
+                    Ident 1099..1100 "x"
+                Comma 1100..1101 ","
+                FieldPat 1102..1106
+                  Ident 1102..1103 "y"
+                  Colon 1103..1104 ":"
+                  LiteralPat 1105..1106
+                    Int 1105..1106 "0"
+                RBrace 1107..1108 "}"
+              RParen 1108..1109 ")"
+            FatArrow 1110..1112 "=>"
+            PathExpr 1113..1114
+              Ident 1113..1114 "x"
+            Comma 1114..1115 ","
+          MatchArm 1124..1156
+            PathPat 1124..1146
+              Path 1124..1127
+                Ident 1124..1127 "Dot"
+              LParen 1127..1128 "("
+              StructPat 1128..1145
+                Path 1128..1133
+                  Ident 1128..1133 "Point"
+                LBrace 1134..1135 "{"
+                FieldPat 1136..1140
+                  Ident 1136..1137 "x"
+                  Colon 1137..1138 ":"
+                  LiteralPat 1139..1140
+                    Int 1139..1140 "0"
+                Comma 1140..1141 ","
+                FieldPat 1142..1143
+                  IdentPat 1142..1143
+                    Ident 1142..1143 "y"
+                RBrace 1144..1145 "}"
+              RParen 1145..1146 ")"
+            FatArrow 1147..1149 "=>"
+            BinExpr 1150..1155
+              PathExpr 1150..1151
+                Ident 1150..1151 "y"
+              Star 1152..1153 "*"
+              LiteralExpr 1154..1155
+                Int 1154..1155 "2"
+            Comma 1155..1156 ","
+          MatchArm 1165..1194
+            PathPat 1165..1184
+              Path 1165..1168
+                Ident 1165..1168 "Dot"
+              LParen 1168..1169 "("
+              StructPat 1169..1183
+                Path 1169..1174
+                  Ident 1169..1174 "Point"
+                LBrace 1175..1176 "{"
+                FieldPat 1177..1178
+                  IdentPat 1177..1178
+                    Ident 1177..1178 "x"
+                Comma 1178..1179 ","
+                FieldPat 1180..1181
+                  IdentPat 1180..1181
+                    Ident 1180..1181 "y"
+                RBrace 1182..1183 "}"
+              RParen 1183..1184 ")"
+            FatArrow 1185..1187 "=>"
+            BinExpr 1188..1193
+              PathExpr 1188..1189
+                Ident 1188..1189 "x"
+              Star 1190..1191 "*"
+              PathExpr 1192..1193
+                Ident 1192..1193 "y"
+            Comma 1193..1194 ","
+          RBrace 1199..1200 "}"
+        Term 1200..1201 "\n"
+      RBrace 1201..1202 "}"
+  Term 1202..1203 "\n"
+  FnDecl 1204..1310
+    FnKw 1204..1206 "fn"
+    Ident 1207..1216 "wrap_arms"
+    ParamList 1216..1226
+      LParen 1216..1217 "("
+      Param 1217..1225
+        Ident 1217..1218 "o"
+        Colon 1218..1219 ":"
+        PathType 1220..1225
+          Path 1220..1225
+            Ident 1220..1225 "Wraps"
+      RParen 1225..1226 ")"
+    RetType 1227..1233
+      Arrow 1227..1229 "->"
+      PathType 1230..1233
+        Path 1230..1233
+          Ident 1230..1233 "int"
+    Block 1234..1310
+      LBrace 1234..1235 "{"
+      ExprStmt 1240..1309
+        MatchExpr 1240..1308
+          MatchKw 1240..1245 "match"
+          PathExpr 1246..1247
+            Ident 1246..1247 "o"
+          LBrace 1248..1249 "{"
+          MatchArm 1258..1282
+            PathPat 1258..1267
+              Path 1258..1259
+                Ident 1258..1259 "S"
+              LParen 1259..1260 "("
+              TuplePat 1260..1266
+                LParen 1260..1261 "("
+                IdentPat 1261..1262
+                  Ident 1261..1262 "a"
+                Comma 1262..1263 ","
+                IdentPat 1264..1265
+                  Ident 1264..1265 "b"
+                RParen 1265..1266 ")"
+              RParen 1266..1267 ")"
+            FatArrow 1268..1270 "=>"
+            BinExpr 1271..1281
+              BinExpr 1271..1277
+                PathExpr 1271..1272
+                  Ident 1271..1272 "a"
+                Star 1273..1274 "*"
+                LiteralExpr 1275..1277
+                  Int 1275..1277 "10"
+              Plus 1278..1279 "+"
+              PathExpr 1280..1281
+                Ident 1280..1281 "b"
+            Comma 1281..1282 ","
+          MatchArm 1291..1302
+            IdentPat 1291..1295
+              Ident 1291..1295 "Zero"
+            FatArrow 1296..1298 "=>"
+            PrefixExpr 1299..1301
+              Minus 1299..1300 "-"
+              LiteralExpr 1300..1301
+                Int 1300..1301 "1"
+            Comma 1301..1302 ","
+          RBrace 1307..1308 "}"
+        Term 1308..1309 "\n"
+      RBrace 1309..1310 "}"
+  Term 1310..1311 "\n"
+  FnDecl 1312..1700
+    FnKw 1312..1314 "fn"
+    Ident 1315..1319 "main"
+    ParamList 1319..1321
+      LParen 1319..1320 "("
+      RParen 1320..1321 ")"
+    RetType 1322..1329
+      Arrow 1322..1324 "->"
+      ErrorUnionType 1325..1329
+        Not 1325..1326 "!"
+        PathType 1326..1329
+          Path 1326..1329
+            Ident 1326..1329 "int"
+    Block 1330..1700
+      LBrace 1330..1331 "{"
+      ExprStmt 1336..1387
+        IfExpr 1336..1386
+          IfKw 1336..1338 "if"
+          BinExpr 1339..1373
+            CallExpr 1339..1366
+              PathExpr 1339..1348
+                Ident 1339..1348 "pair_arms"
+              ArgList 1348..1366
+                LParen 1348..1349 "("
+                Arg 1349..1365
+                  CallExpr 1349..1365
+                    MemberExpr 1349..1359
+                      PathExpr 1349..1354
+                        Ident 1349..1354 "Pairs"
+                      Dot 1354..1355 "."
+                      Ident 1355..1359 "Pair"
+                    ArgList 1359..1365
+                      LParen 1359..1360 "("
+                      Arg 1360..1361
+                        LiteralExpr 1360..1361
+                          Int 1360..1361 "3"
+                      Comma 1361..1362 ","
+                      Arg 1363..1364
+                        LiteralExpr 1363..1364
+                          Int 1363..1364 "0"
+                      RParen 1364..1365 ")"
+                RParen 1365..1366 ")"
+            NotEq 1367..1369 "!="
+            LiteralExpr 1370..1373
+              Int 1370..1373 "300"
+          Block 1374..1386
+            LBrace 1374..1375 "{"
+            ExprStmt 1376..1384
+              ReturnExpr 1376..1384
+                ReturnKw 1376..1382 "return"
+                LiteralExpr 1383..1384
+                  Int 1383..1384 "1"
+            RBrace 1385..1386 "}"
+        Term 1386..1387 "\n"
+      ExprStmt 1391..1440
+        IfExpr 1391..1439
+          IfKw 1391..1393 "if"
+          BinExpr 1394..1426
+            CallExpr 1394..1421
+              PathExpr 1394..1403
+                Ident 1394..1403 "pair_arms"
+              ArgList 1403..1421
+                LParen 1403..1404 "("
+                Arg 1404..1420
+                  CallExpr 1404..1420
+                    MemberExpr 1404..1414
+                      PathExpr 1404..1409
+                        Ident 1404..1409 "Pairs"
+                      Dot 1409..1410 "."
+                      Ident 1410..1414 "Pair"
+                    ArgList 1414..1420
+                      LParen 1414..1415 "("
+                      Arg 1415..1416
+                        LiteralExpr 1415..1416
+                          Int 1415..1416 "3"
+                      Comma 1416..1417 ","
+                      Arg 1418..1419
+                        LiteralExpr 1418..1419
+                          Int 1418..1419 "4"
+                      RParen 1419..1420 ")"
+                RParen 1420..1421 ")"
+            NotEq 1422..1424 "!="
+            LiteralExpr 1425..1426
+              Int 1425..1426 "7"
+          Block 1427..1439
+            LBrace 1427..1428 "{"
+            ExprStmt 1429..1437
+              ReturnExpr 1429..1437
+                ReturnKw 1429..1435 "return"
+                LiteralExpr 1436..1437
+                  Int 1436..1437 "2"
+            RBrace 1438..1439 "}"
+        Term 1439..1440 "\n"
+      ExprStmt 1444..1506
+        IfExpr 1444..1505
+          IfKw 1444..1446 "if"
+          BinExpr 1447..1492
+            CallExpr 1447..1487
+              PathExpr 1447..1455
+                Ident 1447..1455 "dot_arms"
+              ArgList 1455..1487
+                LParen 1455..1456 "("
+                Arg 1456..1486
+                  CallExpr 1456..1486
+                    MemberExpr 1456..1464
+                      PathExpr 1456..1460
+                        Ident 1456..1460 "Dots"
+                      Dot 1460..1461 "."
+                      Ident 1461..1464 "Dot"
+                    ArgList 1464..1486
+                      LParen 1464..1465 "("
+                      Arg 1465..1485
+                        StructLit 1465..1485
+                          PathExpr 1465..1470
+                            Ident 1465..1470 "Point"
+                          LBrace 1471..1472 "{"
+                          FieldInit 1473..1477
+                            Ident 1473..1474 "x"
+                            Colon 1474..1475 ":"
+                            LiteralExpr 1476..1477
+                              Int 1476..1477 "8"
+                          Comma 1477..1478 ","
+                          FieldInit 1479..1483
+                            Ident 1479..1480 "y"
+                            Colon 1480..1481 ":"
+                            LiteralExpr 1482..1483
+                              Int 1482..1483 "0"
+                          RBrace 1484..1485 "}"
+                      RParen 1485..1486 ")"
+                RParen 1486..1487 ")"
+            NotEq 1488..1490 "!="
+            LiteralExpr 1491..1492
+              Int 1491..1492 "8"
+          Block 1493..1505
+            LBrace 1493..1494 "{"
+            ExprStmt 1495..1503
+              ReturnExpr 1495..1503
+                ReturnKw 1495..1501 "return"
+                LiteralExpr 1502..1503
+                  Int 1502..1503 "3"
+            RBrace 1504..1505 "}"
+        Term 1505..1506 "\n"
+      ExprStmt 1510..1573
+        IfExpr 1510..1572
+          IfKw 1510..1512 "if"
+          BinExpr 1513..1559
+            CallExpr 1513..1553
+              PathExpr 1513..1521
+                Ident 1513..1521 "dot_arms"
+              ArgList 1521..1553
+                LParen 1521..1522 "("
+                Arg 1522..1552
+                  CallExpr 1522..1552
+                    MemberExpr 1522..1530
+                      PathExpr 1522..1526
+                        Ident 1522..1526 "Dots"
+                      Dot 1526..1527 "."
+                      Ident 1527..1530 "Dot"
+                    ArgList 1530..1552
+                      LParen 1530..1531 "("
+                      Arg 1531..1551
+                        StructLit 1531..1551
+                          PathExpr 1531..1536
+                            Ident 1531..1536 "Point"
+                          LBrace 1537..1538 "{"
+                          FieldInit 1539..1543
+                            Ident 1539..1540 "x"
+                            Colon 1540..1541 ":"
+                            LiteralExpr 1542..1543
+                              Int 1542..1543 "0"
+                          Comma 1543..1544 ","
+                          FieldInit 1545..1549
+                            Ident 1545..1546 "y"
+                            Colon 1546..1547 ":"
+                            LiteralExpr 1548..1549
+                              Int 1548..1549 "5"
+                          RBrace 1550..1551 "}"
+                      RParen 1551..1552 ")"
+                RParen 1552..1553 ")"
+            NotEq 1554..1556 "!="
+            LiteralExpr 1557..1559
+              Int 1557..1559 "10"
+          Block 1560..1572
+            LBrace 1560..1561 "{"
+            ExprStmt 1562..1570
+              ReturnExpr 1562..1570
+                ReturnKw 1562..1568 "return"
+                LiteralExpr 1569..1570
+                  Int 1569..1570 "4"
+            RBrace 1571..1572 "}"
+        Term 1572..1573 "\n"
+      ExprStmt 1577..1640
+        IfExpr 1577..1639
+          IfKw 1577..1579 "if"
+          BinExpr 1580..1626
+            CallExpr 1580..1620
+              PathExpr 1580..1588
+                Ident 1580..1588 "dot_arms"
+              ArgList 1588..1620
+                LParen 1588..1589 "("
+                Arg 1589..1619
+                  CallExpr 1589..1619
+                    MemberExpr 1589..1597
+                      PathExpr 1589..1593
+                        Ident 1589..1593 "Dots"
+                      Dot 1593..1594 "."
+                      Ident 1594..1597 "Dot"
+                    ArgList 1597..1619
+                      LParen 1597..1598 "("
+                      Arg 1598..1618
+                        StructLit 1598..1618
+                          PathExpr 1598..1603
+                            Ident 1598..1603 "Point"
+                          LBrace 1604..1605 "{"
+                          FieldInit 1606..1610
+                            Ident 1606..1607 "x"
+                            Colon 1607..1608 ":"
+                            LiteralExpr 1609..1610
+                              Int 1609..1610 "3"
+                          Comma 1610..1611 ","
+                          FieldInit 1612..1616
+                            Ident 1612..1613 "y"
+                            Colon 1613..1614 ":"
+                            LiteralExpr 1615..1616
+                              Int 1615..1616 "4"
+                          RBrace 1617..1618 "}"
+                      RParen 1618..1619 ")"
+                RParen 1619..1620 ")"
+            NotEq 1621..1623 "!="
+            LiteralExpr 1624..1626
+              Int 1624..1626 "12"
+          Block 1627..1639
+            LBrace 1627..1628 "{"
+            ExprStmt 1629..1637
+              ReturnExpr 1629..1637
+                ReturnKw 1629..1635 "return"
+                LiteralExpr 1636..1637
+                  Int 1636..1637 "5"
+            RBrace 1638..1639 "}"
+        Term 1639..1640 "\n"
+      ExprStmt 1644..1693
+        IfExpr 1644..1692
+          IfKw 1644..1646 "if"
+          BinExpr 1647..1679
+            CallExpr 1647..1673
+              PathExpr 1647..1656
+                Ident 1647..1656 "wrap_arms"
+              ArgList 1656..1673
+                LParen 1656..1657 "("
+                Arg 1657..1672
+                  CallExpr 1657..1672
+                    MemberExpr 1657..1664
+                      PathExpr 1657..1662
+                        Ident 1657..1662 "Wraps"
+                      Dot 1662..1663 "."
+                      Ident 1663..1664 "S"
+                    ArgList 1664..1672
+                      LParen 1664..1665 "("
+                      Arg 1665..1671
+                        TupleExpr 1665..1671
+                          LParen 1665..1666 "("
+                          LiteralExpr 1666..1667
+                            Int 1666..1667 "4"
+                          Comma 1667..1668 ","
+                          LiteralExpr 1669..1670
+                            Int 1669..1670 "2"
+                          RParen 1670..1671 ")"
+                      RParen 1671..1672 ")"
+                RParen 1672..1673 ")"
+            NotEq 1674..1676 "!="
+            LiteralExpr 1677..1679
+              Int 1677..1679 "42"
+          Block 1680..1692
+            LBrace 1680..1681 "{"
+            ExprStmt 1682..1690
+              ReturnExpr 1682..1690
+                ReturnKw 1682..1688 "return"
+                LiteralExpr 1689..1690
+                  Int 1689..1690 "6"
+            RBrace 1691..1692 "}"
+        Term 1692..1693 "\n"
+      ExprStmt 1697..1699
+        LiteralExpr 1697..1698
+          Int 1697..1698 "0"
+        Term 1698..1699 "\n"
+      RBrace 1699..1700 "}"
+  Term 1700..1701 "\n"
+  Eof 1701..1701 ""
+== diagnostics ==

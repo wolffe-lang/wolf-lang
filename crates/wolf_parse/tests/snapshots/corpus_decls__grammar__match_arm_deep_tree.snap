@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 810..855 name=Pairs variants=2
+StructDecl 857..897 name=Box fields=2
+FnDecl 899..1014 name=probe body=Block
+FnDecl 1016..1109 name=main body=Block

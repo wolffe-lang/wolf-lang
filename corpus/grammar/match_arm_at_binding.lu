@@ -1,0 +1,40 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.pat, gram.pat.struct
+//!
+//! s130 (#179) — `@`-bindings over products in arm position. The
+//! grammar has admitted `IDENT '@' closed_pattern` since `[gram.pat]`
+//! was written; the c06 refusal named "@-bindings" as part of the held
+//! product domain, so they land with it: the whole value binds under
+//! the name AND the sub-pattern's tests and binds apply. Guards see
+//! every product bind (`if x > y` below reads two field binds), and a
+//! guard that fails re-enters the chain at the next candidate.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn at_tuple(p: (int, int)) -> int {
+    match p {
+        w @ (0, b) => b + w.1,
+        (a, _) => a,
+    }
+}
+
+fn at_struct(p: Point) -> int {
+    match p {
+        q @ Point { x: 0, .. } => q.y * 2,
+        Point { x, y } if x > y => x - y,
+        Point { y, .. } => y,
+    }
+}
+
+fn main() -> !int {
+    if at_tuple((0, 6)) != 12 { return 1 }
+    if at_tuple((9, 6)) != 9 { return 2 }
+    if at_struct(Point { x: 0, y: 4 }) != 8 { return 3 }
+    if at_struct(Point { x: 5, y: 2 }) != 3 { return 4 }
+    if at_struct(Point { x: 1, y: 4 }) != 4 { return 5 }
+    0
+}

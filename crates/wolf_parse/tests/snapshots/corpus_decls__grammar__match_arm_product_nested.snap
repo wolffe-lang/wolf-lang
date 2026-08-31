@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 707..747 name=Point fields=2
+EnumDecl 749..794 name=Pairs variants=2
+EnumDecl 796..834 name=Dots variants=2
+EnumDecl 836..879 name=Wraps variants=2
+FnDecl 881..1014 name=pair_arms body=Block
+FnDecl 1016..1202 name=dot_arms body=Block
+FnDecl 1204..1310 name=wrap_arms body=Block
+FnDecl 1312..1700 name=main body=Block

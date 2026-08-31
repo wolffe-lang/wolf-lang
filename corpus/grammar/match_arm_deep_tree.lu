@@ -1,0 +1,37 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: gram.pat
+//!
+//! s130 (#179) — the c06 RESIDUE after the product domain landed,
+//! pinned loud: an enum (or row) test INSIDE a product pattern — the
+//! deep-tree class — still refuses by name on the native pipe
+//! ("an enum or row test inside a product pattern (deep trees,
+//! c06)"). The product compiler tests fields and payload slots
+//! against literals and products; a refutable TAG at product depth
+//! needs a nested discriminant read the decision chain does not emit
+//! yet. The checked executor already RUNS this file (its value-wise
+//! matcher recurses through any depth), so the lanes stay honestly
+//! non-nested — this pin measures the native half only. The day deep
+//! trees land, `phase:` advances to `run` in the same commit.
+
+enum Pairs {
+    Empty,
+    Pair(int, int),
+}
+
+struct Box {
+    p: Pairs,
+    k: int,
+}
+
+fn probe(b: Box) -> int {
+    match b {
+        Box { p: Pair(a, _), .. } => a,
+        Box { k, .. } => k,
+    }
+}
+
+fn main() -> !int {
+    if probe(Box { p: Pairs.Pair(7, 1), k: 3 }) != 7 { return 1 }
+    0
+}

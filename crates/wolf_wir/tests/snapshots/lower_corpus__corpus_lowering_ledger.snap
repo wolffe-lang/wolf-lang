@@ -120,6 +120,10 @@ grammar/let_group.lu: lowers
 grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
 grammar/let_group_destructure.lu: lowers
 grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
+grammar/match_arm_at_binding.lu: lowers
+grammar/match_arm_deep_tree.lu: refused — an enum or row test inside a product pattern (deep trees, c06)
+grammar/match_arm_product_nested.lu: lowers
+grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern (c06)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
@@ -131,6 +135,7 @@ grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_unknown_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
+grammar/tuple_pattern_match_arm.lu: lowers
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
@@ -207,6 +212,7 @@ memory/list_slice.lu: lowers
 memory/list_slice_edges.lu: lowers
 memory/list_slice_inline_owned.lu: lowers
 memory/list_slice_owned_call.lu: lowers
+memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
@@ -390,6 +396,8 @@ typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/main_unit_row.lu: lowers
+typecheck/match_arm_product_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
+typecheck/match_arm_product_unreachable.lu: lowers
 typecheck/match_chain_reuse.lu: lowers
 typecheck/match_exhaustive.lu: lowers
 typecheck/match_guard_const.lu: lowers
