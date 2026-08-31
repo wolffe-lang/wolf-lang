@@ -99,6 +99,17 @@ pub enum SyntaxKind {
 
     // Patterns `[gram.pat]`.
     WildcardPat, LiteralPat, IdentPat, PathPat, TuplePat, OrPat, BindingPat,
+    /// `path '{' field_pat … '}'` (`[gram.pat.struct]`, s129 #179).
+    StructPat,
+    /// One `IDENT (':' pattern)?` of a struct pattern. The shorthand
+    /// holds a single [`SyntaxKind::IdentPat`] child (the binding IS
+    /// the field name); the explicit form holds the field-name token,
+    /// `:`, and the sub-pattern node.
+    FieldPat,
+    /// The `..` rest marker closing a struct pattern's field list —
+    /// its own node (not a pattern kind: it binds nothing and may not
+    /// nest) so the formatter's list machinery sees it as a member.
+    RestPat,
 
     /// One `pattern (':' type)? '=' expr` member of a comma-grouped
     /// `let`/`var` (D63). Present only when the declaration carries

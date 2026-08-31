@@ -4,6 +4,7 @@
 
 use crate::green::{GreenNode, GreenToken};
 use crate::kind::SyntaxKind;
+use wolf_span::Span;
 
 /// Parameter passing mode (D10 Tier 0). The default `read` mode has no
 /// keyword — its absence *is* the syntax — so accessors return
@@ -41,6 +42,8 @@ pub fn is_pattern_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::TuplePat
             | SyntaxKind::OrPat
             | SyntaxKind::BindingPat
+            | SyntaxKind::StructPat
+            | SyntaxKind::FieldPat
     )
 }
 
@@ -1279,6 +1282,64 @@ impl<'a> FieldInit<'a> {
 
     pub fn value(self) -> Option<&'a GreenNode> {
         first_expr(self.0)
+    }
+}
+
+ast_node!(
+    /// `path '{' field_pat (',' field_pat)* ','? '..'? '}'`
+    /// (`[gram.pat.struct]`, s129 #179).
+    StructPat
+);
+
+impl<'a> StructPat<'a> {
+    /// The `Path` node before the brace (the pattern-side path, as in
+    /// [`PathPat`] — never an expression).
+    pub fn path(self) -> Option<&'a GreenNode> {
+        self.0.nodes().find(|n| n.kind == SyntaxKind::Path)
+    }
+
+    pub fn fields(self) -> impl Iterator<Item = FieldPat<'a>> {
+        self.0.nodes().filter_map(FieldPat::cast)
+    }
+
+    /// `true` when a trailing `..` says the unnamed fields are
+    /// deliberately ignored.
+    pub fn has_rest(self) -> bool {
+        self.0.nodes().any(|n| n.kind == SyntaxKind::RestPat)
+    }
+}
+
+ast_node!(
+    /// One `IDENT (':' pattern)?` of a struct pattern. Shorthand
+    /// carries a single `IdentPat` child (the binding IS the field
+    /// name); the explicit form carries the field-name token and the
+    /// sub-pattern node.
+    FieldPat
+);
+
+impl<'a> FieldPat<'a> {
+    /// The explicit form's field-name token (`x` in `x: pat`); absent
+    /// in the shorthand.
+    pub fn name(self) -> Option<&'a GreenToken> {
+        self.0.child_token(SyntaxKind::Ident)
+    }
+
+    /// The sub-pattern the field's value matches against: the
+    /// explicit form's pattern, or the shorthand's own `IdentPat`.
+    pub fn pattern(self) -> Option<&'a GreenNode> {
+        self.0.nodes().find(|n| is_pattern_kind(n.kind))
+    }
+
+    /// The field name this member takes apart, whichever form spelled
+    /// it — the explicit name token's span, or the shorthand
+    /// binding's.
+    pub fn name_span(self) -> Option<Span> {
+        if let Some(t) = self.name() {
+            return Some(t.span);
+        }
+        self.pattern()
+            .filter(|n| n.kind == SyntaxKind::IdentPat)
+            .map(|n| n.span)
     }
 }
 
