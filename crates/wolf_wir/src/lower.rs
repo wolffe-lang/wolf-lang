@@ -898,6 +898,7 @@ fn lower_body(
         fns,
         dispatch: tb.dispatch.iter().map(|(s, d)| (*s, d)).collect(),
         matches: tb.matches.iter().copied().collect(),
+        pending_arm_binds: Vec::new(),
         scopes: Vec::new(),
         visible: None,
         loops: Vec::new(),
@@ -1038,6 +1039,7 @@ fn lower_task_body<'t>(
         fns,
         dispatch: tb.dispatch.iter().map(|(s, d)| (*s, d)).collect(),
         matches: tb.matches.iter().copied().collect(),
+        pending_arm_binds: Vec::new(),
         scopes: Vec::new(),
         visible: None,
         loops: Vec::new(),
@@ -2395,6 +2397,10 @@ enum MatchDomain {
     /// `str`: literal arms dispatch by equality (#54, v0) — a chain of
     /// `__wolf_rt_str_eq` tests in arm order.
     Str,
+    /// A single-constructor product (struct or tuple scrutinee, s130):
+    /// no discriminant exists — arms are conjunctions of field tests
+    /// (`[gram.pat.struct]`'s "single-constructor product" reading).
+    Product,
 }
 
 /// One lowered pattern's shape.
@@ -2410,6 +2416,12 @@ enum PatShape {
     /// Str literal arm: the scrutinee equals one of these cooked byte
     /// strings (or-alternatives). Dispatch-by-equality (#54, v0).
     StrTests(Vec<Vec<u8>>),
+    /// The product match domain (s130, retiring the s128/s129 c06
+    /// deferral): tuple/struct patterns, `@`-bindings, and payload
+    /// products under an enum/row tag. The arm compiles to a
+    /// conjunction of projection tests plus projection binds —
+    /// [`Lowerer::product_arm_parts`] owns the walk.
+    Product,
 }
 
 /// Where a `match` arm's guard re-enters the decision chain on
@@ -2509,6 +2521,13 @@ struct Lowerer<'t, 'b, 'm> {
     dispatch: HashMap<Span, &'t Dispatch>,
     /// Per-`match` exhaustiveness facts by span (s17).
     matches: HashMap<Span, bool>,
+    /// Product-arm binds staged for the next [`Self::enter_match_arm`]
+    /// call (s130): the product compiler extracts and `def_var`s each
+    /// bound projection in the chain block (it dominates the arm), and
+    /// the arm entry drains them into the arm's own scope — before the
+    /// guard, so guards see the binds exactly as payload binds are
+    /// seen. Always empty between arms.
+    pending_arm_binds: Vec<(String, LocalBind)>,
     scopes: Vec<ScopeFrame<'t>>,
     /// In-force visibility fence while re-lowering a defer entry at an
     /// exit site: (scope index, binds visible there, stack depth when
@@ -14733,8 +14752,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         .map(|(i, v)| (v.name.clone(), i as i64, v.payload.len()))
                         .collect(),
                 )),
+                // A struct scrutinee (s130): the single-constructor
+                // product — arms test fields, never a discriminant.
+                Some(ItemSig::Struct(_)) => Ok(MatchDomain::Product),
                 _ => Err(refuse("match over this nominal type", span)),
             },
+            TyKind::Tuple(_) => Ok(MatchDomain::Product),
             TyKind::Row { tags, .. } => Ok(MatchDomain::Row(
                 tags.iter().map(|(n, p)| (n.clone(), p.len())).collect(),
             )),
@@ -14764,7 +14787,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         (id, *a)
                     })
             }
-            MatchDomain::Scalar | MatchDomain::Str => None,
+            MatchDomain::Scalar | MatchDomain::Str | MatchDomain::Product => None,
         }
     }
 
@@ -14844,12 +14867,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     match s.kind {
                         SyntaxKind::IdentPat => binds.push((j, self.text(s.span))),
                         SyntaxKind::WildcardPat => {}
-                        _ => {
-                            return Err(refuse(
-                                "nested refutable payload patterns (deep trees, c06)",
-                                s.span,
-                            ));
-                        }
+                        // A payload carrying more than a name (s130):
+                        // products, literals, `@`-bindings — the
+                        // product-arm compiler owns the whole arm.
+                        _ => return Ok(PatShape::Product),
                     }
                 }
                 Ok(PatShape::Tests(vec![c], binds))
@@ -14873,6 +14894,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         PatShape::BoolTest(_) => {
                             return Err(refuse("or-patterns over bool", alt.span));
                         }
+                        PatShape::Product => {
+                            return Err(refuse(
+                                "or-patterns over product patterns (join params, c06)",
+                                alt.span,
+                            ));
+                        }
                     }
                 }
                 if !strs.is_empty() {
@@ -14883,11 +14910,568 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(PatShape::Tests(consts, vec![]))
             }
-            _ => Err(refuse(
-                "this pattern shape in match lowering (tuple/struct/@-bindings — \
-                 the product match domain, c06)",
-                pat.span,
+            // The product match domain (s130): tuple and struct
+            // patterns in arm position, and `@`-bindings over any
+            // admitted shape — the s128/s129 deferral retired.
+            SyntaxKind::TuplePat | SyntaxKind::StructPat | SyntaxKind::BindingPat => {
+                Ok(PatShape::Product)
+            }
+            _ => Err(refuse("this pattern shape in match lowering", pat.span)),
+        }
+    }
+
+    // ------------------------------ product arms (s130, c06 retired) ----
+
+    /// Compile one product-domain arm pattern to a conjunction of
+    /// pure tests plus staged binds. `conds` collects BOOL values that
+    /// must ALL hold for the arm to match; `binds` collects extracted
+    /// projections already `def_var`'d in the current (chain) block —
+    /// it dominates the arm, so the arm entry only has to put the
+    /// names in scope. A test that DECIDES false at build time sets
+    /// `dead` (the arm lowers to nothing, the constant-discriminant
+    /// posture); a decided-true test emits nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn product_top(
+        &mut self,
+        pat: &'t GreenNode,
+        sv: Value,
+        disc: Value,
+        scrut_sema: TyId,
+        domain: &MatchDomain,
+        conds: &mut Vec<Value>,
+        binds: &mut Vec<(String, LocalBind)>,
+        dead: &mut bool,
+    ) -> R<()> {
+        if *dead {
+            return Ok(());
+        }
+        match pat.kind {
+            // `name @ pat` (`[gram.pat]`'s binding form): the whole
+            // scrutinee binds under the name AND the sub-pattern
+            // matches it.
+            SyntaxKind::BindingPat => {
+                let Some(tok) = pat.tokens().find(|t| t.kind == SyntaxKind::Ident) else {
+                    return Err(refuse("an `@`-binding without a name", pat.span));
+                };
+                let name = self.text(tok.span);
+                self.product_bind_named(name, pat.span, sv, self.table, scrut_sema, binds)?;
+                match pat.nodes().find(|n| wolf_ast::is_pattern_kind(n.kind)) {
+                    Some(inner) => {
+                        self.product_top(inner, sv, disc, scrut_sema, domain, conds, binds, dead)
+                    }
+                    None => Ok(()),
+                }
+            }
+            // A bare name that spells a case is a tag test (#4); any
+            // other name binds the whole scrutinee.
+            SyntaxKind::IdentPat => {
+                let name = self.text(pat.span);
+                match self.domain_test(domain, &name) {
+                    Some((c, _)) => {
+                        self.product_tag_test(disc, c, conds, dead);
+                        Ok(())
+                    }
+                    None => {
+                        self.product_bind_named(name, pat.span, sv, self.table, scrut_sema, binds)
+                    }
+                }
+            }
+            // `Tag(products…)`: the tag test on the shared discriminant
+            // plus payload sub-patterns at their slots — the nesting
+            // the c06 deferral held out (`Some((a, b))`,
+            // `Ok(Point { x, .. })`).
+            SyntaxKind::PathPat => {
+                let end = pat
+                    .nodes()
+                    .find(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .map(|n| n.span.lo)
+                    .unwrap_or(pat.span.hi);
+                let raw = String::from_utf8_lossy(&self.src[pat.span.lo as usize..end as usize])
+                    .into_owned();
+                let name: String = raw.trim_end().trim_end_matches('(').trim_end().to_string();
+                let Some((c, arity)) = self.domain_test(domain, &name) else {
+                    return Err(refuse(
+                        "a pattern tag the scrutinee does not carry",
+                        pat.span,
+                    ));
+                };
+                let subs: Vec<&'t GreenNode> = pat
+                    .nodes()
+                    .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .collect();
+                if subs.len() != arity {
+                    return Err(refuse(
+                        "payload arity in a pattern (checker contract)",
+                        pat.span,
+                    ));
+                }
+                self.product_tag_test(disc, c, conds, dead);
+                if *dead {
+                    return Ok(());
+                }
+                let agg_ty = self.b.func.value_ty(sv);
+                let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
+                    return Err(refuse(
+                        "payload patterns on a payload-free scrutinee",
+                        pat.span,
+                    ));
+                };
+                let payload_tys = self.payload_sema_tys(scrut_sema, domain, c, &name, pat.span)?;
+                for (j, s) in subs.iter().enumerate() {
+                    if s.kind == SyntaxKind::WildcardPat {
+                        continue;
+                    }
+                    let Some(&fty) = fields.get(j + 1) else {
+                        return Err(refuse(
+                            "a payload slot the scrutinee does not carry",
+                            s.span,
+                        ));
+                    };
+                    let Some(&(ptbl, pid)) = payload_tys.get(j) else {
+                        return Err(refuse(
+                            "a payload slot the scrutinee does not carry",
+                            s.span,
+                        ));
+                    };
+                    let pv = self
+                        .b
+                        .ins(Opcode::AggGet, &[sv], &[fty], Aux::Int((j + 1) as i64))
+                        .one();
+                    self.product_sub(s, pv, ptbl, pid, conds, binds, dead)?;
+                    if *dead {
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            _ => self.product_sub(pat, sv, self.table, scrut_sema, conds, binds, dead),
+        }
+    }
+
+    /// One sub-pattern of a product arm, matched against the extracted
+    /// value `v` whose sema type is `sema_ty` in `tbl`. The admitted
+    /// domain is the closed_pattern product surface: binders,
+    /// wildcards, scalar literals, nested tuple/struct patterns and
+    /// `@`-bindings. Enum/row tests INSIDE a product stay refused by
+    /// name (deep trees, c06 residue), as do or-patterns and str/float
+    /// literals in product position.
+    #[allow(clippy::too_many_arguments)]
+    fn product_sub(
+        &mut self,
+        sub: &'t GreenNode,
+        v: Value,
+        tbl: &'t TypeTable,
+        sema_ty: TyId,
+        conds: &mut Vec<Value>,
+        binds: &mut Vec<(String, LocalBind)>,
+        dead: &mut bool,
+    ) -> R<()> {
+        if *dead {
+            return Ok(());
+        }
+        match sub.kind {
+            SyntaxKind::WildcardPat => Ok(()),
+            SyntaxKind::IdentPat => {
+                let name = self.text(sub.span);
+                // Mirror sema's #4 rule for the FIELD's own type: a
+                // bare name spelling one of its cases is a test, and a
+                // nested case test is the deep-tree residue.
+                if self.names_sema_case(tbl, sema_ty, &name) {
+                    return Err(refuse(
+                        "an enum or row test inside a product pattern (deep trees, c06)",
+                        sub.span,
+                    ));
+                }
+                self.product_bind_named(name, sub.span, v, tbl, sema_ty, binds)
+            }
+            SyntaxKind::BindingPat => {
+                let Some(tok) = sub.tokens().find(|t| t.kind == SyntaxKind::Ident) else {
+                    return Err(refuse("an `@`-binding without a name", sub.span));
+                };
+                let name = self.text(tok.span);
+                self.product_bind_named(name, sub.span, v, tbl, sema_ty, binds)?;
+                match sub.nodes().find(|n| wolf_ast::is_pattern_kind(n.kind)) {
+                    Some(inner) => self.product_sub(inner, v, tbl, sema_ty, conds, binds, dead),
+                    None => Ok(()),
+                }
+            }
+            SyntaxKind::LiteralPat => self.product_literal_test(sub, v, conds, dead),
+            SyntaxKind::TuplePat => {
+                let stripped = strip_sema_in(tbl, sema_ty);
+                let TyKind::Tuple(elem_tys) = tbl.kind(stripped).clone() else {
+                    return Err(refuse("a tuple pattern over a non-tuple type", sub.span));
+                };
+                let subs: Vec<&'t GreenNode> = sub
+                    .nodes()
+                    .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .collect();
+                if subs.len() != elem_tys.len() {
+                    return Err(refuse("a tuple pattern with a mismatched arity", sub.span));
+                }
+                let agg_ty = self.b.func.value_ty(v);
+                let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
+                    return Err(refuse(
+                        "a tuple pattern over a non-aggregate value",
+                        sub.span,
+                    ));
+                };
+                if fields.len() != subs.len() {
+                    return Err(refuse("a tuple pattern with a mismatched layout", sub.span));
+                }
+                for (i, s) in subs.iter().enumerate() {
+                    if s.kind == SyntaxKind::WildcardPat {
+                        continue;
+                    }
+                    let ev = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[fields[i]], Aux::Int(i as i64))
+                        .one();
+                    self.product_sub(s, ev, tbl, elem_tys[i], conds, binds, dead)?;
+                    if *dead {
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            SyntaxKind::StructPat => {
+                let d = wolf_ast::StructPat::cast(sub).expect("kind");
+                let stripped = strip_sema_in(tbl, sema_ty);
+                let TyKind::Nominal { module, name, args } = tbl.kind(stripped).clone() else {
+                    return Err(refuse("a struct pattern over a non-struct type", sub.span));
+                };
+                let Some(ItemSig::Struct(ss)) = self.sigs.get(module as usize, &name) else {
+                    return Err(refuse("a struct pattern over a non-struct type", sub.span));
+                };
+                let ss = ss.clone();
+                let agg_ty = self.b.func.value_ty(v);
+                let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
+                    return Err(refuse(
+                        "a struct pattern over a non-aggregate value",
+                        sub.span,
+                    ));
+                };
+                if fields.len() != ss.fields.len() {
+                    return Err(refuse(
+                        "a struct pattern with a mismatched layout",
+                        sub.span,
+                    ));
+                }
+                for f in d.fields() {
+                    let Some(nspan) = f.name_span() else { continue };
+                    let fname = self.text(nspan);
+                    let Some(fsub) = f.pattern() else { continue };
+                    if fsub.kind == SyntaxKind::WildcardPat {
+                        continue;
+                    }
+                    let Some(i) = ss.fields.iter().position(|sf| sf.name == fname) else {
+                        return Err(refuse("a field the struct does not declare", nspan));
+                    };
+                    let fty = fields[i];
+                    // The field's sema type, in whichever table owns
+                    // it — the bind_struct_value discipline (s129).
+                    let (ftbl, fid): (&'t TypeTable, TyId) =
+                        match self.sig_table.kind(ss.fields[i].ty) {
+                            TyKind::Rigid(r) => {
+                                let Some(gi) = ss.generics.iter().position(|g| g == r) else {
+                                    return Err(refuse(
+                                        "a generic struct field outside its instantiation",
+                                        fsub.span,
+                                    ));
+                                };
+                                let Some(&aid) = args.get(gi) else {
+                                    return Err(refuse(
+                                        "a generic struct field outside its instantiation",
+                                        fsub.span,
+                                    ));
+                                };
+                                (tbl, aid)
+                            }
+                            _ if ty_mentions_rigid(self.sig_table, ss.fields[i].ty) => {
+                                return Err(refuse(
+                                    "a struct pattern under a generic field's compound type (c06)",
+                                    fsub.span,
+                                ));
+                            }
+                            _ => (self.sig_table, ss.fields[i].ty),
+                        };
+                    let ev = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[fty], Aux::Int(i as i64))
+                        .one();
+                    self.product_sub(fsub, ev, ftbl, fid, conds, binds, dead)?;
+                    if *dead {
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+            SyntaxKind::PathPat => Err(refuse(
+                "an enum or row test inside a product pattern (deep trees, c06)",
+                sub.span,
             )),
+            SyntaxKind::OrPat => Err(refuse(
+                "or-patterns inside product patterns (join params, c06)",
+                sub.span,
+            )),
+            _ => Err(refuse("this pattern shape in match lowering", sub.span)),
+        }
+    }
+
+    /// Stage one product bind: extract-value `v` def'd under a fresh
+    /// var in the CURRENT (chain) block, name pushed at arm entry.
+    fn product_bind_named(
+        &mut self,
+        name: String,
+        span: Span,
+        v: Value,
+        tbl: &TypeTable,
+        sema_ty: TyId,
+        binds: &mut Vec<(String, LocalBind)>,
+    ) -> R<()> {
+        if matches!(tbl.kind(strip_sema_in(tbl, sema_ty)), TyKind::RegionTy) {
+            return Err(refuse("a region inside a destructured value", span));
+        }
+        let fty = self.b.func.value_ty(v);
+        let var = self.b.declare_var(fty);
+        self.b.def_var(var, v);
+        self.b.func.add_debug_var(name.clone(), v, false);
+        binds.push((
+            name,
+            LocalBind::Val {
+                var,
+                wrapping: matches!(tbl.kind(sema_ty), TyKind::Wrapping(_)),
+                unsigned: sema_unsigned(tbl, sema_ty),
+                wir_ty: fty,
+            },
+        ));
+        Ok(())
+    }
+
+    /// One scalar literal test inside a product: bool literals gate on
+    /// the value itself, int/char literals compare at the VALUE's own
+    /// width (the s74 discipline). Str and float literals in product
+    /// position stay refused by name.
+    fn product_literal_test(
+        &mut self,
+        sub: &'t GreenNode,
+        v: Value,
+        conds: &mut Vec<Value>,
+        dead: &mut bool,
+    ) -> R<()> {
+        if sub
+            .nodes()
+            .any(|n| matches!(n.kind, SyntaxKind::StringLit | SyntaxKind::StringExpr))
+        {
+            return Err(refuse(
+                "a str literal inside a product pattern (c06)",
+                sub.span,
+            ));
+        }
+        let text = self.text(sub.span);
+        if text == "true" || text == "false" {
+            let want = text == "true";
+            match self.b.as_bool_const(v) {
+                Some(c) => {
+                    self.b.stats.identity += 1;
+                    if c != want {
+                        *dead = true;
+                    }
+                }
+                None => {
+                    let cond = if want {
+                        v
+                    } else {
+                        let t = self.b.bconst(true);
+                        self.b
+                            .ins(Opcode::Bxor, &[v, t], &[types::BOOL], Aux::None)
+                            .one()
+                    };
+                    conds.push(cond);
+                }
+            }
+            return Ok(());
+        }
+        let n = if text.starts_with('\'') {
+            match wolf_sema::check::cook_char_literal(&text) {
+                Some(c) => i64::from(u32::from(c)),
+                None => return Err(refuse("this char literal pattern shape", sub.span)),
+            }
+        } else {
+            match parse_int_literal(&text) {
+                Some(n) => n,
+                None => {
+                    return Err(refuse(
+                        "this literal shape inside a product pattern (c06)",
+                        sub.span,
+                    ));
+                }
+            }
+        };
+        let vty = self.b.func.value_ty(v);
+        let n = match self.b.module.types.int_bits(vty) {
+            Some(bits) => wrap_bits(n as u64, bits),
+            None => n,
+        };
+        match self.b.as_int_const(v) {
+            Some(c) => {
+                self.b.stats.identity += 1;
+                if c != n {
+                    *dead = true;
+                }
+            }
+            None => {
+                let cv = self.b.iconst(vty, n);
+                let t = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[v, cv],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                conds.push(t);
+            }
+        }
+        Ok(())
+    }
+
+    /// The tag half of a product arm's conjunction: discriminant
+    /// equality at the discriminant's own width, folded when the
+    /// discriminant is a build-time constant.
+    fn product_tag_test(&mut self, disc: Value, c: i64, conds: &mut Vec<Value>, dead: &mut bool) {
+        let dty = self.b.func.value_ty(disc);
+        let c = match self.b.module.types.int_bits(dty) {
+            Some(bits) => wrap_bits(c as u64, bits),
+            None => c,
+        };
+        match self.b.as_int_const(disc) {
+            Some(n) => {
+                self.b.stats.identity += 1;
+                if n != c {
+                    *dead = true;
+                }
+            }
+            None => {
+                let cv = self.b.iconst(dty, c);
+                let t = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[disc, cv],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                conds.push(t);
+            }
+        }
+    }
+
+    /// Does `name` spell one of `ty`'s cases (a non-generic enum's
+    /// variants, a row's tags) — sema's `scrut_cases` mirror, deciding
+    /// bind-vs-test for bare names inside products.
+    fn names_sema_case(&self, tbl: &TypeTable, ty: TyId, name: &str) -> bool {
+        let t = strip_sema_in(tbl, ty);
+        match tbl.kind(t) {
+            TyKind::Row { tags, .. } => tags.iter().any(|(n, _)| n == name),
+            TyKind::Nominal {
+                module,
+                name: tname,
+                ..
+            } => match self.sigs.get(*module as usize, tname) {
+                Some(ItemSig::Enum {
+                    generic: false,
+                    variants,
+                    ..
+                }) => variants.iter().any(|v| v.name == name),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// The sema types of one variant/tag's payload slots, each with
+    /// the table that owns it: enum payloads live in the SIGNATURE
+    /// table (rigids answered by the application's arguments, the
+    /// bind_struct_value discipline), row payloads in the scrutinee's
+    /// own table.
+    fn payload_sema_tys(
+        &mut self,
+        scrut_sema: TyId,
+        domain: &MatchDomain,
+        c: i64,
+        name: &str,
+        span: Span,
+    ) -> R<Vec<(&'t TypeTable, TyId)>> {
+        let mut ty = strip_sema_in(self.table, scrut_sema);
+        for _ in 0..32 {
+            match self.table.kind(ty) {
+                TyKind::Distinct(inner) => ty = strip_sema_in(self.table, *inner),
+                _ => break,
+            }
+        }
+        match domain {
+            MatchDomain::Enum(_) => {
+                let TyKind::Nominal {
+                    module,
+                    name: tname,
+                    args,
+                } = self.table.kind(ty).clone()
+                else {
+                    return Err(refuse("an enum payload outside its nominal type", span));
+                };
+                let Some(ItemSig::Enum {
+                    variants, generics, ..
+                }) = self.sigs.get(module as usize, &tname)
+                else {
+                    return Err(refuse("an enum payload outside its nominal type", span));
+                };
+                let generics = generics.clone();
+                let Some(variant) = variants.get(c as usize).cloned() else {
+                    return Err(refuse("a variant the enum does not declare", span));
+                };
+                let mut out = Vec::new();
+                for pid in &variant.payload {
+                    let slot = match self.sig_table.kind(*pid) {
+                        TyKind::Rigid(r) => {
+                            let Some(gi) = generics.iter().position(|g| g == r) else {
+                                return Err(refuse(
+                                    "a generic payload outside its instantiation",
+                                    span,
+                                ));
+                            };
+                            let Some(&aid) = args.get(gi) else {
+                                return Err(refuse(
+                                    "a generic payload outside its instantiation",
+                                    span,
+                                ));
+                            };
+                            (self.table, aid)
+                        }
+                        _ if ty_mentions_rigid(self.sig_table, *pid) => {
+                            return Err(refuse(
+                                "a product pattern under a generic payload's compound type (c06)",
+                                span,
+                            ));
+                        }
+                        _ => (self.sig_table, *pid),
+                    };
+                    out.push(slot);
+                }
+                Ok(out)
+            }
+            MatchDomain::Row(_) => {
+                let TyKind::Row { tags, .. } = self.table.kind(ty).clone() else {
+                    return Err(refuse("a row payload outside a row type", span));
+                };
+                let last = name.rsplit('.').next().unwrap_or(name);
+                let Some((_, payload)) = tags.iter().find(|(n, _)| n == name || n == last) else {
+                    return Err(refuse("a tag the row does not carry", span));
+                };
+                Ok(payload.iter().map(|&pid| (self.table, pid)).collect())
+            }
+            _ => Err(refuse("a payload pattern outside an enum or row", span)),
         }
     }
 
@@ -15320,6 +15904,96 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     self.b.gvn_push_scope();
                     chain_gvn += 1;
                 }
+                PatShape::Product => {
+                    // s130 — the product match domain (c06 retired):
+                    // the arm is a CONJUNCTION of pure projection
+                    // tests plus staged projection binds. Tests that
+                    // decide at build time folded in the walk; a
+                    // decided-false arm lowers to nothing (the
+                    // constant-discriminant posture).
+                    let mut conds: Vec<Value> = Vec::new();
+                    let mut binds: Vec<(String, LocalBind)> = Vec::new();
+                    let mut dead = false;
+                    self.product_top(
+                        pat, sv, disc, scrut_sema, &domain, &mut conds, &mut binds, &mut dead,
+                    )?;
+                    if dead {
+                        continue;
+                    }
+                    if conds.is_empty() || (is_last && exhaustive && arm.guard().is_none()) {
+                        // A decided/irrefutable product arm — or the
+                        // closing arm under sema's totality theorem,
+                        // which skips its tests exactly as the Tests
+                        // path does.
+                        if arm.guard().is_some() {
+                            self.pending_arm_binds = binds;
+                            match self.enter_match_arm(
+                                arm,
+                                sv,
+                                &[],
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                ArmNext::Fresh,
+                                e.span,
+                            )? {
+                                Some(nb) => {
+                                    self.b.seal_block(nb);
+                                    self.b.switch_to_block(nb);
+                                    self.b.gvn_push_scope();
+                                    chain_gvn += 1;
+                                }
+                                // No re-entry edge: the arm closes the
+                                // chain.
+                                None => open = false,
+                            }
+                        } else {
+                            self.pending_arm_binds = binds;
+                            self.enter_match_arm(
+                                arm,
+                                sv,
+                                &[],
+                                None,
+                                want_v,
+                                merge_eu,
+                                &mut merge,
+                                ArmNext::None,
+                                e.span,
+                            )?;
+                            open = false;
+                        }
+                        continue;
+                    }
+                    let mut cond = conds[0];
+                    for &c in &conds[1..] {
+                        cond = self
+                            .b
+                            .ins(Opcode::Band, &[cond, c], &[types::BOOL], Aux::None)
+                            .one();
+                    }
+                    let arm_bb = self.b.create_block();
+                    let next_bb = self.b.create_block();
+                    self.b.ins_br(cond, arm_bb, &[], next_bb, &[]);
+                    self.b.seal_block(arm_bb);
+                    self.b.switch_to_block(arm_bb);
+                    self.pending_arm_binds = binds;
+                    self.enter_match_arm(
+                        arm,
+                        sv,
+                        &[],
+                        None,
+                        want_v,
+                        merge_eu,
+                        &mut merge,
+                        ArmNext::To(next_bb),
+                        e.span,
+                    )?;
+                    self.b.seal_block(next_bb);
+                    self.b.switch_to_block(next_bb);
+                    self.b.gvn_push_scope();
+                    chain_gvn += 1;
+                }
             }
         }
         if open {
@@ -15395,6 +16069,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         next: ArmNext,
         span: Span,
     ) -> R<Option<Block>> {
+        // Product-arm binds staged by the product compiler (s130):
+        // their values were def'd in the chain block, which dominates
+        // this arm — the names enter scope here, BEFORE the guard, so
+        // guards see them exactly as payload binds are seen.
+        let staged = std::mem::take(&mut self.pending_arm_binds);
+        for (name, bind) in staged {
+            self.scopes
+                .last_mut()
+                .expect("scope")
+                .binds
+                .push((name, bind));
+        }
         // Payload bindings: field 1+slot of the scrutinee aggregate,
         // licensed by the dominating tag test.
         let sv_ty = self.b.func.value_ty(sv);

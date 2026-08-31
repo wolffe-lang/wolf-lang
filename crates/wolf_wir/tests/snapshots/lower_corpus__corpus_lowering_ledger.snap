@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 354
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -127,7 +126,7 @@ grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
-grammar/struct_pattern_match_arm.lu: refused — match over this nominal type
+grammar/struct_pattern_match_arm.lu: lowers
 grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_unknown_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
