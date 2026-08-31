@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/struct_pattern_diagnostics.rs
+assertion_line: 61
+expression: "render_types(&format!(\"{POINT}fn main() -> !int {{\\n    let p = Point {{ x: 1, y: 2 }}\\n    \\\n             let Point {{ x, x, .. }} = p\\n    x\\n}}\\n\"))"
+---
+error[E0814]: the field `x` appears twice in this pattern
+ --> mem:///main.lu:8:20
+  |
+8 |     let Point { x, x, .. } = p
+  |                    ^ second appearance
+  |
+  = note: each field is taken apart at most once.

@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/struct_pattern_diagnostics.rs
+assertion_line: 72
+expression: "render_types(&format!(\"{POINT}fn main() -> !int {{\\n    let p = Point {{ x: 1, y: 2 }}\\n    \\\n             let Point {{ .. }} = p\\n    0\\n}}\\n\"))"
+---
+error[E0814]: this struct pattern names no fields
+ --> mem:///main.lu:8:9
+  |
+8 |     let Point { .. } = p
+  |         ^^^^^^^^^^^^ empty field list
+  |
+  = note: a pattern that ignores every field is spelled `_`; name at least one field, with `..`
+    for the rest ([gram.pat.struct]).

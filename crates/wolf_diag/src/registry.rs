@@ -1259,6 +1259,25 @@ Only nominal types (structs, enums) carry trait impls; primitives,
 functions and other shapes cannot enter a `dyn` today.
 "#);
 
+code!(E0814, "struct pattern fields do not match the struct", r#"
+A struct pattern names each field it takes apart — the shorthand
+`Point { x, y }` binds both fields under their own names, `x: pat`
+matches a field against any pattern — and the field list must fit the
+struct: each field at most once, and every field named unless `..`
+says the rest is deliberately ignored ([gram.pat.struct]).
+
+Missing fields are an error without `..` for the same reason a struct
+literal writes every field (E0408): when the struct gains a field,
+every pattern that silently assumed the old shape should break loudly
+at the pattern, not misbind at a distance. Ignore the rest on
+purpose: `Point { x, .. }`. A pattern that ignores every field is
+spelled `_`.
+
+Unknown fields are E0403 — the same code member access and struct
+literals use — with the struct's definition site and a typo
+suggestion when one is close.
+"#);
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004

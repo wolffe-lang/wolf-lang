@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/struct_pattern_diagnostics.rs
+assertion_line: 50
+expression: "render_types(&format!(\"{POINT}fn main() -> !int {{\\n    let p = Point {{ x: 1, y: 2 }}\\n    \\\n             let Point {{ x }} = p\\n    x\\n}}\\n\"))"
+---
+error[E0814]: this `Point` pattern is missing the field `y`
+ --> mem:///main.lu:8:9
+  |
+1 | struct Point {
+  |        ----- `Point` is defined here
+...
+8 |     let Point { x } = p
+  |         ^^^^^^^^^^^ missing fields
+  |
+  = note: name every field, or say the rest is deliberate with `..` ([gram.pat.struct] — loud by
+    default, exactly as the struct literal's E0408).

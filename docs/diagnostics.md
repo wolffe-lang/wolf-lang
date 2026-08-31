@@ -489,7 +489,7 @@ Methods are looked up separately from fields: if you meant to *call*
 something, the parentheses matter — `p.len` is a field access,
 `p.len()` is a method call.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0403_unknown_method.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__struct_pattern_unknown_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0403_unknown_method.snap, crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0403_pattern_unknown_field.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap
 
 ## E0404 — this would be an infinite type
 
@@ -557,7 +557,7 @@ call sites want a "default" shape, the wolf pattern is an ordinary
 function that builds one (`fn default_config() -> Config { … }`) —
 explicit, checkable, and versioned with the type.
 
-Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0408_missing_field.snap
+Fixtures: crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0814_missing_field.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0408_missing_field.snap
 
 ## E0409 — the operator does not work on this type
 
@@ -1316,6 +1316,27 @@ not exist.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__index_origin_bad.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_duplicate.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_no_origin.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_origin_seven.snap, crates/wolf_sema/tests/snapshots/origin_diagnostics__e0813_unknown_inner.snap
 
+## E0814 — struct pattern fields do not match the struct
+
+A struct pattern names each field it takes apart — the shorthand
+`Point { x, y }` binds both fields under their own names, `x: pat`
+matches a field against any pattern — and the field list must fit the
+struct: each field at most once, and every field named unless `..`
+says the rest is deliberately ignored ([gram.pat.struct]).
+
+Missing fields are an error without `..` for the same reason a struct
+literal writes every field (E0408): when the struct gains a field,
+every pattern that silently assumed the old shape should break loudly
+at the pattern, not misbind at a distance. Ignore the rest on
+purpose: `Point { x, .. }`. A pattern that ignores every field is
+spelled `_`.
+
+Unknown fields are E0403 — the same code member access and struct
+literals use — with the struct's definition site and a typo
+suggestion when one is close.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__struct_pattern_missing_field.snap, crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0814_duplicate_field.snap, crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0814_empty.snap, crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0814_missing_field.snap
+
 ## E1001 — this value was moved away (or never given one) before this use
 
 In wolf, assignment and argument passing *move* a value: after
@@ -1329,7 +1350,7 @@ where the move happens — `copy a` produces an independent value of
 any type — or give the name a new value first: assigning to a
 moved-from place makes it live again.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1002 — this needs exclusive access, but the value is in use here
 
