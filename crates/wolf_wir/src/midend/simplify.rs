@@ -160,7 +160,7 @@ fn gvn_fold_round(
             // construction-time gauntlet.
             match fold_inst(f, types, inst) {
                 Fold::Int(n) => {
-                    morph_const(f, inst, Aux::Int(n), Opcode::Iconst);
+                    morph_int_const(f, inst, n);
                     stats.folds += 1;
                     changed = true;
                     kept.push(inst);
@@ -213,7 +213,7 @@ fn gvn_fold_round(
                             continue;
                         }
                         Rewrite::ConstInt(n) => {
-                            morph_const(f, inst, Aux::Int(n), Opcode::Iconst);
+                            morph_int_const(f, inst, n);
                             stats.rule_hits += 1;
                             changed = true;
                             kept.push(inst);
@@ -321,6 +321,20 @@ fn morph_const(f: &mut Function, inst: Inst, aux: Aux, op: Opcode) {
     data.op = op;
     data.args = empty;
     data.aux = aux;
+}
+
+/// Rewrite an instruction into an INTEGER constant — unless its result
+/// is bool-typed, where the constant must be `bconst` (s130: the
+/// bitwise identity table is type-blind, and `bxor x, x` over bools —
+/// a product arm's folded `!cond` — must not mint an `iconst.bool`,
+/// which the verifier rejects).
+fn morph_int_const(f: &mut Function, inst: Inst, n: i64) {
+    let res = f.vpool.get(f.insts[inst].results);
+    if f.value_ty(res[0]) == crate::types::BOOL {
+        morph_const(f, inst, Aux::Bool(n != 0), Opcode::Bconst);
+    } else {
+        morph_const(f, inst, Aux::Int(n), Opcode::Iconst);
+    }
 }
 
 /// `br` on a constant → `jmp` down the taken edge; `br` with two
