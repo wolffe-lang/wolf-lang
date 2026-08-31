@@ -11307,6 +11307,57 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .filter_map(Arg::value)
                 .next()
                 .ok_or_else(|| refuse("an index without an operand", e.span))?;
+            // s129 (#184): a SLICE of a byte view — `b[lo..hi]` where
+            // `b` arrived as a lent view (s89), or `s.bytes()[lo..hi]`
+            // inline. A slice READS its source and materializes a
+            // fresh List ([mem.list.slice]), and reading through a
+            // lent view is exactly what a lend permits — so the
+            // endpoints resolve as every slice's do (sc24 semantics,
+            // `range_endpoints`), the domain is `lo <=u hi <=u len`
+            // (the s128 List-slice trap), and the copy is the
+            // runtime's materializing entry over the view's own bytes
+            // at `base + lo`. Before this arm the range subexpression
+            // leaked into value lowering and refused as a range VALUE
+            // (the c06 string) — the misattribution #184 records.
+            if ix.kind == SyntaxKind::RangeExpr {
+                let Some((lo, hi)) = self.range_endpoints(ix, n, origin)? else {
+                    return Ok(Flow::Diverged);
+                };
+                let lo_ok = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[lo, hi],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Ule),
+                    )
+                    .one();
+                let hi_ok = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[hi, n],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Ule),
+                    )
+                    .one();
+                let ok = self
+                    .b
+                    .ins(Opcode::Band, &[lo_ok, hi_ok], &[types::BOOL], Aux::None)
+                    .one();
+                if self.trap_unless(ok, TrapKind::Bounds) {
+                    return Ok(Flow::Diverged);
+                }
+                let p = self.b.ins_ptr_off(base, lo, 1);
+                let cnt = self
+                    .b
+                    .ins(Opcode::IsubWrap, &[hi, lo], &[types::I64], Aux::None)
+                    .one();
+                let out = self
+                    .rt_call_foreign("__wolf_rt_str_bytes", &[p, cnt], None, Some(types::PTR))
+                    .expect("hdr");
+                return Ok(Flow::Val(Some(out)));
+            }
             let Some(idx) = flow_val!(self.lower_expr(ix)) else {
                 return Err(refuse("a valueless List index", ix.span));
             };
