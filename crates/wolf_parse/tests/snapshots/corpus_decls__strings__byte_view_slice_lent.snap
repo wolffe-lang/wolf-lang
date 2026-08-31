@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+FnDecl 1025..1077 name=first4 body=Block
+FnDecl 1079..1152 name=mid body=Block
+FnDecl 1154..1205 name=tail body=Block
+FnDecl 1207..1260 name=closed body=Block
+FnDecl 1262..1313 name=empty body=Block
+FnDecl 1315..1637 name=main body=Block

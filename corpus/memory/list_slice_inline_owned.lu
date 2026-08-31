@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="2 1 2")
+//! phase: run
+//! conforms: mem.list.slice
+//!
+//! s129 (#184) — the INLINE twin of `byte_view_slice_lent.lu`: the
+//! slice at the caller over an owned local, no call at all. The third
+//! leg of sc28's isolation — with the lent and owned twins beside it,
+//! any future verdict move names its own seam.
+
+fn main() -> !int {
+    var owned = List[int]()
+    (mut owned).push(1)
+    (mut owned).push(2)
+    (mut owned).push(3)
+    let cut = owned[0..2]
+    print("{cut.len} {cut[0]} {cut[1]}")
+    0
+}

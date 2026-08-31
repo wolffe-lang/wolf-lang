@@ -60,6 +60,7 @@ errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
 faults/assert_msg_holds.lu: lowers
 faults/bounds_slice.lu: lowers
+faults/byte_view_slice_reversed.lu: lowers
 faults/cast_float_nan_trap.lu: lowers
 faults/cast_float_overflow_trap.lu: lowers
 faults/cast_float_to_int_truncate.lu: lowers
@@ -202,6 +203,8 @@ memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
 memory/list_session_struct.lu: lowers
 memory/list_slice.lu: lowers
 memory/list_slice_edges.lu: lowers
+memory/list_slice_inline_owned.lu: lowers
+memory/list_slice_owned_call.lu: lowers
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
@@ -319,6 +322,7 @@ strings/boundary_battery.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
 strings/byte_view_lend.lu: lowers
+strings/byte_view_slice_lent.lu: lowers
 strings/char_battery.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/char_interp.lu: lowers
