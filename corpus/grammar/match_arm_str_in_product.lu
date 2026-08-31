@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: gram.pat
+//!
+//! s130 (#179) — the second named c06 residue: a str literal inside a
+//! product pattern refuses on the native pipe ("a str literal inside
+//! a product pattern (c06)"). Top-level str arms dispatch by inline
+//! equality (#54); at product depth that chain would have to nest
+//! inside the arm's conjunction, and s130 kept the conjunction to
+//! scalar tests. The checked executor RUNS this file (its literal
+//! matcher cooks and compares bytes at any depth) — the honest
+//! non-nesting this pin records. Advances to `run` in the commit that
+//! nests the str chain.
+
+fn probe(p: (str, int)) -> int {
+    match p {
+        ("go", n) => n,
+        (_, n) => n * 2,
+    }
+}
+
+fn main() -> !int {
+    if probe(("go", 4)) != 4 { return 1 }
+    if probe(("halt", 4)) != 8 { return 2 }
+    0
+}

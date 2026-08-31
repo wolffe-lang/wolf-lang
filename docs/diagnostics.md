@@ -1151,7 +1151,7 @@ a guard can be false, so only unguarded arms prove anything. Add arms
 for the listed witnesses, or end the `match` with a `_` arm (or a
 binding) to catch the rest deliberately.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_str_nonexhaustive.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_arm_product_nonexhaustive.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_str_nonexhaustive.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap
 
 ## E0802 — this `match` arm can never match
 
@@ -1163,7 +1163,7 @@ that swallows this one. Delete the unreachable arm, or reorder the
 arms so the more specific pattern comes first. (This is a warning:
 the program still compiles and its meaning is unchanged.)
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__match_str_arm_unreachable.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_unreachable.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_shape.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_duplicate_literal.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_unreachable_arm.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__match_str_arm_unreachable.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_arm_product_unreachable.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_unreachable.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__pattern_shape.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0602_pattern_unknown_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_duplicate_literal.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0802_unreachable_arm.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0808_variant_over_int.snap
 
 ## E0803 — more than one trait in scope provides this method
 
@@ -1350,7 +1350,7 @@ where the move happens — `copy a` produces an independent value of
 any type — or give the name a new value first: assigning to a
 moved-from place makes it live again.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__match_arm_whole_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1002 — this needs exclusive access, but the value is in use here
 

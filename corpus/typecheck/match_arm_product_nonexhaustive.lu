@@ -1,0 +1,23 @@
+//! check: fail(E0801)
+//! phase: resolve
+//! conforms: ty.match.exhaustive, gram.pat.struct
+//!
+//! s130 (#179) — the non-exhaustive refusal over a PRODUCT scrutinee:
+//! the struct is the single-constructor product of its fields, so the
+//! bool column must split. Covering only `on: true` leaves a concrete
+//! witness (the engine constructs the uncovered shape rather than
+//! saying a bare "not exhaustive"), and the match is E0801 exactly as
+//! an enum with a missing variant would be.
+
+struct Flag {
+    on: bool,
+    n: int,
+}
+
+fn main() -> !int {
+    let f = Flag { on: true, n: 3 }
+    let r = match f {
+        Flag { on: true, n } => n,
+    }
+    r - 3
+}

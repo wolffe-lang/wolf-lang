@@ -1,0 +1,26 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: ty.match.reachable, gram.pat.struct
+//! warns: E0802
+//!
+//! s130 (#179) — the redundant-arm WARNING over a product scrutinee:
+//! the first two arms split the bool column and their binder rows
+//! close the int column, so the third arm can never match and E0802
+//! cites the covering prefix. The program still compiles and runs;
+//! the warning tier is the whole story.
+
+struct Flag {
+    on: bool,
+    n: int,
+}
+
+fn main() -> !int {
+    let f = Flag { on: false, n: 9 }
+    let r = match f {
+        Flag { on: true, n } => n,
+        Flag { on: false, n } => n * 2,
+        Flag { n, .. } => n * 3,
+    }
+    if r != 18 { return 1 }
+    0
+}

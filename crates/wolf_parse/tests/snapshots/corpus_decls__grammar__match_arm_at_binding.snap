@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 568..608 name=Point fields=2
+FnDecl 610..719 name=at_tuple body=Block
+FnDecl 721..889 name=at_struct body=Block
+FnDecl 891..1174 name=main body=Block

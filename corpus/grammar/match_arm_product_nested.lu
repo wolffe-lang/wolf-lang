@@ -1,0 +1,67 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.pat, gram.pat.struct
+//!
+//! s130 (#179) — nesting through enum payloads, the c06 shapes the
+//! sprint contract names: a struct pattern inside a variant's payload
+//! (`Dot(Point { x, y: 0 })`), a tuple pattern inside a payload slot
+//! (`S((a, b))`), and literals at product depth (`Pair(a, 0)`). The
+//! tag test and every projection test conjoin into one arm condition;
+//! binds are element-/field-wise off the matched payload. Every
+//! variant constructed here carries a payload, so the checked lane
+//! executes the same programs the native tiers compile (a payload-free
+//! variant VALUE is still the executor's #12 module-item refusal).
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+enum Pairs {
+    Empty,
+    Pair(int, int),
+}
+
+enum Dots {
+    Nil,
+    Dot(Point),
+}
+
+enum Wraps {
+    Zero,
+    S((int, int)),
+}
+
+fn pair_arms(s: Pairs) -> int {
+    match s {
+        Empty => 0,
+        Pair(a, 0) => a * 100,
+        Pair(a, b) => a + b,
+    }
+}
+
+fn dot_arms(s: Dots) -> int {
+    match s {
+        Nil => -5,
+        Dot(Point { x, y: 0 }) => x,
+        Dot(Point { x: 0, y }) => y * 2,
+        Dot(Point { x, y }) => x * y,
+    }
+}
+
+fn wrap_arms(o: Wraps) -> int {
+    match o {
+        S((a, b)) => a * 10 + b,
+        Zero => -1,
+    }
+}
+
+fn main() -> !int {
+    if pair_arms(Pairs.Pair(3, 0)) != 300 { return 1 }
+    if pair_arms(Pairs.Pair(3, 4)) != 7 { return 2 }
+    if dot_arms(Dots.Dot(Point { x: 8, y: 0 })) != 8 { return 3 }
+    if dot_arms(Dots.Dot(Point { x: 0, y: 5 })) != 10 { return 4 }
+    if dot_arms(Dots.Dot(Point { x: 3, y: 4 })) != 12 { return 5 }
+    if wrap_arms(Wraps.S((4, 2))) != 42 { return 6 }
+    0
+}

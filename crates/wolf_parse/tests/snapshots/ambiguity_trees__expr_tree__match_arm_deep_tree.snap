@@ -1,0 +1,194 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 810..1110
+  EnumDecl 810..855
+    EnumKw 810..814 "enum"
+    Ident 815..820 "Pairs"
+    LBrace 821..822 "{"
+    EnumVariant 827..832
+      Ident 827..832 "Empty"
+    Comma 832..833 ","
+    EnumVariant 838..852
+      Ident 838..842 "Pair"
+      LParen 842..843 "("
+      PathType 843..846
+        Path 843..846
+          Ident 843..846 "int"
+      Comma 846..847 ","
+      PathType 848..851
+        Path 848..851
+          Ident 848..851 "int"
+      RParen 851..852 ")"
+    Comma 852..853 ","
+    RBrace 854..855 "}"
+  Term 855..856 "\n"
+  StructDecl 857..897
+    StructKw 857..863 "struct"
+    Ident 864..867 "Box"
+    LBrace 868..869 "{"
+    StructField 874..883
+      Ident 874..875 "p"
+      Colon 875..876 ":"
+      PathType 877..882
+        Path 877..882
+          Ident 877..882 "Pairs"
+      Comma 882..883 ","
+    StructField 888..895
+      Ident 888..889 "k"
+      Colon 889..890 ":"
+      PathType 891..894
+        Path 891..894
+          Ident 891..894 "int"
+      Comma 894..895 ","
+    RBrace 896..897 "}"
+  Term 897..898 "\n"
+  FnDecl 899..1014
+    FnKw 899..901 "fn"
+    Ident 902..907 "probe"
+    ParamList 907..915
+      LParen 907..908 "("
+      Param 908..914
+        Ident 908..909 "b"
+        Colon 909..910 ":"
+        PathType 911..914
+          Path 911..914
+            Ident 911..914 "Box"
+      RParen 914..915 ")"
+    RetType 916..922
+      Arrow 916..918 "->"
+      PathType 919..922
+        Path 919..922
+          Ident 919..922 "int"
+    Block 923..1014
+      LBrace 923..924 "{"
+      ExprStmt 929..1013
+        MatchExpr 929..1012
+          MatchKw 929..934 "match"
+          PathExpr 935..936
+            Ident 935..936 "b"
+          LBrace 937..938 "{"
+          MatchArm 947..978
+            StructPat 947..972
+              Path 947..950
+                Ident 947..950 "Box"
+              LBrace 951..952 "{"
+              FieldPat 953..966
+                Ident 953..954 "p"
+                Colon 954..955 ":"
+                PathPat 956..966
+                  Path 956..960
+                    Ident 956..960 "Pair"
+                  LParen 960..961 "("
+                  IdentPat 961..962
+                    Ident 961..962 "a"
+                  Comma 962..963 ","
+                  WildcardPat 964..965
+                    Underscore 964..965 "_"
+                  RParen 965..966 ")"
+              Comma 966..967 ","
+              RestPat 968..970
+                DotDot 968..970 ".."
+              RBrace 971..972 "}"
+            FatArrow 973..975 "=>"
+            PathExpr 976..977
+              Ident 976..977 "a"
+            Comma 977..978 ","
+          MatchArm 987..1006
+            StructPat 987..1000
+              Path 987..990
+                Ident 987..990 "Box"
+              LBrace 991..992 "{"
+              FieldPat 993..994
+                IdentPat 993..994
+                  Ident 993..994 "k"
+              Comma 994..995 ","
+              RestPat 996..998
+                DotDot 996..998 ".."
+              RBrace 999..1000 "}"
+            FatArrow 1001..1003 "=>"
+            PathExpr 1004..1005
+              Ident 1004..1005 "k"
+            Comma 1005..1006 ","
+          RBrace 1011..1012 "}"
+        Term 1012..1013 "\n"
+      RBrace 1013..1014 "}"
+  Term 1014..1015 "\n"
+  FnDecl 1016..1109
+    FnKw 1016..1018 "fn"
+    Ident 1019..1023 "main"
+    ParamList 1023..1025
+      LParen 1023..1024 "("
+      RParen 1024..1025 ")"
+    RetType 1026..1033
+      Arrow 1026..1028 "->"
+      ErrorUnionType 1029..1033
+        Not 1029..1030 "!"
+        PathType 1030..1033
+          Path 1030..1033
+            Ident 1030..1033 "int"
+    Block 1034..1109
+      LBrace 1034..1035 "{"
+      ExprStmt 1040..1102
+        IfExpr 1040..1101
+          IfKw 1040..1042 "if"
+          BinExpr 1043..1088
+            CallExpr 1043..1083
+              PathExpr 1043..1048
+                Ident 1043..1048 "probe"
+              ArgList 1048..1083
+                LParen 1048..1049 "("
+                Arg 1049..1082
+                  StructLit 1049..1082
+                    PathExpr 1049..1052
+                      Ident 1049..1052 "Box"
+                    LBrace 1053..1054 "{"
+                    FieldInit 1055..1074
+                      Ident 1055..1056 "p"
+                      Colon 1056..1057 ":"
+                      CallExpr 1058..1074
+                        MemberExpr 1058..1068
+                          PathExpr 1058..1063
+                            Ident 1058..1063 "Pairs"
+                          Dot 1063..1064 "."
+                          Ident 1064..1068 "Pair"
+                        ArgList 1068..1074
+                          LParen 1068..1069 "("
+                          Arg 1069..1070
+                            LiteralExpr 1069..1070
+                              Int 1069..1070 "7"
+                          Comma 1070..1071 ","
+                          Arg 1072..1073
+                            LiteralExpr 1072..1073
+                              Int 1072..1073 "1"
+                          RParen 1073..1074 ")"
+                    Comma 1074..1075 ","
+                    FieldInit 1076..1080
+                      Ident 1076..1077 "k"
+                      Colon 1077..1078 ":"
+                      LiteralExpr 1079..1080
+                        Int 1079..1080 "3"
+                    RBrace 1081..1082 "}"
+                RParen 1082..1083 ")"
+            NotEq 1084..1086 "!="
+            LiteralExpr 1087..1088
+              Int 1087..1088 "7"
+          Block 1089..1101
+            LBrace 1089..1090 "{"
+            ExprStmt 1091..1099
+              ReturnExpr 1091..1099
+                ReturnKw 1091..1097 "return"
+                LiteralExpr 1098..1099
+                  Int 1098..1099 "1"
+            RBrace 1100..1101 "}"
+        Term 1101..1102 "\n"
+      ExprStmt 1106..1108
+        LiteralExpr 1106..1107
+          Int 1106..1107 "0"
+        Term 1107..1108 "\n"
+      RBrace 1108..1109 "}"
+  Term 1109..1110 "\n"
+  Eof 1110..1110 ""
+== diagnostics ==

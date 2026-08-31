@@ -1,0 +1,249 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 615..995
+  FnDecl 615..781
+    FnKw 615..617 "fn"
+    Ident 618..626 "classify"
+    ParamList 626..642
+      LParen 626..627 "("
+      Param 627..641
+        Ident 627..628 "p"
+        Colon 628..629 ":"
+        TupleType 630..641
+          LParen 630..631 "("
+          PathType 631..634
+            Path 631..634
+              Ident 631..634 "int"
+          Comma 634..635 ","
+          PathType 636..640
+            Path 636..640
+              Ident 636..640 "bool"
+          RParen 640..641 ")"
+      RParen 641..642 ")"
+    RetType 643..649
+      Arrow 643..645 "->"
+      PathType 646..649
+        Path 646..649
+          Ident 646..649 "int"
+    Block 650..781
+      LBrace 650..651 "{"
+      ExprStmt 656..780
+        MatchExpr 656..779
+          MatchKw 656..661 "match"
+          PathExpr 662..663
+            Ident 662..663 "p"
+          LBrace 664..665 "{"
+          MatchArm 674..689
+            TuplePat 674..683
+              LParen 674..675 "("
+              LiteralPat 675..676
+                Int 675..676 "0"
+              Comma 676..677 ","
+              LiteralPat 678..682
+                TrueKw 678..682 "true"
+              RParen 682..683 ")"
+            FatArrow 684..686 "=>"
+            LiteralExpr 687..688
+              Int 687..688 "1"
+            Comma 688..689 ","
+          MatchArm 698..714
+            TuplePat 698..708
+              LParen 698..699 "("
+              LiteralPat 699..700
+                Int 699..700 "0"
+              Comma 700..701 ","
+              LiteralPat 702..707
+                FalseKw 702..707 "false"
+              RParen 707..708 ")"
+            FatArrow 709..711 "=>"
+            LiteralExpr 712..713
+              Int 712..713 "2"
+            Comma 713..714 ","
+          MatchArm 723..743
+            TuplePat 723..732
+              LParen 723..724 "("
+              IdentPat 724..725
+                Ident 724..725 "n"
+              Comma 725..726 ","
+              LiteralPat 727..731
+                TrueKw 727..731 "true"
+              RParen 731..732 ")"
+            FatArrow 733..735 "=>"
+            BinExpr 736..742
+              PathExpr 736..737
+                Ident 736..737 "n"
+              Plus 738..739 "+"
+              LiteralExpr 740..742
+                Int 740..742 "10"
+            Comma 742..743 ","
+          MatchArm 752..773
+            TuplePat 752..762
+              LParen 752..753 "("
+              IdentPat 753..754
+                Ident 753..754 "n"
+              Comma 754..755 ","
+              LiteralPat 756..761
+                FalseKw 756..761 "false"
+              RParen 761..762 ")"
+            FatArrow 763..765 "=>"
+            BinExpr 766..772
+              PathExpr 766..767
+                Ident 766..767 "n"
+              Plus 768..769 "+"
+              LiteralExpr 770..772
+                Int 770..772 "20"
+            Comma 772..773 ","
+          RBrace 778..779 "}"
+        Term 779..780 "\n"
+      RBrace 780..781 "}"
+  Term 781..782 "\n"
+  FnDecl 783..994
+    FnKw 783..785 "fn"
+    Ident 786..790 "main"
+    ParamList 790..792
+      LParen 790..791 "("
+      RParen 791..792 ")"
+    RetType 793..800
+      Arrow 793..795 "->"
+      ErrorUnionType 796..800
+        Not 796..797 "!"
+        PathType 797..800
+          Path 797..800
+            Ident 797..800 "int"
+    Block 801..994
+      LBrace 801..802 "{"
+      ExprStmt 807..848
+        IfExpr 807..847
+          IfKw 807..809 "if"
+          BinExpr 810..834
+            CallExpr 810..829
+              PathExpr 810..818
+                Ident 810..818 "classify"
+              ArgList 818..829
+                LParen 818..819 "("
+                Arg 819..828
+                  TupleExpr 819..828
+                    LParen 819..820 "("
+                    LiteralExpr 820..821
+                      Int 820..821 "0"
+                    Comma 821..822 ","
+                    LiteralExpr 823..827
+                      TrueKw 823..827 "true"
+                    RParen 827..828 ")"
+                RParen 828..829 ")"
+            NotEq 830..832 "!="
+            LiteralExpr 833..834
+              Int 833..834 "1"
+          Block 835..847
+            LBrace 835..836 "{"
+            ExprStmt 837..845
+              ReturnExpr 837..845
+                ReturnKw 837..843 "return"
+                LiteralExpr 844..845
+                  Int 844..845 "1"
+            RBrace 846..847 "}"
+        Term 847..848 "\n"
+      ExprStmt 852..894
+        IfExpr 852..893
+          IfKw 852..854 "if"
+          BinExpr 855..880
+            CallExpr 855..875
+              PathExpr 855..863
+                Ident 855..863 "classify"
+              ArgList 863..875
+                LParen 863..864 "("
+                Arg 864..874
+                  TupleExpr 864..874
+                    LParen 864..865 "("
+                    LiteralExpr 865..866
+                      Int 865..866 "0"
+                    Comma 866..867 ","
+                    LiteralExpr 868..873
+                      FalseKw 868..873 "false"
+                    RParen 873..874 ")"
+                RParen 874..875 ")"
+            NotEq 876..878 "!="
+            LiteralExpr 879..880
+              Int 879..880 "2"
+          Block 881..893
+            LBrace 881..882 "{"
+            ExprStmt 883..891
+              ReturnExpr 883..891
+                ReturnKw 883..889 "return"
+                LiteralExpr 890..891
+                  Int 890..891 "2"
+            RBrace 892..893 "}"
+        Term 893..894 "\n"
+      ExprStmt 898..940
+        IfExpr 898..939
+          IfKw 898..900 "if"
+          BinExpr 901..926
+            CallExpr 901..920
+              PathExpr 901..909
+                Ident 901..909 "classify"
+              ArgList 909..920
+                LParen 909..910 "("
+                Arg 910..919
+                  TupleExpr 910..919
+                    LParen 910..911 "("
+                    LiteralExpr 911..912
+                      Int 911..912 "5"
+                    Comma 912..913 ","
+                    LiteralExpr 914..918
+                      TrueKw 914..918 "true"
+                    RParen 918..919 ")"
+                RParen 919..920 ")"
+            NotEq 921..923 "!="
+            LiteralExpr 924..926
+              Int 924..926 "15"
+          Block 927..939
+            LBrace 927..928 "{"
+            ExprStmt 929..937
+              ReturnExpr 929..937
+                ReturnKw 929..935 "return"
+                LiteralExpr 936..937
+                  Int 936..937 "3"
+            RBrace 938..939 "}"
+        Term 939..940 "\n"
+      ExprStmt 944..987
+        IfExpr 944..986
+          IfKw 944..946 "if"
+          BinExpr 947..973
+            CallExpr 947..967
+              PathExpr 947..955
+                Ident 947..955 "classify"
+              ArgList 955..967
+                LParen 955..956 "("
+                Arg 956..966
+                  TupleExpr 956..966
+                    LParen 956..957 "("
+                    LiteralExpr 957..958
+                      Int 957..958 "7"
+                    Comma 958..959 ","
+                    LiteralExpr 960..965
+                      FalseKw 960..965 "false"
+                    RParen 965..966 ")"
+                RParen 966..967 ")"
+            NotEq 968..970 "!="
+            LiteralExpr 971..973
+              Int 971..973 "27"
+          Block 974..986
+            LBrace 974..975 "{"
+            ExprStmt 976..984
+              ReturnExpr 976..984
+                ReturnKw 976..982 "return"
+                LiteralExpr 983..984
+                  Int 983..984 "4"
+            RBrace 985..986 "}"
+        Term 986..987 "\n"
+      ExprStmt 991..993
+        LiteralExpr 991..992
+          Int 991..992 "0"
+        Term 992..993 "\n"
+      RBrace 993..994 "}"
+  Term 994..995 "\n"
+  Eof 995..995 ""
+== diagnostics ==

@@ -1,0 +1,29 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.pat, gram.expr.flow
+//!
+//! s130 (#179) — the tuple twin of `struct_pattern_match_arm`: the
+//! s128 deferral retired by the same commit. A tuple pattern in arm
+//! position is the single-constructor product — literals inside the
+//! product are tests (the arm is a CONJUNCTION of element tests),
+//! names bind element-wise, `_` discards, and exhaustiveness composes
+//! over the bool column: the four (0/nonzero × true/false) arms below
+//! are total without a wildcard because the `bool` element splits and
+//! the binder rows close the int column.
+
+fn classify(p: (int, bool)) -> int {
+    match p {
+        (0, true) => 1,
+        (0, false) => 2,
+        (n, true) => n + 10,
+        (n, false) => n + 20,
+    }
+}
+
+fn main() -> !int {
+    if classify((0, true)) != 1 { return 1 }
+    if classify((0, false)) != 2 { return 2 }
+    if classify((5, true)) != 15 { return 3 }
+    if classify((7, false)) != 27 { return 4 }
+    0
+}
