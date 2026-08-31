@@ -1,0 +1,20 @@
+//! check: run(exit=trap(bounds))
+//! phase: run
+//! conforms: mem.list.slice, mem.str.view.lend, mem.ub.defined
+//!
+//! s129 (#184)'s fault twin: the reversed range through a LENT view
+//! is the same domain fault the owned form pins
+//! (`list_slice_reversed.lu`) — `b[3..1]` traps `bounds`, never an
+//! empty slice, never a backwards walk, and the lend changes nothing
+//! about the domain.
+
+fn cut(b: List[int]) -> List[int] {
+    b[3..1]
+}
+
+fn main() -> !int {
+    let s = "wolf"
+    let x = cut(s.bytes())
+    print("{x.len}")
+    0
+}

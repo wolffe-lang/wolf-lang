@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 607..647 name=Point fields=2
+StructDecl 649..691 name=Seg fields=2
+StructDecl 693..734 name=Box fields=2
+FnDecl 736..793 name=mk body=Block
+FnDecl 795..1398 name=main body=Block

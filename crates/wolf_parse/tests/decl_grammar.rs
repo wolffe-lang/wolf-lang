@@ -388,6 +388,80 @@ fn bindings_let_var_const() {
 }
 
 #[test]
+fn struct_patterns() {
+    // `[gram.pat.struct]` (s129, #179): shorthand, explicit + nested,
+    // `..` rest, dotted path, `@`-binding over a struct pattern.
+    let src = "let Point { x, y } = p\nlet Point { x: a, .. } = p\nlet geo.Point { x } = q\nlet Seg { a: Point { x, .. }, b: _ } = s\nlet whole @ Point { x, .. } = p\n";
+    let root = clean(src);
+    let pats: Vec<SyntaxKind> = root
+        .nodes()
+        .filter_map(LetDecl::cast)
+        .map(|l| l.pattern().expect("pattern").kind)
+        .collect();
+    assert_eq!(
+        pats,
+        [
+            SyntaxKind::StructPat,
+            SyntaxKind::StructPat,
+            SyntaxKind::StructPat,
+            SyntaxKind::StructPat,
+            SyntaxKind::BindingPat,
+        ]
+    );
+    let first = root
+        .nodes()
+        .find_map(LetDecl::cast)
+        .and_then(|l| l.pattern())
+        .and_then(wolf_ast::StructPat::cast)
+        .expect("struct pattern");
+    assert!(!first.has_rest());
+    let names: Vec<&str> = first
+        .fields()
+        .map(|f| text(src, f.name_span().expect("name")))
+        .collect();
+    assert_eq!(names, ["x", "y"]);
+    // Shorthand members carry their binding as an IdentPat.
+    assert!(
+        first
+            .fields()
+            .all(|f| f.pattern().expect("sub").kind == SyntaxKind::IdentPat)
+    );
+    let second = root
+        .nodes()
+        .filter_map(LetDecl::cast)
+        .nth(1)
+        .and_then(|l| l.pattern())
+        .and_then(wolf_ast::StructPat::cast)
+        .expect("struct pattern");
+    assert!(second.has_rest());
+    let f = second.fields().next().expect("field");
+    assert_eq!(text(src, f.name().expect("name").span), "x");
+    assert_eq!(f.pattern().expect("sub").kind, SyntaxKind::IdentPat);
+    let nested = root
+        .nodes()
+        .filter_map(LetDecl::cast)
+        .nth(3)
+        .and_then(|l| l.pattern())
+        .and_then(wolf_ast::StructPat::cast)
+        .expect("struct pattern");
+    let kinds: Vec<SyntaxKind> = nested
+        .fields()
+        .map(|f| f.pattern().expect("sub").kind)
+        .collect();
+    assert_eq!(kinds, [SyntaxKind::StructPat, SyntaxKind::WildcardPat]);
+}
+
+#[test]
+fn struct_pattern_rest_must_be_last() {
+    let src = "let Point { .., x } = p\n";
+    let p = util::parse(src);
+    assert!(
+        !p.diagnostics.is_empty(),
+        "`..` before a field must be rejected"
+    );
+}
+
+#[test]
 fn binding_patterns() {
     let src = "let A | B = x\nlet all @ (a, b) = pair\nlet Some(v) = opt\nlet io.Error(e) = err\nlet _ = ignore\nlet 42 = answer\n";
     let root = clean(src);

@@ -1515,9 +1515,17 @@ pub(crate) fn pattern_names(node: &GreenNode, src: &[u8]) -> Vec<(String, Span)>
                     walk(c, src, out);
                 }
             }
-            SyntaxKind::TuplePat | SyntaxKind::OrPat | SyntaxKind::PathPat => {
+            SyntaxKind::TuplePat
+            | SyntaxKind::OrPat
+            | SyntaxKind::PathPat
+            | SyntaxKind::StructPat
+            | SyntaxKind::FieldPat => {
                 // A PathPat's path is a tag/variant (type-dependent,
-                // s13); only its payload patterns bind.
+                // s13); only its payload patterns bind. A StructPat's
+                // path is the type; its FieldPat members bind through
+                // their sub-patterns — the shorthand's own IdentPat,
+                // or the explicit form's pattern (the explicit field
+                // NAME is a token, so it never binds).
                 for c in node.nodes().filter(|n| is_pattern_kind(n.kind)) {
                     walk(c, src, out);
                 }

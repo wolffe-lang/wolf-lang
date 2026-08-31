@@ -1546,6 +1546,39 @@ impl<'a> Fmt<'a> {
                     self.walk_children(n, out, ctx);
                 }
             }
+            // `[gram.pat.struct]` (s129): struct-literal spacing —
+            // `Point { x, y: p, .. }`. The `..` rest marker is its
+            // own node (`RestPat`) precisely so this list machinery
+            // treats it as one more member.
+            K::StructPat => {
+                let mut it = n.nodes();
+                let path = it.next();
+                if let Some(p) = path {
+                    self.node(p, out, Ctx::Postfix);
+                }
+                out.push(Doc::text(" "));
+                let (open, elems, commas, close) = self.split_list(n, K::LBrace, K::RBrace);
+                if let Some(open) = open {
+                    let fields: Vec<&GreenNode> = elems
+                        .into_iter()
+                        .filter(|e| matches!(e.kind, K::FieldPat | K::RestPat))
+                        .collect();
+                    let force = self.brace_multiline(open, close);
+                    self.list(
+                        open,
+                        close,
+                        &fields,
+                        &commas,
+                        true,
+                        force,
+                        false,
+                        out,
+                        Ctx::Free,
+                    );
+                } else {
+                    self.walk_children(n, out, ctx);
+                }
+            }
 
             // ------------------------------------------------- exprs --
             K::ParenExpr => self.paren(n, out, ctx),

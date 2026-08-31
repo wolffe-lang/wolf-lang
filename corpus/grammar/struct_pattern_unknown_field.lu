@@ -1,0 +1,20 @@
+//! check: fail(E0403)
+//! phase: resolve
+//! conforms: gram.pat.struct
+//!
+//! s129 (#179) refusal pin — an unknown field in a struct pattern is
+//! E0403, the same code member access and struct literals answer
+//! with: the struct's definition site and a typo suggestion when one
+//! is close (`z` is not `x`/`y`). The `..` keeps the missing-field
+//! rule out of this pin's way so exactly one rule fires.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() -> !int {
+    let p = Point { x: 1, y: 2 }
+    let Point { x, z, .. } = p
+    x
+}

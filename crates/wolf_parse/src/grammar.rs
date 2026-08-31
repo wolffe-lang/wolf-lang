@@ -1948,6 +1948,10 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
             path(p, "pattern");
             if p.at_punct(Punct::LParen) {
                 pattern_payload(p);
+            } else if p.at_punct(Punct::LBrace) {
+                // `[gram.pat.struct]` (s129, #179): `Point { x, y: p, .. }`.
+                struct_pat_fields(p);
+                return Some(m.complete(p, SyntaxKind::StructPat));
             } else {
                 p.error(
                     codes::EXPECTED_TOKEN,
@@ -1973,10 +1977,15 @@ fn at_binding_pattern(p: &Parser<'_>) -> bool {
     p.nth(1) == TokenKind::Punct(Punct::At)
 }
 
-/// Bounded lookahead: `Tag(pat)` / `io.Error(pat)` vs. bare `x` — the
-/// `.` or `(` after the identifier decides.
+/// Bounded lookahead: `Tag(pat)` / `io.Error(pat)` / `Point { … }`
+/// vs. bare `x` — the `.`, `(`, or `{` after the identifier decides
+/// (an identifier pattern is never followed by `{` in any position a
+/// pattern is parsed, so the brace is free — `[gram.pat.struct]`).
 fn at_path_pattern(p: &Parser<'_>) -> bool {
-    matches!(p.nth(1), TokenKind::Punct(Punct::Dot | Punct::LParen))
+    matches!(
+        p.nth(1),
+        TokenKind::Punct(Punct::Dot | Punct::LParen | Punct::LBrace)
+    )
 }
 
 /// `'(' pattern (',' pattern)* ','? ')'` after a path pattern.
@@ -2014,6 +2023,95 @@ fn pattern_payload(p: &mut Parser<'_>) {
         }
         if p.pos() == before {
             unclosed(p, opener, "(");
+            break;
+        }
+    }
+}
+
+/// `'{' field_pat (',' field_pat)* ','? '..'? '}'` after a struct
+/// pattern's path (`[gram.pat.struct]`, s129 #179). Each member is a
+/// `FieldPat`: the shorthand wraps a single `IdentPat` (the binding IS
+/// the field name); `IDENT ':' pattern` matches the field against any
+/// pattern. A `..` before the brace closes the list — nothing may
+/// follow it. Recovery mirrors [`pattern_payload`]'s discipline (the
+/// D22 budget): one report per damaged member, resynchronize at
+/// `,`/`}`/`=`, and a truncation at statement scale reports the
+/// unclosed opener once.
+fn struct_pat_fields(p: &mut Parser<'_>) {
+    let opener = p.current_span();
+    p.bump(); // `{`
+    loop {
+        if p.at_punct(Punct::RBrace) {
+            p.bump();
+            break;
+        }
+        if p.at_eof() || p.at_decl_start() || p.at_punct(Punct::Eq) {
+            unclosed(p, opener, "{");
+            break;
+        }
+        if p.at_punct(Punct::DotDot) {
+            let rm = p.start();
+            p.bump();
+            rm.complete(p, SyntaxKind::RestPat);
+            if p.at_punct(Punct::RBrace) {
+                p.bump();
+            } else {
+                p.error(
+                    codes::EXPECTED_TOKEN,
+                    p.here(),
+                    "`..` ignores the remaining fields and must be last — expected `}`",
+                );
+                p.recover_until(true, |k| {
+                    k == TokenKind::Punct(Punct::RBrace) || k == TokenKind::Punct(Punct::Eq)
+                });
+                if p.at_punct(Punct::RBrace) {
+                    p.bump();
+                }
+            }
+            break;
+        }
+        let before = p.pos();
+        if p.at(TokenKind::Ident) {
+            let fm = p.start();
+            if p.nth(1) == TokenKind::Punct(Punct::Colon) {
+                p.bump(); // field name
+                p.bump(); // `:`
+                if pattern(p).is_none() {
+                    p.error(
+                        codes::EXPECTED_PATTERN,
+                        p.here(),
+                        "expected a pattern after `:`",
+                    );
+                    p.missing();
+                }
+            } else {
+                // Shorthand: the name binds itself.
+                let im = p.start();
+                p.bump();
+                im.complete(p, SyntaxKind::IdentPat);
+            }
+            fm.complete(p, SyntaxKind::FieldPat);
+        } else {
+            if !p.arm_error_reported {
+                p.arm_error_reported = true;
+                p.error(
+                    codes::EXPECTED_PATTERN,
+                    p.current_span(),
+                    "expected a field name",
+                );
+            }
+            p.recover_until(true, |k| {
+                matches!(
+                    k,
+                    TokenKind::Punct(Punct::Comma | Punct::RBrace | Punct::Eq | Punct::DotDot)
+                )
+            });
+        }
+        if p.at_punct(Punct::Comma) {
+            p.bump();
+        }
+        if p.pos() == before {
+            unclosed(p, opener, "{");
             break;
         }
     }

@@ -1,0 +1,20 @@
+//! check: fail(E0814)
+//! phase: resolve
+//! conforms: gram.pat.struct
+//!
+//! s129 (#179) refusal pin — WITHOUT `..` a struct pattern names
+//! every field ([gram.pat.struct], the loud-by-default lean argued in
+//! the clause: the same rule a struct literal lives under, E0408, so
+//! a struct gaining a field breaks the pattern at the pattern). The
+//! fix the note spells: name `y`, or say `..` on purpose.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() -> !int {
+    let p = Point { x: 1, y: 2 }
+    let Point { x } = p
+    x
+}

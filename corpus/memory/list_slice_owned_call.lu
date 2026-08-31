@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="4 1 4")
+//! phase: run
+//! conforms: mem.list.slice
+//!
+//! s129 (#184) — the OWNED twin of `byte_view_slice_lent.lu`: the
+//! same callee (`first4`, sc28's probe under test) over a pushed-up
+//! owned `List[int]`. This shape always ran; it stands beside the
+//! lent twin so a future verdict move isolates to the lend in one
+//! read, exactly as sc28's three-probe isolation did.
+
+fn first4(b: List[int]) -> List[int] {
+    b[0..4]
+}
+
+fn main() -> !int {
+    var owned = List[int]()
+    (mut owned).push(1)
+    (mut owned).push(2)
+    (mut owned).push(3)
+    (mut owned).push(4)
+    (mut owned).push(5)
+    let cut = first4(owned)
+    print("{cut.len} {cut[0]} {cut[3]}")
+    0
+}

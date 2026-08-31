@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="4 119 4 108 2 0")
+//! phase: run
+//! conforms: mem.list.slice, mem.str.view.lend, mem.str.view
+//!
+//! s129 (#184) — a callee SLICES a lent byte view. The caller lends
+//! `s.bytes()` across the call ([mem.str.view.lend], s89); inside the
+//! callee `b[from..to]` is a slice, and a slice READS its source and
+//! materializes a fresh List ([mem.list.slice]) — reading through a
+//! lent view is exactly what a lend permits. Before s129 the native
+//! rung refused this at mem, misattributing the limit to the c06
+//! range-VALUE conservatism (the view fast-path had no slice arm and
+//! leaked the range subexpression into value lowering); the owned and
+//! inline twins beside this file always ran, which is how sc28's
+//! three-probe isolation found the seam. `mid` is the doc-fence shape
+//! from wolf-std's `bytes.slice` (F-0101 — the retreat this witness
+//! prices the return of); every endpoint form resolves through the
+//! lend (`^n`, open sides, `..=`, the legal empty slice).
+
+fn first4(b: List[int]) -> List[int] {
+    b[0..4]
+}
+
+fn mid(b: List[int], from: int, to: int) -> List[int] {
+    b[from..to]
+}
+
+fn tail(b: List[int]) -> List[int] {
+    b[2..^2]
+}
+
+fn closed(b: List[int]) -> List[int] {
+    b[1..=2]
+}
+
+fn empty(b: List[int]) -> List[int] {
+    b[3..3]
+}
+
+fn main() -> !int {
+    let s = "wolfpack"
+    let a = first4(s.bytes())
+    let m = mid(s.bytes(), 2, 6)
+    let t = tail(s.bytes())
+    let c = closed(s.bytes())
+    let z = empty(s.bytes())
+    print("{a.len} {a[0]} {m.len} {m[0]} {c.len} {z.len}")
+    if t.len != 4 { return 1 }
+    if t[0] != 108 { return 2 }
+    0
+}

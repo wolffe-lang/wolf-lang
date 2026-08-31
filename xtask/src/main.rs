@@ -1234,12 +1234,30 @@ const ALL_THREE_FLOOR: usize = 207;
 // traps are runs) — so every count moves +4. Totals 235/257/257,
 // union 271, all-three 221. Counts measured by this gate, not
 // predicted.
+// s129 ratchet over 416 entries: the #184 witnesses — sc28's probe
+// trio (`strings/byte_view_slice_lent.lu`,
+// `memory/list_slice_owned_call.lu`, `memory/list_slice_inline_owned.lu`)
+// and the `faults/` reversed twin through the lend — are four NEW
+// files every lane executes (the lent shape compiles natively for the
+// first time; traps are runs), so every count moves +4: a population
+// change, no pre-existing file moved lanes. Totals 239/261/261,
+// union 275, all-three 225. Counts measured by this gate, not
+// predicted.
+// s129 item 2 ratchet over 422 entries: struct patterns land (#179,
+// `[gram.pat.struct]`). Two new run-phase witnesses, each three-lane
+// — `memory/struct_pattern_binder.lu` (the whole binder surface) and
+// `memory/struct_destructure_partial_live.lu` (field-granular
+// partial moves) — so every count moves +2; the four other s129
+// witnesses are static pins (E1001/E0403/E0814) and the match-arm
+// deferral (`refused@mem` on every lane, deliberately). Totals
+// 241/263/263, union 277, all-three 227. Counts measured by this
+// gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 235), ("native", 257), ("release", 257)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 241), ("native", 263), ("release", 263)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 271;
+const UNION_FLOOR: usize = 277;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 221;
+const ALL_THREE_FLOOR: usize = 227;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

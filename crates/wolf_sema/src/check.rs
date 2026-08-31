@@ -3210,6 +3210,31 @@ impl<'a> Checker<'a> {
                 }
                 Ok(())
             }
+            SyntaxKind::StructPat => {
+                // `[gram.pat.struct]` (s129, #179): irrefutable exactly
+                // when its sub-patterns are — admitted in binders.
+                match self.struct_pattern_fields(pat, ty)? {
+                    Some(cols) => {
+                        for (sub, fty) in cols {
+                            if let Some(sub) = sub {
+                                self.bind_pattern(sub, fty)?;
+                            }
+                        }
+                    }
+                    None => {
+                        // Shape errors already reported; bind the
+                        // sub-patterns loosely so their names exist.
+                        let d = wolf_ast::StructPat::cast(pat).expect("kind");
+                        let err = self.error_ty();
+                        let subs: Vec<&GreenNode> =
+                            d.fields().filter_map(|f| f.pattern()).collect();
+                        for sub in subs {
+                            self.bind_pattern(sub, err)?;
+                        }
+                    }
+                }
+                Ok(())
+            }
             _ => {
                 // E0806 — a refutable pattern where matching cannot
                 // fail (s17): `let`/`var`/`for`/params/`else |p|`.
@@ -3229,6 +3254,210 @@ impl<'a> Checker<'a> {
                 Ok(())
             }
         }
+    }
+
+    /// Resolve a struct pattern against the value it takes apart
+    /// (`[gram.pat.struct]`, s129 #179): the struct comes from the
+    /// SCRUTINEE's type (type-directed, the #4 posture — the pattern's
+    /// path must agree); each named field's sub-pattern is paired with
+    /// the field's own type (generic arguments substituted, s94), in
+    /// DECLARATION order — `None` sub-patterns are fields the pattern
+    /// leaves to `..`. Field-list errors are this method's: unknown
+    /// field E0403 (the member-access code, typo suggestions),
+    /// duplicate/missing-without-`..`/empty E0814. `Ok(None)` means
+    /// the pattern cannot be resolved against this value (reported
+    /// here unless the type is already an error).
+    #[allow(clippy::type_complexity)]
+    fn struct_pattern_fields<'p>(
+        &mut self,
+        pat: &'p GreenNode,
+        scrut: TyId,
+    ) -> R<Option<Vec<(Option<&'p GreenNode>, TyId)>>> {
+        let d = wolf_ast::StructPat::cast(pat).expect("kind");
+        // The scrutinee's nominal, distinct wrappers stripped (the
+        // eval_match domain posture).
+        let mut t = scrut;
+        for _ in 0..32 {
+            match self.kind_of(t) {
+                TyKind::Distinct(inner) => t = inner,
+                _ => break,
+            }
+        }
+        let path_text = d.path().map(|p| self.text(p.span)).unwrap_or_default();
+        let path_last = path_text
+            .rsplit('.')
+            .next()
+            .unwrap_or(path_text.as_str())
+            .to_string();
+        let (module, name, args) = match self.kind_of(t) {
+            TyKind::Nominal { module, name, args } => (module as usize, name, args),
+            TyKind::Error => return Ok(None),
+            TyKind::Var(_) => {
+                // No type to direct from: resolve the pattern's own
+                // path (the struct-literal route) and let unification
+                // hand the fields back. Bare names only — a dotted
+                // path with an unknown scrutinee is a corner nothing
+                // spells today.
+                let Some((module, name)) = self.named_struct_target(&path_last) else {
+                    self.pattern_shape_err(
+                        pat.span,
+                        format!("cannot resolve `{path_last}` to a struct here"),
+                        "annotate the value's type, or import the struct".to_string(),
+                    );
+                    return Ok(None);
+                };
+                let Some(ItemSig::Struct(sig)) = self.sigs.get(module, &name).cloned() else {
+                    self.pattern_shape_err(
+                        pat.span,
+                        format!("`{path_last}` is not a struct"),
+                        "only structs are taken apart by field".to_string(),
+                    );
+                    return Ok(None);
+                };
+                let fresh: Vec<TyId> = sig
+                    .generics
+                    .iter()
+                    .map(|_| self.fresh(NumKind::Any, pat.span))
+                    .collect();
+                let nom = self.lo.table.intern(TyKind::Nominal {
+                    module: module as u32,
+                    name: name.clone(),
+                    args: fresh.clone(),
+                });
+                let exp = Expect {
+                    ty: nom,
+                    reason: Reason::Pattern,
+                    because: Some(pat.span),
+                };
+                self.expect_unify(pat.span, scrut, &exp);
+                (module, name, fresh)
+            }
+            _ => {
+                let shown = self.show(scrut);
+                self.pattern_shape_err(
+                    pat.span,
+                    format!("this pattern takes a struct apart, but the value is `{shown}`"),
+                    "match the value's own shape, or bind it to a name".to_string(),
+                );
+                return Ok(None);
+            }
+        };
+        let Some(ItemSig::Struct(sig)) = self.sigs.get(module, &name).cloned() else {
+            let shown = self.show(scrut);
+            self.pattern_shape_err(
+                pat.span,
+                format!("this pattern takes a struct apart, but the value is `{shown}`"),
+                "match the value's own shape, or bind it to a name".to_string(),
+            );
+            return Ok(None);
+        };
+        // The pattern's path must NAME the scrutinee's struct — the
+        // type already decided which struct this is; a disagreeing
+        // path is reported and the value's own fields govern.
+        if !path_last.is_empty() && path_last != name {
+            self.pattern_shape_err(
+                d.path().map(|p| p.span).unwrap_or(pat.span),
+                format!("the pattern names `{path_last}`, but the value is `{name}`"),
+                format!("write `{name} {{ … }}` — the scrutinee's type decides"),
+            );
+        }
+        // s94: field types answer under the application's arguments.
+        let inst_map: std::collections::BTreeMap<String, TyId> = sig
+            .generics
+            .iter()
+            .cloned()
+            .zip(args.iter().copied())
+            .collect();
+        let fields: Vec<wolf_ast::FieldPat<'_>> = d.fields().collect();
+        if fields.is_empty() {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0814,
+                    pat.span,
+                    "this struct pattern names no fields".to_string(),
+                )
+                .with_label("empty field list")
+                .with_note(
+                    "a pattern that ignores every field is spelled `_`; name at least \
+                     one field, with `..` for the rest ([gram.pat.struct])."
+                        .to_string(),
+                ),
+            );
+            return Ok(None);
+        }
+        let mut seen: Vec<String> = Vec::new();
+        let mut by_decl: Vec<Option<&'p GreenNode>> = vec![None; sig.fields.len()];
+        for f in &fields {
+            let Some(nspan) = f.name_span() else { continue };
+            let fname = self.text(nspan);
+            if seen.contains(&fname) {
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0814,
+                        nspan,
+                        format!("the field `{fname}` appears twice in this pattern"),
+                    )
+                    .with_label("second appearance")
+                    .with_note("each field is taken apart at most once.".to_string()),
+                );
+                continue;
+            }
+            seen.push(fname.clone());
+            let Some(i) = sig.fields.iter().position(|sf| sf.name == fname) else {
+                self.unknown_field(&name, &sig, nspan, &fname);
+                // Type the orphan sub-pattern loosely so its names
+                // still bind.
+                if let Some(sub) = f.pattern() {
+                    let err = self.error_ty();
+                    self.bind_pattern(sub, err)?;
+                }
+                continue;
+            };
+            by_decl[i] = f.pattern();
+        }
+        if !d.has_rest() {
+            let missing: Vec<&str> = sig
+                .fields
+                .iter()
+                .filter(|sf| !seen.contains(&sf.name))
+                .map(|sf| sf.name.as_str())
+                .collect();
+            if !missing.is_empty() {
+                let list = missing
+                    .iter()
+                    .map(|m| format!("`{m}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0814,
+                        pat.span,
+                        format!(
+                            "this `{name}` pattern is missing the field{} {list}",
+                            if missing.len() == 1 { "" } else { "s" }
+                        ),
+                    )
+                    .with_label("missing fields")
+                    .with_secondary(sig.name_span, format!("`{name}` is defined here"))
+                    .with_note(
+                        "name every field, or say the rest is deliberate with `..` \
+                         ([gram.pat.struct] — loud by default, exactly as the struct \
+                         literal's E0408)."
+                            .to_string(),
+                    ),
+                );
+            }
+        }
+        let mut out = Vec::with_capacity(sig.fields.len());
+        for (i, sf) in sig.fields.iter().enumerate() {
+            let fty = if inst_map.is_empty() {
+                sf.ty
+            } else {
+                crate::types::subst(&mut self.lo.table, sf.ty, &inst_map)
+            };
+            out.push((by_decl[i], fty));
+        }
+        Ok(Some(out))
     }
 
     fn check_assign(&mut self, s: &GreenNode) -> R<()> {
@@ -8896,6 +9125,27 @@ impl<'a> Checker<'a> {
             }
             SyntaxKind::LiteralPat => self.literal_pattern(pat, scrut),
             SyntaxKind::PathPat => self.path_pattern(pat, scrut),
+            // `[gram.pat.struct]` (s129, #179): a struct is a
+            // single-constructor product — the pattern lowers to the
+            // Tuple ctor over the fields in DECLARATION order,
+            // `..`/omission as wildcards, so exhaustiveness sees
+            // exactly the product it is.
+            SyntaxKind::StructPat => match self.struct_pattern_fields(pat, scrut)? {
+                Some(cols) => {
+                    let mut args = Vec::new();
+                    for (sub, fty) in cols {
+                        args.push(match sub {
+                            Some(sub) => self.match_pattern(sub, fty)?,
+                            None => Pat::Wild,
+                        });
+                    }
+                    Ok(Pat::Ctor {
+                        ctor: Ctor::Tuple,
+                        args,
+                    })
+                }
+                None => Ok(Pat::Wild),
+            },
             _ => Ok(Pat::Wild), // broken tree: silence (D22)
         }
     }
@@ -9290,7 +9540,11 @@ impl<'a> Checker<'a> {
                 }
                 ColTy::Tuple(cols)
             }
-            TyKind::Nominal { .. } => match self.scrut_variants(t) {
+            TyKind::Nominal {
+                module,
+                ref name,
+                ref args,
+            } => match self.scrut_variants(t) {
                 Some(vs) => {
                     let mut out = Vec::new();
                     for (n, payload, _) in vs {
@@ -9302,7 +9556,46 @@ impl<'a> Checker<'a> {
                     }
                     ColTy::Enum(out)
                 }
-                None => ColTy::Opaque,
+                // `[gram.pat.struct]` (s129): a STRUCT is a
+                // single-constructor product — its column is the tuple
+                // of its field columns (declaration order, arguments
+                // substituted), so struct patterns participate in
+                // exhaustiveness as the product they are. A field the
+                // engine cannot resolve keeps the whole column opaque
+                // (a wildcard is then the only cover — never wrong,
+                // only conservative). A missing-case witness may print
+                // tuple-shaped for a struct scrutinee; cosmetic.
+                None => {
+                    let struct_cols = (|| {
+                        let ItemSig::Struct(sig) = self.sigs.get(module as usize, name)?.clone()
+                        else {
+                            return None;
+                        };
+                        if sig.generics.len() != args.len() {
+                            return None;
+                        }
+                        let inst_map: std::collections::BTreeMap<String, TyId> = sig
+                            .generics
+                            .iter()
+                            .cloned()
+                            .zip(args.iter().copied())
+                            .collect();
+                        let mut cols = Vec::new();
+                        for f in &sig.fields {
+                            let fty = if inst_map.is_empty() {
+                                f.ty
+                            } else {
+                                crate::types::subst(&mut self.lo.table, f.ty, &inst_map)
+                            };
+                            cols.push(self.col_ty(fty, depth + 1)?);
+                        }
+                        Some(cols)
+                    })();
+                    match struct_cols {
+                        Some(cols) => ColTy::Tuple(cols),
+                        None => ColTy::Opaque,
+                    }
+                }
             },
             TyKind::Row { tags, tail } => {
                 let mut out = Vec::new();

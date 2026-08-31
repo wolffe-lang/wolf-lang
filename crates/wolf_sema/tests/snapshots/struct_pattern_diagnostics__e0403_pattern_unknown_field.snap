@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/struct_pattern_diagnostics.rs
+assertion_line: 83
+expression: "render_types(&format!(\"{POINT}fn main() -> !int {{\\n    let p = Point {{ x: 1, y: 2 }}\\n    \\\n             let Point {{ x, z, .. }} = p\\n    x\\n}}\\n\"))"
+---
+error[E0403]: `Point` has no field named `z`
+ --> mem:///main.lu:8:20
+  |
+1 | struct Point {
+  |        ----- `Point` is defined here
+...
+8 |     let Point { x, z, .. } = p
+  |                    ^ unknown field
+  |
+help: did you mean `x`?
+  |
+8 |     let Point { x, x, .. } = p
+  |

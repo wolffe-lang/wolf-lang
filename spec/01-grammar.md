@@ -705,8 +705,10 @@ row_entry ::= path ('(' type (',' type)* ')')?
 pattern ::= closed_pattern ('|' closed_pattern)*
 closed_pattern ::= '_' | literal | IDENT
           | path '(' pattern (',' pattern)* ','? ')'
+          | path '{' field_pat (',' field_pat)* ','? '..'? '}'
           | '(' pattern (',' pattern)* ','? ')'
           | IDENT '@' closed_pattern
+field_pat ::= IDENT (':' pattern)?
 ```
 
 Payload binding: `BadDigit(e) => …`; or-patterns `A | B`; guards are arm
@@ -715,6 +717,25 @@ pattern without a top-level `|`: positions where a `|` delimiter follows
 the pattern — the `else` handler `else |pat| …` (`[gram.expr.primary]`)
 — take `closed_pattern`, keeping the or-bar and the closing delimiter
 unambiguous (parenthesize inside the payload to combine: `E((A | B))`).
+
+Struct patterns `[gram.pat.struct]` (s129, #179): `Point { x, y }`
+takes a struct apart by field name. The shorthand `x` binds the
+field's value under the field's own name (`x` is `x: x`);
+`IDENT ':' pattern` matches the field against any pattern — nesting,
+`_`, `@`-bindings, further struct patterns. Fields may appear in any
+order, each at most once. A trailing `..` ignores every field the
+pattern does not name; WITHOUT `..` the pattern must name every field
+of the struct. That default is deliberate and loud: it is the same
+rule a struct literal lives under (E0408 — every field written at
+construction), so a struct gaining a field breaks each pattern that
+silently assumed the old shape at the pattern itself, not by
+misbinding at a distance. Ignoring the rest is spelled on purpose
+(`Point { x, .. }`), and a pattern that would ignore every field is
+spelled `_` — the production requires at least one `field_pat`. A
+struct pattern is irrefutable exactly when its sub-patterns are, so
+it is admitted wherever a binder pattern is (`let`/`var`, D63 comma
+groups, `for` headers) and in `match` arms, where it participates in
+exhaustiveness as the single-constructor product of its fields.
 
 ---
 

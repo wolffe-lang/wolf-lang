@@ -1,0 +1,6 @@
+---
+source: crates/wolf_sema/tests/struct_pattern_diagnostics.rs
+assertion_line: 94
+expression: "render_types(&format!(\"{POINT}fn main() -> !int {{\\n    let p = Point {{ x: 1, y: 2 }}\\n    \\\n             let Point {{ x, y: b }} = p\\n    let Point {{ x: a, .. }} = p\\n    \\\n             a + x + b\\n}}\\n\"))"
+---
+(clean)

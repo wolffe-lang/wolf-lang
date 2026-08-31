@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="1 2")
+//! phase: run
+//! conforms: gram.pat.struct, mem.tier0.move.2
+//!
+//! s129 (#179) — the element-move half at RUN time, the s128 tuple
+//! discipline over NAMED fields: `let Holder { a, .. } = h` moves
+//! `h.a` ONLY — `h.b` is untouched and stays readable after the
+//! destructure (each field its own place, `Proj::Field(name)` exactly
+//! as #179 predicted). The fault twin beside this file pins the read
+//! of the field that DID move.
+
+struct Inner {
+    n: int,
+}
+
+struct Holder {
+    a: Inner,
+    b: Inner,
+}
+
+fn main() -> !int {
+    var h = Holder { a: Inner { n: 1 }, b: Inner { n: 2 } }
+    let Holder { a, .. } = h
+    let k = h.b.n
+    print("{a.n} {k}")
+    0
+}
