@@ -1252,12 +1252,32 @@ const ALL_THREE_FLOOR: usize = 207;
 // deferral (`refused@mem` on every lane, deliberately). Totals
 // 241/263/263, union 277, all-three 227. Counts measured by this
 // gate, not predicted.
+// s130 ratchet over 430 entries: the product match domain lands in
+// arms (#179, c06 retired for tuples AND structs in one commit).
+// native/release +5 each — four new three-lane run witnesses
+// (`grammar/tuple_pattern_match_arm`, `match_arm_product_nested`,
+// `match_arm_at_binding`, `typecheck/match_arm_product_unreachable`)
+// plus the s129 deferral pin `grammar/struct_pattern_match_arm`
+// FLIPPING from refused@mem to run on every lane (the "must advance
+// loudly" payoff). checked +10: the same five, two checked-only new
+// entries (`match_arm_deep_tree`, `match_arm_str_in_product` — the
+// c06 residue the native pipe still refuses by name, which the
+// value-wise matcher walks), and THREE pre-existing files the
+// executor newly runs — `rows/qmark_defer` and
+// `typecheck/match_guard_const` (the arm guard evaluated its wrapper
+// node instead of its condition, the s27 lesson relearned) and
+// `typecheck/match_exhaustive` (payload patterns now match
+// value-wise; a qualified ctor's dotted tag compares spelling-blind,
+// the way native compares tag IDS). union 277 → 284 (+7); all-three
+// 227 → 235 (+5 new, +3 the movers native already ran — the checked
+// lane joining files others held, s96's mirror). Counts measured by
+// this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 241), ("native", 263), ("release", 263)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 251), ("native", 268), ("release", 268)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 277;
+const UNION_FLOOR: usize = 284;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 227;
+const ALL_THREE_FLOOR: usize = 235;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
