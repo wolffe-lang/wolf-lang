@@ -1,0 +1,48 @@
+//! check: run(exit=0, stdout="3 4 7 9 1 20 11")
+//! phase: run
+//! conforms: gram.pat.struct, gram.item.let, mem.tier0.move.2
+//!
+//! s129 (#179) — struct patterns in binders, the whole surface:
+//! shorthand (`x` binds the field's name), explicit `y: b`, fields in
+//! any order, `..` ignoring the rest, nesting through a struct field
+//! and a tuple element, a D63 comma group carrying a struct binder,
+//! and a generic struct whose field answers under the application's
+//! argument. Every shape here is irrefutable — a binder position —
+//! and lupin's half rides is30 off `[gram.pat.struct]`.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+struct Seg {
+    a: Point,
+    b: Point,
+}
+
+struct Box[T] {
+    v: T,
+    tag: int,
+}
+
+fn mk() -> (Point, int) {
+    (Point { x: 5, y: 6 }, 9)
+}
+
+fn main() -> !int {
+    let p = Point { x: 3, y: 4 }
+    let Point { x, y } = p
+    let q = Point { x: 9, y: 7 }
+    let Point { y: seven, x: nine } = q
+    let r = Point { x: 1, y: 2 }
+    let Point { x: only, .. } = r
+    let (Point { x: px, y: py }, n) = mk()
+    let s = Seg { a: Point { x: 11, y: 12 }, b: Point { x: 13, y: 14 } }
+    let base = 0, Seg { a: Point { x: ax, .. }, .. } = s, tail = base + ax
+    let bx = Box { v: 42, tag: 5 }
+    let Box { v, .. } = bx
+    if v != 42 { return 1 }
+    if seven != 7 { return 2 }
+    print("{x} {y} {x + y} {nine} {only} {px + py + n} {tail}")
+    0
+}

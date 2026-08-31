@@ -1,0 +1,93 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+assertion_line: 34
+expression: out
+---
+== tree ==
+SourceFile 411..545
+  StructDecl 411..451
+    StructKw 411..417 "struct"
+    Ident 418..423 "Point"
+    LBrace 424..425 "{"
+    StructField 430..437
+      Ident 430..431 "x"
+      Colon 431..432 ":"
+      PathType 433..436
+        Path 433..436
+          Ident 433..436 "int"
+      Comma 436..437 ","
+    StructField 442..449
+      Ident 442..443 "y"
+      Colon 443..444 ":"
+      PathType 445..448
+        Path 445..448
+          Ident 445..448 "int"
+      Comma 448..449 ","
+    RBrace 450..451 "}"
+  Term 451..452 "\n"
+  FnDecl 453..544
+    FnKw 453..455 "fn"
+    Ident 456..460 "main"
+    ParamList 460..462
+      LParen 460..461 "("
+      RParen 461..462 ")"
+    RetType 463..470
+      Arrow 463..465 "->"
+      ErrorUnionType 466..470
+        Not 466..467 "!"
+        PathType 467..470
+          Path 467..470
+            Ident 467..470 "int"
+    Block 471..544
+      LBrace 471..472 "{"
+      LetDecl 477..506
+        LetKw 477..480 "let"
+        IdentPat 481..482
+          Ident 481..482 "p"
+        Eq 483..484 "="
+        StructLit 485..505
+          PathExpr 485..490
+            Ident 485..490 "Point"
+          LBrace 491..492 "{"
+          FieldInit 493..497
+            Ident 493..494 "x"
+            Colon 494..495 ":"
+            LiteralExpr 496..497
+              Int 496..497 "1"
+          Comma 497..498 ","
+          FieldInit 499..503
+            Ident 499..500 "y"
+            Colon 500..501 ":"
+            LiteralExpr 502..503
+              Int 502..503 "2"
+          RBrace 504..505 "}"
+        Term 505..506 "\n"
+      LetDecl 510..537
+        LetKw 510..513 "let"
+        StructPat 514..532
+          Path 514..519
+            Ident 514..519 "Point"
+          LBrace 520..521 "{"
+          FieldPat 522..523
+            IdentPat 522..523
+              Ident 522..523 "x"
+          Comma 523..524 ","
+          FieldPat 525..526
+            IdentPat 525..526
+              Ident 525..526 "z"
+          Comma 526..527 ","
+          RestPat 528..530
+            DotDot 528..530 ".."
+          RBrace 531..532 "}"
+        Eq 533..534 "="
+        PathExpr 535..536
+          Ident 535..536 "p"
+        Term 536..537 "\n"
+      ExprStmt 541..543
+        PathExpr 541..542
+          Ident 541..542 "x"
+        Term 542..543 "\n"
+      RBrace 543..544 "}"
+  Term 544..545 "\n"
+  Eof 545..545 ""
+== diagnostics ==

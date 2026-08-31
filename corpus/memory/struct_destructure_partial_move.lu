@@ -1,0 +1,26 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: gram.pat.struct, mem.tier0.move.2
+//!
+//! s129 (#179) — the partial-move fault twin: the struct pattern
+//! moved `h.a`, so reading `h.a.n` afterwards is use-after-move —
+//! while the sibling read of `h.b.n` on the line before stays legal
+//! (the field-granular discipline `struct_destructure_partial_live`
+//! witnesses from the other side).
+
+struct Inner {
+    n: int,
+}
+
+struct Holder {
+    a: Inner,
+    b: Inner,
+}
+
+fn main() -> !int {
+    var h = Holder { a: Inner { n: 1 }, b: Inner { n: 2 } }
+    let Holder { a, .. } = h
+    let ok = h.b.n
+    let bad = h.a.n
+    a.n + ok + bad
+}

@@ -1,0 +1,33 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: gram.pat.struct
+//!
+//! s129 (#179) — struct patterns in MATCH ARMS: sema-complete,
+//! lowerings DEFERRED-LOUD. The grammar admits the arm, sema types
+//! the fields and runs exhaustiveness over the single-constructor
+//! product (this match is total without a wildcard — the `y` column
+//! splits over bool and `..`/`_` cover the rest), and then BOTH
+//! lowerings refuse product patterns in arm position by name — the
+//! same c06 family that already holds TUPLE patterns out of match
+//! arms (native: "this pattern shape in match lowering
+//! (tuple/struct/@-bindings — the product match domain, c06)";
+//! checked: "this pattern shape in checked execution"). Landing
+//! struct arms alone would have been asymmetric with s128's own
+//! posture. The day the product match domain lands, this file's
+//! `phase:` must advance to `run` in the same commit — that is the
+//! loud half of the deferral.
+
+struct Flag {
+    on: bool,
+    n: int,
+}
+
+fn main() -> !int {
+    let f = Flag { on: true, n: 3 }
+    let r = match f {
+        Flag { on: true, n } => n,
+        Flag { on: false, .. } => 0,
+    }
+    if r != 3 { return 1 }
+    0
+}

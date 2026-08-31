@@ -1243,12 +1243,21 @@ const ALL_THREE_FLOOR: usize = 207;
 // change, no pre-existing file moved lanes. Totals 239/261/261,
 // union 275, all-three 225. Counts measured by this gate, not
 // predicted.
+// s129 item 2 ratchet over 422 entries: struct patterns land (#179,
+// `[gram.pat.struct]`). Two new run-phase witnesses, each three-lane
+// — `memory/struct_pattern_binder.lu` (the whole binder surface) and
+// `memory/struct_destructure_partial_live.lu` (field-granular
+// partial moves) — so every count moves +2; the four other s129
+// witnesses are static pins (E1001/E0403/E0814) and the match-arm
+// deferral (`refused@mem` on every lane, deliberately). Totals
+// 241/263/263, union 277, all-three 227. Counts measured by this
+// gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 239), ("native", 261), ("release", 261)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 241), ("native", 263), ("release", 263)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 275;
+const UNION_FLOOR: usize = 277;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 225;
+const ALL_THREE_FLOOR: usize = 227;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

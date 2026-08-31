@@ -127,6 +127,9 @@ grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
+grammar/struct_pattern_match_arm.lu: refused — match over this nominal type
+grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
+grammar/struct_pattern_unknown_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
@@ -241,6 +244,9 @@ memory/region_value_pass.lu: lowers
 memory/region_value_return.lu: lowers
 memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers, s27)
+memory/struct_destructure_partial_live.lu: lowers
+memory/struct_destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
+memory/struct_pattern_binder.lu: lowers
 memory/unsafe_assume_malformed.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_c_alloc_native.lu: lowers
 memory/unsafe_creation_not_use.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
