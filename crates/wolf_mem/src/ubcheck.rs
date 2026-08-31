@@ -2717,16 +2717,23 @@ impl<'t> Machine<'t> {
         };
         for arm in d.arms() {
             let Some(pat) = arm.pattern() else { continue };
-            let bind = match self.match_pattern(pat, &scrut, domain.as_deref())? {
+            let binds = match self.match_pattern(pat, &scrut, domain.as_deref(), false)? {
                 Some(b) => b,
                 None => continue,
             };
             self.push_scope();
-            if let Some((name, v)) = bind {
+            for (name, v) in binds {
                 self.declare(&name, v);
             }
             if let Some(guard) = arm.guard() {
-                let g = match self.eval(guard)? {
+                // The guard node WRAPS its condition (the s27 lesson,
+                // relearned here at s130): evaluate the condition
+                // expression, not the wrapper.
+                let Some(cond) = guard.nodes().find(|n| wolf_ast::is_expr_kind(n.kind)) else {
+                    self.close_scope(false)?;
+                    return self.refuse("a guard without a condition", guard.span);
+                };
+                let g = match self.eval(cond)? {
                     Flow::Val(Value::Bool(g)) => g,
                     Flow::Val(_) => false,
                     other => {
@@ -2777,21 +2784,28 @@ impl<'t> Machine<'t> {
     }
 
     /// Match a pattern against a value: `None` = no match;
-    /// `Some(None)` = matched, no binding; `Some(Some((name, v)))` =
-    /// matched with one binding. Literal, wildcard, and single-ident
-    /// patterns only — the modelled subset. `domain` carries the
-    /// scrutinee row/enum's tag names: a bare identifier naming one is
-    /// a tag TEST (match iff the value carries that tag), mirroring
-    /// native lowering's `domain_test` — never a catch-all binding.
+    /// `Some(binds)` = matched, with the (name, value) pairs the arm
+    /// binds. The product match domain (s130) executes here — tuple
+    /// and struct patterns element-/field-wise over the positional
+    /// and named `Value::Struct` shapes, `Tag(products…)` through
+    /// enum/row payloads, literals at any product depth, and
+    /// `@`-bindings. `domain` carries the scrutinee row/enum's tag
+    /// names: a bare identifier naming one is a tag TEST (match iff
+    /// the value carries that tag), mirroring native lowering's
+    /// `domain_test` — never a catch-all binding. `nested` marks
+    /// sub-value positions, where bind-vs-test for a bare name is
+    /// answered by sema's OWN record (`tb.locals`): a name the
+    /// checker did not bind is a case test on the sub-value.
     #[allow(clippy::type_complexity)]
     fn match_pattern(
         &mut self,
         pat: &'t GreenNode,
         scrut: &Value,
         domain: Option<&[String]>,
-    ) -> E<Option<Option<(String, Value)>>> {
+        nested: bool,
+    ) -> E<Option<Vec<(String, Value)>>> {
         match pat.kind {
-            SyntaxKind::WildcardPat => Ok(Some(None)),
+            SyntaxKind::WildcardPat => Ok(Some(Vec::new())),
             SyntaxKind::LiteralPat => {
                 let text = self.text(pat.span);
                 let matched = match scrut {
@@ -2806,7 +2820,7 @@ impl<'t> Machine<'t> {
                     Value::Str(s) => cooked_str_pattern(&text) == s.as_bytes(),
                     _ => false,
                 };
-                Ok(if matched { Some(None) } else { None })
+                Ok(if matched { Some(Vec::new()) } else { None })
             }
             SyntaxKind::IdentPat => {
                 let name = self.text(pat.span);
@@ -2814,28 +2828,172 @@ impl<'t> Machine<'t> {
                 if let Some(names) = domain
                     && let Some(tag) = names.iter().find(|n| *n == &name || n.as_str() == last)
                 {
+                    // The value's tag may carry its type qualifier
+                    // (`Pairs.Pair` from a qualified ctor) — native
+                    // compares tag IDS, so the checked twin compares
+                    // spelling-blind by last segment.
                     let hit = match scrut {
-                        Value::ErrTag { tag: t, .. } => t == tag,
-                        Value::Enum { variant, .. } => variant == tag,
+                        Value::ErrTag { tag: t, .. } => tag_name_matches(t, tag),
+                        Value::Enum { variant, .. } => tag_name_matches(variant, tag),
                         _ => false,
                     };
-                    return Ok(if hit { Some(None) } else { None });
+                    return Ok(if hit { Some(Vec::new()) } else { None });
                 }
-                Ok(Some(Some((name, scrut.clone()))))
+                if nested {
+                    // Inside a product: sema's record is the ruling —
+                    // an ident it bound is a binding, one it did not
+                    // is a case test on the sub-value (#4's rule,
+                    // decided by the checker, replayed here).
+                    let tok = pat
+                        .tokens()
+                        .find(|t| t.kind == SyntaxKind::Ident)
+                        .map(|t| t.span)
+                        .unwrap_or(pat.span);
+                    let bound = self.ctx().tb.locals.iter().any(|(_, s, _)| *s == tok);
+                    if !bound {
+                        let hit = match scrut {
+                            Value::Enum { variant, .. } => tag_name_matches(variant, last),
+                            Value::ErrTag { tag, .. } => tag_name_matches(tag, last),
+                            _ => {
+                                return self
+                                    .refuse("a bare name the checker did not bind", pat.span);
+                            }
+                        };
+                        return Ok(if hit { Some(Vec::new()) } else { None });
+                    }
+                }
+                Ok(Some(vec![(name, scrut.clone())]))
             }
             SyntaxKind::BindingPat => {
-                let name = self.text(pat.span);
-                Ok(Some(Some((name, scrut.clone()))))
+                // `name @ pat`: the whole value binds under the name
+                // AND the sub-pattern must match it.
+                let Some(tok) = pat.tokens().find(|t| t.kind == SyntaxKind::Ident) else {
+                    return self.refuse("an `@`-binding without a name", pat.span);
+                };
+                let mut binds = vec![(self.text(tok.span), scrut.clone())];
+                if let Some(inner) = pat.nodes().find(|n| is_pattern_kind(n.kind)) {
+                    match self.match_pattern(inner, scrut, domain, nested)? {
+                        Some(bs) => binds.extend(bs),
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(binds))
             }
             SyntaxKind::OrPat => {
                 // First matching alternative wins; or-alternatives
                 // never carry bindings (native lowering's rule).
                 for alt in pat.nodes().filter(|n| is_pattern_kind(n.kind)) {
-                    if self.match_pattern(alt, scrut, domain)?.is_some() {
-                        return Ok(Some(None));
+                    if let Some(bs) = self.match_pattern(alt, scrut, domain, nested)? {
+                        if !bs.is_empty() {
+                            return self.refuse(
+                                "or-patterns with bindings in checked execution",
+                                alt.span,
+                            );
+                        }
+                        return Ok(Some(Vec::new()));
                     }
                 }
                 Ok(None)
+            }
+            // s130: tuple patterns in arm position — element-wise over
+            // the positional Struct value the TupleExpr evaluator
+            // builds, refutable sub-patterns and all.
+            SyntaxKind::TuplePat => {
+                let subs: Vec<&'t GreenNode> =
+                    pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+                let Value::Struct { fields } = scrut else {
+                    return self.refuse(
+                        "a tuple pattern over a non-tuple value in checked execution",
+                        pat.span,
+                    );
+                };
+                if fields.len() != subs.len() {
+                    return self.refuse(
+                        "a tuple pattern with a mismatched arity in checked execution",
+                        pat.span,
+                    );
+                }
+                let mut binds = Vec::new();
+                for (sub, (_, ev)) in subs.iter().zip(fields) {
+                    match self.match_pattern(sub, ev, None, true)? {
+                        Some(bs) => binds.extend(bs),
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(binds))
+            }
+            // s130: struct patterns in arm position — by FIELD NAME
+            // over the named Struct value; omitted fields and `..`
+            // are simply not read.
+            SyntaxKind::StructPat => {
+                let Some(d) = wolf_ast::StructPat::cast(pat) else {
+                    return self.refuse("this pattern shape", pat.span);
+                };
+                let Value::Struct { fields } = scrut else {
+                    return self.refuse(
+                        "a struct pattern over a non-struct value in checked execution",
+                        pat.span,
+                    );
+                };
+                let mut binds = Vec::new();
+                for f in d.fields() {
+                    let Some(nspan) = f.name_span() else { continue };
+                    let fname = self.text(nspan);
+                    let Some(sub) = f.pattern() else { continue };
+                    let Some((_, ev)) = fields.iter().find(|(n, _)| *n == fname) else {
+                        // Sema owns the unknown-field report (E0403);
+                        // reaching here is a defensive refusal.
+                        return self.refuse("a field the struct does not carry", nspan);
+                    };
+                    match self.match_pattern(sub, &ev.clone(), None, true)? {
+                        Some(bs) => binds.extend(bs),
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(binds))
+            }
+            // s130: `Tag(sub…)` — the tag test plus payload
+            // sub-patterns, the nesting the c06 family held out
+            // (products, literals and `@`-bindings in payload slots).
+            SyntaxKind::PathPat => {
+                let end = pat
+                    .nodes()
+                    .find(|n| is_pattern_kind(n.kind))
+                    .map(|n| n.span.lo)
+                    .unwrap_or(pat.span.hi);
+                let ctx = self.ctx();
+                let src = &self.pkg.files[ctx.src_file].raw.src;
+                let raw =
+                    String::from_utf8_lossy(&src[pat.span.lo as usize..end as usize]).into_owned();
+                let name: String = raw.trim_end().trim_end_matches('(').trim_end().to_string();
+                let last = name.rsplit('.').next().unwrap_or(name.as_str()).to_string();
+                let subs: Vec<&'t GreenNode> =
+                    pat.nodes().filter(|n| is_pattern_kind(n.kind)).collect();
+                let (tag, payload) = match scrut {
+                    Value::Enum { variant, payload } => (variant, payload),
+                    Value::ErrTag { tag, payload } => (tag, payload),
+                    _ => {
+                        return self.refuse(
+                            "a tag pattern over this value in checked execution",
+                            pat.span,
+                        );
+                    }
+                };
+                if !tag_name_matches(tag, &last) {
+                    return Ok(None);
+                }
+                if subs.len() != payload.len() {
+                    return self.refuse("payload arity in a pattern (checker contract)", pat.span);
+                }
+                let payload = payload.clone();
+                let mut binds = Vec::new();
+                for (sub, ev) in subs.iter().zip(&payload) {
+                    match self.match_pattern(sub, ev, None, true)? {
+                        Some(bs) => binds.extend(bs),
+                        None => return Ok(None),
+                    }
+                }
+                Ok(Some(binds))
             }
             _ => self.refuse("this pattern shape in checked execution", pat.span),
         }
@@ -6490,6 +6648,20 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         ) => xt == yt && xp.len() == yp.len() && xp.iter().zip(yp).all(|(m, n)| values_equal(m, n)),
         _ => false,
     }
+}
+
+/// Does a value's tag spell the same case as a pattern's name? Native
+/// lowering compares tag IDS, so spelling never matters there; the
+/// checked twin compares by full name or last dotted segment — a value
+/// constructed as `Pairs.Pair` matches the arm `Pair` and vice versa
+/// (s130).
+fn tag_name_matches(value_tag: &str, pat_name: &str) -> bool {
+    if value_tag == pat_name {
+        return true;
+    }
+    let vlast = value_tag.rsplit('.').next().unwrap_or(value_tag);
+    let plast = pat_name.rsplit('.').next().unwrap_or(pat_name);
+    vlast == plast
 }
 
 /// Dedent a `"""` string's inner bytes by the closing delimiter's
