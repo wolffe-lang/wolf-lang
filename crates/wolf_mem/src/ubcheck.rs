@@ -2110,6 +2110,17 @@ impl<'t> Machine<'t> {
             self.bind_tuple_from_place(pat, &base)?;
             return Ok(Flow::Val(Value::Unit));
         }
+        // s129 (#179): a struct pattern over a PLACE — the tuple
+        // discipline over NAMED fields: each named field is taken
+        // from `base.name` (copy or partial move); omission and `..`
+        // leave the source field-wise live.
+        if let (Some(pat), Some(e)) = (pat, init)
+            && pat.kind == SyntaxKind::StructPat
+            && let Some(base) = self.place_of(e)?
+        {
+            self.bind_struct_from_place(pat, &base)?;
+            return Ok(Flow::Val(Value::Unit));
+        }
         let v = match init {
             Some(e) => match self.eval(e)? {
                 Flow::Val(v) => v,
@@ -2182,6 +2193,41 @@ impl<'t> Machine<'t> {
                 self.bind_tuple_from_place(sub, &ep)?;
                 continue;
             }
+            if sub.kind == SyntaxKind::StructPat {
+                self.bind_struct_from_place(sub, &ep)?;
+                continue;
+            }
+            let v = self.take_value(&ep, sub.span)?;
+            self.bind_pattern(sub, v)?;
+        }
+        Ok(())
+    }
+
+    /// Field-wise destructure of a struct PLACE (s129, #179): each
+    /// field the pattern names is taken from `base.name` — a copy for
+    /// Copy values, a partial move otherwise; omitted fields and `..`
+    /// touch nothing; nested tuple/struct patterns recurse.
+    fn bind_struct_from_place(&mut self, pat: &'t GreenNode, base: &Place) -> E<()> {
+        let Some(d) = wolf_ast::StructPat::cast(pat) else {
+            return self.refuse("this pattern shape", pat.span);
+        };
+        for f in d.fields() {
+            let Some(nspan) = f.name_span() else { continue };
+            let fname = self.text(nspan);
+            let Some(sub) = f.pattern() else { continue };
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let mut ep = base.clone();
+            ep.path.push(PStep::Field(fname));
+            if sub.kind == SyntaxKind::TuplePat {
+                self.bind_tuple_from_place(sub, &ep)?;
+                continue;
+            }
+            if sub.kind == SyntaxKind::StructPat {
+                self.bind_struct_from_place(sub, &ep)?;
+                continue;
+            }
             let v = self.take_value(&ep, sub.span)?;
             self.bind_pattern(sub, v)?;
         }
@@ -2209,6 +2255,32 @@ impl<'t> Machine<'t> {
             }
             for (sub, (_, ev)) in subs.iter().zip(fields) {
                 self.bind_pattern(sub, ev)?;
+            }
+            return Ok(());
+        }
+        // s129 (#179): a struct pattern binds by FIELD NAME over the
+        // named Struct value — shorthand and explicit alike; omitted
+        // fields and `..` are simply not read.
+        if pat.kind == SyntaxKind::StructPat {
+            let Some(d) = wolf_ast::StructPat::cast(pat) else {
+                return self.refuse("this pattern shape", pat.span);
+            };
+            let Value::Struct { fields } = v else {
+                return self.refuse(
+                    "a struct pattern over a non-struct value in checked execution",
+                    pat.span,
+                );
+            };
+            for f in d.fields() {
+                let Some(nspan) = f.name_span() else { continue };
+                let fname = self.text(nspan);
+                let Some(sub) = f.pattern() else { continue };
+                let Some((_, ev)) = fields.iter().find(|(n, _)| *n == fname) else {
+                    // Sema owns the unknown-field report (E0403);
+                    // reaching here is a defensive refusal.
+                    return self.refuse("a field the struct does not carry", nspan);
+                };
+                self.bind_pattern(sub, ev.clone())?;
             }
             return Ok(());
         }

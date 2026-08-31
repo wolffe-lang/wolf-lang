@@ -3940,6 +3940,20 @@ impl<'t> Lowerer<'t> {
                 self.bind_tuple_from_place(pat, place, ty);
                 continue;
             }
+            // s129 (#179): a struct pattern over a PLACE initializer —
+            // the s128 tuple discipline generalized to NAMED fields
+            // (`Proj::Field(name)`): each named field moves (or
+            // copies) out of its own sub-place; omission and `..`
+            // leave fields untouched, so the source stays field-wise
+            // live.
+            if let (Some(pat), Some(init)) = (b.pattern, b.init)
+                && pat.kind == SyntaxKind::StructPat
+                && !self.is_raw_index(init)
+                && let Some((place, ty)) = self.as_place(init)
+            {
+                self.bind_struct_from_place(pat, place, ty);
+                continue;
+            }
             let (has_init, val) = match b.init {
                 Some(init) => (true, self.eval_value(init)?),
                 None => (false, Val::none()),
@@ -3990,6 +4004,94 @@ impl<'t> Lowerer<'t> {
             };
             if sub.kind == SyntaxKind::TuplePat {
                 self.bind_tuple_from_place(sub, ep, ety);
+                continue;
+            }
+            if sub.kind == SyntaxKind::StructPat {
+                self.bind_struct_from_place(sub, ep, ety);
+                continue;
+            }
+            let val = if self.places.is_copy(ep) {
+                Val::none()
+            } else {
+                self.val_of_place(ep, sub.span)
+            };
+            if !self.places.is_copy(ep) {
+                self.pattern_moves.push(sub.span);
+            }
+            self.use_value(ep, sub.span);
+            self.bind_pattern_inits(sub, true, &val);
+        }
+    }
+
+    /// `let Point { x, .. } = p` where `p` names a place (s129,
+    /// #179): [`Self::bind_tuple_from_place`]'s discipline over NAMED
+    /// fields. When the struct's declaration is resolvable, EVERY
+    /// declared field's place is interned first (the move analysis
+    /// expands partial residue over the interned universe); each
+    /// field the pattern names is then consumed from its own
+    /// sub-place — a copy for Copy fields, a move otherwise — and
+    /// bound as a single binding. Nested tuple/struct patterns
+    /// recurse; omitted fields and `..` are interned but never
+    /// touched. Without a resolvable declaration only the named
+    /// fields intern, conservatively non-Copy — the tuple precedent's
+    /// unknown-type posture.
+    fn bind_struct_from_place(
+        &mut self,
+        pat: &'t GreenNode,
+        base: PlaceId,
+        base_ty: Option<Ty<'t>>,
+    ) {
+        let d = wolf_ast::StructPat::cast(pat).expect("kind");
+        let declared = base_ty.and_then(|t| self.fields_of(t));
+        let base_place = self.places.get(base).clone();
+        let mut fplaces: Vec<(String, PlaceId, Option<Ty<'t>>)> = Vec::new();
+        if let Some(fields) = &declared {
+            for (fname, fty) in fields {
+                let mut proj = base_place.proj.clone();
+                proj.push(Proj::Field(fname.clone()));
+                let ep = self.places.intern(
+                    Place {
+                        base: base_place.base.clone(),
+                        proj,
+                    },
+                    is_copy(*fty, 0),
+                );
+                fplaces.push((fname.clone(), ep, Some(*fty)));
+            }
+        }
+        for f in d.fields() {
+            let Some(nspan) = f.name_span() else { continue };
+            let fname = self.text(nspan);
+            let Some(sub) = f.pattern() else { continue };
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let (ep, ety) = match fplaces.iter().find(|(n, ..)| *n == fname) {
+                Some(&(_, ep, ety)) => (ep, ety),
+                None => {
+                    if declared.is_some() {
+                        // Unknown field: sema reported it (E0403);
+                        // nothing to move.
+                        continue;
+                    }
+                    let mut proj = base_place.proj.clone();
+                    proj.push(Proj::Field(fname.clone()));
+                    let ep = self.places.intern(
+                        Place {
+                            base: base_place.base.clone(),
+                            proj,
+                        },
+                        false,
+                    );
+                    (ep, None)
+                }
+            };
+            if sub.kind == SyntaxKind::TuplePat {
+                self.bind_tuple_from_place(sub, ep, ety);
+                continue;
+            }
+            if sub.kind == SyntaxKind::StructPat {
+                self.bind_struct_from_place(sub, ep, ety);
                 continue;
             }
             let val = if self.places.is_copy(ep) {
