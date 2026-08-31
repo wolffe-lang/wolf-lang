@@ -1929,6 +1929,51 @@ fn row_slot_tys(
 
 /// Is the sema type an unsigned integer (through wrappers)? Decides
 /// `u*.chk` op and `icmp.u*` condition selection.
+/// [`Lowerer::strip_sema`] over an explicit table (s129 — struct
+/// pattern fields resolve in the SIGNATURE table, not the module's).
+fn strip_sema_in(table: &TypeTable, mut ty: TyId) -> TyId {
+    for _ in 0..32 {
+        match table.kind(ty) {
+            TyKind::Distinct(i) | TyKind::Wrapping(i) => ty = *i,
+            _ => break,
+        }
+    }
+    ty
+}
+
+/// Does `ty` mention a generic parameter anywhere? (wolf_mem's
+/// `mentions_rigid`, verbatim — the struct-pattern field resolver
+/// refuses compound generic fields by name rather than mistype them.)
+fn ty_mentions_rigid(table: &TypeTable, ty: TyId) -> bool {
+    match table.kind(ty) {
+        TyKind::Rigid(_) => true,
+        TyKind::Wrapping(t)
+        | TyKind::Range(t)
+        | TyKind::Ptr(t)
+        | TyKind::Shared(t)
+        | TyKind::Handle(t)
+        | TyKind::Weak(t)
+        | TyKind::Distinct(t)
+        | TyKind::List(t)
+        | TyKind::Pool(t)
+        | TyKind::Chan(t)
+        | TyKind::Mutex(t) => ty_mentions_rigid(table, *t),
+        TyKind::Tuple(ts) => ts.iter().any(|t| ty_mentions_rigid(table, *t)),
+        TyKind::Fn(ps, r) => {
+            ps.iter().any(|t| ty_mentions_rigid(table, *t)) || ty_mentions_rigid(table, *r)
+        }
+        TyKind::ErrUnion(a, b) => ty_mentions_rigid(table, *a) || ty_mentions_rigid(table, *b),
+        TyKind::Row { tags, tail } => {
+            tags.iter()
+                .any(|(_, ps)| ps.iter().any(|t| ty_mentions_rigid(table, *t)))
+                || tail.is_some_and(|t| ty_mentions_rigid(table, t))
+        }
+        TyKind::Nominal { args, .. } => args.iter().any(|t| ty_mentions_rigid(table, *t)),
+        TyKind::Proj(t, _) => ty_mentions_rigid(table, *t),
+        _ => false,
+    }
+}
+
 fn sema_unsigned(table: &TypeTable, id: TyId) -> bool {
     match table.kind(id) {
         TyKind::Prim(Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64) => true,
@@ -3127,10 +3172,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
-            // s128 (#173): tuple patterns land; struct patterns have
-            // no grammar yet and every other pattern kind is refutable
-            // (sema's E0806 owns those).
-            SyntaxKind::TuplePat => {
+            // s128 (#173): tuple patterns; s129 (#179): struct
+            // patterns. Every other pattern kind is refutable (sema's
+            // E0806 owns those).
+            SyntaxKind::TuplePat | SyntaxKind::StructPat => {
                 let Some(init) = init else {
                     return Err(refuse(
                         "uninitialized bindings (definite-assignment lowering)",
@@ -3143,11 +3188,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(v) = flow_val!(self.lower_expr(init)) else {
                     return Err(refuse("a typed binding of a valueless expression", span));
                 };
-                self.bind_tuple_value(pat, v, sema_ty, span)?;
+                if pat.kind == SyntaxKind::TuplePat {
+                    self.bind_tuple_value(pat, v, self.table, sema_ty, span)?;
+                } else {
+                    self.bind_struct_value(pat, v, self.table, sema_ty, span)?;
+                }
                 Ok(Flow::Val(None))
             }
             _ => Err(refuse(
-                "destructuring bindings (tuple/struct patterns, c06)",
+                "destructuring bindings (this pattern shape, c06)",
                 pat.span,
             )),
         }
@@ -3162,11 +3211,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         &mut self,
         pat: &'t GreenNode,
         agg: Value,
+        tbl: &TypeTable,
         sema_ty: TyId,
         span: Span,
     ) -> R<()> {
-        let stripped = self.strip_sema(sema_ty);
-        let TyKind::Tuple(elem_tys) = self.table.kind(stripped).clone() else {
+        let stripped = strip_sema_in(tbl, sema_ty);
+        let TyKind::Tuple(elem_tys) = tbl.kind(stripped).clone() else {
             return Err(refuse("a tuple pattern over a non-tuple type", pat.span));
         };
         let subs: Vec<&'t GreenNode> = pat
@@ -3193,41 +3243,135 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .b
                 .ins(Opcode::AggGet, &[agg], &[fty], Aux::Int(i as i64))
                 .one();
-            match sub.kind {
-                SyntaxKind::TuplePat => self.bind_tuple_value(sub, ev, elem_sema, span)?,
-                SyntaxKind::IdentPat => {
-                    if matches!(
-                        self.table.kind(self.strip_sema(elem_sema)),
-                        TyKind::RegionTy
-                    ) {
-                        return Err(refuse("a region inside a destructured tuple", sub.span));
-                    }
-                    let name = self.text(sub.span);
-                    let var = self.b.declare_var(fty);
-                    if self.straight_line {
-                        self.b.mark_single_block(var);
-                    }
-                    self.b.def_var(var, ev);
-                    self.b.func.add_debug_var(name.clone(), ev, false);
-                    let bind = LocalBind::Val {
-                        var,
-                        wrapping: matches!(self.table.kind(elem_sema), TyKind::Wrapping(_)),
-                        unsigned: sema_unsigned(self.table, elem_sema),
-                        wir_ty: fty,
-                    };
-                    self.scopes
-                        .last_mut()
-                        .expect("scope")
-                        .binds
-                        .push((name, bind));
+            self.bind_pattern_elem(sub, ev, fty, tbl, elem_sema, span)?;
+        }
+        Ok(())
+    }
+
+    /// One extracted element of a destructured aggregate, bound by its
+    /// sub-pattern — the shared tail of [`Self::bind_tuple_value`] and
+    /// [`Self::bind_struct_value`]. `tbl` is the table `elem_sema`
+    /// lives in: the module's expression table at the top level, the
+    /// SIGNATURE table for a struct's declared field types (s129 —
+    /// both recursions pass their own).
+    fn bind_pattern_elem(
+        &mut self,
+        sub: &'t GreenNode,
+        ev: Value,
+        fty: TypeId,
+        tbl: &TypeTable,
+        elem_sema: TyId,
+        span: Span,
+    ) -> R<()> {
+        match sub.kind {
+            SyntaxKind::TuplePat => self.bind_tuple_value(sub, ev, tbl, elem_sema, span),
+            SyntaxKind::StructPat => self.bind_struct_value(sub, ev, tbl, elem_sema, span),
+            SyntaxKind::IdentPat => {
+                if matches!(tbl.kind(strip_sema_in(tbl, elem_sema)), TyKind::RegionTy) {
+                    return Err(refuse("a region inside a destructured value", sub.span));
                 }
-                _ => {
+                let name = self.text(sub.span);
+                let var = self.b.declare_var(fty);
+                if self.straight_line {
+                    self.b.mark_single_block(var);
+                }
+                self.b.def_var(var, ev);
+                self.b.func.add_debug_var(name.clone(), ev, false);
+                let bind = LocalBind::Val {
+                    var,
+                    wrapping: matches!(tbl.kind(elem_sema), TyKind::Wrapping(_)),
+                    unsigned: sema_unsigned(tbl, elem_sema),
+                    wir_ty: fty,
+                };
+                self.scopes
+                    .last_mut()
+                    .expect("scope")
+                    .binds
+                    .push((name, bind));
+                Ok(())
+            }
+            _ => Err(refuse(
+                "this pattern shape in a destructuring binding (c06)",
+                sub.span,
+            )),
+        }
+    }
+
+    /// `let Point { x, y: p, .. } = …` (s129, #179): the aggregate is
+    /// evaluated ONCE; each field the pattern names extracts by
+    /// `agg.get` at the field's DECLARED index — element-wise moves
+    /// per the s128 tuple discipline (the mem rung already tracked
+    /// each field as its own place; `[gram.pat.struct]`). Omitted
+    /// fields and `..` extract nothing. Field types come from the
+    /// struct's signature: a plain field reads the signature table, a
+    /// bare generic field (`v: T`) answers with the application's
+    /// argument; a generic field's COMPOUND type would need interning
+    /// this lowering cannot do — refused by name, mem's own posture.
+    fn bind_struct_value(
+        &mut self,
+        pat: &'t GreenNode,
+        agg: Value,
+        tbl: &TypeTable,
+        sema_ty: TyId,
+        span: Span,
+    ) -> R<()> {
+        let d = wolf_ast::StructPat::cast(pat).expect("kind");
+        let stripped = strip_sema_in(tbl, sema_ty);
+        let TyKind::Nominal { module, name, args } = tbl.kind(stripped).clone() else {
+            return Err(refuse("a struct pattern over a non-struct type", pat.span));
+        };
+        let Some(ItemSig::Struct(ss)) = self.sigs.get(module as usize, &name) else {
+            return Err(refuse("a struct pattern over a non-struct type", pat.span));
+        };
+        let ss = ss.clone();
+        let agg_ty = self.b.func.value_ty(agg);
+        let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
+            return Err(refuse("a struct binding of a non-aggregate value", span));
+        };
+        if fields.len() != ss.fields.len() {
+            return Err(refuse("a struct binding with a mismatched layout", span));
+        }
+        for f in d.fields() {
+            let Some(nspan) = f.name_span() else { continue };
+            let fname = self.text(nspan);
+            let Some(sub) = f.pattern() else { continue };
+            if sub.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let Some(i) = ss.fields.iter().position(|sf| sf.name == fname) else {
+                return Err(refuse("a field the struct does not declare", nspan));
+            };
+            let fty = fields[i];
+            // The field's sema type, in whichever table owns it.
+            let (ftbl, fid): (&TypeTable, TyId) = match self.sig_table.kind(ss.fields[i].ty) {
+                TyKind::Rigid(r) => {
+                    let Some(gi) = ss.generics.iter().position(|g| g == r) else {
+                        return Err(refuse(
+                            "a generic struct field outside its instantiation",
+                            sub.span,
+                        ));
+                    };
+                    let Some(&aid) = args.get(gi) else {
+                        return Err(refuse(
+                            "a generic struct field outside its instantiation",
+                            sub.span,
+                        ));
+                    };
+                    (tbl, aid)
+                }
+                _ if ty_mentions_rigid(self.sig_table, ss.fields[i].ty) => {
                     return Err(refuse(
-                        "this pattern shape in a destructuring binding (c06)",
+                        "a struct pattern under a generic field's compound type (c06)",
                         sub.span,
                     ));
                 }
-            }
+                _ => (self.sig_table, ss.fields[i].ty),
+            };
+            let ev = self
+                .b
+                .ins(Opcode::AggGet, &[agg], &[fty], Aux::Int(i as i64))
+                .one();
+            self.bind_pattern_elem(sub, ev, fty, ftbl, fid, span)?;
         }
         Ok(())
     }
@@ -14740,7 +14884,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(PatShape::Tests(consts, vec![]))
             }
             _ => Err(refuse(
-                "this pattern shape in match lowering (tuple/@-bindings, c06)",
+                "this pattern shape in match lowering (tuple/struct/@-bindings — \
+                 the product match domain, c06)",
                 pat.span,
             )),
         }
