@@ -597,10 +597,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // str_chars — the materializing `chars()`, [mem.str.chars]);
     // s121 the char print pair (D58: write_char/strbuf_char — `{c}`
     // prints the character, never the code point); s125 the sited trap
-    // (`trap_at` — the second stderr line naming file:line:col).
+    // (`trap_at` — the second stderr line naming file:line:col);
+    // s131 the region accounting queries (#187: region_bytes /
+    // live_region_bytes — the wolf_rt ledger surfaced, one i64 read
+    // each).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        119,
+        121,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

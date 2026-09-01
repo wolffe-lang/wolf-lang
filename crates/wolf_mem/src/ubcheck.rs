@@ -316,6 +316,14 @@ struct DynRegion {
     frozen: bool,
     backing: Option<usize>,
     span: Span,
+    /// Bytes ever charged by allocations attributed to this region
+    /// (s131, #187): this machine's own ledger for the accounting
+    /// queries — cumulative over the region's lifetime, zero at
+    /// creation, in the shadow-memory model's units (each modeled
+    /// allocation's size, not the native tier's rounded container
+    /// charges; `[mem.region.account.1]` pins the relations, not the
+    /// units).
+    charged: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -697,6 +705,11 @@ struct Machine<'t> {
     allocs: Vec<Allocation>,
     regions: Vec<DynRegion>,
     lists: Vec<Vec<Value>>,
+    /// Each list's BIRTH region (s131, #187): the ambient region at
+    /// the site that minted it — the native rule ("growth stays in
+    /// the birth region"), so the ledger charges pushes to the region
+    /// that owns the storage, not the region open at the push site.
+    list_region: Vec<usize>,
     pools: Vec<Vec<PoolSlot>>,
     cells: Vec<RcCell>,
     frames: Vec<Frame<'t>>,
@@ -911,6 +924,31 @@ impl<'t> Machine<'t> {
 // ------------------------------------------------- the tag machine ------
 
 impl<'t> Machine<'t> {
+    /// Mint a list in the CURRENT ambient region and charge its
+    /// initial elements to that region's ledger (s131, #187): the
+    /// checked machine's container twin of the native birth-region
+    /// rule. The model's unit is 16 bytes per element slot — the
+    /// `charge_mem` unit this machine already uses — so the pinned
+    /// relations (`[mem.region.account.1]`) hold without pretending
+    /// the two tiers share a layout.
+    fn mint_list(&mut self, items: Vec<Value>) -> usize {
+        let rid = self.ambient.last().copied().unwrap_or(0);
+        self.charge_region_bytes(rid, 16 * items.len() as u64);
+        let id = self.lists.len();
+        self.lists.push(items);
+        self.list_region.push(rid);
+        id
+    }
+
+    /// Add to a region's cumulative ledger (never subtracted: the
+    /// charge is monotone within the region's lifetime, the native
+    /// arena's own rule).
+    fn charge_region_bytes(&mut self, rid: usize, bytes: u64) {
+        if let Some(r) = self.regions.get_mut(rid) {
+            r.charged = r.charged.saturating_add(bytes);
+        }
+    }
+
     fn new_alloc(
         &mut self,
         size: u64,
@@ -921,6 +959,12 @@ impl<'t> Machine<'t> {
         span: Span,
     ) -> E<usize> {
         self.charge_mem(size)?;
+        // The region's own ledger (s131, #187): attribution follows
+        // the allocation's region, the way the native arena charges
+        // the region that was ambient at the allocation site.
+        if let Some(r) = self.regions.get_mut(region) {
+            r.charged = r.charged.saturating_add(size);
+        }
         let id = self.allocs.len();
         self.allocs.push(Allocation {
             size,
@@ -1404,6 +1448,7 @@ impl<'t> Machine<'t> {
             allocs: Vec::new(),
             regions: Vec::new(),
             lists: Vec::new(),
+            list_region: Vec::new(),
             pools: Vec::new(),
             cells: Vec::new(),
             frames: Vec::new(),
@@ -1432,6 +1477,7 @@ impl<'t> Machine<'t> {
             frozen: false,
             backing: None,
             span: pkg.files[0].parse.root.span,
+            charged: 0,
         });
         m.ambient.push(0);
         for (i, outcome) in tc.bodies.iter().enumerate() {
@@ -2587,6 +2633,7 @@ impl<'t> Machine<'t> {
                     frozen: false,
                     backing: None,
                     span: e.span,
+                    charged: 0,
                 });
                 Ok(Flow::Val(Value::Region(rid)))
             }
@@ -2654,6 +2701,7 @@ impl<'t> Machine<'t> {
             frozen: false,
             backing: None,
             span: e.span,
+            charged: 0,
         });
         self.ambient.push(rid);
         // The sugar block's name is usable inside it (`in a { }`
@@ -3198,8 +3246,7 @@ impl<'t> Machine<'t> {
                 for e in elems {
                     copied.push(self.deep_copy(e)?);
                 }
-                let nid = self.lists.len();
-                self.lists.push(copied);
+                let nid = self.mint_list(copied);
                 Value::List(nid)
             }
             Value::Pool(id) => {
@@ -4092,8 +4139,7 @@ impl<'t> Machine<'t> {
                 names.sort();
                 self.charge_mem(names.iter().map(|n| n.len() as u64).sum())?;
                 let items: Vec<Value> = names.into_iter().map(Value::Str).collect();
-                let id = self.lists.len();
-                self.lists.push(items);
+                let id = self.mint_list(items);
                 Ok(Flow::Val(Value::List(id)))
             }
             "fs_create_dir" | "fs_create_dir_all" => {
@@ -4212,8 +4258,7 @@ impl<'t> Machine<'t> {
     /// Bytes as a fresh `List[int]` value.
     fn byte_list_value(&mut self, bytes: &[u8]) -> Value {
         let items: Vec<Value> = bytes.iter().map(|&b| Value::Int(i64::from(b))).collect();
-        let id = self.lists.len();
-        self.lists.push(items);
+        let id = self.mint_list(items);
         Value::List(id)
     }
 
@@ -4481,8 +4526,7 @@ impl<'t> Machine<'t> {
             "env_args" => {
                 let items: Vec<Value> = self.args.iter().cloned().map(Value::Str).collect();
                 self.charge_mem(self.args.iter().map(|a| a.len() as u64).sum())?;
-                let id = self.lists.len();
-                self.lists.push(items);
+                let id = self.mint_list(items);
                 Ok(Flow::Val(Value::List(id)))
             }
             "env_get" => {
@@ -4537,8 +4581,7 @@ impl<'t> Machine<'t> {
                     })
                     .sum();
                 self.charge_mem(bytes)?;
-                let id = self.lists.len();
-                self.lists.push(items);
+                let id = self.mint_list(items);
                 Ok(Flow::Val(Value::List(id)))
             }
             "os_cwd" => match std::env::current_dir() {
@@ -4737,6 +4780,41 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(self.byte_list_value(&buf)))
             }
             _ => self.refuse("this os builtin", span),
+        }
+    }
+
+    /// The region accounting queries (s131, #187), checked: the
+    /// machine's own ledger answers. `region_bytes` reads a region
+    /// value's cumulative charge; `live_region_bytes` sums the charge
+    /// of every LIVE region except the run's root — the native
+    /// counter's scope (the process-root arena is never counted there
+    /// either). Units are per-tier by design (`[mem.region.account]`):
+    /// this machine charges its shadow-memory sizes, the native tier
+    /// its alignment-rounded arena charges; what agrees everywhere is
+    /// the pinned relations — zero at creation, monotone growth,
+    /// stability between allocations, wholesale disappearance of a
+    /// freed region's live contribution.
+    fn region_query_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        match name {
+            "region_bytes" => {
+                let Some(Value::Region(rid)) = argv.first() else {
+                    return self.refuse("region_bytes over a non-region value", span);
+                };
+                let Some(r) = self.regions.get(*rid) else {
+                    return self.refuse("region_bytes over an unknown region", span);
+                };
+                Ok(Flow::Val(Value::Int(r.charged.min(i64::MAX as u64) as i64)))
+            }
+            _ => {
+                let total: u64 = self
+                    .regions
+                    .iter()
+                    .skip(1)
+                    .filter(|r| r.live)
+                    .map(|r| r.charged)
+                    .sum();
+                Ok(Flow::Val(Value::Int(total.min(i64::MAX as u64) as i64)))
+            }
         }
     }
 
@@ -5119,8 +5197,7 @@ impl<'t> Machine<'t> {
         };
         let items: Vec<Value> = self.lists[id][start as usize..end as usize].to_vec();
         self.charge_mem(16 * items.len() as u64 + 16)?;
-        let nid = self.lists.len();
-        self.lists.push(items);
+        let nid = self.mint_list(items);
         Ok(Flow::Val(Value::List(nid)))
     }
 
@@ -5535,8 +5612,7 @@ impl<'t> Machine<'t> {
         // Container constructors (`List[int]()`, `Pool[Node]()`).
         match self.expr_ty(e.span) {
             Some(TyKind::List(_)) if is_container_ctor(d.callee()) => {
-                let id = self.lists.len();
-                self.lists.push(Vec::new());
+                let id = self.mint_list(Vec::new());
                 return Ok(Flow::Val(Value::List(id)));
             }
             Some(TyKind::Pool(_)) if is_container_ctor(d.callee()) => {
@@ -5668,6 +5744,23 @@ impl<'t> Machine<'t> {
                     n if n.starts_with("time_") => self.time_builtin(n, argv, e.span),
                     n => self.os_builtin(n, argv, e.span),
                 };
+            }
+            // The region accounting queries (s131, #187): reads of
+            // this machine's own region ledger — no host operation,
+            // no row, the native tier's `wolf_rt` shims mirrored.
+            "region_bytes" | "live_region_bytes" => {
+                let mut argv = Vec::new();
+                for a in d.args().into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = Arg::value(a) {
+                        let x = if let Some(place) = self.place_of(v)? {
+                            self.read_place(&place, v.span)?
+                        } else {
+                            val!(self.eval(v))
+                        };
+                        argv.push(x);
+                    }
+                }
+                return self.region_query_builtin(&callee_name, argv, e.span);
             }
             "assert" => {
                 // Only the FIRST argument is the condition; the
@@ -6052,6 +6145,11 @@ impl<'t> Machine<'t> {
                             if let Some(v) = Arg::value(a) {
                                 let x = self.eval_arg(v, None)?;
                                 self.charge_mem(16)?;
+                                // The ledger charges the BIRTH region
+                                // (s131, #187): growth stays where the
+                                // list lives, not where the push runs.
+                                let rid = self.list_region.get(id).copied().unwrap_or(0);
+                                self.charge_region_bytes(rid, 16);
                                 self.lists[id].push(x);
                             }
                         }
@@ -6270,8 +6368,7 @@ impl<'t> Machine<'t> {
                 };
                 let make_list = |m: &mut Self, items: Vec<Value>| -> E<Flow> {
                     m.charge_mem(16 * items.len() as u64 + 16)?;
-                    let id = m.lists.len();
-                    m.lists.push(items);
+                    let id = m.mint_list(items);
                     Ok(Flow::Val(Value::List(id)))
                 };
                 match method {

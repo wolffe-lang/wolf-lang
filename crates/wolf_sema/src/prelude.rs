@@ -167,6 +167,15 @@ pub const PRELUDE: &[&str] = &[
     // row, never a trap and never a cast. PURE (no capability, no
     // sandbox category), like the json family.
     "str_from_utf8",
+    // the region accounting queries (s131, wolf-lang#187): the ledger
+    // wolf_rt already keeps, surfaced. `region_bytes(r)` answers a
+    // named region's charge; `live_region_bytes()` the process-wide
+    // live-region total. PURE (no capability, no sandbox category) —
+    // they read the memory model's own state, not an ambient OS
+    // surface; the comptime engine refuses them with the rest (no
+    // region machine in the D33 sandbox).
+    "region_bytes",
+    "live_region_bytes",
     // provisional corpus stand-ins (retire with s05's real std surface)
     "acquire",
     "release",

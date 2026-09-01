@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="create true | attributed true | birth true")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.create.3
+//!
+//! `region_bytes` over a FIRST-CLASS region value (s131, #187), and
+//! the attribution rule the ledger inherits from `[mem.region.create.3]`:
+//! a container's storage charges the region that was ambient at its
+//! ALLOCATION site — its birth region — so growing a root-born list
+//! while `r` is charged elsewhere moves `r`'s ledger not one byte.
+
+fn main() -> !int {
+    let r = region()
+    let c0 = region_bytes(r)
+    var root_born = List[int]()
+    in r {
+        var ys = List[int]()
+        for i in 0..500 { (mut ys).push(i) }
+    }
+    let c1 = region_bytes(r)
+    (mut root_born).push(1)
+    (mut root_born).push(2)
+    let c2 = region_bytes(r)
+    let created = c0 == 0
+    let attributed = c1 > c0
+    let birth = c2 == c1
+    print("create {created} | attributed {attributed} | birth {birth}")
+    if !created { return 1 }
+    if !attributed { return 2 }
+    if !birth { return 3 }
+    0
+}

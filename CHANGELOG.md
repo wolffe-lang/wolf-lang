@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### The region answers (s131)
+
+The region accounting queries land three-tier (#187, the wolf-web
+`memory_budget` customer): `region_bytes(r)` reads a named region's
+byte ledger — the count `wolf_rt` has kept since s76, now surfaced —
+and `live_region_bytes()` reads the process-wide live-region total.
+The new clause `[mem.region.account]` pins what every tier guarantees
+(zero at creation, monotone within the lifetime, stable between
+allocations, wholesale disappearance at free) and leaves the units as
+per-tier measured facts: the native arena charges alignment-rounded
+container storage, the checked machine its shadow-memory model. The
+str gap stays #191's (string bytes charge no named region on the
+native tier until the c09 seam closes — recorded in the clause).
+#187's second half — the creation-time cap and its fault semantics —
+is deliberately not here: the honest designs all need a ruling
+(catchable-row-at-the-boundary wants a mechanism `[abi.err.repr]`
+forbids), and the r04 lesson says the clause must not outrun the
+differential.
+
 ## 0.2.1 — 2026-09-01
 
 THE LETTER AND THE ARCHIVE. A patch release: no new features, and

@@ -1295,12 +1295,20 @@ const ALL_THREE_FLOOR: usize = 207;
 // pre-existing file moved lanes: both fixes make the compiler accept
 // and stay quiet where it was wrong, and neither touches a refusal any
 // lane was carrying. Counts measured by this gate, not predicted.
+// s131 ratchet over 436 entries: #187's query half. Two new run-phase
+// witnesses — `memory/region_bytes_query` and
+// `memory/region_bytes_value` (the region accounting builtins:
+// relations pinned, units per-tier by design) — and each executes on
+// all three lanes, so every count moves by exactly two
+// (256/273/273, union 289, all-three 240). No pre-existing file moved
+// lanes: the builtins are new surface; nothing they touch changes an
+// existing verdict. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 254), ("native", 271), ("release", 271)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 256), ("native", 273), ("release", 273)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 287;
+const UNION_FLOOR: usize = 289;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 238;
+const ALL_THREE_FLOOR: usize = 240;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
