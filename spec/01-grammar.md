@@ -712,11 +712,24 @@ row_entry ::= path ('(' type (',' type)* ')')?
 pattern ::= closed_pattern ('|' closed_pattern)*
 closed_pattern ::= '_' | literal | IDENT
           | path '(' pattern (',' pattern)* ','? ')'
-          | path '{' field_pat (',' field_pat)* ','? '..'? '}'
+          | path '{' field_pat (',' field_pat)* (',' '..'?)? '}'
           | '(' pattern (',' pattern)* ','? ')'
           | IDENT '@' closed_pattern
 field_pat ::= IDENT (':' pattern)?
 ```
+
+The separating comma is **required** between members throughout the
+family — the productions' `(',' …)*` is the law, and `..` follows a
+separator like one more member: `Point { x, .. }` parses,
+`Point { x .. }` and `Point { x y }` and `(a b)` are E0201, each with
+a machine-applicable "add the comma" fix. (Measured at #190 — the
+reference interpreter and every worked example already held this line;
+the compiler's comma-less acceptance was an unlicensed recovery-loop
+accident — and ruled D67, 2026-09-01: the clause lands with the parser
+tightening, never before it. Files:
+`grammar/struct_pattern_rest_bare.lu`,
+`grammar/struct_pattern_no_separator.lu`,
+`grammar/tuple_pattern_no_separator.lu`.)
 
 Payload binding: `BadDigit(e) => …`; or-patterns `A | B`; guards are arm
 syntax (`[gram.expr.flow]`), not pattern syntax. `closed_pattern` is a
@@ -731,7 +744,9 @@ field's value under the field's own name (`x` is `x: x`);
 `IDENT ':' pattern` matches the field against any pattern — nesting,
 `_`, `@`-bindings, further struct patterns. Fields may appear in any
 order, each at most once. A trailing `..` ignores every field the
-pattern does not name; WITHOUT `..` the pattern must name every field
+pattern does not name, and **follows a separator like one more
+member** (`Point { x, .. }` — D67; the comma-less spelling is E0201);
+WITHOUT `..` the pattern must name every field
 of the struct. That default is deliberate and loud: it is the same
 rule a struct literal lives under (E0408 — every field written at
 construction), so a struct gaining a field breaks each pattern that

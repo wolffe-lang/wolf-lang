@@ -7897,6 +7897,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if callee_text == "str_from_utf8" {
             return self.lower_str_from_utf8(d, e);
         }
+        // The region accounting queries (s131, #187): the ledger
+        // `wolf_rt` already keeps, surfaced. One rt read each — no
+        // row, no out slot, no allocation.
+        if matches!(callee_text.as_str(), "region_bytes" | "live_region_bytes") {
+            return self.lower_region_query(&callee_text, d, e);
+        }
         if cs.is_none() {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
@@ -11441,6 +11447,39 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(None))
             }
             _ => Err(refuse("this os/time builtin", e.span)),
+        }
+    }
+
+    /// The region accounting queries (s131, #187), natively: one
+    /// `wolf_rt` ledger read each. `region_bytes(r)` hands the named
+    /// region's handle to the shim — the operand rides `expect_region`,
+    /// so anything beyond a named region binding refuses by name (the
+    /// c05 posture every region operand holds). `live_region_bytes()`
+    /// reads the process-wide chunk counter. Plain i64s in registers:
+    /// no row (the query cannot fail), no slot, no allocation.
+    fn lower_region_query(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        match name {
+            "region_bytes" => {
+                let Some(rx) = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .find_map(Arg::value)
+                else {
+                    return Err(refuse("a region_bytes call without its region", e.span));
+                };
+                let (_region, handle, _owned) = self.expect_region(rx)?;
+                let v = self
+                    .rt_call("__wolf_rt_region_bytes", &[handle], Some(types::I64))
+                    .expect("bytes");
+                Ok(Flow::Val(Some(v)))
+            }
+            _ => {
+                let v = self
+                    .rt_call("__wolf_rt_live_region_bytes", &[], Some(types::I64))
+                    .expect("bytes");
+                Ok(Flow::Val(Some(v)))
+            }
         }
     }
 

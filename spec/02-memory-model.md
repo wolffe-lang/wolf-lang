@@ -245,6 +245,46 @@ Edge legality (source stores a reference to target):
   except through §7-licensed reasoning and address inspection in Tier 3
   (which carries no placement guarantees — `[mem.ub]` row T2 layout freedom).
 
+### Accounting `[mem.region.account]`
+
+- `[mem.region.account.1]` Every region carries a **byte ledger**: a
+  cumulative count of the bytes the implementation charges for
+  allocations placed in it (`[mem.region.create.3]`). The builtin
+  `region_bytes(r)` reads a named region binding's ledger — the sugar
+  block's name or a first-class value. Contractual on every tier:
+  the ledger is **zero at creation**, **monotone within the region's
+  lifetime** (a reallocation's abandoned buffer stays charged; nothing
+  is ever subtracted while the region lives), and **stable between
+  allocations** (two reads with no intervening charge agree). The
+  ledger's *units* — what charges, and by how much — are
+  implementation-measured facts per tier, not comparison surface: the
+  native arena charges alignment-rounded container and region-alloc
+  storage; the checked machine charges its shadow-memory model. The
+  ledger is an accounting surface in the same carve-out class as
+  Tier-3 address inspection, not a `[mem.region.promote.1]`
+  observation: an allocation the implementation promotes or elides may
+  charge nothing, and no program may read placement from the number.
+  Known per-tier gap, recorded: the native tier realizes `str`
+  materialization's ambient region as the process root (wolf-lang#191,
+  the c09 seam), so string bytes appear in **no** named region's
+  ledger there today; when that seam closes they charge the current
+  region — programs must not read this clause as "`str` never
+  charges". (Added 2026-09-01, s131 — wolf-lang#187, the wolf-web
+  `memory_budget` customer; the query half. A creation-time cap and
+  its fault semantics are #187's second half, not this clause.)
+- `[mem.region.account.2]` `live_region_bytes()` reads the
+  **process-wide** total the implementation holds for live
+  first-class/sugar regions — the reclamation counter, not an RSS
+  proxy. Granularity is implementation-specified (the native tier
+  counts backing-chunk capacity at chunk grant; the checked machine
+  sums live regions' ledgers); the process-root arena is never
+  counted. Contractual: the total **rises** while a region holds
+  charged storage and a freed region's contribution **vanishes
+  wholesale** at its free — `region scratch { … }` returns the total
+  to its entry reading. Files: `memory/region_bytes_query.lu`,
+  `memory/region_bytes_value.lu`. (Added 2026-09-01, s131 —
+  wolf-lang#187.)
+
 ## §4 Tier 2 — `shared` and `handle` `[mem.shared]`
 
 Lineage: `.docs/refs/papers/perceus.pdf` (RC insertion, drop timing).

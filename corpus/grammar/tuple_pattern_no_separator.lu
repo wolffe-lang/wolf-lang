@@ -1,0 +1,14 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.pat
+//!
+//! D67 refusal pin (#190): the family-wide half of the measurement —
+//! the comma-less run was never one construct's quirk, the pattern
+//! family's member loops all shared it. `(a b)` refuses like
+//! `Point { x y }` refuses; the tuple production's `(',' pattern)*`
+//! is the law. The fix is machine-applicable.
+
+fn main() -> !int {
+    let (a b) = (1, 2)
+    if a + b == 3 { 0 } else { 1 }
+}

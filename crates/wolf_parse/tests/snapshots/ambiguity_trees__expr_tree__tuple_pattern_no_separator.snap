@@ -1,0 +1,75 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 384..464
+  FnDecl 384..463
+    FnKw 384..386 "fn"
+    Ident 387..391 "main"
+    ParamList 391..393
+      LParen 391..392 "("
+      RParen 392..393 ")"
+    RetType 394..401
+      Arrow 394..396 "->"
+      ErrorUnionType 397..401
+        Not 397..398 "!"
+        PathType 398..401
+          Path 398..401
+            Ident 398..401 "int"
+    Block 402..463
+      LBrace 402..403 "{"
+      LetDecl 408..427
+        LetKw 408..411 "let"
+        TuplePat 412..417
+          LParen 412..413 "("
+          IdentPat 413..414
+            Ident 413..414 "a"
+          IdentPat 415..416
+            Ident 415..416 "b"
+          RParen 416..417 ")"
+        Eq 418..419 "="
+        TupleExpr 420..426
+          LParen 420..421 "("
+          LiteralExpr 421..422
+            Int 421..422 "1"
+          Comma 422..423 ","
+          LiteralExpr 424..425
+            Int 424..425 "2"
+          RParen 425..426 ")"
+        Term 426..427 "\n"
+      ExprStmt 431..462
+        IfExpr 431..461
+          IfKw 431..433 "if"
+          BinExpr 434..444
+            BinExpr 434..439
+              PathExpr 434..435
+                Ident 434..435 "a"
+              Plus 436..437 "+"
+              PathExpr 438..439
+                Ident 438..439 "b"
+            EqEq 440..442 "=="
+            LiteralExpr 443..444
+              Int 443..444 "3"
+          Block 445..450
+            LBrace 445..446 "{"
+            ExprStmt 447..448
+              LiteralExpr 447..448
+                Int 447..448 "0"
+            RBrace 449..450 "}"
+          ElseKw 451..455 "else"
+          Block 456..461
+            LBrace 456..457 "{"
+            ExprStmt 458..459
+              LiteralExpr 458..459
+                Int 458..459 "1"
+            RBrace 460..461 "}"
+        Term 461..462 "\n"
+      RBrace 462..463 "}"
+  Term 463..464 "\n"
+  Eof 464..464 ""
+== diagnostics ==
+E0201 [Error] 415..415 expected `,` between the tuple pattern's elements
+    note the separating comma is required between pattern members ([gram.pat])
+    help [MachineApplicable] add the comma
+        edit 414..414 -> ","

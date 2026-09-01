@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 421..461 name=Point fields=2
+FnDecl 463..578 name=main body=Block
+-- diagnostics --
+E0201 [Error] 534..534 expected `,` between the struct pattern's fields

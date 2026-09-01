@@ -482,6 +482,23 @@ pub unsafe fn region_bytes(handle: *mut core::ffi::c_void) -> usize {
     r.bytes
 }
 
+/// The `region_bytes(r)` builtin's shim (s131, #187): the region's
+/// ledger weight, surfaced to wolf code. The number is the exact,
+/// alignment-rounded total ever charged to the region — monotone
+/// within the region's lifetime (a container's growth charges the new
+/// buffer without discharging the abandoned one), zero at creation.
+///
+/// # Safety
+///
+/// `handle` must be a live pointer from [`__wolf_rt_region_new`] —
+/// which the lowering guarantees: the builtin takes a named region
+/// binding, and the static tiers refuse a use after free/freeze.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_region_bytes(handle: *mut core::ffi::c_void) -> i64 {
+    // SAFETY: caller contract — live region handle.
+    (unsafe { region_bytes(handle) }) as i64
+}
+
 /// Chunk capacity currently owned by LIVE regions, process-wide — the
 /// runtime's own reclamation accounting (s76 target 3). Maintained at
 /// CHUNK granularity, so the per-allocation bump path pays nothing: a
@@ -497,6 +514,17 @@ static LIVE_REGION_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::At
 /// Read [`LIVE_REGION_BYTES`].
 pub fn live_region_bytes() -> usize {
     LIVE_REGION_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The `live_region_bytes()` builtin's shim (s131, #187): the
+/// process-wide chunk capacity owned by live named regions, surfaced
+/// to wolf code. Chunk-granular by design (the reclamation counter,
+/// not an RSS proxy): it rises when a region takes a chunk, falls
+/// wholesale when a region frees, and counts neither the process-root
+/// arena nor the retired-chunk pool.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_live_region_bytes() -> i64 {
+    live_region_bytes() as i64
 }
 
 // ---- the ambient region slot (s76) ---------------------------------------

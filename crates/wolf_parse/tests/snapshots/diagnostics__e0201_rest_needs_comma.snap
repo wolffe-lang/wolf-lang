@@ -1,0 +1,41 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "expected `,` before `..` — it ignores the remaining fields like one more member",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 23,
+            hi: 23,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [
+        "the separating comma is required, and `..` follows one: `Point { x, .. }`, never `Point { x .. }` ([gram.pat.struct])",
+    ],
+    suggestions: [
+        Suggestion {
+            message: "add the comma",
+            edits: [
+                (
+                    Span {
+                        file: FileId(
+                            0,
+                        ),
+                        lo: 22,
+                        hi: 22,
+                    },
+                    ",",
+                ),
+            ],
+            applicability: MachineApplicable,
+        },
+    ],
+}

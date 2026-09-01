@@ -191,10 +191,21 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
 /// and carries no capability. It stays comptime-refused with the rest —
 /// admitting it would mean modelling `List` values in the D33 sandbox,
 /// which is a design decision, not a convenience.)
+/// (s131 adds the region accounting queries, wolf-lang#187: they read
+/// the memory model's own ledger — no ambient OS surface, no
+/// capability — and stay comptime-refused with the rest: the D33
+/// sandbox models no region machine, and a comptime "bytes charged"
+/// would be a bit-identical lie on every host.)
 pub fn pure_builtin(name: &str) -> bool {
     matches!(
         name,
-        "json_valid" | "json_get" | "json_type" | "json_len" | "str_from_utf8"
+        "json_valid"
+            | "json_get"
+            | "json_type"
+            | "json_len"
+            | "str_from_utf8"
+            | "region_bytes"
+            | "live_region_bytes"
     )
 }
 

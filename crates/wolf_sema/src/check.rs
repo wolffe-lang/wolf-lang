@@ -6620,6 +6620,17 @@ impl<'a> Checker<'a> {
                 let list_int = self.lo.table.intern(TyKind::List(int_));
                 (vec![list_int], rowed(self, str_, &["utf8"]))
             }
+            // The region accounting queries (s131, wolf-lang#187):
+            // pure reads of the ledger `[mem.region.account]` names.
+            // No row — the query cannot fail: the argument is a live
+            // region binding by construction (the affine value's
+            // static discipline), and the process-wide read has no
+            // failure mode.
+            "region_bytes" => {
+                let region_ = self.lo.table.intern(TyKind::RegionTy);
+                (vec![region_], int_)
+            }
+            "live_region_bytes" => (Vec::new(), int_),
             _ => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)

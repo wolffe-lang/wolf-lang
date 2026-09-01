@@ -124,6 +124,8 @@ grammar/let_group_destructure.lu: lowers
 grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
 grammar/match_arm_at_binding.lu: lowers
 grammar/match_arm_deep_tree.lu: refused — an enum or row test inside a product pattern (deep trees, c06)
+grammar/match_arm_or_inside_product.lu: refused — or-patterns inside product patterns (join params, c06)
+grammar/match_arm_or_over_product.lu: refused — or-patterns over product patterns (join params, c06)
 grammar/match_arm_product_nested.lu: lowers
 grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern (c06)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
@@ -134,10 +136,13 @@ grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
 grammar/struct_pattern_match_arm.lu: lowers
 grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
+grammar/struct_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
+grammar/struct_pattern_rest_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_unknown_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/tuple_pattern_match_arm.lu: lowers
+grammar/tuple_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
@@ -228,6 +233,8 @@ memory/prov_holy_grail.lu: lowers
 memory/prov_two_phase.lu: lowers
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
+memory/region_bytes_query.lu: lowers
+memory/region_bytes_value.lu: lowers
 memory/region_conflict_params.lu: not mem-clean (pre-wir rungs own it)
 memory/region_container_freeze_ok.lu: lowers
 memory/region_container_reclaim.lu: lowers

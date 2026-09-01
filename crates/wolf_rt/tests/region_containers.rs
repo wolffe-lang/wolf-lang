@@ -34,8 +34,9 @@
 
 use wolf_rt::list::{__wolf_rt_list_len, __wolf_rt_list_new, __wolf_rt_list_push};
 use wolf_rt::native::{
-    __wolf_rt_region_ambient_enter, __wolf_rt_region_ambient_leave, __wolf_rt_region_free,
-    __wolf_rt_region_new, live_region_bytes, region_bytes,
+    __wolf_rt_live_region_bytes, __wolf_rt_region_ambient_enter, __wolf_rt_region_ambient_leave,
+    __wolf_rt_region_bytes, __wolf_rt_region_free, __wolf_rt_region_new, live_region_bytes,
+    region_bytes,
 };
 
 /// 1.6 MB of `int` elements — far above the 16 KB region chunk floor, so
@@ -63,6 +64,18 @@ fn region_free_reclaims_container_storage() {
 
         let grew = live_region_bytes() - base;
         let charged = region_bytes(r);
+        // The s131 builtin shims (#187) answer with the same ledger:
+        // one i64-shaped read each, nothing recomputed.
+        assert_eq!(
+            __wolf_rt_region_bytes(r),
+            charged as i64,
+            "the region_bytes builtin shim reads the same ledger"
+        );
+        assert_eq!(
+            __wolf_rt_live_region_bytes(),
+            live_region_bytes() as i64,
+            "the live_region_bytes builtin shim reads the same counter"
+        );
         __wolf_rt_region_ambient_leave(prev);
         (grew, charged)
     };

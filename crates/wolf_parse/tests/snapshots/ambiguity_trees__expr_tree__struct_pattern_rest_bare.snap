@@ -1,0 +1,110 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 556..711
+  StructDecl 556..596
+    StructKw 556..562 "struct"
+    Ident 563..568 "Point"
+    LBrace 569..570 "{"
+    StructField 575..582
+      Ident 575..576 "x"
+      Colon 576..577 ":"
+      PathType 578..581
+        Path 578..581
+          Ident 578..581 "int"
+      Comma 581..582 ","
+    StructField 587..594
+      Ident 587..588 "y"
+      Colon 588..589 ":"
+      PathType 590..593
+        Path 590..593
+          Ident 590..593 "int"
+      Comma 593..594 ","
+    RBrace 595..596 "}"
+  Term 596..597 "\n"
+  FnDecl 598..710
+    FnKw 598..600 "fn"
+    Ident 601..605 "main"
+    ParamList 605..607
+      LParen 605..606 "("
+      RParen 606..607 ")"
+    RetType 608..615
+      Arrow 608..610 "->"
+      ErrorUnionType 611..615
+        Not 611..612 "!"
+        PathType 612..615
+          Path 612..615
+            Ident 612..615 "int"
+    Block 616..710
+      LBrace 616..617 "{"
+      LetDecl 622..651
+        LetKw 622..625 "let"
+        IdentPat 626..627
+          Ident 626..627 "p"
+        Eq 628..629 "="
+        StructLit 630..650
+          PathExpr 630..635
+            Ident 630..635 "Point"
+          LBrace 636..637 "{"
+          FieldInit 638..642
+            Ident 638..639 "x"
+            Colon 639..640 ":"
+            LiteralExpr 641..642
+              Int 641..642 "1"
+          Comma 642..643 ","
+          FieldInit 644..648
+            Ident 644..645 "y"
+            Colon 645..646 ":"
+            LiteralExpr 647..648
+              Int 647..648 "2"
+          RBrace 649..650 "}"
+        Term 650..651 "\n"
+      LetDecl 655..678
+        LetKw 655..658 "let"
+        StructPat 659..673
+          Path 659..664
+            Ident 659..664 "Point"
+          LBrace 665..666 "{"
+          FieldPat 667..668
+            IdentPat 667..668
+              Ident 667..668 "x"
+          RestPat 669..671
+            DotDot 669..671 ".."
+          RBrace 672..673 "}"
+        Eq 674..675 "="
+        PathExpr 676..677
+          Ident 676..677 "p"
+        Term 677..678 "\n"
+      ExprStmt 682..709
+        IfExpr 682..708
+          IfKw 682..684 "if"
+          BinExpr 685..691
+            PathExpr 685..686
+              Ident 685..686 "x"
+            EqEq 687..689 "=="
+            LiteralExpr 690..691
+              Int 690..691 "1"
+          Block 692..697
+            LBrace 692..693 "{"
+            ExprStmt 694..695
+              LiteralExpr 694..695
+                Int 694..695 "0"
+            RBrace 696..697 "}"
+          ElseKw 698..702 "else"
+          Block 703..708
+            LBrace 703..704 "{"
+            ExprStmt 705..706
+              LiteralExpr 705..706
+                Int 705..706 "1"
+            RBrace 707..708 "}"
+        Term 708..709 "\n"
+      RBrace 709..710 "}"
+  Term 710..711 "\n"
+  Eof 711..711 ""
+== diagnostics ==
+E0201 [Error] 669..669 expected `,` before `..` — it ignores the remaining fields like one more member
+    note the separating comma is required, and `..` follows one: `Point { x, .. }`, never `Point { x .. }` ([gram.pat.struct])
+    help [MachineApplicable] add the comma
+        edit 668..668 -> ","

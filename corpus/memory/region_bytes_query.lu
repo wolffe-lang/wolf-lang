@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="create true | grew true | stable true | live_up true | reclaimed true")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+//!
+//! The region accounting queries (s131, #187): `region_bytes(r)` is
+//! the region's own ledger, `live_region_bytes()` the process-wide
+//! live-region total. The UNITS are per-tier facts (the native arena
+//! charges alignment-rounded container storage; the checked machine
+//! charges its shadow-memory model), so this witness pins the
+//! RELATIONS the clause guarantees on every tier: zero at creation,
+//! monotone growth while a container fills, stability between
+//! allocations, and wholesale disappearance from the live total when
+//! the region frees.
+
+fn main() -> !int {
+    let base = live_region_bytes()
+    var created = false
+    var grew = false
+    var stable = false
+    var live_up = false
+    region r {
+        let c0 = region_bytes(r)
+        created = c0 == 0
+        var xs = List[int]()
+        for i in 0..2000 { (mut xs).push(i) }
+        let c1 = region_bytes(r)
+        let c2 = region_bytes(r)
+        grew = c1 > c0
+        stable = c1 == c2
+        live_up = live_region_bytes() > base
+    }
+    let reclaimed = live_region_bytes() == base
+    print(
+        "create {created} | grew {grew} | stable {stable} | live_up {live_up} | reclaimed {reclaimed}",
+    )
+    if !created { return 1 }
+    if !grew { return 2 }
+    if !stable { return 3 }
+    if !live_up { return 4 }
+    if !reclaimed { return 5 }
+    0
+}

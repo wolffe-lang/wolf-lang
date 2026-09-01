@@ -1,0 +1,42 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: gram.pat
+//!
+//! s131 (#196) — the c06 residue's or-pattern half, pinned loud: an
+//! or-pattern whose alternatives are PRODUCT patterns
+//! (`Left(A { n }) | Right(B { n })`) refuses by name on the native
+//! pipe ("or-patterns over product patterns (join params, c06)") —
+//! and, unlike the deep-tree class, the checked executor refuses the
+//! SAME shape at the same rung, so no wolfc lane runs this file
+//! today. lupin 0.1.20 RUNS it (plain alternation, pre-dating
+//! products-in-arms; is31's measurement) — that permissive-direction
+//! divergence was latent until this pin: the differ now carries the
+//! file in the conservatism ledger against lupin's exit(0). The
+//! join-params lowering (each alternative binds the same names, the
+//! arm body takes the joined params) stays with the c06-residue
+//! sprint beside deep trees and str/float literals in products.
+
+struct A {
+    n: int,
+}
+
+struct B {
+    n: int,
+}
+
+enum Msg {
+    Left(A),
+    Right(B),
+}
+
+fn pick(m: Msg) -> int {
+    match m {
+        Msg.Left(A { n }) | Msg.Right(B { n }) => n,
+    }
+}
+
+fn main() -> !int {
+    let a = pick(Msg.Left(A { n: 4 }))
+    let b = pick(Msg.Right(B { n: 3 }))
+    if a + b == 7 { 0 } else { 1 }
+}

@@ -1295,12 +1295,30 @@ const ALL_THREE_FLOOR: usize = 207;
 // pre-existing file moved lanes: both fixes make the compiler accept
 // and stay quiet where it was wrong, and neither touches a refusal any
 // lane was carrying. Counts measured by this gate, not predicted.
+// s131 ratchet over 436 entries: #187's query half. Two new run-phase
+// witnesses — `memory/region_bytes_query` and
+// `memory/region_bytes_value` (the region accounting builtins:
+// relations pinned, units per-tier by design) — and each executes on
+// all three lanes, so every count moves by exactly two
+// (256/273/273, union 289, all-three 240). No pre-existing file moved
+// lanes: the builtins are new surface; nothing they touch changes an
+// existing verdict. Counts measured by this gate, not predicted.
+// s131 ratchet #2 over 441 entries: the #196 or-pattern pins plus
+// D67's three static rejections. `grammar/match_arm_or_inside_product`
+// executes on the CHECKED lane only (native refuses by name — the
+// join-params c06 residue), so checked and the union move by exactly
+// one (257, union 290); `grammar/match_arm_or_over_product` runs on NO
+// wolfc lane (checked refuses it too — the refused@mem residue grows
+// by one, which is the pin's point: lupin runs it, and the differ now
+// carries the divergence in the ledger instead of nowhere). The three
+// E0201 separator witnesses are static rejections and by design move
+// no count. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 254), ("native", 271), ("release", 271)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 257), ("native", 273), ("release", 273)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 287;
+const UNION_FLOOR: usize = 290;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 238;
+const ALL_THREE_FLOOR: usize = 240;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

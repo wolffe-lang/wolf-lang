@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 556..596 name=Point fields=2
+FnDecl 598..710 name=main body=Block
+-- diagnostics --
+E0201 [Error] 669..669 expected `,` before `..` — it ignores the remaining fields like one more member

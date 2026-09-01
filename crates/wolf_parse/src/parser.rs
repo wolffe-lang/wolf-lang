@@ -192,6 +192,17 @@ impl<'a> Parser<'a> {
         Span::new(s.file, s.lo, s.lo)
     }
 
+    /// Zero-width span at the END of the previous significant token —
+    /// where a missing SEPARATOR belongs (the insertion anchor of
+    /// D67's "add the comma" fix: `x, ..`, not `x ,..` — the stream
+    /// is trivia-free, so this lands flush against the member).
+    pub(crate) fn prev_end(&self) -> Option<Span> {
+        self.pos.checked_sub(1).map(|i| {
+            let s = self.tokens[i].span;
+            Span::new(s.file, s.hi, s.hi)
+        })
+    }
+
     /// The current token's text (for contextual keywords: `self`, `pkg`,
     /// `c`).
     pub(crate) fn current_text(&self) -> &'a [u8] {
