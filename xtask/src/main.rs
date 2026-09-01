@@ -1303,10 +1303,20 @@ const ALL_THREE_FLOOR: usize = 207;
 // (256/273/273, union 289, all-three 240). No pre-existing file moved
 // lanes: the builtins are new surface; nothing they touch changes an
 // existing verdict. Counts measured by this gate, not predicted.
+// s131 ratchet #2 over 441 entries: the #196 or-pattern pins plus
+// D67's three static rejections. `grammar/match_arm_or_inside_product`
+// executes on the CHECKED lane only (native refuses by name — the
+// join-params c06 residue), so checked and the union move by exactly
+// one (257, union 290); `grammar/match_arm_or_over_product` runs on NO
+// wolfc lane (checked refuses it too — the refused@mem residue grows
+// by one, which is the pin's point: lupin runs it, and the differ now
+// carries the divergence in the ledger instead of nowhere). The three
+// E0201 separator witnesses are static rejections and by design move
+// no count. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 256), ("native", 273), ("release", 273)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 257), ("native", 273), ("release", 273)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 289;
+const UNION_FLOOR: usize = 290;
 #[cfg(target_os = "macos")]
 const ALL_THREE_FLOOR: usize = 240;
 

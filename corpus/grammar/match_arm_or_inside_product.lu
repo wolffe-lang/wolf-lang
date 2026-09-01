@@ -1,0 +1,33 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: gram.pat
+//!
+//! s131 (#196) — the c06 residue's other or-pattern half: an
+//! or-pattern INSIDE a product pattern (`Pair(1 | 2, b)` — an
+//! alternation in one payload slot) refuses by name on the native
+//! pipe ("or-patterns inside product patterns (join params, c06)").
+//! The checked executor RUNS this file (its value-wise matcher takes
+//! the alternation slot-wise), so the lanes stay honestly non-nested
+//! — the pin measures the native half, the deep-tree posture exactly.
+//! lupin 0.1.20 runs it too (is31); until the join-params lowering
+//! lands with the c06-residue sprint, this file is the measurement
+//! that keeps the divergence visible instead of latent.
+
+enum Shape {
+    Empty,
+    Pair(int, int),
+}
+
+fn score(s: Shape) -> int {
+    match s {
+        Empty => 0,
+        Pair(1 | 2, b) => b * 10,
+        Pair(a, b) => a + b,
+    }
+}
+
+fn main() -> !int {
+    let low = score(Shape.Pair(2, 3))
+    let hi = score(Shape.Pair(7, 1))
+    if low == 30 && hi == 8 { 0 } else { 1 }
+}

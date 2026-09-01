@@ -38,6 +38,18 @@ refusal witnesses pin the family. The struct-literal laxity
 (`Point { x: 7 y: 2 }` still parses) is outside D67's letter and
 stays measured residue on the tracker.
 
+### The or-pattern divergence, measured (s131, #196)
+
+Two witnesses pin the c06 residue's or-pattern halves: an or-pattern
+OVER product alternatives (`Left(A { n }) | Right(B { n })`) refuses
+by name on every wolfc lane, and an or-pattern INSIDE a product
+(`Pair(1 | 2, b)`) refuses natively while the checked executor runs
+it — both shapes lupin runs today (is31's measurement), a
+permissive-direction divergence that was invisible until these files
+put it in the differ's ledger. The join-params lowering itself stays
+with the c06-residue sprint beside deep trees and str/float literals
+in products.
+
 ## 0.2.1 — 2026-09-01
 
 THE LETTER AND THE ARCHIVE. A patch release: no new features, and

@@ -124,6 +124,8 @@ grammar/let_group_destructure.lu: lowers
 grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
 grammar/match_arm_at_binding.lu: lowers
 grammar/match_arm_deep_tree.lu: refused — an enum or row test inside a product pattern (deep trees, c06)
+grammar/match_arm_or_inside_product.lu: refused — or-patterns inside product patterns (join params, c06)
+grammar/match_arm_or_over_product.lu: refused — or-patterns over product patterns (join params, c06)
 grammar/match_arm_product_nested.lu: lowers
 grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern (c06)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)

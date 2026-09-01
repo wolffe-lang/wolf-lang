@@ -1,0 +1,213 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 737..1060
+  EnumDecl 737..782
+    EnumKw 737..741 "enum"
+    Ident 742..747 "Shape"
+    LBrace 748..749 "{"
+    EnumVariant 754..759
+      Ident 754..759 "Empty"
+    Comma 759..760 ","
+    EnumVariant 765..779
+      Ident 765..769 "Pair"
+      LParen 769..770 "("
+      PathType 770..773
+        Path 770..773
+          Ident 770..773 "int"
+      Comma 773..774 ","
+      PathType 775..778
+        Path 775..778
+          Ident 775..778 "int"
+      RParen 778..779 ")"
+    Comma 779..780 ","
+    RBrace 781..782 "}"
+  Term 782..783 "\n"
+  FnDecl 784..916
+    FnKw 784..786 "fn"
+    Ident 787..792 "score"
+    ParamList 792..802
+      LParen 792..793 "("
+      Param 793..801
+        Ident 793..794 "s"
+        Colon 794..795 ":"
+        PathType 796..801
+          Path 796..801
+            Ident 796..801 "Shape"
+      RParen 801..802 ")"
+    RetType 803..809
+      Arrow 803..805 "->"
+      PathType 806..809
+        Path 806..809
+          Ident 806..809 "int"
+    Block 810..916
+      LBrace 810..811 "{"
+      ExprStmt 816..915
+        MatchExpr 816..914
+          MatchKw 816..821 "match"
+          PathExpr 822..823
+            Ident 822..823 "s"
+          LBrace 824..825 "{"
+          MatchArm 834..845
+            IdentPat 834..839
+              Ident 834..839 "Empty"
+            FatArrow 840..842 "=>"
+            LiteralExpr 843..844
+              Int 843..844 "0"
+            Comma 844..845 ","
+          MatchArm 854..879
+            PathPat 854..868
+              Path 854..858
+                Ident 854..858 "Pair"
+              LParen 858..859 "("
+              OrPat 859..864
+                LiteralPat 859..860
+                  Int 859..860 "1"
+                Pipe 861..862 "|"
+                LiteralPat 863..864
+                  Int 863..864 "2"
+              Comma 864..865 ","
+              IdentPat 866..867
+                Ident 866..867 "b"
+              RParen 867..868 ")"
+            FatArrow 869..871 "=>"
+            BinExpr 872..878
+              PathExpr 872..873
+                Ident 872..873 "b"
+              Star 874..875 "*"
+              LiteralExpr 876..878
+                Int 876..878 "10"
+            Comma 878..879 ","
+          MatchArm 888..908
+            PathPat 888..898
+              Path 888..892
+                Ident 888..892 "Pair"
+              LParen 892..893 "("
+              IdentPat 893..894
+                Ident 893..894 "a"
+              Comma 894..895 ","
+              IdentPat 896..897
+                Ident 896..897 "b"
+              RParen 897..898 ")"
+            FatArrow 899..901 "=>"
+            BinExpr 902..907
+              PathExpr 902..903
+                Ident 902..903 "a"
+              Plus 904..905 "+"
+              PathExpr 906..907
+                Ident 906..907 "b"
+            Comma 907..908 ","
+          RBrace 913..914 "}"
+        Term 914..915 "\n"
+      RBrace 915..916 "}"
+  Term 916..917 "\n"
+  FnDecl 918..1059
+    FnKw 918..920 "fn"
+    Ident 921..925 "main"
+    ParamList 925..927
+      LParen 925..926 "("
+      RParen 926..927 ")"
+    RetType 928..935
+      Arrow 928..930 "->"
+      ErrorUnionType 931..935
+        Not 931..932 "!"
+        PathType 932..935
+          Path 932..935
+            Ident 932..935 "int"
+    Block 936..1059
+      LBrace 936..937 "{"
+      LetDecl 942..976
+        LetKw 942..945 "let"
+        IdentPat 946..949
+          Ident 946..949 "low"
+        Eq 950..951 "="
+        CallExpr 952..975
+          PathExpr 952..957
+            Ident 952..957 "score"
+          ArgList 957..975
+            LParen 957..958 "("
+            Arg 958..974
+              CallExpr 958..974
+                MemberExpr 958..968
+                  PathExpr 958..963
+                    Ident 958..963 "Shape"
+                  Dot 963..964 "."
+                  Ident 964..968 "Pair"
+                ArgList 968..974
+                  LParen 968..969 "("
+                  Arg 969..970
+                    LiteralExpr 969..970
+                      Int 969..970 "2"
+                  Comma 970..971 ","
+                  Arg 972..973
+                    LiteralExpr 972..973
+                      Int 972..973 "3"
+                  RParen 973..974 ")"
+            RParen 974..975 ")"
+        Term 975..976 "\n"
+      LetDecl 980..1013
+        LetKw 980..983 "let"
+        IdentPat 984..986
+          Ident 984..986 "hi"
+        Eq 987..988 "="
+        CallExpr 989..1012
+          PathExpr 989..994
+            Ident 989..994 "score"
+          ArgList 994..1012
+            LParen 994..995 "("
+            Arg 995..1011
+              CallExpr 995..1011
+                MemberExpr 995..1005
+                  PathExpr 995..1000
+                    Ident 995..1000 "Shape"
+                  Dot 1000..1001 "."
+                  Ident 1001..1005 "Pair"
+                ArgList 1005..1011
+                  LParen 1005..1006 "("
+                  Arg 1006..1007
+                    LiteralExpr 1006..1007
+                      Int 1006..1007 "7"
+                  Comma 1007..1008 ","
+                  Arg 1009..1010
+                    LiteralExpr 1009..1010
+                      Int 1009..1010 "1"
+                  RParen 1010..1011 ")"
+            RParen 1011..1012 ")"
+        Term 1012..1013 "\n"
+      ExprStmt 1017..1058
+        IfExpr 1017..1057
+          IfKw 1017..1019 "if"
+          BinExpr 1020..1040
+            BinExpr 1020..1029
+              PathExpr 1020..1023
+                Ident 1020..1023 "low"
+              EqEq 1024..1026 "=="
+              LiteralExpr 1027..1029
+                Int 1027..1029 "30"
+            AmpAmp 1030..1032 "&&"
+            BinExpr 1033..1040
+              PathExpr 1033..1035
+                Ident 1033..1035 "hi"
+              EqEq 1036..1038 "=="
+              LiteralExpr 1039..1040
+                Int 1039..1040 "8"
+          Block 1041..1046
+            LBrace 1041..1042 "{"
+            ExprStmt 1043..1044
+              LiteralExpr 1043..1044
+                Int 1043..1044 "0"
+            RBrace 1045..1046 "}"
+          ElseKw 1047..1051 "else"
+          Block 1052..1057
+            LBrace 1052..1053 "{"
+            ExprStmt 1054..1055
+              LiteralExpr 1054..1055
+                Int 1054..1055 "1"
+            RBrace 1056..1057 "}"
+        Term 1057..1058 "\n"
+      RBrace 1058..1059 "}"
+  Term 1059..1060 "\n"
+  Eof 1060..1060 ""
+== diagnostics ==
