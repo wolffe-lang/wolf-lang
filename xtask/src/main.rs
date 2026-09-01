@@ -1279,6 +1279,12 @@ const ALL_THREE_FLOOR: usize = 207;
 // lanes: the release carries a spec amendment and two diagnostics
 // fixes, none of which changes what any lane will run. Counts measured
 // by this gate, not predicted.
+// r04, #189's pin over 432 entries: `grammar/char_uni_seven_digits` is
+// a static rejection (E0101, the seven-digit `\u{…}`) and by design
+// moves no count — the floors below are D66's, re-measured on this
+// tree and unchanged. #190 landed NO witness: `Point { x .. }` is an
+// accept-set divergence (wolfgang runs it, lupin 0.1.20 refuses E0201),
+// so nothing here may pin either side until it is ruled.
 #[cfg(target_os = "macos")]
 const LANE_FLOORS: &[(&str, usize)] = &[("checked", 252), ("native", 269), ("release", 269)];
 #[cfg(target_os = "macos")]

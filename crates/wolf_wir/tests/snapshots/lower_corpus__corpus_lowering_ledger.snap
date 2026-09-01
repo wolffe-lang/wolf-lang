@@ -103,6 +103,7 @@ grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
 grammar/brackets_generic_call.lu: lowers
 grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
+grammar/char_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
 grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers

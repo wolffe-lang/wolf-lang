@@ -107,15 +107,22 @@ is not a reserved keyword. Raw-mode body (no escapes/interpolation).
 
 ```ebnf
 CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
-CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | '\u{' HEX_DIGIT+ '}'
+CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
+UNI_ESC   ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
 ```
 
 One Unicode scalar value between single quotes (s121, D58 —
 `[type.char]` owns the type): `'a'`, `'é'`, `'🐺'`, `'\n'`, `'\''`,
 `'\u{1F43A}'`. `CHAR_TEXT` is any single scalar other than `'`, `\`,
 or a newline. The escape set is the string set plus `\'`; `\u{…}`
-takes one to six hex digits. Malformed shapes are **E0110** with an
-`Error` token, one report each: an empty `''`; more than one scalar
+takes one to six hex digits — the bound is the production's, and it
+binds in string literals too (`[gram.lex.str.escape]`). Seven or more
+digits, or none, is **E0101** at the escape (the digit count is the
+escape's shape, not the `char`'s: leading zeros count, so `'\u{41}'`
+and `'\u{000041}'` are both `'A'` and `'\u{0000041}'` is refused
+before anything asks what value it names). Malformed shapes are
+**E0110** with an `Error` token, one report each: an empty `''`;
+more than one scalar
 (`'ab'` — and a combining pair like `'e\u{301}'` is two scalars: a
 `char` is a scalar, not a grapheme); a literal not closed before the
 end of its line; and a `\x`/`\u` escape naming a non-scalar (the
