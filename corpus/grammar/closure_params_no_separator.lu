@@ -1,0 +1,16 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.closure
+//!
+//! D69 refusal pin (s132): the separating comma is required between
+//! closure parameters — `fn(a b)` was the recovery loop's accident
+//! (`closure_param (',' closure_param)* ','?` never derived it), and
+//! lupin refuses it at the same code. The capture-list loop
+//! (`[gram.expr.unsafe]`) tightened in the same change under the
+//! same law; its inline-C context keeps it out of a standalone
+//! corpus pin, and the parser's diagnostics tests carry it instead.
+
+fn main() -> !int {
+    let f = fn(a b) a + b
+    if f(1, 2) == 3 { 0 } else { 1 }
+}

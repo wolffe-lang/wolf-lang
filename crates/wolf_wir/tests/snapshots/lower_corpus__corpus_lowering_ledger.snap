@@ -107,6 +107,7 @@ grammar/brackets_generic_call.lu: lowers
 grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
 grammar/char_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
+grammar/closure_params_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers
 grammar/else_default.lu: not mem-clean (pre-wir rungs own it)
@@ -136,6 +137,7 @@ grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
+grammar/struct_literal_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_match_arm.lu: lowers
 grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)

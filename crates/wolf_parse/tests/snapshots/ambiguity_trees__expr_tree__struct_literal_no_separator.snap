@@ -1,0 +1,103 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 463..598
+  StructDecl 463..503
+    StructKw 463..469 "struct"
+    Ident 470..475 "Point"
+    LBrace 476..477 "{"
+    StructField 482..489
+      Ident 482..483 "x"
+      Colon 483..484 ":"
+      PathType 485..488
+        Path 485..488
+          Ident 485..488 "int"
+      Comma 488..489 ","
+    StructField 494..501
+      Ident 494..495 "y"
+      Colon 495..496 ":"
+      PathType 497..500
+        Path 497..500
+          Ident 497..500 "int"
+      Comma 500..501 ","
+    RBrace 502..503 "}"
+  Term 503..504 "\n"
+  FnDecl 505..597
+    FnKw 505..507 "fn"
+    Ident 508..512 "main"
+    ParamList 512..514
+      LParen 512..513 "("
+      RParen 513..514 ")"
+    RetType 515..522
+      Arrow 515..517 "->"
+      ErrorUnionType 518..522
+        Not 518..519 "!"
+        PathType 519..522
+          Path 519..522
+            Ident 519..522 "int"
+    Block 523..597
+      LBrace 523..524 "{"
+      LetDecl 529..557
+        LetKw 529..532 "let"
+        IdentPat 533..534
+          Ident 533..534 "p"
+        Eq 535..536 "="
+        StructLit 537..556
+          PathExpr 537..542
+            Ident 537..542 "Point"
+          LBrace 543..544 "{"
+          FieldInit 545..549
+            Ident 545..546 "x"
+            Colon 546..547 ":"
+            LiteralExpr 548..549
+              Int 548..549 "1"
+          FieldInit 550..554
+            Ident 550..551 "y"
+            Colon 551..552 ":"
+            LiteralExpr 553..554
+              Int 553..554 "2"
+          RBrace 555..556 "}"
+        Term 556..557 "\n"
+      ExprStmt 561..596
+        IfExpr 561..595
+          IfKw 561..563 "if"
+          BinExpr 564..578
+            BinExpr 564..573
+              MemberExpr 564..567
+                PathExpr 564..565
+                  Ident 564..565 "p"
+                Dot 565..566 "."
+                Ident 566..567 "x"
+              Plus 568..569 "+"
+              MemberExpr 570..573
+                PathExpr 570..571
+                  Ident 570..571 "p"
+                Dot 571..572 "."
+                Ident 572..573 "y"
+            EqEq 574..576 "=="
+            LiteralExpr 577..578
+              Int 577..578 "3"
+          Block 579..584
+            LBrace 579..580 "{"
+            ExprStmt 581..582
+              LiteralExpr 581..582
+                Int 581..582 "0"
+            RBrace 583..584 "}"
+          ElseKw 585..589 "else"
+          Block 590..595
+            LBrace 590..591 "{"
+            ExprStmt 592..593
+              LiteralExpr 592..593
+                Int 592..593 "1"
+            RBrace 594..595 "}"
+        Term 595..596 "\n"
+      RBrace 596..597 "}"
+  Term 597..598 "\n"
+  Eof 598..598 ""
+== diagnostics ==
+E0201 [Error] 550..550 expected `,` between the struct literal's fields
+    note the separating comma is required between field initializers ([gram.expr.primary]: struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}')
+    help [MachineApplicable] add the comma
+        edit 549..549 -> ","

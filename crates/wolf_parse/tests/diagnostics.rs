@@ -82,6 +82,42 @@ fn e0201_pattern_separator_fix() {
 }
 
 #[test]
+fn e0201_expr_list_separator_fix() {
+    // D69 (s132): the expression-list separators — struct-literal
+    // fields, closure params, capture names — carry the same
+    // machine-applicable "add the comma" insertion as D67's pattern
+    // family: one zero-width edit flush against the previous member.
+    let src = "fn f() { let p = Point { x: 1 y: 2 }\n}\n";
+    let parse = util::parse(src);
+    let d = parse
+        .diagnostics
+        .iter()
+        .find(|d| d.code == codes::EXPECTED_TOKEN)
+        .expect("E0201 for the comma-less literal fields");
+    let sugg = &d.suggestions[0];
+    assert_eq!(
+        sugg.applicability,
+        wolf_diag::Applicability::MachineApplicable
+    );
+    assert_eq!(sugg.edits.len(), 1);
+    assert_eq!(sugg.edits[0].1, ",");
+    assert_eq!(
+        sugg.edits[0].0.lo, sugg.edits[0].0.hi,
+        "the fix is an insertion"
+    );
+    snap(
+        "e0201_literal_fields_need_comma",
+        src,
+        codes::EXPECTED_TOKEN,
+    );
+    snap(
+        "e0201_closure_params_need_comma",
+        "fn f() { let g = fn(a b) a\n}\n",
+        codes::EXPECTED_TOKEN,
+    );
+}
+
+#[test]
 fn e0201_expected_token() {
     // (`fn (` reads as a stray closure line — E0203 — so the missing
     // name is pinned on a generic header instead.)

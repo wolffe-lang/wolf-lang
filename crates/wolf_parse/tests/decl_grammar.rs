@@ -510,6 +510,110 @@ fn pattern_separators_are_required() {
 }
 
 #[test]
+fn expr_list_separators_are_required() {
+    // D69 (s132, D67's precedent made family-wide): the struct
+    // LITERAL, closure-parameter, and capture-list loops tighten to
+    // their productions — the comma separates members; a newline is
+    // layout, never a separator. Each lax spelling is E0201; the
+    // recovery keeps every member in the tree (as-if-comma), so one
+    // deleted comma costs exactly one report.
+    for (src, what) in [
+        (
+            "let p = Point { x: 1 y: 2 }
+",
+            "comma-less literal fields",
+        ),
+        (
+            "let p = Point { x y }
+",
+            "comma-less shorthand fields",
+        ),
+        (
+            "let p = Point {
+    x: 1
+    y: 2
+}
+",
+            "newline-separated literal fields",
+        ),
+        (
+            "let f = fn(a b) a
+",
+            "comma-less closure params",
+        ),
+        (
+            "let f = fn(mut a b: int) a
+",
+            "comma-less moded params",
+        ),
+        (
+            "fn g() { unsafe c [a b] { } }
+",
+            "comma-less captures",
+        ),
+    ] {
+        let p = util::parse(src);
+        assert!(
+            p.diagnostics
+                .iter()
+                .any(|d| d.code == codes::EXPECTED_TOKEN),
+            "{what} must refuse at E0201: {src:?}"
+        );
+    }
+    // The comma-full spellings stay clean — the tightening narrows
+    // the accept set to the production, nothing else. The multi-line
+    // literal's trailing layout (a terminator run before `}`) stays
+    // the production's own.
+    for src in [
+        "let p = Point { x: 1, y: 2 }
+",
+        "let p = Point { x, y }
+",
+        "let p = Point {
+    x: 1,
+    y: 2,
+}
+",
+        "let p = Point {
+    x: 1,
+    y: 2
+}
+",
+        "let f = fn(a, b) a
+",
+        "fn g() { unsafe c [a, b] { } }
+",
+    ] {
+        let p = util::parse(src);
+        assert!(
+            p.diagnostics.is_empty(),
+            "comma-full spelling must stay clean: {src:?} -> {:?}",
+            p.diagnostics.first().map(|d| d.code)
+        );
+    }
+    // One deleted comma, one report (the D22 budget's shape) — and
+    // the latch holds per list.
+    let p = util::parse(
+        "let p = Point { x: 1 y: 2, z: 3 }
+",
+    );
+    assert_eq!(
+        p.diagnostics.len(),
+        1,
+        "one missing separator is one diagnostic"
+    );
+    let p = util::parse(
+        "let p = Point { x: 1 y: 2 z: 3 }
+",
+    );
+    assert_eq!(
+        p.diagnostics.len(),
+        1,
+        "two misses in one list still latch to one report"
+    );
+}
+
+#[test]
 fn binding_patterns() {
     let src = "let A | B = x\nlet all @ (a, b) = pair\nlet Some(v) = opt\nlet io.Error(e) = err\nlet _ = ignore\nlet 42 = answer\n";
     let root = clean(src);

@@ -1,0 +1,41 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "expected `,` between the closure's parameters",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 22,
+            hi: 22,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [
+        "the separating comma is required between closure parameters ([gram.expr.closure]: closure_param (',' closure_param)* ','?)",
+    ],
+    suggestions: [
+        Suggestion {
+            message: "add the comma",
+            edits: [
+                (
+                    Span {
+                        file: FileId(
+                            0,
+                        ),
+                        lo: 21,
+                        hi: 21,
+                    },
+                    ",",
+                ),
+            ],
+            applicability: MachineApplicable,
+        },
+    ],
+}

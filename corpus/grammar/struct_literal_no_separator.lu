@@ -1,0 +1,20 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.primary
+//!
+//! D69 refusal pin (s132, D67's precedent): the separating comma is
+//! required between a struct literal's field initializers —
+//! `Point { x: 1 y: 2 }` was an accident of the recovery loop
+//! (`(',' field_init)*` never derived it), accepted by no other
+//! authority: the production refuses, lupin refuses, every worked
+//! example writes the comma. The fix is machine-applicable.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() -> !int {
+    let p = Point { x: 1 y: 2 }
+    if p.x + p.y == 3 { 0 } else { 1 }
+}

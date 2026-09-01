@@ -43,6 +43,32 @@ cap-0 / query interplay), `conc/proc_cap_fault_join.lu` (the
 join-reason read, both defers, the reclaimed-at-join pin — the shape
 lobo's ws12 consumes).
 
+### The comma insists everywhere (s132, D69 — D67 completed)
+
+The remaining unlicensed comma laxity is gone: struct LITERAL fields
+(`Point { x: 7 y: 2 }` — and the newline-separated spelling, which
+lupin always refused), closure parameters (`fn(a b)`), and inline-C
+capture lists (`unsafe c [a b]`) now refuse at E0201 with the same
+machine-applicable "add the comma" insertion D67 gave the pattern
+family (`wolf fix --apply` produces the canonical spelling; the
+newline form is reported at the field the missing comma should
+precede, byte-for-byte where lupin points). The multi-line literal's
+trailing layout is untouched: a terminator run before `}` is the
+production's own. Blast radius, measured before the tightening, is
+zero working code anywhere: the wolf-lang corpus and fixtures (532
+files), wolf-book (1,129), wolf-std (887), wolf-web (1,976 —
+counting two vendored copies of the one flagged file), and lobo
+(1,395) — the sole flagged file in the world is a fuzz-minimized
+broken-input formatter fixture (`idem_comment_vs_comma.lu`), whose
+idempotence test still holds. The separator report latches once per
+list and never into a reported wreck; MUTATE_BUDGET=300 swept green.
+Two corpus refusal witnesses pin the family (the newline form is
+pinned in the parser suite instead — the formatter's canonical
+multi-line layout regenerates the separator, and a corpus file must
+fully format); the spec sentences land with the fix under
+`[gram.expr.primary]`, `[gram.expr.closure]`, and
+`[gram.expr.unsafe]`.
+
 ### The region answers (s131)
 
 The region accounting queries land three-tier (#187, the wolf-web

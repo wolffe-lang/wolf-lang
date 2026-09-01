@@ -1240,6 +1240,7 @@ fn struct_lit(p: &mut Parser<'_>, lhs: CompletedMarker, ctx: Ctx) -> CompletedMa
     let opener = p.current_span();
     p.bump(); // `{`
     let inner = ctx.inner();
+    let mut list_diags = p.diag_count();
     loop {
         p.eat_terms();
         if p.at_punct(Punct::RBrace) {
@@ -1255,9 +1256,19 @@ fn struct_lit(p: &mut Parser<'_>, lhs: CompletedMarker, ctx: Ctx) -> CompletedMa
         // Note: no per-field latch reset here — a `{` mistaken for a
         // struct literal chews line-shaped "fields" that alternate
         // between clean and broken; one report covers the wreck.
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        // The separator is REQUIRED between fields (D69, s132):
+        // `Point { x: 7 y: 2 }` and its newline-separated spelling
+        // both refuse; a terminator run before `}` stays the
+        // production's own trailing layout.
+        grammar::list_separator(
+            p,
+            Punct::RBrace,
+            "the struct literal's fields",
+            "the separating comma is required between field initializers \
+             ([gram.expr.primary]: struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}')",
+            true,
+            &mut list_diags,
+        );
         if p.pos() == before {
             grammar::unclosed(p, opener, "{");
             break;
@@ -1664,6 +1675,7 @@ fn closure_params(p: &mut Parser<'_>) {
     let pl = p.start();
     let opener = p.current_span();
     p.bump(); // `(`
+    let mut list_diags = p.diag_count();
     loop {
         if p.at_punct(Punct::RParen) {
             p.bump();
@@ -1694,9 +1706,18 @@ fn closure_params(p: &mut Parser<'_>) {
             grammar::type_required(p);
         }
         cp.complete(p, SyntaxKind::Param);
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        // The separator is REQUIRED between parameters (D69, s132):
+        // `fn(a b)` never derived from the production, and lupin
+        // refuses it.
+        grammar::list_separator(
+            p,
+            Punct::RParen,
+            "the closure's parameters",
+            "the separating comma is required between closure parameters \
+             ([gram.expr.closure]: closure_param (',' closure_param)* ','?)",
+            false,
+            &mut list_diags,
+        );
         if p.pos() == before {
             grammar::unclosed(p, opener, "(");
             break;
@@ -2103,6 +2124,7 @@ fn capture_list(p: &mut Parser<'_>) {
     let c = p.start();
     let opener = p.current_span();
     p.bump(); // `[`
+    let mut list_diags = p.diag_count();
     loop {
         if p.at_punct(Punct::RBracket) {
             p.bump();
@@ -2126,9 +2148,17 @@ fn capture_list(p: &mut Parser<'_>) {
                     || k == TokenKind::Term
             });
         }
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        // The separator is REQUIRED between captured names (D69,
+        // s132): `[a b]` never derived from the production.
+        grammar::list_separator(
+            p,
+            Punct::RBracket,
+            "the captured names",
+            "the separating comma is required between captured names \
+             ([gram.expr.unsafe]: capture_list ::= '[' IDENT (',' IDENT)* ','? ']')",
+            false,
+            &mut list_diags,
+        );
         if p.pos() == before {
             grammar::unclosed(p, opener, "[");
             break;

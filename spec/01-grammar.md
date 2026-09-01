@@ -460,7 +460,16 @@ literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
 
 Struct literals: `ParseError { at: i, found: c }`; `Point { x }` shorthand
 binds the field from the identifier. Illegal in condition/scrutinee
-position without parens (`[gram.amb.structlit]`).
+position without parens (`[gram.amb.structlit]`). The separating comma
+is **required** between field initializers — the production is the
+letter (D69, following D67's pattern-family precedent):
+`Point { x: 1 y: 2 }` and its newline-separated spelling are E0201
+with a machine-applicable "add the comma" fix, never a derivation; a
+terminator run before the `}` is the multi-line literal's own trailing
+layout, not a separator. (Added 2026-09-01, s132 — blast radius
+measured first at zero working code: the corpus, wolf-book, wolf-std,
+lobo; the one flagged file anywhere is a fuzz-minimized broken-input
+formatter fixture.)
 
 - **Call-site modes (X1)**: `f(mut x)`, `pool[mut prev]` — `mut`/`take`
   are argument prefixes in both call and index argument lists.
@@ -585,6 +594,11 @@ one `else_expr` — it extends maximally rightward and is terminated only by
 a token the expression grammar cannot consume (`,` `)` `]` `}` TERM).
 `sorted_by(fn(a, b) b.1 <=> a.1)` parses as expected.
 
+The separating comma is **required** between closure parameters (D69,
+2026-09-01, s132): `fn(a b)` is E0201 with the machine-applicable
+"add the comma" fix — `closure_param (',' closure_param)* ','?` never
+derived the comma-less run.
+
 ### 3.6 Regions `[gram.expr.region]`
 
 Both locked forms (X4):
@@ -662,6 +676,9 @@ borrow_expr ::= 'borrow' expr 'from' expr
 
 `asm`, `assume`, `borrow` are only legal inside `unsafe` (enforced in
 sema; the grammar accepts them anywhere for recovery quality, D22).
+The separating comma is **required** between a capture list's names
+(D69, 2026-09-01, s132): `unsafe c [a b] { … }` is E0201 with the
+machine-applicable "add the comma" fix.
 Inline-C block bodies are opaque token text to wolf's lexer (brace-balanced
 scan; c10 owns their meaning). `asm_expr` is a `primary`; `assume_stmt`
 is a `stmt`; `borrow_expr` is a `primary`.
