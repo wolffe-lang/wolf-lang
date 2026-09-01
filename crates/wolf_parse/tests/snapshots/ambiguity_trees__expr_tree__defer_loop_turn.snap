@@ -1,0 +1,95 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 1056..1193
+  FnDecl 1056..1192
+    FnKw 1056..1058 "fn"
+    Ident 1059..1063 "main"
+    ParamList 1063..1065
+      LParen 1063..1064 "("
+      RParen 1064..1065 ")"
+    RetType 1066..1073
+      Arrow 1066..1068 "->"
+      ErrorUnionType 1069..1073
+        Not 1069..1070 "!"
+        PathType 1070..1073
+          Path 1070..1073
+            Ident 1070..1073 "int"
+    Block 1074..1192
+      LBrace 1074..1075 "{"
+      ExprStmt 1080..1161
+        ForExpr 1080..1160
+          ForKw 1080..1083 "for"
+          IdentPat 1084..1085
+            Ident 1084..1085 "i"
+          InKw 1086..1088 "in"
+          RangeExpr 1089..1093
+            LiteralExpr 1089..1090
+              Int 1089..1090 "0"
+            DotDot 1090..1092 ".."
+            LiteralExpr 1092..1093
+              Int 1092..1093 "2"
+          Block 1094..1160
+            LBrace 1094..1095 "{"
+            ExprStmt 1104..1122
+              CallExpr 1104..1121
+                PathExpr 1104..1109
+                  Ident 1104..1109 "print"
+                ArgList 1109..1121
+                  LParen 1109..1110 "("
+                  Arg 1110..1120
+                    StringExpr 1110..1120
+                      StrBegin 1110..1111 "\""
+                      StrFragment 1111..1116 "turn "
+                      Interp 1116..1119
+                        InterpOpen 1116..1117 "{"
+                        PathExpr 1117..1118
+                          Ident 1117..1118 "i"
+                        InterpClose 1118..1119 "}"
+                      StrEnd 1119..1120 "\""
+                  RParen 1120..1121 ")"
+              Term 1121..1122 "\n"
+            DeferStmt 1130..1155
+              DeferKw 1130..1135 "defer"
+              CallExpr 1136..1154
+                PathExpr 1136..1141
+                  Ident 1136..1141 "print"
+                ArgList 1141..1154
+                  LParen 1141..1142 "("
+                  Arg 1142..1153
+                    StringExpr 1142..1153
+                      StrBegin 1142..1143 "\""
+                      StrFragment 1143..1149 "defer "
+                      Interp 1149..1152
+                        InterpOpen 1149..1150 "{"
+                        PathExpr 1150..1151
+                          Ident 1150..1151 "i"
+                        InterpClose 1151..1152 "}"
+                      StrEnd 1152..1153 "\""
+                  RParen 1153..1154 ")"
+              Term 1154..1155 "\n"
+            RBrace 1159..1160 "}"
+        Term 1160..1161 "\n"
+      ExprStmt 1165..1185
+        CallExpr 1165..1184
+          PathExpr 1165..1170
+            Ident 1165..1170 "print"
+          ArgList 1170..1184
+            LParen 1170..1171 "("
+            Arg 1171..1183
+              StringExpr 1171..1183
+                StrBegin 1171..1172 "\""
+                StrFragment 1172..1182 "after loop"
+                StrEnd 1182..1183 "\""
+            RParen 1183..1184 ")"
+        Term 1184..1185 "\n"
+      ExprStmt 1189..1191
+        LiteralExpr 1189..1190
+          Int 1189..1190 "0"
+        Term 1190..1191 "\n"
+      RBrace 1191..1192 "}"
+  Term 1192..1193 "\n"
+  Eof 1193..1193 ""
+== diagnostics ==

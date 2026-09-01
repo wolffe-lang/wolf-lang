@@ -1,0 +1,45 @@
+//! check: run(exit=0, stdout="240")
+//! phase: run
+//! conforms: diag.sev.warn, mem.region.create.1, mem.region.create.3
+//!
+//! Issue #192, half one — the counter-example to the never-allocates
+//! warning (the code is deliberately not spelled: this file is a
+//! fixture for no diagnostic, and the catalog reads these headers).
+//! This region block
+//! holds no allocation SITE of its own: the only `List` built during
+//! its extent is built inside `fill`, and what comes back is an int.
+//! The warning fired here anyway ("the region `pass` never allocates …
+//! delete the region") because the fact it reads is the in-frame site
+//! list, and a callee's allocations are not in it.
+//!
+//! They are still the region's: `[mem.region.create.3]` (D12) charges
+//! a callee's ambient allocations to ITS caller's ambient, which is
+//! `pass` while the block is open. Deleting the region on the
+//! warning's advice was measured at +82 MB max RSS on the reporter's
+//! program. So the analysis gained the second half — no site AND no
+//! call in the extent — and this file carries no `warns:` directive,
+//! which is the corpus's way of saying every warning here is a bug.
+//!
+//! `lints/region_never_allocates.lu` is the twin that must still warn:
+//! its block calls nothing, so deleting it really is free.
+
+fn fill(n: int) -> int {
+    var xs = List[int]()
+    var j = 0
+    while j < n {
+        (mut xs).push(j)
+        j = j + 1
+    }
+    xs.len
+}
+
+fn main() -> !int {
+    var total = 0
+    var i = 0
+    while i < 8 {
+        region pass { total = total + fill(30) }
+        i = i + 1
+    }
+    print("{total}")
+    0
+}

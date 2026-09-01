@@ -1,27 +1,84 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-09-01
 
-- Match arms accept the full product pattern domain (s130): tuple and
-  struct patterns, `@`-bindings, literals at product depth, and
-  products nested through enum/row payloads (`Pair(a, 0)`,
-  `Dot(Point { x, y: 0 })`) now compile on both native tiers and
-  execute on the checked lane; exhaustiveness and the redundant-arm
-  warning already reasoned over products and now have running
-  witnesses. Two shapes stay refused by name on the native pipe: an
-  enum/row test inside a product (deep trees) and a str literal inside
-  a product.
-- A match arm still takes the WHOLE scrutinee when it binds a
-  non-`Copy` piece — the field-wise partial-move story remains a
-  `let`-binder rule; the new `E1001` witness pins the boundary and the
-  diagnostic's `copy` suggestion is the sanctioned idiom.
-- Checked-lane fixes: arm guards evaluate their condition (previously
-  an honest refusal), and a qualified constructor's dotted tag
-  (`Pairs.Pair`) matches bare-name arms the way the native tiers
-  compare tag ids.
-- Release-tier fix: a type-blind peephole rule could fold a bool
-  `bxor x, x` into an integer constant and ICE the verifier; boolean
-  results now fold to `bconst`.
+THE LETTER AND THE ARCHIVE. A patch release: no new features, and
+nothing runs here that did not run at v0.2.0. What it carries is a tag
+the Windows archive can finally reach, the pattern work that landed
+between the tags, and four places where the written language and the
+built one had drifted apart — each one measured on the tools before a
+word of it was rewritten. It pairs with **lupin 0.1.20** at pin
+`b80d239` (D57: the pin is part of this release's identity).
+
+### Patterns take the product domain (s129, s130)
+
+Struct patterns went through the whole pipe (`[gram.pat.struct]`,
+#179): `Point { x, y: p, .. }` takes a struct apart by field name,
+fields move field-wise so an unnamed field stays live, a pattern
+without `..` must name every field (E0814 — the same lean E0408 takes
+at construction), and the formatter has a canonical form for them.
+The lent-view slice gap closed alongside it (#184): `b[lo..hi]` over
+a lent byte view resolves per `[mem.list.slice]` instead of meeting a
+misattributed c06 refusal.
+
+Match arms then took the full product domain (s130, retiring that c06
+arm): tuple and struct patterns, `@`-bindings, literals at product
+depth, and products nested through enum/row payloads (`Pair(a, 0)`,
+`Dot(Point { x, y: 0 })`) compile on both native tiers and execute on
+the checked lane, with exhaustiveness and the redundant-arm warning —
+which already reasoned over products — finally carrying running
+witnesses. Two shapes stay refused by name on the native pipe: an
+enum/row test inside a product, and a `str` literal inside one.
+
+An arm still takes the WHOLE scrutinee when it binds a non-`Copy`
+piece. The field-wise partial-move story remains a `let`-binder rule;
+the boundary is pinned by an `E1001` witness and the diagnostic's
+`copy` suggestion is the sanctioned idiom. Two checked-lane fixes rode
+along — arm guards evaluate their condition rather than their wrapper
+node, and a qualified constructor's dotted tag (`Pairs.Pair`) matches
+a bare-name arm the way the native tiers compare tag ids — and one
+release-tier fix: a type-blind peephole could fold a bool `bxor x, x`
+to an integer constant and ICE the verifier, so boolean results now
+fold to `bconst`.
+
+### Four letters, each measured first
+
+**`defer` runs at scope exit, not as the frames return** (D66, #193).
+Every implementation already did: a `defer` in a loop body fires at
+the end of each turn, and `[mem.shared.drop.1]` had implied it all
+along, since a drop that runs "at scope exit, LIFO with defer" cannot
+be LIFO with something frame-timed. `[mem.model.order]`'s frame
+wording is amended and a corpus witness now pins the interleaving on
+all three lanes.
+
+**`\u{…}` takes one to six hex digits** (#189). The clause said so in
+prose while its production said `HEX_DIGIT+`, and nothing said which
+was normative. The lexer bounds it at six, so the prose was the
+letter and the production amended. The bound is on the escape's
+shape, not on the value it names: leading zeros count, and
+`'\u{0000041}'` is refused before anything asks that it spells `A`.
+
+**Two region diagnostics stopped lying** (#192). `W1001` claimed a
+region "never allocates — delete the region" on blocks whose callees
+allocate through it; the fact it read was the in-frame site list, and
+D12 charges a callee's allocations to its caller's ambient, so the
+advice was measured at +82 MB on the reporting program. It now
+requires no call in the region's extent either. And `E1010` refused a
+region block whose tail was a unit-typed raising call: an error union
+is never `Copy`, so every raising call got a phantom ambient
+allocation, which in tail position read as the block's value
+outliving the region. That judgement now reads through the error row
+the way the region-return judgement beside it already did — a row tag
+carrying a real payload still allocates and still gets its site.
+
+### The archive
+
+v0.2.0's release workflow produced three of four tier-1 archives and
+failed on Windows: `cargo xtask dist` hunted the unix staticlib name
+on MSVC, the first tag since s59 added the guard. Fixed forward at
+`10c2bf8` — the staticlib is named for its target, and the Windows
+archive stages `wolf_rt.lib` against the day s60 teaches the driver to
+link there. This tag is what proves it (#183).
 
 ## 0.2.0 — 2026-08-30
 

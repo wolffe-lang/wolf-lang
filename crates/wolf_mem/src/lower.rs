@@ -192,6 +192,39 @@ fn is_copy(t: Ty<'_>, depth: u32) -> bool {
     }
 }
 
+/// Is a CALL RESULT allocation-free — is there nothing the callee hands
+/// back that needs a home in this frame's ambient region?
+///
+/// [`is_copy`] answers that for a plain type. An error union needs its
+/// ROW read too (#192). `-> () ! {bad}` hands back unit on the ok edge
+/// and a payload-free tag on the error edge, so neither edge allocates
+/// — but `is_copy` saw only a non-`Copy` aggregate and said "heap".
+/// That phantom site made every raising call an ambient allocation,
+/// and a unit-typed raising call in a region block's TAIL position then
+/// read as the block's value outliving the region: E1010 pointing at a
+/// value that does not exist. A row tag WITH a payload really does
+/// allocate, so it keeps its site; an unresolved row or an open tail is
+/// unknown and conservatively keeps one too. This mirrors `ret_region`
+/// at the call site below, which already reads the ok half through the
+/// row for exactly the same reason.
+fn result_is_copy(t: Ty<'_>) -> bool {
+    if is_copy(t, 0) {
+        return true;
+    }
+    let TyKind::ErrUnion(ok, row) = t.kind() else {
+        return false;
+    };
+    let at = |id| Ty { table: t.table, id };
+    let TyKind::Row { tags, tail } = t.table.kind(*row) else {
+        return false;
+    };
+    is_copy(at(*ok), 0)
+        && tail.is_none()
+        && tags
+            .iter()
+            .all(|(_, payload)| payload.iter().all(|&p| is_copy(at(p), 0)))
+}
+
 /// One lowered body: the CFG, the context-free diagnostics found on
 /// the way, and the region inference record (s19).
 pub struct Lowered {
@@ -294,6 +327,14 @@ pub(crate) struct Lowerer<'t> {
     lent_region: Vec<bool>,
     /// Frame-local clean regions: the promotion fact.
     promoted: Vec<RegionId>,
+    /// #192 — regions that were AMBIENT over at least one call. The
+    /// callee's own allocations land in its caller's region, which is
+    /// this frame's ambient at the call site ([mem.region.create.3],
+    /// D12), and none of them is a site this frame can see. Recorded
+    /// so W1001 cannot call such a region empty; the promotion fact
+    /// itself is untouched, because this says nothing new about the
+    /// create/free pair's locality.
+    callee_ambient: Vec<RegionId>,
     /// Any placement demand failed (E1004/E1010 fired).
     conflicted: bool,
     /// Move sites that are binding patterns (s128 #173): E1001 skips
@@ -3349,6 +3390,14 @@ impl<'t> Lowerer<'t> {
         // is therefore an ambient allocation here; `mut` arguments
         // may legally be replaced with fresh ambient allocations, so
         // they gain the call site too.
+        //
+        // "And anything it keeps" is the half no SITE records: a
+        // callee that builds a list and returns its length allocates
+        // into this ambient and hands back an int. #192 — mark the
+        // ambient so W1001 cannot call it empty on the strength of a
+        // site list that never had a chance to see those bytes.
+        let ambient_here = self.ambient();
+        self.callee_ambient.push(ambient_here);
         let ret_ty = self.expr_tys.get(&e.span).map(|&id| Ty {
             table: &self.tb.table,
             id,
@@ -3363,7 +3412,9 @@ impl<'t> Lowerer<'t> {
             }
             _ => false,
         };
-        let ret_heap = !ret_region && ret_ty.map(|t| !is_copy(t, 0)).unwrap_or(false);
+        // #192: allocation-free reads THROUGH the error row, the way
+        // `ret_region` just did — see [`result_is_copy`].
+        let ret_heap = !ret_region && ret_ty.map(|t| !result_is_copy(t)).unwrap_or(false);
         let mut_targets: Vec<PlaceId> = surface
             .mut_args
             .iter()
@@ -4308,6 +4359,7 @@ impl<'t> Lowerer<'t> {
             tainted_region: Vec::new(),
             lent_region: Vec::new(),
             promoted: Vec::new(),
+            callee_ambient: Vec::new(),
             conflicted: false,
             pattern_moves: Default::default(),
             static_region: None,
@@ -4448,6 +4500,7 @@ impl<'t> Lowerer<'t> {
             &self.sites,
             &self.site_escape,
             &self.promoted,
+            &self.callee_ambient,
             self.conflicted,
         );
         Lowered {

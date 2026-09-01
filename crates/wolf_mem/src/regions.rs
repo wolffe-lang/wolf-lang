@@ -164,9 +164,11 @@ pub struct RegionSummary {
     /// Regions whose create/free pair is frame-local and clean: the
     /// promotion fact.
     pub promoted: Vec<RegionId>,
-    /// Promoted regions with **no allocation site at all** (s68,
-    /// W1001): pure ceremony — nothing is ever built in them, and
-    /// their handle never leaves the frame (promotion's own proof).
+    /// Promoted regions with **no allocation site at all** and **no
+    /// call in their extent** (s68, W1001; r04/#192 added the second
+    /// half): pure ceremony — nothing is ever built in them, their
+    /// handle never leaves the frame (promotion's own proof), and no
+    /// callee could have filled them behind this frame's back.
     pub never_allocates: Vec<RegionId>,
     /// Whether any placement demand could not be discharged (the
     /// function has E1004/E1010 diagnostics).
@@ -252,6 +254,7 @@ pub(crate) fn summarize(
     sites: &[AllocSite],
     site_escape: &[Option<&'static str>],
     promoted: &[RegionId],
+    callee_ambient: &[RegionId],
     conflicted: bool,
 ) -> RegionSummary {
     let n = rt.regions.len();
@@ -283,11 +286,20 @@ pub(crate) fn summarize(
                 && !promoted.iter().any(|p| rt.same(*p, s.region)),
         })
         .collect();
-    // W1001's fact: a promoted region no site ever resolved into.
+    // W1001's fact: a promoted region no site ever resolved into AND
+    // no call ever stood open over. The second clause is #192 — the
+    // in-frame site list is silent about a callee's own allocations,
+    // which D12 charges to the caller's ambient, so a region merely
+    // ambient over a call may be doing all the work its block was
+    // written for. Warning "nothing lives here — delete the region"
+    // there was advice measured at 82 MB.
     let never_allocates: Vec<RegionId> = promoted
         .iter()
         .copied()
-        .filter(|&p| !sites.iter().any(|s| rt.same(s.region, p)))
+        .filter(|&p| {
+            !sites.iter().any(|s| rt.same(s.region, p))
+                && !callee_ambient.iter().any(|&c| rt.same(c, p))
+        })
         .collect();
     RegionSummary {
         name: name.to_string(),

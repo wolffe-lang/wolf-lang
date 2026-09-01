@@ -12,7 +12,8 @@ INTERP     ::= '{' expr FORMAT_SPEC? '}'
 FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
 
 CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
-CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | '\u{' HEX_DIGIT+ '}'
+CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
+UNI_ESC   ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
 
 unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item

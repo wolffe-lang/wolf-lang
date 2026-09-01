@@ -1,0 +1,23 @@
+//! check: fail(E0101)
+//! phase: none
+//! conforms: gram.lex.char
+//!
+//! Issue #189: `[gram.lex.char]`'s prose said `\u{…}` takes one to six
+//! hex digits while `CHAR_ESC` wrote `HEX_DIGIT+`, and nothing said
+//! which text was normative. Measured: the lexer bounds the escape at
+//! six, so the PROSE was the letter and the production amended
+//! (`UNI_ESC`). The bound is on the escape's SHAPE, not on the value it
+//! names — leading zeros count, so seven digits is refused here before
+//! anything asks whether `0x0000041` is a scalar (it is: `'A'`).
+//!
+//! Its in-bounds twins already run in `strings/char_battery.lu`, which
+//! spells the same values two, three, four, five and six digits wide.
+//! The code is the string escape set's, not the char literal's
+//! malformed-shape one: the digit count is a rule of
+//! `[gram.lex.str.escape]`, which the char literal inherits, and it
+//! binds inside `"…"` identically. Exactly one report fires here.
+
+fn main() -> !int {
+    let a = '\u{0000041}'
+    if a == 'A' { 0 } else { 1 }
+}

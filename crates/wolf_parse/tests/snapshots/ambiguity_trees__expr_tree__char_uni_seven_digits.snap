@@ -1,0 +1,58 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 966..1047
+  FnDecl 966..1046
+    FnKw 966..968 "fn"
+    Ident 969..973 "main"
+    ParamList 973..975
+      LParen 973..974 "("
+      RParen 974..975 ")"
+    RetType 976..983
+      Arrow 976..978 "->"
+      ErrorUnionType 979..983
+        Not 979..980 "!"
+        PathType 980..983
+          Path 980..983
+            Ident 980..983 "int"
+    Block 984..1046
+      LBrace 984..985 "{"
+      LetDecl 990..1012
+        LetKw 990..993 "let"
+        IdentPat 994..995
+          Ident 994..995 "a"
+        Eq 996..997 "="
+        LiteralExpr 998..1011
+          Char 998..1011 "\'\\u{0000041}\'"
+        Term 1011..1012 "\n"
+      ExprStmt 1016..1045
+        IfExpr 1016..1044
+          IfKw 1016..1018 "if"
+          BinExpr 1019..1027
+            PathExpr 1019..1020
+              Ident 1019..1020 "a"
+            EqEq 1021..1023 "=="
+            LiteralExpr 1024..1027
+              Char 1024..1027 "\'A\'"
+          Block 1028..1033
+            LBrace 1028..1029 "{"
+            ExprStmt 1030..1031
+              LiteralExpr 1030..1031
+                Int 1030..1031 "0"
+            RBrace 1032..1033 "}"
+          ElseKw 1034..1038 "else"
+          Block 1039..1044
+            LBrace 1039..1040 "{"
+            ExprStmt 1041..1042
+              LiteralExpr 1041..1042
+                Int 1041..1042 "1"
+            RBrace 1043..1044 "}"
+        Term 1044..1045 "\n"
+      RBrace 1045..1046 "}"
+  Term 1046..1047 "\n"
+  Eof 1047..1047 ""
+== diagnostics ==
+E0101 [Error] 999..1010 a `\u{…}` escape needs one to six hex digits inside the braces
+    note the escapes wolf understands are `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xNN`, and `\u{…}`. For a literal backslash, write `\\`; for text with no escapes at all, use a raw string `r"…"`.
