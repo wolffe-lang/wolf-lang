@@ -177,6 +177,7 @@ lints/predicate_shape.lu: lowers
 lints/prefix_statement.lu: lowers
 lints/pub_undocumented.lu: lowers
 lints/raw_interp_braces.lu: lowers
+lints/region_call_allocates.lu: lowers
 lints/region_never_allocates.lu: lowers
 lints/safety_comment_missing.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 lints/shadow_prelude.lu: lowers
@@ -245,6 +246,7 @@ memory/region_multiopen_swap.lu: refused — Pool/shared constructor lowering (r
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
+memory/region_unit_tail_call.lu: lowers
 memory/region_value_container.lu: refused — a region inside another value (extent tracking stops at the aggregate boundary — c25 closeout)
 memory/region_value_elem.lu: refused — a region element in a container (extent tracking stops at the handle — c25 closeout)
 memory/region_value_pass.lu: lowers

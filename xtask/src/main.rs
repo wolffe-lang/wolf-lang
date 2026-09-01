@@ -1285,12 +1285,22 @@ const ALL_THREE_FLOOR: usize = 207;
 // tree and unchanged. #190 landed NO witness: `Point { x .. }` is an
 // accept-set divergence (wolfgang runs it, lupin 0.1.20 refuses E0201),
 // so nothing here may pin either side until it is ruled.
+// r04 ratchet #2 over 434 entries: the #192 diagnostics pair. Two new
+// run-phase witnesses, each three-lane and each byte-identical to lupin
+// 0.1.20, so every count moves by exactly two (254/271/271, union 287,
+// all-three 238): `lints/region_call_allocates` (the W1001
+// counter-example — no `warns:` header, so the corpus itself asserts
+// the warning stays silent) and `memory/region_unit_tail_call` (the
+// E1010 counter-example, both error edges in tail position). No
+// pre-existing file moved lanes: both fixes make the compiler accept
+// and stay quiet where it was wrong, and neither touches a refusal any
+// lane was carrying. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 252), ("native", 269), ("release", 269)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 254), ("native", 271), ("release", 271)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 285;
+const UNION_FLOOR: usize = 287;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 236;
+const ALL_THREE_FLOOR: usize = 238;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
