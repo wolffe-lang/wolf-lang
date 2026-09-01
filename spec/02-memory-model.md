@@ -49,8 +49,10 @@ vocabulary.
   everywhere: operands before operators, arguments left-to-right before
   the call, receivers before arguments, struct-literal fields in written
   order. Nothing is unsequenced. `?` and error returns are ordinary
-  control flow: `defer`/`errdefer` run as the frames return, LIFO,
-  after the error value is formed.
+  control flow: `defer`/`errdefer` run at **scope exit**, LIFO with the
+  destructor drops of `[mem.shared.drop.1]`, after the error value is
+  formed. Scope, not frame (D66): a `defer` in a loop body runs at the
+  end of every turn, not when the enclosing function returns.
 - `[mem.codes]` Diagnostic-code families by tier: `E000x` (spec-01 §9)
   + `E01xx` (lexer) + `E02xx` (parser) are syntax-tier — the file fails
   to lex or parse. `E03xx` (resolution), `E04xx` (types), `E1xxx`

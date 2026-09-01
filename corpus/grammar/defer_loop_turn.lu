@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="turn 0\ndefer 0\nturn 1\ndefer 1\nafter loop")
+//! phase: run
+//! conforms: mem.model.order
+//!
+//! D66 / issue #193: `defer` is SCOPE-exit-timed, not frame-exit-timed.
+//! A `defer` in a loop body runs at the end of every turn — the block
+//! it sits in is the scope that exits — so the interleaving below is
+//! the letter, and `after loop` is last because both defers already
+//! ran. `[mem.model.order]` said "as the frames return" until this
+//! witness landed; every lane implemented scope exit and the drop
+//! clause `[mem.shared.drop.1]` already implied it (a drop runs "at
+//! scope exit, LIFO with defer/errdefer" — a defer LIFO with a
+//! scope-exit drop is itself scope-exit-timed).
+//!
+//! Measured on all three lanes before the amendment (wolf run,
+//! `--checked`, `--release`) and on lupin 0.1.18+: zero divergence.
+//! The frame reading is distinguishable from the scope reading only
+//! by a program like this one, and none existed — which is how the
+//! two letters sat contradicting each other.
+
+fn main() -> !int {
+    for i in 0..2 {
+        print("turn {i}")
+        defer print("defer {i}")
+    }
+    print("after loop")
+    0
+}

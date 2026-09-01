@@ -1272,12 +1272,19 @@ const ALL_THREE_FLOOR: usize = 207;
 // 227 → 235 (+5 new, +3 the movers native already ran — the checked
 // lane joining files others held, s96's mirror). Counts measured by
 // this gate, not predicted.
+// r04 ratchet over 431 entries: D66's defer witness. ONE new
+// run-phase file — `grammar/defer_loop_turn` — and it executes on all
+// three lanes, so every count moves by exactly one
+// (252/269/269, union 285, all-three 236). No pre-existing file moved
+// lanes: the release carries a spec amendment and two diagnostics
+// fixes, none of which changes what any lane will run. Counts measured
+// by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 251), ("native", 268), ("release", 268)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 252), ("native", 269), ("release", 269)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 284;
+const UNION_FLOOR: usize = 285;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 235;
+const ALL_THREE_FLOOR: usize = 236;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
