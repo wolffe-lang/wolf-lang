@@ -590,11 +590,15 @@ a token the expression grammar cannot consume (`,` `)` `]` `}` TERM).
 Both locked forms (X4):
 
 ```ebnf
-region_expr ::= 'region' IDENT? (':' region_strategy)? block  /* sugar   */
-              | 'region' '(' region_strategy? ')'             /* value   */
-              | 'in' expr block                               /* into r  */
+region_expr ::= 'region' IDENT ('(' region_cap ')')?
+                         (':' region_strategy)? block          /* sugar   */
+              | 'region' (':' region_strategy)? block          /* anon    */
+              | 'region' '(' (region_strategy (',' region_cap)?
+                             | region_cap)? ')'                /* value   */
+              | 'in' expr block                                /* into r  */
               | 'freeze' prefix_operand
 region_strategy ::= 'rc' | 'pool' '(' type ')'
+region_cap      ::= 'cap' ':' expr
 ```
 
 - Sugar: `region tmp { … }` — create, scope, free at `}`; the block's
@@ -602,6 +606,12 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
   builds anonymously and promotes (the build-then-share idiom).
 - Value: `let r = region()`, `let r = region(rc)`, `region r: pool(Node)
   { … }` names the sugar's region for `in r { … }` use within.
+- Cap (s132, `[mem.region.cap.1]`): `region r(cap: 4096) { … }` and
+  `let r = region(cap: n)` / `region(rc, cap: n)` set a creation-time
+  byte budget. On the sugar form the cap parenthesis follows the NAME
+  — an anonymous sugar block takes no cap, by the grammar's own
+  disambiguation (`region (cap: n)` is the value form); name the
+  region or use the value form.
 - `in r { … }` evaluates its block with allocations landing in `r`.
 - `freeze e` promotes to deep-immutable; its operand is a *prefix-tier*
   operand (tier 3, like `move`/`copy`/`shared`): `freeze r == x` means
@@ -609,7 +619,7 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
   no-struct-literal mode. `freeze region { ... } ` composes.
 - `move` (prefix operator, tier 3) transfers: `ch.send(move r)`.
 
-`rc` and `pool` are contextual keywords (`[gram.inv.ctx]`).
+`rc`, `pool`, and `cap` are contextual keywords (`[gram.inv.ctx]`).
 
 ### 3.7 Concurrency surface `[gram.expr.conc]`
 

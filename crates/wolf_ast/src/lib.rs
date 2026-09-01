@@ -41,11 +41,12 @@ pub use ast::{
     FreezeExpr, FromEndExpr, GenericParam, GenericParamList, IfExpr, ImplDecl, ImportCDecl,
     InBlock, InlineC, InnerAttribute, Interp, LetDecl, LiteralExpr, LoopExpr, MatchArm, MatchExpr,
     MemberExpr, Param, ParamList, ParamMode, ParenExpr, Path, PathExpr, PathType, PrefixExpr,
-    PrefixType, PtrType, RangeExpr, RegionBlock, RegionValue, RetType, ReturnExpr, RowEntry,
-    ScopeExpr, SelectArm, SelectExpr, SpawnExpr, StringExpr, StringLit, StructDecl, StructDef,
-    StructField, StructLit, StructPat, TraitDecl, TryExpr, TupleExpr, TupleType, TypeArgList,
-    TypeBound, TypeDecl, UnsafeBlock, UseDecl, UseGroup, VarDecl, ViewSet, Visibility, WhenExpr,
-    WhileExpr, binding_binders, is_expr_kind, is_pattern_kind, is_stmt_kind, is_type_kind,
+    PrefixType, PtrType, RangeExpr, RegionBlock, RegionCap, RegionValue, RetType, ReturnExpr,
+    RowEntry, ScopeExpr, SelectArm, SelectExpr, SpawnExpr, StringExpr, StringLit, StructDecl,
+    StructDef, StructField, StructLit, StructPat, TraitDecl, TryExpr, TupleExpr, TupleType,
+    TypeArgList, TypeBound, TypeDecl, UnsafeBlock, UseDecl, UseGroup, VarDecl, ViewSet, Visibility,
+    WhenExpr, WhileExpr, binding_binders, is_expr_kind, is_pattern_kind, is_stmt_kind,
+    is_type_kind,
 };
 pub use dump::dump_decls;
 pub use green::{Child, GreenNode, GreenToken};

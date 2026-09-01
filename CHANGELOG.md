@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### The region holds (s132, D68 — #187 closes)
+
+The cap half of #187 lands whole, in D68's ruled direction. A region
+takes a creation-time byte budget — `region r(cap: n) { … }` on the
+named sugar block, `region(cap: n)` / `region(rc, cap: n)` on the
+value form — and a charge that would take its ledger PAST the budget
+is the deterministic trap `alloc-contract` at the allocating site:
+the existing kind (`[conf.trap.map]` — a byte budget is an allocation
+contract), no new trap vocabulary. At-cap-exactly is not a breach;
+the next byte is; `cap: 0` is legal and everything breaches it; a
+negative budget is the same contract violation at the creating site.
+The cap bounds `[mem.region.account.1]`'s ledger in each tier's own
+units — and the clause now says plainly that budgets are denominated
+in LEDGER units, not payload bytes (the ledger is cumulative and
+high-water; #203 measured a 64 KiB io chunk at ~1 MiB of ledger), so
+portable programs derive budgets from measured `region_bytes`
+readings — which is exactly how the witnesses pin the boundary on
+all three tiers at once. New clauses `[mem.region.cap.1/.2/.3]`.
+
+The fault half is D68's point: a breach **inside a proc** no longer
+kills the process. The trap is contained at the proc boundary
+(`[conc.proc.1]`'s failure domain): the proc dies by the killed-proc
+sequence — no further user code, so no `defer` below the boundary
+runs — and `[conc.proc.exit]`'s closed reason set gains the mapping,
+`fault(kind)` with `kind` from the closed trap vocabulary, read at
+the join as `is_fault()` and, for the budget breach specifically,
+`is_alloc_contract()`. Fault teardown is free-then-deliver, measured
+and then pinned as `[mem.region.cap.3]`: at the join,
+`live_region_bytes()` has already returned to its pre-spawn reading —
+the supervisor that answers 503 on this reason was handed the memory
+back first. Containment is the no-unwinding law made mechanism
+(`[abi.native.nounwind]` holds: the trapping worker parks; its thread
+and stack high-water are the measured per-breach cost, the same class
+as a task parked on a silent channel). In the root domain a trap
+remains process death (`[conf.trap.exit]`, amended to say so).
+Witnesses: `faults/region_cap_breach.lu` (three-tier breach at
+measured-minus-one), `memory/region_cap_boundary.lu` (at-cap /
+cap-0 / query interplay), `conc/proc_cap_fault_join.lu` (the
+join-reason read, both defers, the reclaimed-at-join pin — the shape
+lobo's ws12 consumes).
+
 ### The region answers (s131)
 
 The region accounting queries land three-tier (#187, the wolf-web

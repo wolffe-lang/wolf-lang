@@ -116,17 +116,53 @@ fn write_trap_report(w: &mut impl std::io::Write, kind: i32, site: Option<(&str,
     }
 }
 
+/// The proc-containment seam (s132, D68): when procs exist, a trap on
+/// a task INSIDE a proc is contained at the proc boundary — the proc
+/// dies with reason `fault(kind)`, the process lives ([conc.proc.1],
+/// [conc.proc.exit]). Same D15 posture as [`RegionLedgerHooks`]: the
+/// proc registry's lazy init installs the hook, a no-proc binary
+/// links none of the proc layer and pays one null-check on the trap
+/// path (which is already cold and terminal). The hook DIVERGES when
+/// it contains (the trapping thread is parked — compiled frames are
+/// never unwound, `[abi.native.nounwind]`) and returns when the trap
+/// is not containable (root domain, or no proc on this task): then
+/// the process-exit path below proceeds exactly as it always did.
+static TRAP_CONTAIN: std::sync::atomic::AtomicPtr<()> =
+    std::sync::atomic::AtomicPtr::new(std::ptr::null_mut());
+
+/// Install the trap-containment hook (once, from the proc registry's
+/// lazy init).
+pub(crate) fn install_trap_containment(hook: fn(i32)) {
+    TRAP_CONTAIN.store(hook as *mut (), std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Give the proc layer its chance to contain `kind` — diverges if it
+/// does; returns if the trap belongs to the process.
+fn try_contain_trap(kind: i32) {
+    let p = TRAP_CONTAIN.load(std::sync::atomic::Ordering::SeqCst);
+    if !p.is_null() {
+        // SAFETY: only ever null or the fn(i32) stored above.
+        let hook: fn(i32) = unsafe { core::mem::transmute::<*mut (), fn(i32)>(p) };
+        hook(kind);
+    }
+}
+
 /// A deterministic fault fired (X3). Reports the kind on stderr in the
 /// machine-readable form `wolf-trap: <kind>` and exits with
 /// [`TRAP_EXIT_CODE`]. Never returns. Codegen emits this form for
 /// sites with no source coordinates (synthetic functions, spanless
 /// instructions); user-code sites carry them via [`__wolf_rt_trap_at`].
+/// A trap on a task inside a proc never reaches the report: it is
+/// contained at the proc boundary as reason `fault(kind)` (D68,
+/// [`try_contain_trap`]) — the `wolf-trap:` stderr line is the
+/// PROCESS outcome's, and a contained trap is not a process outcome.
 ///
 /// # Safety
 ///
 /// Callable from any thread at any time; takes no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
+    try_contain_trap(kind);
     let mut err = std::io::stderr().lock();
     write_trap_report(&mut err, kind, None);
     let _ = err.flush();
@@ -157,6 +193,10 @@ pub unsafe extern "C" fn __wolf_rt_trap_at(
     line: i64,
     col: i64,
 ) -> ! {
+    // Containment first (D68): inside a proc the site rides the
+    // reason's fault kind, not stderr — the proc dies, not the
+    // process, and the harness line would misreport an outcome.
+    try_contain_trap(kind);
     let mut err = std::io::stderr().lock();
     if file.is_null() || file_len <= 0 {
         write_trap_report(&mut err, kind, None);
@@ -609,6 +649,15 @@ struct Region {
     /// Tracked unconditionally (one add on the alloc path); read only
     /// through the proc-ledger seam.
     bytes: usize,
+    /// Creation-time byte budget on the LEDGER (`[mem.region.cap.1]`,
+    /// D68/#187): an allocation that would take `bytes` past this
+    /// traps `alloc-contract` at the site. `usize::MAX` = today's
+    /// unbounded region (the absent-cap default), so the hot path pays
+    /// exactly one always-predictable compare. The cap is charged in
+    /// the ledger's own units ([mem.region.account.1]: aligned charge,
+    /// monotone, high-water) and travels with the region across
+    /// transfer/adopt — it is the region's for life.
+    cap: usize,
 }
 
 /// `region.new` — a fresh region arena. Returns the opaque handle.
@@ -625,6 +674,7 @@ pub extern "C" fn __wolf_rt_region_new() -> *mut core::ffi::c_void {
                 chunks: Vec::new(),
                 owned: 0,
                 bytes: 0,
+                cap: usize::MAX,
             })
         });
     let handle: *mut core::ffi::c_void = Box::into_raw(r).cast();
@@ -632,6 +682,28 @@ pub extern "C" fn __wolf_rt_region_new() -> *mut core::ffi::c_void {
         (h.on_new)(handle as usize);
     }
     handle
+}
+
+/// `region_set_cap` — install the creation-time byte budget
+/// (`[mem.region.cap.1]`, D68/#187). The lowering calls this
+/// immediately after [`__wolf_rt_region_new`], before any allocation
+/// can land in the region, so the budget is creation-time in every
+/// observable sense. A negative budget is an allocation-contract
+/// violation at the creating site (`[mem.region.cap.2]` — the same
+/// contract class as a negative allocation size); zero is a legal
+/// budget every charge breaches.
+///
+/// # Safety
+///
+/// `handle` must be a live pointer from [`__wolf_rt_region_new`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_region_set_cap(handle: *mut core::ffi::c_void, cap: i64) {
+    if cap < 0 {
+        __wolf_rt_trap(trap_code::ALLOC_CONTRACT);
+    }
+    // SAFETY: caller contract — live region handle.
+    let r: &mut Region = unsafe { &mut *handle.cast() };
+    r.cap = cap as usize;
 }
 
 /// `region.alloc` — bump-allocate `size` bytes (16-aligned) in the
@@ -658,6 +730,16 @@ pub unsafe extern "C" fn __wolf_rt_region_alloc(
     // fits i64 and the add is at most +15.
     let size = ((size as usize) + (ALIGN - 1)) & !(ALIGN - 1);
     let size = size.max(ALIGN);
+    // The cap compare (`[mem.region.cap.1]`, D68 — s131's "one field
+    // + one compare"): a charge that would take the LEDGER past the
+    // budget is trap(alloc-contract) AT this allocating site. At-cap-
+    // exactly is not a breach — the next byte is (`>` against the
+    // post-charge ledger). Uncapped regions hold `usize::MAX`, so the
+    // branch never fires for them; `bytes + size` cannot overflow
+    // before real memory does.
+    if r.bytes + size > r.cap {
+        __wolf_rt_trap(trap_code::ALLOC_CONTRACT);
+    }
     // The bump: one compare, one store, one add. A closed region
     // (null cur, null end) fails the compare for any size >= ALIGN,
     // so the empty case needs no branch of its own. `cur` stays
@@ -724,6 +806,7 @@ pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
     r.end = core::ptr::null_mut();
     r.owned = 0;
     r.bytes = 0;
+    r.cap = usize::MAX;
     POOLS.with(|p| {
         let mut p = p.borrow_mut();
         for c in r.chunks.drain(..) {
@@ -747,6 +830,35 @@ pub unsafe extern "C" fn __wolf_rt_region_freeze(_handle: *mut core::ffi::c_void
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The cap's non-breach half ([mem.region.cap.1]), rt-level: an
+    /// uncapped region never compares against a real budget, a capped
+    /// region charges to EXACTLY its cap without complaint (at-cap is
+    /// not a breach — the next byte is; the breach half fires the
+    /// process trap path, so it is pinned where it can be observed:
+    /// the proc containment tests in task/proc.rs and the corpus
+    /// fault witness).
+    #[test]
+    fn region_cap_at_cap_exactly_is_not_a_breach() {
+        let h = __wolf_rt_region_new();
+        // SAFETY: fresh live handle; freed at the end.
+        unsafe {
+            __wolf_rt_region_set_cap(h, 96);
+            let a = __wolf_rt_region_alloc(h, 80); // charges 80
+            let b = __wolf_rt_region_alloc(h, 1); // rounds to 16: at cap
+            assert!(!a.is_null() && !b.is_null());
+            assert_eq!(region_bytes(h), 96);
+            __wolf_rt_region_free(h);
+        }
+        // A pooled header must not leak the cap into the next region.
+        let h2 = __wolf_rt_region_new();
+        // SAFETY: fresh (possibly pooled) live handle.
+        unsafe {
+            let big = __wolf_rt_region_alloc(h2, 4096);
+            assert!(!big.is_null(), "the reset header is uncapped again");
+            __wolf_rt_region_free(h2);
+        }
+    }
 
     #[test]
     fn bump_regions_allocate_and_free() {

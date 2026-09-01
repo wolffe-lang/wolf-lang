@@ -1707,9 +1707,16 @@ fn closure_params(p: &mut Parser<'_>) {
 
 // -------------------------------------------------------- regions (X4) --
 
-/// `[gram.expr.region]` — the sugar (`region name? (: strategy)? {…}`)
-/// and value (`region(strategy?)`) forms are distinct node kinds: the
-/// sugar means create + scope + free, the value form is first-class.
+/// `[gram.expr.region]` — the sugar
+/// (`region name? ('(' cap ')')? (: strategy)? {…}`) and value
+/// (`region '(' (strategy (',' cap)? | cap)? ')'`) forms are distinct
+/// node kinds: the sugar means create + scope + free, the value form
+/// is first-class. The cap clause (`cap ':' expr`, s132 —
+/// `[mem.region.cap.1]`, D68/#187) is a creation-time byte budget; on
+/// the sugar form its parenthesis follows the NAME (an anonymous
+/// sugar block takes no cap — `region (cap: N)` is the value form's
+/// spelling by the grammar's own disambiguation, so a budgeted sugar
+/// block names its region).
 fn region_expr(p: &mut Parser<'_>) -> CompletedMarker {
     let m = p.start();
     p.bump(); // region
@@ -1718,13 +1725,55 @@ fn region_expr(p: &mut Parser<'_>) -> CompletedMarker {
         if p.at_punct(Punct::RParen) {
             p.bump();
         } else {
-            region_strategy(p);
+            if at_region_cap(p) {
+                region_cap(p);
+            } else {
+                region_strategy(p);
+                if p.at_punct(Punct::Comma) {
+                    p.bump();
+                    if at_region_cap(p) {
+                        region_cap(p);
+                    } else {
+                        p.error(
+                            codes::EXPECTED_TOKEN,
+                            p.here(),
+                            "expected `cap: <bytes>` — the strategy is first, the cap last",
+                        );
+                        p.missing();
+                    }
+                }
+            }
             p.expect_punct(Punct::RParen, "`)` to close `region(`");
         }
         return m.complete(p, SyntaxKind::RegionValue);
     }
     if p.at(TokenKind::Ident) {
         p.bump(); // the region name
+        if p.at_punct(Punct::LParen) {
+            // `region r(cap: N)` — the sugar form's cap parenthesis.
+            let opener = p.current_span();
+            p.bump();
+            if at_region_cap(p) {
+                region_cap(p);
+            } else {
+                p.error(
+                    codes::EXPECTED_TOKEN,
+                    p.here(),
+                    "expected `cap: <bytes>` — the parenthesis after a region's name \
+                     holds its byte budget ([mem.region.cap.1])",
+                );
+                p.missing();
+                p.recover_until(true, |k| {
+                    matches!(k, TokenKind::Punct(Punct::RParen | Punct::LBrace))
+                        || k == TokenKind::Term
+                });
+            }
+            if !p.at_punct(Punct::RParen) {
+                grammar::unclosed(p, opener, "(");
+            } else {
+                p.bump();
+            }
+        }
     }
     if p.at_punct(Punct::Colon) {
         p.bump();
@@ -1732,6 +1781,26 @@ fn region_expr(p: &mut Parser<'_>) -> CompletedMarker {
     }
     block_required(p);
     m.complete(p, SyntaxKind::RegionBlock)
+}
+
+/// At the start of a cap clause: the contextual `cap` followed by `:`
+/// (`[gram.inv.ctx]` — `cap` stays an ordinary identifier everywhere
+/// else, the strategy names' own discipline).
+fn at_region_cap(p: &Parser<'_>) -> bool {
+    p.at(TokenKind::Ident)
+        && p.current_text() == b"cap"
+        && matches!(p.nth(1), TokenKind::Punct(Punct::Colon))
+}
+
+/// `region_cap ::= 'cap' ':' expr` — the creation-time byte budget
+/// (`[mem.region.cap.1]`): an `int` expression, evaluated at region
+/// creation.
+fn region_cap(p: &mut Parser<'_>) {
+    let c = p.start();
+    p.bump(); // cap
+    p.bump(); // :
+    expr_required(p);
+    c.complete(p, SyntaxKind::RegionCap);
 }
 
 /// `region_strategy ::= 'rc' | 'pool' '(' type ')'` — `rc` and `pool`

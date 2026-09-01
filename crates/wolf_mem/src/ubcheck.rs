@@ -324,6 +324,13 @@ struct DynRegion {
     /// charges; `[mem.region.account.1]` pins the relations, not the
     /// units).
     charged: u64,
+    /// The creation-time byte budget (s132, `[mem.region.cap.1]`,
+    /// D68/#187): a charge that takes `charged` past this traps
+    /// `alloc-contract` at the charging site — in THIS machine's
+    /// units, like the ledger itself (the cap compares against the
+    /// ledger, whatever the tier's ledger charges). `None` =
+    /// unbounded.
+    cap: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -931,22 +938,59 @@ impl<'t> Machine<'t> {
     /// `charge_mem` unit this machine already uses — so the pinned
     /// relations (`[mem.region.account.1]`) hold without pretending
     /// the two tiers share a layout.
-    fn mint_list(&mut self, items: Vec<Value>) -> usize {
+    fn mint_list(&mut self, items: Vec<Value>, span: Span) -> E<usize> {
         let rid = self.ambient.last().copied().unwrap_or(0);
-        self.charge_region_bytes(rid, 16 * items.len() as u64);
+        self.charge_region_bytes(rid, 16 * items.len() as u64, span)?;
         let id = self.lists.len();
         self.lists.push(items);
         self.list_region.push(rid);
-        id
+        Ok(id)
+    }
+
+    /// A region's `cap:` budget, evaluated at creation (s132,
+    /// `[mem.region.cap.1]`): an `int` byte count. Negative is the
+    /// allocation-contract violation at the CREATING site
+    /// (`[mem.region.cap.2]` — the compiled tiers' `region_set_cap`
+    /// makes the same check).
+    fn eval_region_cap(
+        &mut self,
+        cap: Option<wolf_ast::RegionCap<'t>>,
+    ) -> E<Result<Option<u64>, Flow>> {
+        let Some(cap) = cap else { return Ok(Ok(None)) };
+        let Some(v) = cap.value() else {
+            return Ok(Ok(None));
+        };
+        let span = v.span;
+        match self.eval(v)? {
+            Flow::Val(Value::Int(n)) => {
+                if n < 0 {
+                    return self.trap("alloc-contract", "mem.region.cap.2", span);
+                }
+                Ok(Ok(Some(n as u64)))
+            }
+            Flow::Val(_) => self.refuse("a non-int region cap", span),
+            // Control flow out of a cap expr (a `?` error, a return)
+            // — surfaces unchanged, before the region exists.
+            other => Ok(Err(other)),
+        }
     }
 
     /// Add to a region's cumulative ledger (never subtracted: the
     /// charge is monotone within the region's lifetime, the native
-    /// arena's own rule).
-    fn charge_region_bytes(&mut self, rid: usize, bytes: u64) {
+    /// arena's own rule) — and compare it against the cap
+    /// (`[mem.region.cap.1]`, s132): a charge that takes the ledger
+    /// PAST the budget is `trap(alloc-contract)` at the charging
+    /// site; landing exactly at the cap is not a breach.
+    fn charge_region_bytes(&mut self, rid: usize, bytes: u64, span: Span) -> E<()> {
+        let mut breach = false;
         if let Some(r) = self.regions.get_mut(rid) {
             r.charged = r.charged.saturating_add(bytes);
+            breach = r.cap.is_some_and(|cap| r.charged > cap);
         }
+        if breach {
+            return self.trap("alloc-contract", "mem.region.cap.1", span);
+        }
+        Ok(())
     }
 
     fn new_alloc(
@@ -961,10 +1005,9 @@ impl<'t> Machine<'t> {
         self.charge_mem(size)?;
         // The region's own ledger (s131, #187): attribution follows
         // the allocation's region, the way the native arena charges
-        // the region that was ambient at the allocation site.
-        if let Some(r) = self.regions.get_mut(region) {
-            r.charged = r.charged.saturating_add(size);
-        }
+        // the region that was ambient at the allocation site — and
+        // the cap compare rides the charge (s132, [mem.region.cap.1]).
+        self.charge_region_bytes(region, size, span)?;
         let id = self.allocs.len();
         self.allocs.push(Allocation {
             size,
@@ -1471,13 +1514,15 @@ impl<'t> Machine<'t> {
             budget: Budget::default(),
             in_defer: false,
         };
-        // The run's root region: `main`'s caller (never freed).
+        // The run's root region: `main`'s caller (never freed, never
+        // capped — the process root is outside `[mem.region.cap.1]`).
         m.regions.push(DynRegion {
             live: true,
             frozen: false,
             backing: None,
             span: pkg.files[0].parse.root.span,
             charged: 0,
+            cap: None,
         });
         m.ambient.push(0);
         for (i, outcome) in tc.bodies.iter().enumerate() {
@@ -2627,6 +2672,15 @@ impl<'t> Machine<'t> {
             }
             SyntaxKind::RegionBlock => self.eval_region_block(e),
             SyntaxKind::RegionValue => {
+                // The cap evaluates FIRST ([mem.model.order]; it may
+                // itself touch the region table), the id is minted
+                // after.
+                let cap = match self
+                    .eval_region_cap(wolf_ast::RegionValue::cast(e).expect("kind").cap())?
+                {
+                    Ok(c) => c,
+                    Err(flow) => return Ok(flow),
+                };
                 let rid = self.regions.len();
                 self.regions.push(DynRegion {
                     live: true,
@@ -2634,6 +2688,7 @@ impl<'t> Machine<'t> {
                     backing: None,
                     span: e.span,
                     charged: 0,
+                    cap,
                 });
                 Ok(Flow::Val(Value::Region(rid)))
             }
@@ -2695,6 +2750,12 @@ impl<'t> Machine<'t> {
 
     fn eval_region_block(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = RegionBlock::cast(e).expect("kind");
+        // The cap evaluates at creation, before the region opens
+        // (s132, [mem.region.cap.1]).
+        let cap = match self.eval_region_cap(d.cap())? {
+            Ok(c) => c,
+            Err(flow) => return Ok(flow),
+        };
         let rid = self.regions.len();
         self.regions.push(DynRegion {
             live: true,
@@ -2702,6 +2763,7 @@ impl<'t> Machine<'t> {
             backing: None,
             span: e.span,
             charged: 0,
+            cap,
         });
         self.ambient.push(rid);
         // The sugar block's name is usable inside it (`in a { }`
@@ -3169,7 +3231,7 @@ impl<'t> Machine<'t> {
                 } else {
                     val!(self.eval(operand))
                 };
-                let copied = self.deep_copy(v)?;
+                let copied = self.deep_copy(v, operand.span)?;
                 Ok(Flow::Val(copied))
             }
             Some(SyntaxKind::MoveKw) => {
@@ -3238,15 +3300,15 @@ impl<'t> Machine<'t> {
         }
     }
 
-    fn deep_copy(&mut self, v: Value) -> E<Value> {
+    fn deep_copy(&mut self, v: Value, span: Span) -> E<Value> {
         Ok(match v {
             Value::List(id) => {
                 let elems = self.lists[id].clone();
                 let mut copied = Vec::with_capacity(elems.len());
                 for e in elems {
-                    copied.push(self.deep_copy(e)?);
+                    copied.push(self.deep_copy(e, span)?);
                 }
-                let nid = self.mint_list(copied);
+                let nid = self.mint_list(copied, span)?;
                 Value::List(nid)
             }
             Value::Pool(id) => {
@@ -3258,7 +3320,7 @@ impl<'t> Machine<'t> {
             Value::Struct { fields } => {
                 let mut out = Vec::with_capacity(fields.len());
                 for (n, fv) in fields {
-                    out.push((n, self.deep_copy(fv)?));
+                    out.push((n, self.deep_copy(fv, span)?));
                 }
                 Value::Struct { fields: out }
             }
@@ -4042,7 +4104,7 @@ impl<'t> Machine<'t> {
                         self.charge_mem(bytes.len() as u64)?;
                         // No UTF-8 gate: bytes are bytes. This is the
                         // entry `copy_file` should always have had.
-                        Ok(Flow::Val(self.byte_list_value(&bytes)))
+                        Ok(Flow::Val(self.byte_list_value(&bytes, span)?))
                     }
                 }
             }
@@ -4073,7 +4135,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 }
                 if max <= 0 {
-                    return Ok(Flow::Val(self.byte_list_value(&[])));
+                    return Ok(Flow::Val(self.byte_list_value(&[], span)?));
                 }
                 let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
                 else {
@@ -4089,7 +4151,7 @@ impl<'t> Machine<'t> {
                     Ok(n) => {
                         buf.truncate(n);
                         self.charge_mem(n as u64)?;
-                        Ok(Flow::Val(self.byte_list_value(&buf)))
+                        Ok(Flow::Val(self.byte_list_value(&buf, span)?))
                     }
                 }
             }
@@ -4139,7 +4201,7 @@ impl<'t> Machine<'t> {
                 names.sort();
                 self.charge_mem(names.iter().map(|n| n.len() as u64).sum())?;
                 let items: Vec<Value> = names.into_iter().map(Value::Str).collect();
-                let id = self.mint_list(items);
+                let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
             "fs_create_dir" | "fs_create_dir_all" => {
@@ -4256,10 +4318,10 @@ impl<'t> Machine<'t> {
     }
 
     /// Bytes as a fresh `List[int]` value.
-    fn byte_list_value(&mut self, bytes: &[u8]) -> Value {
+    fn byte_list_value(&mut self, bytes: &[u8], span: Span) -> E<Value> {
         let items: Vec<Value> = bytes.iter().map(|&b| Value::Int(i64::from(b))).collect();
-        let id = self.mint_list(items);
-        Value::List(id)
+        let id = self.mint_list(items, span)?;
+        Ok(Value::List(id))
     }
 
     /// The s39 net builtin tier (checked lane): REAL blocking TCP over
@@ -4407,7 +4469,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 if max <= 0 {
-                    return Ok(Flow::Val(self.byte_list_value(&[])));
+                    return Ok(Flow::Val(self.byte_list_value(&[], span)?));
                 }
                 let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
                 match s.read(&mut buf) {
@@ -4416,7 +4478,7 @@ impl<'t> Machine<'t> {
                     Ok(n) => {
                         buf.truncate(n);
                         self.charge_mem(n as u64)?;
-                        Ok(Flow::Val(self.byte_list_value(&buf)))
+                        Ok(Flow::Val(self.byte_list_value(&buf, span)?))
                     }
                 }
             }
@@ -4526,7 +4588,7 @@ impl<'t> Machine<'t> {
             "env_args" => {
                 let items: Vec<Value> = self.args.iter().cloned().map(Value::Str).collect();
                 self.charge_mem(self.args.iter().map(|a| a.len() as u64).sum())?;
-                let id = self.mint_list(items);
+                let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
             "env_get" => {
@@ -4581,7 +4643,7 @@ impl<'t> Machine<'t> {
                     })
                     .sum();
                 self.charge_mem(bytes)?;
-                let id = self.mint_list(items);
+                let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
             "os_cwd" => match std::env::current_dir() {
@@ -4777,7 +4839,7 @@ impl<'t> Machine<'t> {
                 if !os_entropy_fill(&mut buf) {
                     return self.trap("assert", "os.random.trap", span);
                 }
-                Ok(Flow::Val(self.byte_list_value(&buf)))
+                Ok(Flow::Val(self.byte_list_value(&buf, span)?))
             }
             _ => self.refuse("this os builtin", span),
         }
@@ -5197,7 +5259,7 @@ impl<'t> Machine<'t> {
         };
         let items: Vec<Value> = self.lists[id][start as usize..end as usize].to_vec();
         self.charge_mem(16 * items.len() as u64 + 16)?;
-        let nid = self.mint_list(items);
+        let nid = self.mint_list(items, e.span)?;
         Ok(Flow::Val(Value::List(nid)))
     }
 
@@ -5612,7 +5674,7 @@ impl<'t> Machine<'t> {
         // Container constructors (`List[int]()`, `Pool[Node]()`).
         match self.expr_ty(e.span) {
             Some(TyKind::List(_)) if is_container_ctor(d.callee()) => {
-                let id = self.mint_list(Vec::new());
+                let id = self.mint_list(Vec::new(), e.span)?;
                 return Ok(Flow::Val(Value::List(id)));
             }
             Some(TyKind::Pool(_)) if is_container_ctor(d.callee()) => {
@@ -6149,7 +6211,7 @@ impl<'t> Machine<'t> {
                                 // (s131, #187): growth stays where the
                                 // list lives, not where the push runs.
                                 let rid = self.list_region.get(id).copied().unwrap_or(0);
-                                self.charge_region_bytes(rid, 16);
+                                self.charge_region_bytes(rid, 16, e.span)?;
                                 self.lists[id].push(x);
                             }
                         }
@@ -6368,7 +6430,7 @@ impl<'t> Machine<'t> {
                 };
                 let make_list = |m: &mut Self, items: Vec<Value>| -> E<Flow> {
                     m.charge_mem(16 * items.len() as u64 + 16)?;
-                    let id = m.mint_list(items);
+                    let id = m.mint_list(items, e.span)?;
                     Ok(Flow::Val(Value::List(id)))
                 };
                 match method {

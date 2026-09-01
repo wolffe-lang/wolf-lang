@@ -1,0 +1,30 @@
+//! check: run(exit=trap(alloc-contract))
+//! phase: run
+//! conforms: mem.region.cap.1, mem.region.account.1
+//!
+//! The cap breach (s132, D68, #187): a charge that would take the
+//! region's ledger PAST its creation-time budget is the deterministic
+//! trap `alloc-contract` at the allocating site — the existing trap
+//! kind ([conf.trap.map]: a byte budget is an allocation contract),
+//! no new vocabulary. The budget is derived from a MEASURED ledger
+//! reading (the dry run below), so the same file breaches on every
+//! tier whatever its ledger units are: the capped region's budget is
+//! one byte short of what the identical build pattern charges —
+//! at-cap-exactly would be legal ([mem.region.cap.1]); the next byte
+//! is the breach, and the replay's last pushes must reach it.
+
+fn main() -> !int {
+    let probe = region()
+    var measured = 0
+    in probe {
+        var xs = List[int]()
+        for i in 0..200 { (mut xs).push(i) }
+        measured = region_bytes(probe)
+    }
+    if measured < 1 { return 1 }
+    region tight(cap: measured - 1) {
+        var ys = List[int]()
+        for i in 0..200 { (mut ys).push(i) }  // TRAP alloc-contract before completing
+    }
+    0
+}

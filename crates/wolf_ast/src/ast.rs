@@ -1514,7 +1514,8 @@ impl<'a> ElseExpr<'a> {
 }
 
 ast_node!(
-    /// `region name? (':' strategy)? { … }` — block sugar (X4).
+    /// `region name? ('(' cap ')')? (':' strategy)? { … }` — block
+    /// sugar (X4; the cap clause is s132's, `[mem.region.cap.1]`).
     RegionBlock
 );
 
@@ -1527,19 +1528,43 @@ impl<'a> RegionBlock<'a> {
         self.0.child_node(SyntaxKind::RegionStrategy)
     }
 
+    /// The `cap: expr` clause, if any (`[mem.region.cap.1]`).
+    pub fn cap(self) -> Option<RegionCap<'a>> {
+        self.0.nodes().find_map(RegionCap::cast)
+    }
+
     pub fn body(self) -> Option<Block<'a>> {
         self.0.nodes().find_map(Block::cast)
     }
 }
 
 ast_node!(
-    /// `region(strategy?)` — first-class value form (X4).
+    /// `region(strategy? cap?)` — first-class value form (X4; the cap
+    /// clause is s132's, `[mem.region.cap.1]`).
     RegionValue
 );
 
 impl<'a> RegionValue<'a> {
     pub fn strategy(self) -> Option<&'a GreenNode> {
         self.0.child_node(SyntaxKind::RegionStrategy)
+    }
+
+    /// The `cap: expr` clause, if any (`[mem.region.cap.1]`).
+    pub fn cap(self) -> Option<RegionCap<'a>> {
+        self.0.nodes().find_map(RegionCap::cast)
+    }
+}
+
+ast_node!(
+    /// `cap ':' expr` — a region's creation-time byte budget
+    /// (`[mem.region.cap.1]`, D68/#187).
+    RegionCap
+);
+
+impl<'a> RegionCap<'a> {
+    /// The budget expression (an `int` byte count).
+    pub fn value(self) -> Option<&'a GreenNode> {
+        first_expr(self.0)
     }
 }
 

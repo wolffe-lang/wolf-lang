@@ -600,10 +600,12 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // (`trap_at` — the second stderr line naming file:line:col);
     // s131 the region accounting queries (#187: region_bytes /
     // live_region_bytes — the wolf_rt ledger surfaced, one i64 read
-    // each).
+    // each); s132 the region cap installer (D68/#187:
+    // region_set_cap — the creation-time byte budget, one call after
+    // region.new, breach = trap(alloc-contract) at the alloc site).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        121,
+        122,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

@@ -2291,6 +2291,14 @@ impl<'t> Lowerer<'t> {
     /// opened; the ambient is untouched until `in` (X4).
     fn eval_region_value(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = RegionValue::cast(e).expect("kind");
+        // The cap budget (s132, [mem.region.cap.1]) evaluates at
+        // creation: an int expr — walked for the move/loan facts it
+        // may carry, placeless for this tier.
+        if let Some(cap) = d.cap()
+            && let Some(v) = cap.value()
+        {
+            self.eval_value(v)?;
+        }
         let strategy = self.parse_strategy(d.strategy());
         let rid = self.new_region("<region>", RegionKind::Value, strategy, e.span);
         Ok(Val {
@@ -2309,6 +2317,13 @@ impl<'t> Lowerer<'t> {
     /// s20 owns the rest of that story).
     fn eval_region_block(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = RegionBlock::cast(e).expect("kind");
+        // The cap budget evaluates at creation, OUTSIDE the region's
+        // scope and ambient (s132, [mem.region.cap.1]).
+        if let Some(cap) = d.cap()
+            && let Some(v) = cap.value()
+        {
+            self.eval_value(v)?;
+        }
         let strategy = self.parse_strategy(d.strategy());
         let name_tok = d.name();
         let name = name_tok

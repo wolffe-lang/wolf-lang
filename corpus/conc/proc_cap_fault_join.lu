@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="fault true | alloc-contract true | reclaimed true | main-defer-ran")
+//! phase: run
+//! conforms: mem.region.cap.3, conc.proc.exit, conc.proc.1, conc.proc.kill
+//!
+//! D68's whole containment story at the join (s132, #187 — the shape
+//! lobo's per-request 503 consumes): a proc breaches its region cap,
+//! the trap is contained at the proc boundary, and the REASON reaches
+//! the join as a value — `is_fault()` for the class,
+//! `is_alloc_contract()` for the one kind the budget contract names.
+//! Three more pins ride the same run:
+//!  - the defer BELOW the proc boundary never runs (the killed-proc
+//!    sequence, [conc.proc.kill] — its marker never reaches stdout);
+//!  - the defer on the JOIN side runs untouched ([mem.model.order] is
+//!    undisturbed outside the failure domain);
+//!  - teardown is free-then-deliver ([mem.region.cap.3]): AT the
+//!    join, `live_region_bytes()` has already returned to its
+//!    pre-spawn reading — no postmortem query observes the dead
+//!    proc's charge, which is the bound half of the contract (the
+//!    supervisor that admits new work on this reason was already
+//!    given the memory back).
+
+fn worker() -> !int {
+    region budget(cap: 64) {
+        defer print_raw("below-boundary-defer ")     // must NOT run
+        var xs = List[int]()
+        for i in 0..100 { (mut xs).push(i) }         // TRAP alloc-contract (contained)
+    }
+    0
+}
+
+fn main() -> !int {
+    let before = live_region_bytes()
+    defer print_raw("| main-defer-ran")
+    let w = spawn proc worker()
+    let m = w.monitor()
+    select {
+        exit(reason) from m => {
+            let f = reason.is_fault()
+            let a = reason.is_alloc_contract()
+            let reclaimed = live_region_bytes() == before
+            print_raw("fault {f} | alloc-contract {a} | reclaimed {reclaimed} ")
+            if !f { return 1 }
+            if !a { return 2 }
+            if !reclaimed { return 3 }
+        },
+        timeout(5.s) => {
+            print_raw("timeout ")
+            return 4
+        },
+    }
+    0
+}

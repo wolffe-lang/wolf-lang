@@ -3517,7 +3517,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::RegionValue => {
                 // Strategy selection (arena/rc/pool) is runtime-handle
                 // configuration; the s28 lowering to wolf_rt carries it.
+                // The cap budget (s132, [mem.region.cap.1]) evaluates
+                // first, then rides `region_set_cap` before any
+                // allocation can land.
+                let d = wolf_ast::RegionValue::cast(init).expect("kind");
+                let cap = self.lower_region_cap_value(d.cap())?;
                 let (region, handle) = self.b.ins_region_new();
+                self.emit_region_cap(handle, cap);
                 Ok(Some(LocalBind::Region {
                     region,
                     handle,
@@ -4680,6 +4686,35 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         )
     }
 
+    /// Lower a region's `cap:` budget expression (s132,
+    /// `[mem.region.cap.1]`), ahead of the `region.new` it configures
+    /// ([mem.model.order]: the budget is written before the block).
+    fn lower_region_cap_value(&mut self, cap: Option<wolf_ast::RegionCap<'t>>) -> R<Option<Value>> {
+        let Some(cap) = cap else { return Ok(None) };
+        let Some(v) = cap.value() else {
+            return Ok(None);
+        };
+        match self.lower_expr(v)? {
+            Flow::Val(Some(val)) => Ok(Some(val)),
+            Flow::Val(None) => Err(refuse("a region cap without a value", v.span)),
+            // A budget expression that diverges never creates the
+            // region; nothing downstream is lowerable. Refuse by name
+            // rather than model an unreachable region.
+            _ => Err(refuse("a region cap that diverges", v.span)),
+        }
+    }
+
+    /// Install a lowered cap on a fresh region handle: one
+    /// `region_set_cap` rt call, before any allocation can land — the
+    /// runtime makes the domain check ([mem.region.cap.2], negative
+    /// caps trap `alloc-contract`) and the per-charge compare
+    /// ([mem.region.cap.1]).
+    fn emit_region_cap(&mut self, handle: Value, cap: Option<Value>) {
+        if let Some(c) = cap {
+            self.rt_call("__wolf_rt_region_set_cap", &[handle, c], None);
+        }
+    }
+
     /// `region name? { body }` — X4 block sugar: `region.new`, the
     /// body with the name bound, `region.free` wholesale at the end
     /// (the s19 frame-local free point). Early exits across the
@@ -4689,7 +4724,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(body) = d.body() else {
             return Ok(Flow::Val(None));
         };
+        let cap = self.lower_region_cap_value(d.cap())?;
         let (region, handle) = self.b.ins_region_new();
+        self.emit_region_cap(handle, cap);
         // s76: the block's region becomes the ambient one for its body
         // — `[mem.region.create.3]`, and the reason `region scratch { }`
         // now reclaims what a container inside it allocated.
@@ -4986,7 +5023,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(body) = d.body() else {
             return Ok(Flow::Val(None));
         };
+        // A budgeted freeze block bounds its BUILD ([mem.region.cap.1]
+        // — the cap is the ledger's, and the ledger stops moving at
+        // the freeze).
+        let cap = self.lower_region_cap_value(d.cap())?;
         let (region, handle) = self.b.ins_region_new();
+        self.emit_region_cap(handle, cap);
         // s76: the block body's ambient region, same as `region { }` —
         // the difference is the ending (freeze, never free), so the
         // arena is immutable forever and a container in it outlives the
@@ -5823,7 +5865,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     }
 
     /// Exit-reason class predicates ([conc.proc.exit]): the wire word
-    /// carries the class in its low byte.
+    /// carries the class in its low byte — 0 normal, 1 error, 2
+    /// killed, 3 cancelled, 4 fault (D68, s132; the fault's payload
+    /// is the trap kind code, pinned by wolf_rt's packing snapshot).
+    /// `is_alloc_contract()` is the D68 mapping's named reader — the
+    /// whole-word compare against `fault(alloc-contract)`'s wire word
+    /// (trap kind 9, class 4), the discriminator lobo's budget story
+    /// consumes (#187).
     fn lower_reason_method(
         &mut self,
         recv: &'t GreenNode,
@@ -5834,11 +5882,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(word) = word else {
             return Err(refuse("a reason predicate without a value", recv.span));
         };
+        if mname == "is_alloc_contract" {
+            let want = self.b.iconst(types::I64, (9 << 8) | 4);
+            return Ok(Flow::Val(Some(
+                self.b
+                    .ins(
+                        Opcode::Icmp,
+                        &[word, want],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one(),
+            )));
+        }
         let class = match mname {
             "is_normal" => 0,
             "is_error" => 1,
             "is_killed" => 2,
             "is_cancelled" => 3,
+            "is_fault" => 4,
             _ => return Err(refuse("this exit-reason method (s39)", e.span)),
         };
         let mask = self.b.iconst(types::I64, 0xFF);
