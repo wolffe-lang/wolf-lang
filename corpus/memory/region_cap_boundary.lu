@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="at-cap true | zero-cap true | query true")
+//! phase: run
+//! conforms: mem.region.cap.1, mem.region.cap.2, mem.region.account.1
+//!
+//! The cap's boundary cases (s132, D68, #187), all non-breaching:
+//! at-cap-exactly is NOT a breach ([mem.region.cap.1] — the budget is
+//! measured from an uncapped dry run, so the pin holds on every tier
+//! in that tier's own ledger units); `cap: 0` is a legal budget a
+//! region that never charges lives happily under
+//! ([mem.region.cap.2]); and the accounting queries answer on capped
+//! regions exactly as on uncapped ones ([mem.region.account.1]:
+//! zero at creation, the measured charge after the build). Both
+//! creation forms carry the cap: the value form takes the measured
+//! budget, the sugar form the zero one.
+
+fn main() -> !int {
+    // Dry run: measure what the pattern charges, uncapped.
+    let probe = region()
+    var measured = 0
+    in probe {
+        var xs = List[int]()
+        for i in 0..150 { (mut xs).push(i) }
+        measured = region_bytes(probe)
+    }
+    if measured < 1 { return 1 }
+
+    // Value form, at-cap-exactly: the same pattern under a budget of
+    // exactly its measured charge completes without a breach.
+    let capped = region(cap: measured)
+    var at_cap = false
+    in capped {
+        var ys = List[int]()
+        for i in 0..150 { (mut ys).push(i) }
+        at_cap = region_bytes(capped) == measured
+    }
+
+    // Sugar form, cap 0: legal, and nothing charges it.
+    var zero_cap = false
+    var query = false
+    region idle(cap: 0) {
+        zero_cap = true
+        query = region_bytes(idle) == 0
+    }
+
+    print("at-cap {at_cap} | zero-cap {zero_cap} | query {query}")
+    if !at_cap { return 2 }
+    if !zero_cap { return 3 }
+    if !query { return 4 }
+    0
+}

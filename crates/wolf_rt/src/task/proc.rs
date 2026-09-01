@@ -135,7 +135,7 @@ pub const ROOT_DEATH_EXIT: i32 = 121;
 pub const TRAP_ERROR_TAG: i64 = -1;
 
 /// A proc's exit reason — `[conc.proc.exit]`'s closed set, as a
-/// value (D30). The variant order is the wire `kind` code (0..=3).
+/// value (D30). The variant order is the wire `kind` code (0..=4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcExit {
     /// Completed with its value.
@@ -143,7 +143,7 @@ pub enum ProcExit {
         /// The completion value (i64 register, `[abi.err]` shape).
         value: i64,
     },
-    /// An error value crossed the proc boundary; trapped/panicked
+    /// An error value crossed the proc boundary; panicked Rust-side
     /// tasks carry [`TRAP_ERROR_TAG`].
     Error {
         /// The error row tag (D30).
@@ -154,30 +154,47 @@ pub enum ProcExit {
     /// Structured cancellation reached the proc and it did not
     /// complete a value (`[conc.proc.cancel]`) — defers ran.
     Cancelled,
+    /// A trap fired on a task inside the proc and was contained at
+    /// the boundary (D68, s132): the proc died by the killed-proc
+    /// sequence (`[conc.proc.kill]` — no further user code, regions
+    /// bulk-freed BEFORE delivery) and the trap's kind code rides as
+    /// the reason's payload — reasons are values, never unwinding
+    /// (`[conc.proc.exit]`). The kind codes are
+    /// [`native::trap_code`]'s closed vocabulary (no new trap kind —
+    /// that is D68's point).
+    Fault {
+        /// The trap kind code ([`native::trap_code`]).
+        kind: i32,
+    },
 }
 
 impl ProcExit {
     /// The reason-class code (hook payloads, the wire word's low
-    /// byte): 0 normal, 1 error, 2 killed, 3 cancelled.
+    /// byte): 0 normal, 1 error, 2 killed, 3 cancelled, 4 fault.
     pub fn kind(self) -> u8 {
         match self {
             ProcExit::Normal { .. } => 0,
             ProcExit::Error { .. } => 1,
             ProcExit::Killed => 2,
             ProcExit::Cancelled => 3,
+            ProcExit::Fault { .. } => 4,
         }
     }
 
     /// True for the reasons that propagate over links
     /// (`[conc.proc.2]`: ABNORMAL exit kills the partner). `normal`
-    /// completion and orderly cancellation do not propagate.
+    /// completion and orderly cancellation do not propagate; a
+    /// contained trap does (a faulted partner is a dead partner).
     pub fn is_abnormal(self) -> bool {
-        matches!(self, ProcExit::Error { .. } | ProcExit::Killed)
+        matches!(
+            self,
+            ProcExit::Error { .. } | ProcExit::Killed | ProcExit::Fault { .. }
+        )
     }
 
     /// Pack the reason into one channel word: kind in the low byte,
-    /// payload (value or tag) in the upper 56 bits — the v0 wire
-    /// shape monitors receive over their s33 channel (payloads
+    /// payload (value, tag, or trap kind) in the upper 56 bits — the
+    /// v0 wire shape monitors receive over their s33 channel (payloads
     /// outside ±2^55 truncate; row-value payloads replace this
     /// packing when s39 lands them). The word shape is pinned by
     /// snapshot below.
@@ -187,6 +204,7 @@ impl ProcExit {
             ProcExit::Error { tag } => (1, tag),
             ProcExit::Killed => (2, 0),
             ProcExit::Cancelled => (3, 0),
+            ProcExit::Fault { kind } => (4, i64::from(kind)),
         };
         ((payload as u64) << 8) | kind
     }
@@ -201,6 +219,9 @@ impl ProcExit {
             1 => ProcExit::Error { tag: payload },
             2 => ProcExit::Killed,
             3 => ProcExit::Cancelled,
+            4 => ProcExit::Fault {
+                kind: payload as i32,
+            },
             _ => ProcExit::Error {
                 tag: TRAP_ERROR_TAG,
             },
@@ -271,8 +292,12 @@ static LEDGER_HOOKS: native::RegionLedgerHooks = native::RegionLedgerHooks {
 fn registry() -> &'static Mutex<Registry> {
     REGISTRY.get_or_init(|| {
         // First proc: install the region-ledger seam (native.rs calls
-        // through it from now on) — the D15 lazy-init moment.
+        // through it from now on) — the D15 lazy-init moment — and the
+        // trap-containment seam beside it (D68, s132): from the first
+        // proc on, a trap on a task inside a proc dies at the proc
+        // boundary instead of taking the process.
         native::install_region_ledger_hooks(&LEDGER_HOOKS);
+        native::install_trap_containment(contain_trap);
         Mutex::new(Registry {
             slots: Vec::new(),
             scope_to_proc: HashMap::new(),
@@ -324,6 +349,12 @@ struct ProcSt {
     /// Kill requested (`[conc.proc.kill]` step 1 begun) — decides the
     /// reason ahead of anything the tree reports.
     kill_requested: bool,
+    /// A trap was contained at this proc's boundary (D68, s132): the
+    /// trap kind code. The FIRST decided teardown wins: a fault only
+    /// records into a proc that is still running and not already
+    /// being killed, and once recorded it decides the reason ahead of
+    /// `kill_requested`.
+    fault: Option<i32>,
     /// The body completed with this value (reason `normal(value)`).
     value: Option<i64>,
     /// The body stopped by acknowledging cancellation.
@@ -369,6 +400,7 @@ pub fn spawn_proc(name: &str, body: impl FnOnce(&TaskCtx) -> ProcOutcome + Send 
             st: Mutex::new(ProcSt {
                 phase: Phase::Running,
                 kill_requested: false,
+                fault: None,
                 value: None,
                 main_cancelled: false,
                 links: Vec::new(),
@@ -421,16 +453,27 @@ fn reap(proc: &Arc<Proc>) {
     // is the crash reason.
     let first_fail = proc.scope.join();
 
-    // Decide the reason (`[conc.proc.exit]`).
-    let (reason, monitors, links) = {
-        let mut st = proc.st.lock().unwrap();
-        let reason = if st.kill_requested {
+    // Decide the reason (`[conc.proc.exit]`) — but do NOT publish it
+    // yet: publication (phase + tombstone) is what lets a racing
+    // `monitor()` deliver immediately, and on the kill-ordered path
+    // the reason must not be observable before the ledger frees
+    // (`[conc.proc.kill]` (3)-(4); `[mem.region.cap.3]` — s132 found
+    // the early `Phase::Exited` write let an early monitor read
+    // `fault(...)` with the breaching charge still live).
+    let reason = {
+        let st = proc.st.lock().unwrap();
+        if let Some(kind) = st.fault {
+            // A contained trap (D68): the fault decided the teardown
+            // before any kill that raced in behind it — the reason
+            // carries the trap kind to the join as a value.
+            ProcExit::Fault { kind }
+        } else if st.kill_requested {
             ProcExit::Killed
         } else {
             match first_fail {
                 Some(ExitReason::Error { tag }) => ProcExit::Error { tag },
-                // A trap/panic becomes an exit reason at the proc
-                // boundary — not process death (unless root).
+                // A Rust-side panic becomes an exit reason at the
+                // proc boundary — not process death (unless root).
                 Some(_) => ProcExit::Error {
                     tag: TRAP_ERROR_TAG,
                 },
@@ -443,27 +486,18 @@ fn reap(proc: &Arc<Proc>) {
                     (None, false) => ProcExit::Normal { value: 0 },
                 },
             }
-        };
-        st.phase = Phase::Exited(reason);
-        proc.cv.notify_all();
-        (
-            reason,
-            std::mem::take(&mut st.monitors),
-            std::mem::take(&mut st.links),
-        )
+        }
     };
     sched_point(SchedEvent::ProcExit {
         proc: proc.id,
         kind: reason.kind(),
     });
 
-    // Retire the registry entry (late monitors read the tombstone)
-    // and take the region ledger.
+    // Take the region ledger (both maps) — the slot stays Live and
+    // the phase stays Running until `publish`, so every observer
+    // still queues behind the teardown instead of reading around it.
     let owned: Vec<usize> = {
         let mut reg = registry().lock().unwrap();
-        if let Some(i) = slot_index(proc.id) {
-            reg.slots[i] = SlotState::Exited(reason);
-        }
         reg.scope_to_proc.remove(&proc.scope.id());
         let owned = reg
             .proc_regions
@@ -477,16 +511,46 @@ fn reap(proc: &Arc<Proc>) {
         owned
     };
 
+    // Publish the reason: registry tombstone (late monitors read it),
+    // then phase + cv (kill()/monitor() waiters), then the registered
+    // monitors/links are taken for delivery. Ordered AROUND the
+    // bulk-free per teardown law below.
+    let publish = |reason: ProcExit| -> (Vec<Arc<Chan>>, Vec<u64>) {
+        {
+            let mut reg = registry().lock().unwrap();
+            if let Some(i) = slot_index(proc.id) {
+                reg.slots[i] = SlotState::Exited(reason);
+            }
+        }
+        let mut st = proc.st.lock().unwrap();
+        st.phase = Phase::Exited(reason);
+        proc.cv.notify_all();
+        (
+            std::mem::take(&mut st.monitors),
+            std::mem::take(&mut st.links),
+        )
+    };
+
     // `[conc.ffi.kill]` step 2 is vacuous in v0 (no FFI runs inside
     // procs yet); the wait-out-or-fence obligation lands with c10.
-    if reason == ProcExit::Killed {
+    if matches!(reason, ProcExit::Killed | ProcExit::Fault { .. }) {
         // Kill order (`[conc.proc.kill]`): (3) bulk-free, (4) deliver.
+        // A contained trap dies by the same sequence (D68, s132) — and
+        // free-BEFORE-deliver is the bound half of the cap contract
+        // (`[mem.region.cap.3]`): by the time `fault(alloc-contract)`
+        // reaches the join, the breaching proc's charge is already
+        // reclaimed wholesale, so a supervisor that admits work on the
+        // reason never races the memory it was promised back. The
+        // reason publishes AFTER the free, so even a monitor that
+        // races the reaper cannot read it early.
         bulk_free(&owned);
+        let (monitors, links) = publish(reason);
         deliver(reason, &monitors, &links);
     } else {
         // Crash/normal order (sprint Target 5): deliver, then free —
         // a monitor never observes a freed region's data (reasons are
         // values; cross-proc data moved or froze, D14).
+        let (monitors, links) = publish(reason);
         deliver(reason, &monitors, &links);
         bulk_free(&owned);
     }
@@ -556,6 +620,36 @@ fn kill_mark(p: &Arc<Proc>) {
     p.scope.kill();
 }
 
+/// D68's containment (s132, the [`native::install_trap_containment`]
+/// seam): a trap fired on the calling thread. If the calling task
+/// runs inside a proc, the proc is the failure domain
+/// (`[conc.proc.1]`): record `fault(kind)` — the first decided
+/// teardown wins — begin the killed-proc sequence for the rest of the
+/// tree (`[conc.proc.kill]`: no further user code, so no `defer`
+/// below the boundary runs), retire the trapping task so the reaper's
+/// join can quiesce, and PARK this thread for good. Parking is the
+/// no-unwinding law made mechanism: compiled wolf frames are never
+/// unwound (`[abi.native.nounwind]`) and never resumed either — the
+/// measured containment cost is one held worker thread (and its
+/// stack's high water) per contained trap, which the pool compensates
+/// for like any indefinitely blocked task. RETURNS (and the process-
+/// exit trap path proceeds unchanged) when the task runs in the root
+/// domain — `main`'s tree, or a plain task outside any proc
+/// (`[conc.proc.root]`: the root domain's trap is process death).
+fn contain_trap(kind: i32) {
+    let Some(pid) = current_proc() else { return };
+    let Ok(p) = live_proc(pid) else { return };
+    {
+        let mut st = p.st.lock().unwrap();
+        if !matches!(st.phase, Phase::Exited(_)) && !st.kill_requested && st.fault.is_none() {
+            st.fault = Some(kind);
+        }
+    }
+    kill_mark(&p);
+    pool::finish_current_task(ExitReason::Killed);
+    pool::park_after_contained_trap();
+}
+
 /// The root supervisor domain died abnormally (`[conc.proc.root]`):
 /// run the killed-proc sequence for every live proc, then terminate
 /// the process with the nonzero [`ROOT_DEATH_EXIT`]. Never returns
@@ -572,7 +666,8 @@ fn root_died(reason: ProcExit) {
             0 => "normal",
             1 => "error",
             2 => "killed",
-            _ => "cancelled",
+            3 => "cancelled",
+            _ => "fault",
         }
     );
     let live: Vec<Arc<Proc>> = {
@@ -1098,6 +1193,9 @@ mod tests {
             ProcExit::Error { tag: -42 },
             ProcExit::Killed,
             ProcExit::Cancelled,
+            ProcExit::Fault {
+                kind: native::trap_code::ALLOC_CONTRACT,
+            },
         ];
         let shapes: Vec<String> = reasons.iter().map(|r| format!("{r:?}")).collect();
         assert_eq!(
@@ -1107,6 +1205,7 @@ mod tests {
                 "Error { tag: -42 }",
                 "Killed",
                 "Cancelled",
+                "Fault { kind: 9 }",
             ]
         );
         for (i, r) in reasons.iter().enumerate() {
@@ -1114,8 +1213,18 @@ mod tests {
             assert_eq!(ProcExit::decode(r.encode()), *r);
         }
         // The packed words themselves are contract (low byte = kind).
+        // fault(alloc-contract)'s word is the one the WIR reason
+        // predicates compare against ([conc.proc.exit] mapping, D68):
+        // trap kind 9 in the payload, reason class 4 in the low byte.
         assert_eq!(ProcExit::Normal { value: 7 }.encode(), (7 << 8));
         assert_eq!(ProcExit::Killed.encode(), 2);
+        assert_eq!(
+            ProcExit::Fault {
+                kind: native::trap_code::ALLOC_CONTRACT
+            }
+            .encode(),
+            (9 << 8) | 4
+        );
     }
 
     /// Monitor delivers `normal(value)`; the observer outlives the
@@ -1292,6 +1401,100 @@ mod tests {
                 tag: TRAP_ERROR_TAG
             }
         );
+    }
+
+    /// D68's whole containment path, rt-level (s132, #187): a proc
+    /// breaches its region cap — `__wolf_rt_region_alloc` fires
+    /// `trap(alloc-contract)` at the site, the containment seam
+    /// contains it at the proc boundary, and the monitor reads
+    /// `fault(alloc-contract)` at the join. At-cap-exactly is not the
+    /// breach (the 64-byte charge against cap 64 succeeds); the next
+    /// charge is. Fault teardown is KILL-ordered ([mem.region.cap.3]):
+    /// by delivery the breaching proc's ledger is already empty — the
+    /// same no-wait assertion the kill test makes.
+    #[test]
+    fn region_cap_breach_contained_as_fault_at_join() {
+        let w = spawn_proc("breacher", |_| {
+            let h = native::__wolf_rt_region_new();
+            // SAFETY: fresh live handle, proc-owned; set_cap precedes
+            // any allocation (the lowering's creation-time contract).
+            unsafe {
+                native::__wolf_rt_region_set_cap(h, 64);
+                let at_cap = native::__wolf_rt_region_alloc(h, 64);
+                assert!(!at_cap.is_null(), "cap == charged is not a breach");
+                // The next byte IS the breach: traps, never returns.
+                native::__wolf_rt_region_alloc(h, 1);
+            }
+            unreachable!("the breach must trap at the allocating site");
+        });
+        let m = monitor(w).unwrap();
+        assert_eq!(
+            recv_reason(&m),
+            ProcExit::Fault {
+                kind: native::trap_code::ALLOC_CONTRACT
+            }
+        );
+        // Free-then-deliver: the reclaimed charge precedes the reason.
+        assert_eq!(proc_ledger(w), (0, 0));
+    }
+
+    /// The cap's domain half ([mem.region.cap.2]): a negative budget
+    /// is the same allocation-contract violation, at the CREATING
+    /// site — and inside a proc it is contained the same way.
+    #[test]
+    fn negative_cap_contained_as_fault() {
+        let w = spawn_proc("neg-cap", |_| {
+            let h = native::__wolf_rt_region_new();
+            // SAFETY: fresh live handle.
+            unsafe { native::__wolf_rt_region_set_cap(h, -1) };
+            unreachable!("a negative cap must trap at the creating site");
+        });
+        let m = monitor(w).unwrap();
+        assert_eq!(
+            recv_reason(&m),
+            ProcExit::Fault {
+                kind: native::trap_code::ALLOC_CONTRACT
+            }
+        );
+    }
+
+    /// A faulted partner is a dead partner: `fault(kind)` propagates
+    /// over links like every abnormal reason (`[conc.proc.2]`).
+    #[test]
+    fn fault_propagates_over_links() {
+        let blocked = Arc::new(Mutex::new(None::<Arc<Chan>>));
+        let bl = blocked.clone();
+        let b = spawn_proc("partner", move |_| {
+            let ch = Chan::new(0);
+            *bl.lock().unwrap() = Some(ch.clone());
+            let _ = ch.recv();
+            ProcOutcome::Value(0)
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while blocked.lock().unwrap().is_none() {
+            assert!(Instant::now() < deadline, "partner never parked");
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        let a = spawn_proc("faulter", |_| {
+            let h = native::__wolf_rt_region_new();
+            // SAFETY: fresh live handle.
+            unsafe {
+                native::__wolf_rt_region_set_cap(h, 0);
+                // cap 0: every charge breaches ([mem.region.cap.2]).
+                native::__wolf_rt_region_alloc(h, 1);
+            }
+            unreachable!("cap 0 must breach on the first charge");
+        });
+        let ma = monitor(a).unwrap();
+        assert_eq!(
+            recv_reason(&ma),
+            ProcExit::Fault {
+                kind: native::trap_code::ALLOC_CONTRACT
+            }
+        );
+        let mb = monitor(b).unwrap();
+        link(a, b).unwrap(); // a already faulted: propagates now
+        assert_eq!(recv_reason(&mb), ProcExit::Killed);
     }
 
     /// Link test (acceptance, `[conc.proc.link.pair]`): killing one

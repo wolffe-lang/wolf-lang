@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 121] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 122] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -76,6 +76,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 121] = [
     // runtime keeps unconditionally, read into a register.
     ("__wolf_rt_region_bytes", 1, true),
     ("__wolf_rt_live_region_bytes", 0, true),
+    // s132 (D68, #187): the creation-time byte budget — installed
+    // right after region.new, compared on every charge; a breach is
+    // trap(alloc-contract) at the allocating site.
+    ("__wolf_rt_region_set_cap", 2, false),
     ("__wolf_rt_main_err", 6, false),
     // The s31 print path: `print` lowers to per-segment writes — bytes
     // (ptr, len), decimal i64, `true`/`false` — flushed per call so no

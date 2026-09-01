@@ -2,6 +2,73 @@
 
 ## Unreleased
 
+### The region holds (s132, D68 — #187 closes)
+
+The cap half of #187 lands whole, in D68's ruled direction. A region
+takes a creation-time byte budget — `region r(cap: n) { … }` on the
+named sugar block, `region(cap: n)` / `region(rc, cap: n)` on the
+value form — and a charge that would take its ledger PAST the budget
+is the deterministic trap `alloc-contract` at the allocating site:
+the existing kind (`[conf.trap.map]` — a byte budget is an allocation
+contract), no new trap vocabulary. At-cap-exactly is not a breach;
+the next byte is; `cap: 0` is legal and everything breaches it; a
+negative budget is the same contract violation at the creating site.
+The cap bounds `[mem.region.account.1]`'s ledger in each tier's own
+units — and the clause now says plainly that budgets are denominated
+in LEDGER units, not payload bytes (the ledger is cumulative and
+high-water; #203 measured a 64 KiB io chunk at ~1 MiB of ledger), so
+portable programs derive budgets from measured `region_bytes`
+readings — which is exactly how the witnesses pin the boundary on
+all three tiers at once. New clauses `[mem.region.cap.1/.2/.3]`.
+
+The fault half is D68's point: a breach **inside a proc** no longer
+kills the process. The trap is contained at the proc boundary
+(`[conc.proc.1]`'s failure domain): the proc dies by the killed-proc
+sequence — no further user code, so no `defer` below the boundary
+runs — and `[conc.proc.exit]`'s closed reason set gains the mapping,
+`fault(kind)` with `kind` from the closed trap vocabulary, read at
+the join as `is_fault()` and, for the budget breach specifically,
+`is_alloc_contract()`. Fault teardown is free-then-deliver, measured
+and then pinned as `[mem.region.cap.3]`: at the join,
+`live_region_bytes()` has already returned to its pre-spawn reading —
+the supervisor that answers 503 on this reason was handed the memory
+back first. Containment is the no-unwinding law made mechanism
+(`[abi.native.nounwind]` holds: the trapping worker parks; its thread
+and stack high-water are the measured per-breach cost, the same class
+as a task parked on a silent channel). In the root domain a trap
+remains process death (`[conf.trap.exit]`, amended to say so).
+Witnesses: `faults/region_cap_breach.lu` (three-tier breach at
+measured-minus-one), `memory/region_cap_boundary.lu` (at-cap /
+cap-0 / query interplay), `conc/proc_cap_fault_join.lu` (the
+join-reason read, both defers, the reclaimed-at-join pin — the shape
+lobo's ws12 consumes).
+
+### The comma insists everywhere (s132, D69 — D67 completed)
+
+The remaining unlicensed comma laxity is gone: struct LITERAL fields
+(`Point { x: 7 y: 2 }` — and the newline-separated spelling, which
+lupin always refused), closure parameters (`fn(a b)`), and inline-C
+capture lists (`unsafe c [a b]`) now refuse at E0201 with the same
+machine-applicable "add the comma" insertion D67 gave the pattern
+family (`wolf fix --apply` produces the canonical spelling; the
+newline form is reported at the field the missing comma should
+precede, byte-for-byte where lupin points). The multi-line literal's
+trailing layout is untouched: a terminator run before `}` is the
+production's own. Blast radius, measured before the tightening, is
+zero working code anywhere: the wolf-lang corpus and fixtures (532
+files), wolf-book (1,129), wolf-std (887), wolf-web (1,976 —
+counting two vendored copies of the one flagged file), and lobo
+(1,395) — the sole flagged file in the world is a fuzz-minimized
+broken-input formatter fixture (`idem_comment_vs_comma.lu`), whose
+idempotence test still holds. The separator report latches once per
+list and never into a reported wreck; MUTATE_BUDGET=300 swept green.
+Two corpus refusal witnesses pin the family (the newline form is
+pinned in the parser suite instead — the formatter's canonical
+multi-line layout regenerates the separator, and a corpus file must
+fully format); the spec sentences land with the fix under
+`[gram.expr.primary]`, `[gram.expr.closure]`, and
+`[gram.expr.unsafe]`.
+
 ### The region answers (s131)
 
 The region accounting queries land three-tier (#187, the wolf-web

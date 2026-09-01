@@ -127,7 +127,21 @@ premise by construction.
 - `[conc.proc.exit]` Exit reasons, closed set: `normal(value)`,
   `error(value)` (an error value crossed the proc boundary),
   `killed` (supervisor/link), `cancelled` (structured cancellation
-  reached the proc). Reasons are values (D30) — never unwinding.
+  reached the proc), `fault(kind)` (a trap fired on a task inside the
+  proc and was contained at the boundary — `kind` is one name from
+  `[conf.trap.set]`'s closed vocabulary, so containment adds **no**
+  new trap kind). Reasons are values (D30) — never unwinding.
+  (Amended 2026-09-01, s132 — D68, the ruled fourth shape: the trap
+  fires at its site, the proc is the failure domain that absorbs it.)
+  The fault mapping: a contained trap runs the killed-proc sequence
+  (`[conc.proc.kill]` — no further user code, regions bulk-free
+  BEFORE delivery), `fault` is abnormal for links (`[conc.proc.2]`:
+  a faulted partner is a dead partner), and the join observes the
+  class as `is_fault()` — with `is_alloc_contract()` naming the one
+  kind the region-cap contract pins (`[mem.region.cap.3]`,
+  wolf-lang#187: the budget breach lobo's per-request 503 matches
+  on). In the root domain a trap remains process death
+  (`[conc.proc.root]`, `[conf.trap.exit]`).
 - `[conc.proc.kill]` **Killed-proc sequence, in order** (the decided
   rule): (1) the proc's task tree is cancelled *without running any
   further user code* — pending `defer`/`errdefer` in the killed proc

@@ -460,7 +460,16 @@ literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
 
 Struct literals: `ParseError { at: i, found: c }`; `Point { x }` shorthand
 binds the field from the identifier. Illegal in condition/scrutinee
-position without parens (`[gram.amb.structlit]`).
+position without parens (`[gram.amb.structlit]`). The separating comma
+is **required** between field initializers — the production is the
+letter (D69, following D67's pattern-family precedent):
+`Point { x: 1 y: 2 }` and its newline-separated spelling are E0201
+with a machine-applicable "add the comma" fix, never a derivation; a
+terminator run before the `}` is the multi-line literal's own trailing
+layout, not a separator. (Added 2026-09-01, s132 — blast radius
+measured first at zero working code: the corpus, wolf-book, wolf-std,
+lobo; the one flagged file anywhere is a fuzz-minimized broken-input
+formatter fixture.)
 
 - **Call-site modes (X1)**: `f(mut x)`, `pool[mut prev]` — `mut`/`take`
   are argument prefixes in both call and index argument lists.
@@ -585,16 +594,25 @@ one `else_expr` — it extends maximally rightward and is terminated only by
 a token the expression grammar cannot consume (`,` `)` `]` `}` TERM).
 `sorted_by(fn(a, b) b.1 <=> a.1)` parses as expected.
 
+The separating comma is **required** between closure parameters (D69,
+2026-09-01, s132): `fn(a b)` is E0201 with the machine-applicable
+"add the comma" fix — `closure_param (',' closure_param)* ','?` never
+derived the comma-less run.
+
 ### 3.6 Regions `[gram.expr.region]`
 
 Both locked forms (X4):
 
 ```ebnf
-region_expr ::= 'region' IDENT? (':' region_strategy)? block  /* sugar   */
-              | 'region' '(' region_strategy? ')'             /* value   */
-              | 'in' expr block                               /* into r  */
+region_expr ::= 'region' IDENT ('(' region_cap ')')?
+                         (':' region_strategy)? block          /* sugar   */
+              | 'region' (':' region_strategy)? block          /* anon    */
+              | 'region' '(' (region_strategy (',' region_cap)?
+                             | region_cap)? ')'                /* value   */
+              | 'in' expr block                                /* into r  */
               | 'freeze' prefix_operand
 region_strategy ::= 'rc' | 'pool' '(' type ')'
+region_cap      ::= 'cap' ':' expr
 ```
 
 - Sugar: `region tmp { … }` — create, scope, free at `}`; the block's
@@ -602,6 +620,12 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
   builds anonymously and promotes (the build-then-share idiom).
 - Value: `let r = region()`, `let r = region(rc)`, `region r: pool(Node)
   { … }` names the sugar's region for `in r { … }` use within.
+- Cap (s132, `[mem.region.cap.1]`): `region r(cap: 4096) { … }` and
+  `let r = region(cap: n)` / `region(rc, cap: n)` set a creation-time
+  byte budget. On the sugar form the cap parenthesis follows the NAME
+  — an anonymous sugar block takes no cap, by the grammar's own
+  disambiguation (`region (cap: n)` is the value form); name the
+  region or use the value form.
 - `in r { … }` evaluates its block with allocations landing in `r`.
 - `freeze e` promotes to deep-immutable; its operand is a *prefix-tier*
   operand (tier 3, like `move`/`copy`/`shared`): `freeze r == x` means
@@ -609,7 +633,7 @@ region_strategy ::= 'rc' | 'pool' '(' type ')'
   no-struct-literal mode. `freeze region { ... } ` composes.
 - `move` (prefix operator, tier 3) transfers: `ch.send(move r)`.
 
-`rc` and `pool` are contextual keywords (`[gram.inv.ctx]`).
+`rc`, `pool`, and `cap` are contextual keywords (`[gram.inv.ctx]`).
 
 ### 3.7 Concurrency surface `[gram.expr.conc]`
 
@@ -652,6 +676,9 @@ borrow_expr ::= 'borrow' expr 'from' expr
 
 `asm`, `assume`, `borrow` are only legal inside `unsafe` (enforced in
 sema; the grammar accepts them anywhere for recovery quality, D22).
+The separating comma is **required** between a capture list's names
+(D69, 2026-09-01, s132): `unsafe c [a b] { … }` is E0201 with the
+machine-applicable "add the comma" fix.
 Inline-C block bodies are opaque token text to wolf's lexer (brace-balanced
 scan; c10 owns their meaning). `asm_expr` is a `primary`; `assume_stmt`
 is a `stmt`; `borrow_expr` is a `primary`.

@@ -128,6 +128,12 @@ thread_local! {
     /// kill: compiled tasks get kill delivery when codegen lowers the
     /// no-defer teardown branch — the honest s34 refusal).
     static IN_RUST_TASK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// The running task's (id, spawn scope) — the trap-containment
+    /// path's handle for retiring a task that will never return
+    /// through [`run_task`] (D68, s132). Set around the body; taken
+    /// by [`finish_current_task`] exactly once.
+    static CURRENT_TASK: RefCell<Option<(u64, Arc<ScopeInner>)>> =
+        const { RefCell::new(None) };
 }
 
 /// The kill-teardown unwind payload (s34, `[conc.proc.kill]` step 1):
@@ -172,6 +178,56 @@ pub(crate) fn suppress_kill_unwind<R>(f: impl FnOnce() -> R) -> R {
 /// checkpoint surface).
 pub fn current_scope() -> Option<Arc<ScopeInner>> {
     SCOPE_STACK.with(|s| s.borrow().last().cloned())
+}
+
+/// Retire the calling thread's running task with `reason` — the
+/// trap-containment path's half of [`run_task`]'s completion (D68,
+/// s132): the task's frames never resume, so its `child_done` must
+/// come from here for the scope join to quiesce. Idempotent by
+/// construction (the TLS slot is taken); a thread with no running
+/// task (the harness root) is a no-op.
+pub(crate) fn finish_current_task(reason: ExitReason) {
+    if let Some((id, scope)) = CURRENT_TASK.with(|c| c.borrow_mut().take()) {
+        scope.child_done(id, reason);
+    }
+}
+
+/// Park the calling worker forever after a contained trap (D68,
+/// s132). The frames below this call are compiled wolf frames plus
+/// the trap path's own — never unwound (`[abi.native.nounwind]`),
+/// never resumed. The worker leaves the unblocked count exactly the
+/// way [`blocking`] does (LIFO slot flushed to stealable ground, the
+/// pool compensated), minus `blocking`'s handler debug-assert: a trap
+/// inside a proc message handler is precisely a case this path must
+/// contain, not assert on. The thread and its stack's high water are
+/// the measured containment cost — the same class as a task parked on
+/// a channel nobody sends to, and the pool already compensates for
+/// those.
+pub(crate) fn park_after_contained_trap() -> ! {
+    if let Some(w) = WORKER_ID.with(std::cell::Cell::get) {
+        let p = pool();
+        let slot = &p.slots[w];
+        let held = slot.lifo.swap(std::ptr::null_mut(), SeqCst);
+        if !held.is_null() {
+            match slot.deque.push(held) {
+                Ok(()) => {}
+                Err(back) => {
+                    // SAFETY: pointer from Box::into_raw in spawn_task.
+                    let boxed = unsafe { Box::from_raw(back) };
+                    p.injector.lock().unwrap().push_back(boxed);
+                }
+            }
+            wake_one(p);
+        }
+        p.unblocked.fetch_sub(1, SeqCst);
+        compensate(p);
+    }
+    // det (s36): the baton frees for good — this thread never takes
+    // another grant (no-op outside the det domain).
+    super::hooks::det_block_enter();
+    loop {
+        std::thread::park();
+    }
 }
 
 /// Run `f` with `scope` as the innermost scope on this thread.
@@ -488,6 +544,11 @@ fn run_task(task: Box<Task>) {
     // live. A task starts at the process root either way — a task's
     // allocations are not its spawner's region's (the region-transfer
     // seam is how a region crosses a spawn).
+    // The trap-containment handle (D68, s132): while the body runs,
+    // a contained trap retires the task through this slot instead of
+    // through the return path below. Cleared after the body either
+    // way — a task that completed normally must not be retirable.
+    CURRENT_TASK.with(|c| *c.borrow_mut() = Some((id, scope.clone())));
     let reason = crate::native::with_root_ambient(|| {
         with_scope(&scope, || match body {
             Body::Rust(f) => {
@@ -536,6 +597,7 @@ fn run_task(task: Box<Task>) {
     });
     #[cfg(unix)]
     super::stack::set_fault_label("");
+    CURRENT_TASK.with(|c| *c.borrow_mut() = None);
     scope.child_done(id, reason);
     // det (s36): completion (child_done's join/cancel wakeups
     // included) happened under the baton; release it for the next

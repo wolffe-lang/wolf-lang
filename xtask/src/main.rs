@@ -1313,12 +1313,24 @@ const ALL_THREE_FLOOR: usize = 207;
 // carries the divergence in the ledger instead of nowhere). The three
 // E0201 separator witnesses are static rejections and by design move
 // no count. Counts measured by this gate, not predicted.
+// s132 ratchet over 444 entries: #187's cap half (D68). Three new
+// run-phase witnesses — `faults/region_cap_breach` and
+// `memory/region_cap_boundary` execute on all three lanes (the budget
+// derives from a measured `region_bytes` reading, so each tier
+// breaches or lands at-cap in its own ledger units), while
+// `conc/proc_cap_fault_join` (the contained-trap join read) executes
+// on the two native lanes only (the checked lane still refuses
+// structured concurrency by name, C1). So checked and all-three move
+// by exactly two (259/242) and native/release/union by exactly three
+// (276/276/293). No pre-existing file moved lanes: the cap is new
+// surface, and containment changes no root-domain verdict. Counts
+// measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 257), ("native", 273), ("release", 273)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 259), ("native", 276), ("release", 276)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 290;
+const UNION_FLOOR: usize = 293;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 240;
+const ALL_THREE_FLOOR: usize = 242;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

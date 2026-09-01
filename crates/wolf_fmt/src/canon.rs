@@ -128,6 +128,13 @@ fn eligible_let<'a>(stmt: &'a GreenNode, src: &[u8]) -> Option<(Vec<u8>, Option<
     if has_comment(stmt, src) {
         return None;
     }
+    // A capped value form stays as written (s132, [mem.region.cap.1]):
+    // the sugar rewrite would have to carry the budget expression
+    // through the merge, and conservatism is the round-trip's friend —
+    // `let r = region(cap: N)` + `in r { … }` is already canonical.
+    if value.child_node(K::RegionCap).is_some() {
+        return None;
+    }
     let strategy = value.child_node(K::RegionStrategy);
     Some((name, strategy))
 }
@@ -255,6 +262,12 @@ fn norm_node(
                     let mut rb: Vec<NTree> = Vec::new();
                     rb.push(NTree::Tok(K::RegionKw, b"region".to_vec()));
                     rb.push(NTree::Tok(K::Ident, name.text(src).to_vec()));
+                    if let Some(cap) = m.child_node(K::RegionCap) {
+                        // The budget is shape ([mem.region.cap.1]):
+                        // a formatter that dropped it must not
+                        // compare equal. The parens are layout.
+                        rb.push(norm_node(cap, src, sugar, drops));
+                    }
                     if let Some(strat) = m.child_node(K::RegionStrategy) {
                         rb.push(norm_node(strat, src, sugar, drops));
                     }

@@ -1764,12 +1764,19 @@ impl<'a> Fmt<'a> {
                 }
             }
             K::RegionBlock => {
-                // `region name? (: strategy)? { … }`
+                // `region name? ('(' cap ')')? (: strategy)? { … }`
                 let mut d = Vec::new();
                 self.kw(n.child_token(K::RegionKw), "region", &mut d);
                 if let Some(name) = n.child_token(K::Ident) {
                     d.push(Doc::text(" "));
                     self.tok(name, &mut d);
+                }
+                if let Some(cap) = n.child_node(K::RegionCap) {
+                    // Tight to the name ([mem.region.cap.1]'s sugar
+                    // spelling: `region r(cap: N)`).
+                    self.kw(n.child_token(K::LParen), "(", &mut d);
+                    self.node(cap, &mut d, Ctx::Free);
+                    self.kw(n.child_token(K::RParen), ")", &mut d);
                 }
                 if let Some(strategy) = n.child_node(K::RegionStrategy) {
                     self.kw(n.child_token(K::Colon), ":", &mut d);

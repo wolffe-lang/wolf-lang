@@ -169,7 +169,7 @@ fn corpus_parse_expectations() {
             }
         }
     }
-    // The ledger: 13 own-file syntax-tier counter-examples exist today
+    // The ledger: 15 own-file syntax-tier counter-examples exist today
     // (E0001, E0002, E0006, E0008, E0210, s88's E0201 bare `..` —
     // wolf-lang#88 — s126's E0211 misplaced `#![…]`, s128's two
     // D63 refusal teach-notes: E0201 one-initializer-many-names and
@@ -177,10 +177,16 @@ fn corpus_parse_expectations() {
     // seven-digit `\u{…}` — wolf-lang#189, the digit bound the
     // production now spells — and s131's three D67 separator pins:
     // E0201 comma-less `..`, comma-less struct fields, comma-less
-    // tuple elements — wolf-lang#190, the production is the law),
-    // plus 1 member-sibling case (s124's broken_sibling, D59);
-    // everything else must pass.
-    assert_eq!(fail, 13, "syntax-tier fail-file count drifted");
+    // tuple elements — wolf-lang#190, the production is the law —
+    // and s132's two D69 separator pins: E0201 comma-less literal
+    // fields and comma-less closure params — the same law,
+    // family-wide; the NEWLINE-separated literal refusal is pinned in
+    // decl_grammar::expr_list_separators_are_required instead, because
+    // the formatter's canonical multi-line layout regenerates the
+    // separator and a corpus file must fully format), plus 1
+    // member-sibling case (s124's broken_sibling, D59); everything
+    // else must pass.
+    assert_eq!(fail, 15, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

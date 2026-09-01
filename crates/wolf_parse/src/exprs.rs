@@ -1240,6 +1240,7 @@ fn struct_lit(p: &mut Parser<'_>, lhs: CompletedMarker, ctx: Ctx) -> CompletedMa
     let opener = p.current_span();
     p.bump(); // `{`
     let inner = ctx.inner();
+    let mut list_diags = p.diag_count();
     loop {
         p.eat_terms();
         if p.at_punct(Punct::RBrace) {
@@ -1255,9 +1256,19 @@ fn struct_lit(p: &mut Parser<'_>, lhs: CompletedMarker, ctx: Ctx) -> CompletedMa
         // Note: no per-field latch reset here — a `{` mistaken for a
         // struct literal chews line-shaped "fields" that alternate
         // between clean and broken; one report covers the wreck.
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        // The separator is REQUIRED between fields (D69, s132):
+        // `Point { x: 7 y: 2 }` and its newline-separated spelling
+        // both refuse; a terminator run before `}` stays the
+        // production's own trailing layout.
+        grammar::list_separator(
+            p,
+            Punct::RBrace,
+            "the struct literal's fields",
+            "the separating comma is required between field initializers \
+             ([gram.expr.primary]: struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}')",
+            true,
+            &mut list_diags,
+        );
         if p.pos() == before {
             grammar::unclosed(p, opener, "{");
             break;
@@ -1664,6 +1675,7 @@ fn closure_params(p: &mut Parser<'_>) {
     let pl = p.start();
     let opener = p.current_span();
     p.bump(); // `(`
+    let mut list_diags = p.diag_count();
     loop {
         if p.at_punct(Punct::RParen) {
             p.bump();
@@ -1694,9 +1706,18 @@ fn closure_params(p: &mut Parser<'_>) {
             grammar::type_required(p);
         }
         cp.complete(p, SyntaxKind::Param);
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        // The separator is REQUIRED between parameters (D69, s132):
+        // `fn(a b)` never derived from the production, and lupin
+        // refuses it.
+        grammar::list_separator(
+            p,
+            Punct::RParen,
+            "the closure's parameters",
+            "the separating comma is required between closure parameters \
+             ([gram.expr.closure]: closure_param (',' closure_param)* ','?)",
+            false,
+            &mut list_diags,
+        );
         if p.pos() == before {
             grammar::unclosed(p, opener, "(");
             break;
@@ -1707,9 +1728,16 @@ fn closure_params(p: &mut Parser<'_>) {
 
 // -------------------------------------------------------- regions (X4) --
 
-/// `[gram.expr.region]` — the sugar (`region name? (: strategy)? {…}`)
-/// and value (`region(strategy?)`) forms are distinct node kinds: the
-/// sugar means create + scope + free, the value form is first-class.
+/// `[gram.expr.region]` — the sugar
+/// (`region name? ('(' cap ')')? (: strategy)? {…}`) and value
+/// (`region '(' (strategy (',' cap)? | cap)? ')'`) forms are distinct
+/// node kinds: the sugar means create + scope + free, the value form
+/// is first-class. The cap clause (`cap ':' expr`, s132 —
+/// `[mem.region.cap.1]`, D68/#187) is a creation-time byte budget; on
+/// the sugar form its parenthesis follows the NAME (an anonymous
+/// sugar block takes no cap — `region (cap: N)` is the value form's
+/// spelling by the grammar's own disambiguation, so a budgeted sugar
+/// block names its region).
 fn region_expr(p: &mut Parser<'_>) -> CompletedMarker {
     let m = p.start();
     p.bump(); // region
@@ -1718,13 +1746,55 @@ fn region_expr(p: &mut Parser<'_>) -> CompletedMarker {
         if p.at_punct(Punct::RParen) {
             p.bump();
         } else {
-            region_strategy(p);
+            if at_region_cap(p) {
+                region_cap(p);
+            } else {
+                region_strategy(p);
+                if p.at_punct(Punct::Comma) {
+                    p.bump();
+                    if at_region_cap(p) {
+                        region_cap(p);
+                    } else {
+                        p.error(
+                            codes::EXPECTED_TOKEN,
+                            p.here(),
+                            "expected `cap: <bytes>` — the strategy is first, the cap last",
+                        );
+                        p.missing();
+                    }
+                }
+            }
             p.expect_punct(Punct::RParen, "`)` to close `region(`");
         }
         return m.complete(p, SyntaxKind::RegionValue);
     }
     if p.at(TokenKind::Ident) {
         p.bump(); // the region name
+        if p.at_punct(Punct::LParen) {
+            // `region r(cap: N)` — the sugar form's cap parenthesis.
+            let opener = p.current_span();
+            p.bump();
+            if at_region_cap(p) {
+                region_cap(p);
+            } else {
+                p.error(
+                    codes::EXPECTED_TOKEN,
+                    p.here(),
+                    "expected `cap: <bytes>` — the parenthesis after a region's name \
+                     holds its byte budget ([mem.region.cap.1])",
+                );
+                p.missing();
+                p.recover_until(true, |k| {
+                    matches!(k, TokenKind::Punct(Punct::RParen | Punct::LBrace))
+                        || k == TokenKind::Term
+                });
+            }
+            if !p.at_punct(Punct::RParen) {
+                grammar::unclosed(p, opener, "(");
+            } else {
+                p.bump();
+            }
+        }
     }
     if p.at_punct(Punct::Colon) {
         p.bump();
@@ -1732,6 +1802,26 @@ fn region_expr(p: &mut Parser<'_>) -> CompletedMarker {
     }
     block_required(p);
     m.complete(p, SyntaxKind::RegionBlock)
+}
+
+/// At the start of a cap clause: the contextual `cap` followed by `:`
+/// (`[gram.inv.ctx]` — `cap` stays an ordinary identifier everywhere
+/// else, the strategy names' own discipline).
+fn at_region_cap(p: &Parser<'_>) -> bool {
+    p.at(TokenKind::Ident)
+        && p.current_text() == b"cap"
+        && matches!(p.nth(1), TokenKind::Punct(Punct::Colon))
+}
+
+/// `region_cap ::= 'cap' ':' expr` — the creation-time byte budget
+/// (`[mem.region.cap.1]`): an `int` expression, evaluated at region
+/// creation.
+fn region_cap(p: &mut Parser<'_>) {
+    let c = p.start();
+    p.bump(); // cap
+    p.bump(); // :
+    expr_required(p);
+    c.complete(p, SyntaxKind::RegionCap);
 }
 
 /// `region_strategy ::= 'rc' | 'pool' '(' type ')'` — `rc` and `pool`
@@ -2034,6 +2124,7 @@ fn capture_list(p: &mut Parser<'_>) {
     let c = p.start();
     let opener = p.current_span();
     p.bump(); // `[`
+    let mut list_diags = p.diag_count();
     loop {
         if p.at_punct(Punct::RBracket) {
             p.bump();
@@ -2057,9 +2148,17 @@ fn capture_list(p: &mut Parser<'_>) {
                     || k == TokenKind::Term
             });
         }
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        // The separator is REQUIRED between captured names (D69,
+        // s132): `[a b]` never derived from the production.
+        grammar::list_separator(
+            p,
+            Punct::RBracket,
+            "the captured names",
+            "the separating comma is required between captured names \
+             ([gram.expr.unsafe]: capture_list ::= '[' IDENT (',' IDENT)* ','? ']')",
+            false,
+            &mut list_diags,
+        );
         if p.pos() == before {
             grammar::unclosed(p, opener, "[");
             break;

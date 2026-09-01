@@ -285,6 +285,56 @@ Edge legality (source stores a reference to target):
   `memory/region_bytes_value.lu`. (Added 2026-09-01, s131 —
   wolf-lang#187.)
 
+### Caps `[mem.region.cap]`
+
+- `[mem.region.cap.1]` A region may carry a **creation-time byte
+  budget** on its ledger: `region r(cap: n) { … }` (the sugar form —
+  the cap parenthesis follows the name; an anonymous sugar block takes
+  no cap) and `region(cap: n)` / `region(strategy, cap: n)` (the value
+  form). Absent cap = unbounded, today's region exactly. The cap
+  bounds `[mem.region.account.1]`'s ledger **in the tier's own
+  units**: a charge that would take the ledger *past* the cap is the
+  deterministic trap **`alloc-contract`** at the allocating site
+  (`[conf.trap.map]`'s existing kind — a byte budget is an allocation
+  contract; no new trap kind exists for it). A ledger standing
+  **exactly at** the cap is not a breach — the next byte is. The cap
+  is the region's for life: it crosses `move`/adoption with the
+  region, and a frozen region's ledger no longer moves. **The budget
+  is denominated in ledger units, not payload bytes**: the ledger is
+  per-tier, cumulative and high-water (`[mem.region.account.1]` — a
+  grown container's abandoned buffers stay charged, and a byte held
+  as a container element charges the element's storage, not one
+  byte), so a cap set by payload arithmetic can be out by an order
+  of magnitude — wolf-lang#203 measured a 64 KiB io chunk at ~1 MiB
+  of ledger (8× element storage × 2× growth history). Portable
+  programs derive caps from measured ledger readings
+  (`region_bytes`) rather than hard-coding payload sizes or per-tier
+  constants. (Added 2026-09-01, s132 — D68, wolf-lang#187: the cap
+  half; the units sentence sharpened the same day against ws12's
+  measurement, wolf-lang#203.)
+- `[mem.region.cap.2]` `cap:` takes an `int`, evaluated once at
+  region creation, before any allocation can charge. The domain is
+  nonnegative: a negative budget is `trap(alloc-contract)` at the
+  *creating* site (the same contract class as a negative allocation
+  size); `cap: 0` is legal and every charge breaches it. (Added
+  2026-09-01, s132.)
+- `[mem.region.cap.3]` A breach **inside a proc** is contained at the
+  proc boundary (D68; `[conc.proc.1]`'s failure domain): the proc
+  dies by the killed-proc sequence (`[conc.proc.kill]` — no further
+  user code runs, so `defer`s in frames below the proc boundary do
+  not run; defers on the join side are untouched and run per
+  `[mem.model.order]`), and the reason reaches the join as the value
+  `fault(alloc-contract)` (`[conc.proc.exit]`) — never unwinding, no
+  catchable row. Teardown is free-then-deliver, measured and
+  normative: the breaching proc's regions are reclaimed wholesale
+  **before** the reason delivers, so at the join
+  `live_region_bytes()` has already returned to its pre-spawn
+  reading, and no postmortem query can observe the dead proc's
+  charge. In the root domain a breach is a process trap
+  (`[conf.trap.exit]`). Files: `faults/region_cap_breach.lu`,
+  `memory/region_cap_boundary.lu`, `conc/proc_cap_fault_join.lu`.
+  (Added 2026-09-01, s132 — D68.)
+
 ## §4 Tier 2 — `shared` and `handle` `[mem.shared]`
 
 Lineage: `.docs/refs/papers/perceus.pdf` (RC insertion, drop timing).

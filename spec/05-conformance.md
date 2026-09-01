@@ -117,7 +117,10 @@ read-mode write barrier, D39), `region-fault`
   edge — and E1005 — transfer of an open region — plus rule violations
   the static tier cannot see), `stale-handle`
   (`[mem.shared.handle.2]`), `alloc-contract` (I15 `#[noalloc]`-family
-  violations in checked builds), `assert` (user assertions, ruled
+  violations in checked builds; region cap breaches and negative
+  budgets — `[mem.region.cap.1]`/`[mem.region.cap.2]`, the s132/D68
+  amendment: a byte budget is an allocation contract), `assert`
+  (user assertions, ruled
   caller-contract violations of builtin surfaces —
   `[mem.str.repeat]`, `[os.random.fill]` — and the ruled
   runtime-refusal trap of the entropy surface, `[os.random.trap]`:
@@ -130,7 +133,11 @@ read-mode write barrier, D39), `region-fault`
   `[conc.deadlock.self]`; detection required in deterministic test
   modes, permitted elsewhere).
 - `[conf.trap.exit]` A trap terminates the process with a nonzero,
-  implementation-specified exit status; conforming tools compare the
+  implementation-specified exit status — unless it fires on a task
+  inside a proc, where `[conc.proc.exit]`'s containment (D68, s132)
+  turns it into the proc's `fault(kind)` reason and the process
+  lives; this clause governs the root domain and every uncontained
+  trap. Conforming tools compare the
   *kind*, never the status number. The statuses in force are
   documented facts of each implementation, not comparison surface:
   the native tier exits 134 (`wolf_rt`'s `TRAP_EXIT_CODE`, 128+SIGABRT

@@ -190,6 +190,11 @@ pub enum SyntaxKind {
     RegionValue,
     /// `rc` / `pool(T)`.
     RegionStrategy,
+    /// `cap ':' expr` — the creation-time byte budget
+    /// (`[mem.region.cap.1]`, D68/#187): parenthesized after the
+    /// sugar form's name (`region r(cap: N) { … }`), last in the
+    /// value form's parens (`region(cap: N)` / `region(rc, cap: N)`).
+    RegionCap,
     /// `in expr { … }`.
     InBlock,
     /// `freeze expr`.

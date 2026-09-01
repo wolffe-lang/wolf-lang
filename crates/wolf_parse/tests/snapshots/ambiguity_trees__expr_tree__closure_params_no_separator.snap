@@ -1,0 +1,84 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 544..629
+  FnDecl 544..628
+    FnKw 544..546 "fn"
+    Ident 547..551 "main"
+    ParamList 551..553
+      LParen 551..552 "("
+      RParen 552..553 ")"
+    RetType 554..561
+      Arrow 554..556 "->"
+      ErrorUnionType 557..561
+        Not 557..558 "!"
+        PathType 558..561
+          Path 558..561
+            Ident 558..561 "int"
+    Block 562..628
+      LBrace 562..563 "{"
+      LetDecl 568..590
+        LetKw 568..571 "let"
+        IdentPat 572..573
+          Ident 572..573 "f"
+        Eq 574..575 "="
+        ClosureExpr 576..589
+          FnKw 576..578 "fn"
+          ParamList 578..583
+            LParen 578..579 "("
+            Param 579..580
+              Ident 579..580 "a"
+            Param 581..582
+              Ident 581..582 "b"
+            RParen 582..583 ")"
+          BinExpr 584..589
+            PathExpr 584..585
+              Ident 584..585 "a"
+            Plus 586..587 "+"
+            PathExpr 588..589
+              Ident 588..589 "b"
+        Term 589..590 "\n"
+      ExprStmt 594..627
+        IfExpr 594..626
+          IfKw 594..596 "if"
+          BinExpr 597..609
+            CallExpr 597..604
+              PathExpr 597..598
+                Ident 597..598 "f"
+              ArgList 598..604
+                LParen 598..599 "("
+                Arg 599..600
+                  LiteralExpr 599..600
+                    Int 599..600 "1"
+                Comma 600..601 ","
+                Arg 602..603
+                  LiteralExpr 602..603
+                    Int 602..603 "2"
+                RParen 603..604 ")"
+            EqEq 605..607 "=="
+            LiteralExpr 608..609
+              Int 608..609 "3"
+          Block 610..615
+            LBrace 610..611 "{"
+            ExprStmt 612..613
+              LiteralExpr 612..613
+                Int 612..613 "0"
+            RBrace 614..615 "}"
+          ElseKw 616..620 "else"
+          Block 621..626
+            LBrace 621..622 "{"
+            ExprStmt 623..624
+              LiteralExpr 623..624
+                Int 623..624 "1"
+            RBrace 625..626 "}"
+        Term 626..627 "\n"
+      RBrace 627..628 "}"
+  Term 628..629 "\n"
+  Eof 629..629 ""
+== diagnostics ==
+E0201 [Error] 581..581 expected `,` between the closure's parameters
+    note the separating comma is required between closure parameters ([gram.expr.closure]: closure_param (',' closure_param)* ','?)
+    help [MachineApplicable] add the comma
+        edit 580..580 -> ","

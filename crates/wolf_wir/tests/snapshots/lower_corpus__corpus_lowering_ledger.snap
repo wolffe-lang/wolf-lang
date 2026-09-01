@@ -35,6 +35,7 @@ conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
 conc/freeze_publish.lu: lowers
 conc/message_passing.lu: lowers
 conc/proc_cancel_defers.lu: lowers
+conc/proc_cap_fault_join.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/proc_spawn_loop.lu: lowers
@@ -80,6 +81,7 @@ faults/overflow_field_read.lu: lowers
 faults/overflow_interp_operand.lu: lowers
 faults/overflow_list_pop_i32.lu: lowers
 faults/overflow_list_pop_i64.lu: lowers
+faults/region_cap_breach.lu: lowers
 faults/repeat_negative.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 faults/wrap_high_as_i32.lu: lowers
@@ -105,6 +107,7 @@ grammar/brackets_generic_call.lu: lowers
 grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
 grammar/char_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
+grammar/closure_params_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers
 grammar/else_default.lu: not mem-clean (pre-wir rungs own it)
@@ -134,6 +137,7 @@ grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
+grammar/struct_literal_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_match_arm.lu: lowers
 grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
@@ -235,6 +239,7 @@ memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
 memory/region_bytes_query.lu: lowers
 memory/region_bytes_value.lu: lowers
+memory/region_cap_boundary.lu: lowers
 memory/region_conflict_params.lu: not mem-clean (pre-wir rungs own it)
 memory/region_container_freeze_ok.lu: lowers
 memory/region_container_reclaim.lu: lowers

@@ -48,8 +48,9 @@ use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
     ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, FromEndExpr, GreenNode,
     IfExpr, InBlock, LetDecl, MatchArm, MatchExpr, MemberExpr, ParenExpr, PathExpr, PrefixExpr,
-    RangeExpr, RegionBlock, RegionValue, ReturnExpr, ScopeExpr, SelectExpr, StringExpr, StructLit,
-    SyntaxKind, TupleExpr, UnsafeBlock, VarDecl, WhenExpr, WhileExpr, is_expr_kind, is_type_kind,
+    RangeExpr, RegionBlock, RegionCap, RegionValue, ReturnExpr, ScopeExpr, SelectExpr, StringExpr,
+    StructLit, SyntaxKind, TupleExpr, UnsafeBlock, VarDecl, WhenExpr, WhileExpr, is_expr_kind,
+    is_type_kind,
 };
 
 use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
@@ -306,6 +307,9 @@ pub enum Reason {
     WhenOperand,
     /// A select arm's source must be a channel (`[conc.select.ready]`).
     SelectSource,
+    /// A region's `cap:` budget is a byte count (s132,
+    /// `[mem.region.cap.1]`).
+    RegionCap,
 }
 
 impl Reason {
@@ -344,6 +348,7 @@ impl Reason {
             Reason::FreezeTarget => "the target of `freeze` must be".to_string(),
             Reason::WhenOperand => "a `when` operand must be".to_string(),
             Reason::SelectSource => "a select arm receives from".to_string(),
+            Reason::RegionCap => "a region's `cap:` budget is a byte count —".to_string(),
         }
     }
 
@@ -372,6 +377,7 @@ impl Reason {
             Reason::FreezeTarget => "the `freeze` is here",
             Reason::WhenOperand => "the `when` set is acquired here",
             Reason::SelectSource => "the select arm is here",
+            Reason::RegionCap => "the region is created here",
         }
     }
 }
@@ -2342,7 +2348,27 @@ impl<'a> Checker<'a> {
     fn synth_region_value(&mut self, e: &GreenNode) -> R<TyId> {
         let d = RegionValue::cast(e).expect("kind");
         self.check_region_strategy(d.strategy());
+        self.check_region_cap(d.cap(), e)?;
         Ok(self.lo.table.intern(TyKind::RegionTy))
+    }
+
+    /// The `cap: expr` clause (s132, `[mem.region.cap.1]`): a
+    /// creation-time byte budget — an `int`, evaluated at region
+    /// creation. The budget's DOMAIN (nonnegative) is the runtime's
+    /// contract check (`[mem.region.cap.2]`, trap `alloc-contract` at
+    /// the creating site), the same split every allocation size
+    /// already has.
+    fn check_region_cap(&mut self, cap: Option<RegionCap<'_>>, e: &GreenNode) -> R<()> {
+        let Some(cap) = cap else { return Ok(()) };
+        let Some(v) = cap.value() else { return Ok(()) };
+        let int = self.lo.table.prim(Prim::Int);
+        let exp = Expect {
+            ty: int,
+            reason: Reason::RegionCap,
+            because: Some(e.span),
+        };
+        self.check_expr(v, &exp)?;
+        Ok(())
     }
 
     /// `region name? (: strategy)? { … }` — the block sugar:
@@ -2353,6 +2379,9 @@ impl<'a> Checker<'a> {
     fn synth_region_block(&mut self, e: &GreenNode) -> R<TyId> {
         let d = RegionBlock::cast(e).expect("kind");
         self.check_region_strategy(d.strategy());
+        // The cap expr types OUTSIDE the region's scope (it evaluates
+        // at creation, before the name binds).
+        self.check_region_cap(d.cap(), e)?;
         self.push_scope();
         if let Some(name) = d.name() {
             let region = self.lo.table.intern(TyKind::RegionTy);
@@ -5498,8 +5527,15 @@ impl<'a> Checker<'a> {
             }
             // `[conc.proc.exit]`'s closed set, observed as class
             // predicates on the reason value (D30: values, never
-            // unwinding).
-            (TyKind::ExitReason, "is_normal" | "is_error" | "is_killed" | "is_cancelled") => {
+            // unwinding). `is_fault()` reads the contained-trap class
+            // (D68, s132) and `is_alloc_contract()` its one named
+            // kind — the region-cap breach the join matches on
+            // (`[mem.region.cap.3]`, #187's budget discriminator).
+            (
+                TyKind::ExitReason,
+                "is_normal" | "is_error" | "is_killed" | "is_cancelled" | "is_fault"
+                | "is_alloc_contract",
+            ) => {
                 let b = self.lo.table.prim(Prim::Bool);
                 (vec![p("self", recv_ty)], b)
             }

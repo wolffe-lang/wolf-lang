@@ -2054,6 +2054,85 @@ fn pattern_separator(p: &mut Parser<'_>, closer: Punct, what: &str, list_diags: 
     p.arm_error_reported = true;
 }
 
+/// D69's expression-list twin of [`pattern_separator`] (s132): the
+/// separating comma is REQUIRED between struct-literal fields,
+/// closure parameters, and captured names — those productions never
+/// licensed the comma-less run their recovery loops accepted, and
+/// lupin refuses every lax spelling (E0201, the newline-separated
+/// struct literal included). Called after each member: a `,` is
+/// consumed; the closer (or a truncation the loop's own guards will
+/// report) is end-of-list; anything else is E0201 with the
+/// machine-applicable "add the comma" insertion at the previous
+/// member's end, and parsing continues as if the comma were present.
+/// `terms_close` is the struct literal's layout carve-out: a
+/// terminator run whose next significant token is the CLOSER is the
+/// production's own trailing layout (`Point {\n  x: 7,\n}`), while
+/// one followed by another member is the newline-separated lax form,
+/// refused like the same-line one. Latches once per list and never
+/// into a reported wreck — [`pattern_separator`]'s D22 discipline,
+/// verbatim.
+pub(crate) fn list_separator(
+    p: &mut Parser<'_>,
+    closer: Punct,
+    what: &str,
+    note: &'static str,
+    terms_close: bool,
+    list_diags: &mut usize,
+) {
+    if p.at_punct(Punct::Comma) {
+        p.bump();
+        return;
+    }
+    if p.at_punct(closer) || p.at_eof() || p.at_decl_start() || p.at_punct(Punct::Eq) {
+        return;
+    }
+    let mut span = p.here();
+    if p.at(TokenKind::Term) {
+        if terms_close {
+            // Bounded lookahead past the terminator run: closer (or
+            // the file's end) = layout; a member = the lax form,
+            // reported AT the member the missing comma should precede
+            // (where lupin points).
+            let mut k = 0;
+            while matches!(p.nth(k), TokenKind::Term) {
+                k += 1;
+            }
+            if matches!(p.nth(k), TokenKind::Punct(pk) if pk == closer)
+                || p.nth(k) == TokenKind::Eof
+            {
+                return;
+            }
+            span = p.nth_span(k);
+        } else {
+            // Bracketed lists treat a terminator as truncation — the
+            // loop's own unclosed guard owns that report.
+            return;
+        }
+    }
+    if p.diag_count() != *list_diags {
+        // The list is already a reported wreck (a damaged member, an
+        // earlier separator miss, recovery in flight): the comma is
+        // not the lesson, and the D22 budget owns the count.
+        return;
+    }
+    let anchor = p.prev_end().unwrap_or(span);
+    p.push_diag(
+        wolf_diag::Diagnostic::error(
+            codes::EXPECTED_TOKEN,
+            span,
+            format!("expected `,` between {what}"),
+        )
+        .with_note(note)
+        .with_suggestion(wolf_diag::Suggestion::new(
+            "add the comma",
+            vec![(anchor, ",".to_string())],
+            wolf_diag::Applicability::MachineApplicable,
+        )),
+    );
+    *list_diags = usize::MAX;
+    p.arm_error_reported = true;
+}
+
 /// `'(' pattern (',' pattern)* ','? ')'` after a path pattern.
 fn pattern_payload(p: &mut Parser<'_>) {
     let opener = p.current_span();
