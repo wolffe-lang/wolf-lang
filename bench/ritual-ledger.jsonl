@@ -31,3 +31,4 @@
 {"ts":"2026-08-25T03:33Z","commit":"7187c6d","geomean":1.082,"verdict":"HOLDS","consecutive":4}
 {"ts":"2026-08-26T03:40Z","commit":"e98b164","geomean":1.091,"verdict":"HOLDS","consecutive":5}
 {"ts":"2026-08-27T13:07Z","commit":"90c90df","geomean":1.098,"verdict":"HOLDS","consecutive":6}
+{"ts":"2026-09-01T12:32Z","commit":"e6548a9","geomean":1.029,"verdict":"DOES-NOT-HOLD","consecutive":0}
