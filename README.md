@@ -13,7 +13,7 @@ Wolf is pre-alpha. The surface still moves.
 
 ## What runs today
 
-v0.2.0 is tagged, under the codename wolfgang. The codenames go on like that.
+v0.2.1 is tagged, under the codename wolfgang. The codenames go on like that.
 
 It ships both tiers: `wolf build` and `wolf run` compile `.lu` source to
 native machine code through the compiler's own backend, with no LLVM in the
@@ -37,7 +37,7 @@ the one above included — answers `version+dev.<commit>`, so an off-tag build
 never claims to be the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and says `+dev.unknown`.
 
-[`CHANGELOG.md`](CHANGELOG.md) tells v0.2.0 by campaign;
+[`CHANGELOG.md`](CHANGELOG.md) tells v0.2.1 by campaign;
 [`docs/release/NOTES-v0.1.0.md`](docs/release/NOTES-v0.1.0.md) says what the
 first release was, feature by feature.
 

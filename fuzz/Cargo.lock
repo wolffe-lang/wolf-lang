@@ -325,14 +325,14 @@ dependencies = [
 
 [[package]]
 name = "wolf_ast"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "wolf_span",
 ]
 
 [[package]]
 name = "wolf_backend"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "gimli",
  "wolf_wir",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_codegen_llvm"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "wolf_backend",
  "wolf_rt",
@@ -349,14 +349,14 @@ dependencies = [
 
 [[package]]
 name = "wolf_diag"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "wolf_span",
 ]
 
 [[package]]
 name = "wolf_fmt"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "wolf_ast",
  "wolf_diag",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_lex"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "unicode-ident",
  "wolf_diag",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_mem"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "libc",
  "wolf_ast",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_parse"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "wolf_ast",
  "wolf_diag",
@@ -397,14 +397,14 @@ dependencies = [
 
 [[package]]
 name = "wolf_rt"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "wolf_sema"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "blake3",
  "rayon",
@@ -416,11 +416,11 @@ dependencies = [
 
 [[package]]
 name = "wolf_span"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "wolf_wir"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "wolf_ast",
  "wolf_diag",
@@ -431,7 +431,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde_json",
 ]
