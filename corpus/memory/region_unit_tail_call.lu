@@ -1,0 +1,57 @@
+//! check: run(exit=0, stdout="2\nhandled")
+//! phase: run
+//! conforms: mem.region.intra.2, err.else
+//!
+//! Issue #192, half two — the counter-example to the region-escape
+//! error (the code is deliberately not spelled: this file compiles, so
+//! it is a fixture for no diagnostic, and the catalog reads headers).
+//! A region block
+//! whose TAIL is a raising call handled by `else |e|` was refused:
+//! "this value is allocated in region `r`, which is freed when the
+//! block ends … the block's value would outlive the region" — pointing
+//! at a call whose value is `()`. Appending a scalar no-op made the
+//! identical block compile, which is what gave the shape away.
+//!
+//! The cause was one type judgement, not the escape check: a call's
+//! result counted as an ambient allocation whenever its type was not
+//! `Copy`, and an error union is never `Copy`. So `() ! {bad}` — unit
+//! on the ok edge, a payload-free tag on the error edge, nothing
+//! allocated on either — got a phantom allocation site, and in tail
+//! position that phantom read as the block's escaping value. The
+//! judgement now reads through the row the way the region-return
+//! judgement beside it already did.
+//!
+//! Both edges run here: the `..._ok` call returns unit normally, the
+//! `..._raise` call raises and its handler runs, and both sit in tail
+//! position inside the region. A row tag carrying a real payload still
+//! allocates and still gets its site — that half is deliberately not
+//! widened.
+
+fn emit(xs: List[int]) -> () ! {bad} {
+    if xs.len > 100 { return bad }
+    print("{xs.len}")
+}
+
+fn emit_raise(xs: List[int]) -> () ! {bad} {
+    if xs.len >= 0 { return bad }
+    print("unreachable")
+}
+
+fn main() -> !int {
+    region r {
+        var xs = List[int]()
+        (mut xs).push(1)
+        (mut xs).push(2)
+        emit(xs) else |e| match e {
+            bad => print("bad"),
+        }
+    }
+    region r2 {
+        var ys = List[int]()
+        (mut ys).push(9)
+        emit_raise(ys) else |e| match e {
+            bad => print("handled"),
+        }
+    }
+    0
+}
