@@ -1,0 +1,34 @@
+# The M2 ritual ledger — one line per ritual, appended by
+# `cargo xtask bench ritual` (lines starting with `#` are this header).
+#
+# THE TICK RULE (s44: "three consecutive nightly runs"): `consecutive`
+# is 0 after any DOES-NOT-HOLD; a HOLDS advances the previous count by
+# one ONLY when >= 12 hours separate it from the previously COUNTED
+# hold — two samples of one thermal state are one tick, however many
+# timestamps they wear. A closer HOLDS is recorded with the count
+# unchanged and a note. At consecutive >= 3 the tool prints the
+# declaration-threshold banner; the declaration itself is the human's.
+#
+# Lines 1-9 are the hand-runs (2026-08-20 -> -22, #89), backfilled from
+# their conditions files' own UTC stamps. Note what the honest stamps
+# say: runs 8 and 9 are EIGHTEEN MINUTES apart — the local calendar
+# rolled over between them, but a night did not pass. Run 9 is
+# therefore recorded as a same-night re-render and the tail count is 1,
+# not the 2 the run-9 publication claimed. The instrument outvotes the
+# narrative, here as everywhere.
+{"ts":"2026-08-20T22:45Z","commit":"2c6980a","geomean":0.643,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 1, first quiet-host reading"}
+{"ts":"2026-08-21T04:17Z","commit":"5bfef6c","geomean":1.612,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 2; headline poisoned by the a5 accounting artifact (#115), ex-a5 0.840"}
+{"ts":"2026-08-21T07:50Z","commit":"ceca1d1","geomean":1.832,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 3; still poisoned (#115), ex-a5 0.956"}
+{"ts":"2026-08-21T08:35Z","commit":"c9da6d9","geomean":0.906,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 4, first artifact-free reading (ops-parity guard live)"}
+{"ts":"2026-08-21T22:11Z","commit":"e75ee1e","geomean":1.072,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 5; geomean condition held for the first time, loss clause unspent"}
+{"ts":"2026-08-22T02:34Z","commit":"62da7cf","geomean":1.043,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 6; a5 regression caught, fixed in 34c36f1"}
+{"ts":"2026-08-22T03:02Z","commit":"34c36f1","geomean":1.095,"verdict":"DOES-NOT-HOLD","consecutive":0,"note":"run 7; loss set = the two drafts, unspent at run time (spent at 857c796)"}
+{"ts":"2026-08-22T03:53Z","commit":"857c796","geomean":1.099,"verdict":"HOLDS","consecutive":1,"note":"run 8, the clock's first counted hold"}
+{"ts":"2026-08-22T04:11Z","commit":"857c796","geomean":1.107,"verdict":"HOLDS","consecutive":1,"note":"run 9; same-night re-render (18m after the counted hold); count unchanged"}
+{"ts":"2026-08-22T06:30Z","commit":"7296812","geomean":1.071,"verdict":"HOLDS","consecutive":1,"note":"same-night re-render (139m after the counted hold); count unchanged"}
+{"ts":"2026-08-23T03:36Z","commit":"82c638e","geomean":1.066,"verdict":"HOLDS","consecutive":2}
+{"ts":"2026-08-24T03:39Z","commit":"2ff4dd1","geomean":1.080,"verdict":"HOLDS","consecutive":3}
+{"ts":"2026-08-25T03:33Z","commit":"7187c6d","geomean":1.082,"verdict":"HOLDS","consecutive":4}
+{"ts":"2026-08-26T03:40Z","commit":"e98b164","geomean":1.091,"verdict":"HOLDS","consecutive":5}
+{"ts":"2026-08-27T13:07Z","commit":"90c90df","geomean":1.098,"verdict":"HOLDS","consecutive":6}
+{"ts":"2026-09-01T12:32Z","commit":"e6548a9","geomean":1.029,"verdict":"DOES-NOT-HOLD","consecutive":0}
