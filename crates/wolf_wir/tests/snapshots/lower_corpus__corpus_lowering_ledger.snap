@@ -134,10 +134,13 @@ grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
 grammar/struct_pattern_match_arm.lu: lowers
 grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
+grammar/struct_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
+grammar/struct_pattern_rest_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_unknown_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
 grammar/tuple_pattern_match_arm.lu: lowers
+grammar/tuple_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers

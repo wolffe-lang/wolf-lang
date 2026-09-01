@@ -1,0 +1,20 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.pat.struct
+//!
+//! D67 refusal pin (#190): the separating comma is required between a
+//! struct pattern's fields — `Point { x y }` was an accident of the
+//! recovery loop (`(',' field_pat)*` never derived it), accepted by
+//! no other authority: the production refuses, lupin refuses, every
+//! worked example writes the comma. The fix is machine-applicable.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() -> !int {
+    let p = Point { x: 1, y: 2 }
+    let Point { x y } = p
+    if x + y == 3 { 0 } else { 1 }
+}

@@ -169,15 +169,18 @@ fn corpus_parse_expectations() {
             }
         }
     }
-    // The ledger: 10 own-file syntax-tier counter-examples exist today
+    // The ledger: 13 own-file syntax-tier counter-examples exist today
     // (E0001, E0002, E0006, E0008, E0210, s88's E0201 bare `..` —
     // wolf-lang#88 — s126's E0211 misplaced `#![…]`, s128's two
     // D63 refusal teach-notes: E0201 one-initializer-many-names and
-    // E0201 bare-tuple, both `[gram.item.let]`, and r04's E0101
+    // E0201 bare-tuple, both `[gram.item.let]`, r04's E0101
     // seven-digit `\u{…}` — wolf-lang#189, the digit bound the
-    // production now spells), plus 1 member-sibling case (s124's
-    // broken_sibling, D59); everything else must pass.
-    assert_eq!(fail, 10, "syntax-tier fail-file count drifted");
+    // production now spells — and s131's three D67 separator pins:
+    // E0201 comma-less `..`, comma-less struct fields, comma-less
+    // tuple elements — wolf-lang#190, the production is the law),
+    // plus 1 member-sibling case (s124's broken_sibling, D59);
+    // everything else must pass.
+    assert_eq!(fail, 13, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

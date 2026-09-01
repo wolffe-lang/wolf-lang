@@ -50,6 +50,38 @@ fn e0008_keyword_used_as_identifier() {
 }
 
 #[test]
+fn e0201_pattern_separator_fix() {
+    // D67 (#190): the pattern family's required separator, with the
+    // machine-applicable "add the comma" fix — one zero-width
+    // insertion flush against the previous member (`x, ..`, never
+    // `x ,..`).
+    let src = "fn f() { let Point { x .. } = p\n}\n";
+    let parse = util::parse(src);
+    let d = parse
+        .diagnostics
+        .iter()
+        .find(|d| d.code == codes::EXPECTED_TOKEN)
+        .expect("E0201 for the comma-less `..`");
+    let sugg = &d.suggestions[0];
+    assert_eq!(
+        sugg.applicability,
+        wolf_diag::Applicability::MachineApplicable
+    );
+    assert_eq!(sugg.edits.len(), 1);
+    assert_eq!(sugg.edits[0].1, ",");
+    assert_eq!(
+        sugg.edits[0].0.lo, sugg.edits[0].0.hi,
+        "the fix is an insertion"
+    );
+    snap("e0201_rest_needs_comma", src, codes::EXPECTED_TOKEN);
+    snap(
+        "e0201_fields_need_comma",
+        "fn f() { let Point { x y } = p\n}\n",
+        codes::EXPECTED_TOKEN,
+    );
+}
+
+#[test]
 fn e0201_expected_token() {
     // (`fn (` reads as a stray closure line — E0203 — so the missing
     // name is pinned on a generic header instead.)

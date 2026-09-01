@@ -4,6 +4,8 @@
 
 mod util;
 
+use wolf_parse::codes;
+
 use wolf_ast::{
     ConstDecl, EnumDecl, FnDecl, GreenNode, ImplDecl, ImportCDecl, LetDecl, ParamMode, StructDecl,
     SyntaxKind, TraitDecl, TypeDecl, UseDecl, VarDecl,
@@ -458,6 +460,52 @@ fn struct_pattern_rest_must_be_last() {
     assert!(
         !p.diagnostics.is_empty(),
         "`..` before a field must be rejected"
+    );
+}
+
+#[test]
+fn pattern_separators_are_required() {
+    // D67 (#190): the production is the law — the comma separates
+    // members throughout the family, `..` included. Each lax spelling
+    // is E0201; the recovery keeps every member in the tree (as-if-
+    // comma), so one deleted comma costs exactly one report.
+    for (src, what) in [
+        ("let Point { x .. } = p\n", "comma-less `..`"),
+        ("let Point { x y } = p\n", "comma-less struct fields"),
+        ("let Point { x y z } = p\n", "a comma-less field run"),
+        ("let (a b) = pair\n", "comma-less tuple elements"),
+        ("let Some(a b) = opt\n", "comma-less payload patterns"),
+    ] {
+        let p = util::parse(src);
+        assert!(
+            p.diagnostics
+                .iter()
+                .any(|d| d.code == codes::EXPECTED_TOKEN),
+            "{what} must refuse at E0201: {src:?}"
+        );
+    }
+    // The comma-full spellings stay clean — the tightening narrows
+    // the accept set to the production, nothing else.
+    for src in [
+        "let Point { x, .. } = p\n",
+        "let Point { x, y } = p\n",
+        "let Point { x, y, } = p\n",
+        "let (a, b) = pair\n",
+        "let Some(a, b) = opt\n",
+    ] {
+        let p = util::parse(src);
+        assert!(
+            p.diagnostics.is_empty(),
+            "comma-full pattern must stay clean: {src:?} -> {:?}",
+            p.diagnostics.first().map(|d| d.code)
+        );
+    }
+    // One deleted comma, one report (the D22 budget's shape).
+    let p = util::parse("let Point { x y, z } = p\n");
+    assert_eq!(
+        p.diagnostics.len(),
+        1,
+        "one missing separator is one diagnostic"
     );
 }
 

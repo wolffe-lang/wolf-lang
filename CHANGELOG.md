@@ -21,6 +21,23 @@ is deliberately not here: the honest designs all need a ruling
 forbids), and the r04 lesson says the clause must not outrun the
 differential.
 
+### The comma insists (s131, D67)
+
+The pattern family's separating comma is now required, as the
+production always said (#190): `Point { x .. }`, `Point { x y }` and
+`(a b)` refuse at E0201 with a machine-applicable "add the comma" fix
+(`wolf fix --apply` produces the canonical spelling), and `..` follows
+a separator like one more member. Blast radius, measured before the
+tightening: zero — the wolf-lang corpus, fmt's output, and every one
+of wolf-book's `.lu` files (the 248-file exercise corpus included)
+already write the comma; only lupin and the spec's letter were ever
+this strict, and the compiler now agrees with both. The r04 spec
+sentence and witness that were backed out of 0.2.1 land WITH the fix:
+`[gram.pat.struct]`'s production tightens to `(',' '..'?)?` and three
+refusal witnesses pin the family. The struct-literal laxity
+(`Point { x: 7 y: 2 }` still parses) is outside D67's letter and
+stays measured residue on the tracker.
+
 ## 0.2.1 — 2026-09-01
 
 THE LETTER AND THE ARCHIVE. A patch release: no new features, and

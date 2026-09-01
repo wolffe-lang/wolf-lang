@@ -1,0 +1,22 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.pat.struct
+//!
+//! D67 refusal pin (#190, the r04 measurement): `..` follows a
+//! separator like one more member — `Point { x .. }` does not parse.
+//! This is the witness r04 drafted and withdrew (landing it against
+//! the lax parser would have cemented one side of an open question in
+//! a patch release); it lands WITH the tightening, so the clause and
+//! the machine move together. lupin 0.1.20 already refused this
+//! spelling at E0201; the fix is machine-applicable ("add the comma").
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn main() -> !int {
+    let p = Point { x: 1, y: 2 }
+    let Point { x .. } = p
+    if x == 1 { 0 } else { 1 }
+}

@@ -1893,6 +1893,7 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
             let m = p.start();
             let opener = p.current_span();
             p.bump();
+            let mut list_diags = p.diag_count();
             loop {
                 if p.at_punct(Punct::RParen) {
                     p.bump();
@@ -1919,9 +1920,12 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
                         )
                     });
                 }
-                if p.at_punct(Punct::Comma) {
-                    p.bump();
-                }
+                pattern_separator(
+                    p,
+                    Punct::RParen,
+                    "the tuple pattern's elements",
+                    &mut list_diags,
+                );
                 if p.pos() == before {
                     unclosed(p, opener, "(");
                     break;
@@ -1988,10 +1992,73 @@ fn at_path_pattern(p: &Parser<'_>) -> bool {
     )
 }
 
+/// The separating comma is REQUIRED between pattern members (D67:
+/// the production is the law — `(',' pattern)*` never licensed the
+/// comma-less run wolfgang's recovery loop accepted, and lupin
+/// refuses it). Called after each member: a `,` is consumed; the
+/// closer (or a truncation the loop's own guards will report) is
+/// end-of-list; anything else — `..` included, which follows a
+/// separator like one more member — is E0201 with a
+/// machine-applicable "add the comma" insertion, and parsing
+/// continues as if the comma were present, so the tree keeps every
+/// member and one deleted comma costs exactly one report. The report
+/// latches per LIST (`reported`): a damaged list whose recovery
+/// re-enters the loop must not pay one separator report per member it
+/// chews — the D22 cascade budget measured exactly that wreck
+/// (MUTATE_BUDGET=300, a duplicated `(` in a payload) — while the
+/// well-formed miss keeps its full teach-note.
+fn pattern_separator(p: &mut Parser<'_>, closer: Punct, what: &str, list_diags: &mut usize) {
+    if p.at_punct(Punct::Comma) {
+        p.bump();
+        return;
+    }
+    if p.at_punct(closer) || p.at_eof() || p.at_decl_start() || p.at_punct(Punct::Eq) {
+        return;
+    }
+    if p.diag_count() != *list_diags {
+        // The list is already a reported wreck (a damaged member, an
+        // earlier separator miss, recovery in flight): the comma is
+        // not the lesson, and the D22 budget owns the count.
+        return;
+    }
+    let span = p.here();
+    let (msg, note) = if p.at_punct(Punct::DotDot) {
+        (
+            "expected `,` before `..` — it ignores the remaining fields like one more member"
+                .to_string(),
+            "the separating comma is required, and `..` follows one: `Point { x, .. }`, \
+             never `Point { x .. }` ([gram.pat.struct])",
+        )
+    } else {
+        (
+            format!("expected `,` between {what}"),
+            "the separating comma is required between pattern members ([gram.pat])",
+        )
+    };
+    let anchor = p.prev_end().unwrap_or(span);
+    p.push_diag(
+        wolf_diag::Diagnostic::error(codes::EXPECTED_TOKEN, span, msg)
+            .with_note(note)
+            .with_suggestion(wolf_diag::Suggestion::new(
+                "add the comma",
+                vec![(anchor, ",".to_string())],
+                wolf_diag::Applicability::MachineApplicable,
+            )),
+    );
+    // Once per list, and never into a wreck: the sentinel makes every
+    // later miss in this list read as "already reported", and the arm
+    // latch folds the member wreckage that often follows a real wreck's
+    // first separator miss — the D22 posture damaged members already
+    // hold (one report per damaged arm region, resynchronize, move on).
+    *list_diags = usize::MAX;
+    p.arm_error_reported = true;
+}
+
 /// `'(' pattern (',' pattern)* ','? ')'` after a path pattern.
 fn pattern_payload(p: &mut Parser<'_>) {
     let opener = p.current_span();
     p.bump(); // `(`
+    let mut list_diags = p.diag_count();
     loop {
         if p.at_punct(Punct::RParen) {
             p.bump();
@@ -2018,9 +2085,7 @@ fn pattern_payload(p: &mut Parser<'_>) {
                 )
             });
         }
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        pattern_separator(p, Punct::RParen, "the payload's patterns", &mut list_diags);
         if p.pos() == before {
             unclosed(p, opener, "(");
             break;
@@ -2028,18 +2093,21 @@ fn pattern_payload(p: &mut Parser<'_>) {
     }
 }
 
-/// `'{' field_pat (',' field_pat)* ','? '..'? '}'` after a struct
-/// pattern's path (`[gram.pat.struct]`, s129 #179). Each member is a
-/// `FieldPat`: the shorthand wraps a single `IdentPat` (the binding IS
-/// the field name); `IDENT ':' pattern` matches the field against any
-/// pattern. A `..` before the brace closes the list — nothing may
-/// follow it. Recovery mirrors [`pattern_payload`]'s discipline (the
+/// `'{' field_pat (',' field_pat)* (',' '..'?)? '}'` after a struct
+/// pattern's path (`[gram.pat.struct]`, s129 #179; the separator
+/// requirement — `..` included — is D67's, measured at #190). Each
+/// member is a `FieldPat`: the shorthand wraps a single `IdentPat`
+/// (the binding IS the field name); `IDENT ':' pattern` matches the
+/// field against any pattern. A `..` before the brace closes the list
+/// — nothing may follow it, and a separator precedes it like any
+/// member's. Recovery mirrors [`pattern_payload`]'s discipline (the
 /// D22 budget): one report per damaged member, resynchronize at
 /// `,`/`}`/`=`, and a truncation at statement scale reports the
 /// unclosed opener once.
 fn struct_pat_fields(p: &mut Parser<'_>) {
     let opener = p.current_span();
     p.bump(); // `{`
+    let mut list_diags = p.diag_count();
     loop {
         if p.at_punct(Punct::RBrace) {
             p.bump();
@@ -2107,9 +2175,12 @@ fn struct_pat_fields(p: &mut Parser<'_>) {
                 )
             });
         }
-        if p.at_punct(Punct::Comma) {
-            p.bump();
-        }
+        pattern_separator(
+            p,
+            Punct::RBrace,
+            "the struct pattern's fields",
+            &mut list_diags,
+        );
         if p.pos() == before {
             unclosed(p, opener, "{");
             break;
