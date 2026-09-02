@@ -356,34 +356,24 @@ pub(crate) fn c_target(cc: CallConv) -> CTarget {
     }
 }
 
-/// Runtime entry points the windows bring-up (s60a) does not serve:
-/// `wolf_rt` compiles for windows WITHOUT its task layer (pooled
-/// stacks, procs, channels, `when`), the io reactor, and signal
-/// delivery — the modules behind `lib.rs`'s linux/macOS gate — so a
-/// program that references one would fail at link with an unresolved
-/// external. It refuses HERE instead, by construct name, so the
-/// corpus lane counts the row as a named gap (`refused@wir`) rather
-/// than an environment failure. s60b (the IOCP reactor + the task
-/// layer on `VirtualAlloc` stacks) is the road; this table shrinks as
-/// it lands.
+/// Runtime entry points windows-native does not serve YET: the s60a
+/// bring-up compiled `wolf_rt` for windows without its task layer,
+/// the io reactor, and signal delivery — the modules behind
+/// `lib.rs`'s platform gate — so a program that referenced one
+/// would have failed at link with an unresolved external. It refuses
+/// HERE instead, by construct name, so the corpus lane counts the
+/// row as a named gap (`refused@wir`) rather than an environment
+/// failure. s60b shrinks the table one target at a time as each
+/// module crosses: the task layer (`spawn`/scopes, `proc`, channels
+/// and `select`, `sync`/`when`, `region_transfer`) crossed with its
+/// first target, so those families are gone from here; what remains
+/// is exactly what the runtime still compiles out on windows.
 fn windows_unserved(name: &str) -> Option<&'static str> {
     if !cfg!(target_os = "windows") {
         return None;
     }
     let family = name.strip_prefix("__wolf_rt_")?;
-    let construct = if family.starts_with("chan_") || family == "select" {
-        "channels and `select`"
-    } else if family.starts_with("scope_")
-        || family.starts_with("task_")
-        || family == "region_transfer"
-        || family == "dump_tasks"
-    {
-        "`spawn`/scopes (the task layer)"
-    } else if family.starts_with("proc_") || family == "region_adopt" {
-        "`proc`"
-    } else if family.starts_with("sync_") || family.starts_with("when_") {
-        "`sync`/`when`"
-    } else if family.starts_with("os_signal_") {
+    let construct = if family.starts_with("os_signal_") {
         "`os.signal` delivery"
     } else if family == "net_deadline" {
         // The blocking-socket posture answers `io` where the reactor
@@ -1014,9 +1004,8 @@ impl<'a, 'b> Tx<'a, 'b> {
             None => {
                 if let Some(construct) = windows_unserved(name) {
                     return Err(BackendError::Unsupported(format!(
-                        "windows-native serves no {construct} at the s60a bring-up (the runtime's \
-                         task layer, io reactor, and signal delivery are s60b's — the IOCP road); \
-                         `{name}` would not link"
+                        "windows-native serves no {construct} yet (the runtime's io reactor and \
+                         signal delivery are s60b's remaining targets); `{name}` would not link"
                     )));
                 }
                 let (_, nparams, has_ret) = RT_SYMBOLS

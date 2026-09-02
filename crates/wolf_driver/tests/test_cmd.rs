@@ -341,11 +341,11 @@ fn test_tier_corpus_is_green() {
     // serves on linux (s28) and macOS (s59). On hosts the port has
     // not reached, the honest verdict is exit 1 with exactly that
     // file unsupported — a green run must mean everything ran.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     {
         assert_eq!(code, 0, "corpus/test runs green under wolf test:\n{out}");
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     {
         assert_eq!(
             code, 1,
