@@ -10,9 +10,10 @@ never inherited (s59): the linux, macOS, and windows lines in
 |---|---|---|---|---|---|---|
 | linux x86-64 | yes (s28) | yes (s41) | yes (s32) | epoll (s35) | yes (s114) | gdb transcripts |
 | macOS aarch64 | yes (s59) | yes (s127) | yes (s59) | kqueue (s59) | yes (s59) | lldb + dSYM |
-| windows x86-64 | **yes — bring-up (s60a)** | refuses by name (s60b) | refuses by name (s60b) | blocking sockets, no deadlines (s60b: IOCP) | refuses by name (s60b) | none (s60: DWARF-in-COFF + lldb) |
+| windows x86-64 | **yes — bring-up (s60a)** | refuses by name (s60c) | **yes (s60b)** | WSAPoll (s60b; IOCP: s60c) | **yes (s60b)** — Ctrl+C/Break/close; external reload/upgrade the named gap | none (s60c: DWARF-in-COFF + lldb) |
 
-## windows x86-64 — the s60a bring-up
+
+## windows x86-64 — the s60a bring-up, the s60b task layer
 
 The learner's bar, and what meets it: on a Windows 10/11 x64 box with
 the release archive unpacked, `wolf build hello.lu` produces
@@ -38,12 +39,58 @@ calls wolf's `main` shim.
   strings, lists, json, `fs`, `os` (env, cwd, exe, exit, `spawn`/
   `wait`/`kill` of child processes), `time`, `random`
   (`BCryptGenRandom`), regions and the region ledger, sited traps.
-- `net` in its **blocking** posture — the v0 fallback the module
-  documents for hosts without a reactor: `listen`/`accept`/`connect`/
-  `read`/`write` block in the syscall. `net_deadline` refuses by name
-  (below): the blocking posture would answer `io` where every reactor
-  host answers `timeout` — measured on the runner — and a different
-  verdict is not a fallback.
+- **The task layer (s60b)**: `spawn`/scopes, `proc`, channels and
+  `select`, `sync`/`when`, `region_transfer`, `wolf test --schedules`.
+  Workers are Win32 threads on the kernel's own reserve-and-guard
+  stacks — `CreateThread` with `STACK_SIZE_PARAM_IS_A_RESERVATION` at
+  `WOLF_TASK_STACK` (8 MiB default): `VirtualAlloc(MEM_RESERVE)` plus
+  the `PAGE_GUARD` page ntdll walks down on first touch, the same
+  reserve-large/commit-on-fault posture the unix `mmap` spans build by
+  hand. Windows offers no thread on memory the runtime mapped (there
+  is no `pthread_attr_setstack`; the TEB's bounds are the kernel's),
+  so the spans are not pooled across threads — a worker keeps its
+  stack for life, which the pool's own lifetime already guarantees —
+  and idle trim (`MEM_DECOMMIT` beneath the parked frame + a re-armed
+  guard, the `_resetstkoflw` shape) is s60c's.
+- **Stack overflow in a task reports in wolf's voice (s60b)**:
+  `wolf-rt: stack overflow in task '<name>'` on stderr, exit **134** —
+  a vectored exception handler (the one place a VEH is genuinely
+  needed on this host: an overflow is the kernel raising
+  `STATUS_STACK_OVERFLOW` on the guard page, never a call) installed
+  at pool init, matching only that status, terminating the process
+  through `TerminateProcess` with no unwinding through wolf frames and
+  no containment (an overflow is process death on every host —
+  `stack-overflow` is not in the closed trap vocabulary, so it is
+  never a proc's `fault(kind)`). The overflowing thread reports from
+  the stack guarantee `SetThreadStackGuarantee` holds back (the
+  altstack twin). The main thread reports too once the pool is up —
+  `wolf-rt: stack overflow`, same number — because the handler is
+  process-wide.
+- **`os.signal` (s60b)** over `SetConsoleCtrlHandler`: `CTRL_C` and
+  `CTRL_CLOSE` → `terminate`, `CTRL_BREAK` → `quit` — the
+  `[os.signal.platform]` table. The console handler runs on a system
+  thread in normal context and enqueues the meaning directly (no
+  self-pipe, no drain thread); a listened meaning is consumed, an
+  unlistened one is left to the console's default disposition.
+  `os_signal_raise` is an **in-process** loopback here —
+  `GenerateConsoleCtrlEvent` is console-wide and would reach every
+  process on the console, the CI shell included — so the loopback
+  witness and a program's own reload path work for every meaning.
+- **The reactor (s60b)** behind the s35 interface, on `WSAPoll`: the
+  `net` parking calls (`accept`/`read`/`write`) await readiness in the
+  reactor thread with the pool compensating, kill teardown reaches
+  them, and `net_deadline` arms the timer wheel so the `timeout` row
+  fires (`corpus/net/read_deadline.lu` answers `timeout`, the same
+  verdict as linux/macOS). The poller keeps the armed list itself
+  (`WSAPoll` has no kernel set) and rebuilds the array per wake; the
+  wake token is a self-connected loopback UDP socket. **Measured** on
+  windows-latest: 24 tasks each parked on a 200 ms read deadline against a silent peer resolved **24/24 `timeout` in 207 ms wall** (4 cores; probe run 33614917814) — the deadlines fired at the deadline, and the poller's whole cost across 24 armed sockets and 24 timers was the 7 ms above the budget. That is the corpus's shape — a handful
+  of sockets per program, deadlines that resolve at the deadline —
+  and it is why the v1 is `WSAPoll` and not IOCP: completion ports
+  are the many-socket scale rung and the only road to async file io,
+  neither of which any row needs today; they land at s60c behind the
+  same seam, readiness adapted underneath exactly as kqueue and
+  `WSAPoll` were.
 - The C membrane for scalars and pointers (`extern "c"` /
   `export` with `int`, `float`, pointer parameters and results).
 
@@ -54,17 +101,14 @@ which sprint owns it, or a `refused@wir` row in `lane-coverage` — never
 a link error, never a silent stub.
 
 - **`wolf build --release`** (the LLVM tier): "this host cannot run the
-  release tier" — s60b.
-- **The task layer**: `spawn`/scopes, `proc`, channels and `select`,
-  `sync`/`when`, `region_transfer`. `wolf_rt` compiles for windows
-  without its task layer (pooled `mmap` stacks, the pthread pool, the
-  guard-page fault reporter are POSIX); the codegen refuses the
-  construct by name so the row counts. s60b: the task layer on
-  `VirtualAlloc(MEM_RESERVE)` stacks and the IOCP reactor.
-- **`net` deadlines** (`net_deadline`): the reactor's — s60b (IOCP).
-- **`os.signal`** listen/wait/raise: no POSIX signals; the
-  `SetConsoleCtrlHandler` mapping is spec'd (`[os.signal.platform]`)
-  and lands with the task layer.
+  release tier" — s60c (`ReleaseTarget::WindowsX64`, clang-cl/lld).
+- **External `reload`/`upgrade` signals**: `SIGHUP`/`SIGUSR2` have no
+  Windows analog — a wws-shaped program on Windows takes reload and
+  upgrade over a control channel (ws04's ungated half). Self-raise of
+  either reaches a listener; an unlistened self-raise of them is
+  dropped (there is no disposition to deliver to), and of
+  `terminate`/`quit` ends the process as Ctrl+C would
+  (`STATUS_CONTROL_C_EXIT`).
 - **Aggregates by value across the C membrane** (`extern "c"` /
   `export` with struct parameters or results): refused by shape —
   the MSVC rules (1/2/4/8-byte composites as bits in a register,
@@ -73,10 +117,20 @@ a link error, never a silent stub.
   pointers cross.
 - **The debugger story**: the lld-link flavors keep wolf's DWARF in
   the PE (`/DEBUG:DWARF`); nothing consumes it yet. `link.exe` drops
-  it. s60 (DWARF-in-COFF + lldb).
-- **Stack overflow in the main thread** dies as
+  it. s60c (DWARF-in-COFF + lldb).
+- **Stack overflow in a program that never spawns** dies as
   `STATUS_STACK_OVERFLOW` (0xC00000FD), not in wolf's voice — the
-  guard-page reporter is the task layer's.
+  reporter is installed at pool init (D15: no spawn, no handler),
+  measured on the runner.
+- **Async file io** (the reactor's fs flavor): IOCP's — s60c.
+
+### The floor line
+
+`cargo xtask lane-coverage` on windows-latest at 306d0fc (probe run
+33614917814) over 449 entries: checked 259 · native 278 ·
+release 0 (dark by design until s60c) · union 295 · all-three 0.
+At the s60a bring-up the line read 259/255/0/274/0 with 21 rows
+refused by construct name; at s60b **0** remain — the by-name table retired with its last row, and the 36 rows the native lane does not execute here are exactly the 36 it does not execute on macOS (the lanes' own scope gaps, none of them a host's).
 
 ### The toolchain a learner needs (and the linker order)
 
@@ -111,12 +165,17 @@ wins this order:
 
 ### The road (the s60 campaign)
 
-- **s60b** — the runtime crosses: the task layer on `VirtualAlloc`
-  stacks, the IOCP reactor behind the s35 interface (`net` deadlines,
-  async fs), `os.signal` over `SetConsoleCtrlHandler`, the LLVM
-  release tier on windows.
-- **s60c** — the compiler owns the image: the in-process COFF/PE
-  writer with `.pdata`/`.xdata`, the MSVC x64 aggregate ABI fuzzed
-  against `cl.exe`, `import c "windows.h"` through bundled mingw-w64
-  headers and import libraries (s47 — which is also the day the
-  Build Tools requirement above retires), DWARF-in-COFF + lldb.
+- **s60b** (landed, 2026-09-02) — the runtime crossed: the task
+  layer on the kernel's reserve-and-guard stacks with the VEH
+  reporter, `os.signal` over `SetConsoleCtrlHandler`, the reactor's
+  `WSAPoll` rung behind the s35 interface (`net` deadlines serve).
+- **s60c** — what s60b named: the LLVM release tier on windows
+  (`ReleaseTarget::WindowsX64`, clang-cl/lld); IOCP behind the same
+  reactor seam (async fs, the many-socket rung); idle stack trim on
+  windows (`MEM_DECOMMIT` + a re-armed guard) and the s36
+  commit-failure injection there; then the campaign map — the
+  in-process COFF/PE writer with `.pdata`/`.xdata`, the MSVC x64
+  aggregate ABI fuzzed against `cl.exe`, `import c "windows.h"`
+  through bundled mingw-w64 headers and import libraries (s47 —
+  which is also the day the Build Tools requirement above retires),
+  DWARF-in-COFF + lldb.

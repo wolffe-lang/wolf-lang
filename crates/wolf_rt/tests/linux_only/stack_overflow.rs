@@ -1,12 +1,15 @@
 //! s32 Target 3 acceptance — hitting the guard page is a
 //! deterministic fault whose diagnostic NAMES the task. Runs the
 //! overflow in a subprocess (re-exec of this binary) and asserts the
-//! trap-discipline exit (134) plus the named report on stderr.
-//! `harness = false` so the child mode is a plain main.
+//! trap-discipline exit (134) plus the named report on stderr — the
+//! same two facts on every host the task layer runs on (the unix
+//! signal handler; on windows the vectored exception handler that
+//! answers `STATUS_STACK_OVERFLOW`, s60b). `harness = false` so the
+//! child mode is a plain main.
 
 const CHILD_ENV: &str = "WOLF_RT_TEST_OVERFLOW_CHILD";
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn overflow_forever(depth: usize) -> usize {
     // Touch the frame page-by-page in address order so the descent
     // cannot leap the guard (rustc's stack probes help; this makes
@@ -22,7 +25,7 @@ fn overflow_forever(depth: usize) -> usize {
     below + buf[0] as usize
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub fn main() {
     if std::env::var(CHILD_ENV).is_ok() {
         // Child: overflow inside a named task. Never returns 0.
@@ -53,11 +56,11 @@ pub fn main() {
     println!("stack_overflow: ok (named deterministic fault)");
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 pub fn main() {
-    // The pooled-stack guard machinery is unix; the subprocess
-    // assertion runs on the linux and macOS lanes (the handler is
-    // shared — SIGBUS is the macOS delivery; windows is the recorded
-    // VirtualAlloc delta).
-    println!("stack_overflow: SKIP (linux-only assertion)");
+    // The guard reporter is the task layer's: the subprocess
+    // assertion runs where the layer runs — SIGSEGV on linux, SIGBUS
+    // on macOS, the vectored handler on windows (s60b). Elsewhere the
+    // gate is closed and there is nothing to assert.
+    println!("stack_overflow: SKIP (no task layer on this host)");
 }

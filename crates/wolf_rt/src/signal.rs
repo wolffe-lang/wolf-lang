@@ -33,15 +33,26 @@
 //!   `[os.signal.platform]` pre-authorized). The module rides the task
 //!   layer's platform gate, which covers both since s59; FreeBSD joins
 //!   with s61 (same POSIX shape, or `kqueue` `EVFILT_SIGNAL`).
-//! - **Windows (tier-1):** POSIX signals do not exist; the meaning
+//! - **Windows (s60b):** POSIX signals do not exist; the meaning
 //!   abstraction maps to `SetConsoleCtrlHandler` — CTRL_C / CTRL_BREAK
-//!   / CTRL_CLOSE → TERMINATE / QUIT / TERMINATE. RELOAD (SIGHUP) and
-//!   UPGRADE (SIGUSR2) have NO Windows analog: a NAMED platform gap —
-//!   wws reload/upgrade on Windows uses a control channel (ws04's
-//!   ungated half), not a signal. The console-control delivery lands
-//!   with the Windows native backend (no Windows codegen target exists
-//!   yet); the meaning mapping is spec'd now so the surface is portable
-//!   by MEANING, not a Linux-signal surface pretending to be portable.
+//!   / CTRL_CLOSE → TERMINATE / QUIT / TERMINATE, exactly the clause's
+//!   table. The console handler is the trampoline's twin with one
+//!   luxury: the system runs it on a thread of its own, in normal
+//!   context, so it locks the hub and enqueues directly — no self-pipe,
+//!   no drain thread. A meaning the program listens for is consumed
+//!   (the handler returns TRUE); one it does not is left to the
+//!   console's default disposition (FALSE: the process ends, as an
+//!   unhandled SIGTERM would). RELOAD (SIGHUP) and UPGRADE (SIGUSR2)
+//!   have NO Windows analog for EXTERNAL delivery: a NAMED platform gap
+//!   — wws reload/upgrade on Windows uses a control channel (ws04's
+//!   ungated half), not a signal. Self-delivery (`raise`) is a plain
+//!   in-process enqueue on windows for every meaning — `kill(getpid())`
+//!   has no console twin that would not also hit every process on the
+//!   console (`GenerateConsoleCtrlEvent` is console-wide) — so the
+//!   loopback rows and a program's own reload path work; an unlistened
+//!   self-raise of TERMINATE/QUIT ends the process as Ctrl+C would
+//!   (`STATUS_CONTROL_C_EXIT`), and of RELOAD/UPGRADE is dropped (there
+//!   is no disposition to deliver to — the checked machine's posture).
 //!
 //! # Determinism (target 4 — X12; spec `[os.signal.det]`)
 //!
@@ -61,9 +72,7 @@
 //! not.
 
 use std::collections::VecDeque;
-use std::os::fd::RawFd;
-use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::{Condvar, Mutex, Once, OnceLock};
+use std::sync::{Condvar, Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::task::{blocking, current_scope, kill_teardown_check};
@@ -102,84 +111,72 @@ const MEANINGS: [i64; 4] = [
     meaning::UPGRADE,
 ];
 
-/// Map a single meaning bit to its platform signal number.
-fn to_signal(m: i64) -> Option<i32> {
-    match m {
-        meaning::RELOAD => Some(libc::SIGHUP),
-        meaning::TERMINATE => Some(libc::SIGTERM),
-        meaning::QUIT => Some(libc::SIGQUIT),
-        meaning::UPGRADE => Some(libc::SIGUSR2),
-        _ => None,
-    }
-}
-
-/// Map a delivered signal number back to its meaning bit (0 = a signal
-/// we never installed, ignored). Async-signal-safe: integer compares
-/// only, called from the trampoline.
-fn from_signal(sig: i32) -> i64 {
-    if sig == libc::SIGHUP {
-        meaning::RELOAD
-    } else if sig == libc::SIGTERM {
-        meaning::TERMINATE
-    } else if sig == libc::SIGQUIT {
-        meaning::QUIT
-    } else if sig == libc::SIGUSR2 {
-        meaning::UPGRADE
-    } else {
-        0
-    }
-}
-
-/// The self-pipe write end, reachable from the async-signal handler
-/// WITHOUT a lock (an atomic load is async-signal-safe; a mutex is
-/// not). `-1` until the hub is initialized.
-static SELF_PIPE_W: AtomicI32 = AtomicI32::new(-1);
-
-/// The async-signal-safe trampoline: map the signal to a meaning byte
-/// and `write` it to the self-pipe. This is the ENTIRE handler — no
-/// allocation, no lock, no wolf code. A full (nonblocking) pipe drops
-/// the byte, which coalesces rapid repeats: standard signal semantics
-/// (real-time signals / queued siginfo are explicitly out of scope).
-extern "C" fn trampoline(sig: libc::c_int) {
-    let m = from_signal(sig);
-    if m == 0 {
-        return;
-    }
-    let byte = m as u8; // meanings 1/2/4/8 fit one byte
-    let fd = SELF_PIPE_W.load(Ordering::Relaxed);
-    if fd >= 0 {
-        // SAFETY: `write` is async-signal-safe; a single-byte write to
-        // the runtime's own nonblocking pipe. The return is ignored on
-        // purpose — a full pipe (EAGAIN) drops, coalescing.
-        unsafe {
-            libc::write(fd, (&raw const byte).cast(), 1);
-        }
-    }
-}
-
-/// The signal hub: the self-pipe read end, the installed-meaning set,
-/// and the FIFO of delivered meanings awaiting waiters.
+/// The signal hub: the installed-meaning set and the FIFO of delivered
+/// meanings awaiting waiters (plus, on unix, the self-pipe's read end).
 struct Hub {
-    read_fd: RawFd,
+    #[cfg(unix)]
+    read_fd: std::os::fd::RawFd,
     state: Mutex<HubState>,
     cv: Condvar,
 }
 
 struct HubState {
-    /// Meanings whose `sigaction` handler is installed.
+    /// Meanings whose delivery (a `sigaction` handler; the console
+    /// handler) is installed.
     installed: i64,
     /// Delivered meanings, oldest first (a coalescing edge queue).
     queue: VecDeque<i64>,
 }
 
 static HUB: OnceLock<Hub> = OnceLock::new();
-static READER: Once = Once::new();
 
 /// Lazy init (D15 pay-for-what-you-use — a program that never listens
-/// carries no signal pipe and no drain thread): first `listen` creates
-/// the self-pipe and spawns the one drain thread.
+/// carries no signal pipe and no drain thread): first `listen` builds
+/// the hub and the platform's delivery path ([`sys::init`]).
 fn hub() -> &'static Hub {
-    let h = HUB.get_or_init(|| {
+    let h = HUB.get_or_init(|| Hub {
+        #[cfg(unix)]
+        read_fd: sys::make_pipe(),
+        state: Mutex::new(HubState {
+            installed: 0,
+            queue: VecDeque::new(),
+        }),
+        cv: Condvar::new(),
+    });
+    sys::init(h);
+    h
+}
+
+/// Enqueue a delivered meaning and wake the waiters — the drain
+/// thread's step on unix, the console handler's own on windows.
+fn deliver(h: &Hub, m: i64) {
+    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+    st.queue.push_back(m);
+    h.cv.notify_all();
+}
+
+/// The per-platform delivery path behind the hub — the WHOLE per-OS
+/// surface of this module: `init` (unix: the self-pipe's drain
+/// thread; windows: nothing to start), `listen_one` (unix: the
+/// `sigaction` trampoline for the meaning's signal; windows: the one
+/// console handler), `raise` (unix: `kill(getpid())`; windows: the
+/// in-process enqueue the module doc explains).
+#[cfg(unix)]
+mod sys {
+    use super::{Hub, deliver, meaning, sig_code};
+    use std::os::fd::RawFd;
+    use std::sync::Once;
+    use std::sync::atomic::{AtomicI32, Ordering};
+
+    /// The self-pipe write end, reachable from the async-signal
+    /// handler WITHOUT a lock (an atomic load is async-signal-safe; a
+    /// mutex is not). `-1` until the hub is initialized.
+    static SELF_PIPE_W: AtomicI32 = AtomicI32::new(-1);
+    static READER: Once = Once::new();
+
+    /// Build the self-pipe; returns the read end (the write end
+    /// publishes through [`SELF_PIPE_W`]).
+    pub fn make_pipe() -> RawFd {
         let mut fds = [0i32; 2];
         // SAFETY: plain pipe creation; result checked. Linux gets the
         // atomic-CLOEXEC pipe2; macOS has no pipe2, so it is `pipe` +
@@ -207,85 +204,243 @@ fn hub() -> &'static Hub {
             libc::fcntl(fds[1], libc::F_SETFL, fl | libc::O_NONBLOCK);
         }
         SELF_PIPE_W.store(fds[1], Ordering::Relaxed);
-        Hub {
-            read_fd: fds[0],
-            state: Mutex::new(HubState {
-                installed: 0,
-                queue: VecDeque::new(),
-            }),
-            cv: Condvar::new(),
-        }
-    });
-    READER.call_once(|| {
-        let read_fd = h.read_fd;
-        std::thread::Builder::new()
-            .name("wolf-signal".into())
-            .spawn(move || reader_main(h, read_fd))
-            .expect("spawn signal drain thread");
-    });
-    h
-}
+        fds[0]
+    }
 
-/// The drain thread: read meaning bytes off the self-pipe in NORMAL
-/// thread context (locks, allocates — everything the handler cannot),
-/// enqueue them, and wake waiters. One blocking `read`, not an event
-/// loop — the sanctioned "dedicated thread" shape (the reactor thread's
-/// twin), not a second epoll.
-fn reader_main(h: &'static Hub, read_fd: RawFd) {
-    let mut buf = [0u8; 64];
-    loop {
-        // SAFETY: valid read end; buffer is live and correctly sized.
-        let n = unsafe { libc::read(read_fd, buf.as_mut_ptr().cast(), buf.len()) };
-        if n < 0 {
-            // EINTR: retry. Any other error on our own pipe is fatal to
-            // delivery — end the thread (only reachable on teardown).
-            if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
-                continue;
-            }
+    /// Spawn the one drain thread (once).
+    pub fn init(h: &'static Hub) {
+        READER.call_once(|| {
+            let read_fd = h.read_fd;
+            std::thread::Builder::new()
+                .name("wolf-signal".into())
+                .spawn(move || reader_main(h, read_fd))
+                .expect("spawn signal drain thread");
+        });
+    }
+
+    /// Map a single meaning bit to its platform signal number.
+    fn to_signal(m: i64) -> Option<i32> {
+        match m {
+            meaning::RELOAD => Some(libc::SIGHUP),
+            meaning::TERMINATE => Some(libc::SIGTERM),
+            meaning::QUIT => Some(libc::SIGQUIT),
+            meaning::UPGRADE => Some(libc::SIGUSR2),
+            _ => None,
+        }
+    }
+
+    /// Map a delivered signal number back to its meaning bit (0 = a
+    /// signal we never installed, ignored). Async-signal-safe: integer
+    /// compares only, called from the trampoline.
+    fn from_signal(sig: i32) -> i64 {
+        if sig == libc::SIGHUP {
+            meaning::RELOAD
+        } else if sig == libc::SIGTERM {
+            meaning::TERMINATE
+        } else if sig == libc::SIGQUIT {
+            meaning::QUIT
+        } else if sig == libc::SIGUSR2 {
+            meaning::UPGRADE
+        } else {
+            0
+        }
+    }
+
+    /// The async-signal-safe trampoline: map the signal to a meaning
+    /// byte and `write` it to the self-pipe. This is the ENTIRE handler
+    /// — no allocation, no lock, no wolf code. A full (nonblocking)
+    /// pipe drops the byte, which coalesces rapid repeats: standard
+    /// signal semantics (real-time signals / queued siginfo are
+    /// explicitly out of scope).
+    extern "C" fn trampoline(sig: libc::c_int) {
+        let m = from_signal(sig);
+        if m == 0 {
             return;
         }
-        if n == 0 {
-            return; // write end closed (process teardown)
+        let byte = m as u8; // meanings 1/2/4/8 fit one byte
+        let fd = SELF_PIPE_W.load(Ordering::Relaxed);
+        if fd >= 0 {
+            // SAFETY: `write` is async-signal-safe; a single-byte write
+            // to the runtime's own nonblocking pipe. The return is
+            // ignored on purpose — a full pipe (EAGAIN) drops,
+            // coalescing.
+            unsafe {
+                libc::write(fd, (&raw const byte).cast(), 1);
+            }
         }
-        let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-        for &b in &buf[..n as usize] {
-            st.queue.push_back(i64::from(b));
+    }
+
+    /// The drain thread: read meaning bytes off the self-pipe in
+    /// NORMAL thread context (locks, allocates — everything the
+    /// handler cannot), enqueue them, and wake waiters. One blocking
+    /// `read`, not an event loop — the sanctioned "dedicated thread"
+    /// shape (the reactor thread's twin), not a second epoll.
+    fn reader_main(h: &'static Hub, read_fd: RawFd) {
+        let mut buf = [0u8; 64];
+        loop {
+            // SAFETY: valid read end; buffer is live and correctly
+            // sized.
+            let n = unsafe { libc::read(read_fd, buf.as_mut_ptr().cast(), buf.len()) };
+            if n < 0 {
+                // EINTR: retry. Any other error on our own pipe is
+                // fatal to delivery — end the thread (only reachable on
+                // teardown).
+                if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                return;
+            }
+            if n == 0 {
+                return; // write end closed (process teardown)
+            }
+            for &b in &buf[..n as usize] {
+                deliver(h, i64::from(b));
+            }
         }
-        h.cv.notify_all();
+    }
+
+    /// Install the trampoline for the meaning's signal (`SA_RESTART`:
+    /// pooled syscalls are not torn by a delivered signal; the
+    /// reactor's `epoll_wait` handles EINTR regardless).
+    pub fn listen_one(_h: &Hub, bit: i64) -> Result<(), ()> {
+        let Some(sig) = to_signal(bit) else {
+            return Ok(());
+        };
+        // SAFETY: installing a static extern handler; the sigaction
+        // struct is zeroed then filled, the mask emptied — the stack.rs
+        // idiom.
+        unsafe {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = trampoline as extern "C" fn(libc::c_int) as usize;
+            libc::sigemptyset(&mut sa.sa_mask);
+            sa.sa_flags = libc::SA_RESTART;
+            if libc::sigaction(sig, &sa, std::ptr::null_mut()) == 0 {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+    }
+
+    /// Send one signal to THIS process: `kill(getpid(), sig)` targets
+    /// the process so any thread without the signal blocked runs the
+    /// trampoline. `IO` for an unmapped meaning or a failed send.
+    pub fn raise(m: i64) -> i64 {
+        let Some(sig) = to_signal(m) else {
+            return sig_code::IO;
+        };
+        // SAFETY: getpid + kill with a validated signal number.
+        let rc = unsafe { libc::kill(libc::getpid(), sig) };
+        if rc == 0 { sig_code::OK } else { sig_code::IO }
     }
 }
 
-/// Install the trampoline for `sig` (`SA_RESTART`: pooled syscalls are
-/// not torn by a delivered signal; the reactor's `epoll_wait` handles
-/// EINTR regardless).
-fn install_handler(sig: i32) -> Result<(), ()> {
-    // SAFETY: installing a static extern handler; the sigaction struct
-    // is zeroed then filled, the mask emptied — the stack.rs idiom.
-    unsafe {
-        let mut sa: libc::sigaction = std::mem::zeroed();
-        sa.sa_sigaction = trampoline as extern "C" fn(libc::c_int) as usize;
-        libc::sigemptyset(&mut sa.sa_mask);
-        sa.sa_flags = libc::SA_RESTART;
-        if libc::sigaction(sig, &sa, std::ptr::null_mut()) == 0 {
-            Ok(())
-        } else {
-            Err(())
+#[cfg(windows)]
+mod sys {
+    use super::{HUB, Hub, deliver, meaning, sig_code};
+    use std::sync::Once;
+
+    /// `SetConsoleCtrlHandler` event codes.
+    const CTRL_C_EVENT: u32 = 0;
+    const CTRL_BREAK_EVENT: u32 = 1;
+    const CTRL_CLOSE_EVENT: u32 = 2;
+    /// What the console's default handler exits an unhandled Ctrl+C
+    /// with — the disposition an unlistened TERMINATE/QUIT self-raise
+    /// mirrors.
+    const STATUS_CONTROL_C_EXIT: u32 = 0xC000_013A;
+
+    // Declared directly (D15: no `windows-sys` in the runtime); both
+    // are kernel32, on every wolf link line.
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn SetConsoleCtrlHandler(handler: unsafe extern "system" fn(u32) -> i32, add: i32) -> i32;
+        fn ExitProcess(code: u32) -> !;
+    }
+
+    static HANDLER: Once = Once::new();
+
+    /// Nothing to start: the console handler is installed by the
+    /// first `listen`, and the system runs it on a thread of its own.
+    pub fn init(_h: &'static Hub) {}
+
+    /// The spec'd table (`[os.signal.platform]`): CTRL_C → TERMINATE,
+    /// CTRL_BREAK → QUIT, CTRL_CLOSE → TERMINATE. Everything else
+    /// (logoff, shutdown) is not ours: 0.
+    fn from_event(ev: u32) -> i64 {
+        match ev {
+            CTRL_C_EVENT | CTRL_CLOSE_EVENT => meaning::TERMINATE,
+            CTRL_BREAK_EVENT => meaning::QUIT,
+            _ => 0,
         }
+    }
+
+    /// The console handler — the trampoline's twin, run by the system
+    /// on its own thread in normal context: lock the hub, enqueue,
+    /// wake. TRUE (handled) when the program listens for the meaning;
+    /// FALSE otherwise, so the console's default disposition (process
+    /// exit) applies exactly as an unhandled SIGTERM's would.
+    unsafe extern "system" fn ctrl_handler(ev: u32) -> i32 {
+        let m = from_event(ev);
+        if m == 0 {
+            return 0;
+        }
+        let Some(h) = HUB.get() else {
+            return 0;
+        };
+        let listened = h.state.lock().unwrap_or_else(|p| p.into_inner()).installed & m != 0;
+        if !listened {
+            return 0;
+        }
+        deliver(h, m);
+        1
+    }
+
+    /// Install the one console handler (once, on the first listened
+    /// meaning of any kind — RELOAD/UPGRADE included, which only
+    /// self-delivery can ever reach here). A failed install is `IO`.
+    pub fn listen_one(_h: &Hub, _bit: i64) -> Result<(), ()> {
+        let mut ok = true;
+        HANDLER.call_once(|| {
+            // SAFETY: registering a static extern fn with the console.
+            ok = unsafe { SetConsoleCtrlHandler(ctrl_handler, 1) } != 0;
+        });
+        if ok { Ok(()) } else { Err(()) }
+    }
+
+    /// Self-delivery, in process (the module doc says why there is no
+    /// console twin of `kill(getpid())`): a listened meaning is
+    /// enqueued as the console handler would enqueue it; an unlistened
+    /// TERMINATE/QUIT ends the process as an unhandled Ctrl+C does; an
+    /// unlistened RELOAD/UPGRADE has no disposition to reach and is
+    /// dropped. An unmapped meaning is `IO`.
+    pub fn raise(m: i64) -> i64 {
+        if !matches!(
+            m,
+            meaning::RELOAD | meaning::TERMINATE | meaning::QUIT | meaning::UPGRADE
+        ) {
+            return sig_code::IO;
+        }
+        let h = super::hub();
+        let listened = h.state.lock().unwrap_or_else(|p| p.into_inner()).installed & m != 0;
+        if listened {
+            deliver(h, m);
+        } else if m == meaning::TERMINATE || m == meaning::QUIT {
+            // SAFETY: process exit with the console's own status.
+            unsafe { ExitProcess(STATUS_CONTROL_C_EXIT) };
+        }
+        sig_code::OK
     }
 }
 
 /// `os_signal_listen(set)` — register interest in a set of meanings,
-/// installing the trampoline for each. Idempotent per meaning. `IO` if
-/// any handler install fails.
+/// installing the platform's delivery for each ([`sys::listen_one`]).
+/// Idempotent per meaning. `IO` if any install fails.
 pub fn listen(mask: i64) -> i64 {
     let h = hub();
     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
     for &bit in &MEANINGS {
-        if mask & bit != 0
-            && st.installed & bit == 0
-            && let Some(sig) = to_signal(bit)
-        {
-            if install_handler(sig).is_err() {
+        if mask & bit != 0 && st.installed & bit == 0 {
+            if sys::listen_one(h, bit).is_err() {
                 return sig_code::IO;
             }
             st.installed |= bit;
@@ -337,16 +492,11 @@ pub fn wait(mask: i64) -> i64 {
 /// `os_signal_raise(meaning)` — send one signal to THIS process (the
 /// self-send companion to `os_kill`'s send-to-child; the deterministic
 /// loopback the witness rides, and a real capability: a program
-/// triggering its own reload path). `kill(getpid(), sig)` targets the
-/// process so any thread without the signal blocked runs the
-/// trampoline. `IO` for an unmapped meaning or a failed send.
+/// triggering its own reload path). `kill(getpid(), sig)` on unix; the
+/// in-process enqueue on windows ([`sys::raise`]). `IO` for an unmapped
+/// meaning or a failed send.
 pub fn raise(m: i64) -> i64 {
-    let Some(sig) = to_signal(m) else {
-        return sig_code::IO;
-    };
-    // SAFETY: getpid + kill with a validated signal number.
-    let rc = unsafe { libc::kill(libc::getpid(), sig) };
-    if rc == 0 { sig_code::OK } else { sig_code::IO }
+    sys::raise(m)
 }
 
 // ---- the C entry surface -------------------------------------------------
@@ -376,6 +526,7 @@ pub extern "C" fn __wolf_rt_os_signal_raise(m: i64) -> i64 {
 mod tests {
     use super::*;
     use crate::task::{ExitReason, scope};
+    use std::sync::atomic::Ordering;
 
     /// The hub is process-global (one self-pipe, one queue): serialize
     /// the signal tests so one test's delivered meaning can never be

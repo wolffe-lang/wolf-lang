@@ -8,37 +8,17 @@
 use std::time::{Duration, Instant};
 use wolf_rt::{net, reactor, task};
 
-#[cfg(target_os = "linux")]
-fn os_thread_count() -> usize {
-    std::fs::read_dir("/proc/self/task").map_or(1, |d| d.count())
-}
-
-/// macOS: `proc_pidinfo(PROC_PIDTASKINFO)` — the task's thread count
-/// straight from the kernel (no /proc here), s59.
-#[cfg(target_os = "macos")]
-fn os_thread_count() -> usize {
-    // SAFETY: zeroed out-struct of the exact size the call contracts.
-    unsafe {
-        let mut ti: libc::proc_taskinfo = std::mem::zeroed();
-        let sz = size_of::<libc::proc_taskinfo>() as i32;
-        let n = libc::proc_pidinfo(
-            std::process::id() as i32,
-            libc::PROC_PIDTASKINFO,
-            0,
-            (&raw mut ti).cast(),
-            sz,
-        );
-        if n == sz {
-            ti.pti_threadnum as usize
-        } else {
-            1
-        }
-    }
-}
+#[path = "thread_count.rs"]
+mod thread_count;
+use thread_count::os_thread_count;
 
 pub fn main() {
-    // Before ANY runtime use: no reactor, no pool, one thread.
+    // Before ANY runtime use: no reactor, no pool, one thread — on
+    // windows, no thread of OURS: the loader seats threads that are
+    // not wolf's (the no_spawn twin's measured finding, s60b), so the
+    // claim there is a delta, taken below at each lifecycle edge.
     assert!(!reactor::initialized(), "reactor up before any io");
+    #[cfg(not(windows))]
     assert_eq!(os_thread_count(), 1, "threads exist before any runtime use");
 
     // Task machinery WITHOUT io: the pool comes up; the reactor must

@@ -10,48 +10,19 @@
 
 use wolf_rt::task;
 
-#[cfg(target_os = "linux")]
-fn os_thread_count() -> usize {
-    std::fs::read_dir("/proc/self/task").map_or(1, |d| d.count())
-}
-
-/// macOS: `proc_pidinfo(PROC_PIDTASKINFO)` — the task's thread count
-/// straight from the kernel (no /proc here), so the no-background-
-/// threads assertions have real teeth on this host too (s59).
-#[cfg(target_os = "macos")]
-fn os_thread_count() -> usize {
-    // SAFETY: zeroed out-struct of the exact size the call contracts.
-    unsafe {
-        let mut ti: libc::proc_taskinfo = std::mem::zeroed();
-        let sz = size_of::<libc::proc_taskinfo>() as i32;
-        let n = libc::proc_pidinfo(
-            std::process::id() as i32,
-            libc::PROC_PIDTASKINFO,
-            0,
-            (&raw mut ti).cast(),
-            sz,
-        );
-        if n == sz {
-            ti.pti_threadnum as usize
-        } else {
-            1
-        }
-    }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-fn os_thread_count() -> usize {
-    1 // No /proc equivalent asserted elsewhere; the lazily-init
-    // assertions below still run.
-}
+#[path = "thread_count.rs"]
+mod thread_count;
+use thread_count::os_thread_count;
 
 pub fn main() {
-    // Before ANY runtime use: exactly the main thread, no pool.
-    assert_eq!(
-        os_thread_count(),
-        1,
-        "background threads exist before first spawn"
-    );
+    // Before ANY runtime use: exactly the main thread, no pool. On
+    // windows the process may already carry threads that are not
+    // ours (the loader's thread pool, an injected DLL's) — the claim
+    // there is that WOLF seats none until the first spawn, measured
+    // as a delta against whatever the host started us with.
+    let base = os_thread_count();
+    #[cfg(not(windows))]
+    assert_eq!(base, 1, "background threads exist before first spawn");
     assert!(!task::initialized(), "pool initialized before first spawn");
 
     // A scope WITHOUT spawns must not bring up the pool either
@@ -59,7 +30,7 @@ pub fn main() {
     let r = task::scope("empty", |_| ());
     assert!(r.is_ok());
     assert!(!task::initialized(), "an empty scope initialized the pool");
-    assert_eq!(os_thread_count(), 1, "an empty scope created threads");
+    assert_eq!(os_thread_count(), base, "an empty scope created threads");
 
     // First spawn: the pool comes up, lazily, now.
     let r = task::scope("first", |s| {
@@ -67,7 +38,7 @@ pub fn main() {
     });
     assert!(r.is_ok());
     assert!(task::initialized(), "spawn did not initialize the pool");
-    assert!(os_thread_count() > 1, "spawn created no worker threads");
+    assert!(os_thread_count() > base, "spawn created no worker threads");
 
     let (target, running, _) = task::counters();
     assert!(running >= 1 && running <= (target * 8).max(target + 4));

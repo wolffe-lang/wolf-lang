@@ -31,12 +31,11 @@
 //! as in C (the whole reason D13 rejected green threads; contrast the
 //! Go register-calling/cgo-pointer machinery cited in mod.rs).
 //!
-//! Windows (`VirtualAlloc(MEM_RESERVE)` + `PAGE_GUARD` walker,
-//! `MEM_RESET` recycling) is a recorded s32 delta: workers there run
-//! on `std::thread` stacks with the same reserve size until a windows
-//! lane exists to prove our-code commit-on-fault (the s36 chaos hooks
-//! need to inject commit failure at that point — the seam obligation
-//! is noted where the fallback lives, pool.rs).
+//! Windows is stack_win.rs (s60b): the same surface over the kernel's
+//! own `VirtualAlloc(MEM_RESERVE)` + `PAGE_GUARD` thread stacks and a
+//! vectored exception handler for the report — its module doc says
+//! why the span is the kernel's there and what (idle trim, the s36
+//! commit-failure injection) is the s60c delta.
 
 #![cfg(unix)]
 

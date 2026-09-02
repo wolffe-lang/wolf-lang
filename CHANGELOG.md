@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### The windows task layer (s60b)
+
+**On Windows, `spawn`, scopes, `proc`, channels and `select`, `sync`/
+`when`, `os.signal`, and `net` deadlines now compile and run.** The
+v0.2.2 archive refused those twenty-one corpus rows by construct name
+— "windows-native serves no `spawn`/scopes (the task layer) at the
+s60a bring-up" — because the runtime's task layer, io reactor, and
+signal delivery were POSIX. Each crossed:
+
+- **The task layer.** Workers are Win32 threads on the kernel's own
+  reserve-and-guard stacks (`CreateThread` with
+  `STACK_SIZE_PARAM_IS_A_RESERVATION` at `WOLF_TASK_STACK`, 8 MiB by
+  default — `VirtualAlloc(MEM_RESERVE)` plus the `PAGE_GUARD` walker,
+  done by ntdll rather than by hand; the span is not ours to pool, and
+  idle trim is named for s60c). **A stack overflow in a task reports
+  in wolf's voice** — `wolf-rt: stack overflow in task '<name>'` on
+  stderr, exit **134** — through a vectored exception handler that
+  answers `STATUS_STACK_OVERFLOW` and terminates the process with no
+  unwinding and no containment, exactly the unix reporter's contract.
+  v0.2.2 died there as `0xC00000FD` with no words; a program that
+  never spawns still does (D15: no spawn, no handler).
+- **`os.signal`** over `SetConsoleCtrlHandler`: Ctrl+C and the
+  console closing are `terminate`, Ctrl+Break is `quit` — the
+  `[os.signal.platform]` table. `os_signal_raise` is an in-process
+  loopback on Windows (there is no self-targeted console event that
+  would not also reach every process on the console), so a program's
+  own reload path and the corpus's loopback rows work; **external
+  `reload`/`upgrade` delivery has no Windows analog** — the named gap
+  stands, and wws-shaped programs use a control channel for those.
+- **The reactor** behind the s35 interface, on `WSAPoll`: `net`
+  deadlines fire the `timeout` row, accept/read/write park in the
+  reactor with the pool compensating, kill teardown reaches them.
+  Measured on the runner: 24 tasks parked on 200 ms read deadlines
+  resolved 24/24 `timeout` in 207 ms wall — the deadlines fire at the
+  deadline, not at the poll's cost. IOCP — completion ports, the async-fs and
+  many-socket rung — is s60c's, behind the same seam.
+
+`wolf build --release` still refuses on Windows by name (the LLVM
+tier is s60c's). The windows floor line moved from 259/255/0/274/0 to
+261/278/0/295/0 (checked/native/release/union/all-three) — native at
+macOS parity, zero rows refused by construct name.
+
 ### The archive smoke degrades by name (the v0.2.2 arm gap)
 
 `cargo xtask dist`'s learner-path smoke refused any archive whose

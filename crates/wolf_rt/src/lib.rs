@@ -29,26 +29,30 @@ pub mod quarantine;
 // program delivery follows the backend port (`[os.random.platform]`).
 pub mod random;
 // The io reactor (s35) shares the task layer's platform posture:
-// epoll on linux (the campaign floor), kqueue on macOS since s59 —
-// the port promised by the reactor's interface, readiness adapted
-// underneath (`Interest`/`Ready` unchanged). IOCP (windows, s60)
-// widens next.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+// epoll on linux (the campaign floor), kqueue on macOS since s59, and
+// `WSAPoll` on windows since s60b — each port promised by the
+// reactor's interface, readiness adapted underneath (`Interest`/
+// `Ready` unchanged). IOCP (the completion-port rung: async fs, the
+// scale story) is s60c's, behind the same seam.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod reactor;
-// Signal RECEPTION (s114, #126): the self-pipe/sigaction trampoline
-// and the meaning-based receive surface. Rides the task layer's
-// platform gate — linux at s114, macOS since s59 (`pipe` + FD_CLOEXEC
-// where pipe2 does not exist, spec `[os.signal.platform]`'s
-// pre-authorized widening); BSD/Windows delivery widens with the
-// remaining port sprints (a NAMED stop).
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+// Signal RECEPTION (s114, #126): the meaning-based receive surface
+// over the self-pipe/sigaction trampoline (linux at s114, macOS since
+// s59 — `pipe` + FD_CLOEXEC where pipe2 does not exist, spec
+// `[os.signal.platform]`'s pre-authorized widening) and over
+// `SetConsoleCtrlHandler` on windows (s60b — the console-control
+// mapping the same clause spec'd). Rides the task layer's platform
+// gate; BSD delivery widens with s61 (a NAMED stop).
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod signal;
 pub mod str;
 pub mod time;
-// The task layer opened on linux (s28's platform posture) and crossed
-// to macOS at s59: the stack plumbing (mmap/madvise/guard-fault
-// reporting) already carried macOS arms, and the pool is POSIX
-// pthreads. Other hosts compile wolf_rt without it; the remaining
-// port sprints (windows s60, freebsd s61) widen this gate.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+// The task layer opened on linux (s28's platform posture), crossed
+// to macOS at s59 (the stack plumbing — mmap/madvise/guard-fault
+// reporting — already carried macOS arms, and the pool is POSIX
+// pthreads), and to windows at s60b (Win32 threads on the kernel's
+// own reserve-and-guard stacks, the guard reporter a vectored
+// exception handler — task/stack_win.rs). Other hosts compile
+// wolf_rt without it; freebsd (s61) widens this gate next.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod task;

@@ -7,14 +7,14 @@
 //! categorically (D33: `wolf add` must never mean arbitrary code talks
 //! to the network with the builder's credentials).
 //!
-//! # Posture (X6; s35 reactor-routed on the native linux + macOS runtimes)
+//! # Posture (X6; s35 reactor-routed on the native linux, macOS, and windows runtimes)
 //!
 //! v0 shipped this module *blocking-syscall-shaped*: plain `std::net`
 //! calls on the calling thread. s35 keeps every v0 signature and
 //! routes the parking calls — `accept`, `read`, `write` — through the
-//! io reactor on linux and macOS (the native runtime's platform
-//! floor, the same gate as the task layer — epoll there, kqueue here
-//! since s59): readiness is awaited in the reactor
+//! io reactor on linux, macOS, and windows (the native runtime's
+//! platform floor, the same gate as the task layer — epoll, kqueue
+//! since s59, `WSAPoll` since s60b): readiness is awaited in the reactor
 //! first (a runtime-owned park — blocking compensation applies, kill
 //! teardown reaches it, deadlines compose), then the syscall runs
 //! without blocking. The completion-arrival decision appended its
@@ -38,9 +38,9 @@
 //! [`NetTable::set_deadline`] arms a per-socket budget applied to
 //! each subsequent parking call; a fired deadline resolves as the
 //! `timeout` row (v0 declared the tag with no way to reach it — the
-//! reactor's timer wheel makes it real). Reactor hosts only (linux +
-//! macOS), like the route itself: elsewhere the call is an honest
-//! `io` refusal, never a silently-inert deadline.
+//! reactor's timer wheel makes it real). Reactor hosts only (linux,
+//! macOS, windows), like the route itself: elsewhere the call is an
+//! honest `io` refusal, never a silently-inert deadline.
 //!
 //! # Error rows (D30)
 //!
@@ -93,7 +93,10 @@ struct Entry {
     sock: Sock,
     /// Per-op deadline budget ([`NetTable::set_deadline`]; honored by
     /// the reactor route — linux and macOS since s59).
-    #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+    #[cfg_attr(
+        not(any(target_os = "linux", target_os = "macos", target_os = "windows")),
+        allow(dead_code)
+    )]
     deadline: Option<std::time::Duration>,
 }
 
@@ -145,19 +148,29 @@ impl NetTable {
     /// these under a short lock and park with the lock RELEASED — a
     /// blocked accept holding the table would deadlock the connect
     /// that resolves it.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn park_spec(
         &mut self,
         fd: i64,
         want_stream: bool,
-    ) -> Result<(std::os::fd::RawFd, Option<std::time::Instant>), NetErr> {
+    ) -> Result<(crate::reactor::RawFd, Option<std::time::Instant>), NetErr> {
+        #[cfg(unix)]
         use std::os::fd::AsRawFd as _;
+        #[cfg(windows)]
+        use std::os::windows::io::AsRawSocket as _;
         let Some(e) = self.entry(fd) else {
             return Err("io");
         };
+        #[cfg(unix)]
         let raw = match (&e.sock, want_stream) {
             (Sock::Stream(s), true) => s.as_raw_fd(),
             (Sock::Listener(l), false) => l.as_raw_fd(),
+            _ => return Err("io"),
+        };
+        #[cfg(windows)]
+        let raw = match (&e.sock, want_stream) {
+            (Sock::Stream(s), true) => s.as_raw_socket(),
+            (Sock::Listener(l), false) => l.as_raw_socket(),
             _ => return Err("io"),
         };
         Ok((raw, e.deadline.map(|d| std::time::Instant::now() + d)))
@@ -167,7 +180,7 @@ impl NetTable {
     /// else a listener) is ready for `interest`, or its deadline
     /// budget fires (`timeout`). The net flavor of the wait is
     /// kill-only — see reactor.rs's cancellation section.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn wait_ready(
         &mut self,
         fd: i64,
@@ -192,7 +205,7 @@ impl NetTable {
     /// macOS); elsewhere an honest `io` refusal — never an inert
     /// deadline.
     pub fn set_deadline(&mut self, fd: i64, millis: i64) -> Result<(), NetErr> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         {
             let Some(e) = self.entry(fd) else {
                 return Err("io");
@@ -203,7 +216,7 @@ impl NetTable {
                 .map(std::time::Duration::from_millis);
             Ok(())
         }
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = (fd, millis);
             Err("io")
@@ -236,7 +249,7 @@ impl NetTable {
     /// the deadline budget resolves `timeout`); returns the stream's
     /// fd.
     pub fn accept(&mut self, fd: i64) -> Result<i64, NetErr> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         self.wait_ready(fd, false, crate::reactor::Interest::Read)?;
         self.accept_ready(fd)
     }
@@ -297,7 +310,7 @@ impl NetTable {
         if max <= 0 {
             return Ok(Vec::new());
         }
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         self.wait_ready(fd, true, crate::reactor::Interest::Read)?;
         self.read_ready(fd, max)
     }
@@ -324,7 +337,7 @@ impl NetTable {
     /// admission; the whole-buffer drain then rides the syscall, the
     /// short-write completion loop being io_uring-parity work).
     pub fn write(&mut self, fd: i64, bytes: &[u8]) -> Result<(), NetErr> {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         self.wait_ready(fd, true, crate::reactor::Interest::Write)?;
         self.write_ready(fd, bytes)
     }
@@ -415,7 +428,7 @@ fn code_of_tag(tag: NetErr) -> i64 {
 /// Await readiness with the table lock RELEASED (see the lock
 /// discipline note above). Off-linux this is a no-op: the syscall
 /// half blocks by itself, the v0 posture.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn wait_unlocked(
     fd: i64,
     want_stream: bool,
@@ -458,7 +471,7 @@ pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
 /// arrives (or the armed deadline fires); the stream's fd, or `-code`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     if let Err(t) = wait_unlocked(fd, false, crate::reactor::Interest::Read) {
         return -code_of_tag(t);
     }
@@ -507,7 +520,7 @@ pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 
             return net_code::OK;
         }
     }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Read) {
         return code_of_tag(t);
     }
@@ -534,7 +547,7 @@ pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
     let s = unsafe { view(sp, sl) };
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Write) {
         return code_of_tag(t);
     }
@@ -568,7 +581,7 @@ pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -
             return net_code::OK;
         }
     }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Read) {
         return code_of_tag(t);
     }
@@ -595,7 +608,7 @@ pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
     let Some(bytes) = (unsafe { byte_elems(hdr) }) else {
         return net_code::INVALID;
     };
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Write) {
         return code_of_tag(t);
     }
@@ -722,7 +735,7 @@ mod tests {
     /// route end to end (readiness awaited for accept/read/write;
     /// generous budgets never fire, the roundtrip is byte-identical
     /// to the v0 path).
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[test]
     fn echo_under_deadline() {
         let mut t = NetTable::new();
@@ -748,7 +761,7 @@ mod tests {
     /// no way to reach it; the reactor's timer wheel makes it real):
     /// an idle accept and an idle read fire their budgets, and the
     /// same sockets still work once readiness truly arrives.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[test]
     fn timeout_row_reachable() {
         let mut t = NetTable::new();
@@ -963,7 +976,7 @@ mod tests {
     /// deadline fires with the table lock RELEASED (a parked read must
     /// not hold the table; see the shim tier's lock discipline), and
     /// clearing restores the indefinite wait.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[test]
     fn shim_deadline_times_out_and_clears() {
         let (ap, al) = pair_of("127.0.0.1:0");
