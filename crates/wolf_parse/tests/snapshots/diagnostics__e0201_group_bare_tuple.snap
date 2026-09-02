@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_parse/tests/diagnostics.rs
-assertion_line: 23
 expression: "format!(\"{d:#?}\")"
 ---
 Diagnostic {
@@ -13,7 +12,7 @@ Diagnostic {
                 0,
             ),
             lo: 15,
-            hi: 15,
+            hi: 16,
         },
         label: "",
     },

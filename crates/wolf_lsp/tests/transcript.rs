@@ -24,8 +24,10 @@ fn wordcount_publishes_no_diagnostics() {
 
 /// A broken fixture publishes the same code at the same span the CLI
 /// reports for the same bytes (`wolf conform-run` probed: E0201 at
-/// bytes [28,28] = line 1, cols 9..9 — the in-process half of the
-/// one-truth check; the cross-binary half lives in wolf_driver/tests).
+/// bytes [28,29] = line 1, cols 9..10 — the `x` found where the line
+/// should have ended; the token, not a point at its start (D71, s134)
+/// — the in-process half of the one-truth check; the cross-binary half
+/// lives in wolf_driver/tests).
 #[test]
 fn broken_fixture_matches_cli_codes_and_spans() {
     let (mut client, _) = Client::start(&["utf-8"]);
@@ -38,7 +40,7 @@ fn broken_fixture_matches_cli_codes_and_spans() {
     assert_eq!(
         diags[0]["range"],
         json!({ "start": { "line": 1, "character": 9 },
-                "end": { "line": 1, "character": 9 } })
+                "end": { "line": 1, "character": 10 } })
     );
     client.shutdown();
 }

@@ -1,8 +1,7 @@
 ---
 source: crates/wolf_parse/tests/corpus_decls.rs
-assertion_line: 58
 expression: dump
 ---
 FnDecl 303..368 name=main body=Block
 -- diagnostics --
-E0201 [Error] 332..332 this binding has no value — expected `=` and an initializer
+E0201 [Error] 332..333 this binding has no value — expected `=` and an initializer

@@ -12,7 +12,7 @@ Diagnostic {
                 0,
             ),
             lo: 30,
-            hi: 30,
+            hi: 31,
         },
         label: "",
     },

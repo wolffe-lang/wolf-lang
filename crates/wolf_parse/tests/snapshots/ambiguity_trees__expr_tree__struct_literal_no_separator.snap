@@ -97,7 +97,7 @@ SourceFile 463..598
   Term 597..598 "\n"
   Eof 598..598 ""
 == diagnostics ==
-E0201 [Error] 550..550 expected `,` between the struct literal's fields
+E0201 [Error] 550..551 expected `,` between the struct literal's fields
     note the separating comma is required between field initializers ([gram.expr.primary]: struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}')
     help [MachineApplicable] add the comma
         edit 549..549 -> ","

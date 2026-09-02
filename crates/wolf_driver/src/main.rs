@@ -2831,6 +2831,7 @@ fn native_run(
     all: Vec<Diagnostic>,
     run_stdout: &mut Option<String>,
     seed: Option<u64>,
+    x_ext: &mut Vec<(&'static str, serde_json::Value)>,
 ) -> (&'static str, String, Vec<Diagnostic>) {
     let dir = std::env::temp_dir().join(format!(
         "wolf-native-{}-{}",
@@ -2901,6 +2902,7 @@ fn native_run(
         }
         Err(BuildStop::Refused { phase, reason }) => {
             eprintln!("wolf conform-run --native: unsupported — {reason}");
+            record_refusal(x_ext, &reason, None);
             (phase, "unsupported".to_string(), all)
         }
         Err(BuildStop::Environment(msg)) => {
@@ -2925,12 +2927,39 @@ fn native_run(
 /// left. The `--checked` and `--native` rungs already speak here; the
 /// static rungs now speak in the same words, and `xtask lane-coverage`
 /// reads them off stderr for the residue report.
-fn report_refusal(nyc: Option<&wolf_sema::check::NotYet>) {
+///
+/// s134 (#219): the RECORD names the construct too, as extension keys
+/// (`[proto.record.ext]`): `x-unsupported-construct` and
+/// `x-unsupported-span`. The `diagnostics` array stays empty — an
+/// `unsupported` verdict carries no partial diagnostics, and a refusal
+/// has no E-code because it is not a fault in the program — but a rig
+/// reading records over a pipe was left with `{"verdict":
+/// "unsupported","diagnostics":[]}` and a bisect (lobo ws13 on a proc
+/// spawn). The counterparty never emits these keys, so they take no
+/// part in comparison.
+fn report_refusal(
+    nyc: Option<&wolf_sema::check::NotYet>,
+    x_ext: &mut Vec<(&'static str, serde_json::Value)>,
+) {
     if let Some(nyc) = nyc {
         eprintln!(
             "wolf conform-run: unsupported — {} @{}..{}",
             nyc.construct, nyc.span.lo, nyc.span.hi
         );
+        record_refusal(x_ext, nyc.construct, Some(nyc.span));
+    }
+}
+
+/// The record half of a refusal (s134, #219): the construct by name
+/// and, when the refusal has one, its span.
+fn record_refusal(
+    x_ext: &mut Vec<(&'static str, serde_json::Value)>,
+    construct: &str,
+    span: Option<wolf_span::Span>,
+) {
+    x_ext.push(("x-unsupported-construct", serde_json::json!(construct)));
+    if let Some(span) = span {
+        x_ext.push(("x-unsupported-span", serde_json::json!([span.lo, span.hi])));
     }
 }
 
@@ -2970,6 +2999,7 @@ fn checked_run(
                 "wolf conform-run --checked: unsupported — {} @{}..{}",
                 nyc.construct, nyc.span.lo, nyc.span.hi
             );
+            record_refusal(x_ext, nyc.construct, Some(nyc.span));
             ("mem", "unsupported".to_string(), all)
         }
         Ok(outcome) => {
@@ -3041,6 +3071,7 @@ fn ct_gate(
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
     mut all: Vec<Diagnostic>,
+    x_ext: &mut Vec<(&'static str, serde_json::Value)>,
 ) -> Result<Vec<Diagnostic>, (&'static str, String, Vec<Diagnostic>)> {
     let mut ct_spans = tc
         .sigs
@@ -3056,7 +3087,7 @@ fn ct_gate(
     };
     let build = wolf_wir::lower_package(pkg, tc);
     if !build.not_yet.is_empty() {
-        report_refusal(build.not_yet.first());
+        report_refusal(build.not_yet.first(), x_ext);
         return Err(("mem", "unsupported".to_string(), all));
     }
     let violations = wolf_wir::ct_check_module(&build.module);
@@ -3086,10 +3117,11 @@ fn wir_rung(
     phase: Option<&str>,
     zstats: bool,
     all: Vec<Diagnostic>,
+    x_ext: &mut Vec<(&'static str, serde_json::Value)>,
 ) -> (&'static str, String, Vec<Diagnostic>) {
     let build = wolf_wir::lower_package(pkg, tc);
     if !build.not_yet.is_empty() {
-        report_refusal(build.not_yet.first());
+        report_refusal(build.not_yet.first(), x_ext);
         return ("mem", "unsupported".to_string(), all);
     }
     if let Err(e) = wolf_wir::verify_module(&build.module) {
@@ -3377,7 +3409,7 @@ fn conform_run(args: &[String]) {
                             // fully-checkable file fail here.
                             let tc = wolf_sema::typecheck_package(&res);
                             if !tc.not_yet.is_empty() {
-                                report_refusal(tc.not_yet.first());
+                                report_refusal(tc.not_yet.first(), &mut x_ext);
                                 ("resolve", "unsupported".to_string(), all)
                             } else {
                                 let mut all = all;
@@ -3399,7 +3431,7 @@ fn conform_run(args: &[String]) {
                                     // memory errors are withheld.
                                     let mem = wolf_mem::check_package(&res.package, &tc);
                                     if !mem.not_yet.is_empty() {
-                                        report_refusal(mem.not_yet.first());
+                                        report_refusal(mem.not_yet.first(), &mut x_ext);
                                         ("typecheck", "unsupported".to_string(), all)
                                     } else {
                                         let mut all = all;
@@ -3423,7 +3455,7 @@ fn conform_run(args: &[String]) {
                                             // unverified secret path.
                                             // Free when no fn carries
                                             // the attribute.
-                                            match ct_gate(&res.package, &tc, all) {
+                                            match ct_gate(&res.package, &tc, all, &mut x_ext) {
                                                 Err(stop) => stop,
                                                 Ok(all) => {
                                                     if checked {
@@ -3456,6 +3488,7 @@ fn conform_run(args: &[String]) {
                                                             all,
                                                             &mut run_stdout,
                                                             seed,
+                                                            &mut x_ext,
                                                         )
                                                     } else {
                                                         // The wir rung (s25):
@@ -3469,6 +3502,7 @@ fn conform_run(args: &[String]) {
                                                             phase.as_deref(),
                                                             zstats,
                                                             all,
+                                                            &mut x_ext,
                                                         )
                                                     }
                                                 }

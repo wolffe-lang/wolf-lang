@@ -187,7 +187,26 @@ impl<'a> Parser<'a> {
 
     /// Zero-width span at the start of the current token — where a
     /// missing token would have been.
+    /// The span a refusal about the CURRENT token carries — the token
+    /// itself, whole (D71, s134 — wolf-lang#220): "expected `}`, found
+    /// identifier `y`" points AT `y`, every byte of it, so the reader's
+    /// editor highlights something; the zero-width point at its start
+    /// that every `expect` miss carried until s134 highlighted nothing,
+    /// and differed from lupin's span on eight corpus witnesses by
+    /// width alone (DIV-2026-020). At `Eof` the token IS zero-width
+    /// (the lexer's completion marker), so an "expected X, found end
+    /// of file" still lands at the end, and an insertion FIX keeps its
+    /// own zero-width anchor (`prev_end`, or `at_here`) — the
+    /// diagnostic's primary span and a suggestion's edit span are
+    /// different things.
     pub(crate) fn here(&self) -> Span {
+        self.current_span()
+    }
+
+    /// Zero-width span at the START of the current token — an
+    /// insertion point in front of it, for a suggestion's edit when
+    /// no previous token anchors it.
+    pub(crate) fn at_here(&self) -> Span {
         let s = self.current_span();
         Span::new(s.file, s.lo, s.lo)
     }
@@ -477,8 +496,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `expect`: bump `kind` or diagnose (E0201) + insert a zero-width
-    /// missing marker and continue.
+    /// `expect`: bump `kind` or diagnose (E0201, spanning the token
+    /// found instead — D71) + insert a zero-width missing marker and
+    /// continue.
     pub(crate) fn expect_punct(&mut self, punct: Punct, what: &str) -> bool {
         if self.at_punct(punct) {
             self.bump();

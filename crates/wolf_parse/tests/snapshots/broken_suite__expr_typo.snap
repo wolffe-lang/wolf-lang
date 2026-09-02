@@ -78,4 +78,4 @@ SourceFile 0..99
   Term 98..99 "\n"
   Eof 99..99 ""
 == diagnostics ==
-E0201 [Error] 36..36 expected an expression
+E0201 [Error] 36..37 expected an expression

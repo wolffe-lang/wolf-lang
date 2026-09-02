@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_parse/tests/ambiguity_trees.rs
-assertion_line: 34
 expression: out
 ---
 == tree ==
@@ -65,5 +64,5 @@ SourceFile 303..369
   Term 368..369 "\n"
   Eof 369..369 ""
 == diagnostics ==
-E0201 [Error] 332..332 this binding has no value — expected `=` and an initializer
+E0201 [Error] 332..333 this binding has no value — expected `=` and an initializer
     note one initializer cannot serve several names. Destructure — `var (i, c) = (0, 0)` — or give each name its own value: `var i = 0, c = 0`.

@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="normal=0 breach=2\n")
+//! phase: run
+//! conforms: conc.proc.exit, mem.region.cap.3, mod.dir
+//!
+//! #219 (lobo ws13, s134): a proc spawned from a NON-ENTRY module —
+//! #136's proc twin. `work.run` lives in the `work/` module and
+//! spawns `body` as a proc; the entry only calls it. Before s134 the
+//! release tier refused `func.addr of @work.run.task0.entry outside
+//! this object's subset` whenever the partition separated the spawner
+//! from its entry shim (the shim is synthetic, `src_file = None`, and
+//! rides the root module's unit under the per-module partition —
+//! `WOLF_MIDEND=0`, the mode lobo builds in while #146 is open), while
+//! the native tier ran the same program by importing the symbol
+//! (#116). The LLVM emitter now takes an out-of-subset referee's
+//! address through the same mangled-symbol declaration a cross-object
+//! CALL uses; a driver test pins the per-module partition itself,
+//! this file pins the shape on every lane. The two rounds are D68's
+//! contract consumed exactly as lobo's budget helper consumes it: a
+//! roomy cap joins `normal`, a 64-unit cap joins `fault(alloc-
+//! contract)` — read through `is_alloc_contract()` in the leaf, mapped
+//! to a small integer for the entry.
+
+use work
+
+fn main() -> !int {
+    let a = work.run(100, 1000000)
+    let b = work.run(100, 64)
+    print("normal={a} breach={b}")
+    if a == 0 && b == 2 { 0 } else { 1 }
+}

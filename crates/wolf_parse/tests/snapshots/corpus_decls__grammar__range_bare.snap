@@ -4,4 +4,4 @@ expression: dump
 ---
 FnDecl 841..934 name=main body=Block
 -- diagnostics --
-E0201 [Error] 896..896 expected an expression after `..`
+E0201 [Error] 896..897 expected an expression after `..`

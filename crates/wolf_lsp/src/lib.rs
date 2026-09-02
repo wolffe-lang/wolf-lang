@@ -30,10 +30,19 @@
 //! `navigate` module docs), `$/cancelRequest` honored into the query
 //! layer.
 //!
+//! s134 adds the annotating trio over the same table: signature help
+//! (`TypedBody::calls` — the declared parameter surface, the active
+//! parameter by the commas before the cursor, trigger `(` and `,`),
+//! semantic tokens (full and range; the closed kind set and the
+//! standard legend names are `wolf_query`'s `annotate` module docs;
+//! `declaration` and `readonly` modifiers), and inlay hints (inferred
+//! `let`/`var` types, parameter names at call sites — each class
+//! switchable off through `initializationOptions.inlayHints`, the
+//! capability declared either way).
+//!
 //! **Still absent, refused by name** (MethodNotFound with the method
-//! named — never faked, per the track's rule): signature help,
-//! semantic tokens, inlay hints, range formatting, workspace symbols,
-//! the pull-diagnostics model.
+//! named — never faked, per the track's rule): semantic-token deltas,
+//! range formatting, workspace symbols, the pull-diagnostics model.
 //!
 //! Transport is rust-analyzer's `lsp-server` (L1: framing, handshake,
 //! IO threads — the parts with sharp edges — and no policy). The main

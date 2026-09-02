@@ -25,8 +25,10 @@ use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestI
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
     CodeActionOrCommand, CodeActionProviderCapability, CompletionOptions, HoverProviderCapability,
-    InitializeParams, Location, LocationLink, OneOf, PublishDiagnosticsParams, RenameOptions,
-    SaveOptions, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    InitializeParams, InlayHintOptions, InlayHintServerCapabilities, Location, LocationLink,
+    MarkupKind, OneOf, PublishDiagnosticsParams, RenameOptions, SaveOptions,
+    SemanticTokensFullOptions, SemanticTokensOptions, SemanticTokensServerCapabilities,
+    ServerCapabilities, SignatureHelpOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit, Url,
 };
 use wolf_query::{Cancelled, Change, QueryHost, RenameOutcome, RenamePrep, Snapshot};
@@ -86,6 +88,42 @@ struct Cx {
     /// `initialize`, fixed for the session.
     link_support: bool,
     document_changes: bool,
+    /// s134 — signature help's documentation format: markdown when
+    /// the client lists it (`signatureHelp.signatureInformation.
+    /// documentationFormat`), plain text otherwise.
+    signature_markdown: bool,
+    /// s134 — which inlay-hint classes this session serves, from
+    /// `initializationOptions.inlayHints.{types, parameterNames}`
+    /// (both `true` when unsaid). The capability is declared either
+    /// way; a class the client's configuration turned off answers
+    /// nothing, and the client's own toggle decides whether hints show
+    /// at all.
+    hints: HintConfig,
+}
+
+/// `initializationOptions.inlayHints` — see [`Cx::hints`].
+#[derive(Clone, Copy)]
+struct HintConfig {
+    types: bool,
+    parameter_names: bool,
+}
+
+impl HintConfig {
+    fn from_init(init: &InitializeParams) -> HintConfig {
+        let opts = init
+            .initialization_options
+            .as_ref()
+            .and_then(|o| o.get("inlayHints"));
+        let flag = |name: &str| {
+            opts.and_then(|h| h.get(name))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true)
+        };
+        HintConfig {
+            types: flag("types"),
+            parameter_names: flag("parameterNames"),
+        }
+    }
 }
 
 /// Serve one LSP session over `connection` until `exit`. The
@@ -114,6 +152,15 @@ pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Erro
         .and_then(|w| w.workspace_edit.as_ref())
         .and_then(|e| e.document_changes)
         .unwrap_or(false);
+    let signature_markdown = init
+        .capabilities
+        .text_document
+        .as_ref()
+        .and_then(|t| t.signature_help.as_ref())
+        .and_then(|s| s.signature_information.as_ref())
+        .and_then(|s| s.documentation_format.as_ref())
+        .is_some_and(|f| f.contains(&MarkupKind::Markdown));
+    let hints = HintConfig::from_init(&init);
     let capabilities = server_capabilities(enc);
     let result = serde_json::json!({
         "capabilities": capabilities,
@@ -136,6 +183,8 @@ pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Erro
         open_urls: Arc::new(Mutex::new(HashMap::new())),
         link_support,
         document_changes,
+        signature_markdown,
+        hints,
     };
     let mut shutdown_requested = false;
     // Docs with unpublished changes: path → deadline.
@@ -256,6 +305,32 @@ fn server_capabilities(enc: Encoding) -> ServerCapabilities {
             prepare_provider: Some(true),
             work_done_progress_options: Default::default(),
         })),
+        // s134: the annotating trio, answered from the same binding
+        // table plus the checker's call and local records. Signature
+        // help triggers on `(` and re-triggers on `,`; semantic tokens
+        // are served full and by range (no delta: a full answer is
+        // cheap here, and a delta is a promise about identity across
+        // edits this server does not need to make); inlay hints need
+        // no resolve step — they arrive whole.
+        signature_help_provider: Some(SignatureHelpOptions {
+            trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+            retrigger_characters: Some(vec![",".to_string()]),
+            work_done_progress_options: Default::default(),
+        }),
+        semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
+            SemanticTokensOptions {
+                work_done_progress_options: Default::default(),
+                legend: convert::semantic_token_legend(),
+                range: Some(true),
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+            },
+        )),
+        inlay_hint_provider: Some(OneOf::Right(InlayHintServerCapabilities::Options(
+            InlayHintOptions {
+                work_done_progress_options: Default::default(),
+                resolve_provider: Some(false),
+            },
+        ))),
         ..Default::default()
     }
 }
@@ -517,6 +592,10 @@ fn handle_request(cx: &Cx, snapshot: &Snapshot, req: &Request) -> Result<Respons
         "textDocument/references" => references(cx, snapshot, id, &req.params),
         "textDocument/prepareRename" => prepare_rename(cx, snapshot, id, &req.params),
         "textDocument/rename" => rename(cx, snapshot, id, &req.params),
+        "textDocument/signatureHelp" => signature_help(cx, snapshot, id, &req.params),
+        "textDocument/semanticTokens/full" => semantic_tokens(cx, snapshot, id, &req.params),
+        "textDocument/semanticTokens/range" => semantic_tokens(cx, snapshot, id, &req.params),
+        "textDocument/inlayHint" => inlay_hint(cx, snapshot, id, &req.params),
         _ => Ok(Response::new_err(
             id,
             ErrorCode::MethodNotFound as i32,
@@ -746,6 +825,112 @@ fn rename(
             ))
         }
     }
+}
+
+// ---------------------------------------------------------- annotating --
+// s134: signature help / semantic tokens / inlay hints. The query owns
+// the answers (`wolf_query::annotate`); these fns are wire shape — the
+// negotiated encoding at every position, the client's documentation
+// format, the session's hint configuration.
+
+fn signature_help(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, _text, _index, offset)) = text_position(cx, snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let Some(help) = snapshot.signature_help(&path, offset)? else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    Ok(Response::new_ok(
+        id,
+        convert::signature_help(&help, cx.signature_markdown),
+    ))
+}
+
+/// The document a `{textDocument}` request names, with its text.
+fn text_document(
+    snapshot: &Snapshot,
+    params: &serde_json::Value,
+) -> Option<(PathBuf, Arc<Vec<u8>>)> {
+    let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+    let path = Url::parse(uri).ok()?.to_file_path().ok()?;
+    let text = snapshot.file_text(&path)?;
+    Some((path, text))
+}
+
+/// `full` and `range` share one answer: the range request is served
+/// the tokens within its range, the full request every token. (A
+/// client that asked for a range gets what it asked for; the full
+/// answer is cheap enough that nothing is cached between them.)
+fn semantic_tokens(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, text)) = text_document(snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let Some(mut toks) = snapshot.semantic_tokens(&path)? else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let index = LineIndex::new(&text);
+    if let Some((lo, hi)) = range_of_params(&text, &index, params, cx.enc) {
+        toks.retain(|t| t.span.lo >= lo && t.span.hi <= hi);
+    }
+    Ok(Response::new_ok(
+        id,
+        convert::semantic_tokens(&text, &index, &toks, cx.enc),
+    ))
+}
+
+fn inlay_hint(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, text)) = text_document(snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let index = LineIndex::new(&text);
+    let (lo, hi) = range_of_params(&text, &index, params, cx.enc).unwrap_or((0, text.len() as u32));
+    let Some(mut hints) = snapshot.inlay_hints(&path, lo, hi)? else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    hints.retain(|h| match h.kind {
+        wolf_query::HintKind::Type => cx.hints.types,
+        wolf_query::HintKind::Parameter => cx.hints.parameter_names,
+    });
+    Ok(Response::new_ok(
+        id,
+        convert::inlay_hints(&text, &index, &hints, cx.enc),
+    ))
+}
+
+/// A request's `range`, as byte offsets, when it carries one.
+fn range_of_params(
+    text: &[u8],
+    index: &LineIndex,
+    params: &serde_json::Value,
+    enc: Encoding,
+) -> Option<(u32, u32)> {
+    let r = params.get("range")?;
+    let to_pos = |v: &serde_json::Value| -> Option<lsp_types::Position> {
+        Some(lsp_types::Position {
+            line: v.get("line")?.as_u64()? as u32,
+            character: v.get("character")?.as_u64()? as u32,
+        })
+    };
+    let start = r.get("start").and_then(to_pos)?;
+    let end = r.get("end").and_then(to_pos)?;
+    let lo = positions::position_to_offset(text, index, start, enc);
+    let hi = positions::position_to_offset(text, index, end, enc);
+    Some((lo.min(hi), hi.max(lo)))
 }
 
 fn document_symbol(

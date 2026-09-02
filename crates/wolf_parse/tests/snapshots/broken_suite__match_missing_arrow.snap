@@ -84,4 +84,4 @@ SourceFile 0..129
   Term 128..129 "\n"
   Eof 129..129 ""
 == diagnostics ==
-E0201 [Error] 68..68 expected `=>` in the match arm
+E0201 [Error] 68..70 expected `=>` in the match arm

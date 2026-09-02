@@ -1,0 +1,38 @@
+//! member: true
+//! conforms: conc.proc.exit
+//!
+//! The leaf that spawns a proc and joins it (#219's reproducer, as
+//! lobo wrote it): the proc body fills a capped region; the spawner
+//! reads the join's reason and classifies it.
+
+/// The proc body: fill a capped region. Row: io on a bad count.
+fn body(n: int, cap: int) -> int ! {io} {
+    region r(cap: cap) {
+        var xs = List[int]()
+        for i in 0..n { (mut xs).push(i) }
+    }
+    if n < 0 { return io }
+    0
+}
+
+/// Spawn the proc, join it: 0 normal, 1 error, 2 alloc-contract, 3 other, 4 timeout.
+pub fn run(n: int, cap: int) -> int {
+    let w = spawn proc body(n, cap)
+    let m = w.monitor()
+    var cls = 3
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() {
+                cls = 0
+            } else if reason.is_error() {
+                cls = 1
+            } else if reason.is_alloc_contract() {
+                cls = 2
+            } else {
+                cls = 3
+            }
+        },
+        timeout(5.s) => { cls = 4 },
+    }
+    cls
+}

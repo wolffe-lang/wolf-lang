@@ -2035,7 +2035,7 @@ fn pattern_separator(p: &mut Parser<'_>, closer: Punct, what: &str, list_diags: 
             "the separating comma is required between pattern members ([gram.pat])",
         )
     };
-    let anchor = p.prev_end().unwrap_or(span);
+    let anchor = p.prev_end().unwrap_or_else(|| p.at_here());
     p.push_diag(
         wolf_diag::Diagnostic::error(codes::EXPECTED_TOKEN, span, msg)
             .with_note(note)
@@ -2115,7 +2115,7 @@ pub(crate) fn list_separator(
         // not the lesson, and the D22 budget owns the count.
         return;
     }
-    let anchor = p.prev_end().unwrap_or(span);
+    let anchor = p.prev_end().unwrap_or_else(|| p.at_here());
     p.push_diag(
         wolf_diag::Diagnostic::error(
             codes::EXPECTED_TOKEN,

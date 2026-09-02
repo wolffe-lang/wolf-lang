@@ -286,10 +286,13 @@ code!(E0201, "the parser expected a different token or construct here", r#"
 The workhorse parse error: at this position the grammar required
 something — a name, a `(`, an expression, a line end — and found
 something else. The message names exactly what was expected and the
-label points at where it should have been; the parser then inserts a
-zero-width placeholder and continues, so one miss does not cascade into
-a screenful. Fix the flagged spot first: later errors in the same
-region may be echoes of this one.
+label spans what was found instead — the whole offending token, so an
+editor highlights it (D71; at end of file there is no token, and the
+label sits on the end). A machine-applicable fix, where one exists,
+carries its own insertion point. The parser then inserts a zero-width
+placeholder and continues, so one miss does not cascade into a
+screenful. Fix the flagged spot first: later errors in the same region
+may be echoes of this one.
 "#);
 
 code!(E0202, "an opening delimiter is never closed", r#"

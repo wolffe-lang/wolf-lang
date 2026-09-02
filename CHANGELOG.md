@@ -2,6 +2,143 @@
 
 ## Unreleased
 
+### The proc leaves its module (s134 item 1 — #219)
+
+**A `spawn proc` in a non-entry module now builds on the release
+tier under every partition.** lobo ws13 measured the gap while
+adopting the region cap: its budget helper spawns a proc from a leaf
+module, and `wolf build --release` answered “cannot compile this yet —
+func.addr of `@work.run.task0.entry` outside this object's subset”
+while `wolf run` executed the same program — #136's proc twin, one
+partition over. s117's `refs=` edge keeps a spawner and its entry shim
+in one CLUSTER; the per-module partition (`WOLF_MIDEND=0`, the
+measurement mode lobo's gauntlet runs in while #146 is open) never
+consulted it — the shim is synthetic, has no source file, and rode the
+root module's object while the spawner sat in its own. The debug tier
+had imported such a symbol across objects since #116; the LLVM tier
+refused. The LLVM emitter now takes an out-of-subset referee's address
+through the same mangled-symbol declaration a cross-object CALL uses —
+a link-time constant in every object, resolved by the linker. Only a
+name no module function carries is a refusal now. Witnesses:
+`corpus/conc/proc_cross_module` (ws13's thirty-line reproducer, three
+lanes plus lupin, `normal=0 breach=2`) and a driver test that pins the
+per-module partition itself, because a thirty-line program is one
+cluster under the whole-program phase and the refusal cannot fire
+there. lobo's `ws13-cap` branch builds `--release` at this commit.
+
+**A refusal names itself in the record.** `wolf conform-run --json`
+answered `{"verdict":"unsupported","diagnostics":[]}` on every checked
+proc spawn — by name on stderr, and nothing in the record a rig reads
+over a pipe. The record now carries `x-unsupported-construct` and,
+when the refusal has one, `x-unsupported-span` (`[proto.record.ext]`
+extension keys, so they take no part in comparison and the
+counterparty need not emit them) on every `unsupported` verdict at
+every rung — typecheck, mem, wir, the checked machine, the native and
+release lanes. `diagnostics` stays empty: an `unsupported` verdict
+carries no partial diagnostics and a refusal is not a fault in the
+program, so it has no E-code. `proc_cap_fault_join.lu`'s checked
+verdict is UNCHANGED — `unsupported` at `mem`, now reading
+`"x-unsupported-construct": "structured concurrency in checked
+execution (C1 deferred)"` with the span of the spawn — because the
+checked machine (`conform-run --checked`, the s23 UB machine) runs no
+structured concurrency at all: `spawn`, scopes, `select` and `when`
+are refused by name at the expression. A proc is refused where every
+spawn is; running one there is the C1 sprint, not a fix. The other
+`--checked` — `wolf run --checked` and `wolf build --checked` — is the
+NATIVE build under the checked profile (the quarantine allocator and
+the checked-tier runtime hooks), which is why ws13 saw the same file
+run there and refuse under `conform-run`; the two flags name two
+machines, and the record now says which one declined.
+
+### The span is the offending token (s134 item 2 — D71, #220 closes)
+
+**A parse refusal about a token now spans that token.** is34's first
+full three-lane diff-run found DIV-2026-020: on eight grammar
+witnesses wolfc's E0201 was a zero-width point at the offending
+token's start while lupin spanned the token — the same byte, a
+different width, invisible to every walk that compares codes and
+visible to every editor, which highlights nothing at a zero-width
+range. D71 ruled the width: "expected `}`, found identifier `y`"
+points AT `y`, every byte of it. The parser's one primitive for a
+refusal about the current token (`here()`) now answers the token's own
+span, so E0201 and its siblings — E0203's "expected a struct name",
+E0206's "expected a type", E0207's "expected a pattern", the missing
+`=`/initializer reports — all moved together; a refusal at end of file
+still lands on the zero-width `Eof` marker, and a suggestion's edit
+keeps its own zero-width anchor (an insertion point IS zero-width; the
+primary span and the fix's span were always different things). Seven of
+the eight rows are now byte-identical to lupin's: `[550,551)` the `y`,
+`[534,535)`, `[415,416)`, `[581,582)`, `[669,671)` the `..`,
+`[332,333)`, `[896,897)`. The eighth, `let_group_bare_tuple.lu`, was
+never a width question — wolfc reads the D63 let-group and refuses at
+the end of the initializer list ("this value has no name", now
+`[374,375)`), lupin refuses at the first comma (`[364,365)`) — and it
+stays a locus divergence for its own triage, exactly as #220 said it
+would.
+
+Blast radius, measured before the change: wolf-lang, 37 snapshot files
+(35 in `wolf_parse`, the LSP one-truth test's `[28,28]` → `[28,29]`,
+and the eight `check: fail(E0201)` corpus pins unchanged — the walk
+compares codes, and the directive grammar pins no spans); wolf-book, 5
+diagnostic snapshots carrying 7 E0201 renderings whose carets widen
+(read-only count — the book's lane re-records at its pin bump);
+wolf-lsp, 0 transcripts (none carries an E0201; the two E0202s are at
+the opener and the E0203 in the two smoke transcripts already spanned
+its token). `cargo xtask differ` gains a **span-width class**: two
+rejections with the same code at the same start byte that differ only
+in width now classify as `SpanWidth` — a row that names itself — where
+until now they were a `Diag` divergence spelled exactly like a wrong
+locus, which is why is34 could only carry them as a waiver
+(`differ::DIV_2026_020_FILES` in wolf-interp; it retires at the pin
+bump that carries this, the interpreter lane's, as #177's did).
+
+### The server annotates (s134 item 3)
+
+`wolf lsp` serves `textDocument/signatureHelp`,
+`textDocument/semanticTokens/full` and `/range`, and
+`textDocument/inlayHint` — the three rungs s133's closeout named as
+the binding table read three more ways. Nothing is a textual search:
+**signature help** reads the checker's call record for the innermost
+call whose argument list holds the cursor (`TypedBody::calls`, keyed
+by the call expression's span) — the declared parameters as
+`name: type` with a declared `mut`/`take` spelled, the receiver
+omitted because the parentheses never spell it, the active parameter
+counted by the commas before the cursor, the return type when the
+callee is a declared item, and its `///` comment (the one doc model
+hover and `wolf doc` read; markdown when the client lists it, plain
+text otherwise); triggers on `(`, re-triggers on `,`. **Semantic
+tokens** classify every identifier through what it bound to
+(`Resolution::refs`, then `TypedBody::member_refs`): `parameter` when
+the binder sits in a parameter list, `variable` otherwise (`readonly`
+unless the binder is `var`'s), `function` / `type` / `variable` by an
+item's kind, `namespace` for modules and std paths, `property` /
+`enumMember` / `function` for fields, variants and methods, `keyword`
+from the token kind, `type` for builtins and `Self`; a binder's own
+token carries `declaration`; a name the compiler never bound gets no
+token. The legend is closed and fixed: eight types in one order, two
+modifiers. **Inlay hints** are the inferred type of an unascribed
+`let`/`var` binder and the parameter name before a positional
+argument that is not already that name — only at calls the checker
+resolved to a declaration, so a fn-typed value and a prelude name
+offer none; each class switches off through
+`initializationOptions.inlayHints.{types, parameterNames}` and the
+client's own toggle decides whether hints show at all. Positions
+honor the negotiated encoding at every span (an astral character on
+the line before a token moves its UTF-16 column, not its byte). No
+delta tokens: a full answer is cheap here and a delta is a promise
+about identity across edits this server has no reason to make; it
+answers `-32601` by name like every other absence. `wolf_query`'s
+contract moves to v5 (additive). Eighteen transcripts were recorded
+in wolf-lsp against this build (one script per rung per maintained
+client profile — fackr, facsimile, nvim, vscode, helix, emacs — the
+answers differing by the profile's own declarations), the forty-seven
+existing ones re-recorded with the initialize answer as their only
+diff, and the unknown-method probe re-targeted at what is still
+absent. Latency, s57's table before and after on the same machine:
+`diagnostics-after-edit` p95 110.6 → 110.8 ms (p50 107.7 → 106.6),
+hover p95 0.2 → 0.1 ms, cold first diagnostics p95 4.1 → 4.4 ms —
+every class inside its budget, the number near perception unmoved.
+
 ### The windows task layer (s60b)
 
 **On Windows, `spawn`, scopes, `proc`, channels and `select`, `sync`/

@@ -78,7 +78,7 @@ SourceFile 544..629
   Term 628..629 "\n"
   Eof 629..629 ""
 == diagnostics ==
-E0201 [Error] 581..581 expected `,` between the closure's parameters
+E0201 [Error] 581..582 expected `,` between the closure's parameters
     note the separating comma is required between closure parameters ([gram.expr.closure]: closure_param (',' closure_param)* ','?)
     help [MachineApplicable] add the comma
         edit 580..580 -> ","

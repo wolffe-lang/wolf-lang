@@ -5,4 +5,4 @@ expression: dump
 StructDecl 463..503 name=Point fields=2
 FnDecl 505..597 name=main body=Block
 -- diagnostics --
-E0201 [Error] 550..550 expected `,` between the struct literal's fields
+E0201 [Error] 550..551 expected `,` between the struct literal's fields

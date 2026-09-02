@@ -62,4 +62,4 @@ SourceFile 0..74
 == diagnostics ==
 E0202 [Error] 19..20 this `(` is never closed
     label opened here
-    secondary 29..29 the parser expected the closing `)` by here
+    secondary 29..32 the parser expected the closing `)` by here

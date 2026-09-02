@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 300..479 name=body body=Block
+FnDecl 567..1050 name=run pub body=Block

@@ -23,7 +23,7 @@ Diagnostic {
                     0,
                 ),
                 lo: 12,
-                hi: 12,
+                hi: 14,
             },
             label: "the parser expected the closing `)` by here",
         },

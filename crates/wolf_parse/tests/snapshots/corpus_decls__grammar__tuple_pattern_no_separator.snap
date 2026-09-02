@@ -4,4 +4,4 @@ expression: dump
 ---
 FnDecl 384..463 name=main body=Block
 -- diagnostics --
-E0201 [Error] 415..415 expected `,` between the tuple pattern's elements
+E0201 [Error] 415..416 expected `,` between the tuple pattern's elements

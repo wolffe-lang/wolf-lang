@@ -109,7 +109,7 @@ SourceFile 421..579
   Term 578..579 "\n"
   Eof 579..579 ""
 == diagnostics ==
-E0201 [Error] 534..534 expected `,` between the struct pattern's fields
+E0201 [Error] 534..535 expected `,` between the struct pattern's fields
     note the separating comma is required between pattern members ([gram.pat])
     help [MachineApplicable] add the comma
         edit 533..533 -> ","
