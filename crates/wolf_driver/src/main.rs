@@ -2086,9 +2086,24 @@ fn windows_linker() -> Result<WindowsLinker, BuildStop> {
             how,
         })
     };
-    // 1. The explicit override.
+    // 1. The explicit override. A `rust-lld` named here needs its
+    // dialect selected (`-flavor link`), exactly as rung 3 drives it.
     if let Some(p) = std::env::var_os("WOLF_LINKER").filter(|v| !v.is_empty()) {
-        return finish(PathBuf::from(p), &[], "WOLF_LINKER");
+        let p = PathBuf::from(p);
+        let is_rust_lld = p
+            .file_name()
+            .map(|n| {
+                n.to_string_lossy()
+                    .to_ascii_lowercase()
+                    .starts_with("rust-lld")
+            })
+            .unwrap_or(false);
+        let flavor: &'static [&'static str] = if is_rust_lld {
+            &["-flavor", "link"]
+        } else {
+            &[]
+        };
+        return finish(p, flavor, "WOLF_LINKER");
     }
     // 2. lld-link: on PATH, else the Visual Studio-bundled LLVM.
     let on_path = std::process::Command::new("lld-link")
