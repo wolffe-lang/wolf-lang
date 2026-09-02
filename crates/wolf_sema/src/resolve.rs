@@ -16,7 +16,7 @@
 //! merged output is deterministically ordered regardless of thread
 //! interleaving.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rayon::prelude::*;
 use wolf_ast::{
@@ -103,6 +103,44 @@ fn collect_bare_row_tags(
     }
 }
 
+/// What one resolved name occurrence bound to (s133 — the binding
+/// table). The resolver decides every name in signatures and bodies;
+/// this is that decision, kept. `wolf lsp` navigates it (definition,
+/// references, rename) and never runs a textual search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RefTarget {
+    /// A lexical binding in the same file — a parameter, a pattern
+    /// binder, a generic parameter, a block-level item, a scope or
+    /// region name, an import alias: the binder token's span. A
+    /// binder records itself here too, so declaration and use share
+    /// one identity.
+    Local(Span),
+    /// A module item (fn / struct / enum / trait / type / const /
+    /// global), by module index and name — the package's own item
+    /// table is the cross-file source of truth (D32 modules).
+    Item { module: usize, name: String },
+    /// A package module used as a namespace (`use geometry` →
+    /// `geometry.area`).
+    Module(usize),
+    /// A std stub module or item (no source at v0).
+    Std,
+    /// The `c` FFI namespace (`import c`; header contents are c10's).
+    CNamespace,
+    /// An ambient prelude name (D31): no declaration to navigate to.
+    Prelude(String),
+    /// A builtin type name (`int`, `str`, `List`, …).
+    BuiltinType(String),
+    /// `Self` in a trait or impl (keyword-bound, no binder token).
+    SelfKw,
+}
+
+/// One resolved name occurrence: the token's span and what it bound to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameRef {
+    pub span: Span,
+    pub target: RefTarget,
+}
+
 /// A fully resolved package: the loaded graph plus every diagnostic the
 /// front half of sema can produce (parse, graph, resolution), in the
 /// engine's deterministic order.
@@ -110,6 +148,14 @@ fn collect_bare_row_tags(
 pub struct Resolution {
     pub package: Package,
     pub diagnostics: Vec<Diagnostic>,
+    /// The binding table (s133), one list per `package.files` entry:
+    /// every name the resolver bound in that file, in visit order —
+    /// uses AND binders (a binder is a `Local` ref to itself; an item
+    /// declaration is an `Item` ref to itself; an import's bound name
+    /// is a ref to what it imports). Names the resolver defers to
+    /// typing (member access, error-row tags, pattern paths) are not
+    /// here — the checker's `TypedBody::member_refs` carries those.
+    pub refs: Vec<Vec<NameRef>>,
 }
 
 /// Load and resolve a package. Reads [`SINGLE_THREAD_ENV`] to pick the
@@ -132,7 +178,7 @@ pub fn resolve_package_with(
     let package = load_package(loader, aliases)?;
     let order: Vec<usize> = package.topo.clone();
     let run = |&m: &usize| resolve_module(&package, m);
-    let per_module: Vec<Vec<Diagnostic>> = if single_thread {
+    let per_module: Vec<ModuleResolved> = if single_thread {
         order.iter().map(run).collect()
     } else {
         order.par_iter().map(run).collect()
@@ -142,8 +188,12 @@ pub fn resolve_package_with(
         diagnostics.extend(unit.parse.diagnostics.iter().cloned());
     }
     diagnostics.extend(package.diagnostics.iter().cloned());
-    for d in per_module {
-        diagnostics.extend(d);
+    let mut refs: Vec<Vec<NameRef>> = package.files.iter().map(|_| Vec::new()).collect();
+    for m in per_module {
+        diagnostics.extend(m.diagnostics);
+        for (file, file_refs) in m.refs {
+            refs[file] = file_refs;
+        }
     }
     // The package-shape pass (the idiom arbiter): module-graph lints
     // that no per-module walk can see. Cascade suppression applies as
@@ -160,13 +210,22 @@ pub fn resolve_package_with(
     Ok(Resolution {
         package,
         diagnostics,
+        refs,
     })
+}
+
+/// One module's resolve output: its diagnostics and, per member file,
+/// the binding table.
+struct ModuleResolved {
+    diagnostics: Vec<Diagnostic>,
+    refs: Vec<(usize, Vec<NameRef>)>,
 }
 
 /// Resolve one module's files (independent of every other module once
 /// pass A has run — the parallel unit).
-fn resolve_module(pkg: &Package, module: usize) -> Vec<Diagnostic> {
+fn resolve_module(pkg: &Package, module: usize) -> ModuleResolved {
     let mut sink = Diagnostics::new();
+    let mut refs = Vec::new();
     for &fi in &pkg.modules[module].files {
         for &region in &pkg.files[fi].parse.error_regions {
             sink.suppress(region);
@@ -183,8 +242,11 @@ fn resolve_module(pkg: &Package, module: usize) -> Vec<Diagnostic> {
             scopes: Vec::new(),
             row_tags: Vec::new(),
             sink: &mut sink,
+            refs: Vec::new(),
+            aliased: vec![false; bindings.len()],
         };
         r.run();
+        refs.push((fi, r.refs));
     }
     // E0410 — `let` immutability — is a resolve-rung law (binding
     // structure is lexical knowledge; DIV-2026-010): checked here, per
@@ -198,7 +260,10 @@ fn resolve_module(pkg: &Package, module: usize) -> Vec<Diagnostic> {
     for &fi in &pkg.modules[module].files {
         crate::wave::check_file(pkg, module, fi, &mut sink);
     }
-    sink.into_vec()
+    ModuleResolved {
+        diagnostics: sink.into_vec(),
+        refs,
+    }
 }
 
 // ------------------------------------------------------------ resolver --
@@ -209,12 +274,18 @@ struct Resolver<'a> {
     file: usize,
     bindings: &'a [Binding],
     used: Vec<bool>,
-    scopes: Vec<BTreeSet<String>>,
+    /// Lexical scopes, innermost last: name → the binder token's span
+    /// (`None` for the keyword-bound `Self`).
+    scopes: Vec<BTreeMap<String, Option<Span>>>,
     /// Per enclosing fn (a stack, for nested items): every tag name
     /// spelled in one of its error rows — the lowercase-deferral set
     /// ([`lexical_row_tags`], #4).
     row_tags: Vec<BTreeSet<String>>,
     sink: &'a mut Diagnostics,
+    /// The binding table under construction (s133).
+    refs: Vec<NameRef>,
+    /// Per import binding: bound through an alias (`use m.x as y`)?
+    aliased: Vec<bool>,
 }
 
 impl Resolver<'_> {
@@ -229,10 +300,96 @@ impl Resolver<'_> {
 
     fn run(&mut self) {
         let root = &self.pkg.files[self.file].parse.root;
+        self.record_declarations(root);
         for node in root.nodes().filter(|n| n.kind.is_item()) {
             self.resolve_item(node);
         }
         self.report_unused_imports(root);
+    }
+
+    /// Record one resolved occurrence in the binding table.
+    fn record(&mut self, span: Span, target: RefTarget) {
+        self.refs.push(NameRef { span, target });
+    }
+
+    /// The declaration-side entries of the binding table (s133): every
+    /// module item's name token as an `Item` ref to itself, and every
+    /// import's bound name as a ref to what it imports — so a
+    /// declaration and its uses share one identity, and a `use` line
+    /// is a reference the rename edit reaches. An aliased import
+    /// (`use m.item as alias`) binds the alias as a `Local` (uses of
+    /// the alias must not follow an item rename) and records the
+    /// path's item segment as the `Item` ref.
+    fn record_declarations(&mut self, root: &GreenNode) {
+        for item in self.pkg.tables[self.module].items.iter() {
+            if item.file == self.file {
+                self.record(
+                    item.name_span,
+                    RefTarget::Item {
+                        module: self.module,
+                        name: item.name.clone(),
+                    },
+                );
+            }
+        }
+        let aliased: Vec<(Span, Span)> = root
+            .nodes()
+            .filter(|n| n.kind == SyntaxKind::UseDecl)
+            .filter_map(wolf_ast::UseDecl::cast)
+            .filter_map(|u| {
+                let alias = u.alias()?;
+                let last = u.path()?.segments().last()?;
+                Some((alias.span, last.span))
+            })
+            .collect();
+        for (i, b) in self.bindings.iter().enumerate() {
+            let target = match &b.target {
+                BindTarget::Item { module, name } => RefTarget::Item {
+                    module: *module,
+                    name: name.clone(),
+                },
+                BindTarget::PkgModule(m) => RefTarget::Module(*m),
+                BindTarget::StdModule(_) | BindTarget::StdItem => RefTarget::Std,
+                BindTarget::CNamespace => RefTarget::CNamespace,
+                BindTarget::Poisoned => continue,
+            };
+            match aliased.iter().find(|(a, _)| *a == b.name_span) {
+                Some((alias, item_seg)) => {
+                    self.aliased[i] = true;
+                    self.refs.push(NameRef {
+                        span: *alias,
+                        target: RefTarget::Local(*alias),
+                    });
+                    self.refs.push(NameRef {
+                        span: *item_seg,
+                        target,
+                    });
+                }
+                None => self.refs.push(NameRef {
+                    span: b.name_span,
+                    target,
+                }),
+            }
+        }
+    }
+
+    /// The target a use of import binding `i` records: the item it
+    /// names, or the alias binder when the import is aliased.
+    fn binding_target(&self, i: usize) -> RefTarget {
+        let b = &self.bindings[i];
+        if self.aliased[i] {
+            return RefTarget::Local(b.name_span);
+        }
+        match &b.target {
+            BindTarget::Item { module, name } => RefTarget::Item {
+                module: *module,
+                name: name.clone(),
+            },
+            BindTarget::PkgModule(m) => RefTarget::Module(*m),
+            BindTarget::StdModule(_) | BindTarget::StdItem => RefTarget::Std,
+            BindTarget::CNamespace => RefTarget::CNamespace,
+            BindTarget::Poisoned => RefTarget::Local(b.name_span),
+        }
     }
 
     // ------------------------------------------------------ items ------
@@ -275,7 +432,7 @@ impl Resolver<'_> {
                     self.push_scope();
                     // `Self` names the implementing type inside trait
                     // and impl member signatures (s14).
-                    self.bind("Self".to_string());
+                    self.bind("Self".to_string(), None);
                     self.bind_generics(d.generics());
                     for m in d.members() {
                         self.resolve_item(m);
@@ -286,7 +443,7 @@ impl Resolver<'_> {
             SyntaxKind::ImplDecl => {
                 if let Some(d) = ImplDecl::cast(node) {
                     self.push_scope();
-                    self.bind("Self".to_string());
+                    self.bind("Self".to_string(), None);
                     self.bind_generics(d.generics());
                     if let Some(p) = d.trait_path() {
                         self.resolve_path_first(p.syntax(), false);
@@ -398,33 +555,45 @@ impl Resolver<'_> {
     // ------------------------------------------------------ scopes -----
 
     fn push_scope(&mut self) {
-        self.scopes.push(BTreeSet::new());
+        self.scopes.push(BTreeMap::new());
     }
 
     fn pop_scope(&mut self) {
         self.scopes.pop();
     }
 
-    fn bind(&mut self, name: String) {
+    /// Bind `name` in the innermost scope. A binder with a token
+    /// records itself in the binding table (s133: declaration and use
+    /// share one identity); the keyword-bound `Self` has none.
+    fn bind(&mut self, name: String, span: Option<Span>) {
+        if let Some(s) = span {
+            self.record(s, RefTarget::Local(s));
+        }
         if let Some(top) = self.scopes.last_mut() {
-            top.insert(name);
+            top.insert(name, span);
         }
     }
 
     fn in_scope(&self, name: &str) -> bool {
-        self.scopes.iter().any(|s| s.contains(name))
+        self.lookup(name).is_some()
+    }
+
+    /// The innermost lexical binding of `name`: `Some(binder span)`,
+    /// or `Some(None)` for `Self`.
+    fn lookup(&self, name: &str) -> Option<Option<Span>> {
+        self.scopes.iter().rev().find_map(|s| s.get(name).copied())
     }
 
     fn bind_generics(&mut self, list: Option<GenericParamList<'_>>) {
         let Some(list) = list else { return };
         // Bind every parameter first (bounds may mention them), then
         // resolve the bounds.
-        let names: Vec<String> = list
+        let names: Vec<(String, Span)> = list
             .params()
-            .filter_map(|p| p.name().map(|t| self.text(t.span)))
+            .filter_map(|p| p.name().map(|t| (self.text(t.span), t.span)))
             .collect();
-        for n in names {
-            self.bind(n);
+        for (n, s) in names {
+            self.bind(n, Some(s));
         }
         for p in list.params() {
             if let Some(bound) = p.bound() {
@@ -438,18 +607,22 @@ impl Resolver<'_> {
     fn bind_params(&mut self, params: ParamList<'_>) {
         for p in params.params() {
             if p.is_self() {
-                self.bind("self".to_string());
+                // The receiver binds `self` to its own keyword token,
+                // so uses of `self` navigate to the parameter and
+                // references stay body-scoped.
+                let span = p.syntax().child_token(SyntaxKind::SelfKw).map(|t| t.span);
+                self.bind("self".to_string(), span);
             } else if let Some(t) = p.name() {
                 let name = self.text(t.span);
-                self.bind(name);
+                self.bind(name, Some(t.span));
             }
         }
     }
 
     fn bind_pattern(&mut self, pat: &GreenNode) {
         let names = pattern_names(pat, self.src());
-        for (n, _) in names {
-            self.bind(n);
+        for (n, s) in names {
+            self.bind(n, Some(s));
         }
     }
 
@@ -463,7 +636,7 @@ impl Resolver<'_> {
     fn candidates(&self) -> Vec<String> {
         let mut set: BTreeSet<String> = BTreeSet::new();
         for s in &self.scopes {
-            set.extend(s.iter().cloned());
+            set.extend(s.keys().cloned());
         }
         set.extend(self.bindings.iter().map(|b| b.name.clone()));
         set.extend(self.pkg.tables[self.module].names().map(str::to_string));
@@ -476,17 +649,36 @@ impl Resolver<'_> {
     /// rule: in expression position a capitalized miss may be an
     /// error-row tag, whose existence only typing can decide.
     fn resolve_name(&mut self, name: &str, span: Span, defer_tags: bool) {
-        if name == "self" || self.in_scope(name) {
+        if let Some(binder) = self.lookup(name) {
+            let target = binder.map_or(RefTarget::SelfKw, RefTarget::Local);
+            self.record(span, target);
             return;
+        }
+        if name == "self" {
+            return; // a bare `self` outside any receiver: s17's
         }
         if let Some(i) = self.binding_index(name) {
             self.used[i] = true;
+            let target = self.binding_target(i);
+            self.record(span, target);
             return;
         }
-        if self.pkg.tables[self.module].get(name).is_some()
-            || prelude::in_prelude(name)
-            || prelude::is_builtin_type(name)
-        {
+        if self.pkg.tables[self.module].get(name).is_some() {
+            self.record(
+                span,
+                RefTarget::Item {
+                    module: self.module,
+                    name: name.to_string(),
+                },
+            );
+            return;
+        }
+        if prelude::in_prelude(name) {
+            self.record(span, RefTarget::Prelude(name.to_string()));
+            return;
+        }
+        if prelude::is_builtin_type(name) {
+            self.record(span, RefTarget::BuiltinType(name.to_string()));
             return;
         }
         if defer_tags && name.chars().next().is_some_and(char::is_uppercase) {
@@ -527,12 +719,19 @@ impl Resolver<'_> {
         let mut segs = path.tokens().filter(|t| t.kind == SyntaxKind::Ident);
         let Some(first) = segs.next() else { return };
         let name = self.text(first.span);
-        if self.in_scope(&name) || name == "self" {
+        if let Some(binder) = self.lookup(&name) {
+            let target = binder.map_or(RefTarget::SelfKw, RefTarget::Local);
+            self.record(first.span, target);
+            return;
+        }
+        if name == "self" {
             return;
         }
         if let Some(i) = self.binding_index(&name) {
             self.used[i] = true;
             let target = self.bindings[i].target.clone();
+            let recorded = self.binding_target(i);
+            self.record(first.span, recorded);
             if let Some(second) = segs.next() {
                 let member = self.text(second.span);
                 self.check_namespace_member(&target, &name, &member, second.span);
@@ -554,7 +753,9 @@ impl Resolver<'_> {
             BindTarget::CNamespace | BindTarget::Poisoned => {}
             BindTarget::StdModule(mi) => {
                 let m = &prelude::STD_MODULES[*mi];
-                if !m.items.contains(&member) {
+                if m.items.contains(&member) {
+                    self.record(span, RefTarget::Std);
+                } else {
                     let cands: Vec<String> = m.items.iter().map(|s| s.to_string()).collect();
                     self.sink
                         .push(graph_no_such_item(span, member, ns_name, &cands));
@@ -570,6 +771,15 @@ impl Resolver<'_> {
                     self.sink.push(d);
                 }
                 Some(item) if item.vis == Vis::Private => {
+                    // Navigable even though refused: the definition
+                    // is exactly what the reader wants to see.
+                    self.record(
+                        span,
+                        RefTarget::Item {
+                            module: *midx,
+                            name: member.to_string(),
+                        },
+                    );
                     let mod_name = self.pkg.modules[*midx].display_name();
                     self.sink.push(
                         Diagnostic::error(
@@ -587,7 +797,13 @@ impl Resolver<'_> {
                         )),
                     );
                 }
-                Some(_) => {}
+                Some(_) => self.record(
+                    span,
+                    RefTarget::Item {
+                        module: *midx,
+                        name: member.to_string(),
+                    },
+                ),
             },
             // A value import: deeper members are type-dependent (s13).
             BindTarget::Item { .. } | BindTarget::StdItem => {}
@@ -652,14 +868,14 @@ impl Resolver<'_> {
                     }
                     if let Some(n) = d.name() {
                         let name = self.text(n.span);
-                        self.bind(name);
+                        self.bind(name, Some(n.span));
                     }
                 }
             }
             SyntaxKind::FnDecl => {
                 if let Some(n) = FnDecl::cast(stmt).and_then(|d| d.name()) {
                     let name = self.text(n.span);
-                    self.bind(name);
+                    self.bind(name, Some(n.span));
                 }
                 self.resolve_fn(stmt);
             }
@@ -669,7 +885,7 @@ impl Resolver<'_> {
             | SyntaxKind::TraitDecl => {
                 if let Some(n) = stmt.child_token(SyntaxKind::Ident) {
                     let name = self.text(n.span);
-                    self.bind(name);
+                    self.bind(name, Some(n.span));
                 }
                 self.resolve_item(stmt);
             }
@@ -797,7 +1013,7 @@ impl Resolver<'_> {
                     self.push_scope();
                     if let Some(n) = s.name() {
                         let name = self.text(n.span);
-                        self.bind(name);
+                        self.bind(name, Some(n.span));
                     }
                     if let Some(b) = s.body() {
                         self.resolve_block(b);
@@ -810,7 +1026,7 @@ impl Resolver<'_> {
                     self.push_scope();
                     if let Some(n) = r.name() {
                         let name = self.text(n.span);
-                        self.bind(name);
+                        self.bind(name, Some(n.span));
                     }
                     // The strategy (`rc` / `pool(T)`) is a closed
                     // contextual form — nothing to resolve at v0.
@@ -989,10 +1205,17 @@ impl Resolver<'_> {
             && let Some(t) = PathExpr::cast(base).and_then(|p| p.ident())
         {
             let name = self.text(t.span);
-            if name != "self" && !self.in_scope(&name) {
+            if let Some(binder) = self.lookup(&name) {
+                let target = binder.map_or(RefTarget::SelfKw, RefTarget::Local);
+                self.record(t.span, target);
+                return;
+            }
+            if name != "self" {
                 if let Some(i) = self.binding_index(&name) {
                     self.used[i] = true;
                     let target = self.bindings[i].target.clone();
+                    let recorded = self.binding_target(i);
+                    self.record(t.span, recorded);
                     if let Some(mem) = m.member().filter(|t| t.kind == SyntaxKind::Ident) {
                         let member = self.text(mem.span);
                         self.check_namespace_member(&target, &name, &member, mem.span);

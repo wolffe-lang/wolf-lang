@@ -19,12 +19,21 @@
 //! completion after `.` — trigger character `.`, which is both member
 //! access and the module path separator; the incomplete-buffer
 //! contract lives in `wolf_query::Snapshot::completions`),
-//! `$/cancelRequest` honored into the query layer.
+//! `textDocument/definition`, `textDocument/references`,
+//! `textDocument/prepareRename` + `textDocument/rename` (s133: the
+//! navigation trio, answered from the binding table the resolver and
+//! checker keep — never a textual search; `LocationLink[]` when the
+//! client declares `linkSupport`, `documentChanges` when it declares
+//! `workspaceEdit.documentChanges`; rename refuses BY NAME with
+//! `RequestFailed` for keywords, builtins, prelude names, std/`import
+//! c` symbols and modules — the refusal set is `wolf_query`'s
+//! `navigate` module docs), `$/cancelRequest` honored into the query
+//! layer.
 //!
 //! **Still absent, refused by name** (MethodNotFound with the method
-//! named — never faked, per the track's rule): goto-definition,
-//! references, signature help, semantic tokens, inlay hints, rename,
-//! range formatting, the pull-diagnostics model.
+//! named — never faked, per the track's rule): signature help,
+//! semantic tokens, inlay hints, range formatting, workspace symbols,
+//! the pull-diagnostics model.
 //!
 //! Transport is rust-analyzer's `lsp-server` (L1: framing, handshake,
 //! IO threads — the parts with sharp edges — and no policy). The main

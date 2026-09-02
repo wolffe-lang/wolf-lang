@@ -52,6 +52,7 @@
 mod completions;
 pub mod docs;
 mod host;
+mod navigate;
 mod overlay;
 mod queries;
 
@@ -60,6 +61,7 @@ pub use docs::{
     Directive, DocComment, DocFence, DocItem, DocModule, DocPackage, doc_package, resolve_links,
 };
 pub use host::{CancelToken, Cancelled, Change, QueryHost, Snapshot};
+pub use navigate::{FileEdits, RenameOutcome, RenamePrep, Symbol};
 pub use queries::{
     DefResult, DiagnosticsBatch, DocSymbol, FormatResult, HoverResult, SourceFile, SymbolKind,
 };
@@ -78,7 +80,16 @@ pub use queries::{
 /// recovered; repaired-text re-analysis for member position; the
 /// empty list, never an error, when a receiver cannot be typed) is
 /// part of the surface the s57 daemon must honor.
-pub const CONTRACT_VERSION: u32 = 3;
+///
+/// v4 (s133): the navigation trio joins the surface — additive.
+/// [`Snapshot::definition`], [`Snapshot::references`],
+/// [`Snapshot::prepare_rename`] and [`Snapshot::rename`] answer from
+/// the binding table the resolver and checker keep
+/// (`wolf_sema::Resolution::refs`, `TypedBody::member_refs`) — never
+/// a textual search — and [`DefResult`] gained the asking token
+/// (`origin`). Rename's refusal set is part of the surface (the
+/// `navigate` module docs).
+pub const CONTRACT_VERSION: u32 = 4;
 
 /// Test-only knob: when set to a number of milliseconds, every query
 /// sleeps that long at its first checkpoint (in small cancellable

@@ -16,7 +16,7 @@
 //! negative rule).
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -25,11 +25,11 @@ use lsp_server::{Connection, ErrorCode, Message, Notification, Request, RequestI
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
     CodeActionOrCommand, CodeActionProviderCapability, CompletionOptions, HoverProviderCapability,
-    InitializeParams, OneOf, PublishDiagnosticsParams, SaveOptions, ServerCapabilities,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, TextEdit, Url,
+    InitializeParams, Location, LocationLink, OneOf, PublishDiagnosticsParams, RenameOptions,
+    SaveOptions, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+    TextDocumentSyncOptions, TextDocumentSyncSaveOptions, TextEdit, Url,
 };
-use wolf_query::{Cancelled, Change, QueryHost, Snapshot};
+use wolf_query::{Cancelled, Change, QueryHost, RenameOutcome, RenamePrep, Snapshot};
 use wolf_span::{LineIndex, Span};
 
 use crate::convert;
@@ -44,6 +44,10 @@ const DEBOUNCE: Duration = Duration::from_millis(100);
 /// `-32800` / `-32801`, from the transport crate's enum.
 const REQUEST_CANCELLED: i32 = ErrorCode::RequestCanceled as i32;
 const CONTENT_MODIFIED: i32 = ErrorCode::ContentModified as i32;
+/// `-32803` — the 3.17 code for "the request failed for a reason the
+/// client should not retry": rename's refusals (s133) answer with it,
+/// the message naming the token and why.
+const REQUEST_FAILED: i32 = ErrorCode::RequestFailed as i32;
 
 /// Per-in-flight-request control: the token cancels the query, the
 /// flag records that the *client* asked (⇒ `-32800`, not retry).
@@ -74,6 +78,14 @@ struct Cx {
     /// path → the client's own URI string for open docs (echoed
     /// byte-identically; clients compare URIs as strings).
     open_urls: Arc<Mutex<HashMap<PathBuf, Url>>>,
+    /// s133 — two client declarations that change an answer's SHAPE
+    /// (not its content): `textDocument.definition.linkSupport` (a
+    /// `LocationLink[]` instead of `Location[]`) and
+    /// `workspace.workspaceEdit.documentChanges` (a rename's edit as
+    /// `documentChanges` instead of the `changes` map). Read once at
+    /// `initialize`, fixed for the session.
+    link_support: bool,
+    document_changes: bool,
 }
 
 /// Serve one LSP session over `connection` until `exit`. The
@@ -88,6 +100,20 @@ pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Erro
     let (init_id, init_value) = connection.initialize_start()?;
     let init: InitializeParams = serde_json::from_value(init_value)?;
     let enc = positions::negotiate(&init);
+    let link_support = init
+        .capabilities
+        .text_document
+        .as_ref()
+        .and_then(|t| t.definition.as_ref())
+        .and_then(|d| d.link_support)
+        .unwrap_or(false);
+    let document_changes = init
+        .capabilities
+        .workspace
+        .as_ref()
+        .and_then(|w| w.workspace_edit.as_ref())
+        .and_then(|e| e.document_changes)
+        .unwrap_or(false);
     let capabilities = server_capabilities(enc);
     let result = serde_json::json!({
         "capabilities": capabilities,
@@ -108,6 +134,8 @@ pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Erro
         early_cancel: Arc::new(Mutex::new(std::collections::HashSet::new())),
         enc,
         open_urls: Arc::new(Mutex::new(HashMap::new())),
+        link_support,
+        document_changes,
     };
     let mut shutdown_requested = false;
     // Docs with unpublished changes: path → deadline.
@@ -218,6 +246,16 @@ fn server_capabilities(enc: Encoding) -> ServerCapabilities {
             trigger_characters: Some(vec![".".to_string()]),
             ..Default::default()
         }),
+        // s133: the navigation trio, answered from the resolver's
+        // binding table. Rename advertises `prepareProvider` so a
+        // client asks before it opens the rename box — the refusal
+        // arrives by name at that point, never as a partial edit.
+        definition_provider: Some(OneOf::Left(true)),
+        references_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Right(RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: Default::default(),
+        })),
         ..Default::default()
     }
 }
@@ -475,6 +513,10 @@ fn handle_request(cx: &Cx, snapshot: &Snapshot, req: &Request) -> Result<Respons
         "textDocument/formatting" => formatting(cx, snapshot, id, &req.params),
         "textDocument/codeAction" => code_action(cx, snapshot, id, &req.params),
         "textDocument/completion" => completion(cx, snapshot, id, &req.params),
+        "textDocument/definition" => definition(cx, snapshot, id, &req.params),
+        "textDocument/references" => references(cx, snapshot, id, &req.params),
+        "textDocument/prepareRename" => prepare_rename(cx, snapshot, id, &req.params),
+        "textDocument/rename" => rename(cx, snapshot, id, &req.params),
         _ => Ok(Response::new_err(
             id,
             ErrorCode::MethodNotFound as i32,
@@ -549,6 +591,161 @@ fn completion(
         return Ok(Response::new_ok(id, serde_json::Value::Null));
     };
     Ok(Response::new_ok(id, convert::completion_items(&items)))
+}
+
+// ---------------------------------------------------------- navigation --
+// s133: definition / references / prepareRename / rename. The query
+// owns identity and the refusal set (`wolf_query::navigate`); these
+// fns are pure wire shape — the negotiated encoding at every span,
+// the client's declared shapes (`linkSupport`, `documentChanges`),
+// and `RequestFailed` for a refusal.
+
+/// A compiler location → an LSP `Location`, reading the target file's
+/// text through the snapshot (overlay or disk — the bytes the analysis
+/// read at this revision).
+fn locate(cx: &Cx, snapshot: &Snapshot, path: &Path, span: Span) -> Option<Location> {
+    let text = snapshot.file_text(path)?;
+    let open_urls = cx
+        .open_urls
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let uri = convert::url_for(path, &open_urls)?;
+    let index = LineIndex::new(&text);
+    Some(Location {
+        uri,
+        range: convert::range_of(&text, &index, span, cx.enc),
+    })
+}
+
+fn definition(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, text, index, offset)) = text_position(cx, snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let Some(def) = snapshot.definition(&path, offset)? else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let Some(target) = locate(cx, snapshot, &def.path, def.span) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    if cx.link_support {
+        // The declaration's name token serves as both target ranges:
+        // the query keys identity on it (the full item range is not
+        // part of the binding table), and equal ranges are legal.
+        let link = LocationLink {
+            origin_selection_range: Some(convert::range_of(&text, &index, def.origin, cx.enc)),
+            target_uri: target.uri,
+            target_range: target.range,
+            target_selection_range: target.range,
+        };
+        return Ok(Response::new_ok(id, vec![link]));
+    }
+    Ok(Response::new_ok(id, vec![target]))
+}
+
+fn references(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, _text, _index, offset)) = text_position(cx, snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let include_declaration = params
+        .get("context")
+        .and_then(|c| c.get("includeDeclaration"))
+        .and_then(|b| b.as_bool())
+        .unwrap_or(false);
+    let Some(refs) = snapshot.references(&path, offset, include_declaration)? else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    // The query's order is (file, offset); locating preserves it.
+    let locations: Vec<Location> = refs
+        .iter()
+        .filter_map(|r| locate(cx, snapshot, &r.path, r.span))
+        .collect();
+    Ok(Response::new_ok(id, locations))
+}
+
+fn prepare_rename(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, text, index, offset)) = text_position(cx, snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    match snapshot.prepare_rename(&path, offset)? {
+        None => Ok(Response::new_ok(id, serde_json::Value::Null)),
+        Some(RenamePrep::Refused(reason)) => Ok(Response::new_err(id, REQUEST_FAILED, reason)),
+        Some(RenamePrep::Ok { span, name }) => Ok(Response::new_ok(
+            id,
+            lsp_types::PrepareRenameResponse::RangeWithPlaceholder {
+                range: convert::range_of(&text, &index, span, cx.enc),
+                placeholder: name,
+            },
+        )),
+    }
+}
+
+fn rename(
+    cx: &Cx,
+    snapshot: &Snapshot,
+    id: RequestId,
+    params: &serde_json::Value,
+) -> Result<Response, Cancelled> {
+    let Some((path, _text, _index, offset)) = text_position(cx, snapshot, params) else {
+        return Ok(Response::new_ok(id, serde_json::Value::Null));
+    };
+    let Some(new_name) = params.get("newName").and_then(|n| n.as_str()) else {
+        return Ok(Response::new_err(
+            id,
+            ErrorCode::InvalidParams as i32,
+            "rename needs `newName`".to_string(),
+        ));
+    };
+    match snapshot.rename(&path, offset, new_name)? {
+        None => Ok(Response::new_ok(id, serde_json::Value::Null)),
+        Some(RenameOutcome::Refused(reason)) => Ok(Response::new_err(id, REQUEST_FAILED, reason)),
+        Some(RenameOutcome::Edits(files)) => {
+            let open_urls = cx
+                .open_urls
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            let mut per_file = Vec::new();
+            for f in &files {
+                // A file the snapshot cannot read cannot be edited —
+                // and a partial edit is exactly what the contract
+                // forbids, so the whole rename is refused.
+                let (Some(text), Some(uri)) = (
+                    snapshot.file_text(&f.path),
+                    convert::url_for(&f.path, &open_urls),
+                ) else {
+                    return Ok(Response::new_err(
+                        id,
+                        REQUEST_FAILED,
+                        format!(
+                            "rename refused: `{}` names the symbol but cannot be read",
+                            f.path.display()
+                        ),
+                    ));
+                };
+                per_file.push((uri, text, f.edits.clone()));
+            }
+            Ok(Response::new_ok(
+                id,
+                convert::workspace_edit(&per_file, cx.enc, cx.document_changes),
+            ))
+        }
+    }
 }
 
 fn document_symbol(

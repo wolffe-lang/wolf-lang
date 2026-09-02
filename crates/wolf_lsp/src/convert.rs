@@ -174,6 +174,57 @@ pub fn code_actions_for(
     out
 }
 
+/// One file of a rename: its URI, the text the analysis read, and
+/// the (span, replacement) edits ascending.
+pub type FileEdit = (Url, std::sync::Arc<Vec<u8>>, Vec<(Span, String)>);
+
+/// A rename's edit set → `WorkspaceEdit` (s133), in the shape the
+/// client declared: `documentChanges` (a `TextDocumentEdit` per file,
+/// `version: null` — the server tracks no versions) when
+/// `document_changes`, the `changes` map otherwise. Files arrive in
+/// the query's order (path); edits within a file ascending.
+pub fn workspace_edit(files: &[FileEdit], enc: Encoding, document_changes: bool) -> WorkspaceEdit {
+    let edits_of = |text: &[u8], edits: &[(Span, String)]| -> Vec<TextEdit> {
+        let index = LineIndex::new(text);
+        edits
+            .iter()
+            .map(|(span, new_text)| TextEdit {
+                range: range_of(text, &index, *span, enc),
+                new_text: new_text.clone(),
+            })
+            .collect()
+    };
+    if document_changes {
+        let docs = files
+            .iter()
+            .map(|(uri, text, edits)| lsp_types::TextDocumentEdit {
+                text_document: lsp_types::OptionalVersionedTextDocumentIdentifier {
+                    uri: uri.clone(),
+                    version: None,
+                },
+                edits: edits_of(text, edits)
+                    .into_iter()
+                    .map(lsp_types::OneOf::Left)
+                    .collect(),
+            })
+            .collect();
+        return WorkspaceEdit {
+            changes: None,
+            document_changes: Some(lsp_types::DocumentChanges::Edits(docs)),
+            change_annotations: None,
+        };
+    }
+    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+    for (uri, text, edits) in files {
+        changes.insert(uri.clone(), edits_of(text, edits));
+    }
+    WorkspaceEdit {
+        changes: Some(changes),
+        document_changes: None,
+        change_annotations: None,
+    }
+}
+
 fn lsp_completion_kind(kind: CompletionKind) -> CompletionItemKind {
     match kind {
         CompletionKind::Keyword => CompletionItemKind::KEYWORD,
