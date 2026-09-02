@@ -1,8 +1,106 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 — 2026-09-02
 
-### The proc leaves its module (s134 item 1 — #219)
+THE ARCHIVE RETURNS. **On Windows, `spawn` and scopes, `proc`, channels
+and `select`, `sync`/`when`, `os.signal` and `net` deadlines now compile
+and run.** v0.2.2 was the first archive that built and ran your program
+on that host, and it refused twenty-one corpus rows by construct name —
+"windows-native serves no `spawn`/scopes (the task layer) at the s60a
+bring-up". That table is retired. The windows native lane measures at
+macOS parity now — 261/278/0/295/0 (checked/native/release/union/
+all-three), **zero rows refused by construct name** — and a stack
+overflow inside a task reports in wolf's own voice,
+`wolf-rt: stack overflow in task '<name>'`, exit **134**, where v0.2.2
+died as `0xC00000FD` with no words at all. Two things this host still
+does not serve, and says so by name: `wolf build --release` (the LLVM
+tier is s60c's), and EXTERNAL `reload`/`upgrade` signal delivery, which
+has no Windows analog — a program's own reload path works, and
+wws-shaped programs use a control channel for the rest.
+
+**And linux aarch64 has its archive back.** v0.2.2's release page
+carried three archives, not four: the new learner-path smoke gated the
+upload on a native tier that host does not serve, so the arm archive was
+built and then thrown away (#213). The smoke reads the driver's
+exit-code contract now — an exit-2 environment refusal is an unserved
+host, not a broken archive — printing the refusal a learner would see
+and then proving `wolf test corpus/hello.lu` runs from the unpacked
+archive on the checked tier, which is how that host has served learners
+since v0.2.1. Four archives at this tag. And the release page carries
+this paragraph instead of a bare asset list, which is the third letter
+below.
+
+Underneath (s60b): workers are Win32 threads on the kernel's own
+reserve-and-guard stacks — `CreateThread` with
+`STACK_SIZE_PARAM_IS_A_RESERVATION` at `WOLF_TASK_STACK`, 8 MiB by
+default: `VirtualAlloc(MEM_RESERVE)` plus the `PAGE_GUARD` page ntdll
+walks down on first touch, done by the kernel rather than by hand. The
+span is not ours to pool (Windows offers no thread on memory the runtime
+mapped), so a worker keeps its stack for life, and idle trim is named
+for s60c. `os.signal` rides `SetConsoleCtrlHandler`: Ctrl+C and the
+console closing are `terminate`, Ctrl+Break is `quit` — the
+`[os.signal.platform]` table — with `os_signal_raise` an in-process
+loopback, because no self-targeted console event exists that would not
+also reach every other process on the console. The reactor behind the
+s35 interface is `WSAPoll`: `net` deadlines fire the `timeout` row,
+accept/read/write park with the pool compensating, kill teardown reaches
+them. Measured on the runner: 24 tasks parked on 200 ms read deadlines
+resolved 24/24 `timeout` in 207 ms wall — the deadlines fire at the
+deadline, not at the poll's cost. IOCP — completion ports, the async-fs
+and many-socket rung — is s60c's, behind the same seam.
+[`docs/platforms.md`](docs/platforms.md) is the per-host ledger.
+
+It pairs with **lupin 0.1.23** at pin `8cda3aa` (D57: the pin is part of
+this release's identity).
+
+### The server annotates (s134)
+
+`wolf lsp` serves `textDocument/signatureHelp`,
+`textDocument/semanticTokens/full` and `/range`, and
+`textDocument/inlayHint` — the three rungs s133's closeout named as
+the binding table read three more ways. Nothing is a textual search:
+**signature help** reads the checker's call record for the innermost
+call whose argument list holds the cursor (`TypedBody::calls`, keyed
+by the call expression's span) — the declared parameters as
+`name: type` with a declared `mut`/`take` spelled, the receiver
+omitted because the parentheses never spell it, the active parameter
+counted by the commas before the cursor, the return type when the
+callee is a declared item, and its `///` comment (the one doc model
+hover and `wolf doc` read; markdown when the client lists it, plain
+text otherwise); triggers on `(`, re-triggers on `,`. **Semantic
+tokens** classify every identifier through what it bound to
+(`Resolution::refs`, then `TypedBody::member_refs`): `parameter` when
+the binder sits in a parameter list, `variable` otherwise (`readonly`
+unless the binder is `var`'s), `function` / `type` / `variable` by an
+item's kind, `namespace` for modules and std paths, `property` /
+`enumMember` / `function` for fields, variants and methods, `keyword`
+from the token kind, `type` for builtins and `Self`; a binder's own
+token carries `declaration`; a name the compiler never bound gets no
+token. The legend is closed and fixed: eight types in one order, two
+modifiers. **Inlay hints** are the inferred type of an unascribed
+`let`/`var` binder and the parameter name before a positional
+argument that is not already that name — only at calls the checker
+resolved to a declaration, so a fn-typed value and a prelude name
+offer none; each class switches off through
+`initializationOptions.inlayHints.{types, parameterNames}` and the
+client's own toggle decides whether hints show at all. Positions
+honor the negotiated encoding at every span (an astral character on
+the line before a token moves its UTF-16 column, not its byte). No
+delta tokens: a full answer is cheap here and a delta is a promise
+about identity across edits this server has no reason to make; it
+answers `-32601` by name like every other absence. `wolf_query`'s
+contract moves to v5 (additive). Eighteen transcripts were recorded
+in wolf-lsp against this build (one script per rung per maintained
+client profile — fackr, facsimile, nvim, vscode, helix, emacs — the
+answers differing by the profile's own declarations), the forty-seven
+existing ones re-recorded with the initialize answer as their only
+diff, and the unknown-method probe re-targeted at what is still
+absent. Latency, s57's table before and after on the same machine:
+`diagnostics-after-edit` p95 110.6 → 110.8 ms (p50 107.7 → 106.6),
+hover p95 0.2 → 0.1 ms, cold first diagnostics p95 4.1 → 4.4 ms —
+every class inside its budget, the number near perception unmoved.
+
+### The proc leaves its module (s134 — #219 closes)
 
 **A `spawn proc` in a non-entry module now builds on the release
 tier under every partition.** lobo ws13 measured the gap while
@@ -50,7 +148,7 @@ the checked-tier runtime hooks), which is why ws13 saw the same file
 run there and refuse under `conform-run`; the two flags name two
 machines, and the record now says which one declined.
 
-### The span is the offending token (s134 item 2 — D71, #220 closes)
+### The span is the offending token (s134 — D71, #220 closes)
 
 **A parse refusal about a token now spans that token.** is34's first
 full three-lane diff-run found DIV-2026-020: on eight grammar
@@ -92,106 +190,67 @@ locus, which is why is34 could only carry them as a waiver
 (`differ::DIV_2026_020_FILES` in wolf-interp; it retires at the pin
 bump that carries this, the interpreter lane's, as #177's did).
 
-### The server annotates (s134 item 3)
+### The letters
 
-`wolf lsp` serves `textDocument/signatureHelp`,
-`textDocument/semanticTokens/full` and `/range`, and
-`textDocument/inlayHint` — the three rungs s133's closeout named as
-the binding table read three more ways. Nothing is a textual search:
-**signature help** reads the checker's call record for the innermost
-call whose argument list holds the cursor (`TypedBody::calls`, keyed
-by the call expression's span) — the declared parameters as
-`name: type` with a declared `mut`/`take` spelled, the receiver
-omitted because the parentheses never spell it, the active parameter
-counted by the commas before the cursor, the return type when the
-callee is a declared item, and its `///` comment (the one doc model
-hover and `wolf doc` read; markdown when the client lists it, plain
-text otherwise); triggers on `(`, re-triggers on `,`. **Semantic
-tokens** classify every identifier through what it bound to
-(`Resolution::refs`, then `TypedBody::member_refs`): `parameter` when
-the binder sits in a parameter list, `variable` otherwise (`readonly`
-unless the binder is `var`'s), `function` / `type` / `variable` by an
-item's kind, `namespace` for modules and std paths, `property` /
-`enumMember` / `function` for fields, variants and methods, `keyword`
-from the token kind, `type` for builtins and `Self`; a binder's own
-token carries `declaration`; a name the compiler never bound gets no
-token. The legend is closed and fixed: eight types in one order, two
-modifiers. **Inlay hints** are the inferred type of an unascribed
-`let`/`var` binder and the parameter name before a positional
-argument that is not already that name — only at calls the checker
-resolved to a declaration, so a fn-typed value and a prelude name
-offer none; each class switches off through
-`initializationOptions.inlayHints.{types, parameterNames}` and the
-client's own toggle decides whether hints show at all. Positions
-honor the negotiated encoding at every span (an astral character on
-the line before a token moves its UTF-16 column, not its byte). No
-delta tokens: a full answer is cheap here and a delta is a promise
-about identity across edits this server has no reason to make; it
-answers `-32601` by name like every other absence. `wolf_query`'s
-contract moves to v5 (additive). Eighteen transcripts were recorded
-in wolf-lsp against this build (one script per rung per maintained
-client profile — fackr, facsimile, nvim, vscode, helix, emacs — the
-answers differing by the profile's own declarations), the forty-seven
-existing ones re-recorded with the initialize answer as their only
-diff, and the unknown-method probe re-targeted at what is still
-absent. Latency, s57's table before and after on the same machine:
-`diagnostics-after-edit` p95 110.6 → 110.8 ms (p50 107.7 → 106.6),
-hover p95 0.2 → 0.1 ms, cold first diagnostics p95 4.1 → 4.4 ms —
-every class inside its budget, the number near perception unmoved.
+**One archive per target, not a history** (#212). `cargo xtask dist`
+runs in every gauntlet, and the archive, the staged tree and the
+unpacked smoke tree it writes are all named for the version — so a
+version bump renamed them and left the previous set behind forever. r05
+measured the cost: five runs' worth plus the fuzz target dir took the
+release rig to **0 bytes free** mid-release, which deadlocks a tool
+harness that spools every output to a file first. `dist` now prunes
+every prior artifact for its own target before it writes anything, and
+names each removal, so a CI log can be audited. The second consequence
+was worse than disk and closes with it: the release workflow uploads
+`target/dist/*.tar.gz` by GLOB, so an archive left over from an older
+version would have ridden a tag it did not belong to.
 
-### The windows task layer (s60b)
+**The release body fills itself** (#214). `GET
+/repos/wolffe-lang/wolf-lang/releases/tags/v0.2.2` answered with a
+`body` of length **0**, and so did v0.2.1 — the workflow created the
+release with `--title` and nothing else, so the paragraph written for a
+newcomer lived only in this file, and a learner arriving from a download
+link never read it. `cargo xtask release-notes <TAG>` cuts the entry for
+the tag with fenced blocks transparent (the 0.2.2 entry quotes a
+compiler refusal inside a fence, and a naive cut would have ended the
+body two paragraphs in), and the release job passes it to `gh release
+create --notes-file` and then to `gh release edit`, so the body is right
+whether the workflow opened the release or someone else did. A tag with
+no entry here fails the job by name. This page is the proof.
 
-**On Windows, `spawn`, scopes, `proc`, channels and `select`, `sync`/
-`when`, `os.signal`, and `net` deadlines now compile and run.** The
-v0.2.2 archive refused those twenty-one corpus rows by construct name
-— "windows-native serves no `spawn`/scopes (the task layer) at the
-s60a bring-up" — because the runtime's task layer, io reactor, and
-signal delivery were POSIX. Each crossed:
+**The multiline, raw and generalized literals have productions** (#215).
+`literal` named `MULTILINE_STRING`, `RAW_STRING` and
+`GENERALIZED_STRING` on one line and defined none of them; `STR_TEXT`
+and `CHAR_TEXT` were cited by the productions above them and defined
+nowhere. A reader working from `spec/grammar.ebnf` alone derived nothing
+at all for three of the six literal forms — the same class as #198, one
+literal over. It bit le05, which wired an `invalid_escape` node for
+tree-sitter-wolf and had to decide whether it belongs inside a `"""`
+string: the productions could not answer, so the answer had to be read
+off a CONTRAST between three prose bullets, two of which say "no
+escapes" outright and the third of which says nothing about them. The
+lexer was measured and the productions written from it —
+`MULTI_PART ::= MULTI_TEXT | STR_ESC | '{{' | '}}' | INTERP`, the same
+alternatives `STR_PART` has, because one routine scans both bodies. So
+escapes and interpolation work inside a multiline, and that is a
+derivation now rather than a silence. `RAW_TEXT` and `GEN_TEXT` derive
+scalars and nothing else, which is where "no escapes, no interpolation"
+is read from instead of the sentence beside them. Two corpus witnesses
+make it measured: the escapes running inside a multiline, and the E0101
+refusal of an unknown escape there — the first corpus entry anywhere to
+pin one, which is how it turned up **#225**, a code collision 484
+differential entries had never shown: lupin refuses a bad escape under
+the code the catalogue spends on a multiline's opening line, in plain
+strings and multilines alike.
 
-- **The task layer.** Workers are Win32 threads on the kernel's own
-  reserve-and-guard stacks (`CreateThread` with
-  `STACK_SIZE_PARAM_IS_A_RESERVATION` at `WOLF_TASK_STACK`, 8 MiB by
-  default — `VirtualAlloc(MEM_RESERVE)` plus the `PAGE_GUARD` walker,
-  done by ntdll rather than by hand; the span is not ours to pool, and
-  idle trim is named for s60c). **A stack overflow in a task reports
-  in wolf's voice** — `wolf-rt: stack overflow in task '<name>'` on
-  stderr, exit **134** — through a vectored exception handler that
-  answers `STATUS_STACK_OVERFLOW` and terminates the process with no
-  unwinding and no containment, exactly the unix reporter's contract.
-  v0.2.2 died there as `0xC00000FD` with no words; a program that
-  never spawns still does (D15: no spawn, no handler).
-- **`os.signal`** over `SetConsoleCtrlHandler`: Ctrl+C and the
-  console closing are `terminate`, Ctrl+Break is `quit` — the
-  `[os.signal.platform]` table. `os_signal_raise` is an in-process
-  loopback on Windows (there is no self-targeted console event that
-  would not also reach every process on the console), so a program's
-  own reload path and the corpus's loopback rows work; **external
-  `reload`/`upgrade` delivery has no Windows analog** — the named gap
-  stands, and wws-shaped programs use a control channel for those.
-- **The reactor** behind the s35 interface, on `WSAPoll`: `net`
-  deadlines fire the `timeout` row, accept/read/write park in the
-  reactor with the pool compensating, kill teardown reaches them.
-  Measured on the runner: 24 tasks parked on 200 ms read deadlines
-  resolved 24/24 `timeout` in 207 ms wall — the deadlines fire at the
-  deadline, not at the poll's cost. IOCP — completion ports, the async-fs and
-  many-socket rung — is s60c's, behind the same seam.
-
-`wolf build --release` still refuses on Windows by name (the LLVM
-tier is s60c's). The windows floor line moved from 259/255/0/274/0 to
-261/278/0/295/0 (checked/native/release/union/all-three) — native at
-macOS parity, zero rows refused by construct name.
-
-### The archive smoke degrades by name (the v0.2.2 arm gap)
-
-`cargo xtask dist`'s learner-path smoke refused any archive whose
-unpacked `wolf` could not build `hello.lu` natively — which lost the
-linux/aarch64 archive at v0.2.2, a host with no native tier that had
-served learners through the checked tier since v0.2.1. The smoke now
-reads the driver's exit-code contract: an exit-2 environment refusal
-is an unserved host, not a broken archive — it prints the refusal the
-learner will see and proves `wolf test corpus/hello.lu` runs from the
-unpacked archive on the checked tier. The next tag restores the arm
-archive.
+**The pairing moved to lupin 0.1.23.** The sibling released while s60b
+and s134 ran, which is why both waves carried `LUPIN=` overrides. The
+ritual differ run over 484 corpus files found nothing new — checked 257
+agreements / 2 soundness / 8 hard, native 278 / 0 / 5, every hard row a
+standing named one (#167's warning-channel asymmetry, #168's float-cast
+twins) — and one class GONE: not a single `SpanWidth` row, because
+s134's D71 work made those seven E0201 spans byte-identical and this is
+the pin bump at which the interpreter retires its waiver.
 
 ## 0.2.2 — 2026-09-02
 
