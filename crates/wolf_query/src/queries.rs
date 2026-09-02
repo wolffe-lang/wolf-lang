@@ -59,10 +59,14 @@ pub struct HoverResult {
     pub span: Span,
 }
 
-/// A def-of-symbol answer: the defining name token's location.
+/// A navigation answer (s133): a name token's location — the
+/// declaration for `definition`, one use for `references` — plus the
+/// token at the cursor that asked (`origin`, for `LocationLink`).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DefResult {
     pub path: PathBuf,
     pub span: Span,
+    pub origin: Span,
 }
 
 /// Document-symbol kinds (the shim maps these onto LSP's enum).
@@ -269,10 +273,11 @@ impl Snapshot {
         self.guard(|| self.type_at_impl(entry, offset))
     }
 
-    /// Def-of-symbol from s12 resolution: file-scoped import bindings,
-    /// then module items; inside checked bodies, local bindings first.
+    /// Def-of-symbol — the s52 name for [`Snapshot::definition`]
+    /// (s133 moved the answer from a by-name lookup onto the binding
+    /// table; the surface is unchanged).
     pub fn def_of(&self, entry: &Path, offset: u32) -> Result<Option<DefResult>, Cancelled> {
-        self.guard(|| self.def_of_impl(entry, offset))
+        self.definition(entry, offset)
     }
 
     /// The document outline, from the parse tree alone (answers on
@@ -385,74 +390,6 @@ impl Snapshot {
             span: *span,
         })
     }
-
-    fn def_of_impl(&self, entry: &Path, offset: u32) -> Option<DefResult> {
-        let a = self.analysis(entry)?;
-        let res = a.resolution.as_ref()?;
-        let pkg = &res.package;
-        let file_idx = file_index(res, entry)?;
-        let unit = &pkg.files[file_idx];
-        let token = ident_at(&unit.parse.root, offset)?;
-        let text = String::from_utf8_lossy(token.text(&unit.raw.src)).into_owned();
-        let module_idx = pkg
-            .modules
-            .iter()
-            .position(|m| m.files.contains(&file_idx))?;
-        let md = &pkg.modules[module_idx];
-        let file_pos = md.files.iter().position(|&f| f == file_idx)?;
-
-        // Locals shadow everything: nearest preceding same-named local
-        // binding in the checked body containing the offset.
-        if let Some(tc) = a.typecheck.as_ref()
-            && let Some((decl, member)) = decl_at(&unit.parse.root, offset)
-            && let Some(outcome) = tc
-                .bodies
-                .iter()
-                .find(|o| o.body.file == file_idx && o.body.decl == decl && o.body.member == member)
-            && let wolf_sema::BodyResult::Checked(tb) = &outcome.result
-            && let Some((_, span, _)) = tb
-                .locals
-                .iter()
-                .filter(|(n, s, _)| n == &text && s.lo <= offset)
-                .max_by_key(|(_, s, _)| s.lo)
-        {
-            return Some(DefResult {
-                path: pkg.files[file_idx].raw.display.clone().into(),
-                span: *span,
-            });
-        }
-
-        // File-scoped import bindings (s12).
-        if let Some(binding) = md.bindings[file_pos].iter().find(|b| b.name == text) {
-            match &binding.target {
-                wolf_sema::BindTarget::Item { module, name } => {
-                    let item = pkg.tables[*module].get(name)?;
-                    let target = &pkg.files[item.file];
-                    return Some(DefResult {
-                        path: target.raw.display.clone().into(),
-                        span: item.name_span,
-                    });
-                }
-                wolf_sema::BindTarget::PkgModule(m) => {
-                    let first = *pkg.modules[*m].files.first()?;
-                    let target = &pkg.files[first];
-                    return Some(DefResult {
-                        path: target.raw.display.clone().into(),
-                        span: Span::new(target.raw.file, 0, 0),
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        // The module's own item table.
-        let item = pkg.tables[module_idx].get(&text)?;
-        let target = &pkg.files[item.file];
-        Some(DefResult {
-            path: target.raw.display.clone().into(),
-            span: item.name_span,
-        })
-    }
 }
 
 // ------------------------------------------------------- tree helpers --
@@ -500,28 +437,6 @@ pub(crate) fn decl_at(root: &GreenNode, offset: u32) -> Option<(usize, Option<us
         }
     }
     Some((decl, None))
-}
-
-/// Depth-first identifier token containing `offset`.
-fn ident_at(node: &GreenNode, offset: u32) -> Option<&GreenToken> {
-    for child in &node.children {
-        match child {
-            Child::Token(t) => {
-                if t.kind == SyntaxKind::Ident && t.span.lo <= offset && offset < t.span.hi {
-                    return Some(t);
-                }
-            }
-            Child::Node(n) => {
-                if n.span.lo <= offset
-                    && offset < n.span.hi
-                    && let Some(t) = ident_at(n, offset)
-                {
-                    return Some(t);
-                }
-            }
-        }
-    }
-    None
 }
 
 /// Hover on a top-level item's *name token*: header text + doc comment.
