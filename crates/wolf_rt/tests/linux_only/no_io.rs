@@ -13,8 +13,12 @@ mod thread_count;
 use thread_count::os_thread_count;
 
 pub fn main() {
-    // Before ANY runtime use: no reactor, no pool, one thread.
+    // Before ANY runtime use: no reactor, no pool, one thread — on
+    // windows, no thread of OURS: the loader seats threads that are
+    // not wolf's (the no_spawn twin's measured finding, s60b), so the
+    // claim there is a delta, taken below at each lifecycle edge.
     assert!(!reactor::initialized(), "reactor up before any io");
+    #[cfg(not(windows))]
     assert_eq!(os_thread_count(), 1, "threads exist before any runtime use");
 
     // Task machinery WITHOUT io: the pool comes up; the reactor must
