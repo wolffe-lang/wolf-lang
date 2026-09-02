@@ -81,10 +81,8 @@ jobs:
           LU
           echo "== task overflow (expect: wolf-rt: stack overflow in task 'main.task0.entry' / exit 134)"
           ./target/debug/wolf.exe build probe/overflow_task/main.lu -o overflow_task.exe && timeout 120 ./overflow_task.exe; echo "bash exit=$?"
-          cmd //c "overflow_task.exe & echo ERRORLEVEL=%ERRORLEVEL%"
           echo "== main-thread overflow, no spawn (expect: no wolf voice — STATUS_STACK_OVERFLOW 0xC00000FD = -1073741571; the D15 posture: no handler without a spawn)"
           ./target/debug/wolf.exe build probe/overflow_main/main.lu -o overflow_main.exe && timeout 120 ./overflow_main.exe; echo "bash exit=$?"
-          cmd //c "overflow_main.exe & echo ERRORLEVEL=%ERRORLEVEL%"
           true
 
       - name: "T2 os.signal: the two corpus rows on the native lane (the console-control mapping + the in-process loopback)"
@@ -147,7 +145,8 @@ jobs:
       - name: "T5 dist: cargo xtask dist (archive + the unpacked-archive smoke)"
         run: cargo xtask dist
 
-      - name: "T6 tests: cargo test --workspace (what the gate-open makes execute here)"
+      - name: "T6 tests: cargo test --workspace (what the gate-open makes execute here; panics and failures kept loud)"
         continue-on-error: true
         timeout-minutes: 25
-        run: cargo test --workspace --no-fail-fast 2>&1 | grep -E -A10 "^(test result|test .*FAILED|---- |     Running|no_spawn:|no_io:|stack_overflow:|proc_root:)" | grep -vE "^\s*$|^--$" | head -500
+        run: |
+          cargo test --workspace --no-fail-fast 2>&1 | grep -E -A10 "^(test result|test .*FAILED|---- |     Running|no_spawn:|no_io:|stack_overflow:|proc_root:|thread '.*panicked|error: test failed)" | grep -vE "^\s*$|^--$" | head -600
