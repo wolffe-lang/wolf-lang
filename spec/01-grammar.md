@@ -8,7 +8,8 @@ diagnostics. EBNF blocks tagged ` ```ebnf ` are extracted to
 `spec/grammar.ebnf` by `cargo xtask spec-extract` (CI-enforced sync).
 
 Notation: W3C-style EBNF. `::=` defines; `|` alternates; `?` optional; `*`
-zero-or-more; `+` one-or-more; parentheses group; terminals in `'quotes'`;
+zero-or-more; `+` one-or-more; `A - B` matches what `A` matches and `B` does
+not (the W3C exception); parentheses group; terminals in `'quotes'`;
 UPPER names are lexer tokens, lower names are syntactic productions.
 
 This document says what *parses*. Meaning is informal gloss only; semantics
@@ -23,6 +24,15 @@ live in 02-memory-model, 03-concurrency, and later sema documents.
 Source files are UTF-8, extension `.lu`. Byte order marks are rejected.
 Tokens are defined over Unicode scalar values; all offsets in diagnostics
 and slicing are byte offsets (D25).
+
+```ebnf
+SCALAR ::= /* any one Unicode scalar value */
+NL     ::= /* U+000A */
+```
+
+`SCALAR` and `NL` are the two primitives every literal body is written
+over. A literal whose body may not cross a line says so by excluding `NL`
+from its text production rather than in prose (#215).
 
 ### 1.2 Comments `[gram.lex.comment]`
 
@@ -79,6 +89,7 @@ input still tokenizes so the parser can produce the friendly error.
 ```ebnf
 STRING     ::= '"' STR_PART* '"'
 STR_PART   ::= STR_TEXT | STR_ESC | '{{' | '}}' | INTERP
+STR_TEXT   ::= (SCALAR - ('"' | '\' | '{' | '}' | NL))+
 STR_ESC    ::= '\' ('n' | 't' | 'r' | '0' | '\' | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
 UNI_ESC    ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
 INTERP     ::= '{' expr FORMAT_SPEC? '}'
@@ -98,31 +109,77 @@ FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
   `[gram.lex.char]`'s set is this one plus `\'`, which its production now
   says rather than asserts (#198).
 
-**Multiline** `[gram.lex.str.multi]`: `"""` opens; the literal ends at the
-next `"""`; the closing delimiter's column sets the dedent — every content
-line must start with at least that much whitespace, which is stripped
-(SE-0168 lineage). First newline after the opening `"""` is dropped.
-Interpolation works inside.
+**Multiline** `[gram.lex.str.multi]`:
 
-**Raw** `[gram.lex.str.raw]`: `r"…"`, `r#"…"#`, `r##"…"##` — no escapes,
-no interpolation, `#`-fences balance.
+```ebnf
+MULTILINE_STRING ::= '"""' MULTI_PART* '"""'
+MULTI_PART ::= MULTI_TEXT | STR_ESC | '{{' | '}}' | INTERP
+MULTI_TEXT ::= ((SCALAR - ('\' | '{' | '}'))+) - (SCALAR* '"""' SCALAR*)
+```
 
-**Generalized literals** `[gram.lex.str.gen]`: `IDENT '"' … '"'` with no
-whitespace between — `re"[a-z]+"`, `path"/etc/hosts"`. Desugars to a
-comptime call `IDENT.from_literal("…")`; the prefix is any identifier that
-is not a reserved keyword. Raw-mode body (no escapes/interpolation).
+`"""` opens; the literal ends at the next `"""`. `MULTI_PART` is `STR_PART`
+with the line break and the lone `"` admitted as text — the lexer scans a
+multiline body with the same routine as a plain one — so **escapes and
+interpolation work inside `"""…"""`**, and that is a derivation rather
+than a silence read against the two neighbours below, which say the
+opposite outright (#215; le05 had to decide whether an invalid escape is
+possible here, and the productions could not answer). `\q` inside a
+multiline is E0101, the same refusal it is inside `"…"`. What parses is
+not what the mid-end compiles today: interpolation inside a multiline is
+refused by name in the conservatism ledger (s38 formatting), which is a
+ledger row, not a grammar fact.
+
+The layout is a side condition on the parse, not part of it: the opening
+`"""` must be the last thing on its line (E0103), the closing `"""` must
+stand alone on its (E0104), and that closing delimiter's column sets the
+dedent — every content line must start with at least that much whitespace,
+which is stripped (SE-0168 lineage; a line whose margin mixes tabs and
+spaces differently is E0105, because the comparison is byte-for-byte and
+never by visual width). First newline after the opening `"""` is dropped.
+
+**Raw** `[gram.lex.str.raw]`:
+
+```ebnf
+RAW_STRING ::= 'r' HASH_FENCE '"' RAW_TEXT '"' HASH_FENCE
+HASH_FENCE ::= '#'*
+RAW_TEXT   ::= SCALAR*
+```
+
+`r"…"`, `r#"…"#`, `r##"…"##`. Two side conditions no context-free
+production carries: the two `HASH_FENCE`s are the SAME fence (they
+balance), and `RAW_TEXT` ends at the first `"` followed by it. What the
+production DOES carry is the escape answer — `RAW_TEXT` derives scalars
+and nothing else, no `STR_ESC` and no `INTERP` — so "no escapes, no
+interpolation" is read off it instead of asserted beside it (#215).
+
+**Generalized literals** `[gram.lex.str.gen]`:
+
+```ebnf
+GENERALIZED_STRING ::= IDENT '"' GEN_TEXT '"'
+GEN_TEXT ::= (SCALAR - ('"' | NL))*
+```
+
+`re"[a-z]+"`, `path"/etc/hosts"` — no whitespace between the `IDENT` and
+the `"` (`re "x"` is two tokens), and the prefix is any identifier that is
+not a reserved keyword. Desugars to a comptime call
+`IDENT.from_literal("…")`. `GEN_TEXT` derives scalars only, like
+`RAW_TEXT`: a raw-mode body, no escapes and no interpolation, and it does
+not cross a line.
 
 ### 1.5b Char literals `[gram.lex.char]`
 
 ```ebnf
 CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
+CHAR_TEXT ::= SCALAR - ("'" | '\' | NL)
 CHAR_ESC  ::= STR_ESC | '\' "'"
 ```
 
 One Unicode scalar value between single quotes (s121, D58 —
 `[type.char]` owns the type): `'a'`, `'é'`, `'🐺'`, `'\n'`, `'\''`,
-`'\u{1F43A}'`. `CHAR_TEXT` is any single scalar other than `'`, `\`,
-or a newline. The escape set is the string set plus `\'` — which
+`'\u{1F43A}'`. `CHAR_TEXT` — any single scalar other than `'`, `\` or a
+newline — now derives that instead of being named here and defined
+nowhere, one more of #215's holes. The escape set is the string set plus
+`\'` — which
 `CHAR_ESC` now derives from `STR_ESC` instead of restating, so the
 claim is read off the productions (#198); `\u{…}` takes one to six hex
 digits — the bound is `UNI_ESC`'s, one production reached from both
