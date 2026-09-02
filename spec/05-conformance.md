@@ -137,7 +137,13 @@ read-mode write barrier, D39), `region-fault`
   inside a proc, where `[conc.proc.exit]`'s containment (D68, s132)
   turns it into the proc's `fault(kind)` reason and the process
   lives; this clause governs the root domain and every uncontained
-  trap. Conforming tools compare the
+  trap. **A trap runs no `defer` or `errdefer`, anywhere**: in the
+  root domain death is immediate, so the pending scope-exit effects
+  of the trapping scope and of every scope enclosing it are
+  abandoned, exactly as `[conc.proc.exit]`'s killed-proc sequence
+  abandons the ones below a proc boundary. A trap is not an error
+  value and never unwinds (`[abi.native.nounwind]`); effects that had
+  already run, ran. Conforming tools compare the
   *kind*, never the status number. The statuses in force are
   documented facts of each implementation, not comparison surface:
   the native tier exits 134 (`wolf_rt`'s `TRAP_EXIT_CODE`, 128+SIGABRT
@@ -146,7 +152,12 @@ read-mode write barrier, D39), `region-fault`
   signal arithmetic behind it — D70, s60a), the reference
   interpreter exits 3. (Appended 2026-08-28, s125: the divergence had
   been implicit since s28 and every "predict the exit code" exercise
-  tripped over it — #150.)
+  tripped over it — #150. The defer sentence added 2026-09-01, r05:
+  the clause ruled the proc path and was silent about the root, so
+  nothing pinned whether a root-domain trap flushed its pending
+  defers — `faults/trap_skips_root_defers.lu` is the witness, and it
+  records a measured divergence, lupin 0.1.22 running the root defer
+  where every wolfc lane abandons it — #209.)
 - `[conf.trap.report]` A compiled program reports its trap on stderr
   in a fixed shape. The FIRST line is the machine contract:
   `wolf-trap: <kind>` — everything after the prefix, trimmed, is the

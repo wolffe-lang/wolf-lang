@@ -83,6 +83,7 @@ faults/overflow_list_pop_i32.lu: lowers
 faults/overflow_list_pop_i64.lu: lowers
 faults/region_cap_breach.lu: lowers
 faults/repeat_negative.lu: lowers
+faults/trap_skips_root_defers.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 faults/wrap_high_as_i32.lu: lowers
 faults/wrap_top_bit_as_int.lu: lowers
@@ -137,6 +138,7 @@ grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
+grammar/str_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_literal_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_match_arm.lu: lowers
 grammar/struct_pattern_missing_field.lu: not mem-clean (pre-wir rungs own it)
@@ -374,6 +376,7 @@ strings/raw_fences.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings/split_clause.lu: lowers
+strings/str_uni_leading_zeros.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 test/conc_schedules_test.lu: lowers

@@ -1,0 +1,62 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 1029..1110
+  FnDecl 1029..1109
+    FnKw 1029..1031 "fn"
+    Ident 1032..1036 "main"
+    ParamList 1036..1038
+      LParen 1036..1037 "("
+      RParen 1037..1038 ")"
+    RetType 1039..1046
+      Arrow 1039..1041 "->"
+      ErrorUnionType 1042..1046
+        Not 1042..1043 "!"
+        PathType 1043..1046
+          Path 1043..1046
+            Ident 1043..1046 "int"
+    Block 1047..1109
+      LBrace 1047..1048 "{"
+      LetDecl 1053..1075
+        LetKw 1053..1056 "let"
+        IdentPat 1057..1058
+          Ident 1057..1058 "s"
+        Eq 1059..1060 "="
+        StringExpr 1061..1074
+          StrBegin 1061..1062 "\""
+          ErrorToken 1062..1073 "\\u{0000041}"
+          StrEnd 1073..1074 "\""
+        Term 1074..1075 "\n"
+      ExprStmt 1079..1108
+        IfExpr 1079..1107
+          IfKw 1079..1081 "if"
+          BinExpr 1082..1090
+            PathExpr 1082..1083
+              Ident 1082..1083 "s"
+            EqEq 1084..1086 "=="
+            StringExpr 1087..1090
+              StrBegin 1087..1088 "\""
+              StrFragment 1088..1089 "A"
+              StrEnd 1089..1090 "\""
+          Block 1091..1096
+            LBrace 1091..1092 "{"
+            ExprStmt 1093..1094
+              LiteralExpr 1093..1094
+                Int 1093..1094 "0"
+            RBrace 1095..1096 "}"
+          ElseKw 1097..1101 "else"
+          Block 1102..1107
+            LBrace 1102..1103 "{"
+            ExprStmt 1104..1105
+              LiteralExpr 1104..1105
+                Int 1104..1105 "1"
+            RBrace 1106..1107 "}"
+        Term 1107..1108 "\n"
+      RBrace 1108..1109 "}"
+  Term 1109..1110 "\n"
+  Eof 1110..1110 ""
+== diagnostics ==
+E0101 [Error] 1062..1073 a `\u{…}` escape needs one to six hex digits inside the braces
+    note the escapes wolf understands are `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xNN`, and `\u{…}`. For a literal backslash, write `\\`; for text with no escapes at all, use a raw string `r"…"`.

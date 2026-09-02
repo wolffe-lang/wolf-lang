@@ -1,0 +1,24 @@
+//! check: fail(E0101)
+//! phase: none
+//! conforms: gram.lex.str.escape
+//!
+//! Issue #198, the string half. v0.2.1 bounded `\u{…}` at one to six
+//! hex digits and said in prose that the bound "binds in string
+//! literals too" — while `STR_PART` derived no escape at all, so the
+//! sentence pointed at a production that did not exist and nothing
+//! measured the claim. is32 found the same hole from the other side:
+//! lupin 0.1.21 implements the prose half, and the two machines'
+//! agreement inside `"…"` was unverified by any file.
+//!
+//! This is that file. `STR_ESC` now carries the escape set and reaches
+//! the same `UNI_ESC` a `char` literal reaches, and the refusal here is
+//! the one `grammar/char_uni_seven_digits.lu` pins for `'…'`: same
+//! code, same rule, same seven digits. The bound is on the escape's
+//! SHAPE, not on the value it names — `0x0000041` is a perfectly good
+//! scalar (`A`), and it is refused before anything asks. Its in-bounds
+//! twin is `strings/str_uni_leading_zeros.lu`.
+
+fn main() -> !int {
+    let s = "\u{0000041}"
+    if s == "A" { 0 } else { 1 }
+}

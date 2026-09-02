@@ -2366,19 +2366,14 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     if !Path::new(&file).is_file() {
         fail(&format!("no such file: {file}"));
     }
-    // A bare file name has an empty parent; anchor it so the package
-    // root (= the entry's directory) is a readable path.
-    let file = if Path::new(&file)
-        .parent()
-        .is_none_or(|p| p.as_os_str().is_empty())
-    {
-        format!("./{file}")
-    } else {
-        file
-    };
     // The cache lives at the package root (`.lu-cache/` next to the
-    // entry file).
-    opts.cache_root = Path::new(&file).parent().map(Path::to_path_buf);
+    // entry file). A bare file name's parent is the EMPTY path and
+    // means `.` — the same reading `wolf_sema::anchor_entry` gives it
+    // for the loader, so `wolf build hello.lu` and `wolf build
+    // ./hello.lu` share a cache as well as a package (#206).
+    opts.cache_root = wolf_sema::anchor_entry(Path::new(&file))
+        .parent()
+        .map(Path::to_path_buf);
     BuildCli {
         file,
         out,
@@ -3279,6 +3274,15 @@ fn conform_run(args: &[String]) {
         eprintln!("wolf conform-run: no such file: {file}");
         std::process::exit(2);
     }
+    // A bare relative name is read as `./name` — the loader's reading
+    // of an entry whose parent is the EMPTY path (#206). Taken here,
+    // once, so the record's `file`, the interned entry, the
+    // diagnostics' display and the package root all name the entry
+    // the same way: `wolf conform-run hello.lu` and `wolf conform-run
+    // ./hello.lu` produce byte-identical records.
+    let file = wolf_sema::anchor_entry(Path::new(&file))
+        .display()
+        .to_string();
 
     let mut sources = Sources::new();
     // The index→path table for diag-schema `files` (SourceMap intern

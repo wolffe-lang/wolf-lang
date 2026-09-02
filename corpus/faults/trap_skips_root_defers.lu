@@ -1,0 +1,46 @@
+//! check: run(exit=trap(assert), stdout="inner inner-defer before-trap")
+//! phase: run
+//! conforms: conf.trap.exit, mem.model.order
+//!
+//! Issue #209: `[conf.trap.exit]` ruled the PROC path (s132/D68 — a
+//! trap inside a proc runs no defer below the boundary) and was silent
+//! about the root domain, so nothing anywhere pinned whether a
+//! root-domain trap flushes its pending defers on the way out. is33
+//! left lupin's root path untouched for exactly that reason, and the
+//! differential could not see the question: on a trapping program the
+//! reference interpreter's record reports no stdout at all
+//! (`stdout_inline: null`), so the two machines are verdict-identical
+//! whatever they print.
+//!
+//! The ruling is the consistent one — a trap is not an error value and
+//! runs NO defers anywhere; death at the root is immediate, matching
+//! the killed-proc sequence (`conc/proc_cap_fault_join.lu` pins the
+//! same shape one boundary down). So `root-defer` never reaches
+//! stdout.
+//!
+//! The inner block is the control: its defer runs, at the inner
+//! block's own exit, BEFORE the trap. Without it a green here could
+//! not tell "the pending defer was abandoned" from "defers do not run
+//! in this program at all".
+//!
+//! MEASURED DIVERGENCE, r05 (for is34). All three wolfc lanes —
+//! `--checked`, `--native`, `--release` — print exactly
+//! `inner inner-defer before-trap` and stop, which is the sentence
+//! above. lupin 0.1.22 (pin 2bfbe5e) prints
+//! `inner inner-defer before-trap root-defer`: the root-domain trap
+//! runs the pending defer on its way out. Same verdict on both
+//! (`trap(assert)`), different observable behaviour — the divergence
+//! this file exists to make visible, since the record cannot carry it.
+
+fn main() -> !int {
+    defer print_raw(" root-defer")        // pending at the trap — must NOT run
+    {
+        defer print_raw(" inner-defer")   // runs at THIS block's exit
+        print_raw("inner")
+    }
+    print_raw(" before-trap")
+    let n = 2
+    assert(n == 3)                        // TRAP assert
+    print_raw(" unreachable")
+    0
+}

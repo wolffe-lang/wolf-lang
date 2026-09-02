@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1029..1109 name=main body=Block
+-- diagnostics --
+E0101 [Error] 1062..1073 a `\u{…}` escape needs one to six hex digits inside the braces
