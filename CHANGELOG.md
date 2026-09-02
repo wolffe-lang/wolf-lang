@@ -92,6 +92,53 @@ locus, which is why is34 could only carry them as a waiver
 (`differ::DIV_2026_020_FILES` in wolf-interp; it retires at the pin
 bump that carries this, the interpreter lane's, as #177's did).
 
+### The server annotates (s134 item 3)
+
+`wolf lsp` serves `textDocument/signatureHelp`,
+`textDocument/semanticTokens/full` and `/range`, and
+`textDocument/inlayHint` — the three rungs s133's closeout named as
+the binding table read three more ways. Nothing is a textual search:
+**signature help** reads the checker's call record for the innermost
+call whose argument list holds the cursor (`TypedBody::calls`, keyed
+by the call expression's span) — the declared parameters as
+`name: type` with a declared `mut`/`take` spelled, the receiver
+omitted because the parentheses never spell it, the active parameter
+counted by the commas before the cursor, the return type when the
+callee is a declared item, and its `///` comment (the one doc model
+hover and `wolf doc` read; markdown when the client lists it, plain
+text otherwise); triggers on `(`, re-triggers on `,`. **Semantic
+tokens** classify every identifier through what it bound to
+(`Resolution::refs`, then `TypedBody::member_refs`): `parameter` when
+the binder sits in a parameter list, `variable` otherwise (`readonly`
+unless the binder is `var`'s), `function` / `type` / `variable` by an
+item's kind, `namespace` for modules and std paths, `property` /
+`enumMember` / `function` for fields, variants and methods, `keyword`
+from the token kind, `type` for builtins and `Self`; a binder's own
+token carries `declaration`; a name the compiler never bound gets no
+token. The legend is closed and fixed: eight types in one order, two
+modifiers. **Inlay hints** are the inferred type of an unascribed
+`let`/`var` binder and the parameter name before a positional
+argument that is not already that name — only at calls the checker
+resolved to a declaration, so a fn-typed value and a prelude name
+offer none; each class switches off through
+`initializationOptions.inlayHints.{types, parameterNames}` and the
+client's own toggle decides whether hints show at all. Positions
+honor the negotiated encoding at every span (an astral character on
+the line before a token moves its UTF-16 column, not its byte). No
+delta tokens: a full answer is cheap here and a delta is a promise
+about identity across edits this server has no reason to make; it
+answers `-32601` by name like every other absence. `wolf_query`'s
+contract moves to v5 (additive). Eighteen transcripts were recorded
+in wolf-lsp against this build (one script per rung per maintained
+client profile — fackr, facsimile, nvim, vscode, helix, emacs — the
+answers differing by the profile's own declarations), the forty-seven
+existing ones re-recorded with the initialize answer as their only
+diff, and the unknown-method probe re-targeted at what is still
+absent. Latency, s57's table before and after on the same machine:
+`diagnostics-after-edit` p95 110.6 → 110.8 ms (p50 107.7 → 106.6),
+hover p95 0.2 → 0.1 ms, cold first diagnostics p95 4.1 → 4.4 ms —
+every class inside its budget, the number near perception unmoved.
+
 ### The windows task layer (s60b)
 
 **On Windows, `spawn`, scopes, `proc`, channels and `select`, `sync`/
