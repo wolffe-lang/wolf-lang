@@ -36,6 +36,7 @@ conc/freeze_publish.lu: lowers
 conc/message_passing.lu: lowers
 conc/proc_cancel_defers.lu: lowers
 conc/proc_cap_fault_join.lu: lowers
+conc/proc_cross_module/main.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/proc_spawn_loop.lu: lowers
