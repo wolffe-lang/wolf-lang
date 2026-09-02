@@ -104,7 +104,7 @@ SourceFile 556..711
   Term 710..711 "\n"
   Eof 711..711 ""
 == diagnostics ==
-E0201 [Error] 669..669 expected `,` before `..` — it ignores the remaining fields like one more member
+E0201 [Error] 669..671 expected `,` before `..` — it ignores the remaining fields like one more member
     note the separating comma is required, and `..` follows one: `Point { x, .. }`, never `Point { x .. }` ([gram.pat.struct])
     help [MachineApplicable] add the comma
         edit 668..668 -> ","

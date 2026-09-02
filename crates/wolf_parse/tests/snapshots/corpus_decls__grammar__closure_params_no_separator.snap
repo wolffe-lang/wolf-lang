@@ -4,4 +4,4 @@ expression: dump
 ---
 FnDecl 544..628 name=main body=Block
 -- diagnostics --
-E0201 [Error] 581..581 expected `,` between the closure's parameters
+E0201 [Error] 581..582 expected `,` between the closure's parameters

@@ -42,4 +42,4 @@ SourceFile 0..49
   Term 48..49 "\n"
   Eof 49..49 ""
 == diagnostics ==
-E0201 [Error] 19..19 expected `{` or line end after the function header
+E0201 [Error] 19..25 expected `{` or line end after the function header

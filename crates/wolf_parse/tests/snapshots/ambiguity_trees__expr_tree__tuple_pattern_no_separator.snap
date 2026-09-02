@@ -69,7 +69,7 @@ SourceFile 384..464
   Term 463..464 "\n"
   Eof 464..464 ""
 == diagnostics ==
-E0201 [Error] 415..415 expected `,` between the tuple pattern's elements
+E0201 [Error] 415..416 expected `,` between the tuple pattern's elements
     note the separating comma is required between pattern members ([gram.pat])
     help [MachineApplicable] add the comma
         edit 414..414 -> ","

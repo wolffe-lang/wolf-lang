@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_parse/tests/ambiguity_trees.rs
-assertion_line: 34
 expression: out
 ---
 == tree ==
@@ -70,5 +69,5 @@ SourceFile 335..404
   Term 403..404 "\n"
   Eof 404..404 ""
 == diagnostics ==
-E0201 [Error] 374..374 this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf
+E0201 [Error] 374..375 this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf
     note a comma groups complete bindings, each with its own `=`: `let a = 1, b = 2`. To unpack one value into several names, destructure with parens on both sides: `let (a, b) = (1, 2)`.
