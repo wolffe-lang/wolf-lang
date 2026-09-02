@@ -270,10 +270,13 @@ fn format_is_idempotent() {
 /// this contract implements the incomplete-buffer completion
 /// semantics too — and to 4 when the navigation trio joined it
 /// (s133): definition, references and rename answer from the binding
-/// table, and the daemon owes the same table.
+/// table, and the daemon owes the same table — and to 5 when the
+/// annotating trio joined (s134): signature help, semantic tokens and
+/// inlay hints read that table plus the checker's call and local
+/// records.
 #[test]
-fn contract_version_is_four() {
-    assert_eq!(wolf_query::CONTRACT_VERSION, 4);
+fn contract_version_is_five() {
+    assert_eq!(wolf_query::CONTRACT_VERSION, 5);
 }
 
 /// The one doc-comment model, from the query side: the same `///` block

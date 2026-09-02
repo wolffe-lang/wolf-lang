@@ -49,6 +49,7 @@
 //! between lex/parse/resolve/typecheck); the resident daemon tightens
 //! granularity without changing the contract.
 
+mod annotate;
 mod completions;
 pub mod docs;
 mod host;
@@ -56,6 +57,7 @@ mod navigate;
 mod overlay;
 mod queries;
 
+pub use annotate::{HintKind, InlayHint, SemKind, SemToken, SignatureHelpResult};
 pub use completions::{Completion, CompletionKind};
 pub use docs::{
     Directive, DocComment, DocFence, DocItem, DocModule, DocPackage, doc_package, resolve_links,
@@ -89,7 +91,15 @@ pub use queries::{
 /// a textual search — and [`DefResult`] gained the asking token
 /// (`origin`). Rename's refusal set is part of the surface (the
 /// `navigate` module docs).
-pub const CONTRACT_VERSION: u32 = 4;
+///
+/// v5 (s134): the annotating trio joins the surface — additive.
+/// [`Snapshot::signature_help`], [`Snapshot::semantic_tokens`] and
+/// [`Snapshot::inlay_hints`] answer from the same binding table plus
+/// the checker's call and local records (`TypedBody::calls`,
+/// `TypedBody::locals`); the semantic-token kind set
+/// ([`SemKind`]) is closed and its names are the protocol's standard
+/// legend names (the `annotate` module docs).
+pub const CONTRACT_VERSION: u32 = 5;
 
 /// Test-only knob: when set to a number of milliseconds, every query
 /// sleeps that long at its first checkpoint (in small cancellable
