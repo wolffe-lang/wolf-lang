@@ -141,7 +141,9 @@ read-mode write barrier, D39), `region-fault`
   *kind*, never the status number. The statuses in force are
   documented facts of each implementation, not comparison surface:
   the native tier exits 134 (`wolf_rt`'s `TRAP_EXIT_CODE`, 128+SIGABRT
-  by convention, deterministic — never a real signal), the reference
+  by convention, deterministic — never a real signal; the SAME number
+  on windows-native, where it is a plain `ExitProcess(134)` with no
+  signal arithmetic behind it — D70, s60a), the reference
   interpreter exits 3. (Appended 2026-08-28, s125: the divergence had
   been implicit since s28 and every "predict the exit code" exercise
   tripped over it — #150.)
