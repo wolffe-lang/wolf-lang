@@ -24,7 +24,7 @@ jobs:
   probe:
     name: windows table (x86-64, the task layer)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -52,7 +52,8 @@ jobs:
       - name: "T1 stack overflow: a task overflows -> wolf's voice + exit 134 (the VEH); main-thread overflow in a no-spawn program -> the s60a gap, measured"
         run: |
           set +e
-          cat > overflow_task.lu <<'LU'
+          mkdir -p probe/overflow_task probe/overflow_main
+          cat > probe/overflow_task/main.lu <<'LU'
           fn deep(n: int) -> int {
               if n < 0 { 0 } else { deep(n + 1) + 1 }
           }
@@ -67,7 +68,7 @@ jobs:
               0
           }
           LU
-          cat > overflow_main.lu <<'LU'
+          cat > probe/overflow_main/main.lu <<'LU'
           fn deep(n: int) -> int {
               if n < 0 { 0 } else { deep(n + 1) + 1 }
           }
@@ -79,10 +80,10 @@ jobs:
           }
           LU
           echo "== task overflow (expect: wolf-rt: stack overflow in task 'main.task0.entry' / exit 134)"
-          ./target/debug/wolf.exe build overflow_task.lu -o overflow_task.exe && ./overflow_task.exe; echo "bash exit=$?"
+          ./target/debug/wolf.exe build probe/overflow_task/main.lu -o overflow_task.exe && timeout 120 ./overflow_task.exe; echo "bash exit=$?"
           cmd //c "overflow_task.exe & echo ERRORLEVEL=%ERRORLEVEL%"
           echo "== main-thread overflow, no spawn (expect: no wolf voice — STATUS_STACK_OVERFLOW 0xC00000FD = -1073741571; the D15 posture: no handler without a spawn)"
-          ./target/debug/wolf.exe build overflow_main.lu -o overflow_main.exe && ./overflow_main.exe; echo "bash exit=$?"
+          ./target/debug/wolf.exe build probe/overflow_main/main.lu -o overflow_main.exe && timeout 120 ./overflow_main.exe; echo "bash exit=$?"
           cmd //c "overflow_main.exe & echo ERRORLEVEL=%ERRORLEVEL%"
           true
 
@@ -91,7 +92,7 @@ jobs:
           set +e
           for f in corpus/os/signal_loopback.lu corpus/os/signal_supervisor.lu; do
             echo "== wolf conform-run --json --native $f"
-            ./target/debug/wolf.exe conform-run "$f" --json --native; echo "exit=$?"
+            timeout 120 ./target/debug/wolf.exe conform-run "$f" --json --native; echo "exit=$? (124 = hung past 120s)"
           done
           true
 
@@ -100,14 +101,15 @@ jobs:
           set +e
           for f in corpus/net/*.lu; do
             echo "== wolf conform-run --json --native $f"
-            ./target/debug/wolf.exe conform-run "$f" --json --native; echo "exit=$?"
+            timeout 120 ./target/debug/wolf.exe conform-run "$f" --json --native; echo "exit=$? (124 = hung past 120s)"
           done
           true
 
       - name: "T3 measure: 24 tasks each parked on a 200ms read deadline — the reactor's wall clock under a corpus-shaped fan-in (WSAPoll vs IOCP, decided by this number)"
         run: |
           set +e
-          cat > deadline_fanin.lu <<'LU'
+          mkdir -p probe/deadline_fanin
+          cat > probe/deadline_fanin/main.lu <<'LU'
           fn main() -> !int {
               let srv = net_listen("127.0.0.1:0")?
               let port = net_port(srv)?
@@ -130,14 +132,16 @@ jobs:
               0
           }
           LU
-          ./target/debug/wolf.exe build deadline_fanin.lu -o deadline_fanin.exe && ./deadline_fanin.exe; echo "exit=$?"
+          ./target/debug/wolf.exe build probe/deadline_fanin/main.lu -o deadline_fanin.exe && timeout 120 ./deadline_fanin.exe; echo "exit=$?"
           true
 
       - name: "T4 corpus: lane-coverage --rows (per-row verdicts; the windows floor line)"
+        timeout-minutes: 25
         run: cargo xtask lane-coverage --rows
 
       - name: "T4 corpus: xtask corpus (the ledger, as the unix lanes run it)"
         continue-on-error: true
+        timeout-minutes: 20
         run: cargo xtask corpus 2>&1 | tail -60
 
       - name: "T5 dist: cargo xtask dist (archive + the unpacked-archive smoke)"
@@ -145,4 +149,5 @@ jobs:
 
       - name: "T6 tests: cargo test --workspace (what the gate-open makes execute here)"
         continue-on-error: true
+        timeout-minutes: 25
         run: cargo test --workspace --no-fail-fast 2>&1 | grep -E -A10 "^(test result|test .*FAILED|---- |     Running|no_spawn:|no_io:|stack_overflow:|proc_root:)" | grep -vE "^\s*$|^--$" | head -500
