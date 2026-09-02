@@ -143,10 +143,13 @@ static TRAP_CONTAIN: std::sync::atomic::AtomicPtr<()> =
 
 /// Install the trap-containment hook (once, from the proc registry's
 /// lazy init).
-// The proc layer is the only caller, and it rides the task layer.s
-// platform gate: a host without it (windows at s60a) compiles the
+// The proc layer is the only caller, and it rides the task layer's
+// platform gate: a host without it (freebsd until s61) compiles the
 // seam and never installs a hook — dead by cfg, not by design.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "linux", target_os = "macos", target_os = "windows")),
+    allow(dead_code)
+)]
 pub(crate) fn install_trap_containment(hook: fn(i32)) {
     TRAP_CONTAIN.store(hook as *mut (), std::sync::atomic::Ordering::SeqCst);
 }
@@ -510,7 +513,10 @@ static LEDGER_HOOKS: std::sync::atomic::AtomicPtr<RegionLedgerHooks> =
 
 /// Install the proc-ledger hooks (once, from the proc registry's lazy
 /// init). The table leaks by design: it lives for the process.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "linux", target_os = "macos", target_os = "windows")),
+    allow(dead_code)
+)]
 pub(crate) fn install_region_ledger_hooks(hooks: &'static RegionLedgerHooks) {
     LEDGER_HOOKS.store(
         std::ptr::from_ref(hooks).cast_mut(),
@@ -602,7 +608,10 @@ pub(crate) fn ambient_region() -> *mut core::ffi::c_void {
 /// it afterwards. The pool wraps every task body in this: workers are
 /// REUSED, and a body that left the slot set would hand the next task a
 /// handle that is no longer live.
-#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
+#[cfg_attr(
+    not(any(target_os = "linux", target_os = "macos", target_os = "windows")),
+    allow(dead_code)
+)]
 pub(crate) fn with_root_ambient<R>(f: impl FnOnce() -> R) -> R {
     struct Restore(*mut core::ffi::c_void);
     impl Drop for Restore {

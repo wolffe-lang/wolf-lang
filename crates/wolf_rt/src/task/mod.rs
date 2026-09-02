@@ -82,7 +82,15 @@ mod hooks;
 mod pool;
 mod proc;
 mod scope;
+// The stack plumbing is the ONE per-OS module of the task layer:
+// pooled mmap spans + the SIGSEGV/SIGBUS guard reporter on unix,
+// the kernel's own reserve-and-guard thread stacks + a vectored
+// exception handler on windows (s60b). Same surface either side:
+// `reserve_size`, `set_fault_label`, `install_overflow_handler`.
 #[cfg(unix)]
+mod stack;
+#[cfg(windows)]
+#[path = "stack_win.rs"]
 mod stack;
 mod when;
 

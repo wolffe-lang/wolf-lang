@@ -20,9 +20,11 @@
 //! and compensation keeps the pool's parallelism unobservable.
 //!
 //! Worker threads run on the pooled, lazily-committed stacks of
-//! stack.rs (unix; elsewhere `std::thread` with the same reserve —
-//! the recorded windows delta, where the s36 chaos hooks must later
-//! be able to inject commit failure in our own guard walker).
+//! stack.rs (unix) or on the kernel's own reserve-and-guard stacks
+//! (windows, stack_win.rs — s60b: the reservation is `CreateThread`'s,
+//! the guard walker ntdll's, the overflow reporter a vectored
+//! exception handler; the span is not ours to pool, so idle trim and
+//! the s36 commit-failure injection are the named s60c delta there).
 //!
 //! The pool, like every static here, is **lazily initialized on first
 //! spawn** (Target 1): a wolf binary that never spawns never creates
@@ -242,7 +244,6 @@ pub fn with_scope<R>(scope: &Arc<ScopeInner>, f: impl FnOnce() -> R) -> R {
 
 fn pool() -> &'static Pool {
     POOL.get_or_init(|| {
-        #[cfg(unix)]
         super::stack::install_overflow_handler();
         let target = std::thread::available_parallelism()
             .map(|n| n.get())
@@ -527,7 +528,6 @@ fn run_task(task: Box<Task>) {
         scope,
         body,
     } = *task;
-    #[cfg(unix)]
     super::stack::set_fault_label(&name);
     scope.child_state(id, TaskState::Running);
     // det (s36): a tracked task joins the det domain and waits for
@@ -595,7 +595,6 @@ fn run_task(task: Box<Task>) {
             }
         })
     });
-    #[cfg(unix)]
     super::stack::set_fault_label("");
     CURRENT_TASK.with(|c| *c.borrow_mut() = None);
     scope.child_done(id, reason);
@@ -737,18 +736,32 @@ thread_local! {
         const { std::cell::Cell::new(None) };
 }
 
+#[cfg(windows)]
+mod os {
+    //! Win32 workers (s60b). `std::thread::Builder::stack_size` is
+    //! `CreateThread(…, STACK_SIZE_PARAM_IS_A_RESERVATION)`: the
+    //! kernel reserves the span and commits on fault behind its
+    //! `PAGE_GUARD` page (stack_win.rs's module doc says why the span
+    //! is the kernel's, not ours). The reserve honors `WOLF_TASK_STACK`
+    //! exactly as the unix mapping does; the worker's first act is to
+    //! hold back the stack guarantee the overflow report runs in.
+    use super::super::stack;
+
+    pub fn spawn_worker(run: Box<dyn FnOnce() + Send>) {
+        std::thread::Builder::new()
+            .name("wolf-worker".into())
+            .stack_size(stack::reserve_size())
+            .spawn(move || {
+                stack::enter();
+                run()
+            })
+            .expect("wolf-rt: CreateThread failed for a pool worker");
+    }
+}
+
 fn start_worker(p: &'static Pool, slot: usize, extra: bool) {
     let run: Box<dyn FnOnce() + Send> = Box::new(move || worker_main(p, slot, extra));
-    #[cfg(unix)]
     os::spawn_worker(run);
-    #[cfg(not(unix))]
-    {
-        // Recorded delta: no VirtualAlloc guard walker yet — std
-        // stacks at the same reserve (see module doc).
-        let _ = std::thread::Builder::new()
-            .stack_size(8 << 20)
-            .spawn(move || run());
-    }
 }
 
 /// Test/diagnostic visibility: (target, running, unblocked).

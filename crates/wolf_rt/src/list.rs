@@ -435,7 +435,7 @@ mod tests {
     #[test]
     // The transfer/adopt pair lives in the task layer (linux at s28,
     // macOS since s59); the rest of this file is portable everywhere.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn a_moved_region_keeps_its_container() {
         let a = crate::native::__wolf_rt_region_new();
         unsafe {
