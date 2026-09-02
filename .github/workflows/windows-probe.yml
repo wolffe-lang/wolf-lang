@@ -72,9 +72,14 @@ jobs:
           if [ -n "$LINK_EXE" ]; then
             WOLF_LINKER="$LINK_EXE" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-r4.exe && ./hello-r4.exe; echo "rung4(WOLF_LINKER=link.exe) exit=$?"
           fi
-          echo "== a bare environment (PATH stripped to System32, no LIB, no rustc): the learner in a plain shell — MSVC discovery by registry/vswhere, or the named refusal"
-          env -i SYSTEMROOT="$SYSTEMROOT" PATH="/c/Windows/System32" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-bare.exe; echo "bare-env exit=$? (0 = linked by discovery; 2 = the named refusal)"
-          [ -f hello-bare.exe ] && ./hello-bare.exe
+          echo "== rung 3: rust-lld — PATH holds rustc but no lld-link"
+          env PATH="$(dirname "$(command -v rustc)"):/c/Windows/System32" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-r3.exe && ./hello-r3.exe; echo "rung3(rust-lld) exit=$?"
+          echo "== rung 4 by discovery: a plain shell (PATH = System32 only: no lld-link, no rustc; LIB unset) — MSVC found by vswhere/registry, or the named refusal"
+          env -u LIB PATH="/c/Windows/System32" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-plain.exe; echo "plain-shell exit=$? (0 = linked by discovery; 2 = the named refusal)"
+          [ -f hello-plain.exe ] && ./hello-plain.exe
+          echo "== no environment at all (env -i): what a learner never has"
+          env -i SYSTEMROOT="$SYSTEMROOT" PATH="/c/Windows/System32" ./target/debug/wolf.exe build corpus/hello.lu -o hello-bare.exe; echo "env-i exit=$?"
+          true
 
       - name: "T2 trap: the report and the exit number (D70 — 134 via ExitProcess)"
         run: |
