@@ -2,6 +2,80 @@
 
 ## Unreleased
 
+### The server navigates (s133 — #208 closes)
+
+`wolf lsp` serves `textDocument/definition`, `textDocument/references`
+and `textDocument/rename` (with `prepareRename`) — the three rungs
+s122 named and nobody had climbed, so F12 / Shift+F12 / F2 on a `.lu`
+file did nothing in every editor. All three answer from a **binding
+table**, never a textual search: the resolver now KEEPS the decision
+it already makes for every name (`wolf_sema::Resolution::refs`, one
+list per file — uses and binders alike, a binder being a ref to
+itself, an item declaration an `Item` ref to itself, an import's
+bound name a ref to what it imports), and the checker keeps the
+type-dependent half it already resolves (`TypedBody::member_refs`:
+fields through `.`, struct-literal and pattern fields, enum variants
+in value, call and pattern position, methods and associated
+functions — with the declaration's name token, which may sit in
+another file). The two halves share one key — the declaration's name
+token span, `FileId` included — so a cross-file answer is a lookup
+over the package graph (D32 modules, `//! member` files, `use`
+targets), not a scan. Locals, parameters, generic parameters, pattern
+binders, block-level items, scope and region names, import aliases
+(`use m.x as y`: uses of `y` bind to the alias, the path segment binds
+to the item, so an item rename never rewrites the alias) all
+navigate; a name the compiler never bound — a deferred error-row
+tag, a member on an untyped receiver, anything inside a body that did
+not reach typecheck — answers `null`, never a guess, and the lexical
+half keeps answering when typing stopped.
+
+The wire shapes follow the client's declarations, read once at
+`initialize`: `LocationLink[]` (with the asking token as
+`originSelectionRange`) when it declares
+`textDocument.definition.linkSupport`, `Location[]` otherwise;
+a rename's `WorkspaceEdit` as `documentChanges` (one
+`TextDocumentEdit` per file, `version: null`) when it declares
+`workspace.workspaceEdit.documentChanges`, the `changes` map
+otherwise. References come back in (file, offset) order, the
+declaration only when `includeDeclaration` asks. The negotiated
+position encoding holds at every span — the utf-16 astral case is
+pinned. Builtins and prelude names answer `null` for definition and
+their uses for references.
+
+Rename refuses BY NAME — a `RequestFailed` (-32803) `ResponseError`
+whose message names the token and the reason, never a partial edit —
+when the cursor is on a keyword (`self` and `Self` included), a
+builtin type, a prelude name (D31), a std stub or `import c` symbol
+(cross-package), or a module (a directory, D32); and when the new
+name is not a single identifier or is a keyword. `prepareRename`
+refuses with the same reasons before the rename box opens. The D59
+`//!` member marker carries no identifier (`member:` is a boolean),
+so no rename ever touches a `//!` line — the question the contract
+asked, answered in `wolf_query::navigate`'s docs. Known residue,
+named: the reachable set is the package around the ENTRY (the v0
+single-entry model) — asked from a `member: true` sibling, references
+see that module alone; a workspace-root model is s57's.
+
+`wolf_query`'s contract moves to v4 (additive: `definition`,
+`references`, `prepare_rename`, `rename`; `DefResult` gained
+`origin`; `def_of` is the s52 name for `definition`). Protocol tests
+land in `crates/wolf_lsp/tests/navigate.rs` over a two-file fixture;
+query tests in `crates/wolf_query/tests/navigate.rs`. wolf-lsp's
+transcript library gains one script per rung per maintained client
+profile on its `s133-transcripts` branch (recorded against this
+branch's binary; le05 re-pins at the tag), and the still-absent set
+is now signature help, semantic tokens, inlay hints, range
+formatting, workspace symbols and pull diagnostics (s134's rungs).
+Latency, measured before and after on the same machine (wolf-lsp's
+`lspconf bench`, `regions.lu`, 20 fresh processes): `diagnostics-
+after-edit` p50 104.9 → 104.6 ms, p95 105.7 → 105.7 ms — the one
+number near perception holds (the binding table rides the resolve
+walk the ladder already runs); hover/documentSymbol/formatting/
+codeAction unchanged at their sub-millisecond floors; the new
+requests answer in ≈0.03 ms p95 in-process (`lsp_bench`: definition
+0.032, references 0.035, rename 0.033) — a lookup on the memoized
+analysis, no re-resolve.
+
 ### The region holds (s132, D68 — #187 closes)
 
 The cap half of #187 lands whole, in D68's ruled direction. A region
