@@ -3806,8 +3806,65 @@ fn git_tags_at_head() -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Prior `target/dist` artifacts for THIS target (#212), as a pure
+/// predicate over a directory listing.
+///
+/// `xtask dist` runs in every gauntlet, and the archive, the staged
+/// tree and the smoke tree it writes are all named for the VERSION — so
+/// a version bump renamed them and left the previous set behind
+/// forever. r05 measured the cost: five runs' worth plus the fuzz
+/// target dir took the release rig to 0 bytes free mid-release, which
+/// deadlocks a tool harness that spools every output to a file first.
+/// The second consequence is worse than disk: `release.yml` uploads
+/// `target/dist/*.tar.gz` by GLOB, so an archive left over from an
+/// older version would ride a tag it does not belong to.
+///
+/// One archive per target, never a history. `smoke` holds an unpacked
+/// copy of exactly one archive, so it goes with them; another target's
+/// artifacts are not this run's to delete (the release matrix builds
+/// one host per job, and a cross-compiled tree will share the
+/// directory when c13 lands).
+fn stale_dist_entries(names: &[String], host: &str) -> Vec<String> {
+    let suffix = format!("-{host}");
+    let mut stale: Vec<String> = names
+        .iter()
+        .filter(|n| n.as_str() == "smoke" || (n.starts_with("wolf-") && n.contains(&suffix)))
+        .cloned()
+        .collect();
+    stale.sort();
+    stale
+}
+
+/// Remove what [`stale_dist_entries`] names, before anything is
+/// written — including this version's own archive, which is about to be
+/// rewritten and must never survive a failed build into the upload
+/// glob. Each removal is named on stderr: a pruner that deletes
+/// silently is one nobody can audit from a CI log.
+fn prune_dist(dir: &Path, host: &str) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return; // no target/dist yet — nothing to prune
+    };
+    let names: Vec<String> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    for name in stale_dist_entries(&names, host) {
+        let path = dir.join(&name);
+        let removed = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match removed {
+            Ok(()) => eprintln!("dist: pruned prior {name}"),
+            Err(e) => eprintln!("dist: could not prune {name}: {e}"),
+        }
+    }
+}
+
 fn dist() -> ExitCode {
     let host = rustc_host_triple();
+    prune_dist(Path::new("target/dist"), &host);
     let version = env!("CARGO_PKG_VERSION");
     // Three artifacts, always: `wolf` cannot link a program without
     // `libwolf_rt.a` beside it. Shipping the binary alone is the exact
@@ -4283,6 +4340,76 @@ fn deps_check() -> ExitCode {
     } else {
         eprintln!("deps-check: crate graph direction ok");
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod dist_prune_tests {
+    use super::stale_dist_entries;
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// #212: a version bump renames the archive, the staged tree and
+    /// the unpacked smoke tree, so every earlier version's set outlived
+    /// every later run. All of them go, this version's included — it is
+    /// about to be rewritten, and a half-written archive must never
+    /// survive a failed build into `release.yml`'s upload glob.
+    #[test]
+    fn every_prior_artifact_for_this_target_is_stale() {
+        assert_eq!(
+            stale_dist_entries(
+                &names(&[
+                    "wolf-0.2.1-aarch64-apple-darwin",
+                    "wolf-0.2.1-aarch64-apple-darwin.tar.gz",
+                    "wolf-0.2.2-aarch64-apple-darwin",
+                    "wolf-0.2.2-aarch64-apple-darwin.tar.gz",
+                    "smoke",
+                ]),
+                "aarch64-apple-darwin"
+            ),
+            names(&[
+                "smoke",
+                "wolf-0.2.1-aarch64-apple-darwin",
+                "wolf-0.2.1-aarch64-apple-darwin.tar.gz",
+                "wolf-0.2.2-aarch64-apple-darwin",
+                "wolf-0.2.2-aarch64-apple-darwin.tar.gz",
+            ])
+        );
+    }
+
+    /// Another target's archive is not this run's to delete: the
+    /// release matrix builds one host per job, and c13's
+    /// cross-compilation will put several in one directory.
+    #[test]
+    fn another_targets_artifacts_are_left_alone() {
+        assert_eq!(
+            stale_dist_entries(
+                &names(&[
+                    "wolf-0.2.2-x86_64-unknown-linux-gnu",
+                    "wolf-0.2.2-x86_64-unknown-linux-gnu.tar.gz",
+                    "wolf-0.2.2-aarch64-unknown-linux-gnu.tar.gz",
+                    "wolf-0.2.2-aarch64-apple-darwin.tar.gz",
+                ]),
+                "aarch64-apple-darwin"
+            ),
+            names(&["wolf-0.2.2-aarch64-apple-darwin.tar.gz"])
+        );
+    }
+
+    /// The pruner removes only what it names: nothing that is not an
+    /// artifact of this command is touched, whatever else shares
+    /// `target/dist`.
+    #[test]
+    fn unrelated_names_are_never_pruned() {
+        assert!(
+            stale_dist_entries(
+                &names(&["notes.txt", "wolf.tar.gz", "wolfram-aarch64-apple-darwin"]),
+                "aarch64-apple-darwin"
+            )
+            .is_empty()
+        );
     }
 }
 
