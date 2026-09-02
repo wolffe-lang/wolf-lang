@@ -650,14 +650,54 @@ mod tests {
         t.close(srv).expect("close srv");
     }
 
-    /// Dialing a port that was just released is the `refused` row —
-    /// a handleable outcome, never a trap.
+    /// A loopback port nothing will answer on — the refusal probes'
+    /// target (#205).
+    ///
+    /// The old shape asked the kernel for an EPHEMERAL port
+    /// (`listen("127.0.0.1:0")`), read it, closed it, and dialed —
+    /// betting that nothing took the port in between. Under `cargo
+    /// test`'s full parallelism the rest of the suite (and every other
+    /// test binary cargo runs beside it) is asking that same kernel
+    /// for ephemeral ports the whole time, and the bet lost on trunk:
+    /// a full `cargo xtask ci` red at the `test` step while
+    /// `shim_refused_code` passed 3/3 in isolation. A gate whose
+    /// verdict depends on the host's port churn teaches the house to
+    /// re-run instead of to read.
+    ///
+    /// A port from OUTSIDE the host's ephemeral range cannot be handed
+    /// to anyone by `bind(0)` — kernels auto-assign only from the high
+    /// range (49152.. on macOS and windows, 32768.. on linux) — so
+    /// binding one to prove it is free and closing it leaves a port
+    /// that STAYS quiet, and the dial after it is a refusal rather
+    /// than a coin flip. A clean listener close leaves no TIME_WAIT
+    /// (nothing was ever accepted), so the port is immediately dead.
+    ///
+    /// Holding a socket bound-but-never-listening was the other
+    /// candidate and is not portable: macOS drops the SYN on such a
+    /// socket instead of answering RST, so the dial hangs to its
+    /// deadline instead of refusing (measured here before this shape
+    /// was chosen).
+    fn quiet_loopback_port() -> u16 {
+        // Spread concurrent test binaries apart by pid so they rarely
+        // probe the same port; correctness does not depend on it,
+        // since a port nobody listens on refuses every dialer.
+        let start = u16::try_from(std::process::id() % 8_000).unwrap_or(0);
+        for i in 0..256u16 {
+            let port = 20_000 + (start + i) % 8_000;
+            if let Ok(l) = std::net::TcpListener::bind(("127.0.0.1", port)) {
+                drop(l);
+                return port;
+            }
+        }
+        panic!("no free loopback port in 20000..28000 for the refusal probe");
+    }
+
+    /// Dialing a port nothing answers on is the `refused` row — a
+    /// handleable outcome, never a trap.
     #[test]
     fn refused_is_a_row() {
         let mut t = NetTable::new();
-        let srv = t.listen("127.0.0.1:0").expect("listen");
-        let port = t.port(srv).expect("port");
-        t.close(srv).expect("close");
+        let port = quiet_loopback_port();
         assert_eq!(t.connect(&format!("127.0.0.1:{port}")), Err("refused"));
     }
 
@@ -815,39 +855,26 @@ mod tests {
         assert_eq!(__wolf_rt_net_deadline(99_999, 50), net_code::IO);
     }
 
-    /// Dialing a just-released port through the shim is the REFUSED
-    /// code — `corpus/net/refused_row.lu`'s native half.
+    /// Dialing a quiet port through the shim is the REFUSED code —
+    /// `corpus/net/refused_row.lu`'s native half.
     ///
-    /// #121: the just-released ephemeral port can be rebound by a
-    /// CONCURRENT same-host run before this dial reaches it, so a lone
-    /// dial is racy. Harden with a bounded retry: an unexpected connect
-    /// (someone else grabbed the port) is closed and the probe restarts
-    /// on a fresh port; a genuine REFUSED converges on the first quiet
-    /// attempt. Test-only — the corpus witness is unaffected.
+    /// #121 hardened this with a bounded retry over freshly-released
+    /// EPHEMERAL ports; #205 is that retry's bill — the race it
+    /// tolerated reddened a trunk gauntlet. The target comes from
+    /// [`quiet_loopback_port`] now, so one dial is the whole story and
+    /// anything but REFUSED is a real failure. Test-only — the corpus
+    /// witness is unaffected.
     #[test]
     fn shim_refused_code() {
-        for attempt in 0..5 {
-            let (ap, al) = pair_of("127.0.0.1:0");
-            let srv = unsafe { __wolf_rt_net_listen(ap, al) };
-            assert!(srv >= 0);
-            let port = __wolf_rt_net_port(srv);
-            assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
-            let addr = format!("127.0.0.1:{port}");
-            let (cp, cl) = pair_of(&addr);
-            let rc = unsafe { __wolf_rt_net_connect(cp, cl) };
-            if rc == -net_code::REFUSED {
-                return;
-            }
-            // A racing run rebound the port between close and dial: the
-            // dial connected (a valid fd >= 0). Drop it and try a fresh
-            // port.
-            assert!(
-                rc >= 0,
-                "dial was neither REFUSED nor a live fd: {rc} (attempt {attempt})"
-            );
-            assert_eq!(__wolf_rt_net_close(rc), net_code::OK);
-        }
-        panic!("no quiet ephemeral port in 5 attempts — the host is saturated");
+        let port = quiet_loopback_port();
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        let rc = unsafe { __wolf_rt_net_connect(cp, cl) };
+        assert_eq!(
+            rc,
+            -net_code::REFUSED,
+            "dial of the quiet port {port} answered {rc}, not REFUSED"
+        );
     }
 
     /// A non-UTF-8 arrival is the UTF8 code (the read shim's own
