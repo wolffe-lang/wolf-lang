@@ -43,7 +43,7 @@ pub mod reactor;
 // `SetConsoleCtrlHandler` on windows (s60b — the console-control
 // mapping the same clause spec'd). Rides the task layer's platform
 // gate; BSD delivery widens with s61 (a NAMED stop).
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod signal;
 pub mod str;
 pub mod time;

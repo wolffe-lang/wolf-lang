@@ -366,16 +366,15 @@ pub(crate) fn c_target(cc: CallConv) -> CTarget {
 /// failure. s60b shrinks the table one target at a time as each
 /// module crosses: the task layer (`spawn`/scopes, `proc`, channels
 /// and `select`, `sync`/`when`, `region_transfer`) crossed with its
-/// first target, so those families are gone from here; what remains
-/// is exactly what the runtime still compiles out on windows.
+/// first target and `os.signal` with its second (the console-control
+/// mapping), so those families are gone from here; what remains is
+/// exactly what the runtime still compiles out on windows.
 fn windows_unserved(name: &str) -> Option<&'static str> {
     if !cfg!(target_os = "windows") {
         return None;
     }
     let family = name.strip_prefix("__wolf_rt_")?;
-    let construct = if family.starts_with("os_signal_") {
-        "`os.signal` delivery"
-    } else if family == "net_deadline" {
+    let construct = if family == "net_deadline" {
         // The blocking-socket posture answers `io` where the reactor
         // hosts answer `timeout` — a DIFFERENT verdict, measured on
         // the runner (corpus/net/read_deadline.lu), so the call refuses
@@ -1004,8 +1003,8 @@ impl<'a, 'b> Tx<'a, 'b> {
             None => {
                 if let Some(construct) = windows_unserved(name) {
                     return Err(BackendError::Unsupported(format!(
-                        "windows-native serves no {construct} yet (the runtime's io reactor and \
-                         signal delivery are s60b's remaining targets); `{name}` would not link"
+                        "windows-native serves no {construct} yet (the runtime's io reactor is \
+                         s60b's remaining target); `{name}` would not link"
                     )));
                 }
                 let (_, nparams, has_ret) = RT_SYMBOLS
