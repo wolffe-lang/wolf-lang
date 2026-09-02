@@ -120,12 +120,13 @@ jobs:
       - run: cargo test --workspace
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
-      # windows floor line (259/255/0/274/0 at the bring-up; the release
-      # lane is DARK by design until s60b, and every row the bring-up
-      # cannot serve refuses by construct name and is counted in the
-      # residue, never hidden). `dist` is the learner path: the archive
-      # is built, unpacked somewhere else, and its `wolf.exe` builds and
-      # runs corpus/hello.lu. macOS runs both inside its own gauntlet.
+      # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
+      # rows refused by construct name; 261/278/0/295/0 since s60b's
+      # task layer, reactor, and signal surface crossed — native at
+      # macOS parity; the release lane stays DARK by design until s60c).
+      # `dist` is the learner path: the archive is built, unpacked
+      # somewhere else, and its `wolf.exe` builds and runs
+      # corpus/hello.lu. macOS runs both inside its own gauntlet.
       - name: windows native rung — corpus lane coverage (the windows floor line)
         if: matrix.os == 'windows-latest'
         run: cargo xtask lane-coverage

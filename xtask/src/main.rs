@@ -1186,29 +1186,27 @@ const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("rel
 const UNION_FLOOR: usize = 256;
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const ALL_THREE_FLOOR: usize = 207;
-// s60a, windows/x86-64 — the bring-up's OWN line, never the macOS or
-// linux numbers: measured on the windows-latest runner the day the
-// clif gate opened (the probe workflow prints the count; the floor is
-// set to what it printed and ratchets from there). The release tier
-// refuses windows by name (s60b), so its lane is DARK here by design
-// — floor 0, and `lane_coverage_cmd` expects the darkness (a dark lane
-// with a nonzero floor is the loud host-cannot-measure SKIP instead).
-// The native lane refuses the task layer, procs, channels, `sync`/
-// `when`, and `os.signal` by construct name (`windows_unserved` in the
-// clif backend), so its count sits below the checked lane's — every
-// such row is in the `refused@wir` residue, counted, not hidden.
-// Measured on windows-latest at 3f96817 (probe run 33578115570) over
-// 446 entries: checked 259 — full parity with macOS/linux (the lane
-// never touched the host); native 255 — the macOS 276 minus the 20
-// rows refused by construct name (11 channels/select, 4 spawn/scopes,
-// 2 proc, 2 os.signal, 1 sync/when) and the one `net_deadline` row;
-// release 0 (dark); union 274; all-three 0 (no release lane to
-// intersect). Counts measured by this gate on that runner, not
-// predicted.
+// windows/x86-64 — its OWN line, never the macOS or linux numbers:
+// measured on the windows-latest runner (the probe workflow prints the
+// count; the floor is set to what it printed and ratchets from there).
+// s60a opened the clif gate at 259/255/0/274/0 with 21 rows refused by
+// construct name (the task layer, procs, channels/select, sync/when,
+// os.signal, net deadlines — `wolf_rt` compiled for windows without
+// its task layer, reactor, and signal delivery). s60b crossed all
+// three, retired the by-name table, and re-measured at 306d0fc
+// (probe run 33614917814) over 449 entries: checked 261 (parity with
+// macOS/linux — the lane never touched the host); native 278 (parity
+// with macOS: every row the task layer, the reactor, and the signal
+// surface reach there reaches here); release 0 (DARK by design — the
+// LLVM tier refuses windows by name until s60c, and `lane_coverage_cmd`
+// expects the darkness: a dark lane with a nonzero floor is the loud
+// host-cannot-measure SKIP instead); union 295; all-three 0 (no
+// release lane to intersect). Counts measured by this gate on that
+// runner, not predicted.
 #[cfg(target_os = "windows")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 259), ("native", 255), ("release", 0)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 261), ("native", 278), ("release", 0)];
 #[cfg(target_os = "windows")]
-const UNION_FLOOR: usize = 274;
+const UNION_FLOOR: usize = 295;
 #[cfg(target_os = "windows")]
 const ALL_THREE_FLOOR: usize = 0;
 // s59, measured on macOS/aarch64 the day the gate lifted: checked and
@@ -1476,7 +1474,7 @@ fn residue_class(obs: &BTreeMap<&str, LaneObs>, forward: bool) -> String {
 }
 
 /// The ratchet comparison, behind a function on purpose: a platform
-/// whose floor is 0 (a tier not yet measured there — windows at s60a)
+/// whose floor is 0 (a tier not yet measured there — windows' release lane)
 /// is a legitimate state, and clippy's `absurd_extreme_comparisons`
 /// would otherwise deny the literal `n < 0` on that host alone.
 fn below_floor(n: usize, floor: usize) -> bool {
@@ -1533,7 +1531,7 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
     // Lanes this host cannot drive at all (exit 2 on their first
     // observation). A lane whose floor on this host is 0 is EXPECTED
     // dark (the platform's own floor line says the tier is not here
-    // yet — windows' release lane at s60a): it is recorded dark and
+    // yet — windows' release lane until s60c): it is recorded dark and
     // the other lanes keep measuring, so the port's coverage is a
     // number, not a skip. A dark lane with a nonzero floor is a host
     // that cannot measure what it is supposed to (no `cc`, no clang):
