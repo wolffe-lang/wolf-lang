@@ -383,6 +383,16 @@ impl Backend for ClifBackend {
         // to ARM64_RELOC_UNSIGNED there — verified on the emitted
         // objects.
         let is_macho = product.object.format() == cranelift_object::object::BinaryFormat::MachO;
+        // COFF (s60a): a 32-bit reference from one DWARF section into
+        // another (`DW_AT_stmt_list` -> .debug_line, the abbrev offset
+        // -> .debug_abbrev) is a SECTION-RELATIVE offset by the
+        // DWARF-in-COFF convention (`IMAGE_REL_AMD64_SECREL`, what
+        // clang and gcc emit). As a 32-bit ABSOLUTE address it is
+        // `ADDR32`, which MSVC `link.exe` refuses in a 64-bit image
+        // (LNK2017 "invalid without /LARGEADDRESSAWARE:NO" — measured
+        // on the windows-latest runner); lld-link was merely lenient.
+        // 64-bit code addresses (`DW_AT_low_pc`) stay absolute.
+        let is_coff = product.object.format() == cranelift_object::object::BinaryFormat::Coff;
         let sec_name = |name: &str| -> Vec<u8> {
             if is_macho {
                 format!("__{}", name.trim_start_matches('.')).into_bytes()
@@ -482,7 +492,14 @@ impl Backend for ClifBackend {
                             symbol: reloc_symbol,
                             addend: r.addend,
                             flags: RelocationFlags::Generic {
-                                kind: RelocationKind::Absolute,
+                                kind: if is_coff
+                                    && r.size == 4
+                                    && matches!(r.target, DebugRelocTarget::Section(_))
+                                {
+                                    RelocationKind::SectionOffset
+                                } else {
+                                    RelocationKind::Absolute
+                                },
                                 encoding: RelocationEncoding::Generic,
                                 size: r.size * 8,
                             },
