@@ -399,14 +399,26 @@ mod sys {
         /// dance's twin. Never `false`: a handle that is not a socket
         /// answers `POLLNVAL` at the wait, which delivers it so the
         /// caller's own syscall surfaces the real row.
+        ///
+        /// The set is ours, not the kernel's, so arming must KICK the
+        /// poller: a reactor thread already asleep in `WSAPoll` over
+        /// the previous array would never see the new socket (the
+        /// s60b round-1 hang — `net/byte_roundtrip.lu`'s first accept
+        /// parked forever). epoll/kqueue see a registration through
+        /// the kernel set; here the wake datagram is the registration
+        /// edge. The datagram outlives the race with a poller between
+        /// its snapshot and its wait (it stays queued on the socket).
         pub fn arm(&self, fd: RawFd, interest: Interest, token: u64) -> bool {
-            let mut a = self.armed.lock().unwrap();
-            a.retain(|e| e.fd != fd);
-            a.push(Armed {
-                fd,
-                interest,
-                token,
-            });
+            {
+                let mut a = self.armed.lock().unwrap();
+                a.retain(|e| e.fd != fd);
+                a.push(Armed {
+                    fd,
+                    interest,
+                    token,
+                });
+            }
+            self.wake();
             true
         }
 
