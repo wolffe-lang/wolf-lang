@@ -351,8 +351,44 @@ fn unit_clif_ty(u: &Unit) -> cranelift_codegen::ir::Type {
 pub(crate) fn c_target(cc: CallConv) -> CTarget {
     match cc {
         CallConv::AppleAarch64 => CTarget::AppleArm64,
+        CallConv::WindowsFastcall => CTarget::Win64,
         _ => CTarget::SysvX64,
     }
+}
+
+/// Runtime entry points the windows bring-up (s60a) does not serve:
+/// `wolf_rt` compiles for windows WITHOUT its task layer (pooled
+/// stacks, procs, channels, `when`), the io reactor, and signal
+/// delivery — the modules behind `lib.rs`'s linux/macOS gate — so a
+/// program that references one would fail at link with an unresolved
+/// external. It refuses HERE instead, by construct name, so the
+/// corpus lane counts the row as a named gap (`refused@wir`) rather
+/// than an environment failure. s60b (the IOCP reactor + the task
+/// layer on `VirtualAlloc` stacks) is the road; this table shrinks as
+/// it lands.
+fn windows_unserved(name: &str) -> Option<&'static str> {
+    if !cfg!(target_os = "windows") {
+        return None;
+    }
+    let family = name.strip_prefix("__wolf_rt_")?;
+    let construct = if family.starts_with("chan_") || family == "select" {
+        "channels and `select`"
+    } else if family.starts_with("scope_")
+        || family.starts_with("task_")
+        || family == "region_transfer"
+        || family == "dump_tasks"
+    {
+        "`spawn`/scopes (the task layer)"
+    } else if family.starts_with("proc_") || family == "region_adopt" {
+        "`proc`"
+    } else if family.starts_with("sync_") || family.starts_with("when_") {
+        "`sync`/`when`"
+    } else if family.starts_with("os_signal_") {
+        "`os.signal` delivery"
+    } else {
+        return None;
+    };
+    Some(construct)
 }
 
 /// Build the CLIF signature + slot map for one WIR signature under one
@@ -447,10 +483,16 @@ pub(crate) fn sig_info(
                             ));
                             params.push(Slot::CStruct(size));
                         }
-                        CTarget::AppleArm64 => {
+                        CTarget::AppleArm64 | CTarget::Win64 => {
                             // AAPCS64 B.4: indirect — a plain pointer
                             // parameter (cranelift's arm64 has no
                             // StructArgument; C does not want one).
+                            // Win64's > 8-byte rule is the same
+                            // pointer-to-copy shape; its plan refuses
+                            // every aggregate at s60a, so this arm is
+                            // the lowering for the day the refusal
+                            // lifts (≤ 8-byte composites will need
+                            // their bits-in-register form first).
                             clif.params.push(AbiParam::new(ctypes::I64));
                             params.push(Slot::CIndirect(size));
                         }
@@ -964,6 +1006,13 @@ impl<'a, 'b> Tx<'a, 'b> {
         let fid = match self.rt.get(name) {
             Some(&fid) => fid,
             None => {
+                if let Some(construct) = windows_unserved(name) {
+                    return Err(BackendError::Unsupported(format!(
+                        "windows-native serves no {construct} at the s60a bring-up (the runtime's \
+                         task layer, io reactor, and signal delivery are s60b's — the IOCP road); \
+                         `{name}` would not link"
+                    )));
+                }
                 let (_, nparams, has_ret) = RT_SYMBOLS
                     .iter()
                     .find(|(n, _, _)| *n == name)

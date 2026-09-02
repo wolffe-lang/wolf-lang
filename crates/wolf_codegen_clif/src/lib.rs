@@ -104,8 +104,10 @@ pub struct ClifBackend {
 
 impl ClifBackend {
     /// A backend for the host target. s28 opened linux/x86-64 (M1);
-    /// s59 widens to macOS/aarch64 (c13, D35's tier-1 matrix) —
-    /// anything else is an honest refusal.
+    /// s59 widened to macOS/aarch64; s60a opens windows/x86-64 (the
+    /// bring-up: COFF objects under `WindowsFastcall`, linked by the
+    /// driver against `wolf_rt.lib`) — anything else is an honest
+    /// refusal (c13, D35's tier-1 matrix).
     pub fn new() -> Result<ClifBackend, BackendError> {
         let triple = target_lexicon::Triple::host();
         let supported = matches!(
@@ -116,13 +118,16 @@ impl ClifBackend {
             ) | (
                 target_lexicon::Architecture::Aarch64(_),
                 target_lexicon::OperatingSystem::Darwin(_)
+            ) | (
+                target_lexicon::Architecture::X86_64,
+                target_lexicon::OperatingSystem::Windows
             )
         );
         if !supported {
             return Err(BackendError::Environment(format!(
                 "this host cannot run the native tier: native codegen targets \
-                 linux/x86-64 and macOS/aarch64 (s28 + s59; the rest of D35's \
-                 matrix is c13) — host: {triple}"
+                 linux/x86-64, macOS/aarch64, and windows/x86-64 (s28 + s59 + s60a; \
+                 the rest of D35's matrix is c13) — host: {triple}"
             )));
         }
         let mut flags = settings::builder();
