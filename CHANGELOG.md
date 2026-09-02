@@ -50,6 +50,48 @@ the checked-tier runtime hooks), which is why ws13 saw the same file
 run there and refuse under `conform-run`; the two flags name two
 machines, and the record now says which one declined.
 
+### The span is the offending token (s134 item 2 — D71, #220 closes)
+
+**A parse refusal about a token now spans that token.** is34's first
+full three-lane diff-run found DIV-2026-020: on eight grammar
+witnesses wolfc's E0201 was a zero-width point at the offending
+token's start while lupin spanned the token — the same byte, a
+different width, invisible to every walk that compares codes and
+visible to every editor, which highlights nothing at a zero-width
+range. D71 ruled the width: "expected `}`, found identifier `y`"
+points AT `y`, every byte of it. The parser's one primitive for a
+refusal about the current token (`here()`) now answers the token's own
+span, so E0201 and its siblings — E0203's "expected a struct name",
+E0206's "expected a type", E0207's "expected a pattern", the missing
+`=`/initializer reports — all moved together; a refusal at end of file
+still lands on the zero-width `Eof` marker, and a suggestion's edit
+keeps its own zero-width anchor (an insertion point IS zero-width; the
+primary span and the fix's span were always different things). Seven of
+the eight rows are now byte-identical to lupin's: `[550,551)` the `y`,
+`[534,535)`, `[415,416)`, `[581,582)`, `[669,671)` the `..`,
+`[332,333)`, `[896,897)`. The eighth, `let_group_bare_tuple.lu`, was
+never a width question — wolfc reads the D63 let-group and refuses at
+the end of the initializer list ("this value has no name", now
+`[374,375)`), lupin refuses at the first comma (`[364,365)`) — and it
+stays a locus divergence for its own triage, exactly as #220 said it
+would.
+
+Blast radius, measured before the change: wolf-lang, 37 snapshot files
+(35 in `wolf_parse`, the LSP one-truth test's `[28,28]` → `[28,29]`,
+and the eight `check: fail(E0201)` corpus pins unchanged — the walk
+compares codes, and the directive grammar pins no spans); wolf-book, 5
+diagnostic snapshots carrying 7 E0201 renderings whose carets widen
+(read-only count — the book's lane re-records at its pin bump);
+wolf-lsp, 0 transcripts (none carries an E0201; the two E0202s are at
+the opener and the E0203 in the two smoke transcripts already spanned
+its token). `cargo xtask differ` gains a **span-width class**: two
+rejections with the same code at the same start byte that differ only
+in width now classify as `SpanWidth` — a row that names itself — where
+until now they were a `Diag` divergence spelled exactly like a wrong
+locus, which is why is34 could only carry them as a waiver
+(`differ::DIV_2026_020_FILES` in wolf-interp; it retires at the pin
+bump that carries this, the interpreter lane's, as #177's did).
+
 ### The windows task layer (s60b)
 
 **On Windows, `spawn`, scopes, `proc`, channels and `select`, `sync`/
