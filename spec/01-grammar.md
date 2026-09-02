@@ -78,7 +78,9 @@ input still tokenizes so the parser can produce the friendly error.
 
 ```ebnf
 STRING     ::= '"' STR_PART* '"'
-STR_PART   ::= STR_TEXT | '{{' | '}}' | INTERP
+STR_PART   ::= STR_TEXT | STR_ESC | '{{' | '}}' | INTERP
+STR_ESC    ::= '\' ('n' | 't' | 'r' | '0' | '\' | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
+UNI_ESC    ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
 INTERP     ::= '{' expr FORMAT_SPEC? '}'
 FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
 ```
@@ -87,7 +89,14 @@ FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
 - The `:` beginning a format spec is the first top-level `:` inside the
   interpolation (top-level = not inside nested `(` `[` `{` or a nested
   string) `[gram.amb.fmtcolon]`.
-- Escapes: `\n \t \r \\ \" \0 \x7f \u{1F43A}`.
+- Escapes: `STR_ESC` — `\n \t \r \\ \" \0 \x7f \u{1F43A}` — and nothing
+  else; any other `\` is **E0101** at the escape. `\u{…}` takes one to six
+  hex digits (`UNI_ESC`); the bound is on the escape's SHAPE, not on the
+  value it names, so leading zeros count and `"\u{0000041}"` is refused
+  before anything asks that it spells `A`. `\'` is a `char` literal's
+  escape only — inside `"…"` it is E0101 like any other unknown escape.
+  `[gram.lex.char]`'s set is this one plus `\'`, which its production now
+  says rather than asserts (#198).
 
 **Multiline** `[gram.lex.str.multi]`: `"""` opens; the literal ends at the
 next `"""`; the closing delimiter's column sets the dedent — every content
@@ -107,16 +116,18 @@ is not a reserved keyword. Raw-mode body (no escapes/interpolation).
 
 ```ebnf
 CHAR_LIT  ::= "'" (CHAR_TEXT | CHAR_ESC) "'"
-CHAR_ESC  ::= '\' ('n' | 't' | 'r' | '0' | '\' | "'" | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
-UNI_ESC   ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
+CHAR_ESC  ::= STR_ESC | '\' "'"
 ```
 
 One Unicode scalar value between single quotes (s121, D58 —
 `[type.char]` owns the type): `'a'`, `'é'`, `'🐺'`, `'\n'`, `'\''`,
 `'\u{1F43A}'`. `CHAR_TEXT` is any single scalar other than `'`, `\`,
-or a newline. The escape set is the string set plus `\'`; `\u{…}`
-takes one to six hex digits — the bound is the production's, and it
-binds in string literals too (`[gram.lex.str.escape]`). Seven or more
+or a newline. The escape set is the string set plus `\'` — which
+`CHAR_ESC` now derives from `STR_ESC` instead of restating, so the
+claim is read off the productions (#198); `\u{…}` takes one to six hex
+digits — the bound is `UNI_ESC`'s, one production reached from both
+literals, and it binds in string literals too
+(`[gram.lex.str.escape]`, where a witness pins it). Seven or more
 digits, or none, is **E0101** at the escape (the digit count is the
 escape's shape, not the `char`'s: leading zeros count, so `'\u{41}'`
 and `'\u{000041}'` are both `'A'` and `'\u{0000041}'` is refused

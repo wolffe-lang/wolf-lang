@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="AAA ok")
+//! phase: run
+//! conforms: gram.lex.str.escape
+//!
+//! Issue #198, the running half: `\u{…}` inside a string literal at
+//! every width the bound admits, with the leading zeros that make the
+//! bound a rule about SHAPE rather than value. `"\u{41}"`,
+//! `"\u{0041}"` and `"\u{000041}"` all spell `A` — one, four and six
+//! digits — and the seventh digit is the refusal
+//! (`grammar/str_uni_seven_digits.lu`), not the value.
+//!
+//! `strings/split_clause.lu` already runs two- to five-digit string
+//! escapes for their own reasons; what was never pinned is the top of
+//! the range and the leading zeros, which is exactly where the char
+//! half's witness lives too (`strings/char_battery.lu`,
+//! `grammar/char_uni_seven_digits.lu`). Both literals reach one
+//! `UNI_ESC` now, and both halves are measured.
+
+fn main() -> !int {
+    let one = "\u{41}"
+    let four = "\u{0041}"
+    let six = "\u{000041}"
+    let all = one + four + six
+    // The escape and the glyph are the same text, at every width.
+    if all == "AAA" && six == "A" && one.bytes().len == 1 {
+        print("{all} ok")
+        0
+    } else {
+        print("{all} bad")
+        1
+    }
+}
