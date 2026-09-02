@@ -1,5 +1,6 @@
-//! The io reactor (s35; kqueue port s59) — one lazy readiness set
-//! (epoll on linux, kqueue on macOS) plus a timer wheel,
+//! The io reactor (s35; kqueue port s59; WSAPoll port s60b) — one
+//! lazy readiness set (epoll on linux, kqueue on macOS, a polled
+//! socket list on windows) plus a timer wheel,
 //! composing the task layer (s32 park/blocking-compensation, s34 kill
 //! teardown) with the net syscall floor (net.rs, the s39 v0 tier).
 //!
@@ -59,15 +60,17 @@
 //! # Lanes, precisely
 //!
 //! The NATIVE runtime (this crate, linked into compiled programs)
-//! routes net waits through this module — linux and macOS, the task
-//! layer's gate (s28/s59). The CHECKED lane
+//! routes net waits through this module — linux, macOS, and windows,
+//! the task layer's gate (s28/s59/s60b). The CHECKED lane
 //! (`wolf_mem::ubcheck`'s net tier) keeps its v0 blocking-syscall
 //! path: the checked machine is single-stepping a program under a
 //! deterministic budget and owes no scheduling; its io story joins
 //! the simulated reactor in s36, against this module's seam. Other
-//! hosts keep v0 blocking net (the IOCP port sprint widens against
-//! this interface, readiness adapted underneath — never the other
-//! way around; kqueue crossed exactly that way at s59).
+//! hosts keep v0 blocking net. Every port widens against this
+//! interface, readiness adapted underneath — never the other way
+//! around: kqueue crossed exactly that way at s59, `WSAPoll` at s60b,
+//! and IOCP (s60c: completion-based, the async-fs and many-socket
+//! rung) will too.
 //!
 //! # Cancellation
 //!
@@ -84,24 +87,39 @@
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
-use std::os::fd::RawFd;
 use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::task::{SchedEvent, blocking, current_scope, kill_teardown_check, sched_point};
 
+/// The raw io handle a wait is keyed on: a file descriptor on unix,
+/// a `SOCKET` on windows (where descriptors and sockets are different
+/// kinds of thing — the reactor only ever polls sockets there).
+#[cfg(unix)]
+pub type RawFd = std::os::fd::RawFd;
+#[cfg(windows)]
+pub type RawFd = std::os::windows::io::RawSocket;
+
 /// The platform poller behind the reactor: one kernel readiness set,
 /// one wake channel, one blocking wait. Everything above this seam —
 /// the waiter table, the timer wheel, cancellation, the `io.arrive`
 /// schedule point — is shared verbatim across platforms; this is the
 /// WHOLE per-OS surface (the s35 module doc's promised kqueue seam,
-/// cashed at s59).
+/// cashed at s59; the windows rung at s60b).
 ///
 /// - **linux**: epoll (oneshot interests) + an eventfd wake token.
 /// - **macOS**: kqueue (`EV_ONESHOT` interests keyed on (fd, filter))
 ///   + an `EVFILT_USER` wake event (`EV_CLEAR` self-resets, so there
 ///     is nothing to drain).
+/// - **windows**: `WSAPoll` over the armed list (rebuilt per wait —
+///   there is no kernel set) + a self-connected loopback UDP socket as
+///   the wake token. The measured v1 (the s60b decision, stated in
+///   docs/platforms.md): the corpus's deadline and readiness rows are
+///   a handful of sockets per program, where an O(n) rebuild per wake
+///   is noise; IOCP — completion-based, the only route to async file
+///   io and the many-socket scale story — is s60c's, behind this same
+///   seam.
 #[cfg(target_os = "linux")]
 mod sys {
     use super::{Interest, RawFd};
@@ -317,6 +335,146 @@ mod sys {
                     continue; // the wake event; EV_CLEAR already reset it
                 }
                 deliver(ev.udata as usize as u64);
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+mod sys {
+    use super::{Interest, RawFd};
+    use std::net::UdpSocket;
+    use std::os::windows::io::AsRawSocket as _;
+    use std::sync::Mutex;
+
+    /// `WSAPOLLFD`.
+    #[repr(C)]
+    struct PollFd {
+        fd: usize,
+        events: i16,
+        revents: i16,
+    }
+
+    const POLLRDNORM: i16 = 0x0100;
+    const POLLWRNORM: i16 = 0x0010;
+
+    // Declared directly (D15: no `windows-sys` in the runtime);
+    // ws2_32 is on every wolf link line.
+    #[link(name = "ws2_32")]
+    unsafe extern "system" {
+        fn WSAPoll(fds: *mut PollFd, count: u32, timeout_ms: i32) -> i32;
+    }
+
+    struct Armed {
+        fd: RawFd,
+        interest: Interest,
+        token: u64,
+    }
+
+    pub struct Poller {
+        /// The wake channel: a loopback UDP socket connected to
+        /// itself — one datagram kicks `WSAPoll`, and the drain is a
+        /// nonblocking `recv` loop.
+        wake: UdpSocket,
+        /// The armed interests — the "readiness set", ours to keep
+        /// because `WSAPoll` has none.
+        armed: Mutex<Vec<Armed>>,
+    }
+
+    impl Poller {
+        pub fn new() -> Poller {
+            let wake = UdpSocket::bind("127.0.0.1:0").expect("reactor wake socket");
+            let me = wake.local_addr().expect("wake socket addr");
+            wake.connect(me).expect("wake socket self-connect");
+            wake.set_nonblocking(true).expect("wake socket nonblocking");
+            Poller {
+                wake,
+                armed: Mutex::new(Vec::new()),
+            }
+        }
+
+        /// Arm a socket interest (oneshot: delivery removes it) under
+        /// `token`. One pending wait per socket at a time is the v1
+        /// contract — a re-arm replaces in place, the epoll EEXIST
+        /// dance's twin. Never `false`: a handle that is not a socket
+        /// answers `POLLNVAL` at the wait, which delivers it so the
+        /// caller's own syscall surfaces the real row.
+        pub fn arm(&self, fd: RawFd, interest: Interest, token: u64) -> bool {
+            let mut a = self.armed.lock().unwrap();
+            a.retain(|e| e.fd != fd);
+            a.push(Armed {
+                fd,
+                interest,
+                token,
+            });
+            true
+        }
+
+        /// Remove `fd`'s interest (resolution cleanup; an already-
+        /// delivered or never-armed fd is the self-healing no-op).
+        pub fn del(&self, fd: RawFd) {
+            self.armed.lock().unwrap().retain(|e| e.fd != fd);
+        }
+
+        /// Kick the poller out of its wait.
+        pub fn wake(&self) {
+            let _ = self.wake.send(&[1u8]);
+        }
+
+        /// Block up to `timeout_ms` (-1 = until an event); hand every
+        /// delivered completion token to `deliver`.
+        pub fn wait(&self, timeout_ms: i32, mut deliver: impl FnMut(u64)) {
+            let mut fds = vec![PollFd {
+                fd: self.wake.as_raw_socket() as usize,
+                events: POLLRDNORM,
+                revents: 0,
+            }];
+            let tokens: Vec<u64> = {
+                let a = self.armed.lock().unwrap();
+                for e in a.iter() {
+                    fds.push(PollFd {
+                        fd: e.fd as usize,
+                        events: match e.interest {
+                            Interest::Read => POLLRDNORM,
+                            Interest::Write => POLLWRNORM,
+                        },
+                        revents: 0,
+                    });
+                }
+                a.iter().map(|e| e.token).collect()
+            };
+            // SAFETY: a live, correctly-sized WSAPOLLFD array.
+            let n = unsafe { WSAPoll(fds.as_mut_ptr(), fds.len() as u32, timeout_ms) };
+            if n < 0 {
+                // SOCKET_ERROR: something armed is not a socket the
+                // poll can take at all. Deliver everything armed so
+                // each caller's own syscall surfaces its real row (a
+                // bad handle is a row, never a hang) — and never spin
+                // on the same set.
+                let all: Vec<u64> = self
+                    .armed
+                    .lock()
+                    .unwrap()
+                    .drain(..)
+                    .map(|e| e.token)
+                    .collect();
+                for t in all {
+                    deliver(t);
+                }
+                return;
+            }
+            if fds[0].revents != 0 {
+                // Drain the wake datagrams.
+                let mut buf = [0u8; 16];
+                while self.wake.recv(&mut buf).is_ok() {}
+            }
+            for (pf, token) in fds[1..].iter().zip(tokens) {
+                if pf.revents != 0 {
+                    // Ready, hung up, errored, or not a socket — every
+                    // one of them means "the syscall will not block".
+                    self.armed.lock().unwrap().retain(|e| e.token != token);
+                    deliver(token);
+                }
             }
         }
     }
@@ -655,11 +813,43 @@ mod tests {
     }
 
     /// A pipe pair for readiness tests (raw, closed on drop).
+    #[cfg(unix)]
     struct Pipe {
         r: RawFd,
         w: RawFd,
     }
 
+    /// The windows twin: a TCP loopback pair — the reactor polls
+    /// sockets there, so the readiness tests feed one. `r` is the
+    /// accepted end's raw socket; the streams close on drop.
+    #[cfg(windows)]
+    struct Pipe {
+        r: RawFd,
+        w: std::net::TcpStream,
+        _accepted: std::net::TcpStream,
+    }
+
+    #[cfg(windows)]
+    impl Pipe {
+        fn new() -> Pipe {
+            use std::os::windows::io::AsRawSocket as _;
+            let l = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+            let w = std::net::TcpStream::connect(l.local_addr().unwrap()).expect("connect");
+            let (accepted, _) = l.accept().expect("accept");
+            Pipe {
+                r: accepted.as_raw_socket(),
+                w,
+                _accepted: accepted,
+            }
+        }
+
+        fn feed(&self, byte: u8) {
+            use std::io::Write as _;
+            (&self.w).write_all(&[byte]).expect("feed");
+        }
+    }
+
+    #[cfg(unix)]
     impl Pipe {
         fn new() -> Pipe {
             let mut fds = [0i32; 2];
@@ -684,6 +874,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     impl Drop for Pipe {
         fn drop(&mut self) {
             // SAFETY: our own fds, closed once.

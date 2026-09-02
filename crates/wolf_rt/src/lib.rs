@@ -34,7 +34,7 @@ pub mod random;
 // reactor's interface, readiness adapted underneath (`Interest`/
 // `Ready` unchanged). IOCP (the completion-port rung: async fs, the
 // scale story) is s60c's, behind the same seam.
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod reactor;
 // Signal RECEPTION (s114, #126): the meaning-based receive surface
 // over the self-pipe/sigaction trampoline (linux at s114, macOS since
