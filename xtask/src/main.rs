@@ -84,6 +84,7 @@ fn main() -> ExitCode {
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("fmt-fuzz") => fmt_fuzz(&args[1..]),
         Some("dist") => dist(),
+        Some("release-notes") => release_notes_cmd(&args[1..]),
         Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
         Some("conformance") => conformance_cmd(&args[1..]),
         Some("differ") => differ_cmd(&args[1..]),
@@ -96,7 +97,12 @@ fn main() -> ExitCode {
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+            );
+            eprintln!(
+                "       cargo xtask release-notes <TAG> [--out FILE]\n\
+                 \x20                        (the CHANGELOG entry for a tag — release.yml's\n\
+                 \x20                        `gh release create --notes-file`, #214)"
             );
             eprintln!(
                 "       cargo xtask lane-coverage [--json]   (the [proto.cmp.coverage] gate)"
@@ -3806,8 +3812,188 @@ fn git_tags_at_head() -> Vec<String> {
         .unwrap_or_default()
 }
 
+// --------------------------------------------------- release-notes --
+
+/// The CHANGELOG entry for a release tag (#214).
+///
+/// `GET /repos/wolffe-lang/wolf-lang/releases/tags/v0.2.2` answered with
+/// a `body` of length 0, and so did v0.2.1: `release.yml` created the
+/// release with `--title` and nothing else, so the paragraph written for
+/// a newcomer lived only in `CHANGELOG.md` and a learner arriving from a
+/// download link never read it. The release job passes this text to
+/// `gh release create --notes-file`, so the body fills itself at the
+/// tag instead of needing a hand step nobody remembers.
+///
+/// The section runs from `## <version>` to the next top-level `## `.
+/// Fenced blocks are transparent, which is not a nicety: the 0.2.2 entry
+/// quotes a compiler refusal inside a fence, and a heading that appears
+/// in one is content, not the next release. Everything else is carried
+/// through verbatim — the `###` subsections, and the repo-relative
+/// `[docs/platforms.md](docs/platforms.md)` link, which a GitHub release
+/// page is the one place that resolves correctly.
+fn release_notes(changelog: &str, tag: &str) -> Result<String, String> {
+    let version = tag.strip_prefix('v').unwrap_or(tag);
+    let mut body: Vec<&str> = Vec::new();
+    let mut collecting = false;
+    let mut fenced = false;
+    for line in changelog.lines() {
+        if line.starts_with("```") {
+            fenced = !fenced;
+        } else if !fenced && line.starts_with("## ") {
+            if collecting {
+                break; // the next release's heading ends this one
+            }
+            // `## 0.2.2 — 2026-09-02`, or a bare `## 0.2.2`. A longer
+            // version that merely starts the same (`0.2.30`) is not it.
+            collecting = line[3..]
+                .trim_start()
+                .strip_prefix(version)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace));
+            continue; // the heading is the release title, not its body
+        }
+        if collecting {
+            body.push(line);
+        }
+    }
+    if !collecting {
+        return Err(format!(
+            "CHANGELOG.md has no `## {version}` entry, so {tag}'s release body would be \
+             empty — which is the whole of #214. Curate the entry before tagging."
+        ));
+    }
+    let text = body.join("\n").trim().to_string();
+    if text.is_empty() {
+        return Err(format!("CHANGELOG.md's `## {version}` entry is empty"));
+    }
+    Ok(text)
+}
+
+/// `cargo xtask release-notes <TAG> [--out FILE]` — #214's mechanism,
+/// as a command so the workflow stays a thin wrapper (and so the
+/// extraction is testable without a tag).
+fn release_notes_cmd(args: &[String]) -> ExitCode {
+    let mut tag: Option<String> = None;
+    let mut out: Option<String> = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--out" => match it.next() {
+                Some(path) => out = Some(path.clone()),
+                None => {
+                    eprintln!("release-notes: --out needs a path");
+                    return ExitCode::from(2);
+                }
+            },
+            other if other.starts_with("--") => {
+                eprintln!("release-notes: unknown flag {other}");
+                return ExitCode::from(2);
+            }
+            other => tag = Some(other.to_string()),
+        }
+    }
+    let Some(tag) = tag else {
+        eprintln!("release-notes: need a tag — `cargo xtask release-notes v0.2.3 [--out FILE]`");
+        return ExitCode::from(2);
+    };
+    let changelog = match std::fs::read_to_string("CHANGELOG.md") {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("release-notes: cannot read CHANGELOG.md: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let notes = match release_notes(&changelog, &tag) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("release-notes: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match out {
+        Some(path) => {
+            let parent = Path::new(&path)
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty());
+            if let Some(parent) = parent
+                && let Err(e) = std::fs::create_dir_all(parent)
+            {
+                eprintln!("release-notes: cannot create {}: {e}", parent.display());
+                return ExitCode::FAILURE;
+            }
+            if let Err(e) = std::fs::write(&path, format!("{notes}\n")) {
+                eprintln!("release-notes: cannot write {path}: {e}");
+                return ExitCode::FAILURE;
+            }
+            eprintln!(
+                "release-notes: {tag} -> {path} ({} bytes, first line: {:?})",
+                notes.len() + 1,
+                notes.lines().next().unwrap_or_default()
+            );
+        }
+        None => println!("{notes}"),
+    }
+    ExitCode::SUCCESS
+}
+
+/// Prior `target/dist` artifacts for THIS target (#212), as a pure
+/// predicate over a directory listing.
+///
+/// `xtask dist` runs in every gauntlet, and the archive, the staged
+/// tree and the smoke tree it writes are all named for the VERSION — so
+/// a version bump renamed them and left the previous set behind
+/// forever. r05 measured the cost: five runs' worth plus the fuzz
+/// target dir took the release rig to 0 bytes free mid-release, which
+/// deadlocks a tool harness that spools every output to a file first.
+/// The second consequence is worse than disk: `release.yml` uploads
+/// `target/dist/*.tar.gz` by GLOB, so an archive left over from an
+/// older version would ride a tag it does not belong to.
+///
+/// One archive per target, never a history. `smoke` holds an unpacked
+/// copy of exactly one archive, so it goes with them; another target's
+/// artifacts are not this run's to delete (the release matrix builds
+/// one host per job, and a cross-compiled tree will share the
+/// directory when c13 lands).
+fn stale_dist_entries(names: &[String], host: &str) -> Vec<String> {
+    let suffix = format!("-{host}");
+    let mut stale: Vec<String> = names
+        .iter()
+        .filter(|n| n.as_str() == "smoke" || (n.starts_with("wolf-") && n.contains(&suffix)))
+        .cloned()
+        .collect();
+    stale.sort();
+    stale
+}
+
+/// Remove what [`stale_dist_entries`] names, before anything is
+/// written — including this version's own archive, which is about to be
+/// rewritten and must never survive a failed build into the upload
+/// glob. Each removal is named on stderr: a pruner that deletes
+/// silently is one nobody can audit from a CI log.
+fn prune_dist(dir: &Path, host: &str) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return; // no target/dist yet — nothing to prune
+    };
+    let names: Vec<String> = entries
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    for name in stale_dist_entries(&names, host) {
+        let path = dir.join(&name);
+        let removed = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match removed {
+            Ok(()) => eprintln!("dist: pruned prior {name}"),
+            Err(e) => eprintln!("dist: could not prune {name}: {e}"),
+        }
+    }
+}
+
 fn dist() -> ExitCode {
     let host = rustc_host_triple();
+    prune_dist(Path::new("target/dist"), &host);
     let version = env!("CARGO_PKG_VERSION");
     // Three artifacts, always: `wolf` cannot link a program without
     // `libwolf_rt.a` beside it. Shipping the binary alone is the exact
@@ -4283,6 +4469,171 @@ fn deps_check() -> ExitCode {
     } else {
         eprintln!("deps-check: crate graph direction ok");
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod release_notes_tests {
+    use super::release_notes;
+
+    const DOC: &str = "\
+# Changelog
+
+## Unreleased
+
+### something in flight
+
+not this.
+
+## 0.2.2 — 2026-09-02
+
+THE LEARNERS' RELEASE.
+
+```text
+## this heading is quoted, not a section
+wolf build: cannot compile this yet
+```
+
+[`docs/platforms.md`](docs/platforms.md) is the per-host ledger.
+
+## 0.2.1 — 2026-09-01
+
+THE LETTER AND THE ARCHIVE.
+";
+
+    /// The entry for the tag, and only it: `## Unreleased` above and the
+    /// previous release below are both somebody else's section.
+    #[test]
+    fn the_entry_for_the_tag_is_cut_at_the_next_release() {
+        let notes = release_notes(DOC, "v0.2.2").expect("0.2.2 has an entry");
+        assert!(notes.starts_with("THE LEARNERS' RELEASE."), "{notes}");
+        assert!(!notes.contains("something in flight"), "{notes}");
+        assert!(!notes.contains("THE LETTER AND THE ARCHIVE"), "{notes}");
+        // The heading itself is the release title; the body starts under it.
+        assert!(!notes.contains("## 0.2.2"), "{notes}");
+    }
+
+    /// #214 named this one: the 0.2.2 entry quotes a refusal inside a
+    /// fence, and a `## ` line in a fence is content. Cutting there would
+    /// truncate the body two paragraphs in and lose the link below it.
+    #[test]
+    fn a_heading_inside_a_fenced_block_is_content() {
+        let notes = release_notes(DOC, "v0.2.2").expect("0.2.2 has an entry");
+        assert!(notes.contains("## this heading is quoted"), "{notes}");
+        assert!(
+            notes.contains("[`docs/platforms.md`](docs/platforms.md)"),
+            "{notes}"
+        );
+    }
+
+    /// The tag's `v` is optional, and a version that merely starts the
+    /// same is a different release.
+    #[test]
+    fn the_version_is_matched_whole() {
+        assert!(release_notes(DOC, "0.2.1").is_ok());
+        let err = release_notes(DOC, "v0.2.20").expect_err("no such entry");
+        assert!(err.contains("0.2.20"), "{err}");
+    }
+
+    /// A tag with no entry fails LOUDLY — an empty release body is what
+    /// this closes, so producing one silently would be the bug.
+    #[test]
+    fn a_tag_with_no_entry_is_an_error() {
+        let err = release_notes(DOC, "v9.9.9").expect_err("no such entry");
+        assert!(err.contains("#214"), "{err}");
+    }
+
+    /// The real CHANGELOG, at the entry #214 was filed about: the
+    /// paragraph a learner should have seen on the v0.2.2 release page.
+    #[test]
+    fn the_repos_own_changelog_yields_the_0_2_2_entry() {
+        let md = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../CHANGELOG.md"))
+            .expect("read CHANGELOG.md");
+        let notes = release_notes(&md, "v0.2.2").expect("0.2.2 is released");
+        assert!(
+            notes.starts_with("THE LEARNERS' RELEASE."),
+            "{}",
+            &notes[..80]
+        );
+        assert!(
+            notes.contains("windows-native serves no"),
+            "the fenced refusal survives"
+        );
+        assert!(notes.contains("It pairs with **lupin 0.1.22**"));
+        assert!(
+            !notes.contains("\n## 0.2.1"),
+            "the previous release is not in it"
+        );
+    }
+}
+
+#[cfg(test)]
+mod dist_prune_tests {
+    use super::stale_dist_entries;
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// #212: a version bump renames the archive, the staged tree and
+    /// the unpacked smoke tree, so every earlier version's set outlived
+    /// every later run. All of them go, this version's included — it is
+    /// about to be rewritten, and a half-written archive must never
+    /// survive a failed build into `release.yml`'s upload glob.
+    #[test]
+    fn every_prior_artifact_for_this_target_is_stale() {
+        assert_eq!(
+            stale_dist_entries(
+                &names(&[
+                    "wolf-0.2.1-aarch64-apple-darwin",
+                    "wolf-0.2.1-aarch64-apple-darwin.tar.gz",
+                    "wolf-0.2.2-aarch64-apple-darwin",
+                    "wolf-0.2.2-aarch64-apple-darwin.tar.gz",
+                    "smoke",
+                ]),
+                "aarch64-apple-darwin"
+            ),
+            names(&[
+                "smoke",
+                "wolf-0.2.1-aarch64-apple-darwin",
+                "wolf-0.2.1-aarch64-apple-darwin.tar.gz",
+                "wolf-0.2.2-aarch64-apple-darwin",
+                "wolf-0.2.2-aarch64-apple-darwin.tar.gz",
+            ])
+        );
+    }
+
+    /// Another target's archive is not this run's to delete: the
+    /// release matrix builds one host per job, and c13's
+    /// cross-compilation will put several in one directory.
+    #[test]
+    fn another_targets_artifacts_are_left_alone() {
+        assert_eq!(
+            stale_dist_entries(
+                &names(&[
+                    "wolf-0.2.2-x86_64-unknown-linux-gnu",
+                    "wolf-0.2.2-x86_64-unknown-linux-gnu.tar.gz",
+                    "wolf-0.2.2-aarch64-unknown-linux-gnu.tar.gz",
+                    "wolf-0.2.2-aarch64-apple-darwin.tar.gz",
+                ]),
+                "aarch64-apple-darwin"
+            ),
+            names(&["wolf-0.2.2-aarch64-apple-darwin.tar.gz"])
+        );
+    }
+
+    /// The pruner removes only what it names: nothing that is not an
+    /// artifact of this command is touched, whatever else shares
+    /// `target/dist`.
+    #[test]
+    fn unrelated_names_are_never_pruned() {
+        assert!(
+            stale_dist_entries(
+                &names(&["notes.txt", "wolf.tar.gz", "wolfram-aarch64-apple-darwin"]),
+                "aarch64-apple-darwin"
+            )
+            .is_empty()
+        );
     }
 }
 

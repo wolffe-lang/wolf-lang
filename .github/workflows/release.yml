@@ -24,8 +24,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: build archive
         run: cargo xtask dist
+      # The release body is the CHANGELOG's entry for this tag (#214): v0.2.1
+      # and v0.2.2 both answered the releases API with a `body` of length 0,
+      # because the step below created the release with `--title` and nothing
+      # else. A tag with no CHANGELOG entry fails the job here, by name — an
+      # empty body is exactly what this closes.
+      - name: release notes from the CHANGELOG
+        shell: bash
+        run: cargo xtask release-notes "${GITHUB_REF_NAME}" --out target/release-notes.md
+      # Every matrix job writes the same notes and passes them twice: on the
+      # create, so whichever job wins the race sets the body, and on an edit,
+      # so the body is right even for a release someone opened by hand.
       - name: upload to release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
-        run: gh release upload "${GITHUB_REF_NAME}" target/dist/*.tar.gz --clobber || gh release create "${GITHUB_REF_NAME}" target/dist/*.tar.gz --draft --title "${GITHUB_REF_NAME}"
+        run: |
+          notes=target/release-notes.md
+          gh release create "${GITHUB_REF_NAME}" --draft --title "${GITHUB_REF_NAME}" --notes-file "$notes" || echo "release already exists"
+          gh release edit "${GITHUB_REF_NAME}" --notes-file "$notes"
+          gh release upload "${GITHUB_REF_NAME}" target/dist/*.tar.gz --clobber
