@@ -100,11 +100,22 @@ pub fn validate_record(v: &serde_json::Value) -> Result<Verdict, String> {
 }
 
 /// Divergence classes per `[proto.cmp.severity]`, descending.
+///
+/// `SpanWidth` (s134, D71 — wolf-lang#220) is a named SUB-class of
+/// `Diag`: both sides reject with the same code at the same START
+/// byte and disagree only on the span's width. is34's first full
+/// three-lane diff-run found eight such rows and could only file them
+/// as a waiver, because the report spelled them exactly like a
+/// wrong-locus divergence. D71 ruled the width (the span is the
+/// offending token), and the class exists so the NEXT width drift is
+/// a row that names itself, not a waiver. It is still a divergence —
+/// `[proto.cmp.phase]` compares spans byte-exact — and gates like one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Class {
     Soundness,
     Verdict,
     Diag,
+    SpanWidth,
     Stdout,
 }
 
@@ -168,6 +179,28 @@ pub fn compare(
                 })
         };
         if first(a) != first(b) {
+            // Same code, same start byte, different width: the D71
+            // sub-class (s134), named so a width drift reads as what
+            // it is instead of as a wrong locus.
+            let lo = |r: &serde_json::Value| {
+                r["diagnostics"]
+                    .as_array()
+                    .and_then(|d| d.first())
+                    .and_then(|d| d["span"].as_array())
+                    .and_then(|s| s.first())
+                    .and_then(|v| v.as_u64())
+            };
+            let code = |r: &serde_json::Value| first(r).map(|(c, _)| c);
+            if code(a) == code(b) && lo(a).is_some() && lo(a) == lo(b) {
+                return Some((
+                    Class::SpanWidth,
+                    format!(
+                        "same code and start, widths differ: {:?} vs {:?}",
+                        first(a),
+                        first(b)
+                    ),
+                ));
+            }
             return Some((Class::Diag, format!("{:?} vs {:?}", first(a), first(b))));
         }
     }
@@ -368,6 +401,32 @@ mod tests {
         let (a, b) = (record("ub(mem.ub)"), record("exit(0)"));
         let (class, _) = compare(&a, &b, false).unwrap();
         assert_eq!(class, Class::Soundness);
+    }
+
+    /// D71 (s134, wolf-lang#220): the eight DIV-2026-020 rows were
+    /// same-code, same-start, different-width — a class of their own
+    /// now, so the next drift is a named row. A different start byte
+    /// stays plain `Diag`.
+    #[test]
+    fn a_width_only_span_drift_is_its_own_class() {
+        let mut a = record("fail(E0201)");
+        a["diagnostics"] = json!([{"code": "E0201", "span": [550, 550], "severity": "error"}]);
+        let mut b = record("fail(E0201)");
+        b["diagnostics"] = json!([{"code": "E0201", "span": [550, 551], "severity": "error"}]);
+        let (class, detail) = compare(&a, &b, false).unwrap();
+        assert_eq!(class, Class::SpanWidth, "{detail}");
+        // A different start is a locus divergence, not a width one.
+        let mut c = record("fail(E0201)");
+        c["diagnostics"] = json!([{"code": "E0201", "span": [364, 365], "severity": "error"}]);
+        let (class, _) = compare(&a, &c, false).unwrap();
+        assert_eq!(class, Class::Diag);
+        // A different code is never width.
+        let mut d = record("fail(E0202)");
+        d["diagnostics"] = json!([{"code": "E0202", "span": [550, 551], "severity": "error"}]);
+        assert_ne!(compare(&a, &d, false).unwrap().0, Class::SpanWidth);
+        // Equal spans agree.
+        let b2 = b.clone();
+        assert!(compare(&b, &b2, false).is_none());
     }
 
     #[test]
