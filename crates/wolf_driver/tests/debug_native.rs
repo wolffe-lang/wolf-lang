@@ -146,6 +146,12 @@ fn executable_carries_wolf_debug_sections() {
 /// a demangler exists, s54).
 #[test]
 fn gdb_breaks_steps_and_prints() {
+    if cfg!(windows) {
+        eprintln!(
+            "SKIP: debugger transcripts on windows are s60's (DWARF-in-COFF + lldb) — the s60a bring-up links wolf's DWARF but reads none of it"
+        );
+        return;
+    }
     if Command::new("gdb").arg("--version").output().is_err() {
         eprintln!("SKIP: gdb not installed (required on the linux CI lane)");
         return;
@@ -324,6 +330,12 @@ fn gdb_steps_hello_lu() {
 /// SKIPs loudly where lldb is absent; the macOS CI lane has it.
 #[test]
 fn lldb_breaks_steps_and_prints() {
+    if cfg!(windows) {
+        eprintln!(
+            "SKIP: debugger transcripts on windows are s60's (DWARF-in-COFF + lldb) — the s60a bring-up links wolf's DWARF but reads none of it"
+        );
+        return;
+    }
     if Command::new("lldb").arg("--version").output().is_err() {
         eprintln!("SKIP: lldb not installed (required on the macOS CI lane)");
         return;
@@ -378,6 +390,12 @@ fn lldb_breaks_steps_and_prints() {
 /// program's real output under the debugger.
 #[test]
 fn lldb_steps_hello_lu() {
+    if cfg!(windows) {
+        eprintln!(
+            "SKIP: debugger transcripts on windows are s60's (DWARF-in-COFF + lldb) — the s60a bring-up links wolf's DWARF but reads none of it"
+        );
+        return;
+    }
     if Command::new("lldb").arg("--version").output().is_err() {
         eprintln!("SKIP: lldb not installed (required on the macOS CI lane)");
         return;

@@ -44,6 +44,7 @@ fn clif_of(fixture: &str) -> Option<String> {
     // text is identical across the supported hosts.
     let out = out
         .replace("apple_aarch64", "host_cc")
+        .replace("windows_fastcall", "host_cc")
         .replace("system_v", "host_cc");
     // The object must also finish cleanly (relocatable ELF bytes).
     let product = Box::new(backend).finish().expect("object emits");

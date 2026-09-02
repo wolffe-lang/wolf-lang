@@ -118,6 +118,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace
       - run: cargo test --workspace
+      # s60a: the windows native rung. The clif gate is open on this
+      # host, so the corpus runs natively here — `lane-coverage` is the
+      # windows floor line (259/255/0/274/0 at the bring-up; the release
+      # lane is DARK by design until s60b, and every row the bring-up
+      # cannot serve refuses by construct name and is counted in the
+      # residue, never hidden). `dist` is the learner path: the archive
+      # is built, unpacked somewhere else, and its `wolf.exe` builds and
+      # runs corpus/hello.lu. macOS runs both inside its own gauntlet.
+      - name: windows native rung — corpus lane coverage (the windows floor line)
+        if: matrix.os == 'windows-latest'
+        run: cargo xtask lane-coverage
+      - name: windows dist — the archive, unpacked, builds and runs hello.exe
+        if: matrix.os == 'windows-latest'
+        run: cargo xtask dist
 
   freebsd-check:
     name: cross-check (freebsd x86-64, tier-2)

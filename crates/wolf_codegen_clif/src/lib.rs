@@ -104,8 +104,10 @@ pub struct ClifBackend {
 
 impl ClifBackend {
     /// A backend for the host target. s28 opened linux/x86-64 (M1);
-    /// s59 widens to macOS/aarch64 (c13, D35's tier-1 matrix) —
-    /// anything else is an honest refusal.
+    /// s59 widened to macOS/aarch64; s60a opens windows/x86-64 (the
+    /// bring-up: COFF objects under `WindowsFastcall`, linked by the
+    /// driver against `wolf_rt.lib`) — anything else is an honest
+    /// refusal (c13, D35's tier-1 matrix).
     pub fn new() -> Result<ClifBackend, BackendError> {
         let triple = target_lexicon::Triple::host();
         let supported = matches!(
@@ -116,13 +118,16 @@ impl ClifBackend {
             ) | (
                 target_lexicon::Architecture::Aarch64(_),
                 target_lexicon::OperatingSystem::Darwin(_)
+            ) | (
+                target_lexicon::Architecture::X86_64,
+                target_lexicon::OperatingSystem::Windows
             )
         );
         if !supported {
             return Err(BackendError::Environment(format!(
                 "this host cannot run the native tier: native codegen targets \
-                 linux/x86-64 and macOS/aarch64 (s28 + s59; the rest of D35's \
-                 matrix is c13) — host: {triple}"
+                 linux/x86-64, macOS/aarch64, and windows/x86-64 (s28 + s59 + s60a; \
+                 the rest of D35's matrix is c13) — host: {triple}"
             )));
         }
         let mut flags = settings::builder();
@@ -378,6 +383,16 @@ impl Backend for ClifBackend {
         // to ARM64_RELOC_UNSIGNED there — verified on the emitted
         // objects.
         let is_macho = product.object.format() == cranelift_object::object::BinaryFormat::MachO;
+        // COFF (s60a): a 32-bit reference from one DWARF section into
+        // another (`DW_AT_stmt_list` -> .debug_line, the abbrev offset
+        // -> .debug_abbrev) is a SECTION-RELATIVE offset by the
+        // DWARF-in-COFF convention (`IMAGE_REL_AMD64_SECREL`, what
+        // clang and gcc emit). As a 32-bit ABSOLUTE address it is
+        // `ADDR32`, which MSVC `link.exe` refuses in a 64-bit image
+        // (LNK2017 "invalid without /LARGEADDRESSAWARE:NO" — measured
+        // on the windows-latest runner); lld-link was merely lenient.
+        // 64-bit code addresses (`DW_AT_low_pc`) stay absolute.
+        let is_coff = product.object.format() == cranelift_object::object::BinaryFormat::Coff;
         let sec_name = |name: &str| -> Vec<u8> {
             if is_macho {
                 format!("__{}", name.trim_start_matches('.')).into_bytes()
@@ -477,7 +492,14 @@ impl Backend for ClifBackend {
                             symbol: reloc_symbol,
                             addend: r.addend,
                             flags: RelocationFlags::Generic {
-                                kind: RelocationKind::Absolute,
+                                kind: if is_coff
+                                    && r.size == 4
+                                    && matches!(r.target, DebugRelocTarget::Section(_))
+                                {
+                                    RelocationKind::SectionOffset
+                                } else {
+                                    RelocationKind::Absolute
+                                },
                                 encoding: RelocationEncoding::Generic,
                                 size: r.size * 8,
                             },

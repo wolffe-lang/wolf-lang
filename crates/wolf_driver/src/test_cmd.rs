@@ -876,7 +876,7 @@ fn native_schedule_runs(
     if std::fs::create_dir_all(&dir).is_err() {
         return Err((Status::Fail, "cannot create a scratch dir".to_string()));
     }
-    let exe = dir.join("a.out");
+    let exe = dir.join(crate::exe_name("a.out"));
     let mut scratch = Sources::new();
     let compiled = crate::compile_native(
         file,

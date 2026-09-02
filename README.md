@@ -20,7 +20,11 @@ native machine code through the compiler's own backend, with no LLVM in the
 loop, and `wolf build --release` goes through LLVM instead. The tiers agree
 on every corpus program that runs, on linux x86-64 and macOS aarch64 alike,
 and the release tier's M2 gate — the thirteen-kernel suite against naive
-`clang -O3` — is declared held.
+`clang -O3` — is declared held. Windows x86-64 runs the native tier as a
+bring-up (s60a): `hello.exe` builds and runs, traps report and exit 134,
+and the task layer, the release tier, and `os.signal` refuse by name —
+[`docs/platforms.md`](docs/platforms.md) is the per-host ledger and the
+road.
 
 ```sh
 cargo build --release -p wolf_driver

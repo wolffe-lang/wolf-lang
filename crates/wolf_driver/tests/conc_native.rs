@@ -95,6 +95,16 @@ fn native_tier(file: &str, seed: Option<u64>, midend: bool, release: bool) -> Op
         eprintln!("SKIP: the native tier refuses this host");
         return None;
     }
+    // s60a: a host whose native tier serves the language but not THIS
+    // construct yet (windows without its task layer) refuses by name —
+    // the same loud skip; lane-coverage counts the row in its residue.
+    if rec["verdict"] == "unsupported" && stderr.contains("windows-native serves no") {
+        eprintln!(
+            "SKIP: the native lane refuses this construct by name on this host: {}",
+            stderr.trim()
+        );
+        return None;
+    }
     if release
         && rec["verdict"] == "unsupported"
         && stderr.contains("release tier targets linux/x86-64")
@@ -483,6 +493,10 @@ fn wolf_test_schedules_explores_a_native_body() {
     // stdout, not a stderr line.
     if stderr.contains("native codegen targets") || stdout.contains("native codegen targets") {
         eprintln!("SKIP: the native tier refuses this host");
+        return;
+    }
+    if stderr.contains("windows-native serves no") || stdout.contains("windows-native serves no") {
+        eprintln!("SKIP: the native lane refuses the task layer by name on this host (s60a)");
         return;
     }
     assert!(

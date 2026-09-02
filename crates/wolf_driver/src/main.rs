@@ -1588,7 +1588,7 @@ fn compile_native(
         }
         return Ok(());
     }
-    link_objects(&objects, out)
+    link_objects(&objects, out, opts.verbose)
 }
 
 /// `--codegen-report` (s43): the whole-program phase's decisions, in
@@ -1782,17 +1782,18 @@ fn lld_fuse_flag() -> Option<&'static str> {
     have.then_some("-fuse-ld=lld")
 }
 
-/// Link the module objects + `libwolf_rt.a` into an executable via the
-/// system C driver, `-fuse-ld=lld` when the probe finds lld. Objects
-/// are staged under deterministic temp names so cached and `--no-cache`
-/// links see identical inputs (the CI determinism check's ground).
-fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildStop> {
+/// Link the module objects + the runtime staticlib into an executable.
+/// Unix hosts go through the system C driver (`-fuse-ld=lld` when the
+/// probe finds lld); windows goes through a COFF linker found by
+/// [`windows_linker`]'s documented order. Objects are staged under
+/// deterministic temp names so cached and `--no-cache` links see
+/// identical inputs (the CI determinism check's ground).
+fn link_objects(objects: &[(String, Vec<u8>)], out: &Path, verbose: bool) -> Result<(), BuildStop> {
     let rt = find_rt_lib().ok_or_else(|| {
-        BuildStop::Environment(
-            "libwolf_rt.a not found next to the `wolf` binary (build it with \
+        BuildStop::Environment(format!(
+            "{RT_LIB_NAME} not found next to the `wolf` binary (build it with \
              `cargo build -p wolf_rt`, or point WOLF_RT_LIB at it)"
-                .to_string(),
-        )
+        ))
     })?;
     // The staging dir is UNIQUE per link (pid + nanos): two
     // concurrent links may stage byte-identical objects, and a shared
@@ -1815,11 +1816,39 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
         .map_err(|e| BuildStop::Environment(format!("create {}: {e}", dir.display())))?;
     let mut paths = Vec::new();
     for (i, (name, bytes)) in objects.iter().enumerate() {
-        let p = dir.join(format!("{i:02}-{name}.o"));
+        let p = dir.join(format!("{i:02}-{name}.{OBJ_EXT}"));
         std::fs::write(&p, bytes)
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
         paths.push(p);
     }
+    let result = link_staged(&paths, out, &rt, &dir, verbose);
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+/// The runtime staticlib's file name: rustc's own spelling per target
+/// (`wolf_rt.lib` on MSVC, `libwolf_rt.a` everywhere else — the dist
+/// stages it under the same name, 10c2bf8).
+const RT_LIB_NAME: &str = if cfg!(windows) {
+    "wolf_rt.lib"
+} else {
+    "libwolf_rt.a"
+};
+
+/// Staged object extension: `.obj` is what a COFF linker expects to
+/// see; `.o` everywhere else.
+const OBJ_EXT: &str = if cfg!(windows) { "obj" } else { "o" };
+
+/// The unix link: `cc` + `-fuse-ld=lld` when found. Staged objects,
+/// the rt archive, the platform's pthread/dl/m set, section GC.
+#[cfg(not(windows))]
+fn link_staged(
+    paths: &[PathBuf],
+    out: &Path,
+    rt: &Path,
+    dir: &Path,
+    verbose: bool,
+) -> Result<(), BuildStop> {
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let mut cmd = std::process::Command::new(&cc);
     // macOS determinism, both halves (s59): ZERO_AR_DATE zeroes the
@@ -1836,14 +1865,14 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
         cmd.arg(format!("-Wl,-oso_prefix,{}/", dir.display()));
     }
     cmd.arg("-o").arg(out);
-    for p in &paths {
+    for p in paths {
         cmd.arg(p);
     }
     // What a Rust staticlib needs from the platform. On linux that is
     // pthreads + libdl + libm as separate archives; on macOS every one
     // of those lives in libSystem, which `cc` links implicitly — an
     // explicit `-ldl` has nothing to resolve to (s59).
-    cmd.arg(&rt);
+    cmd.arg(rt);
     #[cfg(target_os = "macos")]
     cmd.args(["-lpthread", "-lm"]);
     #[cfg(not(target_os = "macos"))]
@@ -1875,7 +1904,7 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     if matches!(&status, Ok(s) if s.success()) {
         let out_abs = std::path::absolute(out).unwrap_or_else(|_| out.to_path_buf());
         match std::process::Command::new("dsymutil")
-            .current_dir(&dir)
+            .current_dir(dir)
             .arg(&out_abs)
             .status()
         {
@@ -1891,7 +1920,11 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
             ),
         }
     }
-    let _ = std::fs::remove_dir_all(&dir);
+    #[cfg(not(target_os = "macos"))]
+    let _ = dir;
+    if verbose {
+        eprintln!("wolf build: linked {} with `{cc}`", out.display());
+    }
     let status = status?;
     if !status.success() {
         return Err(BuildStop::Environment(format!(
@@ -1902,15 +1935,243 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path) -> Result<(), BuildSt
     Ok(())
 }
 
-/// Locate `libwolf_rt.a`: `WOLF_RT_LIB` wins; otherwise next to the
-/// running `wolf` binary (cargo puts both in target/<profile>/).
+/// The windows link (s60a, the bring-up): a COFF linker in `link.exe`
+/// dialect over the staged objects, `wolf_rt.lib`, and the import
+/// libraries a Rust staticlib needs on this host — exactly the set
+/// `rustc --print native-static-libs` names for wolf_rt
+/// (kernel32, ntdll, userenv, ws2_32, dbghelp, bcrypt) plus the
+/// dynamic UCRT through `msvcrt.lib` (rustc's own default; the CRT's
+/// `mainCRTStartup` is the PE entry and calls wolf's `main` shim).
+/// `/SUBSYSTEM:CONSOLE` — a wolf program prints. `/OPT:REF` is the
+/// `--gc-sections` twin (the no-spawn posture); `/Brepro` zeroes the
+/// PE timestamp so cached and `--no-cache` links are bit-identical.
+/// The lld flavors keep wolf's DWARF (`.debug_*` COFF sections) with
+/// `/DEBUG:DWARF`; `link.exe` has no such switch and drops them — the
+/// debugger story on windows is s60's, not the bring-up's.
+#[cfg(windows)]
+fn link_staged(
+    paths: &[PathBuf],
+    out: &Path,
+    rt: &Path,
+    _dir: &Path,
+    verbose: bool,
+) -> Result<(), BuildStop> {
+    let linker = windows_linker()?;
+    if verbose {
+        eprintln!(
+            "wolf build: windows linker: {} ({})",
+            linker.path.display(),
+            linker.how
+        );
+    }
+    let mut cmd = std::process::Command::new(&linker.path);
+    cmd.args(linker.flavor);
+    for (k, v) in &linker.env {
+        cmd.env(k, v);
+    }
+    cmd.arg("/NOLOGO")
+        .arg(format!("/OUT:{}", out.display()))
+        .arg("/SUBSYSTEM:CONSOLE")
+        .arg("/OPT:REF")
+        .arg("/Brepro");
+    if linker.is_lld {
+        cmd.arg("/DEBUG:DWARF");
+    }
+    for p in paths {
+        cmd.arg(p);
+    }
+    cmd.arg(rt);
+    cmd.args([
+        "kernel32.lib",
+        "ntdll.lib",
+        "userenv.lib",
+        "ws2_32.lib",
+        "dbghelp.lib",
+        "bcrypt.lib",
+        "msvcrt.lib",
+    ]);
+    let status = cmd.status().map_err(|e| {
+        BuildStop::Environment(format!(
+            "cannot run the linker `{}` ({}): {e}",
+            linker.path.display(),
+            linker.how
+        ))
+    })?;
+    if !status.success() {
+        return Err(BuildStop::Environment(format!(
+            "`{}` ({}) failed linking {}",
+            linker.path.display(),
+            linker.how,
+            out.display()
+        )));
+    }
+    Ok(())
+}
+
+/// A COFF linker the windows link step found, and how.
+#[cfg(windows)]
+struct WindowsLinker {
+    path: PathBuf,
+    /// Leading arguments that select the `link.exe` dialect
+    /// (`rust-lld -flavor link`); empty for a native `lld-link` or
+    /// `link.exe`.
+    flavor: &'static [&'static str],
+    /// The MSVC environment (LIB/PATH) the import libraries live in.
+    env: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    is_lld: bool,
+    /// Which rung of the discovery order answered — printed under
+    /// `--verbose` and in every failure, so a learner can see what
+    /// the compiler chose.
+    how: &'static str,
+}
+
+/// The windows linker discovery order (s60a, documented in
+/// `docs/platforms.md`):
+///
+/// 1. `WOLF_LINKER` — an explicit path, taken as-is (the `CC` twin).
+/// 2. `lld-link` on `PATH`, else the LLVM that Visual Studio bundles
+///    (`VC\Tools\Llvm\x64\bin\lld-link.exe`).
+/// 3. rustup's bundled `rust-lld` (`rustc --print sysroot`, then
+///    `lib\rustlib\x86_64-pc-windows-msvc\bin\rust-lld.exe`, driven
+///    as `-flavor link`) — a learner with a Rust toolchain has this
+///    without installing anything else.
+/// 4. MSVC `link.exe`, located the way rustc locates it: the current
+///    environment when this is a Developer Command Prompt, else the
+///    newest Visual Studio / Build Tools install via vswhere and the
+///    registry (`find-msvc-tools`, the `cc` crate's own discovery).
+/// 5. A NAMED refusal that says what to install.
+///
+/// Every rung needs the import libraries (`kernel32.lib`, the UCRT —
+/// the Windows SDK) and `msvcrt.lib` (the MSVC toolset): they come
+/// with Visual Studio Build Tools' "Desktop development with C++"
+/// workload, and the discovery hands their `LIB` directories to
+/// whichever linker won. Bundling them so no install is needed at
+/// all is s47's (mingw-w64 import libs), named in the refusal.
+#[cfg(windows)]
+fn windows_linker() -> Result<WindowsLinker, BuildStop> {
+    const TARGET: &str = "x86_64-pc-windows-msvc";
+    let msvc = find_msvc_tools::find_tool(TARGET, "link.exe");
+    let env: Vec<(std::ffi::OsString, std::ffi::OsString)> = msvc
+        .as_ref()
+        .map(|t| t.env().into_iter().cloned().collect())
+        .unwrap_or_default();
+    // The import libraries are the real requirement. `LIB` in the
+    // caller's environment (a Developer Command Prompt) or the MSVC
+    // discovery's own LIB both satisfy it; neither present means no
+    // linker can finish, so say so before choosing one.
+    let have_libs = env
+        .iter()
+        .any(|(k, v)| k.eq_ignore_ascii_case("LIB") && !v.is_empty())
+        || std::env::var_os("LIB").is_some_and(|v| !v.is_empty());
+    if !have_libs {
+        return Err(BuildStop::Environment(
+            "windows-native: no MSVC toolset / Windows SDK found — the import libraries every \
+             linker needs (kernel32.lib, the UCRT, msvcrt.lib) come with Visual Studio Build \
+             Tools' \"Desktop development with C++\" workload (MSVC x64 + Windows SDK); install \
+             that, or run from a Developer Command Prompt (LIB set). Bundling the libraries so \
+             no install is needed is s47's (the s60 campaign)."
+                .to_string(),
+        ));
+    }
+    let finish = |path: PathBuf, flavor: &'static [&'static str], how: &'static str| {
+        let is_lld = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase().contains("lld"))
+            .unwrap_or(false);
+        Ok(WindowsLinker {
+            path,
+            flavor,
+            env: env.clone(),
+            is_lld,
+            how,
+        })
+    };
+    // 1. The explicit override. A `rust-lld` named here needs its
+    // dialect selected (`-flavor link`), exactly as rung 3 drives it.
+    if let Some(p) = std::env::var_os("WOLF_LINKER").filter(|v| !v.is_empty()) {
+        let p = PathBuf::from(p);
+        let is_rust_lld = p
+            .file_name()
+            .map(|n| {
+                n.to_string_lossy()
+                    .to_ascii_lowercase()
+                    .starts_with("rust-lld")
+            })
+            .unwrap_or(false);
+        let flavor: &'static [&'static str] = if is_rust_lld {
+            &["-flavor", "link"]
+        } else {
+            &[]
+        };
+        return finish(p, flavor, "WOLF_LINKER");
+    }
+    // 2. lld-link: on PATH, else the Visual Studio-bundled LLVM.
+    let on_path = std::process::Command::new("lld-link")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok();
+    if on_path {
+        return finish(PathBuf::from("lld-link"), &[], "lld-link on PATH");
+    }
+    if let Some(t) = find_msvc_tools::find_tool(TARGET, "lld-link.exe") {
+        return finish(
+            t.path().to_path_buf(),
+            &[],
+            "lld-link bundled with Visual Studio",
+        );
+    }
+    // 3. rustup's rust-lld.
+    if let Ok(o) = std::process::Command::new("rustc")
+        .args(["--print", "sysroot"])
+        .output()
+        && o.status.success()
+    {
+        let sysroot = PathBuf::from(String::from_utf8_lossy(&o.stdout).trim());
+        let p = sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(TARGET)
+            .join("bin")
+            .join("rust-lld.exe");
+        if p.is_file() {
+            return finish(p, &["-flavor", "link"], "rust-lld from the Rust toolchain");
+        }
+    }
+    // 4. MSVC link.exe.
+    if let Some(t) = msvc {
+        return finish(t.path().to_path_buf(), &[], "MSVC link.exe");
+    }
+    // 5. Named.
+    Err(BuildStop::Environment(
+        "windows-native: no linker found. In order, wolf looks for WOLF_LINKER, `lld-link` \
+         (on PATH or bundled with Visual Studio), rustup's `rust-lld`, then MSVC `link.exe` \
+         (Developer Command Prompt or a Visual Studio / Build Tools install). Install Visual \
+         Studio Build Tools with the \"Desktop development with C++\" workload, or LLVM \
+         (lld-link), or set WOLF_LINKER=<path to a link.exe-compatible linker>."
+            .to_string(),
+    ))
+}
+
+/// The executable file name for `stem` on this host (`hello.exe` on
+/// windows, `hello` elsewhere) — every path the driver runs or hands a
+/// learner goes through here, so a COFF linker is never asked for an
+/// extensionless image.
+fn exe_name(stem: &str) -> String {
+    format!("{stem}{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// Locate the runtime staticlib ([`RT_LIB_NAME`]): `WOLF_RT_LIB` wins;
+/// otherwise next to the running `wolf` binary (cargo puts both in
+/// target/<profile>/; the dist archive is flat).
 fn find_rt_lib() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("WOLF_RT_LIB").filter(|v| !v.is_empty()) {
         let p = PathBuf::from(p);
         return p.is_file().then_some(p);
     }
     let exe = std::env::current_exe().ok()?;
-    let p = exe.parent()?.join("libwolf_rt.a");
+    let p = exe.parent()?.join(RT_LIB_NAME);
     p.is_file().then_some(p)
 }
 
@@ -2164,8 +2425,13 @@ fn build(args: &[String]) {
     let cli = parse_build_cli("build", args, false);
     // On macOS the system linker is the DESIGN (Apple ld's automatic
     // ad-hoc signature — see `lld_fuse_flag`), so there is nothing to
-    // note; elsewhere a missing lld is worth a heads-up.
-    if !cfg!(target_os = "macos") && lld_fuse_flag().is_none() && cli.opts.emit == Emit::Bin {
+    // note; windows chooses its linker by `windows_linker`'s own order
+    // (`--verbose` names the choice); elsewhere a missing lld is worth
+    // a heads-up.
+    if !cfg!(any(target_os = "macos", windows))
+        && lld_fuse_flag().is_none()
+        && cli.opts.emit == Emit::Bin
+    {
         eprintln!(
             "wolf build: note: ld.lld not found on PATH — linking with the system \
              linker (lld ships with the toolchain; packaging is c13)"
@@ -2178,7 +2444,7 @@ fn build(args: &[String]) {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "a.out".to_string());
         match cli.opts.emit {
-            Emit::Bin => PathBuf::from(stem),
+            Emit::Bin => PathBuf::from(exe_name(&stem)),
             Emit::Obj => PathBuf::from(format!("{stem}.o")),
             Emit::Wir => PathBuf::from(format!("{stem}.wir")),
             Emit::LlvmIr => PathBuf::from(format!("{stem}.ll")),
@@ -2228,9 +2494,10 @@ fn run(args: &[String]) {
                     eprintln!("wolf run: create {}: {e}", bin.display());
                     std::process::exit(2);
                 }
-                bin.join(&stem)
+                bin.join(exe_name(&stem))
             }
-            _ => std::env::temp_dir().join(format!("wolf-run-{}-{stem}", std::process::id())),
+            _ => std::env::temp_dir()
+                .join(exe_name(&format!("wolf-run-{}-{stem}", std::process::id()))),
         },
     };
     let mut sources = Sources::new();
@@ -2582,7 +2849,7 @@ fn native_run(
         eprintln!("wolf conform-run: cannot create {}: {e}", dir.display());
         std::process::exit(2);
     }
-    let exe = dir.join("a.out");
+    let exe = dir.join(exe_name("a.out"));
     let mut scratch_sources = Sources::new();
     // Fully ephemeral: the native rung must not grow `.lu-cache`
     // droppings in corpus directories.

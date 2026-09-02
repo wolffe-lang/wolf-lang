@@ -313,7 +313,7 @@ impl Script {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "script".to_string());
-        self.build_dir.join(stem)
+        self.build_dir.join(crate::exe_name(&stem))
     }
 
     /// Is a compiled artifact already there? This is the whole warm-run

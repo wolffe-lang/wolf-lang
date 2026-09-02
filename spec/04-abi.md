@@ -124,9 +124,17 @@ AAPCS64, win64, Apple arm64 deltas).
   indirect via a caller-owned copy; the `x8` indirect-result register
   not drawn from the argument eight; stack arguments packed at natural
   alignment. Register-exhaustion shapes the backend cannot express are
-  refused BY SHAPE, loudly — never lowered divergently. Still contracts
-  to fill: AAPCS64 (linux aarch64 — ~80% shared with the Apple plan),
-  win64 (windows x86-64). The s49 differential against the platform C
+  refused BY SHAPE, loudly — never lowered divergently. **win64
+  (windows x86-64; BRING-UP contract, s60a)** — the MSVC x64
+  convention for scalars and pointers (four position-indexed
+  argument slots RCX/RDX/R8/R9 ⊕ XMM0–XMM3, the caller's 32-byte
+  shadow space, both executed by the backend's `WindowsFastcall`);
+  every aggregate crossing by value, in either direction, is refused
+  BY SHAPE until the campaign's cl.exe differential lands the MSVC
+  rules (1/2/4/8-byte composites as their bits in a register, larger
+  ones by pointer to a caller-owned copy, returns beyond 8 bytes via
+  a hidden pointer). Still a contract to fill: AAPCS64 (linux aarch64
+  — ~80% shared with the Apple plan). The s49 differential against the platform C
   compiler is each contract's acceptance test (Apple clang on macOS
   since s59).
 - `[abi.c.panic]` A wolf fault reaching an `extern "c"` or `export`

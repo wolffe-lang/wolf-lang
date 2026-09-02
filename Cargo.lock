@@ -1158,6 +1158,7 @@ name = "wolf_driver"
 version = "0.2.1"
 dependencies = [
  "blake3",
+ "find-msvc-tools",
  "object",
  "rayon",
  "serde_json",

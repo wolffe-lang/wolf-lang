@@ -198,7 +198,9 @@ fn wolf_run_builds_and_propagates_exit() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(
-        dir.join(".lu-cache/bin/main").is_file(),
+        dir.join(".lu-cache/bin")
+            .join(format!("main{}", std::env::consts::EXE_SUFFIX))
+            .is_file(),
         "wolf run caches the binary under .lu-cache/bin/"
     );
     // Exit codes propagate: break the program's expectation so main
@@ -296,7 +298,12 @@ fn concurrent_identical_links_stage_in_distinct_dirs() {
             .arg("-o")
             .arg(dir.join(format!("race-{tag}")))
             .arg("--no-cache")
+            // unix reads TMPDIR; windows reads TMP/TEMP (s60a) — the
+            // staging dir must land under the test-owned directory on
+            // both.
             .env("TMPDIR", &tmp)
+            .env("TMP", &tmp)
+            .env("TEMP", &tmp)
             .spawn()
             .expect("spawn wolf")
     };

@@ -53,6 +53,17 @@ use std::io::Write as _;
 /// Exit code of a trapped wolf program (128 + SIGABRT by convention;
 /// deterministic, never a real signal — the trap is a reported outcome,
 /// not a crash).
+///
+/// One number on every native host (D70, s60a): the trap path never
+/// raises a signal or an exception — codegen's per-site cold block
+/// CALLS [`__wolf_rt_trap_at`], which writes the report and hands the
+/// status to `std::process::exit` (`_exit`/`exit_group` on unix,
+/// `ExitProcess` on windows). Windows exit statuses are plain 32-bit
+/// values with no signal arithmetic, so 134 is neither impossible
+/// nor dishonest there: `%ERRORLEVEL%`, `$LASTEXITCODE`, and
+/// `ExitStatus::code()` all read 134. No vectored-exception handler
+/// is needed for the trap CONTRACT — the sited trap is not a fault
+/// at any tier (the release tier declares the same `noreturn` call).
 pub const TRAP_EXIT_CODE: i32 = 134;
 
 /// Trap kind codes — the closed s06 conformance vocabulary, numbered.
@@ -132,6 +143,10 @@ static TRAP_CONTAIN: std::sync::atomic::AtomicPtr<()> =
 
 /// Install the trap-containment hook (once, from the proc registry's
 /// lazy init).
+// The proc layer is the only caller, and it rides the task layer.s
+// platform gate: a host without it (windows at s60a) compiles the
+// seam and never installs a hook — dead by cfg, not by design.
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 pub(crate) fn install_trap_containment(hook: fn(i32)) {
     TRAP_CONTAIN.store(hook as *mut (), std::sync::atomic::Ordering::SeqCst);
 }
@@ -495,6 +510,7 @@ static LEDGER_HOOKS: std::sync::atomic::AtomicPtr<RegionLedgerHooks> =
 
 /// Install the proc-ledger hooks (once, from the proc registry's lazy
 /// init). The table leaks by design: it lives for the process.
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 pub(crate) fn install_region_ledger_hooks(hooks: &'static RegionLedgerHooks) {
     LEDGER_HOOKS.store(
         std::ptr::from_ref(hooks).cast_mut(),
@@ -586,6 +602,7 @@ pub(crate) fn ambient_region() -> *mut core::ffi::c_void {
 /// it afterwards. The pool wraps every task body in this: workers are
 /// REUSED, and a body that left the slot set would hand the next task a
 /// handle that is no longer live.
+#[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
 pub(crate) fn with_root_ambient<R>(f: impl FnOnce() -> R) -> R {
     struct Restore(*mut core::ffi::c_void);
     impl Drop for Restore {

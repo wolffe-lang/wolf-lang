@@ -542,11 +542,15 @@ pub(crate) fn sig_info(
                             ));
                             params.push(Slot::CStruct(l.size, l.align));
                         }
-                        abi::CTarget::AppleArm64 => {
+                        abi::CTarget::AppleArm64 | abi::CTarget::Win64 => {
                             // AAPCS64 B.4: > 16-byte composites cross
                             // INDIRECT — a pointer to a caller-owned
                             // copy, never SysV's byval (clang emits the
-                            // same shape for this triple).
+                            // same shape for this triple). Win64 shares
+                            // the pointer-to-copy shape above 8 bytes;
+                            // unreachable today — the release tier has
+                            // no windows target (s60b) and the win64
+                            // plan refuses aggregates by shape.
                             ll_params.push("ptr".to_string());
                             params.push(Slot::CIndirect(l.size, l.align));
                         }

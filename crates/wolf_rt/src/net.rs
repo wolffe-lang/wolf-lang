@@ -93,6 +93,7 @@ struct Entry {
     sock: Sock,
     /// Per-op deadline budget ([`NetTable::set_deadline`]; honored by
     /// the reactor route — linux and macOS since s59).
+    #[cfg_attr(not(any(target_os = "linux", target_os = "macos")), allow(dead_code))]
     deadline: Option<std::time::Duration>,
 }
 

@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### windows-native bring-up (s60a)
+
+The native tier opens on windows x86-64 — the bring-up, not the
+campaign. The clif backend accepts the host (COFF objects under the
+MSVC x64 convention), and the driver links them: `wolf_rt.lib` beside
+`wolf.exe` (shipped since v0.2.1), the import libraries a Rust
+staticlib needs, the C runtime's console entry calling wolf's `main`
+shim. The linker is found in a documented order — `WOLF_LINKER`,
+`lld-link` (on PATH or Visual Studio's), rustup's `rust-lld`, MSVC
+`link.exe` located the way rustc locates it — with a named refusal at
+the end that says what to install (Visual Studio Build Tools' C++
+workload: the SDK import libraries every rung needs, until s47 bundles
+them). `wolf build hello.lu` writes `hello.exe`; `wolf run` runs it;
+`wolf build --verbose` names the linker. A trap reports
+`wolf-trap: <kind>` with its site line and exits **134** — one number
+on every native host (D70): the trap is a call into the runtime ending
+in `ExitProcess(134)`, no vectored handler needed because no sited
+trap is a fault at any tier. `[abi.c.targets]` gains the win64
+bring-up contract: scalars and pointers direct, aggregates by value
+refused by shape until the campaign's `cl.exe` differential. What the
+bring-up cannot serve refuses BY NAME and is counted: the release
+tier, the task layer (`spawn`, `proc`, channels, `sync`/`when`),
+`os.signal`, `net` deadlines — s60b's, the IOCP road; `net` otherwise
+serves in its documented blocking posture. `cargo xtask lane-coverage` measures windows on its
+OWN floor line — 259/255/0/274/0 (checked/native/release/union/
+all-three), measured on the windows-latest runner: checked at full
+parity, native the macOS count minus the 21 rows refused by name,
+release dark (a lane the host cannot drive is recorded dark when its
+floor says so, and the others keep measuring; `--rows` prints every
+observation), and `cargo xtask dist` now unpacks its own archive and
+builds and runs `corpus/hello.lu` from it on every host — the learner
+path, mechanized. `docs/platforms.md` is the per-host ledger and names
+s60b/s60c as the road.
+
 ### The region holds (s132, D68 — #187 closes)
 
 The cap half of #187 lands whole, in D68's ruled direction. A region
