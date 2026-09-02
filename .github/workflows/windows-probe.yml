@@ -49,10 +49,6 @@ jobs:
       - name: "T1 clippy: the windows lane is clippy-clean too (its own step, so a lint never hides the table)"
         continue-on-error: true
         run: cargo clippy --workspace --all-targets -- -D warnings
-|
-          cargo build --workspace
-          ls -la target/debug/wolf.exe target/debug/wolf_rt.lib
-          cargo clippy --workspace --all-targets -- -D warnings
 
       - name: "T1 hello: wolf build hello.lu -> hello.exe (verbose names the linker), run it"
         run: |
