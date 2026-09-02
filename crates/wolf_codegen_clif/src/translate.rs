@@ -385,6 +385,12 @@ fn windows_unserved(name: &str) -> Option<&'static str> {
         "`sync`/`when`"
     } else if family.starts_with("os_signal_") {
         "`os.signal` delivery"
+    } else if family == "net_deadline" {
+        // The blocking-socket posture answers `io` where the reactor
+        // hosts answer `timeout` — a DIFFERENT verdict, measured on
+        // the runner (corpus/net/read_deadline.lu), so the call refuses
+        // by name rather than run and diverge.
+        "`net` deadlines (the io reactor)"
     } else {
         return None;
     };
