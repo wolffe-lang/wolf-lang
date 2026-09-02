@@ -1,229 +1,226 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 — 2026-09-02
 
-### windows-native bring-up (s60a)
+THE LEARNERS' RELEASE. **On Windows, this is the first archive that
+compiles and runs your program.** Unpack it, keep `wolf.exe` and
+`wolf_rt.lib` together, and `wolf run hello.lu` produces a real
+`hello.exe` and executes it — the native tier, on the host, not an
+interpreter. One thing has to be installed beside it: **Visual Studio
+Build Tools, "Desktop development with C++"**. The import libraries
+every Windows link needs — `kernel32.lib`, `ws2_32.lib`, the UCRT,
+`msvcrt.lib` — ship with the Windows SDK and the MSVC toolset, not with
+Windows, and this is the same requirement Rust's own `windows-msvc`
+toolchain carries; bundling them so no install is needed at all is
+s47's, and the refusal that asks for them says so. With them present
+wolf finds a linker by itself — `WOLF_LINKER`, then `lld-link`, then
+rustup's bundled `rust-lld` (a learner with a Rust toolchain already
+has one), then MSVC `link.exe` — and `wolf build --verbose` names the
+choice.
 
-The native tier opens on windows x86-64 — the bring-up, not the
-campaign. The clif backend accepts the host (COFF objects under the
-MSVC x64 convention), and the driver links them: `wolf_rt.lib` beside
-`wolf.exe` (shipped since v0.2.1), the import libraries a Rust
-staticlib needs, the C runtime's console entry calling wolf's `main`
-shim. The linker is found in a documented order — `WOLF_LINKER`,
-`lld-link` (on PATH or Visual Studio's), rustup's `rust-lld`, MSVC
-`link.exe` located the way rustc locates it — with a named refusal at
-the end that says what to install (Visual Studio Build Tools' C++
-workload: the SDK import libraries every rung needs, until s47 bundles
-them). `wolf build hello.lu` writes `hello.exe`; `wolf run` runs it;
-`wolf build --verbose` names the linker. A trap reports
-`wolf-trap: <kind>` with its site line and exits **134** — one number
-on every native host (D70): the trap is a call into the runtime ending
-in `ExitProcess(134)`, no vectored handler needed because no sited
-trap is a fault at any tier. `[abi.c.targets]` gains the win64
+What the bring-up does not serve, it refuses **by name**, before the
+link, in these words:
+
+```text
+wolf build: cannot compile this yet — windows-native serves no
+<construct> at the s60a bring-up (the runtime's task layer, io
+reactor, and signal delivery are s60b's — the IOCP road);
+`<symbol>` would not link (pipeline is honest through `wir`; the
+conservatism ledger, not a bug in your program)
+```
+
+Twenty-one rows of the corpus take that refusal: the task layer
+(`spawn` and scopes, `proc`, channels and `select`, `sync`/`when`,
+`region_transfer`), `os.signal`, and `net` deadlines. `wolf build
+--release` refuses in the same voice. Everything else serves — `print`,
+strings, lists, json, `fs`, `os` (env, cwd, exe, exit, child
+processes), `time`, `random`, regions and the region ledger, `net` in
+its documented blocking posture, the C membrane for scalars and
+pointers — and a trapping program prints `wolf-trap: <kind>` with its
+site line and exits **134**, the same number as every other native
+host. Nothing is a silent stub and nothing is a link error.
+[`docs/platforms.md`](docs/platforms.md) is the per-host ledger and
+names s60b and s60c as the road.
+
+Underneath (s60a): cranelift emits COFF objects under the MSVC x64
+convention, the driver links them against `wolf_rt.lib` (shipped in
+every windows archive since v0.2.1) and the import libraries a Rust
+staticlib needs, and the C runtime's console entry calls wolf's `main`
+shim. Five linker rungs were proven — one of them turned up a real
+`link.exe` bug with wolf's DWARF SECREL relocations. The 134 is not
+signal arithmetic here: a trap is a call into the runtime ending in
+`ExitProcess(134)` (D70), which is why no vectored handler is needed —
+no sited trap is a fault at any tier. `[abi.c.targets]` gains the win64
 bring-up contract: scalars and pointers direct, aggregates by value
-refused by shape until the campaign's `cl.exe` differential. What the
-bring-up cannot serve refuses BY NAME and is counted: the release
-tier, the task layer (`spawn`, `proc`, channels, `sync`/`when`),
-`os.signal`, `net` deadlines — s60b's, the IOCP road; `net` otherwise
-serves in its documented blocking posture. `cargo xtask lane-coverage` measures windows on its
-OWN floor line — 259/255/0/274/0 (checked/native/release/union/
-all-three), measured on the windows-latest runner: checked at full
-parity, native the macOS count minus the 21 rows refused by name,
-release dark (a lane the host cannot drive is recorded dark when its
-floor says so, and the others keep measuring; `--rows` prints every
-observation), and `cargo xtask dist` now unpacks its own archive and
-builds and runs `corpus/hello.lu` from it on every host — the learner
-path, mechanized. `docs/platforms.md` is the per-host ledger and names
-s60b/s60c as the road.
+refused by shape until the campaign's `cl.exe` differential.
+`cargo xtask lane-coverage` measures windows on its OWN floor line —
+259/255/0/274/0 (checked/native/release/union/all-three), checked at
+full parity, native the macOS count minus the 21 refused rows, release
+dark because that host's floor says so — and `cargo xtask dist` now
+unpacks its own archive and builds and runs `corpus/hello.lu` from it
+on every host: the learner's path, mechanized, in standing CI.
+
+It pairs with **lupin 0.1.22** at pin `2bfbe5e` (D57: the pin is part
+of this release's identity).
 
 ### The server navigates (s133 — #208 closes)
 
 `wolf lsp` serves `textDocument/definition`, `textDocument/references`
-and `textDocument/rename` (with `prepareRename`) — the three rungs
-s122 named and nobody had climbed, so F12 / Shift+F12 / F2 on a `.lu`
-file did nothing in every editor. All three answer from a **binding
-table**, never a textual search: the resolver now KEEPS the decision
-it already makes for every name (`wolf_sema::Resolution::refs`, one
-list per file — uses and binders alike, a binder being a ref to
-itself, an item declaration an `Item` ref to itself, an import's
-bound name a ref to what it imports), and the checker keeps the
-type-dependent half it already resolves (`TypedBody::member_refs`:
-fields through `.`, struct-literal and pattern fields, enum variants
-in value, call and pattern position, methods and associated
-functions — with the declaration's name token, which may sit in
-another file). The two halves share one key — the declaration's name
-token span, `FileId` included — so a cross-file answer is a lookup
-over the package graph (D32 modules, `//! member` files, `use`
-targets), not a scan. Locals, parameters, generic parameters, pattern
-binders, block-level items, scope and region names, import aliases
-(`use m.x as y`: uses of `y` bind to the alias, the path segment binds
-to the item, so an item rename never rewrites the alias) all
-navigate; a name the compiler never bound — a deferred error-row
-tag, a member on an untyped receiver, anything inside a body that did
-not reach typecheck — answers `null`, never a guess, and the lexical
-half keeps answering when typing stopped.
+and `textDocument/rename` (with `prepareRename`) — the three rungs s122
+named and nobody had climbed, so F12 / Shift+F12 / F2 on a `.lu` file
+did nothing in every editor. All three answer from a **binding table**,
+never a textual search: the resolver keeps the decision it already
+makes for every name (`Resolution::refs` — uses and binders alike, a
+binder a ref to itself, an import's bound name a ref to what it
+imports), and the checker keeps the type-dependent half
+(`TypedBody::member_refs`: fields through `.`, literal and pattern
+fields, variants in value/call/pattern position, methods and associated
+fns). The two halves share one key — the declaration's name token span,
+`FileId` included — so a cross-file answer is a lookup over the package
+graph, not a scan. A name the compiler never bound answers `null`,
+never a guess, and the lexical half keeps answering when typing
+stopped.
 
 The wire shapes follow the client's declarations, read once at
-`initialize`: `LocationLink[]` (with the asking token as
-`originSelectionRange`) when it declares
-`textDocument.definition.linkSupport`, `Location[]` otherwise;
-a rename's `WorkspaceEdit` as `documentChanges` (one
-`TextDocumentEdit` per file, `version: null`) when it declares
-`workspace.workspaceEdit.documentChanges`, the `changes` map
-otherwise. References come back in (file, offset) order, the
-declaration only when `includeDeclaration` asks. The negotiated
-position encoding holds at every span — the utf-16 astral case is
-pinned. Builtins and prelude names answer `null` for definition and
-their uses for references.
+`initialize`: `LocationLink[]` with `originSelectionRange` when it
+declares `linkSupport`, `Location[]` otherwise; a rename's
+`WorkspaceEdit` as `documentChanges` when it declares them, the
+`changes` map otherwise. References come back in (file, offset) order,
+the declaration only when `includeDeclaration` asks, and the negotiated
+position encoding holds at every span (the utf-16 astral case is
+pinned). Rename refuses BY NAME — `RequestFailed` (-32803) naming the
+token and the reason, never a partial edit — on keywords (`self` and
+`Self` included), builtin types, prelude names, std and `import c`
+symbols, modules, and a new name that is not a single identifier;
+`prepareRename` refuses with the same reasons before the box opens. The
+D59 `//!` member marker carries no identifier, so no rename ever
+touches one. `wolf_query`'s contract moves to v4 (additive). Six client
+profiles were transcribed against this build. Latency, measured before
+and after on the same machine: `diagnostics-after-edit` p95 105.7 →
+105.7 ms — the one number near perception is unchanged — and the three
+new requests answer at ≈0.03 ms p95 in-process. Known residue, named:
+the reachable set is the package around the ENTRY (the v0 single-entry
+model); a workspace-root model is s57's.
 
-Rename refuses BY NAME — a `RequestFailed` (-32803) `ResponseError`
-whose message names the token and the reason, never a partial edit —
-when the cursor is on a keyword (`self` and `Self` included), a
-builtin type, a prelude name (D31), a std stub or `import c` symbol
-(cross-package), or a module (a directory, D32); and when the new
-name is not a single identifier or is a keyword. `prepareRename`
-refuses with the same reasons before the rename box opens. The D59
-`//!` member marker carries no identifier (`member:` is a boolean),
-so no rename ever touches a `//!` line — the question the contract
-asked, answered in `wolf_query::navigate`'s docs. Known residue,
-named: the reachable set is the package around the ENTRY (the v0
-single-entry model) — asked from a `member: true` sibling, references
-see that module alone; a workspace-root model is s57's.
+### The region answers, and holds (s131, s132, D68 — #187 closes)
 
-`wolf_query`'s contract moves to v4 (additive: `definition`,
-`references`, `prepare_rename`, `rename`; `DefResult` gained
-`origin`; `def_of` is the s52 name for `definition`). Protocol tests
-land in `crates/wolf_lsp/tests/navigate.rs` over a two-file fixture;
-query tests in `crates/wolf_query/tests/navigate.rs`. wolf-lsp's
-transcript library gains one script per rung per maintained client
-profile on its `s133-transcripts` branch (recorded against this
-branch's binary; le05 re-pins at the tag), and the still-absent set
-is now signature help, semantic tokens, inlay hints, range
-formatting, workspace symbols and pull diagnostics (s134's rungs).
-Latency, measured before and after on the same machine (wolf-lsp's
-`lspconf bench`, `regions.lu`, 20 fresh processes): `diagnostics-
-after-edit` p50 104.9 → 104.6 ms, p95 105.7 → 105.7 ms — the one
-number near perception holds (the binding table rides the resolve
-walk the ladder already runs); hover/documentSymbol/formatting/
-codeAction unchanged at their sub-millisecond floors; the new
-requests answer in ≈0.03 ms p95 in-process (`lsp_bench`: definition
-0.032, references 0.035, rename 0.033) — a lookup on the memoized
-analysis, no re-resolve.
+Region accounting became readable and then became a contract. Three
+tiers gained `region_bytes(r)` — a named region's byte ledger, the
+count `wolf_rt` has kept since s76, now surfaced — and
+`live_region_bytes()`, the process-wide live total, with
+`[mem.region.account]` pinning what every tier guarantees (zero at
+creation, monotone within the lifetime, stable between allocations,
+wholesale disappearance at free) and leaving the units as per-tier
+measured facts.
 
-### The region holds (s132, D68 — #187 closes)
+Then the cap. A region takes a creation-time byte budget — `region
+r(cap: n) { … }`, or `region(cap: n)` on the value form — and a charge
+that would take its ledger PAST the budget is the deterministic trap
+`alloc-contract` at the allocating site: the existing kind, no new trap
+vocabulary, because a byte budget is an allocation contract. At-cap
+exactly is not a breach; the next byte is; `cap: 0` is legal and
+everything breaches it. Budgets are denominated in LEDGER units, not
+payload bytes — the clause now says so plainly, after #203 measured a
+64 KiB io chunk at ~1 MiB of ledger — so portable programs derive
+budgets from measured `region_bytes` readings, which is exactly how the
+witnesses pin the boundary on all three tiers at once.
 
-The cap half of #187 lands whole, in D68's ruled direction. A region
-takes a creation-time byte budget — `region r(cap: n) { … }` on the
-named sugar block, `region(cap: n)` / `region(rc, cap: n)` on the
-value form — and a charge that would take its ledger PAST the budget
-is the deterministic trap `alloc-contract` at the allocating site:
-the existing kind (`[conf.trap.map]` — a byte budget is an allocation
-contract), no new trap vocabulary. At-cap-exactly is not a breach;
-the next byte is; `cap: 0` is legal and everything breaches it; a
-negative budget is the same contract violation at the creating site.
-The cap bounds `[mem.region.account.1]`'s ledger in each tier's own
-units — and the clause now says plainly that budgets are denominated
-in LEDGER units, not payload bytes (the ledger is cumulative and
-high-water; #203 measured a 64 KiB io chunk at ~1 MiB of ledger), so
-portable programs derive budgets from measured `region_bytes`
-readings — which is exactly how the witnesses pin the boundary on
-all three tiers at once. New clauses `[mem.region.cap.1/.2/.3]`.
-
-The fault half is D68's point: a breach **inside a proc** no longer
-kills the process. The trap is contained at the proc boundary
-(`[conc.proc.1]`'s failure domain): the proc dies by the killed-proc
-sequence — no further user code, so no `defer` below the boundary
+D68's point is the fault half: a breach **inside a proc** no longer
+kills the process. The trap is contained at the proc boundary — the
+proc dies by the killed-proc sequence, so no `defer` below the boundary
 runs — and `[conc.proc.exit]`'s closed reason set gains the mapping,
-`fault(kind)` with `kind` from the closed trap vocabulary, read at
-the join as `is_fault()` and, for the budget breach specifically,
-`is_alloc_contract()`. Fault teardown is free-then-deliver, measured
-and then pinned as `[mem.region.cap.3]`: at the join,
-`live_region_bytes()` has already returned to its pre-spawn reading —
-the supervisor that answers 503 on this reason was handed the memory
-back first. Containment is the no-unwinding law made mechanism
-(`[abi.native.nounwind]` holds: the trapping worker parks; its thread
-and stack high-water are the measured per-breach cost, the same class
-as a task parked on a silent channel). In the root domain a trap
-remains process death (`[conf.trap.exit]`, amended to say so).
-Witnesses: `faults/region_cap_breach.lu` (three-tier breach at
-measured-minus-one), `memory/region_cap_boundary.lu` (at-cap /
-cap-0 / query interplay), `conc/proc_cap_fault_join.lu` (the
-join-reason read, both defers, the reclaimed-at-join pin — the shape
-lobo's ws12 consumes).
+`fault(kind)` read at the join as `is_fault()` and
+`is_alloc_contract()`. Teardown is free-then-deliver, measured and then
+pinned: at the join, `live_region_bytes()` has already returned to its
+pre-spawn reading, so the supervisor that answers 503 on this reason
+was handed the memory back first. Containment is the no-unwinding law
+made mechanism; the trapping worker parks, and its thread and stack
+high-water are the measured per-breach cost.
 
-### The comma insists everywhere (s132, D69 — D67 completed)
+### The comma insists everywhere (s131, s132 — D67, D69)
 
-The remaining unlicensed comma laxity is gone: struct LITERAL fields
-(`Point { x: 7 y: 2 }` — and the newline-separated spelling, which
-lupin always refused), closure parameters (`fn(a b)`), and inline-C
-capture lists (`unsafe c [a b]`) now refuse at E0201 with the same
-machine-applicable "add the comma" insertion D67 gave the pattern
-family (`wolf fix --apply` produces the canonical spelling; the
-newline form is reported at the field the missing comma should
-precede, byte-for-byte where lupin points). The multi-line literal's
-trailing layout is untouched: a terminator run before `}` is the
-production's own. Blast radius, measured before the tightening, is
-zero working code anywhere: the wolf-lang corpus and fixtures (532
-files), wolf-book (1,129), wolf-std (887), wolf-web (1,976 —
-counting two vendored copies of the one flagged file), and lobo
-(1,395) — the sole flagged file in the world is a fuzz-minimized
-broken-input formatter fixture (`idem_comment_vs_comma.lu`), whose
-idempotence test still holds. The separator report latches once per
-list and never into a reported wreck; MUTATE_BUDGET=300 swept green.
-Two corpus refusal witnesses pin the family (the newline form is
-pinned in the parser suite instead — the formatter's canonical
-multi-line layout regenerates the separator, and a corpus file must
-fully format); the spec sentences land with the fix under
-`[gram.expr.primary]`, `[gram.expr.closure]`, and
-`[gram.expr.unsafe]`.
+The separating comma is now required wherever the productions always
+said it was, family by family and each with its blast radius measured
+BEFORE the tightening. D67 took the pattern family: `Point { x .. }`,
+`Point { x y }` and `(a b)` refuse at E0201 with a machine-applicable
+"add the comma" fix (`wolf fix --apply` produces the canonical
+spelling), and `..` follows a separator like one more member. D69 took
+the rest of the unlicensed laxity: struct LITERAL fields (`Point { x: 7
+y: 2 }`, and the newline-separated spelling lupin always refused),
+closure parameters (`fn(a b)`), and inline-C capture lists (`unsafe c
+[a b]`).
 
-### The region answers (s131)
+Blast radius across the world, measured: zero working code. The
+wolf-lang corpus and fixtures (532 files), wolf-book (1,129), wolf-std
+(887), wolf-web (1,976) and lobo (1,395) already write the comma; the
+sole flagged file anywhere is a fuzz-minimized broken-input formatter
+fixture, whose idempotence test still holds. The multi-line literal's
+trailing layout is untouched — a terminator run before `}` is the
+production's own — and the separator report latches once per list and
+never into a reported wreck. Only lupin and the spec's letter were ever
+this strict; the compiler now agrees with both.
 
-The region accounting queries land three-tier (#187, the wolf-web
-`memory_budget` customer): `region_bytes(r)` reads a named region's
-byte ledger — the count `wolf_rt` has kept since s76, now surfaced —
-and `live_region_bytes()` reads the process-wide live-region total.
-The new clause `[mem.region.account]` pins what every tier guarantees
-(zero at creation, monotone within the lifetime, stable between
-allocations, wholesale disappearance at free) and leaves the units as
-per-tier measured facts: the native arena charges alignment-rounded
-container storage, the checked machine its shadow-memory model. The
-str gap stays #191's (string bytes charge no named region on the
-native tier until the c09 seam closes — recorded in the clause).
-#187's second half — the creation-time cap and its fault semantics —
-is deliberately not here: the honest designs all need a ruling
-(catchable-row-at-the-boundary wants a mechanism `[abi.err.repr]`
-forbids), and the r04 lesson says the clause must not outrun the
-differential.
+Two more measurements rode along: `defer` runs at scope exit, not as
+the frames return (D66/#193, now with a corpus witness pinning the
+loop-turn interleaving on all three lanes), and two or-pattern
+divergences got witnesses — an or-pattern OVER product alternatives
+refuses on every wolfc lane, one INSIDE a product refuses natively
+while the checked executor runs it; lupin runs both. Permissive-
+direction divergences that were invisible until a file put them in the
+differ's ledger (#196).
 
-### The comma insists (s131, D67)
+### The letters
 
-The pattern family's separating comma is now required, as the
-production always said (#190): `Point { x .. }`, `Point { x y }` and
-`(a b)` refuse at E0201 with a machine-applicable "add the comma" fix
-(`wolf fix --apply` produces the canonical spelling), and `..` follows
-a separator like one more member. Blast radius, measured before the
-tightening: zero — the wolf-lang corpus, fmt's output, and every one
-of wolf-book's `.lu` files (the 248-file exercise corpus included)
-already write the comma; only lupin and the spec's letter were ever
-this strict, and the compiler now agrees with both. The r04 spec
-sentence and witness that were backed out of 0.2.1 land WITH the fix:
-`[gram.pat.struct]`'s production tightens to `(',' '..'?)?` and three
-refusal witnesses pin the family. The struct-literal laxity
-(`Point { x: 7 y: 2 }` still parses) is outside D67's letter and
-stays measured residue on the tracker.
+**A bare entry name means `.`** (#206). `wolf conform-run hello.lu`
+answered "the package root has no wolf source files" where
+`./hello.lu` ran the program — `Path::parent()` on a bare relative name
+is the EMPTY path, not `None`, and the anchoring that fixed it lived in
+exactly one CLI parser, which is why `build`, `run` and `fmt` worked
+and `conform-run`, `test`, `interface` and `doc` did not. It lives in
+the loader now, root and entry anchored together so a headered entry
+stays its own module's entry. One consequence is worth stating, because
+it is visible in the machine record: `conform-run` reads its argument
+through the same anchoring before interning it, so the record's `file`
+field carries the anchored spelling and `wolf conform-run hello.lu` and
+`wolf conform-run ./hello.lu` now produce BYTE-IDENTICAL records rather
+than two `FileId`s for one file — identical programs, identical
+records, whatever the command line typed. On Windows before this
+release that one missing `./` stood between a learner and their first
+program, because `conform-run --checked` was the only way to run one.
 
-### The or-pattern divergence, measured (s131, #196)
+**`STR_PART` derives escapes** (#198). v0.2.1 bounded `\u{…}` at one to
+six hex digits and said in prose that the bound "binds in string
+literals too" — while the production derived no escape at all, so a
+reader working from `spec/grammar.ebnf` got the bound for `'…'` and
+nothing whatsoever for `"…"`. `STR_ESC` now carries the escape set,
+`UNI_ESC` sits beside it, and `CHAR_ESC ::= STR_ESC | '\' "'"` — so
+"the char set is the string set plus `\'`" is read off the productions
+instead of asserted next to them. Two corpus witnesses make the string
+half measured rather than assumed: the seven-digit refusal (shape, not
+value — `0x0000041` IS `A`, and it is refused before anything asks) and
+its in-bounds twin at one, four and six digits.
 
-Two witnesses pin the c06 residue's or-pattern halves: an or-pattern
-OVER product alternatives (`Left(A { n }) | Right(B { n })`) refuses
-by name on every wolfc lane, and an or-pattern INSIDE a product
-(`Pair(1 | 2, b)`) refuses natively while the checked executor runs
-it — both shapes lupin runs today (is31's measurement), a
-permissive-direction divergence that was invisible until these files
-put it in the differ's ledger. The join-params lowering itself stays
-with the c06-residue sprint beside deep trees and str/float literals
-in products.
+**A trap runs no defers, at the root too** (#209). `[conf.trap.exit]`
+ruled the proc path and was silent about the root, so nothing pinned
+whether a root-domain trap flushed its pending defers. The consistent
+reading is written now — a trap is not an error value and runs no
+`defer` or `errdefer` anywhere; at the root death is immediate — with
+`faults/trap_skips_root_defers.lu` as the witness. It records a
+measured divergence for the interpreter's next sprint: every wolfc lane
+abandons the pending root defer, lupin 0.1.22 runs it. The differ could
+never have found this on its own — on a trapping program the
+interpreter's record carries no stdout, so the two machines are
+verdict-identical whatever they print.
+
+**Two nondeterministic verdicts retired.** The net refusal probes
+dialed a just-released EPHEMERAL port and bet that nothing took it in
+between; under `cargo test`'s full parallelism that bet lost, and it
+reddened a trunk gauntlet while passing 3/3 in isolation (#205). They
+dial a port from outside the host's ephemeral range now — one nobody's
+`bind(0)` can be handed — so one dial is the whole story. And the
+bare-entry suite's linking rung builds the runtime staticlib on demand
+and skips loudly where a host cannot link, instead of reading an absent
+toolchain as a regression.
 
 ## 0.2.1 — 2026-09-01
 
