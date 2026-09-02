@@ -55,6 +55,12 @@ impl Client {
     /// with an explicit client-capabilities document (the shape a
     /// real client declares: `linkSupport`, `documentChanges`, …).
     pub fn start_with(caps: Value) -> (Client, Value) {
+        Client::start_with_options(caps, Value::Null)
+    }
+
+    /// As [`Client::start_with`], with `initializationOptions` (s134:
+    /// the inlay-hint class configuration rides there).
+    pub fn start_with_options(caps: Value, options: Value) -> (Client, Value) {
         let (server_side, client_side) = Connection::memory();
         let server = std::thread::spawn(move || {
             wolf_lsp::main_loop(server_side).expect("server loop failed")
@@ -65,7 +71,11 @@ impl Client {
             next_id: 0,
             notifications: Vec::new(),
         };
-        let id = client.request("initialize", json!({ "capabilities": caps }));
+        let mut params = json!({ "capabilities": caps });
+        if !options.is_null() {
+            params["initializationOptions"] = options;
+        }
+        let id = client.request("initialize", params);
         let result = client.wait_response(id).expect("initialize succeeds");
         client.notify("initialized", json!({}));
         (client, result)

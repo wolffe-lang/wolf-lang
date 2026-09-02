@@ -7,10 +7,16 @@ use std::path::Path;
 
 use lsp_types::{
     CodeAction, CodeActionKind, CompletionItem, CompletionItemKind, DiagnosticRelatedInformation,
-    DiagnosticSeverity, DocumentSymbol, Location, NumberOrString, Range,
-    SymbolKind as LspSymbolKind, TextEdit, Url, WorkspaceEdit,
+    DiagnosticSeverity, DocumentSymbol, Documentation, InlayHint, InlayHintKind, InlayHintLabel,
+    Location, MarkupContent, MarkupKind, NumberOrString, ParameterInformation, ParameterLabel,
+    Range, SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokens,
+    SemanticTokensLegend, SignatureHelp, SignatureInformation, SymbolKind as LspSymbolKind,
+    TextEdit, Url, WorkspaceEdit,
 };
-use wolf_query::{Completion, CompletionKind, DiagnosticsBatch, DocSymbol, SymbolKind};
+use wolf_query::{
+    Completion, CompletionKind, DiagnosticsBatch, DocSymbol, HintKind, InlayHint as QueryHint,
+    SemKind, SemToken, SignatureHelpResult, SymbolKind,
+};
 use wolf_span::{LineIndex, Span};
 
 use crate::positions::{Encoding, offset_to_position};
@@ -303,6 +309,151 @@ pub fn document_symbols(
                 } else {
                     Some(children)
                 },
+            }
+        })
+        .collect()
+}
+
+// ------------------------------------------------------------ s134 --
+// Signature help, semantic tokens, inlay hints: the annotating rungs.
+
+/// The semantic-token legend this server declares — `SemKind`'s closed
+/// set in one fixed order, and two modifiers. Clients index into it;
+/// the order is part of the wire contract and must not move.
+pub fn semantic_token_legend() -> SemanticTokensLegend {
+    SemanticTokensLegend {
+        token_types: SEM_TYPES
+            .iter()
+            .map(|k| SemanticTokenType::new(k.as_str()))
+            .collect(),
+        token_modifiers: vec![
+            SemanticTokenModifier::DECLARATION,
+            SemanticTokenModifier::READONLY,
+        ],
+    }
+}
+
+/// `semantic_token_legend()`'s type order.
+const SEM_TYPES: [SemKind; 8] = [
+    SemKind::Namespace,
+    SemKind::Type,
+    SemKind::Parameter,
+    SemKind::Variable,
+    SemKind::Property,
+    SemKind::EnumMember,
+    SemKind::Function,
+    SemKind::Keyword,
+];
+
+/// Classified tokens → the protocol's relative-delta integer stream,
+/// positions and lengths in the negotiated encoding's units (a token
+/// never spans a line: identifiers and keywords do not).
+pub fn semantic_tokens(
+    src: &[u8],
+    index: &LineIndex,
+    toks: &[SemToken],
+    enc: Encoding,
+) -> SemanticTokens {
+    let mut data = Vec::with_capacity(toks.len());
+    let (mut prev_line, mut prev_start) = (0u32, 0u32);
+    for t in toks {
+        let start = offset_to_position(src, index, t.span.lo, enc);
+        let end = offset_to_position(src, index, t.span.hi, enc);
+        if end.line != start.line {
+            continue;
+        }
+        let delta_line = start.line - prev_line;
+        let delta_start = if delta_line == 0 {
+            start.character - prev_start
+        } else {
+            start.character
+        };
+        let token_type = SEM_TYPES.iter().position(|k| *k == t.kind).unwrap_or(0) as u32;
+        let mut modifiers = 0u32;
+        if t.declaration {
+            modifiers |= 1;
+        }
+        if t.readonly {
+            modifiers |= 2;
+        }
+        data.push(SemanticToken {
+            delta_line,
+            delta_start,
+            length: end.character - start.character,
+            token_type,
+            token_modifiers_bitset: modifiers,
+        });
+        prev_line = start.line;
+        prev_start = start.character;
+    }
+    SemanticTokens {
+        result_id: None,
+        data,
+    }
+}
+
+/// A signature-help answer → the wire shape. Parameter labels are
+/// offsets into the signature label, in UTF-16 units as the protocol
+/// counts them; `plaintext` documentation when the client said it
+/// reads nothing richer, markdown otherwise.
+pub fn signature_help(r: &SignatureHelpResult, markdown: bool) -> SignatureHelp {
+    let utf16 = |byte: u32| r.label[..byte as usize].encode_utf16().count() as u32;
+    let parameters: Vec<ParameterInformation> = r
+        .params
+        .iter()
+        .map(|&(lo, hi)| ParameterInformation {
+            label: ParameterLabel::LabelOffsets([utf16(lo), utf16(hi)]),
+            documentation: None,
+        })
+        .collect();
+    let documentation = r.doc.as_ref().map(|d| {
+        if markdown {
+            Documentation::MarkupContent(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value: d.clone(),
+            })
+        } else {
+            Documentation::String(d.clone())
+        }
+    });
+    SignatureHelp {
+        signatures: vec![SignatureInformation {
+            label: r.label.clone(),
+            documentation,
+            parameters: Some(parameters),
+            active_parameter: r.active_parameter,
+        }],
+        active_signature: Some(0),
+        active_parameter: r.active_parameter,
+    }
+}
+
+/// Inlay hints → the wire shape: a type hint sits after the binder
+/// with padding on its left; a parameter-name hint sits before the
+/// argument with padding on its right.
+pub fn inlay_hints(
+    src: &[u8],
+    index: &LineIndex,
+    hints: &[QueryHint],
+    enc: Encoding,
+) -> Vec<InlayHint> {
+    hints
+        .iter()
+        .map(|h| {
+            let parameter = h.kind == HintKind::Parameter;
+            InlayHint {
+                position: offset_to_position(src, index, h.offset, enc),
+                label: InlayHintLabel::String(h.label.clone()),
+                kind: Some(if parameter {
+                    InlayHintKind::PARAMETER
+                } else {
+                    InlayHintKind::TYPE
+                }),
+                text_edits: None,
+                tooltip: None,
+                padding_left: Some(!parameter),
+                padding_right: Some(parameter),
+                data: None,
             }
         })
         .collect()
