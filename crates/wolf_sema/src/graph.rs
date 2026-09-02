@@ -205,17 +205,37 @@ pub struct DiskLoader<'a> {
     dep_roots: std::collections::BTreeMap<String, PathBuf>,
 }
 
+/// The entry path as the loader reads it (#206). A bare relative name
+/// — `hello.lu`, whose [`Path::parent`] is the EMPTY path, not `None`
+/// — anchors to `./hello.lu`: the package root is then a directory
+/// that can be read, and the entry still equals the path
+/// [`std::fs::read_dir`] hands back for it, so the entry stays the
+/// entry (D59 membership turns on that comparison). Any other path is
+/// returned unchanged.
+///
+/// Every verb that interns the entry file itself reads it through this
+/// too, so one file is one `FileId` however the command line spelled
+/// it.
+pub fn anchor_entry(entry: &Path) -> PathBuf {
+    match entry.parent() {
+        Some(p) if p.as_os_str().is_empty() => Path::new(".").join(entry),
+        _ => entry.to_path_buf(),
+    }
+}
+
 impl<'a> DiskLoader<'a> {
     /// Entry-file mode. Returns `None` when `entry` has no parent
-    /// directory or is not a file.
+    /// directory or is not a file. A bare relative name is read
+    /// through [`anchor_entry`] first.
     pub fn from_entry(entry: &Path, sm: &'a mut SourceMap) -> Option<Self> {
         if !entry.is_file() {
             return None;
         }
+        let entry = anchor_entry(entry);
         let root = entry.parent()?.to_path_buf();
         Some(DiskLoader {
             root,
-            entry: Some(entry.to_path_buf()),
+            entry: Some(entry),
             sm,
             std_root: None,
             dep_roots: std::collections::BTreeMap::new(),
