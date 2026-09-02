@@ -43,6 +43,18 @@ impl Client {
     /// Start a server thread and complete the `initialize` handshake,
     /// offering `encodings` (e.g. `&["utf-8"]`); empty = no capability.
     pub fn start(encodings: &[&str]) -> (Client, Value) {
+        let caps = if encodings.is_empty() {
+            json!({})
+        } else {
+            json!({ "general": { "positionEncodings": encodings } })
+        };
+        Client::start_with(caps)
+    }
+
+    /// Start a server thread and complete the `initialize` handshake
+    /// with an explicit client-capabilities document (the shape a
+    /// real client declares: `linkSupport`, `documentChanges`, …).
+    pub fn start_with(caps: Value) -> (Client, Value) {
         let (server_side, client_side) = Connection::memory();
         let server = std::thread::spawn(move || {
             wolf_lsp::main_loop(server_side).expect("server loop failed")
@@ -52,11 +64,6 @@ impl Client {
             server: Some(server),
             next_id: 0,
             notifications: Vec::new(),
-        };
-        let caps = if encodings.is_empty() {
-            json!({})
-        } else {
-            json!({ "general": { "positionEncodings": encodings } })
         };
         let id = client.request("initialize", json!({ "capabilities": caps }));
         let result = client.wait_response(id).expect("initialize succeeds");

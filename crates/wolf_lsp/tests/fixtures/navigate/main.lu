@@ -1,0 +1,35 @@
+//! The navigation fixture (s133): a struct with fields and a method,
+//! an enum with variants, a parameter, locals, and a sibling module
+//! reached through `use` — every rung's subject in one package.
+
+use shapes
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+impl Point {
+    fn sum(self) -> int {
+        self.x + self.y
+    }
+}
+
+enum Color {
+    Red,
+    Rgb(int, int, int),
+}
+
+fn brightness(c: Color) -> int {
+    match c {
+        Red => 1,
+        Rgb(r, g, b) => (r + g + b) / 3,
+    }
+}
+
+fn main() -> !int {
+    let p = Point { x: 1, y: 2 }
+    let total = p.sum() + p.x + shapes.area(3) + brightness(Color.Rgb(1, 2, 3))
+    print("{total}")
+    0
+}

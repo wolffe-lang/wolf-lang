@@ -86,6 +86,14 @@ fn main() {
     }
 
     let doc = json!({ "uri": uri });
+    // A use of `total` after its declaration (utf-8: byte columns).
+    let nav_pos = {
+        let decl = text.find("var total").expect("wordcount declares `total`");
+        let off = decl + text[decl + 9..].find("total").expect("a later use") + 9;
+        let line = text[..off].matches('\n').count();
+        let col = off - text[..off].rfind('\n').map_or(0, |i| i + 1);
+        json!({ "line": line, "character": col })
+    };
     let kinds: Vec<(&str, &str, Value)> = vec![
         (
             "hover",
@@ -118,6 +126,25 @@ fn main() {
             "completion",
             "textDocument/completion",
             json!({ "textDocument": doc, "position": { "line": 18, "character": 7 } }),
+        ),
+        // s133: the navigation trio on a local's USE (`total`, the
+        // wordcount map) — a binding-table lookup on the memoized
+        // analysis; rename walks every file's table for the edit set.
+        (
+            "definition",
+            "textDocument/definition",
+            json!({ "textDocument": doc, "position": nav_pos }),
+        ),
+        (
+            "references",
+            "textDocument/references",
+            json!({ "textDocument": doc, "position": nav_pos,
+                    "context": { "includeDeclaration": true } }),
+        ),
+        (
+            "rename",
+            "textDocument/rename",
+            json!({ "textDocument": doc, "position": nav_pos, "newName": "counts" }),
         ),
     ];
 
