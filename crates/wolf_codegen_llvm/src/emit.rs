@@ -1922,22 +1922,45 @@ impl<'a> Fx<'a> {
             // s86: the compiled task-entry pointer. A module function's
             // address is a link-time constant exactly like `data.addr`'s
             // — the symbol itself is the `ptr` operand, so there is
-            // nothing to materialize and GVN may dedup it freely. The
-            // callee must live in THIS object's subset (the task shim
-            // always does: lowering synthesizes it into the same
-            // module); anything else is an honest refusal, the same
-            // line the debug tier draws.
+            // nothing to materialize and GVN may dedup it freely.
+            //
+            // s134 (#219): the referee need NOT live in this object's
+            // subset. Until s134 an out-of-subset referee was refused
+            // here while the debug tier (#116) imported it by mangled
+            // symbol — so a `spawn proc` whose spawner lowered into
+            // one object and whose entry shim landed in another
+            // (`src_file = None` rides the root module's unit under
+            // the per-module partition, and any partition may separate
+            // the pair: `WOLF_MIDEND=0`, an import copy, a future
+            // clusterer) turned a program the native tier runs into a
+            // release refusal. The symbol is a link-time constant in
+            // every object, exactly as `lower_call`'s out-of-subset
+            // fallback declares it: declare, take the address, let the
+            // linker resolve. Only a name no module function carries
+            // is a refusal now.
             Opcode::FuncAddr => {
                 let Aux::Callee(ef) = data.aux else {
                     return Err(ice("func.addr without callee"));
                 };
                 let callee = self.f.ext_funcs[ef].name.clone();
-                let Some(entry) = self.funcs.get(&callee) else {
+                let symbol = if let Some(entry) = self.funcs.get(&callee) {
+                    entry.symbol.clone()
+                } else if let Some(target) = self.m.funcs.values().find(|f| f.name == callee) {
+                    let sig = target.sig;
+                    let symbol = wolf_backend::mangle(self.m, &callee, sig);
+                    let si = sig_info(self.m, sig, Conv::Wolf, &self.cx.opts.clone())?;
+                    let decl = format!(
+                        "declare {} @\"{symbol}\"({}) nounwind",
+                        si.ret_ty(),
+                        si.ll_params.join(", ")
+                    );
+                    self.ensure_decl(&symbol, decl);
+                    symbol
+                } else {
                     return Err(nyi(format!(
-                        "func.addr of `@{callee}` outside this object's subset"
+                        "func.addr of `@{callee}` names no module function"
                     )));
                 };
-                let symbol = entry.symbol.clone();
                 self.vals
                     .insert(results[0], Repr::Scalar(format!("@\"{symbol}\"")));
             }
