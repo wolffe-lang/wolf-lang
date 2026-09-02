@@ -47,8 +47,7 @@ jobs:
           ls -la target/debug/wolf.exe target/debug/wolf_rt.lib
 
       - name: "T1 clippy: the windows lane is clippy-clean too (its own step, so a lint never hides the table)"
-        continue-on-        run: cargo test --workspace --no-fail-fast 2>&1 | grep -E -A10 "^(test result|test .*FAILED|---- |     Running)" | grep -vE "^\s*0^--  | head -400
- true
+        continue-on-error: true
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: "T1 hello: wolf build hello.lu -> hello.exe (verbose names the linker), run it"
@@ -74,7 +73,7 @@ jobs:
             WOLF_LINKER="$LINK_EXE" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-r4.exe && ./hello-r4.exe; echo "rung4(WOLF_LINKER=link.exe) exit=$?"
           fi
           echo "== rung 3 forced: WOLF_LINKER=rust-lld (the -flavor link dialect)"
-          WOLF_LINKER="20 20 12 61 79 80 81 701 33 98 100 204 250 395 398 399 400rustc --print sysroot)/lib/rustlib/x86_64-pc-windows-msvc/bin/rust-lld.exe" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-r3f.exe && ./hello-r3f.exe; echo "rung3(WOLF_LINKER=rust-lld) exit=0"
+          WOLF_LINKER="$(rustc --print sysroot)/lib/rustlib/x86_64-pc-windows-msvc/bin/rust-lld.exe" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-r3f.exe && ./hello-r3f.exe; echo "rung3(WOLF_LINKER=rust-lld) exit=$?"
           echo "== rung 2b/3 by order: PATH holds rustc but no lld-link (the VS-bundled lld-link outranks rust-lld where VS has one)"
           env PATH="$(dirname "$(command -v rustc)"):/c/Windows/System32" ./target/debug/wolf.exe build --verbose corpus/hello.lu -o hello-r3.exe && ./hello-r3.exe; echo "rung3(rust-lld) exit=$?"
           echo "== rung 4 by discovery: a plain shell (PATH = System32 only: no lld-link, no rustc; LIB unset) — MSVC found by vswhere/registry, or the named refusal"
@@ -119,4 +118,4 @@ jobs:
 
       - name: "T5 tests: cargo test --workspace (what the gate-open makes execute here)"
         continue-on-error: true
-        run: cargo test --workspace --no-fail-fast 2>&1 | grep -E "^(test result|test .*FAILED|failures:|---- |SKIP|error\[|error:|     Running)" | head -250
+        run: cargo test --workspace --no-fail-fast 2>&1 | grep -E -A10 "^(test result|test .*FAILED|---- |     Running)" | grep -vE "^\s*$|^--$" | head -400
