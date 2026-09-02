@@ -24,8 +24,8 @@ bring-up contract: scalars and pointers direct, aggregates by value
 refused by shape until the campaign's `cl.exe` differential. What the
 bring-up cannot serve refuses BY NAME and is counted: the release
 tier, the task layer (`spawn`, `proc`, channels, `sync`/`when`),
-`os.signal` — s60b's, the IOCP road; `net` serves in its documented
-blocking posture. `cargo xtask lane-coverage` measures windows on its
+`os.signal`, `net` deadlines — s60b's, the IOCP road; `net` otherwise
+serves in its documented blocking posture. `cargo xtask lane-coverage` measures windows on its
 OWN floor line (a lane the host cannot drive is recorded dark when its
 floor says so, and the others keep measuring; `--rows` prints every
 observation), and `cargo xtask dist` now unpacks its own archive and

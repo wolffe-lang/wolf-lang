@@ -40,8 +40,10 @@ calls wolf's `main` shim.
   (`BCryptGenRandom`), regions and the region ledger, sited traps.
 - `net` in its **blocking** posture — the v0 fallback the module
   documents for hosts without a reactor: `listen`/`accept`/`connect`/
-  `read`/`write` block in the syscall; `net_deadline` answers `io`
-  (never an inert deadline).
+  `read`/`write` block in the syscall. `net_deadline` refuses by name
+  (below): the blocking posture would answer `io` where every reactor
+  host answers `timeout` — measured on the runner — and a different
+  verdict is not a fallback.
 - The C membrane for scalars and pointers (`extern "c"` /
   `export` with `int`, `float`, pointer parameters and results).
 
@@ -59,6 +61,7 @@ a link error, never a silent stub.
   guard-page fault reporter are POSIX); the codegen refuses the
   construct by name so the row counts. s60b: the task layer on
   `VirtualAlloc(MEM_RESERVE)` stacks and the IOCP reactor.
+- **`net` deadlines** (`net_deadline`): the reactor's — s60b (IOCP).
 - **`os.signal`** listen/wait/raise: no POSIX signals; the
   `SetConsoleCtrlHandler` mapping is spec'd (`[os.signal.platform]`)
   and lands with the task layer.
