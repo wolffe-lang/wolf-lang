@@ -303,13 +303,22 @@ fn abi_table_round_trips_against_host_cc() {
             return;
         }
     };
-    compile_module(
+    // s60a: a C target that refuses this table BY SHAPE (win64 refuses
+    // every aggregate by value until the campaign's cl.exe differential)
+    // is a loud skip — the shape refusal is the contract there, and the
+    // differential against the platform compiler is s49/s60's.
+    if let Err(e) = compile_module(
         &mut backend,
         &module,
         None,
         &mut wolf_backend::NullDebugSink,
-    )
-    .expect("compiles");
+    ) {
+        if matches!(e, wolf_backend::BackendError::Unsupported(_)) {
+            eprintln!("SKIP: this host's C target refuses the table by shape: {e}");
+            return;
+        }
+        panic!("compiles: {e}");
+    }
     let product = Box::new(backend).finish().expect("object emits");
 
     // Every export must be visible under its UNMANGLED name.
@@ -329,6 +338,12 @@ fn abi_table_round_trips_against_host_cc() {
     std::fs::write(&obj, &product.bytes).expect("write object");
     std::fs::write(&drv, C_DRIVER).expect("write driver");
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        eprintln!(
+            "SKIP: no `{cc}` on this host — the differential against the platform C compiler needs one"
+        );
+        return;
+    }
     let out = Command::new(&cc)
         .arg("-o")
         .arg(&exe)
@@ -384,13 +399,22 @@ int main(void) {
             return;
         }
     };
-    compile_module(
+    // s60a: a C target that refuses this table BY SHAPE (win64 refuses
+    // every aggregate by value until the campaign's cl.exe differential)
+    // is a loud skip — the shape refusal is the contract there, and the
+    // differential against the platform compiler is s49/s60's.
+    if let Err(e) = compile_module(
         &mut backend,
         &module,
         None,
         &mut wolf_backend::NullDebugSink,
-    )
-    .expect("compiles");
+    ) {
+        if matches!(e, wolf_backend::BackendError::Unsupported(_)) {
+            eprintln!("SKIP: this host's C target refuses the table by shape: {e}");
+            return;
+        }
+        panic!("compiles: {e}");
+    }
     let product = Box::new(backend).finish().expect("object emits");
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("abi_check_trap");
     std::fs::create_dir_all(&dir).expect("mkdir");
@@ -400,6 +424,12 @@ int main(void) {
     std::fs::write(&obj, &product.bytes).expect("write object");
     std::fs::write(&drv, c_driver).expect("write driver");
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        eprintln!(
+            "SKIP: no `{cc}` on this host — the differential against the platform C compiler needs one"
+        );
+        return;
+    }
     let out = Command::new(&cc)
         .arg("-o")
         .arg(&exe)

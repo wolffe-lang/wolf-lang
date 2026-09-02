@@ -84,6 +84,10 @@ fn run_wir(name: &str, text: &str) -> Option<(i32, String)> {
     std::fs::write(&obj, &product.bytes).expect("write object");
     std::fs::write(&stub, RT_STUB).expect("write stub");
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        eprintln!("SKIP: no `{cc}` on this host to link the rt stub");
+        return None;
+    }
     let st = Command::new(&cc)
         .arg("-o")
         .arg(&exe)
@@ -387,6 +391,10 @@ fn eu_main_err_reports_tag_and_exits_one() {
     std::fs::write(&obj, &product.bytes).expect("write object");
     std::fs::write(&stub, RT_STUB).expect("write stub");
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    if Command::new(&cc).arg("--version").output().is_err() {
+        eprintln!("SKIP: no `{cc}` on this host to link the rt stub");
+        return;
+    }
     let st = Command::new(&cc)
         .arg("-o")
         .arg(&exe)

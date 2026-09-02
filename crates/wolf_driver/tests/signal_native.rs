@@ -50,6 +50,18 @@ fn lane(case: &str, src: &str, flag: &str) -> Option<Obs> {
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
+    // s60a: a host without signal delivery (windows until s60b) refuses
+    // by name at codegen — a loud skip, never a verdict.
+    if flag == "--native"
+        && rec["verdict"] == "unsupported"
+        && String::from_utf8_lossy(&out.stderr).contains("windows-native serves no")
+    {
+        eprintln!(
+            "SKIP: the native lane refuses `os.signal` by name on this host: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
     Some(Obs {
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),

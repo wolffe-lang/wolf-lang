@@ -65,6 +65,18 @@ fn lane(file: &str, flag: &str) -> Option<Obs> {
     );
     let rec: serde_json::Value =
         serde_json::from_slice(&out.stdout).expect("observation record parses");
+    // s60a: the native lane refusing THIS construct by name on this
+    // host (windows without its reactor/task layer) is a loud skip.
+    if flag == "--native"
+        && rec["verdict"] == "unsupported"
+        && String::from_utf8_lossy(&out.stderr).contains("windows-native serves no")
+    {
+        eprintln!(
+            "SKIP: the native lane refuses this construct by name on this host: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
     // The release tier refuses this HOST by name (linux/x86-64 +
     // macOS/aarch64 since s127): a loud skip, not a verdict (s59).
     if flag == "--release"

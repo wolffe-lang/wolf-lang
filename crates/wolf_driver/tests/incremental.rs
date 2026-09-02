@@ -296,7 +296,12 @@ fn concurrent_identical_links_stage_in_distinct_dirs() {
             .arg("-o")
             .arg(dir.join(format!("race-{tag}")))
             .arg("--no-cache")
+            // unix reads TMPDIR; windows reads TMP/TEMP (s60a) — the
+            // staging dir must land under the test-owned directory on
+            // both.
             .env("TMPDIR", &tmp)
+            .env("TMP", &tmp)
+            .env("TEMP", &tmp)
             .spawn()
             .expect("spawn wolf")
     };
