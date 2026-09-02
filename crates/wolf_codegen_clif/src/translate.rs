@@ -356,36 +356,6 @@ pub(crate) fn c_target(cc: CallConv) -> CTarget {
     }
 }
 
-/// Runtime entry points windows-native does not serve YET: the s60a
-/// bring-up compiled `wolf_rt` for windows without its task layer,
-/// the io reactor, and signal delivery — the modules behind
-/// `lib.rs`'s platform gate — so a program that referenced one
-/// would have failed at link with an unresolved external. It refuses
-/// HERE instead, by construct name, so the corpus lane counts the
-/// row as a named gap (`refused@wir`) rather than an environment
-/// failure. s60b shrinks the table one target at a time as each
-/// module crosses: the task layer (`spawn`/scopes, `proc`, channels
-/// and `select`, `sync`/`when`, `region_transfer`) crossed with its
-/// first target and `os.signal` with its second (the console-control
-/// mapping), so those families are gone from here; what remains is
-/// exactly what the runtime still compiles out on windows.
-fn windows_unserved(name: &str) -> Option<&'static str> {
-    if !cfg!(target_os = "windows") {
-        return None;
-    }
-    let family = name.strip_prefix("__wolf_rt_")?;
-    let construct = if family == "net_deadline" {
-        // The blocking-socket posture answers `io` where the reactor
-        // hosts answer `timeout` — a DIFFERENT verdict, measured on
-        // the runner (corpus/net/read_deadline.lu), so the call refuses
-        // by name rather than run and diverge.
-        "`net` deadlines (the io reactor)"
-    } else {
-        return None;
-    };
-    Some(construct)
-}
-
 /// Build the CLIF signature + slot map for one WIR signature under one
 /// convention, executing the shared plan from [`wolf_backend::abi`]
 /// (where ALL classification lives — this function is mechanical).
@@ -1001,12 +971,12 @@ impl<'a, 'b> Tx<'a, 'b> {
         let fid = match self.rt.get(name) {
             Some(&fid) => fid,
             None => {
-                if let Some(construct) = windows_unserved(name) {
-                    return Err(BackendError::Unsupported(format!(
-                        "windows-native serves no {construct} yet (the runtime's io reactor is \
-                         s60b's remaining target); `{name}` would not link"
-                    )));
-                }
+                // Every runtime symbol links on every host the clif
+                // gate opens for: the s60a bring-up's by-name refusal
+                // table (`windows_unserved` — the task layer, procs,
+                // channels, `sync`/`when`, `os.signal`, `net`
+                // deadlines) emptied one target at a time at s60b and
+                // retired with its last row.
                 let (_, nparams, has_ret) = RT_SYMBOLS
                     .iter()
                     .find(|(n, _, _)| *n == name)
