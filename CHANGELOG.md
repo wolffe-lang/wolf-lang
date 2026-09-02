@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### The proc leaves its module (s134 item 1 — #219)
+
+**A `spawn proc` in a non-entry module now builds on the release
+tier under every partition.** lobo ws13 measured the gap while
+adopting the region cap: its budget helper spawns a proc from a leaf
+module, and `wolf build --release` answered “cannot compile this yet —
+func.addr of `@work.run.task0.entry` outside this object's subset”
+while `wolf run` executed the same program — #136's proc twin, one
+partition over. s117's `refs=` edge keeps a spawner and its entry shim
+in one CLUSTER; the per-module partition (`WOLF_MIDEND=0`, the
+measurement mode lobo's gauntlet runs in while #146 is open) never
+consulted it — the shim is synthetic, has no source file, and rode the
+root module's object while the spawner sat in its own. The debug tier
+had imported such a symbol across objects since #116; the LLVM tier
+refused. The LLVM emitter now takes an out-of-subset referee's address
+through the same mangled-symbol declaration a cross-object CALL uses —
+a link-time constant in every object, resolved by the linker. Only a
+name no module function carries is a refusal now. Witnesses:
+`corpus/conc/proc_cross_module` (ws13's thirty-line reproducer, three
+lanes plus lupin, `normal=0 breach=2`) and a driver test that pins the
+per-module partition itself, because a thirty-line program is one
+cluster under the whole-program phase and the refusal cannot fire
+there. lobo's `ws13-cap` branch builds `--release` at this commit.
+
+**A refusal names itself in the record.** `wolf conform-run --json`
+answered `{"verdict":"unsupported","diagnostics":[]}` on every checked
+proc spawn — by name on stderr, and nothing in the record a rig reads
+over a pipe. The record now carries `x-unsupported-construct` and,
+when the refusal has one, `x-unsupported-span` (`[proto.record.ext]`
+extension keys, so they take no part in comparison and the
+counterparty need not emit them) on every `unsupported` verdict at
+every rung — typecheck, mem, wir, the checked machine, the native and
+release lanes. `diagnostics` stays empty: an `unsupported` verdict
+carries no partial diagnostics and a refusal is not a fault in the
+program, so it has no E-code. `proc_cap_fault_join.lu`'s checked
+verdict is UNCHANGED — `unsupported` at `mem`, now reading
+`"x-unsupported-construct": "structured concurrency in checked
+execution (C1 deferred)"` with the span of the spawn — because the
+checked machine (`conform-run --checked`, the s23 UB machine) runs no
+structured concurrency at all: `spawn`, scopes, `select` and `when`
+are refused by name at the expression. A proc is refused where every
+spawn is; running one there is the C1 sprint, not a fix. The other
+`--checked` — `wolf run --checked` and `wolf build --checked` — is the
+NATIVE build under the checked profile (the quarantine allocator and
+the checked-tier runtime hooks), which is why ws13 saw the same file
+run there and refuse under `conform-run`; the two flags name two
+machines, and the record now says which one declined.
+
 ### The windows task layer (s60b)
 
 **On Windows, `spawn`, scopes, `proc`, channels and `select`, `sync`/
