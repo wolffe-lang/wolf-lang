@@ -44,3 +44,10 @@ rayon.workspace = true
 # s30 debug tests: parse the built executable's ELF sections to assert
 # .debug_* presence (the ledger's readelf-style check, tool-free).
 object = { version = "0.39", default-features = false, features = ["read_core", "elf", "std"] }
+
+# s60a: the windows link step's MSVC/SDK discovery — the same crate
+# rustc's own `cc` uses to find `link.exe` and the import libraries
+# (LIB/PATH) from a plain shell, so a learner outside a Developer
+# Command Prompt still links. Windows only; no other host pays for it.
+[target.'cfg(windows)'.dependencies]
+find-msvc-tools = "0.1"
