@@ -1467,6 +1467,14 @@ fn residue_class(obs: &BTreeMap<&str, LaneObs>, forward: bool) -> String {
     }
 }
 
+/// The ratchet comparison, behind a function on purpose: a platform
+/// whose floor is 0 (a tier not yet measured there — windows at s60a)
+/// is a legitimate state, and clippy's `absurd_extreme_comparisons`
+/// would otherwise deny the literal `n < 0` on that host alone.
+fn below_floor(n: usize, floor: usize) -> bool {
+    n < floor
+}
+
 /// `cargo xtask lane-coverage [--json]` — publish what the differential
 /// actually covers (`[proto.cmp.coverage]`; wolf-lang#90).
 ///
@@ -1676,7 +1684,7 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
     let mut fell = false;
     for (lane, floor) in LANE_FLOORS {
         let n = cov.lane(lane);
-        if n < *floor {
+        if below_floor(n, *floor) {
             eprintln!(
                 "lane-coverage: the `{lane}` lane executes {n} entries, below its floor of {floor} \
                  — a lane stopped running programs it used to run; fix the refusal or lower the \
@@ -1685,7 +1693,7 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
             fell = true;
         }
     }
-    if union.len() < UNION_FLOOR {
+    if below_floor(union.len(), UNION_FLOOR) {
         eprintln!(
             "lane-coverage: union coverage {} is below the floor of {UNION_FLOOR} — the \
              differential sees less of the corpus than it did",
@@ -1693,7 +1701,7 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         );
         fell = true;
     }
-    let all_three_holds = all_three.len() >= ALL_THREE_FLOOR;
+    let all_three_holds = !below_floor(all_three.len(), ALL_THREE_FLOOR);
     if !all_three_holds {
         eprintln!(
             "lane-coverage: all-three coverage {} is below the floor of {ALL_THREE_FLOOR} — the \

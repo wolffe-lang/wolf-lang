@@ -41,8 +41,15 @@ jobs:
           echo "== link.exe via vswhere"; "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath || true
           echo "== LIB env: ${LIB:-<unset>}"
 
-      - name: "T1 build: workspace + wolf_rt.lib + clippy (the windows lane is clippy-clean too)"
+      - name: "T1 build: workspace + wolf_rt.lib"
         run: |
+          cargo build --workspace
+          ls -la target/debug/wolf.exe target/debug/wolf_rt.lib
+
+      - name: "T1 clippy: the windows lane is clippy-clean too (its own step, so a lint never hides the table)"
+        continue-on-error: true
+        run: cargo clippy --workspace --all-targets -- -D warnings
+|
           cargo build --workspace
           ls -la target/debug/wolf.exe target/debug/wolf_rt.lib
           cargo clippy --workspace --all-targets -- -D warnings
