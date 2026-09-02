@@ -405,8 +405,12 @@ fn eu_main_err_reports_tag_and_exits_one() {
     assert!(st.success(), "link failed");
     let out = Command::new(&exe).output().expect("binary runs");
     assert_eq!(out.status.code(), Some(1));
+    // The C stub's `printf` writes stdout in text mode, which is CRLF
+    // on windows (s60a) — the STUB's newline, not wolf's (wolf_rt
+    // writes bytes through Rust std, `\n` on every host; the corpus
+    // lane pins that). Normalize the stub's line ending only.
     assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n"),
         "error: Boom\n",
         "the tag NAME is the documented report"
     );
