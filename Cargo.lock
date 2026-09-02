@@ -1084,14 +1084,14 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "wolf_ast"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "wolf_span",
 ]
 
 [[package]]
 name = "wolf_backend"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "gimli",
  "wolf_wir",
@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_cimport"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "insta",
@@ -1109,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_codegen_clif"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "cranelift-codegen",
  "cranelift-frontend",
@@ -1125,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_codegen_llvm"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "wolf_backend",
@@ -1135,7 +1135,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_diag"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "serde_json",
@@ -1144,7 +1144,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_doc"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "wolf_diag",
@@ -1155,7 +1155,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_driver"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "find-msvc-tools",
@@ -1184,7 +1184,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_fmt"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "proptest",
@@ -1197,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_lex"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "proptest",
@@ -1208,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_lsp"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "lsp-server",
@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_mem"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "libc",
@@ -1233,7 +1233,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_parse"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "wolf_ast",
@@ -1244,7 +1244,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_pkg"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "insta",
@@ -1256,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "wolf_query"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "wolf_ast",
  "wolf_diag",
@@ -1269,14 +1269,14 @@ dependencies = [
 
 [[package]]
 name = "wolf_rt"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "wolf_sema"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "blake3",
  "insta",
@@ -1289,14 +1289,14 @@ dependencies = [
 
 [[package]]
 name = "wolf_span"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "proptest",
 ]
 
 [[package]]
 name = "wolf_wir"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "wolf_ast",
@@ -1314,7 +1314,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "xtask"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "insta",
  "serde_json",
