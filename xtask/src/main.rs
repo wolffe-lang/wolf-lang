@@ -51,7 +51,19 @@ fn main() -> ExitCode {
             std::fs::create_dir_all(&dest).expect("create install dir");
             // The importer worker installs beside `wolf`, which is
             // exactly where `wolf` looks for it (s46).
-            for f in ["wolf", "libwolf_rt.a", "wolf-cimport-worker"] {
+            // Names are the host's (s60a): `wolf.exe` + `wolf_rt.lib`
+            // + `wolf-cimport-worker.exe` on windows.
+            let exe = std::env::consts::EXE_SUFFIX;
+            let files = [
+                format!("wolf{exe}"),
+                if cfg!(windows) {
+                    "wolf_rt.lib".to_string()
+                } else {
+                    "libwolf_rt.a".to_string()
+                },
+                format!("wolf-cimport-worker{exe}"),
+            ];
+            for f in &files {
                 let from = std::path::Path::new("target/release").join(f);
                 let to = dest.join(f);
                 // unlink first: a running `wolf lsp` holds the old inode
@@ -370,7 +382,8 @@ fn corpus_cmd() -> ExitCode {
             // run — the M1 gate). WOLF_NATIVE=1 keeps the argv shape
             // protocol-stable.
             let native = d.phase.as_deref() == Some("run");
-            let mut cmd = Command::new("target/debug/wolf");
+            let mut cmd =
+                Command::new(format!("target/debug/wolf{}", std::env::consts::EXE_SUFFIX));
             cmd.arg("conform-run").arg(f).arg("--json");
             if native {
                 cmd.env("WOLF_NATIVE", "1");
@@ -1167,12 +1180,29 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // Floors are PER-PLATFORM and MEASURED, never inherited (s59): the
 // linux numbers are linux measurements and stay untouched; each newly
 // ported host ratchets from its own first measurement.
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const LANE_FLOORS: &[(&str, usize)] = &[("checked", 221), ("native", 242), ("release", 242)];
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const UNION_FLOOR: usize = 256;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 const ALL_THREE_FLOOR: usize = 207;
+// s60a, windows/x86-64 — the bring-up's OWN line, never the macOS or
+// linux numbers: measured on the windows-latest runner the day the
+// clif gate opened (the probe workflow prints the count; the floor is
+// set to what it printed and ratchets from there). The release tier
+// refuses windows by name (s60b), so its lane is DARK here by design
+// — floor 0, and `lane_coverage_cmd` expects the darkness (a dark lane
+// with a nonzero floor is the loud host-cannot-measure SKIP instead).
+// The native lane refuses the task layer, procs, channels, `sync`/
+// `when`, and `os.signal` by construct name (`windows_unserved` in the
+// clif backend), so its count sits below the checked lane's — every
+// such row is in the `refused@wir` residue, counted, not hidden.
+#[cfg(target_os = "windows")]
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 0), ("native", 0), ("release", 0)];
+#[cfg(target_os = "windows")]
+const UNION_FLOOR: usize = 0;
+#[cfg(target_os = "windows")]
+const ALL_THREE_FLOOR: usize = 0;
 // s59, measured on macOS/aarch64 the day the gate lifted: checked and
 // native at FULL linux parity (221/242, union 256 — the port left no
 // coverage behind), release honestly 0 (the s41 tier refused this
@@ -1449,14 +1479,18 @@ fn residue_class(obs: &BTreeMap<&str, LaneObs>, forward: bool) -> String {
 /// figure cannot decay into folklore between differentials.
 fn lane_coverage_cmd(args: &[String]) -> ExitCode {
     let json = args.iter().any(|a| a == "--json");
+    // `--rows`: every observation as one line — file, lane, verdict,
+    // and the lane's own refusal words — the per-row table a port
+    // bring-up reads off a CI log (s60a's windows probe).
+    let rows = args.iter().any(|a| a == "--rows");
     if !run_ok(
         "cargo",
         &["build", "-p", "wolf_driver", "-p", "wolf_rt", "--quiet"],
     ) {
-        eprintln!("lane-coverage: failed to build wolf + libwolf_rt.a");
+        eprintln!("lane-coverage: failed to build wolf + the runtime staticlib");
         return ExitCode::FAILURE;
     }
-    let wolf = PathBuf::from("target/debug/wolf");
+    let wolf = PathBuf::from(format!("target/debug/wolf{}", std::env::consts::EXE_SUFFIX));
     let mut files = Vec::new();
     collect_wolf_files(Path::new("corpus"), &mut files);
     files.sort();
@@ -1480,11 +1514,34 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
 
     let mut cov = xtask::protocol::Coverage::default();
     let mut per_file: BTreeMap<String, BTreeMap<&str, LaneObs>> = BTreeMap::new();
+    // Lanes this host cannot drive at all (exit 2 on their first
+    // observation). A lane whose floor on this host is 0 is EXPECTED
+    // dark (the platform's own floor line says the tier is not here
+    // yet — windows' release lane at s60a): it is recorded dark and
+    // the other lanes keep measuring, so the port's coverage is a
+    // number, not a skip. A dark lane with a nonzero floor is a host
+    // that cannot measure what it is supposed to (no `cc`, no clang):
+    // the loud SKIP, never a silent green — and never a floor failure
+    // blamed on a lane that could not run.
+    let mut dark: BTreeSet<&str> = BTreeSet::new();
     for f in &files {
         let key = f.display().to_string();
         for (lane, flag) in RUN_LANES {
+            if dark.contains(lane) {
+                continue;
+            }
             match lane_observe(&wolf, f, flag) {
                 Ok(obs) => {
+                    if rows {
+                        eprintln!(
+                            "lane-coverage: row {lane:<8} {:<22} {key}{}",
+                            obs.verdict,
+                            obs.reason
+                                .as_deref()
+                                .map(|r| format!(" — {r}"))
+                                .unwrap_or_default()
+                        );
+                    }
                     let rec = serde_json::json!({
                         "phase_reached": obs.phase, "verdict": obs.verdict,
                     });
@@ -1492,6 +1549,15 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
                     per_file.entry(key.clone()).or_default().insert(lane, obs);
                 }
                 Err(LaneStop::Environment(e)) => {
+                    let floor = LANE_FLOORS
+                        .iter()
+                        .find(|(l, _)| l == lane)
+                        .map_or(0, |(_, n)| *n);
+                    if floor == 0 {
+                        eprintln!("lane-coverage: lane `{lane}` is DARK on this host — {e}");
+                        dark.insert(lane);
+                        continue;
+                    }
                     // Loud skip, never a silent green: a lane that could
                     // not run is not a lane that covers nothing.
                     eprintln!("lane-coverage: SKIP — {e}");
@@ -1518,11 +1584,16 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
         let n = cov.lane(lane);
         let holes = cov.holes(lane, COMPARED_LANES).len();
         eprintln!(
-            "lane-coverage:   {lane:<8} executes {n:>3} at run{}",
+            "lane-coverage:   {lane:<8} executes {n:>3} at run{}{}",
             if COMPARED_LANES.contains(lane) {
                 format!("  ({holes} the other lanes reach and it does not)")
             } else {
                 String::new()
+            },
+            if dark.contains(lane) {
+                "  [DARK on this host]"
+            } else {
+                ""
             }
         );
     }
@@ -3807,7 +3878,70 @@ fn dist() -> ExitCode {
         return ExitCode::FAILURE;
     }
     eprintln!("dist: {archive}");
-    ExitCode::SUCCESS
+    // The learner path, mechanized (s60a): unpack the archive somewhere
+    // ELSE, build `corpus/hello.lu` with the unpacked `wolf` (which
+    // must find the runtime lib and the importer worker beside itself
+    // — nothing from target/ may leak in), run the result, read the
+    // greeting. What the release page hands a learner is exactly what
+    // this just ran, on every host the dist matrix builds.
+    let smoke = Path::new("target/dist/smoke");
+    let _ = std::fs::remove_dir_all(smoke);
+    std::fs::create_dir_all(smoke).expect("mkdir dist smoke");
+    let archive_abs = std::path::absolute(&archive).expect("absolute archive path");
+    if !run_ok(
+        "tar",
+        &[
+            "-C",
+            "target/dist/smoke",
+            "-xzf",
+            &archive_abs.to_string_lossy(),
+        ],
+    ) {
+        eprintln!("dist: smoke — cannot unpack {archive}");
+        return ExitCode::FAILURE;
+    }
+    let unpacked_wolf = smoke.join(&name).join(exe);
+    let hello = smoke.join(format!("hello{}", std::env::consts::EXE_SUFFIX));
+    let built = Command::new(&unpacked_wolf)
+        .args(["build", "corpus/hello.lu", "-o"])
+        .arg(&hello)
+        .env_remove("WOLF_RT_LIB")
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !built {
+        eprintln!(
+            "dist: smoke — the unpacked `{}` could not build corpus/hello.lu (the archive \
+             would not serve a learner)",
+            unpacked_wolf.display()
+        );
+        return ExitCode::FAILURE;
+    }
+    let ran = Command::new(&hello).output();
+    match ran {
+        Ok(o)
+            if o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "hello, wolf" =>
+        {
+            eprintln!(
+                "dist: smoke — {} built and ran corpus/hello.lu from the unpacked archive",
+                unpacked_wolf.display()
+            );
+            ExitCode::SUCCESS
+        }
+        Ok(o) => {
+            eprintln!(
+                "dist: smoke — {} ran with {} and printed {:?}, not the greeting",
+                hello.display(),
+                o.status,
+                String::from_utf8_lossy(&o.stdout)
+            );
+            ExitCode::FAILURE
+        }
+        Err(e) => {
+            eprintln!("dist: smoke — cannot run {}: {e}", hello.display());
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn rustc_host_triple() -> String {
