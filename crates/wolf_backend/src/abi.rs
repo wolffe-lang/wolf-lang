@@ -74,9 +74,13 @@
 //! - **aapcs64** (linux aarch64): apple-arm64 minus the packing rule
 //!   and with C.8's even-register alignment — ~80% shared with the
 //!   s59 plan (the follow-on files against the s59 contract).
-//! - **win64**: 4 register slots shared across GP/XMM, shadow space
-//!   for C calls (never for wolf-native — `[abi.native.call]`),
-//!   aggregates > 8 bytes by reference.
+//! - **win64** (windows x86-64; BRING-UP contract at s60a,
+//!   [`CTarget::Win64`]): scalars and pointers direct — the 4 register
+//!   slots shared across GP/XMM and the shadow space for C calls
+//!   (never for wolf-native — `[abi.native.call]`) are cranelift's
+//!   `WindowsFastcall`; aggregates by value (bits-in-register at
+//!   1/2/4/8 bytes, by reference otherwise) are refusal-by-shape
+//!   until the s60 campaign lands them against cl.exe.
 //!
 //! # Reserved divergence room (spec/04 `[abi.native.unstable]`)
 //!
@@ -149,6 +153,18 @@ pub enum CTarget {
     /// natural alignment, not 8-byte slots) is executed by
     /// cranelift's `AppleAarch64` convention underneath the plan.
     AppleArm64,
+    /// The MSVC x64 convention (windows x86-64), s60a's BRING-UP
+    /// contract: scalars and pointers cross directly — the four
+    /// position-indexed slots (RCX/RDX/R8/R9 ⊕ XMM0–XMM3) and the
+    /// caller's 32-byte shadow space are executed by cranelift's
+    /// `WindowsFastcall` convention underneath the plan. Aggregates
+    /// by value are REFUSED BY SHAPE at this bring-up (win64 passes
+    /// 1/2/4/8-byte composites as their bits in a register and every
+    /// other size by pointer to a caller-owned copy, returns beyond
+    /// 8 bytes via a hidden pointer): that lowering lands with the
+    /// s60 campaign's cl.exe differential (s49), never as a plan
+    /// guessed here and executed silently.
+    Win64,
 }
 
 /// Register class of one eightbyte (SysV vocabulary; wolf-native v0
@@ -484,10 +500,69 @@ fn plan_sig_c_arm64(types: &TypeInterner, sig: &SigData) -> SigPlan {
 /// never cross the membrane (`[abi.err.row]` — the front end rejects
 /// with E1201 before any backend runs).
 pub fn plan_sig(types: &TypeInterner, sig: &SigData, conv: Conv, target: CTarget) -> SigPlan {
-    if conv == Conv::C && target == CTarget::AppleArm64 {
-        return plan_sig_c_arm64(types, sig);
+    match (conv, target) {
+        (Conv::C, CTarget::AppleArm64) => plan_sig_c_arm64(types, sig),
+        (Conv::C, CTarget::Win64) => plan_sig_c_win64(types, sig),
+        _ => plan_sig_sysv(types, sig, conv),
     }
-    plan_sig_sysv(types, sig, conv)
+}
+
+/// The [`Conv::C`] plan for [`CTarget::Win64`] (`[abi.c.targets]`
+/// win64, the s60a bring-up). Scalars and pointers pass direct — the
+/// slot assignment and shadow space are cranelift's `WindowsFastcall`
+/// business, not the plan's. Every aggregate crossing by value, in
+/// either direction, is refusal-by-shape ([`SigPlan::refusals`]):
+/// loud at the backend, never a SysV split executed under a
+/// convention that wants bits-in-a-register or a pointer instead.
+/// The rt symbol contract is scalar/pointer-only, so compiled wolf
+/// programs never meet the refusal; hand-declared `extern "c"`
+/// signatures with composites do, by name.
+fn plan_sig_c_win64(types: &TypeInterner, sig: &SigData) -> SigPlan {
+    let mut refusals = Vec::new();
+    let rets: Vec<RetPass> = sig
+        .results
+        .iter()
+        .map(|&r| {
+            if types.is_token(r) {
+                RetPass::Token
+            } else if is_agg(types, r) {
+                let size = layout::layout_of(types, r).map_or(0, |l| l.size);
+                refusals.push(format!(
+                    "win64 C membrane: an aggregate result by value ({size} bytes) is not \
+                     lowered at the s60a bring-up — scalars and pointers only (the MSVC x64 \
+                     aggregate rules land with the s60 campaign)"
+                ));
+                RetPass::Sret { disc_in_reg: false }
+            } else {
+                RetPass::Direct(r)
+            }
+        })
+        .collect();
+    let params = sig
+        .params
+        .iter()
+        .map(|p| {
+            if types.is_token(p.ty) {
+                ParamPass::Token
+            } else if is_agg(types, p.ty) {
+                let size = layout::layout_of(types, p.ty).map_or(0, |l| l.size);
+                refusals.push(format!(
+                    "win64 C membrane: an aggregate parameter by value ({size} bytes) is not \
+                     lowered at the s60a bring-up — scalars and pointers only (the MSVC x64 \
+                     aggregate rules land with the s60 campaign)"
+                ));
+                ParamPass::Memory
+            } else {
+                ParamPass::Direct(p.ty)
+            }
+        })
+        .collect();
+    SigPlan {
+        conv: Conv::C,
+        params,
+        rets,
+        refusals,
+    }
 }
 
 /// The s29 plan: wolf-abi (any target) and SysV x86-64 C.
@@ -781,6 +856,64 @@ mod tests {
     /// included — the delta from SysV's per-eightbyte SSE classes);
     /// larger composites go indirect; the `x8` sret consumes no
     /// argument register.
+    /// The win64 bring-up contract (s60a): scalars and pointers cross
+    /// direct with no register accounting in the plan (cranelift's
+    /// `WindowsFastcall` owns the slots); any aggregate by value, in
+    /// either direction, is refusal-by-shape — named, never a SysV
+    /// split executed under the wrong convention. The wolf plan is
+    /// untouched by the target.
+    #[test]
+    fn win64_scalars_direct_and_aggregates_refused_by_shape() {
+        let mut m = Module::new();
+        let sig = m.make_sig(
+            vec![
+                Param::val(types::I64),
+                Param::val(types::F64),
+                Param::val(types::PTR),
+                Param::val(types::IO),
+                Param::val(types::I64),
+                Param::val(types::I64),
+            ],
+            vec![types::I32],
+        );
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::Win64);
+        assert!(plan.refusals.is_empty());
+        assert_eq!(
+            plan.params,
+            vec![
+                ParamPass::Direct(types::I64),
+                ParamPass::Direct(types::F64),
+                ParamPass::Direct(types::PTR),
+                ParamPass::Token,
+                ParamPass::Direct(types::I64),
+                ParamPass::Direct(types::I64),
+            ]
+        );
+        assert_eq!(plan.rets, vec![RetPass::Direct(types::I32)]);
+
+        // {i64, i64}: SysV splits it; win64 refuses it by shape.
+        let pair = m.types.intern(TypeData::Agg(vec![types::I64, types::I64]));
+        let sig = m.make_sig(vec![Param::val(pair)], vec![pair]);
+        let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::Win64);
+        assert_eq!(
+            plan.refusals.len(),
+            2,
+            "one per crossing: {:?}",
+            plan.refusals
+        );
+        assert!(
+            plan.refusals
+                .iter()
+                .all(|r| r.contains("win64") && r.contains("16 bytes"))
+        );
+        // The wolf plan does not see the target at all.
+        let w = plan_sig(&m.types, &m.sigs[sig], Conv::Wolf, CTarget::Win64);
+        assert_eq!(
+            w,
+            plan_sig(&m.types, &m.sigs[sig], Conv::Wolf, CTarget::SysvX64)
+        );
+    }
+
     #[test]
     fn apple_arm64_hfa_and_gp_classification() {
         let mut m = Module::new();
