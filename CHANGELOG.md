@@ -26,7 +26,10 @@ bring-up cannot serve refuses BY NAME and is counted: the release
 tier, the task layer (`spawn`, `proc`, channels, `sync`/`when`),
 `os.signal`, `net` deadlines — s60b's, the IOCP road; `net` otherwise
 serves in its documented blocking posture. `cargo xtask lane-coverage` measures windows on its
-OWN floor line (a lane the host cannot drive is recorded dark when its
+OWN floor line — 259/255/0/274/0 (checked/native/release/union/
+all-three), measured on the windows-latest runner: checked at full
+parity, native the macOS count minus the 21 rows refused by name,
+release dark (a lane the host cannot drive is recorded dark when its
 floor says so, and the others keep measuring; `--rows` prints every
 observation), and `cargo xtask dist` now unpacks its own archive and
 builds and runs `corpus/hello.lu` from it on every host — the learner

@@ -1197,10 +1197,18 @@ const ALL_THREE_FLOOR: usize = 207;
 // `when`, and `os.signal` by construct name (`windows_unserved` in the
 // clif backend), so its count sits below the checked lane's — every
 // such row is in the `refused@wir` residue, counted, not hidden.
+// Measured on windows-latest at 3f96817 (probe run 33578115570) over
+// 446 entries: checked 259 — full parity with macOS/linux (the lane
+// never touched the host); native 255 — the macOS 276 minus the 20
+// rows refused by construct name (11 channels/select, 4 spawn/scopes,
+// 2 proc, 2 os.signal, 1 sync/when) and the one `net_deadline` row;
+// release 0 (dark); union 274; all-three 0 (no release lane to
+// intersect). Counts measured by this gate on that runner, not
+// predicted.
 #[cfg(target_os = "windows")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 0), ("native", 0), ("release", 0)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 259), ("native", 255), ("release", 0)];
 #[cfg(target_os = "windows")]
-const UNION_FLOOR: usize = 0;
+const UNION_FLOOR: usize = 274;
 #[cfg(target_os = "windows")]
 const ALL_THREE_FLOOR: usize = 0;
 // s59, measured on macOS/aarch64 the day the gate lifted: checked and
