@@ -3918,20 +3918,58 @@ fn dist() -> ExitCode {
     }
     let unpacked_wolf = smoke.join(&name).join(exe);
     let hello = smoke.join(format!("hello{}", std::env::consts::EXE_SUFFIX));
-    let built = Command::new(&unpacked_wolf)
+    let build = Command::new(&unpacked_wolf)
         .args(["build", "corpus/hello.lu", "-o"])
         .arg(&hello)
         .env_remove("WOLF_RT_LIB")
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+        .output();
+    let built = build.as_ref().map(|o| o.status.success()).unwrap_or(false);
     if !built {
+        // The driver's exit-code contract: 2 is an ENVIRONMENT refusal
+        // (BackendError::Environment — this host has no native tier), 1
+        // a named refusal of the program. An unserved host is not a broken
+        // archive: linux/aarch64 served learners through the checked tier
+        // at v0.2.1 and still does. Degrade to that tier BY NAME — print
+        // the refusal the learner will see, then prove the checked tier
+        // runs the greeting from the unpacked archive. (The v0.2.2 arm
+        // archive was lost to the stricter smoke; this is its repair.)
+        let env_refusal = build
+            .as_ref()
+            .map(|o| o.status.code() == Some(2))
+            .unwrap_or(false);
+        if !env_refusal {
+            eprintln!(
+                "dist: smoke — the unpacked `{}` could not build corpus/hello.lu (the archive \
+                 would not serve a learner)",
+                unpacked_wolf.display()
+            );
+            return ExitCode::FAILURE;
+        }
+        let refusal = build
+            .as_ref()
+            .map(|o| String::from_utf8_lossy(&o.stderr).trim().to_string())
+            .unwrap_or_default();
+        eprintln!("dist: smoke — native tier unserved on this host (exit 2, by name): {refusal}");
+        let checked = Command::new(&unpacked_wolf)
+            .args(["test", "corpus/hello.lu"])
+            .env_remove("WOLF_RT_LIB")
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !checked {
+            eprintln!(
+                "dist: smoke — the unpacked `{}` could not run corpus/hello.lu on the checked \
+                 tier either (the archive would not serve a learner)",
+                unpacked_wolf.display()
+            );
+            return ExitCode::FAILURE;
+        }
         eprintln!(
-            "dist: smoke — the unpacked `{}` could not build corpus/hello.lu (the archive \
-             would not serve a learner)",
+            "dist: smoke — {} ran corpus/hello.lu on the checked tier from the unpacked \
+             archive (native is not served here; the archive still serves a learner)",
             unpacked_wolf.display()
         );
-        return ExitCode::FAILURE;
+        return ExitCode::SUCCESS;
     }
     let ran = Command::new(&hello).output();
     match ran {

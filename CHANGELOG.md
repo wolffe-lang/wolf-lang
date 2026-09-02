@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### The archive smoke degrades by name (the v0.2.2 arm gap)
+
+`cargo xtask dist`'s learner-path smoke refused any archive whose
+unpacked `wolf` could not build `hello.lu` natively — which lost the
+linux/aarch64 archive at v0.2.2, a host with no native tier that had
+served learners through the checked tier since v0.2.1. The smoke now
+reads the driver's exit-code contract: an exit-2 environment refusal
+is an unserved host, not a broken archive — it prints the refusal the
+learner will see and proves `wolf test corpus/hello.lu` runs from the
+unpacked archive on the checked tier. The next tag restores the arm
+archive.
+
 ## 0.2.2 — 2026-09-02
 
 THE LEARNERS' RELEASE. **On Windows, this is the first archive that
