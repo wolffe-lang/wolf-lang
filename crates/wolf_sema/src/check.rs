@@ -177,6 +177,14 @@ pub struct TypedBody {
     pub exprs: Vec<(Span, TyId)>,
     /// (name, span, type) per local binding.
     pub locals: Vec<(String, Span, TyId)>,
+    /// s133 — the type-dependent half of the binding table: every
+    /// member name this body resolved (a field through `.`, a struct
+    /// literal or pattern field, an enum variant in value, call or
+    /// pattern position, a method or associated function), as (use
+    /// token span, declaration name-token span). The declaration may
+    /// sit in another file. The resolver's `Resolution::refs` carries
+    /// the lexical half; `wolf lsp` navigates both.
+    pub member_refs: Vec<(Span, Span)>,
     /// Every `defer`/`errdefer` in declaration order (s15): `true` =
     /// `errdefer` (error-path-only). s27 lowers the strict-LIFO
     /// interleave from exactly this record; no unwinding anywhere.
@@ -493,6 +501,8 @@ struct Checker<'a> {
     match_facts: Vec<(Span, bool)>,
     /// Resolved call-site mode surfaces in visit order (s18).
     calls: Vec<(Span, CallSig)>,
+    /// Member resolutions (s133): (use span, declaration name span).
+    member_refs: Vec<(Span, Span)>,
     /// Every tag name spelled in an error row of the item under check
     /// — the resolver's lowercase-deferral set, recomputed here so a
     /// lowercase name it deferred is refused honestly instead of
@@ -670,6 +680,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         match_recs: Vec::new(),
         match_facts: Vec::new(),
         calls: Vec::new(),
+        member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
@@ -761,6 +772,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     coercions: c.coercions,
                     matches: c.match_facts,
                     calls: c.calls,
+                    member_refs: c.member_refs,
                     task_captures,
                 })
             } else {
@@ -822,6 +834,7 @@ pub(crate) fn collect_body_rows(
         match_recs: Vec::new(),
         match_facts: Vec::new(),
         calls: Vec::new(),
+        member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
@@ -3442,6 +3455,7 @@ impl<'a> Checker<'a> {
                 }
                 continue;
             };
+            self.member_refs.push((nspan, sig.fields[i].span));
             by_decl[i] = f.pattern();
         }
         if !d.has_rest() {
@@ -7240,6 +7254,7 @@ impl<'a> Checker<'a> {
                 let label = format!("{tyname}.{mname}");
                 let payload = v.payload.clone();
                 let v_span = v.span;
+                self.member_refs.push((member.span, v_span));
                 let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
                 if arg_nodes.len() != payload.len() {
                     self.wrong_arg_count(
@@ -7318,6 +7333,7 @@ impl<'a> Checker<'a> {
                         .find(|mm| mm.name == mname && !mm.has_self)
                         .cloned()
                         .expect("found above");
+                    self.member_refs.push((member.span, method.name_span));
                     let label = format!("{tyname}.{mname}");
                     return Ok(Some(self.call_by_sig(
                         &label,
@@ -7574,6 +7590,7 @@ impl<'a> Checker<'a> {
                     method: mname.to_string(),
                 },
             ));
+            self.member_refs.push((member_span, method.name_span));
             return self.dispatch_method(
                 mname,
                 &method.sig,
@@ -7645,6 +7662,7 @@ impl<'a> Checker<'a> {
                         dyn_call: false,
                     },
                 ));
+                self.member_refs.push((member_span, method.name_span));
                 self.dispatch_method(
                     mname,
                     &method.sig,
@@ -7750,6 +7768,7 @@ impl<'a> Checker<'a> {
                         dyn_call: false,
                     },
                 ));
+                self.member_refs.push((member_span, method.name_span));
                 self.dispatch_method(
                     mname,
                     &method.sig,
@@ -7853,6 +7872,7 @@ impl<'a> Checker<'a> {
                 dyn_call: true,
             },
         ));
+        self.member_refs.push((member_span, method.name_span));
         self.dispatch_method(
             mname,
             &method.sig,
@@ -8298,6 +8318,9 @@ impl<'a> Checker<'a> {
                 return Ok(self.error_ty());
             };
             let mname = self.text(member.span);
+            if let Some(v) = variants.iter().find(|v| v.name == mname) {
+                self.member_refs.push((member.span, v.span));
+            }
             if generic {
                 return Err(NotYet {
                     construct: "a generic enum's variants (generic data)",
@@ -8411,7 +8434,10 @@ impl<'a> Checker<'a> {
                         };
                         let mname = self.text(member.span);
                         match s.fields.iter().find(|f| f.name == mname).cloned() {
-                            Some(f) => Ok(inst(self, f.ty)),
+                            Some(f) => {
+                                self.member_refs.push((member.span, f.span));
+                                Ok(inst(self, f.ty))
+                            }
                             None => {
                                 // The field/method crossover classic:
                                 // `p.len` when `len` is a method.
@@ -8751,6 +8777,7 @@ impl<'a> Checker<'a> {
                 }
                 continue;
             };
+            self.member_refs.push((nt.span, field.span));
             let fty = field_ty(self, field.ty);
             match init.value() {
                 Some(v) => {
@@ -9327,7 +9354,10 @@ impl<'a> Checker<'a> {
                     // last segment.
                     let vname = segs.last().map(|(n, _)| n.clone()).unwrap_or_default();
                     match vs.iter().find(|v| v.0 == vname) {
-                        Some((n, p, _)) => Some((n.clone(), p.clone())),
+                        Some((n, p, vspan)) => {
+                            self.member_refs.push((name_span, *vspan));
+                            Some((n.clone(), p.clone()))
+                        }
                         None => {
                             self.unknown_case(scrut, name_span, &vname);
                             None
