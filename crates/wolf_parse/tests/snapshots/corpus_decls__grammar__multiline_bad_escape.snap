@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1522..1614 name=main body=Block
+-- diagnostics --
+E0101 [Error] 1566..1568 there is no `\q` escape in wolf

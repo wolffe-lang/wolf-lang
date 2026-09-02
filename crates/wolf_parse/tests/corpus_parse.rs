@@ -169,7 +169,7 @@ fn corpus_parse_expectations() {
             }
         }
     }
-    // The ledger: 16 own-file syntax-tier counter-examples exist today
+    // The ledger: 17 own-file syntax-tier counter-examples exist today
     // (E0001, E0002, E0006, E0008, E0210, s88's E0201 bare `..` —
     // wolf-lang#88 — s126's E0211 misplaced `#![…]`, s128's two
     // D63 refusal teach-notes: E0201 one-initializer-many-names and
@@ -186,10 +186,12 @@ fn corpus_parse_expectations() {
     // family-wide; the NEWLINE-separated literal refusal is pinned in
     // decl_grammar::expr_list_separators_are_required instead, because
     // the formatter's canonical multi-line layout regenerates the
-    // separator and a corpus file must fully format), plus 1
-    // member-sibling case (s124's broken_sibling, D59); everything
-    // else must pass.
-    assert_eq!(fail, 16, "syntax-tier fail-file count drifted");
+    // separator and a corpus file must fully format), and r06's E0101
+    // UNKNOWN escape inside a multiline — wolf-lang#215, the first
+    // entry to pin `\q` anywhere, which is how it turned up #225's
+    // code divergence — plus 1 member-sibling case (s124's
+    // broken_sibling, D59); everything else must pass.
+    assert_eq!(fail, 17, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

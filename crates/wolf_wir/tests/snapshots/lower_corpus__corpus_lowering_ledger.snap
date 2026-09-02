@@ -133,6 +133,7 @@ grammar/match_arm_or_inside_product.lu: refused — or-patterns inside product p
 grammar/match_arm_or_over_product.lu: refused — or-patterns over product patterns (join params, c06)
 grammar/match_arm_product_nested.lu: lowers
 grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern (c06)
+grammar/multiline_bad_escape.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
@@ -373,6 +374,7 @@ strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
 strings/match_str_const_scrutinee.lu: lowers
 strings/match_str_dispatch.lu: lowers
+strings/multiline_escapes.lu: lowers
 strings/raw_fences.lu: lowers
 strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers

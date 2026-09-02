@@ -1,0 +1,63 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 1522..1615
+  FnDecl 1522..1614
+    FnKw 1522..1524 "fn"
+    Ident 1525..1529 "main"
+    ParamList 1529..1531
+      LParen 1529..1530 "("
+      RParen 1530..1531 ")"
+    RetType 1532..1539
+      Arrow 1532..1534 "->"
+      ErrorUnionType 1535..1539
+        Not 1535..1536 "!"
+        PathType 1536..1539
+          Path 1536..1539
+            Ident 1536..1539 "int"
+    Block 1540..1614
+      LBrace 1540..1541 "{"
+      LetDecl 1546..1581
+        LetKw 1546..1549 "let"
+        IdentPat 1550..1551
+          Ident 1550..1551 "s"
+        Eq 1552..1553 "="
+        StringExpr 1554..1580
+          StrBegin 1554..1557 "\"\"\""
+          StrFragment 1557..1566 "\n        "
+          ErrorToken 1566..1568 "\\q"
+          StrFragment 1568..1577 "\n        "
+          StrEnd 1577..1580 "\"\"\""
+        Term 1580..1581 "\n"
+      ExprStmt 1585..1613
+        IfExpr 1585..1612
+          IfKw 1585..1587 "if"
+          BinExpr 1588..1595
+            PathExpr 1588..1589
+              Ident 1588..1589 "s"
+            EqEq 1590..1592 "=="
+            StringExpr 1593..1595
+              StrBegin 1593..1594 "\""
+              StrEnd 1594..1595 "\""
+          Block 1596..1601
+            LBrace 1596..1597 "{"
+            ExprStmt 1598..1599
+              LiteralExpr 1598..1599
+                Int 1598..1599 "0"
+            RBrace 1600..1601 "}"
+          ElseKw 1602..1606 "else"
+          Block 1607..1612
+            LBrace 1607..1608 "{"
+            ExprStmt 1609..1610
+              LiteralExpr 1609..1610
+                Int 1609..1610 "1"
+            RBrace 1611..1612 "}"
+        Term 1612..1613 "\n"
+      RBrace 1613..1614 "}"
+  Term 1614..1615 "\n"
+  Eof 1615..1615 ""
+== diagnostics ==
+E0101 [Error] 1566..1568 there is no `\q` escape in wolf
+    note the escapes wolf understands are `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xNN`, and `\u{…}`. For a literal backslash, write `\\`; for text with no escapes at all, use a raw string `r"…"`.

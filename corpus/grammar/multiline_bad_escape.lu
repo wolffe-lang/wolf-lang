@@ -1,0 +1,34 @@
+//! check: fail(E0101)
+//! phase: none
+//! conforms: gram.lex.str.escape, gram.lex.str.multi
+//!
+//! Issue #215, the refusal half — le05's actual question, answered by a
+//! file instead of by a contrast between prose bullets. `\q` is not an
+//! escape wolf has; inside `"…"` that is **E0101**, and this pins that
+//! it is E0101 inside `"""…"""` too, because `MULTI_PART` reaches the
+//! same `STR_ESC` a plain string's `STR_PART` does. An
+//! `invalid_escape` node therefore belongs inside a multiline: the
+//! productions say so now, and this file measures it.
+//!
+//! Its running twin is `strings/multiline_escapes.lu`, which pins the
+//! escapes that ARE derived. Same shape as #198's pair one literal
+//! over (`grammar/str_uni_seven_digits.lu` and
+//! `strings/str_uni_leading_zeros.lu`).
+//!
+//! It also RECORDS A DIVERGENCE, and #225 carries the numbers: lupin
+//! 0.1.23 refuses this file under a DIFFERENT code — one the catalog
+//! already spends on a multiline's opening line — and refuses a plain
+//! `"\q"` under it too, so the divergence is about the escape, not the
+//! multiline. E0101 is normative twice over: the catalog assigns it to
+//! the invalid escape, and `[gram.lex.str.escape]` has said "any other
+//! `\` is E0101 at the escape" since before this file. #198's two
+//! witnesses agree because they pin the `\u{…}` DIGIT BOUND, which both
+//! machines number the same; nothing had ever pinned an unknown escape,
+//! which is how a code collision survived 484 differential entries.
+
+fn main() -> !int {
+    let s = """
+        \q
+        """
+    if s == "" { 0 } else { 1 }
+}

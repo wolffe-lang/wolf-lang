@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="ok")
+//! phase: run
+//! conforms: gram.lex.str.multi, gram.lex.str.escape
+//!
+//! Issue #215, the running half. `[gram.lex.str.multi]` said
+//! "Interpolation works inside" and nothing whatsoever about escapes,
+//! while its two neighbours say the opposite outright — raw is "no
+//! escapes, no interpolation", generalized is a "raw-mode body". Read
+//! against them the silence reads as "escapes work", which is the
+//! reading tree-sitter-wolf took at le05 while deciding whether its new
+//! `invalid_escape` node belongs inside `"""…"""`. That is an inference
+//! from an omission, in a spec whose own #198 fix was to stop asserting
+//! escape facts in prose and start deriving them.
+//!
+//! The silence was right, and it is a production now:
+//! `MULTI_PART ::= MULTI_TEXT | STR_ESC | '{{' | '}}' | INTERP` — the
+//! same alternatives `STR_PART` has, because the lexer scans a multiline
+//! body with the same routine as a plain one, with the line break and
+//! the lone `"` admitted as text. This file measures it: `\t`, `\u{…}`
+//! at six digits, `\"` (which does NOT close the literal), and the `{{`
+//! `}}` literal braces — inside `"""…"""`, compared against the same
+//! text written as a plain string. Its refusal twin is
+//! `grammar/multiline_bad_escape.lu`.
+//!
+//! Interpolation is deliberately absent: it lexes here (INTERP is a
+//! `MULTI_PART`) and the mid-end refuses it by name — "interpolation
+//! inside a multiline string (s38 formatting)" — so a witness carrying
+//! one would measure the conservatism ledger, not the grammar.
+
+fn main() -> !int {
+    let s = """
+        tab:\there
+        wolf:\u{01F43A}
+        quote:\" brace:{{}}
+        """
+    let want = "tab:\there\nwolf:\u{01F43A}\nquote:\" brace:{{}}\n"
+    if s == want {
+        print("ok")
+        0
+    } else {
+        print("GOT {s}")
+        1
+    }
+}
