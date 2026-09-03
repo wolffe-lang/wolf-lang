@@ -1219,10 +1219,23 @@ const ALL_THREE_FLOOR: usize = 207;
 // discards the reply buffered before an RST close, which is why the
 // row reads to the `closed` row rather than counting bytes). Counts
 // measured by this gate on that runner, not predicted.
+// s136 ratchet, windows' own line, read off PR #236's windows job
+// (run 33724011699, head c08cec6) over 469 entries: checked 272,
+// native 290, release 0 (DARK by design, s60c's), union 307,
+// all-three 0. Six new run-phase witnesses reach both live lanes on
+// this host — the four byte-producer rows (`memory/byte_producers_ledger`,
+// `memory/consumed_walk_charges_nothing`, `strings/bytes_roundtrip`,
+// `net/echo_bytes`), `grammar/bom_at_start` (a BOM-prefixed file
+// runs) and `net/unix_echo`, which on this host answers the
+// `unsupported` row BY NAME and prints the same relations (the
+// witness's construction: one stdout on every host; the AF_UNIX
+// kernel probe beside it passed on the same run — the serving rung
+// is `docs/platforms.md`'s named gap, not this floor's). Counts
+// measured by this gate on that runner, not predicted.
 #[cfg(target_os = "windows")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 266), ("native", 284), ("release", 0)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 272), ("native", 290), ("release", 0)];
 #[cfg(target_os = "windows")]
-const UNION_FLOOR: usize = 301;
+const UNION_FLOOR: usize = 307;
 #[cfg(target_os = "windows")]
 const ALL_THREE_FLOOR: usize = 0;
 // s59, measured on macOS/aarch64 the day the gate lifted: checked and
@@ -1394,12 +1407,28 @@ const ALL_THREE_FLOOR: usize = 0;
 // lane refused by construct before, so nothing it touches changes an
 // existing verdict, and the #224 fix only widens what `net_deadline`
 // accepts. Counts measured by this gate, not predicted.
+// s136 ratchet over 469 entries: the producers speak bytes (#231),
+// the phantom 16x (#232), unix-domain sockets (#227) and D74's
+// string-layout codes (#230). Measured on this tree at the sprint's
+// head: six new run-phase witnesses execute on all three lanes —
+// `memory/byte_producers_ledger` (F-0104's after-table as relations),
+// `memory/consumed_walk_charges_nothing` (#232's relation),
+// `strings/bytes_roundtrip`, `net/echo_bytes` (an echo over
+// List[byte]), `net/unix_echo` (served on this host; refused by name
+// on windows, same stdout by construction) and `grammar/bom_at_start`
+// (a BOM-prefixed file runs) — so every count moves by exactly six
+// (272/290/290, union 307, all-three 255). The five D74 refusal
+// witnesses and `typecheck/byte_elem_arith_fail` are static
+// rejections and by design move no count. The 11 pre-existing
+// byte-view files moved TYPES, not lanes: each still executes where
+// it did (the blast radius inside this corpus, spelled `as int` /
+// `List[byte]`). Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 266), ("native", 284), ("release", 284)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 272), ("native", 290), ("release", 290)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 301;
+const UNION_FLOOR: usize = 307;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 249;
+const ALL_THREE_FLOOR: usize = 255;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
