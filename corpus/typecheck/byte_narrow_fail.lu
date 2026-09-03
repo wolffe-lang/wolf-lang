@@ -1,0 +1,19 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.byte, type.byte.cast
+//!
+//! s135 (D72) — `int` -> `byte` without `as` is the type mismatch it
+//! looks like: a `byte` adopts no literal (`let b: byte = 65` is not a
+//! narrowing, it is a literal that has no byte to become — `char`'s
+//! posture, [type.byte]), and a value never narrows implicitly. The
+//! teach-note names the spelling and what it does: `65 as byte`
+//! keeps the low eight bits ([type.byte.cast]). Snapshot:
+//! `crates/wolf_sema/tests/typecheck_diagnostics.rs`.
+
+fn main() -> !int {
+    let b: byte = 65
+    let n = 300
+    let c: byte = n
+    print("{b} {c}")
+    0
+}

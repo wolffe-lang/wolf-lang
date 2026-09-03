@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="widen 200 200 | trunc 0 255 0 255 44 | arith 201 400 -1 -200 | order true true true | eq true true")
+//! phase: run
+//! conforms: type.byte, type.byte.cast, type.byte.op, type.byte.interp
+//!
+//! s135 (D72) — the `byte` cast semantics, three-tier. `int as byte`
+//! TRUNCATES to the low eight bits and never traps: the boundary
+//! values 0, 255, 256 and -1 are the witness (256 is 0, -1 is 255,
+//! 300 is 44 — no W0401, no overflow row, no wrap type spelled).
+//! `byte as int` WIDENS by zero-extension (200 comes back 200, never
+//! -56). Every arithmetic and bitwise operator widens a byte operand
+//! to `int` first and yields `int` ([type.byte.op]): 200 + 200 is 400
+//! (no 8-bit overflow — the term is int's), 0 - 1 is -1 (no wrap, no
+//! trap), `-b` is int's negation; the bitwise operators widen the
+//! same way (`b & 15`, `b >> 4`) but sit outside this witness because
+//! the checked machine refuses bitwise ops on plain `int` by name
+//! (its own conservatism, not the byte's). Comparisons are octet order (the
+//! unsigned compare: 200 > 100 stays true where a signed i8 would
+//! say -56 < 100). `{b}` prints the number.
+
+fn main() -> !int {
+    let b = 200 as byte
+    let w = b as int
+    // truncation at the boundaries ([type.byte.cast])
+    let t0 = 0 as byte
+    let t255 = 255 as byte
+    let t256 = 256 as byte
+    let tneg = (0 - 1) as byte
+    let t300 = 300 as byte
+    // arithmetic widens ([type.byte.op]): every result is an int
+    let a1 = b + 1
+    let a2 = b + b
+    let a3 = t0 - 1
+    let a4 = -b
+    // order is octet order — unsigned
+    let hi = 100 as byte
+    let o1 = b > hi
+    let o2 = hi < b
+    let o3 = t255 >= t256
+    // equality is octet equality; the round trip is the identity
+    let e1 = w as byte == b
+    let e2 = t256 == t0
+    print(
+        "widen {b} {w} | trunc {t0} {t255} {t256} {tneg} {t300} | arith {a1} {a2} {a3} {a4} | order {o1} {o2} {o3} | eq {e1} {e2}",
+    )
+    0
+}

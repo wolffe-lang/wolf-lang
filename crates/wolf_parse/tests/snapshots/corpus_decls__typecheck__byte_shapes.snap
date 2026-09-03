@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 763..827 name=Pixel fields=3
+FnDecl 829..953 name=classify body=Block
+FnDecl 955..1066 name=describe body=Block
+FnDecl 1068..1755 name=main body=Block
