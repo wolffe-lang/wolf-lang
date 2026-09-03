@@ -13,18 +13,20 @@ Wolf is pre-alpha. The surface still moves.
 
 ## What runs today
 
-v0.2.3 is tagged, under the codename wolfgang. The codenames go on like that.
+v0.2.4 is tagged, under the codename wolfgang. The codenames go on like that.
 
 It ships both tiers: `wolf build` and `wolf run` compile `.lu` source to
 native machine code through the compiler's own backend, with no LLVM in the
 loop, and `wolf build --release` goes through LLVM instead. The tiers agree
 on every corpus program that runs, on linux x86-64 and macOS aarch64 alike,
 and the release tier's M2 gate — the thirteen-kernel suite against naive
-`clang -O3` — is declared held. Windows x86-64 runs the native tier as a
-bring-up (s60a): `hello.exe` builds and runs, traps report and exit 134,
-and the task layer, the release tier, and `os.signal` refuse by name —
-[`docs/platforms.md`](docs/platforms.md) is the per-host ledger and the
-road.
+`clang -O3` — is declared held. Windows x86-64 runs the native tier
+(s60a) with the task layer on it (s60b): `hello.exe` builds and runs,
+traps report and exit 134, `spawn` and scopes, `proc`, channels and
+`select`, `sync`/`when` and `os.signal` all serve, and what refuses by
+name there is the release tier and EXTERNAL `reload`/`upgrade` signal
+delivery — [`docs/platforms.md`](docs/platforms.md) is the per-host
+ledger and the road.
 
 ```sh
 cargo build --release -p wolf_driver
@@ -41,7 +43,7 @@ the one above included — answers `version+dev.<commit>`, so an off-tag build
 never claims to be the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and says `+dev.unknown`.
 
-[`CHANGELOG.md`](CHANGELOG.md) tells v0.2.3 by campaign;
+[`CHANGELOG.md`](CHANGELOG.md) tells v0.2.4 by campaign;
 [`docs/release/NOTES-v0.1.0.md`](docs/release/NOTES-v0.1.0.md) says what the
 first release was, feature by feature.
 
