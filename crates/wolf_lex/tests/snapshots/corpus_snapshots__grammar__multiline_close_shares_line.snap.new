@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_lex/tests/corpus_snapshots.rs
+assertion_line: 41
 expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..22 "//! check: fail(E0103)"

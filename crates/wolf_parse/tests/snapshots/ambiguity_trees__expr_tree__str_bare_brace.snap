@@ -3,57 +3,57 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 647..715
-  FnDecl 647..714
-    FnKw 647..649 "fn"
-    Ident 650..654 "main"
-    ParamList 654..656
-      LParen 654..655 "("
-      RParen 655..656 ")"
-    RetType 657..664
-      Arrow 657..659 "->"
-      ErrorUnionType 660..664
-        Not 660..661 "!"
-        PathType 661..664
-          Path 661..664
-            Ident 661..664 "int"
-    Block 665..714
-      LBrace 665..666 "{"
-      LetDecl 671..694
-        LetKw 671..674 "let"
-        IdentPat 675..676
-          Ident 675..676 "s"
-        Eq 677..678 "="
-        StringExpr 679..693
-          StrBegin 679..680 "\""
-          StrFragment 680..686 "hello "
-          Interp 686..693
-            InterpOpen 686..687 "{"
-            StringExpr 687..693
-              StrBegin 687..693 "world\""
-              StrEnd 693..693 ""
-            InterpClose 693..693 ""
-          StrEnd 693..693 ""
-        Term 693..694 "\n"
-      ExprStmt 698..707
-        CallExpr 698..706
-          PathExpr 698..703
-            Ident 698..703 "print"
-          ArgList 703..706
-            LParen 703..704 "("
-            Arg 704..705
-              PathExpr 704..705
-                Ident 704..705 "s"
-            RParen 705..706 ")"
-        Term 706..707 "\n"
-      ExprStmt 711..713
-        LiteralExpr 711..712
-          Int 711..712 "0"
-        Term 712..713 "\n"
-      RBrace 713..714 "}"
-  Term 714..715 "\n"
-  Eof 715..715 ""
+SourceFile 648..716
+  FnDecl 648..715
+    FnKw 648..650 "fn"
+    Ident 651..655 "main"
+    ParamList 655..657
+      LParen 655..656 "("
+      RParen 656..657 ")"
+    RetType 658..665
+      Arrow 658..660 "->"
+      ErrorUnionType 661..665
+        Not 661..662 "!"
+        PathType 662..665
+          Path 662..665
+            Ident 662..665 "int"
+    Block 666..715
+      LBrace 666..667 "{"
+      LetDecl 672..695
+        LetKw 672..675 "let"
+        IdentPat 676..677
+          Ident 676..677 "s"
+        Eq 678..679 "="
+        StringExpr 680..694
+          StrBegin 680..681 "\""
+          StrFragment 681..687 "hello "
+          Interp 687..694
+            InterpOpen 687..688 "{"
+            StringExpr 688..694
+              StrBegin 688..694 "world\""
+              StrEnd 694..694 ""
+            InterpClose 694..694 ""
+          StrEnd 694..694 ""
+        Term 694..695 "\n"
+      ExprStmt 699..708
+        CallExpr 699..707
+          PathExpr 699..704
+            Ident 699..704 "print"
+          ArgList 704..707
+            LParen 704..705 "("
+            Arg 705..706
+              PathExpr 705..706
+                Ident 705..706 "s"
+            RParen 706..707 ")"
+        Term 707..708 "\n"
+      ExprStmt 712..714
+        LiteralExpr 712..713
+          Int 712..713 "0"
+        Term 713..714 "\n"
+      RBrace 714..715 "}"
+  Term 715..716 "\n"
+  Eof 716..716 ""
 == diagnostics ==
-E0102 [Error] 679..693 this string never closes
+E0102 [Error] 680..694 this string never closes
     label it opens here, and an interpolation `{` inside it is still open when the line ends
     note a `"…"` string — and every `{…}` interpolation inside it — must close before the line ends. Close the interpolation with `}` and the string with `"`; for a literal brace, write `{{`.

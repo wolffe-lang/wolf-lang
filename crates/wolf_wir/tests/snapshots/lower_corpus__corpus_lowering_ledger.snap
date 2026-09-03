@@ -218,7 +218,7 @@ memory/closure_escape_refused.lu: refused — a capturing closure read as a valu
 memory/closure_kill_list.lu: lowers
 memory/closure_region_capture.lu: refused — a region captured by a closure (open it in the enclosing frame — c25 closeout)
 memory/closure_value_paths.lu: lowers
-memory/consumed_walk_charges_nothing.lu: not mem-clean (pre-wir rungs own it)
+memory/consumed_walk_charges_nothing.lu: lowers
 memory/defer_order.lu: lowers
 memory/destructure_bind.lu: lowers
 memory/destructure_partial_live.lu: lowers
