@@ -61,6 +61,19 @@ fn e0401_byte_narrowing_teach_note() {
     );
 }
 
+/// s136 (#231): the byte producers speak `List[byte]`, so a `.bytes()`
+/// element used as an `int` without `as int` is the mismatch the
+/// blast radius reads — an index, a binding typed `int`, a comparison
+/// against a literal, a literal `match` arm. Every note names `as
+/// int` ([type.byte.cast] widens by zero-extension).
+#[test]
+fn e0401_byte_widening_teach_note() {
+    snap_one(
+        "e0401_byte_widening",
+        "fn main() -> !int {\n    let table = List[int]()\n    let s = \"wolf\"\n    let b = s.bytes()[0]\n    let hit = table[b]\n    let n: int = b\n    if b == 119 { return 1 }\n    match b {\n        10 => print(\"nl\"),\n        _ => print(\"{hit} {n}\"),\n    }\n    0\n}\n",
+    );
+}
+
 /// Catalog case 2: return-type mismatch with the because chain.
 #[test]
 fn e0401_return_mismatch_provenance() {

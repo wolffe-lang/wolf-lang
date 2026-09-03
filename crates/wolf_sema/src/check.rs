@@ -1641,11 +1641,17 @@ impl<'a> Checker<'a> {
         match (&e, &a) {
             // s135 (D72): `int` -> `byte` without `as`. A literal adopts
             // no byte and a value never narrows implicitly; the cast is
-            // the spelling, and it keeps the low eight bits.
+            // the spelling, and it keeps the low eight bits. s136
+            // (#231): with `bytes()` and the io readers speaking
+            // `List[byte]`, the common site is a byte COMPARED against
+            // an int literal (`b == 10`), where widening the byte is
+            // the fix the blast radius reads — the note names `as int`
+            // first and `as byte` second.
             (TyKind::Prim(Prim::Byte), _) if numeric(&a) => Some(
                 "`byte` adopts no literal and takes no `int` implicitly \
-                 ([type.byte]); narrow it explicitly with `as byte` — the cast \
-                 keeps the value's low eight bits ([type.byte.cast])."
+                 ([type.byte]): widen the byte — `b as int` — or narrow this \
+                 side with `as byte`, which keeps the value's low eight bits \
+                 ([type.byte.cast])."
                     .to_string(),
             ),
             (TyKind::Prim(Prim::Int), TyKind::Prim(Prim::Byte)) => Some(
@@ -5814,10 +5820,14 @@ impl<'a> Checker<'a> {
                 let ret = none_of(self, str_);
                 (vec![p("self", recv_ty), p("range", r)], ret)
             }
-            // The byte view, materialized at v0 (D25 licenses byte
-            // indexing on `bytes`; `b[i]` rides List indexing).
+            // The byte view (D25 licenses byte indexing on `bytes`;
+            // `b[i]` rides List indexing). `List[byte]` since s136
+            // (wolf-lang#231, D72's producer half): each element is
+            // the octet itself, so a walk binds a `byte` and the
+            // materialized list strides by 1.
             "bytes" => {
-                let ret = self.lo.table.intern(TyKind::List(int_));
+                let byte_ = self.lo.table.prim(Prim::Byte);
+                let ret = self.lo.table.intern(TyKind::List(byte_));
                 (vec![p("self", recv_ty)], ret)
             }
             // Code-point iteration ([mem.str.chars], s120; typed s121):
@@ -6575,35 +6585,39 @@ impl<'a> Checker<'a> {
                     &["not_found", "denied", "exists", "invalid", "io"],
                 ),
             ),
-            // BYTES. `List[int]` is the byte carrier s77's `bytes()`
-            // and s81's `str_from_utf8` already established. No `utf8`
-            // row anywhere here: a file holding a lone `0x80` is data,
-            // and refusing to carry it was exactly what made
-            // `copy_file`/`move_file` text operations. `invalid` is a
-            // list element that is not a byte (outside `0..=255`) —
-            // the write's spelling of s81's refusal, since writing is
-            // not decoding.
+            // BYTES. `List[byte]` is the byte carrier (s136,
+            // wolf-lang#231): the octet type D72 ruled, one ledger byte
+            // per payload byte on every tier — before s136 these were
+            // `List[int]`, the carrier s77's `bytes()` and s81's
+            // `str_from_utf8` had established, and a 64 KiB read
+            // charged 16x its payload. No `utf8` row anywhere here: a
+            // file holding a lone `0x80` is data, and refusing to carry
+            // it was exactly what made `copy_file`/`move_file` text
+            // operations. `invalid` stays declared on the writes (the
+            // row vocabulary is stable; a `byte` element is in range by
+            // construction, so the row is unreachable from typed code
+            // and remains the FFI-caller answer).
             "fs_read_bytes" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
+                let list_byte = self.byte_list_ty();
                 (
                     vec![str_],
-                    rowed(self, list_int, &["not_found", "denied", "io"]),
+                    rowed(self, list_byte, &["not_found", "denied", "io"]),
                 )
             }
             "fs_write_bytes" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
+                let list_byte = self.byte_list_ty();
                 (
-                    vec![str_, list_int],
+                    vec![str_, list_byte],
                     rowed(self, unit, &["not_found", "denied", "invalid", "io"]),
                 )
             }
             "fs_read_chunk" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (vec![int_, int_], rowed(self, list_int, &["eof", "io"]))
+                let list_byte = self.byte_list_ty();
+                (vec![int_, int_], rowed(self, list_byte, &["eof", "io"]))
             }
             "fs_write_chunk" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (vec![int_, list_int], rowed(self, unit, &["invalid", "io"]))
+                let list_byte = self.byte_list_ty();
+                (vec![int_, list_byte], rowed(self, unit, &["invalid", "io"]))
             }
             // DIRECTORIES. `fs_read_dir` hands back entry NAMES,
             // SORTED — the decision is `wolf_rt::fs`'s doc and the
@@ -6673,6 +6687,30 @@ impl<'a> Checker<'a> {
             // deadlines make it routinely reachable. A forged or
             // wrong-kind fd is `io`, never a trap.
             "net_listen" => (vec![str_], rowed(self, int_, &["io"])),
+            // s136 (#227, `[os.net.unix]`): the unix-domain family, in
+            // the TCP pair's shape. The rows distinguish "this host
+            // does not serve the family" (`unsupported` — windows at
+            // this pin, by name) from "the path failed" (`exists` for
+            // a stale socket file at bind, `not_found` for a missing
+            // directory or socket file, `denied` for a permission the
+            // caller lacks, `refused` for a file nobody listens on);
+            // the accepted/dialed stream is an ordinary net fd.
+            "net_listen_unix" => (
+                vec![str_],
+                rowed(
+                    self,
+                    int_,
+                    &["unsupported", "exists", "not_found", "denied", "io"],
+                ),
+            ),
+            "net_connect_unix" => (
+                vec![str_],
+                rowed(
+                    self,
+                    int_,
+                    &["unsupported", "refused", "not_found", "denied", "io"],
+                ),
+            ),
             "net_port" => (vec![int_], rowed(self, int_, &["io"])),
             "net_accept" => (vec![int_], rowed(self, int_, &["timeout", "io"])),
             "net_connect" => (vec![str_], rowed(self, int_, &["refused", "timeout", "io"])),
@@ -6681,21 +6719,22 @@ impl<'a> Checker<'a> {
                 rowed(self, str_, &["closed", "timeout", "utf8", "io"]),
             ),
             "net_write" => (vec![int_, str_], rowed(self, unit, &["closed", "io"])),
-            // s115 (#137): the byte twins. `List[int]` in/out, no `utf8`
-            // row (bytes are bytes — the `fs_read_bytes` posture over the
-            // socket); the write gains `invalid` for a list element
-            // outside `0..=255`, exactly `fs_write_bytes`.
+            // s115 (#137): the byte twins. `List[byte]` in/out (s136,
+            // #231 — `List[int]` before), no `utf8` row (bytes are
+            // bytes — the `fs_read_bytes` posture over the socket); the
+            // write keeps `invalid` declared exactly as `fs_write_bytes`
+            // does.
             "net_read_bytes" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
+                let list_byte = self.byte_list_ty();
                 (
                     vec![int_, int_],
-                    rowed(self, list_int, &["closed", "timeout", "io"]),
+                    rowed(self, list_byte, &["closed", "timeout", "io"]),
                 )
             }
             "net_write_bytes" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
+                let list_byte = self.byte_list_ty();
                 (
-                    vec![int_, list_int],
+                    vec![int_, list_byte],
                     rowed(self, unit, &["closed", "invalid", "io"]),
                 )
             }
@@ -6783,18 +6822,18 @@ impl<'a> Checker<'a> {
                 vec![str_, str_],
                 rowed(self, int_, &["parse", "missing", "kind"]),
             ),
-            // The s81 str-construction border (#58): `List[int] -> str
-            // ! {utf8}`, pure like the json family. The row is the
-            // whole point — s77 refused an unchecked bytes-to-str path
-            // because that is the forging hole, and this closes the gap
-            // the honest way: the primitive VALIDATES (stray
-            // continuations, truncations, overlong forms, surrogates,
-            // scalars past U+10FFFF, and any element outside 0..=255),
-            // and a rejection is a recoverable `utf8` VALUE, not a
-            // trap. wolf-std's `bytes.to_str` is this call plus a name.
+            // The s81 str-construction border (#58): `List[byte] -> str
+            // ! {utf8}` (s136, #231 — `List[int]` before), pure like the
+            // json family. The row is the whole point — s77 refused an
+            // unchecked bytes-to-str path because that is the forging
+            // hole, and this closes the gap the honest way: the
+            // primitive VALIDATES (stray continuations, truncations,
+            // overlong forms, surrogates, scalars past U+10FFFF), and a
+            // rejection is a recoverable `utf8` VALUE, not a trap.
+            // wolf-std's `bytes.to_str` is this call plus a name.
             "str_from_utf8" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (vec![list_int], rowed(self, str_, &["utf8"]))
+                let list_byte = self.byte_list_ty();
+                (vec![list_byte], rowed(self, str_, &["utf8"]))
             }
             // The region accounting queries (s131, wolf-lang#187):
             // pure reads of the ledger `[mem.region.account]` names.
@@ -6810,6 +6849,15 @@ impl<'a> Checker<'a> {
             _ => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)
+    }
+
+    /// `List[byte]` — the type every byte producer returns and every
+    /// byte consumer takes (s136, wolf-lang#231): `str.bytes()`,
+    /// `str_from_utf8`, the four `fs_*` byte calls and the two `net_*`
+    /// byte calls. One spelling, so the eight signatures cannot drift.
+    fn byte_list_ty(&mut self) -> TyId {
+        let byte_ = self.lo.table.prim(Prim::Byte);
+        self.lo.table.intern(TyKind::List(byte_))
     }
 
     /// A comptime intrinsic call (the D33 allowlist): `typeinfo` /

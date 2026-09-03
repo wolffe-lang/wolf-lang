@@ -1,0 +1,46 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `byte`, but `List index` needs its 1st argument to be `int`
+ --> mem:///main.lu:5:21
+  |
+5 |     let hit = table[b]
+  |                     ^ found `byte` here
+  |
+  = note: expected `int`, found `byte`
+  = note: a `byte` widens only through the spelled cast ([type.byte.cast]): write `b as int`.
+
+error[E0401]: this is `byte`, but `n` is declared as `int`
+ --> mem:///main.lu:6:18
+  |
+6 |     let n: int = b
+  |            --- the annotation is here
+  |                  ^ found `byte` here
+  |
+  = note: expected `int`, found `byte`
+  = note: a `byte` widens only through the spelled cast ([type.byte.cast]): write `b as int`.
+
+error[E0401]: this is `{integer}`, but the other side of `==` makes it `byte`
+ --> mem:///main.lu:7:13
+  |
+7 |     if b == 119 { return 1 }
+  |        - this operand fixed the type
+  |             ^^^ found `{integer}` here
+  |
+  = note: expected `byte`, found `{integer}`
+  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]): widen the byte —
+    `b as int` — or narrow this side with `as byte`, which keeps the value's low eight bits
+    ([type.byte.cast]).
+
+error[E0401]: this is `{integer}`, but the pattern requires `byte`
+ --> mem:///main.lu:9:9
+  |
+9 |         10 => print("nl"),
+  |         ^^ found `{integer}` here
+  |         -- the pattern is here
+  |
+  = note: expected `byte`, found `{integer}`
+  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]): widen the byte —
+    `b as int` — or narrow this side with `as byte`, which keeps the value's low eight bits
+    ([type.byte.cast]).
