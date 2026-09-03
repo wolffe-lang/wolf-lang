@@ -360,6 +360,14 @@ enum Value {
     /// surrogate gap), so an out-of-domain `Value::Char` is
     /// unconstructible by the same rule the compiled lanes trap on.
     Char(char),
+    /// A `byte` (s135, D72): one octet. The host `u8` IS the ruled
+    /// domain, so an out-of-range byte is unconstructible; the cast
+    /// in truncates (`n as u8`, the low eight bits) and the cast out
+    /// widens, and every operator widens first ([type.byte.op]) — a
+    /// `Value::Byte` never reaches integer arithmetic as itself. The
+    /// list slot it charges is ONE byte (`slot_bytes`), the property
+    /// wolf-lang#203 asked for on this tier.
+    Byte(u8),
     /// The executable float (s38): `f64` values under IEEE semantics —
     /// arithmetic never traps (X3 is integer law; inf/nan are values).
     /// `f32` stays an honest refusal until a use case rules its
@@ -419,6 +427,7 @@ impl Value {
                 | Value::Int(_)
                 | Value::Bool(_)
                 | Value::Char(_)
+                | Value::Byte(_)
                 | Value::F64(_)
                 | Value::Str(_)
                 | Value::Range { .. }
@@ -940,7 +949,8 @@ impl<'t> Machine<'t> {
     /// the two tiers share a layout.
     fn mint_list(&mut self, items: Vec<Value>, span: Span) -> E<usize> {
         let rid = self.ambient.last().copied().unwrap_or(0);
-        self.charge_region_bytes(rid, 16 * items.len() as u64, span)?;
+        let bytes: u64 = items.iter().map(slot_bytes).sum();
+        self.charge_region_bytes(rid, bytes, span)?;
         let id = self.lists.len();
         self.lists.push(items);
         self.list_region.push(rid);
@@ -3284,6 +3294,8 @@ impl<'t> Machine<'t> {
                         Some(m) => Ok(Flow::Val(Value::Int(m))),
                         None => self.trap("overflow", "mem.ub.defined", e.span),
                     },
+                    // `-b` widens first (D72): int's negation of the octet.
+                    Value::Byte(b) => Ok(Flow::Val(Value::Int(-i64::from(b)))),
                     // IEEE negation flips the sign bit; `-0.0` exists.
                     Value::F64(x) => Ok(Flow::Val(Value::F64(-x))),
                     _ => self.refuse("negation outside integers", e.span),
@@ -3429,7 +3441,18 @@ impl<'t> Machine<'t> {
                     };
                     Ok(Flow::Val(Value::Bool(out)))
                 }
-                _ => self.refuse("ordering outside integers, `char` and str", e.span),
+                // `byte` orders by octet value (D72) — the unsigned
+                // compare the compiled lanes' `icmp u*` answers to.
+                (Value::Byte(a), Value::Byte(b)) => {
+                    let out = match op {
+                        SyntaxKind::Lt => a < b,
+                        SyntaxKind::Gt => a > b,
+                        SyntaxKind::LtEq => a <= b,
+                        _ => a >= b,
+                    };
+                    Ok(Flow::Val(Value::Bool(out)))
+                }
+                _ => self.refuse("ordering outside integers, `char`, `byte` and str", e.span),
             },
             _ => self.refuse("this operator in checked execution", e.span),
         }
@@ -3469,6 +3492,14 @@ impl<'t> Machine<'t> {
         span: Span,
         ty_span: Span,
     ) -> E<Value> {
+        // A byte operand widens to int before any operator (D72,
+        // [type.byte.op]); the term is int-typed, so the checked int
+        // rails below are exactly the compiled lanes' zext + op.
+        let widen = |v: Value| match v {
+            Value::Byte(b) => Value::Int(i64::from(b)),
+            other => other,
+        };
+        let (l, r) = (widen(l), widen(r));
         match (l, r) {
             // D62 (s128): `+` on two strs is `"{s}{u}"` — UTF-8
             // concatenation, a fresh str per application. Sema admits
@@ -3867,6 +3898,12 @@ impl<'t> Machine<'t> {
             // value reaches.
             Value::Int(n) => FmtValue::Int {
                 v: *n,
+                unsigned: false,
+            },
+            // `{b:x}` takes the integer spec surface (D72): the octet
+            // widened, `ff` at most.
+            Value::Byte(b) => FmtValue::Int {
+                v: i64::from(*b),
                 unsigned: false,
             },
             Value::F64(x) => FmtValue::F64(*x),
@@ -5467,6 +5504,24 @@ impl<'t> Machine<'t> {
                     _ => self.refuse("an int-to-char cast of a non-int value", e.span),
                 }
             }
+            // s135 (D72): `byte as int` — total; the octet's value.
+            Some(CastKind::ByteToInt) => {
+                let v = val!(self.eval(inner));
+                match v {
+                    Value::Byte(b) => Ok(Flow::Val(Value::Int(i64::from(b)))),
+                    _ => self.refuse("a byte cast of a non-byte value", e.span),
+                }
+            }
+            // s135 (D72): `int as byte` — the low eight bits, never a
+            // trap ([type.byte.cast]): `256 as byte` is 0, `-1 as byte`
+            // is 255. `as u8` on the host is exactly that truncation.
+            Some(CastKind::IntToByte) => {
+                let v = val!(self.eval(inner));
+                match v {
+                    Value::Int(n) => Ok(Flow::Val(Value::Byte(n as u8))),
+                    _ => self.refuse("an int-to-byte cast of a non-int value", e.span),
+                }
+            }
             Some(CastKind::Unsize) => {
                 // D47 (s98's checked twin): `place as dyn Trait`. The
                 // cast READS the place (a lend, never a move — the
@@ -6206,12 +6261,13 @@ impl<'t> Machine<'t> {
                         for a in args.into_iter().flat_map(|l| l.args()) {
                             if let Some(v) = Arg::value(a) {
                                 let x = self.eval_arg(v, None)?;
-                                self.charge_mem(16)?;
+                                let slot = slot_bytes(&x);
+                                self.charge_mem(slot)?;
                                 // The ledger charges the BIRTH region
                                 // (s131, #187): growth stays where the
                                 // list lives, not where the push runs.
                                 let rid = self.list_region.get(id).copied().unwrap_or(0);
-                                self.charge_region_bytes(rid, 16, e.span)?;
+                                self.charge_region_bytes(rid, slot, e.span)?;
                                 self.lists[id].push(x);
                             }
                         }
@@ -6773,6 +6829,8 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::Str(x), Value::Str(y)) => x == y,
         // `char` equality is scalar-value equality (D58), total.
         (Value::Char(x), Value::Char(y)) => x == y,
+        // `byte` equality is octet equality (D72), total.
+        (Value::Byte(x), Value::Byte(y)) => x == y,
         (Value::Unit, Value::Unit) => true,
         (
             Value::Handle {
@@ -6986,6 +7044,8 @@ fn format_value(v: &Value) -> String {
         Value::Str(s) => s.clone(),
         // `{c}` prints the CHARACTER (D58), never the code point.
         Value::Char(c) => c.to_string(),
+        // `{b}` prints the NUMBER (D72), never a character.
+        Value::Byte(b) => b.to_string(),
         Value::Unit => "()".to_string(),
         Value::Range { start, end } => format!("{start}..{end}"),
         Value::ErrTag { tag, .. } => format!("{{{tag}}}"),
@@ -7029,6 +7089,18 @@ fn prim_bits(p: Prim) -> Option<u32> {
         Prim::I64 | Prim::U64 | Prim::Int | Prim::Uint | Prim::F64 => 64,
         Prim::Bool | Prim::Str => return None,
     })
+}
+
+/// The ledger bytes one list slot charges on this machine (s131's
+/// 16-byte value slot), and the one exception s135 rules: a `byte`
+/// element charges ONE byte, so `List[byte]` charges 1x its payload
+/// here as it does natively ([type.byte], [mem.region.account.1] —
+/// wolf-lang#203's ask, measured by `memory/byte_list_ledger.lu`).
+fn slot_bytes(v: &Value) -> u64 {
+    match v {
+        Value::Byte(_) => 1,
+        _ => 16,
+    }
 }
 
 fn prim_size(p: Prim) -> u64 {

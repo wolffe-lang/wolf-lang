@@ -49,6 +49,18 @@ fn e0401_if_branch_mismatch() {
     );
 }
 
+/// s135 (D72): `int` -> `byte` without `as` — a literal adopts no
+/// byte ([type.byte]) and a value never narrows implicitly; the note
+/// names the spelling and what it does (`as byte` keeps the low eight
+/// bits). Both faces: the literal at the binding, and a bound `int`.
+#[test]
+fn e0401_byte_narrowing_teach_note() {
+    snap_one(
+        "e0401_byte_narrowing",
+        "fn main() -> !int {\n    let b: byte = 65\n    let n = 300\n    let c: byte = n\n    let w: int = b\n    print(\"{b} {c} {w}\")\n    0\n}\n",
+    );
+}
+
 /// Catalog case 2: return-type mismatch with the because chain.
 #[test]
 fn e0401_return_mismatch_provenance() {
