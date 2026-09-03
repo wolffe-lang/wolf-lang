@@ -21,9 +21,11 @@
 //! lend that indexes and queries, a lend RE-LENT one hop further (the
 //! view stays a view all the way down), and a callee that only reads
 //! two views at once. `whole` is the way IN and still materializes — a
-//! function that RETURNS a list must own it.
+//! function that RETURNS a list must own it. The parameters are
+//! `List[byte]` since s136 (#231 — `bytes()` speaks the octet type),
+//! and `probe`'s arithmetic widens each byte at the operator.
 
-fn total(bs: List[int]) -> int {
+fn total(bs: List[byte]) -> int {
     var n = 0
     for b in bs {
         n = n + b
@@ -31,18 +33,20 @@ fn total(bs: List[int]) -> int {
     n
 }
 
-fn probe(bs: List[int], i: int) -> int {
+fn probe(bs: List[byte], i: int) -> int {
     if bs.is_empty() {
         return 0 - 1
     }
-    bs[i] + bs.len + bs.count() + (bs.first() else 0) + (bs.last() else 0)
+    let first = bs.first() else 0 as byte
+    let last = bs.last() else 0 as byte
+    bs[i] + bs.len + bs.count() + first + last
 }
 
-fn relay(bs: List[int]) -> int {
+fn relay(bs: List[byte]) -> int {
     total(bs)
 }
 
-fn starts(bs: List[int], p: List[int]) -> bool {
+fn starts(bs: List[byte], p: List[byte]) -> bool {
     if p.len > bs.len {
         return false
     }
@@ -56,7 +60,7 @@ fn starts(bs: List[int], p: List[int]) -> bool {
     true
 }
 
-fn whole(s: str) -> List[int] {
+fn whole(s: str) -> List[byte] {
     s.bytes()
 }
 

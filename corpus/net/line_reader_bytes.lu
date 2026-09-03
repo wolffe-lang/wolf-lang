@@ -8,7 +8,7 @@
 //! decodes at the socket, raising `utf8` with the bytes already
 //! consumed). Here the fill is `net_read_bytes(conn, 2)`: the first
 //! chunk is `104 195` — `h` plus half of `é` — and nothing is lost,
-//! because bytes buffer into a `List[int]` and DECODING moves to the
+//! because bytes buffer into a `List[byte]` (s136) and DECODING moves to the
 //! protocol layer: the buffer splits at `\n` (10) and each complete
 //! line passes `str_from_utf8` whole. Two lines out (`hé`, `wö`),
 //! byte-exact, on every lane — the fill the issue said could not be
@@ -20,21 +20,21 @@ fn main() -> !int {
     let cli = net_connect("127.0.0.1:{port}")?
 
     // "hé\nwö\n" as bytes: é = 195 169, ö = 195 182.
-    var payload = List[int]()
-    (mut payload).push(104)
-    (mut payload).push(195)
-    (mut payload).push(169)
-    (mut payload).push(10)
-    (mut payload).push(119)
-    (mut payload).push(195)
-    (mut payload).push(182)
-    (mut payload).push(10)
+    var payload = List[byte]()
+    (mut payload).push(104 as byte)
+    (mut payload).push(195 as byte)
+    (mut payload).push(169 as byte)
+    (mut payload).push(10 as byte)
+    (mut payload).push(119 as byte)
+    (mut payload).push(195 as byte)
+    (mut payload).push(182 as byte)
+    (mut payload).push(10 as byte)
     net_write_bytes(cli, payload)?
 
     let conn = net_accept(srv)?
 
     // The fill: byte-level, max 2 — the first chunk ends inside `é`.
-    var buf = List[int]()
+    var buf = List[byte]()
     while buf.len < 8 {
         let chunk = net_read_bytes(conn, 2)?
         for b in chunk {
@@ -43,13 +43,13 @@ fn main() -> !int {
     }
 
     // The protocol layer: split at `\n`, decode each COMPLETE line.
-    var line = List[int]()
+    var line = List[byte]()
     var out = ""
     for b in buf {
-        if b == 10 {
+        if b as int == 10 {
             let s = str_from_utf8(line)?
             out = "{out}[{s}]"
-            line = List[int]()
+            line = List[byte]()
         } else {
             (mut line).push(b)
         }

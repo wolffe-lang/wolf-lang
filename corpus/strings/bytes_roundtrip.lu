@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="wolf é | 7 | true | 836 | 195 169 | true")
+//! phase: run
+//! conforms: type.byte, type.byte.cast, type.byte.op, str.views
+//!
+//! s136 (#231) — `bytes()` speaks bytes. The view's element is a
+//! `byte` ([type.byte], D72): `let bs = s.bytes()` is a `List[byte]`,
+//! `str_from_utf8(bs)` takes it back without a conversion (the
+//! round trip is the witness that producer and consumer agree on the
+//! type), a byte pushed into a `List[byte]` is the octet itself, the
+//! walk's sum widens at `+` ([type.byte.op]) and an element read
+//! against an `int` is spelled `as int` ([type.byte.cast]) — the
+//! one spelling every program that did arithmetic on a `.bytes()`
+//! element without it now reads in the E0401 note
+//! (`typecheck/byte_elem_arith_fail.lu`).
+
+fn dup(bs: List[byte]) -> List[byte] {
+    var out = List[byte]()
+    for b in bs {
+        (mut out).push(b)
+    }
+    out
+}
+
+fn main() -> !int {
+    let s = "wolf é"
+    let bs = s.bytes()
+    let back = str_from_utf8(bs)?
+    let same = back == s
+    var sum = 0
+    for b in s.bytes() {
+        sum = sum + b
+    }
+    let lead = bs[5] as int
+    let cont = bs[6] as int
+    let dup = dup(bs)
+    let twice = str_from_utf8(dup)?
+    let again = twice == s && dup.len == bs.len
+    print("{back} | {bs.len} | {same} | {sum} | {lead} {cont} | {again}")
+    if !same { return 1 }
+    if !again { return 2 }
+    0
+}

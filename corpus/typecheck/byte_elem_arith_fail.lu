@@ -1,0 +1,25 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.byte, type.byte.cast
+//!
+//! s136 (#231) — the BREAKING half of the producers speaking bytes:
+//! a `.bytes()` element is a `byte`, and a program that used one as
+//! an `int` without saying so — an index, a binding typed `int`, a
+//! comparison against a literal — reads the E0401 mismatch with a
+//! teach-note that names the spelling: `b as int` ([type.byte.cast]
+//! widens by zero-extension). The three shapes below are the blast
+//! radius's three kinds, measured at the landing across wolf-std,
+//! lobo and the book; the first is the one this file pins. Snapshot
+//! of every note: `crates/wolf_sema/tests/typecheck_diagnostics.rs`
+//! (`e0401_byte_widening`).
+
+fn main() -> !int {
+    let table = List[int]()
+    let s = "wolf"
+    let b = s.bytes()[0]
+    let hit = table[b]
+    let n: int = b
+    if b == 119 { return 1 }
+    print("{hit} {n}")
+    0
+}

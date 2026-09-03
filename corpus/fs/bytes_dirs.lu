@@ -25,12 +25,12 @@ fn main() -> !int {
     fs_create_dir_all("target/s90-corpus/sub")?
     fs_write_text("target/s90-corpus/Alpha.txt", "a")?
 
-    // Bytes: a file no text reader can hold.
-    var b = List[int]()
-    (mut b).push(128)
-    (mut b).push(0)
-    (mut b).push(255)
-    (mut b).push(65)
+    // Bytes: a file no text reader can hold (`List[byte]`, s136).
+    var b = List[byte]()
+    (mut b).push(128 as byte)
+    (mut b).push(0 as byte)
+    (mut b).push(255 as byte)
+    (mut b).push(65 as byte)
     fs_write_bytes(bin, b)?
     let refused = fs_read_text(bin) else |_| "text refused"
     let back = fs_read_bytes(bin)?

@@ -3,7 +3,8 @@
 //! conforms: err.union, err.propagate
 //!
 //! s115 (#137): the net BYTE path carries what the str path mangles.
-//! `net_write_bytes`/`net_read_bytes` move a `List[int]` with no
+//! `net_write_bytes`/`net_read_bytes` move a `List[byte]` (s136,
+//! #231; `List[int]` before) with no
 //! UTF-8 gate, so a wolf server can finally carry a binary body — the
 //! `fs_read_bytes`/`fs_write_bytes` surface over the socket. The
 //! payload is deliberately un-decodable as text: a `0xFF` (255, never
@@ -20,11 +21,11 @@ fn main() -> !int {
     let port = net_port(srv)?
     let cli = net_connect("127.0.0.1:{port}")?
 
-    var payload = List[int]()
-    (mut payload).push(255)
-    (mut payload).push(0)
-    (mut payload).push(128)
-    (mut payload).push(65)
+    var payload = List[byte]()
+    (mut payload).push(255 as byte)
+    (mut payload).push(0 as byte)
+    (mut payload).push(128 as byte)
+    (mut payload).push(65 as byte)
     net_write_bytes(cli, payload)?
 
     let conn = net_accept(srv)?

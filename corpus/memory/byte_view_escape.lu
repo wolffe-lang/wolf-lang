@@ -11,7 +11,7 @@
 //! `keep` returns its parameter, so the bytes would leave with it.
 //! Through s91 the checker REFUSED this (E1015). But the compiler had a
 //! safe compilation the whole time — materialize the bytes into a
-//! `List[int]` at the call, bit-for-bit what every call did before views
+//! `List[byte]` at the call, bit-for-bit what every call did before views
 //! crossed calls, and exactly what it already does for a callee whose
 //! use it cannot classify. Refusing a program with a safe compilation
 //! is not this language's style (#108: E1015 was the only rule in the
@@ -30,7 +30,7 @@
 //! Its sibling `corpus/strings/byte_view_lend.lu` is the free half: the
 //! same call shape, with callees that only read, and no warning.
 
-fn keep(bs: List[int]) -> List[int] {
+fn keep(bs: List[byte]) -> List[byte] {
     bs
 }
 

@@ -1,0 +1,72 @@
+//! check: run(exit=0, stdout="payload 65536 | consumed_walk_charges_nothing true | consumed_index_charges_nothing true | consumed_len_charges_nothing true | bound_view_charges true | sum 7798784")
+//! phase: run
+//! conforms: mem.str.view, mem.region.account.1, type.byte
+//!
+//! s136 (#232) — the phantom 16x. `s.bytes()` CONSUMED on the spot —
+//! iterated, indexed, asked for its length — is the receiver's own
+//! `{ptr, len}` ([mem.str.view], s77) and allocates nothing: native
+//! compiles the walk to `ptr.off` + `load.i8`, lupin reads the
+//! string. The checked machine modelled the same walk as the
+//! materializing fallback and charged a full `List[int]` for it —
+//! 1,048,576 for a 64 KiB `str`, 16x a payload the program never
+//! took — which is why a `region r(cap: n)` derived on one tier
+//! mis-fired by an order of magnitude on the other on the exact
+//! idiom `std.bytes` teaches. The machine now models the view as
+//! uncharged storage (the `str`'s own), so every tier answers the
+//! same relation:
+//!   consumed_walk_charges_nothing  — `for b in s.bytes()` in a fresh
+//!                                    region leaves its ledger at 0;
+//!   consumed_index_charges_nothing — so does `s.bytes()[i]`;
+//!   consumed_len_charges_nothing   — and `s.bytes().len`;
+//!   bound_view_charges             — `let bs = s.bytes()` is the
+//!                                    MATERIALIZING position and
+//!                                    charges at least the payload
+//!                                    (the contrast that proves the
+//!                                    region is being read at all).
+//! `sum` is the walk's witness that every byte was visited (119 ×
+//! 65,536), and that a `byte` widens at `+` ([type.byte.op]).
+
+fn main() -> !int {
+    let payload = 65536
+    var s = "w"
+    for _ in 0..16 {
+        s = "{s}{s}"
+    }
+    if s.len != payload { return 1 }
+
+    var walk = 0
+    var index = 0
+    var len = 0
+    var bound = 0
+    var sum = 0
+    var pick = 0
+    region r1 {
+        for b in s.bytes() {
+            sum = sum + b
+        }
+        walk = region_bytes(r1)
+    }
+    region r2 {
+        pick = s.bytes()[payload - 1] as int
+        index = region_bytes(r2)
+    }
+    region r3 {
+        let m = s.bytes().len
+        len = region_bytes(r3)
+        if m != payload { return 4 }
+    }
+    region r4 {
+        let bs = s.bytes()
+        bound = region_bytes(r4)
+        if bs.len != payload { return 2 }
+    }
+    if pick != 119 { return 3 }
+    let w = walk == 0
+    let i = index == 0
+    let l = len == 0
+    let b = bound >= payload
+    print(
+        "payload {payload} | consumed_walk_charges_nothing {w} | consumed_index_charges_nothing {i} | consumed_len_charges_nothing {l} | bound_view_charges {b} | sum {sum}",
+    )
+    0
+}

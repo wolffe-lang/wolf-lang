@@ -9,18 +9,21 @@
 //! point is a refusal by name — the `{none}` row, never a silent
 //! half-character (D25's view semantics; the trapping twin is pinned
 //! by `slice_oob_trap.lu`). Runs under lupin too: `get` and `bytes`
-//! are on every lane, so this file is differential evidence.
+//! are on every lane, so this file is differential evidence. The
+//! elements are `byte`s since s136 (#231): the lead-byte and
+//! continuation tests read them `as int`.
 
 fn main() -> !int {
     let s = "é中🐺"
     let bs = s.bytes()
     // Lead bytes at the three code-point starts: 0xC3, 0xE4, 0xF0.
-    let leads_ok = bs.len == 9 && bs[0] == 195 && bs[2] == 228 && bs[5] == 240
+    let leads_ok = bs.len == 9 && bs[0] as int == 195 && bs[2] as int == 228 && bs[5] as int == 240
     // Six continuation bytes — one for é, two for 中, three for 🐺 —
     // and a continuation never starts a code point.
     var conts = 0
     for b in bs {
-        if b >= 128 && b < 192 {
+        let n = b as int
+        if n >= 128 && n < 192 {
             conts = conts + 1
         }
     }

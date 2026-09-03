@@ -1,7 +1,6 @@
 ---
 source: crates/wolf_parse/tests/corpus_decls.rs
-assertion_line: 58
 expression: dump
 ---
-FnDecl 398..447 name=cut body=Block
-FnDecl 449..543 name=main body=Block
+FnDecl 398..449 name=cut body=Block
+FnDecl 451..545 name=main body=Block

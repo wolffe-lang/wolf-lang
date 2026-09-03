@@ -14,25 +14,26 @@
 //! three-probe isolation found the seam. `mid` is the doc-fence shape
 //! from wolf-std's `bytes.slice` (F-0101 — the retreat this witness
 //! prices the return of); every endpoint form resolves through the
-//! lend (`^n`, open sides, `..=`, the legal empty slice).
+//! lend (`^n`, open sides, `..=`, the legal empty slice). `List[byte]`
+//! since s136 (#231); the element compare widens with `as int`.
 
-fn first4(b: List[int]) -> List[int] {
+fn first4(b: List[byte]) -> List[byte] {
     b[0..4]
 }
 
-fn mid(b: List[int], from: int, to: int) -> List[int] {
+fn mid(b: List[byte], from: int, to: int) -> List[byte] {
     b[from..to]
 }
 
-fn tail(b: List[int]) -> List[int] {
+fn tail(b: List[byte]) -> List[byte] {
     b[2..^2]
 }
 
-fn closed(b: List[int]) -> List[int] {
+fn closed(b: List[byte]) -> List[byte] {
     b[1..=2]
 }
 
-fn empty(b: List[int]) -> List[int] {
+fn empty(b: List[byte]) -> List[byte] {
     b[3..3]
 }
 
@@ -45,6 +46,6 @@ fn main() -> !int {
     let z = empty(s.bytes())
     print("{a.len} {a[0]} {m.len} {m[0]} {c.len} {z.len}")
     if t.len != 4 { return 1 }
-    if t[0] != 108 { return 2 }
+    if t[0] as int != 108 { return 2 }
     0
 }

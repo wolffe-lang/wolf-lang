@@ -1,0 +1,56 @@
+//! check: run(exit=0, stdout="server got 4: 255 0 128 65\nclient got 4: 255 0 128 65\nequal=true")
+//! phase: run
+//! conforms: type.byte, err.union, err.propagate
+//!
+//! s136 (#231) — a net ECHO over `List[byte]`: the client writes an
+//! un-decodable payload (a `0xFF` lead, an embedded NUL, a lone
+//! continuation byte, an `A`), the server reads it as a `List[byte]`
+//! and writes THAT LIST back — no conversion, the read's result is
+//! the write's argument by type — and the client compares byte for
+//! byte. `net_read_bytes`/`net_write_bytes` are declared over
+//! `List[byte]` since s136 (`List[int]` from s115 to s135). Loopback,
+//! port 0, deterministic ordering (the dial completes in the backlog
+//! before accept runs; each side's write lands before the other's
+//! read parks). Both lanes execute it, so the cross-lane sha is the
+//! parity claim.
+
+fn show(who: str, bs: List[byte]) {
+    var line = "{who} got {bs.len}:"
+    for b in bs {
+        line = "{line} {b}"
+    }
+    print(line)
+}
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+
+    var payload = List[byte]()
+    (mut payload).push(255 as byte)
+    (mut payload).push(0 as byte)
+    (mut payload).push(128 as byte)
+    (mut payload).push(65 as byte)
+    net_write_bytes(cli, payload)?
+
+    let conn = net_accept(srv)?
+    let got = net_read_bytes(conn, 16)?
+    show("server", got)
+    net_write_bytes(conn, got)?
+
+    let echo = net_read_bytes(cli, 16)?
+    show("client", echo)
+    var same = echo.len == payload.len
+    var i = 0
+    for b in echo {
+        if b != payload[i] { same = false }
+        i = i + 1
+    }
+    print("equal={same}")
+
+    net_close(cli)?
+    net_close(conn)?
+    net_close(srv)?
+    if same { 0 } else { 1 }
+}

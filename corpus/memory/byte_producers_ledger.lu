@@ -1,0 +1,100 @@
+//! check: run(exit=0, stdout="payload 65536 | read_holds true | read_bound true | read_tight true | chunk_holds true | chunk_bound true | view_holds true | view_bound true | width_retired true | round_trip true")
+//! phase: run
+//! conforms: type.byte, mem.region.account.1, mem.region.account.2, err.union, err.propagate
+//!
+//! s136 (#231) — the PRODUCERS speak bytes: `fs_read_bytes`,
+//! `fs_read_chunk`, `str.bytes()` and `str_from_utf8` (with the
+//! `fs_write_*`/`net_*` twins) are declared over `List[byte]`, so a
+//! 64 KiB read lands in a 1-byte-element list and nothing converts.
+//! This is wolf-std F-0104's after-table as RELATIONS — the table
+//! sc34 measured from the library's side at 31170d1 and could not
+//! reach: a std reader substituted to `List[byte]` against a
+//! `List[int]` builtin charged 17x/18x its payload (the intermediate
+//! list stayed charged for the region's life, [mem.region.account.1]);
+//! with the builtins themselves typed `List[byte]` the reader is a
+//! rename and the charge is the buffer. Units are per-tier and never
+//! printed (the clause forbids comparing them); the relations are:
+//!   read_holds    — a 64 KiB `fs_read_bytes` charges at least the
+//!                   payload (an honest ledger never under-reports);
+//!   read_bound    — and at most twice the payload plus a header (the
+//!                   width multiplier is gone; #203's 16x);
+//!   read_tight    — in fact at most the payload plus a header: the
+//!                   runtime mints a byte read at exact capacity, so
+//!                   the growth history sc33 named as the separable
+//!                   2x is not paid by a producer either (native
+//!                   measured 65,584 = 48 + 65,536 at the landing;
+//!                   the checked machine charges the payload exactly);
+//!   chunk_*       — `fs_read_chunk(fd, 65536)` reads the same;
+//!   view_*        — `let bs = s.bytes()` materialized in a fresh
+//!                   region is the same shape (a consumed walk charges
+//!                   nothing at all — `consumed_walk_charges_nothing`);
+//!   width_retired — the same 65,536 octets pushed as `List[int]`
+//!                   charge at least seven times the read;
+//!   round_trip    — the bytes read back are the bytes written, and
+//!                   `str_from_utf8` over the read list is the text.
+//! Idempotent: the file is written before it is read and removed at
+//! the end (a corpus program runs once per lane against one path).
+
+fn main() -> !int {
+    let payload = 65536
+    let path = "target/s136-producers.bin"
+    var hdr = 0
+    var read = 0
+    var chunk = 0
+    var view = 0
+    var ints = 0
+    var round = false
+
+    // The text: 65,536 ASCII bytes, so the round trip through
+    // `str_from_utf8` is total.
+    var s = "w"
+    for _ in 0..16 {
+        s = "{s}{s}"
+    }
+    fs_write_bytes(path, s.bytes())?
+
+    region r0 {
+        var e = List[byte]()
+        hdr = region_bytes(r0)
+    }
+    region r1 {
+        let got = fs_read_bytes(path)?
+        read = region_bytes(r1)
+        let back = str_from_utf8(got)?
+        round = got.len == payload && back == s
+    }
+    region r2 {
+        let fd = fs_open(path)?
+        let got = fs_read_chunk(fd, payload)?
+        chunk = region_bytes(r2)
+        fs_close(fd)?
+        if got.len != payload { return 2 }
+    }
+    region r3 {
+        let bs = s.bytes()
+        view = region_bytes(r3)
+        if bs.len != payload { return 3 }
+    }
+    region r4 {
+        var ys = List[int]()
+        for i in 0..payload {
+            (mut ys).push(i % 256)
+        }
+        ints = region_bytes(r4)
+    }
+    fs_remove(path)?
+
+    let slack = hdr + 64
+    let read_holds = read >= payload
+    let read_bound = read <= 2 * payload + slack
+    let read_tight = read <= payload + slack
+    let chunk_holds = chunk >= payload
+    let chunk_bound = chunk <= 2 * payload + slack
+    let view_holds = view >= payload
+    let view_bound = view <= 2 * payload + slack
+    let width = ints >= 7 * read
+    print(
+        "payload {payload} | read_holds {read_holds} | read_bound {read_bound} | read_tight {read_tight} | chunk_holds {chunk_holds} | chunk_bound {chunk_bound} | view_holds {view_holds} | view_bound {view_bound} | width_retired {width} | round_trip {round}",
+    )
+    0
+}
