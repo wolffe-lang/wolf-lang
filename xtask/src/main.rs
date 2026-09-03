@@ -1367,12 +1367,29 @@ const ALL_THREE_FLOOR: usize = 0;
 // (276/276/293). No pre-existing file moved lanes: the cap is new
 // surface, and containment changes no root-domain verdict. Counts
 // measured by this gate, not predicted.
+// s135 ratchet over 457 entries: the byte arrives (D72) and two paths
+// straighten. Measured on this tree BEFORE the sprint's rows at
+// 262/280/280, union 297, all-three 245 (trunk 5241ab7 sat above its
+// last pinned line; the pin is re-measured here, never inherited).
+// Four new run-phase witnesses execute on all three lanes —
+// `typecheck/byte_casts` (truncation/widening at 0/255/256/-1, every
+// operator widening to int, octet order), `typecheck/byte_shapes`
+// (struct field, List[byte], match binding, `{b}`/`{b:x}`),
+// `memory/byte_list_ledger` (the #203 mirror: relations, never units)
+// and `net/peer_close_after_serve` (#224: a deadline armed on a
+// reset socket) — so every count moves by exactly four
+// (266/284/284, union 301, all-three 249). `typecheck/byte_narrow_fail`
+// is a static rejection (E0401 + the teach-note) and by design moves
+// no count. No pre-existing file moved lanes: `byte` was a name every
+// lane refused by construct before, so nothing it touches changes an
+// existing verdict, and the #224 fix only widens what `net_deadline`
+// accepts. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 259), ("native", 276), ("release", 276)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 266), ("native", 284), ("release", 284)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 293;
+const UNION_FLOOR: usize = 301;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 242;
+const ALL_THREE_FLOOR: usize = 249;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
