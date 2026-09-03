@@ -320,11 +320,11 @@ fn main() -> !int {{
     // both lanes must see one real filesystem).
     fs_write_text(log, "")?
 
-    var b = List[int]()
-    (mut b).push(128)
-    (mut b).push(0)
-    (mut b).push(255)
-    (mut b).push(65)
+    var b = List[byte]()
+    (mut b).push(128 as byte)
+    (mut b).push(0 as byte)
+    (mut b).push(255 as byte)
+    (mut b).push(65 as byte)
     fs_write_bytes(bin, b)?
     let refused = fs_read_text(bin) else |_| "text refused"
     let back = fs_read_bytes(bin)?
@@ -401,14 +401,6 @@ fn the_s90_rows_carry_the_same_tags_on_both_lanes() {
             "invalid",
         ),
         (
-            "s90_row_invalid_byte",
-            format!(
-                "var b = List[int]()\n    (mut b).push(300)\n    fs_write_bytes(\"{p}\", b)?",
-                p = lu_path(&file)
-            ),
-            "invalid",
-        ),
-        (
             "s90_row_exists",
             format!("fs_create_dir(\"{p}\")?", p = lu_path(&dir)),
             "exists",
@@ -455,7 +447,7 @@ fn main() -> !int {{
     let fd = fs_open(p)?
     fs_close(fd)?
     let text = fs_read(fd, 0) else |_| "text io"
-    let bytes = fs_read_chunk(fd, 0) else |_| List[int]()
+    let bytes = fs_read_chunk(fd, 0) else |_| List[byte]()
     print("{{text}} bytes={{bytes.len}}")
     0
 }}
@@ -493,21 +485,22 @@ fn str_from_utf8_validates_identically_on_both_lanes() {
     // checked machine's `String::from_utf8`, the native tier's
     // `wolf_rt::str::__wolf_rt_str_from_utf8` — so the parity here is
     // the claim that "it validates" means the SAME set on both. Every
-    // refused column is one named UTF-8 failure mode, plus the two
-    // elements that are not bytes at all.
+    // refused column is one named UTF-8 failure mode. (The two
+    // "not a byte at all" columns retired at s136: `List[byte]` cannot
+    // hold 256 or -1.)
     parity(
         "s81_from_utf8",
         r#"
-fn decode(bs: List[int]) -> str {
+fn decode(bs: List[byte]) -> str {
     str_from_utf8(bs) else "X"
 }
 
-fn seq(a: int, b: int, c: int, dd: int, n: int) -> List[int] {
-    var l = List[int]()
-    if n > 0 { (mut l).push(a) }
-    if n > 1 { (mut l).push(b) }
-    if n > 2 { (mut l).push(c) }
-    if n > 3 { (mut l).push(dd) }
+fn seq(a: int, b: int, c: int, dd: int, n: int) -> List[byte] {
+    var l = List[byte]()
+    if n > 0 { (mut l).push(a as byte) }
+    if n > 1 { (mut l).push(b as byte) }
+    if n > 2 { (mut l).push(c as byte) }
+    if n > 3 { (mut l).push(dd as byte) }
     l
 }
 
@@ -522,14 +515,12 @@ fn main() -> !int {
     let overlong = decode(seq(192, 175, 0, 0, 2))
     let surrogate = decode(seq(237, 160, 128, 0, 3))
     let too_big = decode(seq(245, 128, 128, 128, 4))
-    let not_a_byte = decode(seq(256, 0, 0, 0, 1))
-    let negative = decode(seq(0 - 1, 0, 0, 0, 1))
-    print("{lone}{trunc}{overlong}{surrogate}{too_big}{not_a_byte}{negative}")
+    print("{lone}{trunc}{overlong}{surrogate}{too_big}")
     0
 }
 "#,
         "exit(0)",
-        "wolf 🐺 3 wolf é 7\nXXXXXXX\n",
+        "wolf 🐺 3 wolf é 7\nXXXXX\n",
     );
 }
 
@@ -602,10 +593,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // live_region_bytes — the wolf_rt ledger surfaced, one i64 read
     // each); s132 the region cap installer (D68/#187:
     // region_set_cap — the creation-time byte budget, one call after
-    // region.new, breach = trap(alloc-contract) at the alloc site).
+    // region.new, breach = trap(alloc-contract) at the alloc site);
+    // s136 the unix-domain pair (#227: net_listen_unix /
+    // net_connect_unix — a path pair in, the fd or the negated code
+    // back, `[os.net.unix]`).
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        122,
+        124,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

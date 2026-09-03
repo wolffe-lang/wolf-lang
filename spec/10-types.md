@@ -293,5 +293,6 @@ D54 is the literal story, D56 the wrapping escape, and the cast's numeric
 directions, no more. `char`'s method surface (classification,
 case-mapping, the checkable conversion) is std's tier over the
 primitive (D58), not this chapter's; so is `byte`'s (the `bytes`
-library over `List[byte]`, and the migration of every byte-producing
-surface from `List[int]` — D72, wolf-std sc34).
+library over `List[byte]` — D72, wolf-std sc35; the language's own
+byte producers and consumers — `str.bytes()`, `str_from_utf8`, the
+`fs_*`/`net_*` byte calls — speak `List[byte]` since s136, #231).

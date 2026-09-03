@@ -4,7 +4,7 @@ expression: "shaped.join(\"\\n\")"
 ---
 is_empty · fn is_empty() -> bool
 get · fn get(range: Range[int]) -> str ! {none}
-bytes · fn bytes() -> List[int]
+bytes · fn bytes() -> List[byte]
 chars · fn chars() -> List[char]
 starts_with · fn starts_with(needle: str) -> bool
 ends_with · fn ends_with(needle: str) -> bool

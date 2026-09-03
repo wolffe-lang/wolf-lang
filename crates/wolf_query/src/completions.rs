@@ -893,8 +893,8 @@ const STR_MEMBERS: &[(&str, &str, &str)] = &[
     ),
     (
         "bytes",
-        "fn bytes() -> List[int]",
-        "The byte view, materialized at v0.",
+        "fn bytes() -> List[byte]",
+        "The byte view: one `byte` per octet (s136); materializes only where it must.",
     ),
     (
         "chars",
