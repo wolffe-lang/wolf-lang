@@ -1,5 +1,5 @@
 //! check: fail(E0103)
-//! phase: lex
+//! phase: none
 //! conforms: gram.lex.str.multi
 //!
 //! D74 (s136, #230) — the delimiter rule, opening side: a `"""`

@@ -1,5 +1,5 @@
 //! check: fail(E0105)
-//! phase: lex
+//! phase: none
 //! conforms: gram.lex.str.multi
 //!
 //! D74 (s136, #230) — the tab/space rule: the margin is compared

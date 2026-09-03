@@ -39,7 +39,6 @@ fn main() -> !int {
     var len = 0
     var bound = 0
     var sum = 0
-    var pick = 0
     region r1 {
         for b in s.bytes() {
             sum = sum + b
@@ -47,8 +46,9 @@ fn main() -> !int {
         walk = region_bytes(r1)
     }
     region r2 {
-        pick = s.bytes()[payload - 1] as int
+        let pick = s.bytes()[payload - 1] as int
         index = region_bytes(r2)
+        if pick != 119 { return 3 }
     }
     region r3 {
         let m = s.bytes().len
@@ -60,7 +60,6 @@ fn main() -> !int {
         bound = region_bytes(r4)
         if bs.len != payload { return 2 }
     }
-    if pick != 119 { return 3 }
     let w = walk == 0
     let i = index == 0
     let l = len == 0

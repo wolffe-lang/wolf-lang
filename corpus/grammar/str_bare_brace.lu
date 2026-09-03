@@ -1,5 +1,5 @@
 //! check: fail(E0102)
-//! phase: lex
+//! phase: none
 //! conforms: gram.lex.str.multi, gram.lex.source
 //!
 //! D74 (s136, #230) — the bare `{` in a plain string. `{` opens an
