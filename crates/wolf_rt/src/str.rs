@@ -67,7 +67,8 @@
 //! # The byte view (s77, wolf-lang#80)
 //!
 //! `bytes()` used to MATERIALIZE — `__wolf_rt_str_bytes` built a
-//! `List[int]`, eight heap bytes per input byte, so every string kernel
+//! `List[int]`, eight heap bytes per input byte (the byte type did not
+//! exist yet), so every string kernel
 //! in the M2 suite measured an allocation (family D at 0.015x). It is
 //! now a **view**, and the view is the receiver's own `{ptr, len}`
 //! pair: the same two words a `str` is, and the same two words every
@@ -78,10 +79,11 @@
 //! subslice could not.
 //!
 //! Element access is compiled, not called: lowering emits `ptr.off` at
-//! stride 1 plus `load.i8` plus `zext` (s75's gep+load at the stride
-//! bytes actually have), with the bounds check in the caller where the
-//! range analysis can see it. So `wolf_rt` owns no byte-view entry
-//! point at all — which is the point.
+//! stride 1 plus `load.i8` (s75's gep+load at the stride bytes
+//! actually have; the element is a `byte` since s136, and the `zext`
+//! sits at the operator that widens it), with the bounds check in the
+//! caller where the range analysis can see it. So `wolf_rt` owns no
+//! byte-view entry point at all — which is the point.
 //!
 //! **What the view cannot do.** It cannot be written: lowering emits no
 //! store path for it, the surface already refuses to name a temporary as
@@ -94,11 +96,12 @@
 //! # The byte source (s81, wolf-lang#58)
 //!
 //! s77 left the byte tier one-way on purpose — a view and no source —
-//! and named the missing half: a `List[int] -> str ! {utf8}` primitive
-//! that VALIDATES, because an unchecked one is the forging hole rather
-//! than the fix. [`__wolf_rt_str_from_utf8`] is that half, and it is
-//! the only operation in the language that builds a `str` out of
-//! arbitrary numbers. Its failure is a ROW (`utf8`), not a trap and not
+//! and named the missing half: a `List[byte] -> str ! {utf8}` primitive
+//! (`List[int]` until s136, wolf-lang#231) that VALIDATES, because an
+//! unchecked one is the forging hole rather than the fix.
+//! [`__wolf_rt_str_from_utf8`] is that half, and it is the only
+//! operation in the language that builds a `str` out of arbitrary
+//! bytes. Its failure is a ROW (`utf8`), not a trap and not
 //! undefined behaviour: refusing bytes is an outcome a caller handles,
 //! which is what lets wolf-std finally write `bytes.to_str`. So "every
 //! `str` in a wolf program is valid UTF-8" stays a theorem: narrowing
@@ -108,8 +111,9 @@
 //! longer calls them on the hot path:
 //!
 //! - [`__wolf_rt_str_bytes`] is the MATERIALIZING fallback. A view that
-//!   has to become a first-class `List[int]` value (a binding, an
-//!   argument, a return) still goes through it, bit-for-bit as before.
+//!   has to become a first-class `List[byte]` value (a binding, an
+//!   argument, a return) still goes through it — one 1-byte-element
+//!   list at exact capacity since s136.
 //! - [`__wolf_rt_str_get`] is the reference semantics for the inline
 //!   domain test, and the C-ABI entry for an FFI caller. Its domain and
 //!   the compiled test are pinned equal by
@@ -733,14 +737,16 @@ pub unsafe extern "C" fn __wolf_rt_str_split(sp: i64, sl: i64, np: i64, nl: i64,
     hdr as i64
 }
 
-/// `bytes()` — the MATERIALIZING fallback (s77): a `List[int]` with
-/// each byte as an i64 element, exactly the checked lane's value shape.
+/// `bytes()` — the MATERIALIZING fallback (s77): a `List[byte]` (s136,
+/// wolf-lang#231 — `List[int]` of i64 cells before) holding a copy of
+/// the receiver's octets at exact capacity, the checked lane's
+/// `Value::Byte` shape one byte per byte.
 ///
 /// Compiled code no longer calls this to WALK bytes — `for b in
 /// s.bytes()`, `s.bytes()[i]` and the `len`/`count`/`is_empty`/`get`/
 /// `first`/`last` family read the receiver's `{ptr, len}` pair
 /// directly (see the byte-view section of this module's docs). This
-/// stays for the positions that need a first-class `List[int]` value:
+/// stays for the positions that need a first-class `List[byte]` value:
 /// a binding, a call argument, a return.
 ///
 /// # Safety
@@ -749,12 +755,7 @@ pub unsafe extern "C" fn __wolf_rt_str_split(sp: i64, sl: i64, np: i64, nl: i64,
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_bytes(sp: i64, sl: i64) -> i64 {
     let s = unsafe { view(sp, sl) };
-    let hdr = crate::list::new_list(8);
-    for b in s.bytes() {
-        let v = [i64::from(b)];
-        crate::list::push_raw(hdr, v.as_ptr().cast());
-    }
-    hdr as i64
+    crate::list::from_bytes(s.as_bytes()) as i64
 }
 
 /// `chars()` — code-point iteration, materialized (s120, #17,
@@ -784,9 +785,10 @@ pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
     hdr as i64
 }
 
-/// `str_from_utf8(b: List[int]) -> str ! {utf8}` — the s81 border post
+/// `str_from_utf8(b: List[byte]) -> str ! {utf8}` — the s81 border post
 /// (wolf-lang#58), and the ONLY operation in the language that builds a
-/// `str` out of arbitrary numbers.
+/// `str` out of arbitrary bytes (`List[byte]` since s136, wolf-lang#231;
+/// `List[int]` before).
 ///
 /// 0 = accepted, with the materialized pair through `out`; 1 = the
 /// `utf8` row. It VALIDATES, and that is the whole reason it exists:
@@ -796,9 +798,8 @@ pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
 /// boundaries, and a cast would have made "every `str` is valid UTF-8"
 /// a hope instead of an invariant.
 ///
-/// What "validates" means, precisely. Elements outside `0..=255` are
-/// not bytes at all and are rejected before anything else. The byte
-/// sequence then goes through `core::str::from_utf8`, which is the
+/// What "validates" means, precisely. The octets go through
+/// `core::str::from_utf8`, which is the
 /// same Rust `std::str` reference the whole module uses, so the
 /// rejected set is exactly UTF-8's: a lone continuation byte, a
 /// truncated multi-byte sequence, an overlong encoding, a surrogate
@@ -812,28 +813,19 @@ pub unsafe extern "C" fn __wolf_rt_str_chars(sp: i64, sl: i64) -> i64 {
 ///
 /// # Safety
 ///
-/// `hdr` must be a live `List[int]` header from
+/// `hdr` must be a live `List[byte]` header from
 /// [`crate::list::__wolf_rt_list_new`]; `out` must address 16 writable
 /// bytes. A header of the wrong ELEMENT WIDTH is refused rather than
 /// misread — compiled code cannot produce one (sema types the argument
-/// `List[int]`), and a direct FFI caller deserves an answer instead of
-/// undefined behaviour.
+/// `List[byte]`), and a direct FFI caller deserves an answer instead of
+/// undefined behaviour: the same `utf8` answer, made before the decoder
+/// ever sees a byte.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_from_utf8(hdr: i64, out: i64) -> i64 {
-    let Some(elems) = (unsafe { crate::list::i64_elems(hdr) }) else {
+    let Some(bytes) = (unsafe { crate::list::u8_elems(hdr) }) else {
         return 1;
     };
-    let mut bytes: Vec<u8> = Vec::with_capacity(elems.len());
-    for &v in elems {
-        // A byte is 0..=255. Anything else is not a byte, so it cannot
-        // be part of any UTF-8 encoding — the same `utf8` answer, made
-        // before the decoder ever sees it.
-        let Ok(b) = u8::try_from(v) else {
-            return 1;
-        };
-        bytes.push(b);
-    }
-    match core::str::from_utf8(&bytes) {
+    match core::str::from_utf8(bytes) {
         Ok(s) => {
             unsafe { write_owned(out, s) };
             0
@@ -1060,8 +1052,19 @@ mod tests {
         }
     }
 
-    /// Build a `List[int]` of the given element values (they are `int`s,
-    /// not bytes — the out-of-range ones are the point).
+    /// Build a `List[byte]` of the given octets, pushed one at a time
+    /// (the shape compiled code builds; `from_bytes` is the producers').
+    fn byte_list(values: &[u8]) -> i64 {
+        let hdr = crate::list::new_list(1);
+        for v in values {
+            crate::list::push_raw(hdr, core::ptr::from_ref(v));
+        }
+        hdr as i64
+    }
+
+    /// A `List[int]` — the WRONG width for the border post since s136
+    /// typed it `List[byte]`; the one refusal an FFI caller can earn
+    /// that typed code cannot.
     fn int_list(values: &[i64]) -> i64 {
         let hdr = crate::list::new_list(8);
         for &v in values {
@@ -1071,8 +1074,8 @@ mod tests {
         hdr as i64
     }
 
-    fn from_utf8(values: &[i64]) -> Result<String, ()> {
-        let hdr = int_list(values);
+    fn from_utf8(values: &[u8]) -> Result<String, ()> {
+        let hdr = byte_list(values);
         let mut out = [0i64; 2];
         let rc = unsafe { __wolf_rt_str_from_utf8(hdr, out.as_mut_ptr() as i64) };
         if rc == 0 {
@@ -1130,14 +1133,16 @@ mod tests {
         );
         assert!(from_utf8(&[0xFE]).is_err(), "a byte UTF-8 never uses");
 
-        // And the elements that are not bytes at all. `List[int]` holds
-        // `int`s, so a caller can hand over 256 or -1; neither is a
-        // byte, so neither can be part of any encoding.
-        assert!(from_utf8(&[256]).is_err(), "an element above 255");
-        assert!(from_utf8(&[-1]).is_err(), "a negative element");
-        assert!(
-            from_utf8(&[119, 111, 108, 300]).is_err(),
-            "one bad element poisons the whole sequence"
+        // And a list that is not a `List[byte]` at all (s136): typed
+        // code cannot build one, an FFI caller can, and the answer is
+        // the same `utf8` code — even when every element is in range.
+        let mut out = [0i64; 2];
+        assert_eq!(
+            unsafe {
+                __wolf_rt_str_from_utf8(int_list(&[119, 111, 108, 102]), out.as_mut_ptr() as i64)
+            },
+            1,
+            "an 8-byte-element list is not a byte list"
         );
     }
 
@@ -1441,13 +1446,13 @@ mod tests {
     /// close — the list could be written after the check.
     #[test]
     fn from_utf8_materializes_into_the_ambient_region() {
-        let hdr = int_list(&[119, 111, 108, 102]);
+        let hdr = byte_list(&[119, 111, 108, 102]);
         let mut out = [0i64; 2];
         let rc = unsafe { __wolf_rt_str_from_utf8(hdr, out.as_mut_ptr() as i64) };
         assert_eq!(rc, 0);
         assert_eq!(read_pair(&out), "wolf");
         // Overwrite the source list; the str must not move with it.
-        let poison = [0x80i64];
+        let poison = [0x80u8];
         assert_eq!(
             unsafe { crate::list::__wolf_rt_list_write(hdr, 0, poison.as_ptr() as i64) },
             1
