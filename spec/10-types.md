@@ -187,6 +187,76 @@ conversion, and its numeric arms are closed and total:
   are the E0413 mismatch they look like. The number is spelled, not
   ambient: `{c as int}`.
 
+## §4b The `byte` type `[type.byte]`
+
+- `[type.byte]` **`byte` is an 8-bit unsigned scalar** (D72, s135): its
+  domain is `0..=255`, exactly the values one octet holds — what comes
+  off a socket, a file, or a `str`'s UTF-8 encoding, one value per
+  byte. **Layout: 1 byte, alignment 1** — an `i8`-shaped storage cell
+  at every tier (`List[byte]` **strides by 1**, so a byte buffer
+  charges one ledger byte per payload byte under
+  `[mem.region.account.1]` — the property wolf-lang#203 measured the
+  absence of; a `byte` struct field is one byte at its layout offset;
+  the value crosses the runtime's C seam zero-extended to `i64` like
+  every sub-word scalar). Every `byte` value IS an octet, so loads
+  zero-extend and machine compares are unsigned compares. `byte` is
+  **not an integer type** — the posture is `char`'s (`[type.char]`),
+  so there is one rule for width-bearing scalars rather than two: no
+  numeric-literal adoption (`let b: byte = 65` is the type mismatch
+  E0401, whose note names the fix; write `65 as byte` — in every
+  position, a `match` arm included: a `byte` scrutinee binds or
+  wildcards, and a literal arm is spelled over `b as int`), no closed
+  arithmetic (a `byte` never holds the result of `+`,
+  `[type.byte.op]`), no indexing with one, and no literal suffix
+  (there is no suffix inventory; `65 as byte` is the spelling, and
+  the name is `byte`, not `u8` — an alias arrives only if an inventory
+  ever does). `byte` is a builtin type NAME resolved in type position
+  like `int` and `char`, not a keyword: `[gram.inv.kw]`'s closed set
+  stays at 50.
+
+- `[type.byte.cast]` **`byte as int` widens; `int as byte` truncates.**
+  The outbound cast is total — every octet fits an `int`
+  (`200 as byte as int` is `200`) — and is a zero-extension, never a
+  sign-extension, because the domain has no negatives. The inbound
+  cast is the **only** narrowing `as` in the language that never
+  traps: it keeps the value's low eight bits and discards the rest, so
+  `255 as byte` is `255`, `256 as byte` is `0`, `300 as byte` is `44`,
+  and `-1 as byte` is `255` — the low-bits meaning `wrapping[u8]`'s
+  narrowing already has, ruled for `byte` because a byte type exists
+  to hold the low octet of whatever arithmetic produced it (a mask, a
+  shift, a checksum step), and a trap there would make every such site
+  an `as wrapping[u8] as …` dance. The boundary values `0`, `255`,
+  `256`, `-1` are the witness. This is a ruled answer for ONE target,
+  not the general narrowing cast's range-check question (s27's, still
+  open for `i32`/`u16`/…). Other widths cast through `int`
+  (`x as int as byte`); `byte` and `char` bridge through `int` too
+  (`b as int as char`); there is no `byte as f64`. W0401 (a literal
+  outside the target's range) does not fire on `as byte`: truncation
+  is the clause, not an accident.
+
+- `[type.byte.op]` **Every arithmetic and bitwise operator widens a
+  `byte` operand to `int` first, and the result is `int`.** `b + 1`,
+  `b * 2`, `b & 0x0F`, `b >> 4`, `b1 + b2` and `-b` are `int`-typed:
+  the operands are read through `[type.byte.cast]`'s widening and the
+  operation is `int`'s — X3 checked arithmetic, so `b1 + b2` cannot
+  overflow and `b - 1` on a zero byte is `-1`, an `int`, neither a
+  trap nor a wrap. Narrowing the result back is spelled:
+  `(b + 1) as byte`. A `{integer}` literal beside a byte operand
+  adopts `int`; a mixed term `b + n` with `n: int` is legal and `int`.
+  The consequence is that `byte` has no compound assignment — `b += 1`
+  is the E0401 an `int` assigned to a `byte` is, because `b + 1` is an
+  `int`. **Comparisons are total and closed**: `== != < <= > >=`
+  between two `byte`s compare octet values (unsigned order — `200 as
+  byte > 100 as byte`); `<=>` yields `int`; `byte` against `int` is
+  the ordinary type mismatch — widen the byte.
+
+- `[type.byte.interp]` **`{b}` prints the number** — the decimal octet
+  value, `0` through `255`, never a character: a byte is a quantity,
+  and the character it might encode is `str`'s business
+  (`[mem.str.chars]`). A format spec on a byte hole takes the integer
+  spec surface (`{b:x}` is `ff` at most), the same surface `int` has,
+  because the hole widens the byte to `int` before formatting.
+
 ## §5 `str` concatenation `[type.str]`
 
 - `[type.str.concat]` **`+` and `+=` on two `str`s are
@@ -216,8 +286,12 @@ This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
 beyond what literal adoption needs) nor the general narrowing integer
 cast's range-check question (s27's, still open — the wrapping row above
-is the value-preservation answer only for leaving the wrapping domain) —
+is the value-preservation answer only for leaving the wrapping domain,
+and `[type.byte.cast]`'s truncation is the answer for ONE target, the
+octet) —
 D54 is the literal story, D56 the wrapping escape, and the cast's numeric
 directions, no more. `char`'s method surface (classification,
 case-mapping, the checkable conversion) is std's tier over the
-primitive (D58), not this chapter's.
+primitive (D58), not this chapter's; so is `byte`'s (the `bytes`
+library over `List[byte]`, and the migration of every byte-producing
+surface from `List[int]` — D72, wolf-std sc34).

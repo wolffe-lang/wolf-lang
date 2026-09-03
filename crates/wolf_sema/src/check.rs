@@ -165,6 +165,16 @@ pub enum CastKind {
     /// gap check is what keeps "every `str` is valid UTF-8" (D24) an
     /// invariant: a `char` holding a surrogate could never be encoded.
     IntToChar,
+    /// s135 (D72) — `byte as int`: TOTAL. Every octet fits an `int`;
+    /// lowering is a zero-extension of the 8-bit cell (the domain has
+    /// no negatives, so never a sign-extension).
+    ByteToInt,
+    /// s135 (D72) — `int as byte`: TRUNCATES, never traps. The value's
+    /// low eight bits are kept and the rest discarded (`256 as byte`
+    /// is `0`, `-1 as byte` is `255`) — the one narrowing `as` with a
+    /// ruled low-bits meaning, because a byte type exists to hold the
+    /// low octet of whatever arithmetic produced it.
+    IntToByte,
 }
 
 /// The typed HIR of one body — minimal but real: every recorded
@@ -1629,6 +1639,25 @@ impl<'a> Checker<'a> {
             );
         }
         match (&e, &a) {
+            // s135 (D72): `int` -> `byte` without `as`. A literal adopts
+            // no byte and a value never narrows implicitly; the cast is
+            // the spelling, and it keeps the low eight bits.
+            (TyKind::Prim(Prim::Byte), _) if numeric(&a) => Some(
+                "`byte` adopts no literal and takes no `int` implicitly \
+                 ([type.byte]); narrow it explicitly with `as byte` — the cast \
+                 keeps the value's low eight bits ([type.byte.cast])."
+                    .to_string(),
+            ),
+            (TyKind::Prim(Prim::Int), TyKind::Prim(Prim::Byte)) => Some(
+                "a `byte` widens only through the spelled cast ([type.byte.cast]): \
+                 write `b as int`."
+                    .to_string(),
+            ),
+            (_, TyKind::Prim(Prim::Byte)) if numeric(&e) => Some(format!(
+                "a `byte` widens only through the spelled cast ([type.byte.cast]): \
+                 `b as int`, then `as {}` — other widths cast through `int`.",
+                self.show(expected)
+            )),
             (TyKind::Prim(Prim::Bool), _) if numeric(&a) => {
                 Some("wolf has no truthiness: write the comparison out, e.g. `x != 0`.".to_string())
             }
@@ -4173,6 +4202,11 @@ impl<'a> Checker<'a> {
                     self.golden_rule_op(operand.span, &n, "-");
                     return Ok(self.error_ty());
                 }
+                // `-b` on a byte widens first (D72, [type.byte.op]):
+                // the negation is `int`'s and so is the result.
+                if matches!(self.kind_of(t), TyKind::Prim(Prim::Byte)) {
+                    return Ok(self.lo.table.prim(Prim::Int));
+                }
                 let probe = self.fresh(NumKind::Num, e.span);
                 if unify(&mut self.lo.table, &mut self.vars, t, probe).is_err() {
                     self.report_bad_operand(operand.span, "-", "numbers", t);
@@ -4272,6 +4306,23 @@ impl<'a> Checker<'a> {
                         self.lo.table.prim(Prim::Bool)
                     });
                 }
+                // `byte` orders by octet value (D72, [type.byte.op]):
+                // total, closed over two bytes — the unsigned compare.
+                // A byte against an int is the mismatch it looks like
+                // (widen the byte); no adoption bridges it.
+                if matches!(self.kind_of(lt), TyKind::Prim(Prim::Byte)) {
+                    let exp = Expect {
+                        ty: lt,
+                        reason: Reason::OpOperands(op_text.clone()),
+                        because: Some(lhs.span),
+                    };
+                    self.expect_unify(rhs.span, rt, &exp);
+                    return Ok(if op_kind == Some(SyntaxKind::Spaceship) {
+                        self.lo.table.prim(Prim::Int)
+                    } else {
+                        self.lo.table.prim(Prim::Bool)
+                    });
+                }
                 // `str` orders too: byte-lexicographic, total, defined
                 // (the #7 ruling — lupin's byte order, no collation).
                 if matches!(self.kind_of(lt), TyKind::Prim(Prim::Str)) {
@@ -4340,6 +4391,9 @@ impl<'a> Checker<'a> {
                         return Ok(self.error_ty());
                     }
                 }
+                if let Some(t) = self.byte_operand_widens(lhs, lt, rhs, rt, &op_text) {
+                    return Ok(t);
+                }
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "numbers", lt);
@@ -4365,6 +4419,9 @@ impl<'a> Checker<'a> {
                     self.golden_rule_op(lhs.span, &n, &op_text);
                     return Ok(self.error_ty());
                 }
+                if let Some(t) = self.byte_operand_widens(lhs, lt, rhs, rt, &op_text) {
+                    return Ok(t);
+                }
                 let probe = self.fresh(NumKind::Integer, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "integer types", lt);
@@ -4383,6 +4440,42 @@ impl<'a> Checker<'a> {
                 Ok(self.error_ty())
             }
         }
+    }
+
+    /// s135 (D72, `[type.byte.op]`): a `byte` operand of an arithmetic
+    /// or bitwise operator widens to `int` and the term is `int`. The
+    /// other side must be an `int` (a literal adopts `int`; a `byte`
+    /// widens too); anything else is the ordinary mismatch against
+    /// `int`, reported at the non-byte operand. `None` when neither
+    /// operand is a byte — the caller's numeric path proceeds.
+    fn byte_operand_widens(
+        &mut self,
+        lhs: &GreenNode,
+        lt: TyId,
+        rhs: &GreenNode,
+        rt: TyId,
+        op_text: &str,
+    ) -> Option<TyId> {
+        let l_byte = matches!(self.kind_of(lt), TyKind::Prim(Prim::Byte));
+        let r_byte = matches!(self.kind_of(rt), TyKind::Prim(Prim::Byte));
+        if !l_byte && !r_byte {
+            return None;
+        }
+        let int_ = self.lo.table.prim(Prim::Int);
+        let (because, other_span, other_ty) = if l_byte {
+            (lhs.span, rhs.span, rt)
+        } else {
+            (rhs.span, lhs.span, lt)
+        };
+        if !(l_byte && r_byte) {
+            let exp = Expect {
+                ty: int_,
+                reason: Reason::OpOperands(op_text.to_string()),
+                because: Some(because),
+            };
+            self.expect_unify(other_span, other_ty, &exp);
+        }
+        Some(int_)
     }
 
     /// `==`/`!=` compare the primitive family; archetypes answer from
@@ -4454,6 +4547,31 @@ impl<'a> Checker<'a> {
             if src_is_int {
                 self.casts
                     .push((e.span, src_ty, target, CastKind::IntToChar));
+                return Ok(target);
+            }
+        }
+        // s135 (D72): the byte bridges — the only numeric bridges
+        // `byte` has, `char`'s shape. `byte as int` WIDENS (total, a
+        // zero-extension); `int as byte` TRUNCATES to the low eight
+        // bits and never traps ([type.byte.cast]). Everything else
+        // against `byte` falls to E0805 below with the note.
+        if matches!(sk, TyKind::Prim(Prim::Byte)) && matches!(tk, TyKind::Prim(Prim::Int)) {
+            self.casts
+                .push((e.span, src_ty, target, CastKind::ByteToInt));
+            return Ok(target);
+        }
+        if matches!(tk, TyKind::Prim(Prim::Byte)) {
+            let src_is_int = match &sk {
+                TyKind::Prim(Prim::Int) | TyKind::Error | TyKind::Never => true,
+                TyKind::Var(_) => {
+                    let int_ = self.lo.table.prim(Prim::Int);
+                    unify(&mut self.lo.table, &mut self.vars, src_ty, int_).is_ok()
+                }
+                _ => false,
+            };
+            if src_is_int {
+                self.casts
+                    .push((e.span, src_ty, target, CastKind::IntToByte));
                 return Ok(target);
             }
         }
@@ -4596,7 +4714,15 @@ impl<'a> Checker<'a> {
         )
         .with_label("outside the cast set");
         let is_char = |k: &TyKind| matches!(k, TyKind::Prim(Prim::Char));
-        d = if is_char(&sk) || is_char(&tk) {
+        let is_byte = |k: &TyKind| matches!(k, TyKind::Prim(Prim::Byte));
+        d = if is_byte(&sk) || is_byte(&tk) {
+            d.with_note(
+                "the ruled `byte` bridges (D72, [type.byte.cast]) are exactly \
+                 `byte as int` (widens) and `int as byte` (keeps the low eight \
+                 bits); cast through `int` for any other width or for `char` — \
+                 `b as int as char`, `x as int as byte`.",
+            )
+        } else if is_char(&sk) || is_char(&tk) {
             d.with_note(
                 "the ruled `char` bridges (D58) are exactly `char as int` (total) \
                  and `int as char` (traps on a non-scalar value); cast through \
@@ -9608,6 +9734,11 @@ impl<'a> Checker<'a> {
             // A missing-case witness may therefore print as a bare
             // scalar number; cosmetic, noted in D58.
             TyKind::Prim(Prim::Char) => ColTy::Int,
+            // `byte` (s135): no literal spells a byte pattern (a
+            // literal arm is written over `b as int`), so a byte
+            // column is bindings and wildcards — the Int column's
+            // "never complete without a wildcard" rule is exact.
+            TyKind::Prim(Prim::Byte) => ColTy::Int,
             TyKind::Prim(_) => ColTy::Float,
             TyKind::Wrapping(_) => ColTy::Int,
             TyKind::Tuple(ts) => {

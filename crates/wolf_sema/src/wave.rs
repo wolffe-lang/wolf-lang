@@ -1715,7 +1715,12 @@ pub(crate) fn int_range(p: Prim) -> Option<(i128, i128)> {
         Prim::I16 => (i16::MIN as i128, i16::MAX as i128),
         Prim::I32 => (i32::MIN as i128, i32::MAX as i128),
         Prim::I64 | Prim::Int => (i64::MIN as i128, i64::MAX as i128),
-        Prim::U8 | Prim::Byte => (0, u8::MAX as i128),
+        Prim::U8 => (0, u8::MAX as i128),
+        // `byte` (D72, [type.byte.cast]): `as byte` TRUNCATES by clause,
+        // so a literal outside 0..=255 is not a W0401 "cannot fit" —
+        // `300 as byte` is `44`, deliberately. And no literal adopts a
+        // byte, so E0415's binding check never has one to range.
+        Prim::Byte => return None,
         Prim::U16 => (0, u16::MAX as i128),
         Prim::U32 => (0, u32::MAX as i128),
         Prim::U64 | Prim::Uint => (0, u64::MAX as i128),

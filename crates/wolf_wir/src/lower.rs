@@ -1568,7 +1568,16 @@ fn wir_ty_frame(
             // bit is never set, so signed compares ARE scalar-value
             // order.
             Prim::Char => Ok(Some(types::I32)),
-            Prim::Byte => Err(refuse("byte lowering (runtime byte views, c08)", span)),
+            // `byte` (s135, D72): an octet — 1 byte, alignment 1, an
+            // i8-shaped cell at every tier. `List[byte]` strides by 1
+            // (`list_stride_of` over I8), which is the whole point:
+            // one ledger byte per payload byte ([type.byte],
+            // wolf-lang#203). The cell is UNSIGNED — every load
+            // zero-extends and every compare is a `u*` condition
+            // (`sema_unsigned` says so) — and never an arithmetic
+            // operand: `lower_bin`/`lower_prefix` widen a byte to i64
+            // before any op ([type.byte.op]).
+            Prim::Byte => Ok(Some(types::I8)),
         },
         TyKind::Wrapping(inner) => {
             match wir_ty_frame(it, table, sigs, *inner, span, depth + 1, frame)? {
@@ -1978,7 +1987,11 @@ fn ty_mentions_rigid(table: &TypeTable, ty: TyId) -> bool {
 
 fn sema_unsigned(table: &TypeTable, id: TyId) -> bool {
     match table.kind(id) {
-        TyKind::Prim(Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64) => true,
+        // `byte` rides the unsigned rail (D72): zero-extending loads,
+        // `u*` compares, and `{b}` printing the octet value.
+        TyKind::Prim(Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64 | Prim::Byte) => {
+            true
+        }
         TyKind::Wrapping(t) | TyKind::Distinct(t) => sema_unsigned(table, *t),
         _ => false,
     }
@@ -6652,6 +6665,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(v) = v else {
                     return Err(refuse("negation of a valueless expression", e.span));
                 };
+                // `-b` on a byte is int's negation of the widened octet
+                // (D72, [type.byte.op]).
+                let v = self.widen_byte_operand(Some(operand), v);
                 let ty = self.b.func.value_ty(v);
                 if ty == types::F32 || ty == types::F64 {
                     return Ok(Flow::Val(Some(
@@ -6763,6 +6779,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let wrapping = matches!(self.table.kind(sema_ty), TyKind::Wrapping(_));
                 let unsigned = sema_unsigned(self.table, sema_ty);
+                // A byte operand widens to i64 first (D72,
+                // [type.byte.op]): sema typed the term `int`, so `wty`
+                // is I64 while the operand value is the I8 cell.
+                let a = self.widen_byte_operand(d.lhs(), a);
+                let bv = self.widen_byte_operand(d.rhs(), bv);
                 match self.arith(op, a, bv, wrapping, unsigned, wty, e.span)? {
                     Some(v) => Ok(Flow::Val(Some(v))),
                     None => Ok(Flow::Diverged),
@@ -6870,6 +6891,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )))
             }
             _ => Err(refuse("this operator in WIR lowering", e.span)),
+        }
+    }
+
+    /// s135 (D72, `[type.byte.op]`): an operand whose sema type is
+    /// `byte` is an I8 cell; every arithmetic, bitwise and negation
+    /// site widens it to i64 by zero-extension before the op — the
+    /// `byte as int` bridge, applied implicitly where the clause says
+    /// the operator does it. Any other operand passes through.
+    fn widen_byte_operand(&mut self, node: Option<&'t GreenNode>, v: Value) -> Value {
+        let is_byte = node
+            .and_then(|n| self.expr_sema_ty(n.span))
+            .is_some_and(|t| {
+                matches!(
+                    self.table.kind(self.strip_sema(t)),
+                    TyKind::Prim(Prim::Byte)
+                )
+            });
+        if is_byte && self.b.func.value_ty(v) == types::I8 {
+            self.b
+                .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                .one()
+        } else {
+            v
         }
     }
 
@@ -7235,6 +7279,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(
                     self.b
                         .ins(Opcode::Itrunc, &[v], &[types::I32], Aux::None)
+                        .one(),
+                )))
+            }
+            // s135 (D72): `byte as int` is TOTAL — the octet
+            // zero-extends ([type.byte.cast]; the domain has no
+            // negatives, so a sign-extension would be the cast that
+            // lies).
+            CastKind::ByteToInt => {
+                let Some(v) = v else {
+                    return Err(refuse("cast of a valueless expression", e.span));
+                };
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                        .one(),
+                )))
+            }
+            // s135 (D72): `int as byte` TRUNCATES — the low eight bits,
+            // no rail, no trap ([type.byte.cast]): `256 as byte` is 0,
+            // `-1 as byte` is 255. The same `itrunc` the wrapping
+            // family's narrowing emits, ruled for this one target.
+            CastKind::IntToByte => {
+                let Some(v) = v else {
+                    return Err(refuse("cast of a valueless expression", e.span));
+                };
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Itrunc, &[v], &[types::I8], Aux::None)
                         .one(),
                 )))
             }

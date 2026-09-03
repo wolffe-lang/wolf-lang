@@ -29,6 +29,13 @@ impl TyId {
 pub enum Prim {
     Bool,
     Str,
+    /// An octet (D72, s135): `0..=255`, 1 byte, alignment 1 — the
+    /// element type of every byte buffer. Deliberately NOT an integer
+    /// type, `char`'s posture (`[type.byte]`): no numeric-literal
+    /// adoption, no closed arithmetic (a byte operand widens to `int`
+    /// and the result is `int`, `[type.byte.op]`); the bridges are the
+    /// two spelled casts (`byte as int` widens, `int as byte` keeps
+    /// the low eight bits — `[type.byte.cast]`).
     Byte,
     Int,
     Uint,
@@ -98,11 +105,12 @@ impl Prim {
     }
 
     /// Is this one of the integer types (the `{integer}` literal kind)?
+    /// `byte` is not one (D72): a literal adopts no byte, and byte
+    /// arithmetic is `int`'s — see [`Prim::Byte`].
     pub fn is_integer(self) -> bool {
         matches!(
             self,
-            Prim::Byte
-                | Prim::Int
+            Prim::Int
                 | Prim::Uint
                 | Prim::I8
                 | Prim::I16

@@ -306,8 +306,9 @@ Edge legality (source stores a reference to target):
   as a container element charges the element's storage, not one
   byte), so a cap set by payload arithmetic can be out by an order
   of magnitude — wolf-lang#203 measured a 64 KiB io chunk at ~1 MiB
-  of ledger (8× element storage × 2× growth history). Portable
-  programs derive caps from measured ledger readings
+  of ledger (8× element storage × 2× growth history; `List[byte]`,
+  `[type.byte]`, retires the 8× — the growth history stays charged).
+  Portable programs derive caps from measured ledger readings
   (`region_bytes`) rather than hard-coding payload sizes or per-tier
   constants. (Added 2026-09-01, s132 — D68, wolf-lang#187: the cap
   half; the units sentence sharpened the same day against ws12's
@@ -766,8 +767,11 @@ the scalar's value before the value had a type, and it still is.)
   the identity that makes a byte-offset scanner writable in library
   code. `"".chars()` yields nothing; `s.chars().len` is the
   code-point count, `s.len` the byte count, and the two agree exactly
-  when `s` is ASCII. The byte tier is unchanged: `bytes()` stays
-  `List[int]` of bytes — `char` is the scalar tier, never a byte.
+  when `s` is ASCII. The byte tier has its element type now — `byte`
+  (`[type.byte]`, D72): `bytes()` still returns `List[int]` at this
+  pin, and its move to `List[byte]` is a ruled migration behind std's
+  (wolf-std sc34), never a silent retype — `char` is the scalar tier,
+  never a byte.
 
 ---
 

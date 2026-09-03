@@ -75,7 +75,7 @@ fn write_lock(dir: &Path, project: &Project, cmd: &str) {
         return;
     }
     if let Err(e) = std::fs::write(&path, lock.render()) {
-        eprintln!("wolf {cmd}: write {}: {e}", path.display());
+        eprintln!("wolf {cmd}: write {}: {e}", show_path(&path));
         std::process::exit(2);
     }
 }
@@ -98,14 +98,14 @@ fn require_manifest(dir: &Path, cmd: &str) -> String {
         Ok(_) => {
             eprintln!(
                 "wolf {cmd}: {} is not an s51 manifest (expected a `pkg {{ }}` block)",
-                path.display()
+                show_path(&path)
             );
             std::process::exit(2);
         }
         Err(_) => {
             eprintln!(
                 "wolf {cmd}: no wolf.pkg in {} (run `wolf add` to create one, or --dir)",
-                dir.display()
+                show_path(dir)
             );
             std::process::exit(2);
         }
@@ -180,7 +180,7 @@ pub fn init(args: &[String]) {
     let text = match std::fs::read_to_string(&from) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("wolf init: cannot read {}: {e}", from.display());
+            eprintln!("wolf init: cannot read {}: {e}", show_path(&from));
             std::process::exit(2);
         }
     };
@@ -231,7 +231,7 @@ pub fn init(args: &[String]) {
     // and any surrounding prose kept as the module's doc comment.
     let code = strip_frontmatter(&text, read.frontmatter.as_ref());
     if let Err(e) = std::fs::create_dir_all(&dir) {
-        eprintln!("wolf init: create {}: {e}", dir.display());
+        eprintln!("wolf init: create {}: {e}", show_path(&dir));
         std::process::exit(2);
     }
     for (name, body) in [("wolf.pkg", &manifest), ("main.lu", &code)] {
@@ -239,20 +239,20 @@ pub fn init(args: &[String]) {
         if at.exists() {
             eprintln!(
                 "wolf init: {} already exists — refusing to overwrite",
-                at.display()
+                show_path(&at)
             );
             std::process::exit(1);
         }
         if let Err(e) = std::fs::write(&at, body) {
-            eprintln!("wolf init: write {}: {e}", at.display());
+            eprintln!("wolf init: write {}: {e}", show_path(&at));
             std::process::exit(2);
         }
     }
     println!(
         "wolf init: wrote {} and {} from {} (the script is untouched)",
-        dir.join("wolf.pkg").display(),
-        dir.join("main.lu").display(),
-        from.display()
+        show_path(&dir.join("wolf.pkg")),
+        show_path(&dir.join("main.lu")),
+        show_path(&from)
     );
 }
 
@@ -360,7 +360,7 @@ pub fn add(args: &[String]) {
         Ok(_) => {
             eprintln!(
                 "wolf add: {} is not an s51 manifest (expected a `pkg {{ }}` block)",
-                manifest_path.display()
+                show_path(&manifest_path)
             );
             std::process::exit(2);
         }
@@ -373,7 +373,7 @@ pub fn add(args: &[String]) {
             let text = manifest::minimal_manifest(&format!("local/{dirname}"));
             eprintln!(
                 "wolf add: created {} (minimal manifest)",
-                manifest_path.display()
+                show_path(&manifest_path)
             );
             text
         }
@@ -385,7 +385,7 @@ pub fn add(args: &[String]) {
         let mut sources = Sources::new();
         sources.add(
             file,
-            manifest_path.display().to_string().replace('\\', "/"),
+            show_path(&manifest_path).to_string().replace('\\', "/"),
             original.as_bytes(),
         );
         let mut reporter = HumanReporter::new(&sources, RenderOptions::default());
@@ -404,7 +404,7 @@ pub fn add(args: &[String]) {
     }
     let edited = manifest::insert_dep(&original, &m, &alias, &source);
     if let Err(e) = std::fs::write(&manifest_path, &edited) {
-        eprintln!("wolf add: write {}: {e}", manifest_path.display());
+        eprintln!("wolf add: write {}: {e}", show_path(&manifest_path));
         std::process::exit(2);
     }
 
@@ -481,7 +481,7 @@ pub fn rm(args: &[String]) {
         std::process::exit(1);
     };
     if let Err(e) = std::fs::write(&manifest_path, &edited) {
-        eprintln!("wolf rm: write {}: {e}", manifest_path.display());
+        eprintln!("wolf rm: write {}: {e}", show_path(&manifest_path));
         std::process::exit(2);
     }
     let opts = ResolveOpts {
@@ -775,16 +775,16 @@ fn verify_log_or_die(project: &Project, cmd: &str) {
 /// Portable recursive copy (tier-1 includes windows: no symlink
 /// tricks, no permission bits beyond what create/write give).
 fn copy_tree_portable(from: &Path, to: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(to).map_err(|e| format!("create {}: {e}", to.display()))?;
-    let rd = std::fs::read_dir(from).map_err(|e| format!("read {}: {e}", from.display()))?;
+    std::fs::create_dir_all(to).map_err(|e| format!("create {}: {e}", show_path(to)))?;
+    let rd = std::fs::read_dir(from).map_err(|e| format!("read {}: {e}", show_path(from)))?;
     for entry in rd {
-        let entry = entry.map_err(|e| format!("read {}: {e}", from.display()))?;
+        let entry = entry.map_err(|e| format!("read {}: {e}", show_path(from)))?;
         let src = entry.path();
         let dst = to.join(entry.file_name());
         if src.is_dir() {
             copy_tree_portable(&src, &dst)?;
         } else {
-            std::fs::copy(&src, &dst).map_err(|e| format!("copy {}: {e}", src.display()))?;
+            std::fs::copy(&src, &dst).map_err(|e| format!("copy {}: {e}", show_path(&src)))?;
         }
     }
     Ok(())
@@ -824,7 +824,7 @@ pub fn vendor(args: &[String]) {
             eprintln!("wolf vendor: {e}");
             std::process::exit(1);
         }
-        println!("wolf vendor: {} {} -> {}", p.alias, hash, dst.display());
+        println!("wolf vendor: {} {} -> {}", p.alias, hash, show_path(&dst));
         wrote += 1;
     }
     if wrote == 0 && !vend.is_dir() {
@@ -947,7 +947,7 @@ pub fn publish(args: &[String]) {
                 std::process::exit(2);
             };
             let key = match std::fs::read_to_string(&key_file)
-                .map_err(|e| format!("read {}: {e}", key_file.display()))
+                .map_err(|e| format!("read {}: {e}", show_path(&key_file)))
                 .and_then(|t| parse_key(&t))
             {
                 Ok(k) => k,
@@ -957,7 +957,7 @@ pub fn publish(args: &[String]) {
                 }
             };
             if let Err(e) = std::fs::create_dir_all(&logd) {
-                eprintln!("wolf publish: create {}: {e}", logd.display());
+                eprintln!("wolf publish: create {}: {e}", show_path(&logd));
                 std::process::exit(1);
             }
             let log_file = logd.join("log");
@@ -985,7 +985,7 @@ pub fn publish(args: &[String]) {
         None => {
             let bundle_dir = dir.join(".wolf-publish");
             if let Err(e) = std::fs::create_dir_all(&bundle_dir) {
-                eprintln!("wolf publish: create {}: {e}", bundle_dir.display());
+                eprintln!("wolf publish: create {}: {e}", show_path(&bundle_dir));
                 std::process::exit(1);
             }
             let fname = format!(
@@ -994,14 +994,46 @@ pub fn publish(args: &[String]) {
             );
             let path = bundle_dir.join(fname);
             if let Err(e) = std::fs::write(&path, record.render()) {
-                eprintln!("wolf publish: write {}: {e}", path.display());
+                eprintln!("wolf publish: write {}: {e}", show_path(&path));
                 std::process::exit(1);
             }
             print!("{}", record.render());
             println!(
                 "wolf publish: record written to {} — submit it to your log's maintainer",
-                path.display()
+                show_path(&path)
             );
         }
+    }
+}
+
+/// One spelling for every path a package verb prints (wolf-lang#222):
+/// forward slashes on every host — the rule `RawFile.display` already
+/// applies to every diagnostic path (`--> app/main.lu:3:5` on windows
+/// too), so `wolf add`/`publish`/`vendor`/`init` say `app/wolf.pkg`
+/// where the diagnostics would, instead of `app\wolf.pkg` beside them.
+pub(crate) fn show_path(p: &std::path::Path) -> String {
+    p.display().to_string().replace('\\', "/")
+}
+
+#[cfg(test)]
+mod show_path_tests {
+    use super::show_path;
+    use std::path::Path;
+
+    /// Both spellings a host can hand the verbs: the native windows
+    /// separator normalizes, the slash spelling is already canonical
+    /// and passes through byte-identical.
+    #[test]
+    fn both_separator_spellings_print_with_slashes() {
+        assert_eq!(show_path(Path::new("app\\wolf.pkg")), "app/wolf.pkg");
+        assert_eq!(
+            show_path(Path::new("app\\.wolf-publish\\x.record")),
+            "app/.wolf-publish/x.record"
+        );
+        assert_eq!(show_path(Path::new("app/wolf.pkg")), "app/wolf.pkg");
+        assert_eq!(
+            show_path(Path::new("app/.wolf-publish/x.record")),
+            "app/.wolf-publish/x.record"
+        );
     }
 }

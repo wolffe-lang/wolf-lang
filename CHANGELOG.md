@@ -1,5 +1,71 @@
 # Changelog
 
+## Unreleased
+
+### The byte arrives (s135, D72)
+
+wolf has a byte-width scalar: **`byte`**, an 8-bit unsigned octet,
+`0..=255`, one byte of storage with alignment one — so a
+**`List[byte]` charges one ledger byte per payload byte** on every
+tier. That is the property wolf-lang#203 measured the absence of: a
+64 KiB read held as `List[int]` charged ~1 MiB of region ledger (8×
+the element width, 2× the push-growth history); the same 65536 pushes
+as `List[byte]` charge 131,120 bytes natively (2× + a 48-byte header)
+and 65,536 exactly on the checked machine. The width multiplier is
+gone; the growth history is the separable, preallocation half and
+stays where `[mem.region.account.1]` says it does. The type is
+modelled on `char`, the spec's one existing width clause
+(`[type.byte]`, `[type.byte.cast]`, `[type.byte.op]`,
+`[type.byte.interp]` — beside `[type.char]`), so there is one rule
+for width-bearing scalars: **no numeric-literal adoption** —
+`let b: byte = 65` is E0401 with a note that names the fix, and the
+spelling is `65 as byte`; **`int as byte` truncates** to the low
+eight bits and never traps (`255 as byte` is `255`, `256 as byte` is
+`0`, `-1 as byte` is `255`, `300 as byte` is `44` — the boundary
+witness), **`byte as int` widens** by zero-extension (`200` comes
+back `200`, never `-56`); **every arithmetic and bitwise operator
+widens a `byte` operand to `int` and yields `int`** (`b + 1` is an
+`int`; `b += 1` is the mismatch it looks like; write `(b + 1) as
+byte`); comparisons between bytes are octet order (unsigned — `200 as
+byte > 100 as byte`); `{b}` prints the number and `{b:x}` takes the
+integer spec surface. `byte` is a builtin type NAME, not a keyword:
+the reserved set stays at 50. No literal suffix exists (`u8` is not a
+spelling; an alias arrives only if a suffix inventory ever does).
+The name and every rule above are D72's letter. Native and checked
+both serve it (the WIR stores an `i8` cell and zero-extends; the
+checked machine's list slots are one byte for a byte); lupin does not
+know the name yet — wolf-interp is35's flip set. `bytes()` still
+returns `List[int]` at this pin: its move to `List[byte]`, and every
+byte-producing surface in std, is wolf-std sc34's substitution, never
+a silent retype. `wolf-lang#203` closes at this landing.
+
+### One path spelling (wolf-lang#222)
+
+`wolf add` and `wolf publish` printed their status paths with the
+host's separator (`app\wolf.pkg` on windows) while every diagnostic
+path in the same binary is slash-normalized (`--> app/main.lu:3:5`).
+Every path a package verb prints — `add`, `rm`, `init`, `vendor`,
+`publish`, and their error lines — now goes through the diagnostics'
+own spelling: forward slashes on every host. wolf-book's two windows
+transcript rows (samples-os.toml, bs25) retire at bs26.
+
+### The UB machine and the closed peer (wolf-lang#224)
+
+`wolf conform-run --checked` killed a connected client at
+`net_deadline` after the peer closed — lobo's serve sequence hands
+the parsed head to `serve_request` and never drains the socket, so
+the server's close is a close over unread receive data, which is an
+RST close; on macOS `setsockopt(SO_RCVTIMEO)` answers EINVAL on the
+reset socket (linux keeps answering 0) while the reply the server
+wrote is still readable, and the checked machine — which implements
+deadlines with exactly that setsockopt pair — reported the EINVAL as
+the `io` row. Not a handle-lifetime bug: the handle was live and its
+next read could not park. The deadline now ARMS on a reset socket
+(the native reactor's timer wheel never asked the kernel and always
+did), the buffered reply is read, and the reset is the ordinary
+`closed` row after it. `net/peer_close_after_serve.lu` pins it on
+every tier; the checked twin lives in `crates/wolf_mem/tests/net.rs`.
+
 ## 0.2.3 — 2026-09-02
 
 THE ARCHIVE RETURNS. **On Windows, `spawn` and scopes, `proc`, channels

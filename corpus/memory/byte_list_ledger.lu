@@ -1,0 +1,78 @@
+//! check: run(exit=0, stdout="payload 65536 | holds_payload true | growth_bound true | width_retired true | small true | monotone true")
+//! phase: run
+//! conforms: type.byte, mem.region.account.1, mem.region.account.2
+//!
+//! s135 (D72) — the `List[byte]` ledger witness, wolf-lang#203's
+//! evidence mirrored: sc32/sc33 measured a 64 KiB byte buffer held
+//! as `List[int]` at 16x its payload on the compiled tiers (8x the
+//! element width, 2x the push-growth history — `[mem.region.account.1]`
+//! keeps abandoned buffers charged). A `List[byte]` strides by 1
+//! ([type.byte]) and this pins the RELATIONS, never the units (the
+//! native arena and the checked machine's shadow model charge in
+//! their own units, and the clause forbids comparing them):
+//!   holds_payload — the ledger is at least the payload (an honest
+//!                   ledger never under-reports a byte buffer);
+//!   growth_bound  — at most twice the payload plus a header: the
+//!                   width multiplier is gone and only the growth
+//!                   history remains (the checked machine has no
+//!                   growth history and charges exactly 1x; native's
+//!                   push doubling is the separable 2x sc33 named,
+//!                   the preallocation half, not this witness's);
+//!   width_retired — the same 65536 pushes as `List[int]` charge at
+//!                   least seven times more than as `List[byte]`
+//!                   (8x native, 16x checked — the row that used to
+//!                   read 16.0x in every column of #203's table);
+//!   small         — eight bytes cost a header, not a page;
+//!   monotone      — the ledger only grows while the buffer fills.
+//! Measured at the landing (native, macOS/arm64): byte push 131120,
+//! int push 1048560 (#203's number exactly), header 48.
+
+fn main() -> !int {
+    let payload = 65536
+    var hdr = 0
+    var bytes = 0
+    var ints = 0
+    var small = 0
+    var monotone = true
+    region r0 {
+        var e = List[byte]()
+        hdr = region_bytes(r0)
+    }
+    region r1 {
+        var xs = List[byte]()
+        var last = region_bytes(r1)
+        for i in 0..payload {
+            (mut xs).push((i % 256) as byte)
+            if i % 4096 == 0 {
+                let now = region_bytes(r1)
+                if now < last {
+                    monotone = false
+                }
+                last = now
+            }
+        }
+        bytes = region_bytes(r1)
+    }
+    region r2 {
+        var ys = List[int]()
+        for i in 0..payload {
+            (mut ys).push(i % 256)
+        }
+        ints = region_bytes(r2)
+    }
+    region r3 {
+        var zs = List[byte]()
+        for i in 0..8 {
+            (mut zs).push(i as byte)
+        }
+        small = region_bytes(r3)
+    }
+    let holds = bytes >= payload
+    let bound = bytes <= 2 * payload + hdr + 64
+    let width = ints >= 7 * bytes
+    let sm = small <= hdr + 64
+    print(
+        "payload {payload} | holds_payload {holds} | growth_bound {bound} | width_retired {width} | small {sm} | monotone {monotone}",
+    )
+    0
+}

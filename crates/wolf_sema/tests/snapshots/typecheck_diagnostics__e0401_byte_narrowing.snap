@@ -1,0 +1,38 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+assertion_line: 37
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `{integer}`, but `b` is declared as `byte`
+ --> mem:///main.lu:2:19
+  |
+2 |     let b: byte = 65
+  |            ---- the annotation is here
+  |                   ^^ found `{integer}` here
+  |
+  = note: expected `byte`, found `{integer}`
+  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]); narrow it
+    explicitly with `as byte` — the cast keeps the value's low eight bits
+    ([type.byte.cast]).
+
+error[E0401]: this is `{integer}`, but `c` is declared as `byte`
+ --> mem:///main.lu:4:19
+  |
+4 |     let c: byte = n
+  |            ---- the annotation is here
+  |                   ^ found `{integer}` here
+  |
+  = note: expected `byte`, found `{integer}`
+  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]); narrow it
+    explicitly with `as byte` — the cast keeps the value's low eight bits
+    ([type.byte.cast]).
+
+error[E0401]: this is `byte`, but `w` is declared as `int`
+ --> mem:///main.lu:5:18
+  |
+5 |     let w: int = b
+  |            --- the annotation is here
+  |                  ^ found `byte` here
+  |
+  = note: expected `int`, found `byte`
+  = note: a `byte` widens only through the spelled cast ([type.byte.cast]): write `b as int`.

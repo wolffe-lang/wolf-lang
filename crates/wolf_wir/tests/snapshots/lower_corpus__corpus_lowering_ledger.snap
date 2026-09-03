@@ -198,6 +198,7 @@ lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
+memory/byte_list_ledger.lu: lowers
 memory/byte_view_escape.lu: lowers
 memory/carried_quotient_nested.lu: lowers
 memory/carried_quotient_pair.lu: lowers
@@ -287,6 +288,7 @@ memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/byte_roundtrip.lu: lowers
 net/echo_roundtrip.lu: lowers
 net/line_reader_bytes.lu: lowers
+net/peer_close_after_serve.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
 net/spawn_accept.lu: lowers
@@ -405,6 +407,9 @@ typecheck/ambiguous.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
 typecheck/bool_cmp.lu: lowers
+typecheck/byte_casts.lu: lowers
+typecheck/byte_narrow_fail.lu: not mem-clean (pre-wir rungs own it)
+typecheck/byte_shapes.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
 typecheck/cast_int_to_float.lu: lowers
 typecheck/cast_set.lu: lowers

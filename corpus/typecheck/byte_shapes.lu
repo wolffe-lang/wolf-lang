@@ -1,0 +1,54 @@
+//! check: run(exit=0, stdout="field 7 255 | list 3 200 true | match high other | interp 255 ff 0F | strs 4")
+//! phase: run
+//! conforms: type.byte, type.byte.op, type.byte.interp
+//!
+//! s135 (D72) — `byte` in the shapes a program holds one in: a
+//! struct field (one byte at its offset, read back as the octet), a
+//! `List[byte]` element (push, index, compare), a `match` over a
+//! byte (a binding arm — a literal arm is spelled over
+//! `b as int`, since no literal adopts a byte in any position), an
+//! interpolation hole (`{b}` prints the NUMBER, `{b:x}`/`{b:02X}`
+//! take the integer spec surface), and a byte built from a `str`'s
+//! own bytes (`bytes()` stays `List[int]` at this pin; `as byte`
+//! is the bridge until the byte tier migrates).
+
+struct Pixel {
+    tag: int,
+    alpha: byte,
+    level: byte,
+}
+
+fn classify(b: byte) -> str {
+    match b as int {
+        0 => "zero",
+        255 => "high",
+        _ => "other",
+    }
+}
+
+fn describe(b: byte) -> str {
+    match b {
+        x => if x as int > 127 { "high" } else { "other" },
+    }
+}
+
+fn main() -> !int {
+    let px = Pixel { tag: 7, alpha: 255 as byte, level: 3 as byte }
+    let f = "field {px.tag} {px.alpha}"
+    var xs = List[byte]()
+    (mut xs).push(px.level)
+    (mut xs).push(200 as byte)
+    (mut xs).push(px.alpha)
+    let lst = "list {xs.len} {xs[1]} {xs[2] > xs[1]}"
+    let m = "match {classify(px.alpha)} {describe(px.level)}"
+    let fifteen = 15 as byte
+    let hex = "interp {px.alpha} {px.alpha:x} {fifteen:02X}"
+    // bytes() is List[int] at this pin; a byte is one cast away
+    let raw = "wolf".bytes()
+    var bs = List[byte]()
+    for v in raw {
+        (mut bs).push(v as byte)
+    }
+    print("{f} | {lst} | {m} | {hex} | strs {bs.len}")
+    0
+}

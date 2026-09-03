@@ -172,6 +172,14 @@ fn add_rm_round_trip_with_lockfile() {
         &[],
     );
     assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
+    // wolf-lang#222: the status line spells its path the way every
+    // diagnostic does — forward slashes on every host (`app/wolf.pkg`,
+    // never `app\wolf.pkg`), so one binary has one path spelling.
+    assert!(
+        stderr(&out).contains("wolf add: created app/wolf.pkg (minimal manifest)"),
+        "stderr:\n{}",
+        stderr(&out)
+    );
     let manifest = std::fs::read_to_string(app.join("wolf.pkg")).expect("manifest exists");
     assert!(
         manifest.contains("util: { path: \"../util\" }"),

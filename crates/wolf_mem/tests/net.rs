@@ -299,6 +299,47 @@ fn read_deadline_against_a_silent_peer_is_the_timeout_row() {
     assert_eq!(out.stdout, "error: timeout\n");
 }
 
+/// wolf-lang#224 — a peer that closed over UNREAD receive data reset
+/// the connection; on macOS `setsockopt(SO_RCVTIMEO)` answers EINVAL
+/// on the reset socket while the bytes it wrote before closing are
+/// still readable there. The deadline must ARM (native's reactor never
+/// asks the kernel and reports armed) and the reads must end in the
+/// ordinary `closed` row — never `io` at the deadline. Whether the
+/// buffered reply is delivered before the reset is the kernel's
+/// (Windows discards it), so the test reads to the row and pins only
+/// the row. The corpus twin is `net/peer_close_after_serve.lu`.
+#[test]
+fn deadline_after_a_reset_close_arms_and_the_reply_is_readable() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+             let l = net_listen(\"127.0.0.1:0\")?\n\
+             let p = net_port(l)?\n\
+             let cli = net_connect(\"127.0.0.1:{p}\")?\n\
+             net_write(cli, \"GET / HTTP/1.1\\r\\nHost: x\\r\\n\\r\\n\")?\n\
+             let conn = net_accept(l)?\n\
+             net_write(conn, \"HTTP/1.1 200 OK\\r\\nContent-Length: 5\\r\\n\\r\\nhello\")?\n\
+             net_close(conn)?\n\
+             net_deadline(cli, 1000)?\n\
+             var end = \"data\"\n\
+             var more = true\n\
+             while more {\n\
+                 let piece = net_read(cli, 4096) else |e| match e {\n\
+                     closed => { end = \"closed\"\n more = false\n \"\" },\n\
+                     timeout => { end = \"timeout\"\n more = false\n \"\" },\n\
+                     utf8 => { end = \"utf8\"\n more = false\n \"\" },\n\
+                     io => { end = \"io\"\n more = false\n \"\" },\n\
+                 }\n\
+                 if piece.len == 0 { more = false }\n\
+             }\n\
+             print(\"armed {end}\")\n\
+             net_close(cli)?\n\
+             net_close(l)?\n\
+             0\n\
+         }\n",
+        "armed closed\n",
+    );
+}
+
 /// An armed budget bounds `accept` too (the side-table emulation),
 /// clearing (`ms <= 0`) restores the indefinite-wait contract, and a
 /// fired deadline does not poison the socket: readiness that truly
