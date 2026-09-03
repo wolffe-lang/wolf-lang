@@ -4579,6 +4579,31 @@ impl<'t> Machine<'t> {
                     .and_then(|()| s.set_write_timeout(budget))
                 {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    // wolf-lang#224: a peer that closed over UNREAD
+                    // receive data reset the connection, and on macOS
+                    // `setsockopt(SO_RCVTIMEO/SO_SNDTIMEO)` answers
+                    // EINVAL on a reset socket (linux keeps answering
+                    // 0) while the bytes the peer wrote before its
+                    // close are still readable. That is not an `io`
+                    // row — the handle is live and its next read
+                    // cannot park: it returns the buffered bytes and
+                    // then the `closed` row (ConnectionReset). The
+                    // budget is therefore honoured trivially; record
+                    // it and report the deadline ARMED, which is what
+                    // the native reactor's timer wheel (never a
+                    // setsockopt) reports on the same socket. A
+                    // genuinely dead fd still fails `local_addr`
+                    // (EBADF) and stays `io`.
+                    Err(e)
+                        if e.kind() == std::io::ErrorKind::InvalidInput
+                            && s.local_addr().is_ok() =>
+                    {
+                        match budget {
+                            Some(b) => self.sock_deadlines.insert(fd, b),
+                            None => self.sock_deadlines.remove(&fd),
+                        };
+                        Ok(Flow::Val(Value::Unit))
+                    }
                     Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
                 }
             }

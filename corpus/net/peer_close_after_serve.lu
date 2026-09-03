@@ -1,0 +1,75 @@
+//! check: run(exit=0, stdout="deadline after peer reset: armed | reply: seen | after: closed")
+//! phase: run
+//! conforms: err.union, err.propagate
+//!
+//! wolf-lang#224 (lobo ws14): a connected client whose peer closed
+//! WITHOUT draining what the client sent. lobo's serve sequence hands
+//! the parsed head to `serve_request` and never reads the socket, so
+//! the request bytes are still in the accepted socket's receive
+//! buffer when the server closes it — and a close over unread receive
+//! data is an RST close, not a FIN close. The reply (written before
+//! the close) is still readable on the client; what the reset changes
+//! is the client socket's option surface: on macOS `setsockopt(SO_RCVTIMEO)`
+//! answers EINVAL on a reset socket (linux keeps answering 0). The
+//! checked machine implemented `net_deadline` as exactly that pair of
+//! setsockopts and mapped the EINVAL to the `io` row, so lobo's client
+//! died at `net_deadline(cli, …)` before it read one byte of a 247-byte
+//! reply, on that host only; the native tier's deadline is the
+//! reactor's timer wheel and never asks the kernel. Pinned: the
+//! deadline ARMS (the row is a real bug, not a platform nicety), the
+//! buffered reply is read, and the reset itself is then the ordinary
+//! `closed` row. Loopback, port 0, no timing dependence: the reset
+//! is on the wire before the client's first call.
+
+fn main() -> !int {
+    let l = net_listen("127.0.0.1:0")?
+    let p = net_port(l)?
+    let cli = net_connect("127.0.0.1:{p}")?
+    net_write(cli, "GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")?
+    let conn = net_accept(l)?
+    // the server answers WITHOUT reading the request (lobo's shape:
+    // the head was parsed elsewhere) and closes over the unread bytes
+    net_write(conn, "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")?
+    net_close(conn)?
+    // #224's line: must arm, never `io`
+    var armed = "io"
+    net_deadline(cli, 1000) else |_| {
+        armed = "raised"
+    }
+    if armed == "io" {
+        armed = "armed"
+    }
+    // the reply the server wrote before its reset close is readable
+    var seen = "missed"
+    let reply = net_read(cli, 4096) else |_| ""
+    if reply.len > 0 {
+        seen = "seen"
+    }
+    // and the reset is the ordinary closed row after the bytes
+    var after = "data"
+    let more = net_read(cli, 4096) else |e| match e {
+        closed => {
+            after = "closed"
+            ""
+        },
+        timeout => {
+            after = "timeout"
+            ""
+        },
+        utf8 => {
+            after = "utf8"
+            ""
+        },
+        io => {
+            after = "io"
+            ""
+        },
+    }
+    if more.len > 0 {
+        after = "data"
+    }
+    print("deadline after peer reset: {armed} | reply: {seen} | after: {after}")
+    net_close(cli)?
+    net_close(l)?
+    0
+}
