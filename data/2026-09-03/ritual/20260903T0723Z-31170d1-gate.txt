@@ -1,0 +1,3 @@
+verdict: DOES-NOT-HOLD
+geomean: 1.040
+exceptions: 2
