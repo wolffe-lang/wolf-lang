@@ -121,7 +121,7 @@ interpolation never closes before its line ends — close it with `}`, or
 write `{{` for a literal brace (D74 assigns the bare brace here, one
 family for everything that fails to close).
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0102_eol.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_multiline_eof.snap, crates/wolf_lex/tests/snapshots/render__render_e0102_unterminated.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace_code.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_eol.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_multiline_eof.snap, crates/wolf_lex/tests/snapshots/render__render_e0102_unterminated.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_bare_brace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_bare_brace.snap
 
 ## E0103 — a `\
 
@@ -135,7 +135,7 @@ because its column *is* the margin stripped from every content line, so
 nothing else can share it. Move the text down to the next line, or the
 closing delimiter down to its own.
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0103.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_close_shares_line.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_open_shares_line.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0103.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0103_closing.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_close_shares_line.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_open_shares_line.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_close_shares_line.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_open_shares_line.snap
 
 ## E0104 — a multiline string line sits left of the margin
 
@@ -148,7 +148,7 @@ closing `"""` left to the shallowest content line. Blank lines are
 exempt. (A closing `"""` that is not alone on its line is the
 delimiter rule, E0103.)
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0104.snap, crates/wolf_lex/tests/snapshots/render__render_e0104_two_locus.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_close_shares_line.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_short_margin.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0104.snap, crates/wolf_lex/tests/snapshots/render__render_e0104_two_locus.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_short_margin.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_short_margin.snap
 
 ## E0105 — margin tabs and spaces do not match the closing `\
 
@@ -160,7 +160,7 @@ width, so it is an error instead. Re-indent the flagged line with the
 same tab/space mix as the closing delimiter's line — most editors fix
 this with one select-and-reindent.
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0105.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_mixed_margin.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0105.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_mixed_margin.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_mixed_margin.snap
 
 ## E0106 — source bytes are not valid UTF-8
 
@@ -186,7 +186,7 @@ Delete the character. A related case is a lone `}` inside a string:
 `}` closes an interpolation there, so a literal closing brace must be
 written `}}` (just as `{{` is a literal `{`).
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__tab_expansion.snap, crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_lone_brace.snap, crates/wolf_lex/tests/snapshots/render__render_e0107_lone_brace.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__tab_expansion.snap, crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_bom_mid_file.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_lone_brace.snap, crates/wolf_lex/tests/snapshots/render__render_e0107_lone_brace.snap
 
 ## E0108 — string/interpolation nesting exceeds the lexer's 32-level rail
 
@@ -475,7 +475,7 @@ of making you eyeball two long renderings. Note that wolf never
 converts numbers implicitly — `int` and `i64` are simply different
 types, and the fix is an explicit `as` conversion.
 
-Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
