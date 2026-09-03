@@ -1209,10 +1209,20 @@ const ALL_THREE_FLOOR: usize = 207;
 // host-cannot-measure SKIP instead); union 295; all-three 0 (no
 // release lane to intersect). Counts measured by this gate on that
 // runner, not predicted.
+// s135 ratchet, windows' own line, read off PR #229's windows job
+// (run 33699979461, head 608ae1d) over 457 entries: checked 266,
+// native 284, release 0 (DARK by design, s60c's), union 301,
+// all-three 0 — the two live lanes at exact macOS parity again
+// (266/284 there too). The four s135 run-phase witnesses reach both
+// lanes on this host (the byte pipe is the same WIR on every backend;
+// the #224 witness pins the row, not the kernel's delivery — Windows
+// discards the reply buffered before an RST close, which is why the
+// row reads to the `closed` row rather than counting bytes). Counts
+// measured by this gate on that runner, not predicted.
 #[cfg(target_os = "windows")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 261), ("native", 278), ("release", 0)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 266), ("native", 284), ("release", 0)];
 #[cfg(target_os = "windows")]
-const UNION_FLOOR: usize = 295;
+const UNION_FLOOR: usize = 301;
 #[cfg(target_os = "windows")]
 const ALL_THREE_FLOOR: usize = 0;
 // s59, measured on macOS/aarch64 the day the gate lifted: checked and
