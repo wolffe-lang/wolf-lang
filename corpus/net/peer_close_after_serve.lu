@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="deadline after peer reset: armed | reply: seen | after: closed")
+//! check: run(exit=0, stdout="deadline after peer reset: armed | reads end: closed")
 //! phase: run
 //! conforms: err.union, err.propagate
 //!
@@ -16,10 +16,14 @@
 //! died at `net_deadline(cli, …)` before it read one byte of a 247-byte
 //! reply, on that host only; the native tier's deadline is the
 //! reactor's timer wheel and never asks the kernel. Pinned: the
-//! deadline ARMS (the row is a real bug, not a platform nicety), the
-//! buffered reply is read, and the reset itself is then the ordinary
-//! `closed` row. Loopback, port 0, no timing dependence: the reset
-//! is on the wire before the client's first call.
+//! deadline ARMS (the row is a real bug, not a platform nicety), and
+//! the reads end in the ordinary `closed` row. Whether the reply
+//! written before the reset is delivered first is the KERNEL's
+//! (macOS and linux hand it over, Windows discards it with the reset
+//! — measured on this row's first CI run), so the witness reads until
+//! the row and pins only the row. Loopback, port 0, no timing
+//! dependence: the reset is on the wire before the client's first
+//! call.
 
 fn main() -> !int {
     let l = net_listen("127.0.0.1:0")?
@@ -39,36 +43,38 @@ fn main() -> !int {
     if armed == "io" {
         armed = "armed"
     }
-    // the reply the server wrote before its reset close is readable
-    var seen = "missed"
-    let reply = net_read(cli, 4096) else |_| ""
-    if reply.len > 0 {
-        seen = "seen"
+    // read until the row: the reply (if this kernel delivers it past
+    // the reset) and then the reset itself, which is `closed`
+    var end = "data"
+    var more = true
+    while more {
+        let piece = net_read(cli, 4096) else |e| match e {
+            closed => {
+                end = "closed"
+                more = false
+                ""
+            },
+            timeout => {
+                end = "timeout"
+                more = false
+                ""
+            },
+            utf8 => {
+                end = "utf8"
+                more = false
+                ""
+            },
+            io => {
+                end = "io"
+                more = false
+                ""
+            },
+        }
+        if piece.len == 0 {
+            more = false
+        }
     }
-    // and the reset is the ordinary closed row after the bytes
-    var after = "data"
-    let more = net_read(cli, 4096) else |e| match e {
-        closed => {
-            after = "closed"
-            ""
-        },
-        timeout => {
-            after = "timeout"
-            ""
-        },
-        utf8 => {
-            after = "utf8"
-            ""
-        },
-        io => {
-            after = "io"
-            ""
-        },
-    }
-    if more.len > 0 {
-        after = "data"
-    }
-    print("deadline after peer reset: {armed} | reply: {seen} | after: {after}")
+    print("deadline after peer reset: {armed} | reads end: {end}")
     net_close(cli)?
     net_close(l)?
     0
