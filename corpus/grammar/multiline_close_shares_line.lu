@@ -1,0 +1,19 @@
+//! check: fail(E0103)
+//! phase: lex
+//! conforms: gram.lex.str.multi
+//!
+//! D74 (s136, #230) — the delimiter rule, closing side: the closing
+//! `"""` must be the first thing on its line after whitespace, because
+//! its column IS the margin stripped from every content line. Before
+//! D74 wolfc answered this with E0104 (the margin code) while the spec
+//! sentence said E0104 too and the catalog said E0104 meant a short
+//! margin — one rule per code now: E0103 for either delimiter sharing
+//! its line. Span: the closing `"""`.
+
+fn main() -> !int {
+    let p = """
+        a
+        b"""
+    print(p)
+    0
+}

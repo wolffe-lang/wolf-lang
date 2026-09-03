@@ -21,9 +21,11 @@ live in 02-memory-model, 03-concurrency, and later sema documents.
 
 ### 1.1 Source `[gram.lex.source]`
 
-Source files are UTF-8, extension `.lu`. Byte order marks are rejected.
-Tokens are defined over Unicode scalar values; all offsets in diagnostics
-and slicing are byte offsets (D25).
+Source files are UTF-8, extension `.lu`. A byte order mark at the very
+start of a file is stripped and is never a diagnostic (D74 — tolerated,
+kept in place by the formatter); anywhere else it is a stray character
+(E0107). Tokens are defined over Unicode scalar values; all offsets in
+diagnostics and slicing are byte offsets (D25).
 
 ```ebnf
 SCALAR ::= /* any one Unicode scalar value */
@@ -129,13 +131,19 @@ not what the mid-end compiles today: interpolation inside a multiline is
 refused by name in the conservatism ledger (s38 formatting), which is a
 ledger row, not a grammar fact.
 
-The layout is a side condition on the parse, not part of it: the opening
-`"""` must be the last thing on its line (E0103), the closing `"""` must
-stand alone on its (E0104), and that closing delimiter's column sets the
-dedent — every content line must start with at least that much whitespace,
-which is stripped (SE-0168 lineage; a line whose margin mixes tabs and
-spaces differently is E0105, because the comparison is byte-for-byte and
-never by visual width). First newline after the opening `"""` is dropped.
+The layout is a side condition on the parse, not part of it, one rule
+per code (D74): a `"""` delimiter stands alone on its line — the opening
+`"""` must be the last thing on its line and the closing `"""` the first
+thing on its after whitespace, one rule and one code for both (E0103);
+the closing delimiter's column sets the dedent — every content line must
+start with at least that much whitespace, which is stripped (SE-0168
+lineage), and a content line that sits left of that margin is E0104; a
+line whose margin mixes tabs and spaces differently from the closing
+delimiter's is E0105, because the comparison is byte-for-byte and never
+by visual width. First newline after the opening `"""` is dropped. In a
+plain `"…"` string the same family owns the bare `{`: it opens an
+interpolation, and an interpolation still open when the line ends is
+E0102 — the string never closed (`{{` is the literal brace).
 
 **Raw** `[gram.lex.str.raw]`:
 

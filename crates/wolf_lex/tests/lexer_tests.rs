@@ -347,7 +347,16 @@ fn term_not_inserted_after_non_terminators() {
 fn term_suppressed_inside_paren_and_bracket_and_interp() {
     assert_eq!(term_count("f(a\n)\n"), 1); // only after `)`
     assert_eq!(term_count("a[1\n]\n"), 1); // only after `]`
-    assert_eq!(term_count("\"{a\n}\"\n"), 1); // only after StrEnd
+    // A multiline string's interpolation may cross a line: only after
+    // StrEnd. (A PLAIN string's may not — D74: the interpolation still
+    // open at the line end is E0102, `diagnostics::e0102_bare_brace_*`.)
+    assert_eq!(term_count("\"\"\"\n{a\n}\n\"\"\"\n"), 1);
+    let plain = lex("\"{a\n}\"\n");
+    assert!(
+        plain.diagnostics.iter().any(|d| d.code.as_str() == "E0102"),
+        "a plain string's interpolation ends with its line: {:?}",
+        plain.diagnostics
+    );
 }
 
 #[test]
@@ -431,6 +440,32 @@ fn doc_comment_kinds() {
             LineComment,
             Whitespace
         ]
+    );
+}
+
+/// D74 (s136, wolf-lang#230): a byte order mark at byte 0 is trivia —
+/// stripped, never a diagnostic — and the shebang keeps its
+/// first-thing-in-the-file rule behind it. Mid-file the same bytes are
+/// E0107 (`diagnostics::e0107_bom_mid_file`).
+#[test]
+fn bom_at_file_start_is_trivia() {
+    let src = "\u{feff}let x = 1\n";
+    let lexed = lex(src);
+    assert!(!lexed.has_errors(), "{:?}", lexed.diagnostics);
+    let lead = &lexed.tokens[0].leading;
+    assert_eq!(lead[0].kind, wolf_lex::TriviaKind::Bom);
+    assert_eq!((lead[0].span.lo, lead[0].span.hi), (0, 3));
+    assert_eq!(
+        lexed.tokens[0].kind,
+        wolf_lex::TokenKind::Kw(wolf_lex::Keyword::Let)
+    );
+    assert_eq!(lexed.reassemble(src.as_bytes()), src.as_bytes());
+    let with_shebang = lex("\u{feff}#!/usr/bin/env wolf\nx\n");
+    assert!(!with_shebang.has_errors(), "{:?}", with_shebang.diagnostics);
+    assert_eq!(
+        with_shebang.tokens[0].leading[1].kind,
+        wolf_lex::TriviaKind::Shebang,
+        "the shebang is still the first thing in the file behind a BOM"
     );
 }
 
@@ -524,8 +559,10 @@ fn stray_and_invalid_utf8_produce_error_tokens() {
 }
 
 #[test]
-fn bom_is_rejected() {
-    let lexed = util::lex_bytes("\u{feff}let x = 1\n".as_bytes());
+fn bom_mid_file_is_rejected() {
+    // At byte 0 the mark is trivia (`bom_at_file_start_is_trivia`,
+    // D74); anywhere else it is the stray character it always was.
+    let lexed = util::lex_bytes("let x = 1\n\u{feff}let y = 2\n".as_bytes());
     assert_eq!(lexed.diagnostics[0].code, "E0107");
     assert!(lexed.diagnostics[0].message.contains("byte order mark"));
 }

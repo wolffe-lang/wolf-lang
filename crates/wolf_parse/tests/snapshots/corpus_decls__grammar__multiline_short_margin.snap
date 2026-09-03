@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 470..561 name=main body=Block
+-- diagnostics --
+E0104 [Error] 519..525 this line starts left of the string's margin

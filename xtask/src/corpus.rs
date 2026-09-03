@@ -147,6 +147,10 @@ impl Directives {
 /// name the offending line (1-based).
 pub fn parse_directives(src: &str) -> Result<Directives, String> {
     let mut d = Directives::default();
+    // D74 (s136): a leading byte order mark is stripped, as the lexer
+    // and the module-membership scan strip it — the header block
+    // starts behind it (`corpus/grammar/bom_at_start.lu`).
+    let src = src.strip_prefix('\u{feff}').unwrap_or(src);
     for (i, line) in src.lines().enumerate() {
         let line = line.trim_start();
         // s53: an executable script opens with `#!`, which the lexer

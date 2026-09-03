@@ -1,0 +1,59 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 647..715
+  FnDecl 647..714
+    FnKw 647..649 "fn"
+    Ident 650..654 "main"
+    ParamList 654..656
+      LParen 654..655 "("
+      RParen 655..656 ")"
+    RetType 657..664
+      Arrow 657..659 "->"
+      ErrorUnionType 660..664
+        Not 660..661 "!"
+        PathType 661..664
+          Path 661..664
+            Ident 661..664 "int"
+    Block 665..714
+      LBrace 665..666 "{"
+      LetDecl 671..694
+        LetKw 671..674 "let"
+        IdentPat 675..676
+          Ident 675..676 "s"
+        Eq 677..678 "="
+        StringExpr 679..693
+          StrBegin 679..680 "\""
+          StrFragment 680..686 "hello "
+          Interp 686..693
+            InterpOpen 686..687 "{"
+            StringExpr 687..693
+              StrBegin 687..693 "world\""
+              StrEnd 693..693 ""
+            InterpClose 693..693 ""
+          StrEnd 693..693 ""
+        Term 693..694 "\n"
+      ExprStmt 698..707
+        CallExpr 698..706
+          PathExpr 698..703
+            Ident 698..703 "print"
+          ArgList 703..706
+            LParen 703..704 "("
+            Arg 704..705
+              PathExpr 704..705
+                Ident 704..705 "s"
+            RParen 705..706 ")"
+        Term 706..707 "\n"
+      ExprStmt 711..713
+        LiteralExpr 711..712
+          Int 711..712 "0"
+        Term 712..713 "\n"
+      RBrace 713..714 "}"
+  Term 714..715 "\n"
+  Eof 715..715 ""
+== diagnostics ==
+E0102 [Error] 679..693 this string never closes
+    label it opens here, and an interpolation `{` inside it is still open when the line ends
+    note a `"…"` string — and every `{…}` interpolation inside it — must close before the line ends. Close the interpolation with `}` and the string with `"`; for a literal brace, write `{{`.
