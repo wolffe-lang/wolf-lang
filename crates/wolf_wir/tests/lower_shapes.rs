@@ -387,7 +387,7 @@ fn byte_walk_has_no_call_and_no_allocation() {
 fn byte_index_and_str_slice_emit_no_runtime_call() {
     let out = dump(
         "fn at(text: str, i: int) -> int {\n\
-         \x20   text.bytes()[i]\n\
+         \x20   text.bytes()[i] as int\n\
          }\n\
          fn cut(text: str, i: int) -> str {\n\
          \x20   text[i..i + 2]\n\
@@ -537,7 +537,7 @@ fn long_operands_route_to_the_memcmp_shim() {
     );
 }
 
-/// s77: a `bytes()` result that must be a first-class `List[int]`
+/// s77: a `bytes()` result that must be a first-class `List[byte]`
 /// value — bound, passed, returned — still MATERIALIZES through
 /// `__wolf_rt_str_bytes`, bit-for-bit as before. The view is not a
 /// value: it never escapes into the IR, so nothing downstream can
@@ -545,7 +545,7 @@ fn long_operands_route_to_the_memcmp_shim() {
 #[test]
 fn a_named_bytes_result_still_materializes() {
     let out = dump(
-        "fn total(l: List[int]) -> int {\n\
+        "fn total(l: List[byte]) -> int {\n\
          \x20   var n = 0\n\
          \x20   for x in l { n = n + x }\n\
          \x20   n\n\
@@ -563,7 +563,7 @@ fn a_named_bytes_result_still_materializes() {
 
 /// s89 acceptance (wolf-lang#86): a view crosses a CALL. The argument
 /// position joins s77's seven, so a callee that only reads its
-/// `List[int]` parameter is cloned once against the `{ptr, len}` shape
+/// `List[byte]` parameter is cloned once against the `{ptr, len}` shape
 /// and the caller hands it the string's own storage — no
 /// `__wolf_rt_str_bytes`, no eight heap bytes per input byte.
 ///
@@ -572,10 +572,10 @@ fn a_named_bytes_result_still_materializes() {
 #[test]
 fn a_lent_byte_view_crosses_a_call_without_allocating() {
     let out = dump(
-        "fn total(bs: List[int]) -> int {\n\
+        "fn total(bs: List[byte]) -> int {\n\
          \x20   var n = 0\n\
          \x20   for b in bs { n = n + b }\n\
-         \x20   n + bs.len + bs[0]\n\
+         \x20   n + bs.len + bs[0] as int\n\
          }\n\
          fn main() -> !int {\n\
          \x20   total(\"wolf\".bytes()) - 563\n\
@@ -611,7 +611,7 @@ fn a_lent_byte_view_crosses_a_call_without_allocating() {
 #[test]
 fn two_lent_views_share_one_clone() {
     let out = dump(
-        "fn starts(bs: List[int], p: List[int]) -> bool {\n\
+        "fn starts(bs: List[byte], p: List[byte]) -> bool {\n\
          \x20   if p.len > bs.len { return false }\n\
          \x20   var i = 0\n\
          \x20   while i < p.len {\n\
@@ -648,8 +648,8 @@ fn two_lent_views_share_one_clone() {
 #[test]
 fn a_lent_view_relends_without_materializing() {
     let out = dump(
-        "fn inner(bs: List[int]) -> int { bs.len + bs[0] }\n\
-         fn outer(bs: List[int]) -> int { inner(bs) }\n\
+        "fn inner(bs: List[byte]) -> int { bs.len + bs[0] as int }\n\
+         fn outer(bs: List[byte]) -> int { inner(bs) }\n\
          fn main() -> !int {\n\
          \x20   outer(\"wolf\".bytes()) - 123\n\
          }\n",
@@ -671,7 +671,7 @@ fn a_lent_view_relends_without_materializing() {
 #[test]
 fn an_unmodelled_callee_still_materializes() {
     let out = dump(
-        "fn decode(bs: List[int]) -> str {\n\
+        "fn decode(bs: List[byte]) -> str {\n\
          \x20   str_from_utf8(bs) else \"REFUSED\"\n\
          }\n\
          fn main() -> !int {\n\

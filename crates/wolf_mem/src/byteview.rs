@@ -1,6 +1,7 @@
-//! The byte-view **lend** (s89, wolf-lang#86) — what a `List[int]`
-//! parameter may do with bytes it was handed as a view rather than a
-//! copy.
+//! The byte-view **lend** (s89, wolf-lang#86) — what a `List[byte]`
+//! parameter (`List[int]` until s136 moved the byte producers to the
+//! octet type, wolf-lang#231) may do with bytes it was handed as a
+//! view rather than a copy.
 //!
 //! # Why this lives in the memory checker
 //!
@@ -58,7 +59,7 @@ use wolf_span::Span;
 /// cap bounds work on a deep acyclic chain.
 const MAX_DEPTH: usize = 16;
 
-/// What a callee does with a `List[int]` parameter offered as a view.
+/// What a callee does with a `List[byte]` parameter offered as a view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lend {
     /// Every use is a read s77 models: the view may cross the call.
@@ -70,10 +71,11 @@ pub enum Lend {
     Opaque,
 }
 
-/// Is this the type a byte view has — `List[int]`?
+/// Is this the type a byte view has — `List[byte]` (s136; `List[int]`
+/// before the producers spoke bytes)?
 pub fn is_byte_list(table: &TypeTable, ty: wolf_sema::types::TyId) -> bool {
     match table.kind(ty) {
-        TyKind::List(elem) => matches!(table.kind(*elem), TyKind::Prim(Prim::Int)),
+        TyKind::List(elem) => matches!(table.kind(*elem), TyKind::Prim(Prim::Byte)),
         _ => false,
     }
 }
@@ -329,7 +331,7 @@ fn w1004(callee: &str, sig: &FnSig, ix: usize, lend: Span, keep: Span) -> wolf_d
              the call — so they were copied instead"
         ),
     )
-    .with_label("a byte view of the string's own storage; materialized to a `List[int]` here")
+    .with_label("a byte view of the string's own storage; materialized to a `List[byte]` here")
     .with_secondary(keep, format!("`{pname}` outlives the call here"));
     if let Some(p) = sig.params.get(ix) {
         d = d.with_secondary(p.span, format!("`{pname}` is declared here"));

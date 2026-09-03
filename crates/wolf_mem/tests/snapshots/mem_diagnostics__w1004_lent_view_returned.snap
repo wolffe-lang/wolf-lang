@@ -5,12 +5,12 @@ expression: render_mem(src)
 warning[W1004]: these bytes were offered to `keep` as a LEND, but `keep` keeps them past the call — so they were copied instead
  --> mem:///main.lu:4:21
   |
-1 | fn keep(bs: List[int]) -> List[int] { bs }
+1 | fn keep(bs: List[byte]) -> List[byte] { bs }
   |         -- `bs` is declared here
-  |                                       -- `bs` outlives the call here
+  |                                         -- `bs` outlives the call here
 ...
 4 |     let held = keep(s.bytes())
-  |                     ^^^^^^^^^ a byte view of the string's own storage; materialized to a `List[int]` here
+  |                     ^^^^^^^^^ a byte view of the string's own storage; materialized to a `List[byte]` here
   |
   = note: the program means what it meant; it paid one copy the lend was meant to save. If the
     copy is what you wanted, bind the bytes first — `let bs = s.bytes()` — and pass `bs`;

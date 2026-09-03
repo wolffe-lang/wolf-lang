@@ -63,7 +63,7 @@ fn escapes(src: &str, name: &str, ix: usize) {
 #[test]
 fn iteration_is_lendable() {
     lendable(
-        "fn f(bs: List[int]) -> int {\n    \
+        "fn f(bs: List[byte]) -> int {\n    \
              var n = 0\n    \
              for b in bs { n = n + b }\n    \
              n\n\
@@ -75,12 +75,16 @@ fn iteration_is_lendable() {
 
 #[test]
 fn indexing_is_lendable() {
-    lendable("fn f(bs: List[int], i: int) -> int { bs[i] }\n", "f", 0);
+    lendable(
+        "fn f(bs: List[byte], i: int) -> int { bs[i] as int }\n",
+        "f",
+        0,
+    );
 }
 
 #[test]
 fn the_len_field_is_lendable() {
-    lendable("fn f(bs: List[int]) -> int { bs.len }\n", "f", 0);
+    lendable("fn f(bs: List[byte]) -> int { bs.len }\n", "f", 0);
 }
 
 #[test]
@@ -88,12 +92,12 @@ fn the_query_family_is_lendable() {
     for body in [
         "bs.count()",
         "if bs.is_empty() { 0 } else { 1 }",
-        "bs.get(0) else 0",
-        "bs.first() else 0",
-        "bs.last() else 0",
+        "(bs.get(0) else 0 as byte) as int",
+        "(bs.first() else 0 as byte) as int",
+        "(bs.last() else 0 as byte) as int",
     ] {
         lendable(
-            &format!("fn f(bs: List[int]) -> int {{ {body} }}\n"),
+            &format!("fn f(bs: List[byte]) -> int {{ {body} }}\n"),
             "f",
             0,
         );
@@ -103,14 +107,18 @@ fn the_query_family_is_lendable() {
 #[test]
 fn an_index_expression_over_the_view_is_still_lendable() {
     // The INDEX is walked; only the receiver is the view.
-    lendable("fn f(bs: List[int]) -> int { bs[bs.len - 1] }\n", "f", 0);
+    lendable(
+        "fn f(bs: List[byte]) -> int { bs[bs.len - 1] as int }\n",
+        "f",
+        0,
+    );
 }
 
 #[test]
 fn a_re_lend_into_a_lendable_parameter_is_lendable() {
     lendable(
-        "fn inner(bs: List[int]) -> int { bs.len }\n\
-         fn f(bs: List[int]) -> int { inner(bs) }\n",
+        "fn inner(bs: List[byte]) -> int { bs.len }\n\
+         fn f(bs: List[byte]) -> int { inner(bs) }\n",
         "f",
         0,
     );
@@ -123,7 +131,7 @@ fn a_self_recursive_walk_is_lendable() {
     // escape — and assuming otherwise would cost the optimization on
     // every recursive byte walk, which is most of them.
     lendable(
-        "fn sum(bs: List[int], i: int) -> int {\n    \
+        "fn sum(bs: List[byte], i: int) -> int {\n    \
              if i >= bs.len { return 0 }\n    \
              bs[i] + sum(bs, i + 1)\n\
          }\n",
@@ -135,11 +143,11 @@ fn a_self_recursive_walk_is_lendable() {
 #[test]
 fn a_mutually_recursive_walk_is_lendable() {
     lendable(
-        "fn evens(bs: List[int], i: int) -> int {\n    \
+        "fn evens(bs: List[byte], i: int) -> int {\n    \
              if i >= bs.len { return 0 }\n    \
              bs[i] + odds(bs, i + 1)\n\
          }\n\
-         fn odds(bs: List[int], i: int) -> int {\n    \
+         fn odds(bs: List[byte], i: int) -> int {\n    \
              if i >= bs.len { return 0 }\n    \
              evens(bs, i + 1)\n\
          }\n",
@@ -153,7 +161,7 @@ fn a_recursive_walk_that_escapes_still_escapes() {
     // The cycle assumption is about the LOOP, not about the body: a
     // use that outlives the call is still found.
     escapes(
-        "fn walk(bs: List[int], i: int) -> List[int] {\n    \
+        "fn walk(bs: List[byte], i: int) -> List[byte] {\n    \
              if i >= bs.len { return bs }\n    \
              walk(bs, i + 1)\n\
          }\n",
@@ -164,7 +172,7 @@ fn a_recursive_walk_that_escapes_still_escapes() {
 
 #[test]
 fn two_parameters_lend_independently() {
-    let src = "fn f(bs: List[int], p: List[int], n: int) -> int { bs[0] + p.len + n }\n";
+    let src = "fn f(bs: List[byte], p: List[byte], n: int) -> int { bs[0] + p.len + n }\n";
     lendable(src, "f", 0);
     lendable(src, "f", 1);
     // A non-List parameter is never a lend candidate.
@@ -175,13 +183,13 @@ fn two_parameters_lend_independently() {
 
 #[test]
 fn returning_the_parameter_escapes() {
-    escapes("fn f(bs: List[int]) -> List[int] { bs }\n", "f", 0);
+    escapes("fn f(bs: List[byte]) -> List[byte] { bs }\n", "f", 0);
 }
 
 #[test]
 fn an_explicit_return_escapes() {
     escapes(
-        "fn f(bs: List[int], n: int) -> List[int] {\n    \
+        "fn f(bs: List[byte], n: int) -> List[byte] {\n    \
              if n > 0 { return bs }\n    \
              bs\n\
          }\n",
@@ -193,7 +201,7 @@ fn an_explicit_return_escapes() {
 #[test]
 fn a_branch_tail_escapes() {
     escapes(
-        "fn f(bs: List[int], n: int) -> List[int] {\n    \
+        "fn f(bs: List[byte], n: int) -> List[byte] {\n    \
              if n > 0 { bs } else { bs }\n\
          }\n",
         "f",
@@ -204,8 +212,8 @@ fn a_branch_tail_escapes() {
 #[test]
 fn a_transitive_escape_is_an_escape() {
     escapes(
-        "fn keep(bs: List[int]) -> List[int] { bs }\n\
-         fn f(bs: List[int]) -> List[int] { keep(bs) }\n",
+        "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
+         fn f(bs: List[byte]) -> List[byte] { keep(bs) }\n",
         "f",
         0,
     );
@@ -214,8 +222,8 @@ fn a_transitive_escape_is_an_escape() {
 #[test]
 fn an_assignment_away_escapes() {
     escapes(
-        "fn f(bs: List[int]) -> int {\n    \
-             var out = List[int]()\n    \
+        "fn f(bs: List[byte]) -> int {\n    \
+             var out = List[byte]()\n    \
              out = bs\n    \
              out.len\n\
          }\n",
@@ -230,12 +238,16 @@ fn an_assignment_away_escapes() {
 fn a_take_parameter_is_never_a_lend() {
     // Declared ownership transfer: refused at the signature, not per
     // call site.
-    opaque("fn f(take bs: List[int]) -> int { bs.len }\n", "f", 0);
+    opaque("fn f(take bs: List[byte]) -> int { bs.len }\n", "f", 0);
 }
 
 #[test]
 fn a_mut_parameter_is_never_a_lend() {
-    opaque("fn f(mut bs: List[int]) { (mut bs).push(1) }\n", "f", 0);
+    opaque(
+        "fn f(mut bs: List[byte]) { (mut bs).push(1 as byte) }\n",
+        "f",
+        0,
+    );
 }
 
 #[test]
@@ -248,7 +260,7 @@ fn a_builtin_consumer_materializes() {
     // `str_from_utf8` takes a real list; modelling the builtins is the
     // std facade's job, so the caller materializes.
     opaque(
-        "fn f(bs: List[int]) -> str { str_from_utf8(bs) else \"X\" }\n",
+        "fn f(bs: List[byte]) -> str { str_from_utf8(bs) else \"X\" }\n",
         "f",
         0,
     );
@@ -259,9 +271,9 @@ fn a_local_rebinding_of_the_name_materializes() {
     // Shadowing is a refusal, not a puzzle: below the rebind the name
     // means a different value.
     opaque(
-        "fn f(bs: List[int]) -> int {\n    \
+        "fn f(bs: List[byte]) -> int {\n    \
              let n = bs.len\n    \
-             let bs = List[int]()\n    \
+             let bs = List[byte]()\n    \
              n + bs.len\n\
          }\n",
         "f",
@@ -271,11 +283,11 @@ fn a_local_rebinding_of_the_name_materializes() {
 
 #[test]
 fn binding_the_parameter_to_a_local_materializes() {
-    // The local is an ordinary `List[int]` value from here on, and this
+    // The local is an ordinary `List[byte]` value from here on, and this
     // analysis does not follow it — so the caller materializes, which
     // is what the local's type promised anyway.
     opaque(
-        "fn f(bs: List[int]) -> int {\n    \
+        "fn f(bs: List[byte]) -> int {\n    \
              let q = bs\n    \
              q.len\n\
          }\n",
@@ -289,8 +301,8 @@ fn a_re_lend_into_an_opaque_parameter_materializes() {
     // Opacity is transitive in the same direction the lend is: the hop
     // cannot promise more than the callee it hands the view to.
     opaque(
-        "fn inner(bs: List[int]) -> str { str_from_utf8(bs) else \"X\" }\n\
-         fn f(bs: List[int]) -> int { inner(bs).len }\n",
+        "fn inner(bs: List[byte]) -> str { str_from_utf8(bs) else \"X\" }\n\
+         fn f(bs: List[byte]) -> int { inner(bs).len }\n",
         "f",
         0,
     );
@@ -301,13 +313,14 @@ fn the_len_field_is_the_only_field_a_view_has() {
     // `bs.len` is a read position; any OTHER member on the parameter is
     // outside the modelled surface and materializes rather than
     // guessing.
-    lendable("fn f(bs: List[int]) -> int { bs.len }\n", "f", 0);
+    lendable("fn f(bs: List[byte]) -> int { bs.len }\n", "f", 0);
 }
 
 // ---------------------------------------- the nine std.bytes functions ----
 
 /// s89 measured "eight of nine `std.bytes` functions stop copying" —
-/// every function that takes a `List[int]` is `Lendable` except
+/// every function that takes a `List[byte]` (s136 — `List[int]` before
+/// the producers spoke bytes) is `Lendable` except
 /// `to_str`, which hands its bytes to the `str_from_utf8` builtin and
 /// so is `Opaque` (materializes). That number lived only in the s89
 /// merge message; s92 changes what an `Escapes` verdict DOES and must
@@ -316,6 +329,9 @@ fn the_len_field_is_the_only_field_a_view_has() {
 /// comments stripped, embedded so this test does not depend on a
 /// sibling checkout — if std's bodies change, THIS file stays what s89
 /// measured, and a new measurement is a new fixture with its own date.
+/// (s136 retyped the fixture's byte tier `List[byte]` and widened its
+/// element reads with `as int` — the producers speak bytes, #231 —
+/// which moves no verdict: a cast wraps the read, the read is the use.)
 #[test]
 fn eight_of_nine_std_bytes_functions_lend() {
     let src = include_str!("fixtures/std_bytes_at_s89.lu");
@@ -345,7 +361,7 @@ fn eight_of_nine_std_bytes_functions_lend() {
         ["to_str"],
         "to_str is the one that materializes (a builtin takes it)"
     );
-    // `find`, `starts_with`, `ends_with` take a SECOND `List[int]`;
+    // `find`, `starts_with`, `ends_with` take a SECOND `List[byte]`;
     // those lend too — the count above is per function, this is per
     // parameter, and s89 claimed the former.
     for name in ["find", "starts_with", "ends_with"] {

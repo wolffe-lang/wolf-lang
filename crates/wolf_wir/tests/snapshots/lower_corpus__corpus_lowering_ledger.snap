@@ -105,6 +105,7 @@ generics/two_instances.lu: lowers
 generics/two_level_raise.lu: lowers
 grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
+grammar/bom_at_start.lu: lowers
 grammar/brackets_generic_call.lu: lowers
 grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
 grammar/char_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
@@ -134,12 +135,17 @@ grammar/match_arm_or_over_product.lu: refused — or-patterns over product patte
 grammar/match_arm_product_nested.lu: lowers
 grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern (c06)
 grammar/multiline_bad_escape.lu: not mem-clean (pre-wir rungs own it)
+grammar/multiline_close_shares_line.lu: not mem-clean (pre-wir rungs own it)
+grammar/multiline_mixed_margin.lu: not mem-clean (pre-wir rungs own it)
+grammar/multiline_open_shares_line.lu: not mem-clean (pre-wir rungs own it)
+grammar/multiline_short_margin.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
+grammar/str_bare_brace.lu: not mem-clean (pre-wir rungs own it)
 grammar/str_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_literal_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_match_arm.lu: lowers
@@ -199,6 +205,7 @@ lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_list_ledger.lu: lowers
+memory/byte_producers_ledger.lu: lowers
 memory/byte_view_escape.lu: lowers
 memory/carried_quotient_nested.lu: lowers
 memory/carried_quotient_pair.lu: lowers
@@ -211,6 +218,7 @@ memory/closure_escape_refused.lu: refused — a capturing closure read as a valu
 memory/closure_kill_list.lu: lowers
 memory/closure_region_capture.lu: refused — a region captured by a closure (open it in the enclosing frame — c25 closeout)
 memory/closure_value_paths.lu: lowers
+memory/consumed_walk_charges_nothing.lu: not mem-clean (pre-wir rungs own it)
 memory/defer_order.lu: lowers
 memory/destructure_bind.lu: lowers
 memory/destructure_partial_live.lu: lowers
@@ -286,12 +294,14 @@ memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writ
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/byte_roundtrip.lu: lowers
+net/echo_bytes.lu: lowers
 net/echo_roundtrip.lu: lowers
 net/line_reader_bytes.lu: lowers
 net/peer_close_after_serve.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
 net/spawn_accept.lu: lowers
+net/unix_echo.lu: lowers
 os/args_cwd.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
@@ -356,6 +366,7 @@ strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
 strings/byte_view_lend.lu: lowers
 strings/byte_view_slice_lent.lu: lowers
+strings/bytes_roundtrip.lu: lowers
 strings/char_battery.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/char_interp.lu: lowers
@@ -408,6 +419,7 @@ typecheck/arg_count.lu: not mem-clean (pre-wir rungs own it)
 typecheck/arg_vs_return.lu: not mem-clean (pre-wir rungs own it)
 typecheck/bool_cmp.lu: lowers
 typecheck/byte_casts.lu: lowers
+typecheck/byte_elem_arith_fail.lu: not mem-clean (pre-wir rungs own it)
 typecheck/byte_narrow_fail.lu: not mem-clean (pre-wir rungs own it)
 typecheck/byte_shapes.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
