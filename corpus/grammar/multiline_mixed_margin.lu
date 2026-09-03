@@ -1,0 +1,19 @@
+//! check: fail(E0105)
+//! phase: none
+//! conforms: gram.lex.str.multi
+//!
+//! D74 (s136, #230) — the tab/space rule: the margin is compared
+//! byte-for-byte, never by visual width, so a content line whose
+//! margin is eight TABS against a closing delimiter indented with
+//! eight SPACES is E0105 — the widths agree, the bytes do not (a
+//! margin SHORTER than the delimiter's is E0104's rule). Unchanged
+//! by D74; this witness is the one the ruling asked for so both
+//! machines can be measured. Span: the mismatching margin.
+
+fn main() -> !int {
+    let p = """
+								bad
+        """
+    print(p)
+    0
+}

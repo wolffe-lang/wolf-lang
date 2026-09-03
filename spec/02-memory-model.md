@@ -712,7 +712,7 @@ the inputs that would have decided it either way.)
   compiler: `s.bytes()` yields a view when it is *consumed on the spot*
   — iterated, indexed, asked for `len`/`count`/`is_empty`/`get`/
   `first`/`last`, or **passed as an argument to a function that only
-  does those things with it** — and materializes a `List[int]` in every
+  does those things with it** — and materializes a `List[byte]` in every
   other position, `let` bindings and returns included. Three cases at a
   call, decided by the callee's body: (1) a callee that only READS its
   parameter, in the positions above, is lent the receiver's own
@@ -767,11 +767,12 @@ the scalar's value before the value had a type, and it still is.)
   the identity that makes a byte-offset scanner writable in library
   code. `"".chars()` yields nothing; `s.chars().len` is the
   code-point count, `s.len` the byte count, and the two agree exactly
-  when `s` is ASCII. The byte tier has its element type now — `byte`
-  (`[type.byte]`, D72): `bytes()` still returns `List[int]` at this
-  pin, and its move to `List[byte]` is a ruled migration behind std's
-  (wolf-std sc34), never a silent retype — `char` is the scalar tier,
-  never a byte.
+  when `s` is ASCII. The byte tier has its element type — `byte`
+  (`[type.byte]`, D72): `bytes()` returns `List[byte]` (s136,
+  wolf-lang#231 — `List[int]` until then; the eight byte-producing
+  and byte-consuming builtins moved together, and a program that did
+  arithmetic on a byte without `as int` reads the E0401 note that
+  names the cast), and `char` is the scalar tier, never a byte.
 
 ---
 

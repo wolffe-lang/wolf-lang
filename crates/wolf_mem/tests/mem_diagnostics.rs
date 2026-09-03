@@ -1135,7 +1135,7 @@ fn w1004_lent_view_returned() {
     // and where the escape is (E1015 refused this through s91).
     snap(
         "w1004_lent_view_returned",
-        "fn keep(bs: List[int]) -> List[int] { bs }\n\
+        "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
          fn main() -> !int {\n    \
              let s = \"wolf\"\n    \
              let held = keep(s.bytes())\n    \
@@ -1151,8 +1151,8 @@ fn w1004_lent_view_relent_into_an_escape() {
     // diagnostic names the call site that lent, not the hop.
     snap(
         "w1004_lent_view_relent",
-        "fn keep(bs: List[int]) -> List[int] { bs }\n\
-         fn relay(bs: List[int]) -> List[int] { keep(bs) }\n\
+        "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
+         fn relay(bs: List[byte]) -> List[byte] { keep(bs) }\n\
          fn main() -> !int {\n    \
              let s = \"wolf\"\n    \
              relay(s.bytes()).len - 4\n\
@@ -1166,10 +1166,10 @@ fn a_read_only_lend_stays_silent() {
     // only reads gets the view, and nothing is reported.
     snap(
         "clean_byte_view_lend",
-        "fn total(bs: List[int]) -> int {\n    \
+        "fn total(bs: List[byte]) -> int {\n    \
              var n = 0\n    \
              for b in bs { n = n + b }\n    \
-             n + bs.len + bs.count() + bs[0]\n\
+             n + bs.len + bs.count() + bs[0] as int\n\
          }\n\
          fn main() -> !int {\n    \
              let s = \"wolf\"\n    \
@@ -1184,7 +1184,7 @@ fn a_bound_bytes_list_is_not_a_lend() {
     // W1004 reports a copy for takes the bound list without a word.
     snap(
         "clean_bound_bytes_list",
-        "fn keep(bs: List[int]) -> List[int] { bs }\n\
+        "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
          fn main() -> !int {\n    \
              let s = \"wolf\"\n    \
              let bs = s.bytes()\n    \

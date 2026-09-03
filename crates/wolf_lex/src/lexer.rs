@@ -71,6 +71,9 @@ enum Decoded {
     Eof,
 }
 
+/// The UTF-8 encoding of U+FEFF — stripped at byte 0 (D74).
+const BOM: &[u8] = b"\xEF\xBB\xBF";
+
 /// Longest-match punctuation table (multi-byte entries first).
 #[rustfmt::skip]
 const PUNCTS: &[(&[u8], Punct)] = &[
@@ -250,10 +253,33 @@ impl Lexer<'_> {
         }
     }
 
+    /// Is `self.pos` the first token position of the file — byte 0, or
+    /// byte 3 behind a leading byte order mark (D74: the BOM is
+    /// stripped, so the shebang and the `#![…]` opener keep their
+    /// "first thing in the file" rule behind it)?
+    fn at_file_start(&self) -> bool {
+        self.pos == 0 || (self.pos == BOM.len() && self.src.starts_with(BOM))
+    }
+
     fn skip_trivia(&mut self) {
         loop {
             match self.peek(0) {
+                // A byte order mark at byte 0 is trivia (D74, s136):
+                // tolerated, kept by the formatter, never a diagnostic.
+                // The same bytes anywhere else are E0107 (`stray`).
+                Some(0xEF) if self.pos == 0 && self.src.starts_with(BOM) => {
+                    self.pos = BOM.len();
+                    self.push_trivia(TriviaKind::Bom, 0, BOM.len());
+                }
                 Some(b'\n') => {
+                    // D74 (s136, wolf-lang#230): a plain string whose
+                    // interpolation is still open when its line ends
+                    // is E0102 — the bare `{` case. Reported and
+                    // unwound here, before the newline is trivia.
+                    if let Some(f) = self.plain_interp_open() {
+                        self.unterminated_interp(f);
+                        continue;
+                    }
                     if !self.line_broken && self.term_due() {
                         let lo = self.pos;
                         self.pos += 1;
@@ -287,7 +313,7 @@ impl Lexer<'_> {
                 // the file-wide attribute opener, never a shebang
                 // (real interpreter lines start `#!/`).
                 Some(b'#')
-                    if self.pos == 0
+                    if self.at_file_start()
                         && self.peek(1) == Some(b'!')
                         && self.peek(2) != Some(b'[') =>
                 {
@@ -727,12 +753,13 @@ impl Lexer<'_> {
                     Diagnostic::error(
                         codes::STRAY_BYTE,
                         span,
-                        "a byte order mark (BOM) does not belong in a wolf source file",
+                        "a byte order mark (BOM) in the middle of a wolf source file",
                     )
                     .with_label("the invisible BOM character sits here")
                     .with_note(
-                        "wolf reads sources as plain UTF-8 and never uses a BOM \
-                         ([gram.lex.source]). Save the file without one.",
+                        "wolf reads sources as plain UTF-8: a BOM at the very start of \
+                         the file is stripped, and anywhere else it is a stray character \
+                         ([gram.lex.source]). Delete it.",
                     )
                     .with_suggestion(Suggestion::new(
                         "delete the byte order mark",
@@ -820,7 +847,7 @@ impl Lexer<'_> {
                 let open_span = self.span(lo, lo + 3);
                 self.diags.push(
                     Diagnostic::error(
-                        codes::AFTER_OPENING_MULTILINE,
+                        codes::DELIMITER_SHARES_LINE,
                         span,
                         "a multiline string's content starts on the line after the \
                          opening `\"\"\"`",
@@ -1031,7 +1058,9 @@ impl Lexer<'_> {
 
     /// SE-0168 dedent: the exact whitespace before the closing `"""` is
     /// the margin every content line must start with. Returns the margin
-    /// width in bytes (the `StrEnd` payload). Emits E0104/E0105.
+    /// width in bytes (the `StrEnd` payload). Emits E0103 (the closing
+    /// delimiter shares its line with text — D74 folds it into the
+    /// opener's rule: delimiters stand alone), E0104, E0105.
     fn close_multiline(&mut self, f: &StrFrame, close_at: usize) -> u32 {
         let close_line_start = self.src[..close_at]
             .iter()
@@ -1044,17 +1073,20 @@ impl Lexer<'_> {
         let margin: &[u8] = &self.src[close_line_start..close_at];
         if margin.iter().any(|&b| !is_inline_ws(b)) {
             let span = self.span(close_at, close_at + 3);
+            let open_span = self.span(f.open_lo, f.open_lo + 3);
             self.diags.push(
                 Diagnostic::error(
-                    codes::UNDER_INDENTED,
+                    codes::DELIMITER_SHARES_LINE,
                     span,
                     "the closing `\"\"\"` must stand alone on its line",
                 )
                 .with_label("only whitespace may sit before it")
+                .with_secondary(open_span, "the multiline string opens here")
                 .with_note(
-                    "the closing delimiter's column sets the margin stripped from every \
-                     content line, so nothing else can share its line. Move it to its \
-                     own line.",
+                    "a `\"\"\"` delimiter stands alone on its line, opening and closing \
+                     alike: the closing delimiter's column sets the margin stripped from \
+                     every content line, so nothing else can share its line. Move it to \
+                     its own line.",
                 ),
             );
             return 0;
@@ -1151,6 +1183,15 @@ impl Lexer<'_> {
             match self.src.get(self.pos) {
                 None | Some(b'\n') => {
                     self.flush_frag(start);
+                    // D74: `"hello {world"` — the `world"` opened a
+                    // generalized literal INSIDE the interpolation a
+                    // bare `{` began. The story is the plain string's
+                    // (E0102, the interpolation never closed), not the
+                    // literal's (E0109 was the wrong family — #230).
+                    if let Some(outer) = self.plain_interp_open_below() {
+                        self.unterminated_interp(outer);
+                        return;
+                    }
                     let at = self.pos;
                     let span = self.span(f.open_lo, at);
                     self.diags.push(
@@ -1267,6 +1308,75 @@ impl Lexer<'_> {
         }
     }
 
+    // ----------------------------------------- the bare `{` (D74) --
+
+    /// The plain string whose interpolation is open at this point, if
+    /// the innermost `Str` frame is Plain and an `Interp` frame sits
+    /// above it — the bare-`{` shape (D74, wolf-lang#230). A multiline
+    /// string's interpolation may cross lines; a plain string's ends
+    /// with its line.
+    fn plain_interp_open(&self) -> Option<StrFrame> {
+        Self::plain_interp_in(self.frames.iter().rev())
+    }
+
+    /// [`Self::plain_interp_open`] seen from inside a nested literal:
+    /// the innermost frame is that literal's own `Str`, so the scan
+    /// starts one below it.
+    fn plain_interp_open_below(&self) -> Option<StrFrame> {
+        Self::plain_interp_in(self.frames.iter().rev().skip(1))
+    }
+
+    fn plain_interp_in<'f>(frames: impl Iterator<Item = &'f Frame>) -> Option<StrFrame> {
+        let mut seen_interp = false;
+        for f in frames {
+            match f {
+                Frame::Interp { .. } => seen_interp = true,
+                Frame::Str(s) => {
+                    return (seen_interp && s.kind == StrKind::Plain).then_some(*s);
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// E0102 for a plain string whose interpolation never closed before
+    /// the line (or file) ended: ONE diagnostic, at the string, from its
+    /// opener to the current position; then every frame the
+    /// interpolation opened is popped with its zero-width protocol
+    /// closer (a nested literal's `StrEnd`, the `InterpClose`, the
+    /// string's own `StrEnd`) so the parser sees balance and the next
+    /// line lexes cleanly — the same recovery the unterminated plain
+    /// string has always had.
+    fn unterminated_interp(&mut self, f: StrFrame) {
+        let at = self.pos;
+        let span = self.span(f.open_lo, at);
+        self.diags.push(
+            Diagnostic::error(codes::UNTERMINATED_STRING, span, "this string never closes")
+                .with_label(
+                    "it opens here, and an interpolation `{` inside it is still open \
+                     when the line ends",
+                )
+                .with_note(
+                    "a `\"…\"` string — and every `{…}` interpolation inside it — must \
+                     close before the line ends. Close the interpolation with `}` and \
+                     the string with `\"`; for a literal brace, write `{{`.",
+                ),
+        );
+        while let Some(fr) = self.frames.pop() {
+            match fr {
+                Frame::Interp { .. } => self.emit(TokenKind::InterpClose, at, at),
+                Frame::Str(s) => {
+                    self.emit(TokenKind::StrEnd { dedent: 0 }, at, at);
+                    if s == f {
+                        break;
+                    }
+                }
+                Frame::Paren | Frame::Bracket { .. } | Frame::Brace => {}
+            }
+        }
+    }
+
     // -------------------------------------------------------------- close
 
     /// Drain the stack at EOF (zero-width closers + diagnostics), insert
@@ -1274,6 +1384,12 @@ impl Lexer<'_> {
     /// the `Eof` completion marker.
     fn finish(&mut self) {
         let end = self.src.len();
+        // The bare `{` at end of file is the same E0102 it is at end of
+        // line (D74), reported once for the string before the generic
+        // drain below sees the frames.
+        if let Some(f) = self.plain_interp_open() {
+            self.unterminated_interp(f);
+        }
         let mut rest: Vec<Frame> = Vec::new();
         while let Some(frame) = self.frames.pop() {
             match frame {

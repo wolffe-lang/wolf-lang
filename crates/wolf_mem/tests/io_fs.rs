@@ -398,16 +398,6 @@ fn fs_new_rows_carry_their_tags() {
             format!("let fd = fs_open_mode(\"{p}\", 42)?\n", p = lit(&file)),
             "invalid",
         ),
-        // A byte list holding something that is not a byte.
-        (
-            format!(
-                "var b = List[int]()\n\
-                 (mut b).push(300)\n\
-                 fs_write_bytes(\"{p}\", b)?\n",
-                p = lit(&file)
-            ),
-            "invalid",
-        ),
         // Strict create over an existing directory.
         (
             format!("fs_create_dir(\"{p}\")?\n", p = lit(&existing)),
@@ -479,11 +469,11 @@ fn fs_byte_io_carries_what_text_io_refuses() {
         "fn main() -> !int {{\n\
          let p = \"{p}\"\n\
          let q = \"{q}\"\n\
-         var b = List[int]()\n\
-         (mut b).push(128)\n\
-         (mut b).push(0)\n\
-         (mut b).push(255)\n\
-         (mut b).push(65)\n\
+         var b = List[byte]()\n\
+         (mut b).push(128 as byte)\n\
+         (mut b).push(0 as byte)\n\
+         (mut b).push(255 as byte)\n\
+         (mut b).push(65 as byte)\n\
          fs_write_bytes(p, b)?\n\
          let refused = fs_read_text(p) else |_| \"text refused\"\n\
          let back = fs_read_bytes(p)?\n\

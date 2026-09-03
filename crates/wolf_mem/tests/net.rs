@@ -91,7 +91,8 @@ fn echo_roundtrip_over_loopback() {
 /// s115 (#137): the corpus/net/byte_roundtrip.lu twin — the byte
 /// path carries bytes the str path mangles (a 0xFF, an embedded NUL,
 /// a lone continuation byte), round-tripping BYTE-EQUAL with no UTF-8
-/// gate. `net_write_bytes`/`net_read_bytes` over `List[int]`.
+/// gate. `net_write_bytes`/`net_read_bytes` over `List[byte]` (s136;
+/// `List[int]` from s115 to s135).
 #[test]
 fn byte_roundtrip_carries_binary() {
     assert_stdout(
@@ -99,11 +100,11 @@ fn byte_roundtrip_carries_binary() {
              let srv = net_listen(\"127.0.0.1:0\")?\n\
              let port = net_port(srv)?\n\
              let cli = net_connect(\"127.0.0.1:{port}\")?\n\
-             var payload = List[int]()\n\
-             (mut payload).push(255)\n\
-             (mut payload).push(0)\n\
-             (mut payload).push(128)\n\
-             (mut payload).push(65)\n\
+             var payload = List[byte]()\n\
+             (mut payload).push(255 as byte)\n\
+             (mut payload).push(0 as byte)\n\
+             (mut payload).push(128 as byte)\n\
+             (mut payload).push(65 as byte)\n\
              net_write_bytes(cli, payload)?\n\
              let conn = net_accept(srv)?\n\
              let got = net_read_bytes(conn, 16)?\n\
@@ -123,12 +124,18 @@ fn byte_roundtrip_carries_binary() {
     );
 }
 
-/// s115 (#137): a `List[int]` element outside `0..=255` is the
-/// `invalid` row (the `fs_write_bytes` refusal over the socket),
-/// handleable with `else`, and nothing is sent.
+/// s115 (#137) declared `invalid` for a `List[int]` element outside
+/// `0..=255`; since s136 (#231) `net_write_bytes` takes `List[byte]`,
+/// so the out-of-range element is unconstructible and a `List[int]`
+/// at the call is the E0401 mismatch — the row stays declared (the
+/// vocabulary is stable; an FFI caller's wrong-width list still earns
+/// it) and is unreachable from typed code.
 #[test]
-fn write_bytes_out_of_range_is_the_invalid_row() {
-    assert_stdout(
+fn write_bytes_takes_a_byte_list_since_s136() {
+    let mut ml = MemoryLoader::new("net");
+    ml.add_file(
+        &[],
+        "main.lu",
         "fn main() -> !int {\n\
              let srv = net_listen(\"127.0.0.1:0\")?\n\
              let port = net_port(srv)?\n\
@@ -140,7 +147,14 @@ fn write_bytes_out_of_range_is_the_invalid_row() {
              net_close(srv)?\n\
              0\n\
          }\n",
-        "invalid\n",
+    );
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    let codes: Vec<&str> = tc.diagnostics.iter().map(|d| d.code.as_str()).collect();
+    assert_eq!(
+        codes,
+        vec!["E0401"],
+        "a List[int] is not the byte carrier: {codes:?}"
     );
 }
 
@@ -406,5 +420,90 @@ fn read_zero_max_is_empty() {
              0\n\
          }\n",
         "len: 0\n",
+    );
+}
+
+/// s136 (#227, `[os.net.unix]`): the unix-domain family on the checked
+/// machine — an echo over a socket PATH, `net_port` on it the `io`
+/// row, the rows by name (`exists` for a second bind, `not_found` for
+/// a dial with no file, `refused` for a file nobody listens on), and
+/// the cleanup posture: the listener's close unlinks the path. The
+/// twin of `corpus/net/unix_echo.lu`.
+#[cfg(unix)]
+#[test]
+fn unix_echo_rows_and_cleanup() {
+    let dir = std::env::temp_dir().join(format!("wolf-s136-ub-unix-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("echo.sock").display().to_string();
+    let src = format!(
+        r#"fn main() -> !int {{
+    let path = "{path}"
+    let srv = net_listen_unix(path)?
+    let again = net_listen_unix(path) else |e| match e {{
+        exists => -1,
+        _ => -2,
+    }}
+    let port = net_port(srv) else |_| -1
+    let cli = net_connect_unix(path)?
+    net_write(cli, "ping")?
+    let conn = net_accept(srv)?
+    let got = net_read(conn, 16)?
+    net_write(conn, "pong {{got}}")?
+    let reply = net_read(cli, 16)?
+    net_close(cli)?
+    net_close(conn)?
+    net_close(srv)?
+    let gone = !fs_exists(path)
+    let none = net_connect_unix(path) else |e| match e {{
+        not_found => -1,
+        _ => -2,
+    }}
+    fs_write_text(path, "")?
+    let stale = net_connect_unix(path) else |e| match e {{
+        refused => -1,
+        io => -3,
+        _ => -2,
+    }}
+    fs_remove(path)?
+    print("{{again}} {{port}} {{got}} {{reply}} {{gone}} {{none}} {{stale}}")
+    0
+}}
+"#
+    );
+    let out = run(&src);
+    match out.verdict {
+        Verdict::Exit(0) => {}
+        other => panic!("expected exit(0), got {other:?} (stdout: {:?})", out.stdout),
+    }
+    let line = out.stdout.trim_end();
+    assert!(
+        line == "-1 -1 ping pong ping true -1 -1" || line == "-1 -1 ping pong ping true -1 -3",
+        "rows by name and the path unlinked at close: {line:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// s136 (#227): a host the machine does not serve refuses BY NAME —
+/// the `unsupported` row, handleable, never a bare `io` and never a
+/// trap.
+#[cfg(not(unix))]
+#[test]
+fn unix_family_refuses_by_name() {
+    assert_stdout(
+        r#"fn main() -> !int {
+    let l = net_listen_unix("C:/wolf-s136-probe.sock") else |e| match e {
+        unsupported => -1,
+        _ => -2,
+    }
+    let c = net_connect_unix("C:/wolf-s136-probe.sock") else |e| match e {
+        unsupported => -1,
+        _ => -2,
+    }
+    print("{l} {c}")
+    0
+}
+"#,
+        "-1 -1\n",
     );
 }

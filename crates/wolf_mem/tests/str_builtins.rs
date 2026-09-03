@@ -317,7 +317,7 @@ fn words_lines_split_bytes() {
          let words_ok = w.len == 3 && w[1] == \"wolf\"\n\
          let lines_ok = l.len == 3 && l[2] == \"c\"\n\
          let split_ok = p.len == 3 && p[0] == \"a\"\n\
-         let bytes_ok = b.len == 2 && b[0] == 195 && b[1] == 169\n\
+         let bytes_ok = b.len == 2 && b[0] as int == 195 && b[1] as int == 169\n\
          if words_ok && lines_ok && split_ok && bytes_ok { 0 } else { 1 }\n\
          }\n",
         0,
@@ -336,10 +336,10 @@ fn the_byte_view_query_family_runs_on_a_temporary() {
     assert_exit(
         "fn main() -> !int {\n\
          let s = \"wolf é\"\n\
-         let idx = s.bytes()[5]\n\
-         let get = s.bytes().get(6) else 0 - 1\n\
-         let first = s.bytes().first() else 0 - 1\n\
-         let last = s.bytes().last() else 0 - 1\n\
+         let idx = s.bytes()[5] as int\n\
+         let get = (s.bytes().get(6) else 0 as byte) as int\n\
+         let first = (s.bytes().first() else 0 as byte) as int\n\
+         let last = (s.bytes().last() else 0 as byte) as int\n\
          let count = s.bytes().count()\n\
          let empty = s.bytes().is_empty()\n\
          let len = s.bytes().len\n\
@@ -379,7 +379,7 @@ fn indexing_a_byte_view_out_of_range_traps() {
         "fn main() -> !int {\n\
          let s = \"wolf\"\n\
          let b = s.bytes()[9]\n\
-         b\n\
+         b as int\n\
          }\n",
         "bounds",
     );
@@ -409,15 +409,15 @@ fn str_ordering_is_byte_lexicographic() {
 /// The helper every test below shares: a `List[int]` built from up to
 /// four elements, decoded through the border post, with the refusal
 /// spelled as an ordinary `else`.
-const DECODER: &str = "fn decode(bs: List[int]) -> str {\n\
+const DECODER: &str = "fn decode(bs: List[byte]) -> str {\n\
      str_from_utf8(bs) else \"X\"\n\
      }\n\
-     fn seq(a: int, b: int, c: int, dd: int, n: int) -> List[int] {\n\
-     var l = List[int]()\n\
-     if n > 0 { (mut l).push(a) }\n\
-     if n > 1 { (mut l).push(b) }\n\
-     if n > 2 { (mut l).push(c) }\n\
-     if n > 3 { (mut l).push(dd) }\n\
+     fn seq(a: int, b: int, c: int, dd: int, n: int) -> List[byte] {\n\
+     var l = List[byte]()\n\
+     if n > 0 { (mut l).push(a as byte) }\n\
+     if n > 1 { (mut l).push(b as byte) }\n\
+     if n > 2 { (mut l).push(c as byte) }\n\
+     if n > 3 { (mut l).push(dd as byte) }\n\
      l\n\
      }\n";
 
@@ -436,7 +436,7 @@ fn from_utf8_accepts_text_including_an_interior_nul() {
              let two = decode(seq(195, 169, 0, 0, 2))\n\
              let three = decode(seq(226, 130, 172, 0, 3))\n\
              let four = decode(seq(240, 159, 144, 186, 4))\n\
-             let empty = decode(List[int]())\n\
+             let empty = decode(List[byte]())\n\
              let nul = decode(seq(119, 0, 102, 0, 3))\n\
              print(\"{{ascii}} {{two}} {{three}} {{four}} {{empty.len}} {{nul.len}}\")\n\
              0\n\
@@ -451,7 +451,9 @@ fn from_utf8_refuses_the_ugly_inputs_as_a_row_not_a_trap() {
     // One named failure mode per column, and every one of them is a
     // VALUE the `else` catches — refusing bytes is an outcome, and a
     // trap here would make `bytes.to_str` unwritable in wolf-std.
-    // The last two are not bytes at all: `List[int]` holds `int`s.
+    // (Until s136 three more rows stood here — 256, -1 and a 300
+    // poisoning a sequence; `List[byte]` cannot hold them, so those
+    // refusals retired with the type that made them expressible.)
     assert_stdout(
         &format!(
             "{DECODER}\
@@ -465,15 +467,12 @@ fn from_utf8_refuses_the_ugly_inputs_as_a_row_not_a_trap() {
              let surrogate = decode(seq(237, 160, 128, 0, 3))\n\
              let too_big = decode(seq(245, 128, 128, 128, 4))\n\
              let never = decode(seq(254, 0, 0, 0, 1))\n\
-             let big = decode(seq(256, 0, 0, 0, 1))\n\
-             let neg = decode(seq(0 - 1, 0, 0, 0, 1))\n\
-             let poison = decode(seq(119, 111, 108, 300, 4))\n\
              print(\"{{lone}}{{cont}}{{trunc}}{{trunc4}}{{overlong}}{{overlong3}}\")\n\
-             print(\"{{surrogate}}{{too_big}}{{never}}{{big}}{{neg}}{{poison}}\")\n\
+             print(\"{{surrogate}}{{too_big}}{{never}}\")\n\
              0\n\
              }}\n"
         ),
-        "XXXXXX\nXXXXXX\n",
+        "XXXXXX\nXXX\n",
     );
 }
 
@@ -483,10 +482,10 @@ fn from_utf8_round_trips_the_byte_view() {
     // bytes back, same string — and the `?` propagation wolf-std's
     // `bytes.to_str` needs, over a caller that declares its own `utf8`.
     assert_exit(
-        "fn to_str(b: List[int]) -> str ! {utf8} {\n\
+        "fn to_str(b: List[byte]) -> str ! {utf8} {\n\
          str_from_utf8(b)\n\
          }\n\
-         fn shout(b: List[int]) -> str ! {utf8} {\n\
+         fn shout(b: List[byte]) -> str ! {utf8} {\n\
          let s = to_str(b)?\n\
          s.upper()\n\
          }\n\

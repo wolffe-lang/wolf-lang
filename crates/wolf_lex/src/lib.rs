@@ -90,15 +90,23 @@
 //! | code  | meaning                                                    |
 //! |-------|------------------------------------------------------------|
 //! | E0101 | invalid escape sequence                                    |
-//! | E0102 | unterminated string literal / interpolation                |
-//! | E0103 | content after the opening `"""` on the same line           |
-//! | E0104 | multiline line under-indented vs. the closing margin       |
+//! | E0102 | unterminated string literal / interpolation (a bare `{`)   |
+//! | E0103 | a `"""` delimiter shares its line with text (open or close)|
+//! | E0104 | a multiline content line sits left of the closing margin   |
 //! | E0105 | margin tab/space mismatch vs. the closing margin           |
 //! | E0106 | invalid UTF-8 (reported once per run of bad bytes)         |
-//! | E0107 | stray byte / character (incl. BOM, lone `}` in a string)   |
+//! | E0107 | stray byte / character (a mid-file BOM, lone `}` in a str) |
 //! | E0108 | string/interpolation nesting deeper than [`MAX_NEST`]      |
 //! | E0109 | unterminated raw or generalized literal                    |
 //! | E0110 | malformed `char` literal (s121, `[gram.lex.char]`)         |
+//!
+//! One rule per code (D74, s136 — wolf-lang#230): E0103 is the
+//! delimiter rule (both the opening `"""` with text after it and the
+//! closing `"""` with text before it — delimiters stand alone), E0104
+//! the margin rule, E0105 the tab/space rule, and E0102 owns the bare
+//! `{` in a plain string (the interpolation it opens never closes
+//! before the line ends). A byte order mark at byte 0 is stripped as
+//! [`TriviaKind::Bom`], never a diagnostic; anywhere else it is E0107.
 
 use wolf_span::Span;
 
@@ -115,7 +123,9 @@ pub mod codes {
 
     pub const INVALID_ESCAPE: Code = c::E0101;
     pub const UNTERMINATED_STRING: Code = c::E0102;
-    pub const AFTER_OPENING_MULTILINE: Code = c::E0103;
+    /// D74: a `"""` delimiter that shares its line with text — the
+    /// opening one (text after it) or the closing one (text before it).
+    pub const DELIMITER_SHARES_LINE: Code = c::E0103;
     pub const UNDER_INDENTED: Code = c::E0104;
     pub const MARGIN_MISMATCH: Code = c::E0105;
     pub const INVALID_UTF8: Code = c::E0106;
@@ -289,6 +299,12 @@ pub enum TriviaKind {
     DocComment,
     /// `//! …` inner doc comment.
     InnerDocComment,
+    /// A UTF-8 byte order mark (`EF BB BF`) at byte 0 only — stripped,
+    /// never a diagnostic (D74, s136): an editor that writes one has
+    /// not made the file wrong, and the formatter keeps it in place.
+    /// Anywhere else the same three bytes are a stray character
+    /// (E0107).
+    Bom,
     /// `#!…` on the FIRST line of a file only — the interpreter
     /// directive of an executable script (s53). Trivia, not a comment:
     /// it is not `//`-shaped, it carries no prose, and it is legal at

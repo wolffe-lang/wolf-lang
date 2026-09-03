@@ -100,6 +100,9 @@ pub const PRELUDE: &[&str] = &[
     // for the socket). The str variants stay for text.
     "net_read_bytes",
     "net_write_bytes",
+    // s136 (#227): the unix-domain pair, `[os.net.unix]`.
+    "net_listen_unix",
+    "net_connect_unix",
     "net_close",
     // s106 (#45's builtin half): the per-socket deadline budget that
     // makes the `timeout` tag reachable — declared with the family

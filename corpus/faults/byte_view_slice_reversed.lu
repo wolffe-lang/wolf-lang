@@ -8,7 +8,7 @@
 //! empty slice, never a backwards walk, and the lend changes nothing
 //! about the domain.
 
-fn cut(b: List[int]) -> List[int] {
+fn cut(b: List[byte]) -> List[byte] {
     b[3..1]
 }
 

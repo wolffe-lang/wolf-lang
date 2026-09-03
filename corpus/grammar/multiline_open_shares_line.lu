@@ -1,0 +1,17 @@
+//! check: fail(E0103)
+//! phase: none
+//! conforms: gram.lex.str.multi
+//!
+//! D74 (s136, #230) — the delimiter rule, opening side: a `"""`
+//! delimiter stands alone on its line, and text after the opener
+//! has no column to measure the margin against. E0103, one code for
+//! both delimiters (the closing side is `multiline_close_shares_line`).
+//! Span: the text after the opener, on its line.
+
+fn main() -> !int {
+    let p = """oops
+        a
+        """
+    print(p)
+    0
+}

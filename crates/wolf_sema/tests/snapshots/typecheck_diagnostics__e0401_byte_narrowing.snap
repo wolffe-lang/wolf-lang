@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_sema/tests/typecheck_diagnostics.rs
-assertion_line: 37
 expression: "render_types(&[(&[], \"main.lu\", src)])"
 ---
 error[E0401]: this is `{integer}`, but `b` is declared as `byte`
@@ -11,8 +10,8 @@ error[E0401]: this is `{integer}`, but `b` is declared as `byte`
   |                   ^^ found `{integer}` here
   |
   = note: expected `byte`, found `{integer}`
-  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]); narrow it
-    explicitly with `as byte` — the cast keeps the value's low eight bits
+  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]): widen the byte —
+    `b as int` — or narrow this side with `as byte`, which keeps the value's low eight bits
     ([type.byte.cast]).
 
 error[E0401]: this is `{integer}`, but `c` is declared as `byte`
@@ -23,8 +22,8 @@ error[E0401]: this is `{integer}`, but `c` is declared as `byte`
   |                   ^ found `{integer}` here
   |
   = note: expected `byte`, found `{integer}`
-  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]); narrow it
-    explicitly with `as byte` — the cast keeps the value's low eight bits
+  = note: `byte` adopts no literal and takes no `int` implicitly ([type.byte]): widen the byte —
+    `b as int` — or narrow this side with `as byte`, which keeps the value's low eight bits
     ([type.byte.cast]).
 
 error[E0401]: this is `byte`, but `w` is declared as `int`

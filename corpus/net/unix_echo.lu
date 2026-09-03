@@ -1,0 +1,64 @@
+//! check: run(exit=0, stdout="unix sockets | served_or_named true | echo true | port_is_io true | cleaned true")
+//! phase: run
+//! conforms: os.net.unix, err.union, err.propagate
+//!
+//! s136 (#227, `[os.net.unix]`) — the unix-domain family, three
+//! lanes: an echo over a socket PATH (`net_listen_unix` /
+//! `net_connect_unix`, the accepted stream read and written exactly
+//! like a TCP one), `net_port` answering `io` for a socket that has
+//! no port, and the cleanup posture stated by the clause — the
+//! listener's `net_close` unlinks its path. The stdout is the same
+//! on every host BY CONSTRUCTION: a host that serves the family
+//! (linux, macOS) runs the echo; a host that does not (windows at
+//! this pin) must refuse BY NAME — the `unsupported` row — and the
+//! relations then hold vacuously. A bare `io` at bind on any host is
+//! the failure this witness exists to catch (exit 3): the posture a
+//! program cannot measure is the one #227 was filed about. The path
+//! sits under `target/`, is removed if a previous run left it, and
+//! is gone after close.
+
+fn main() -> !int {
+    let path = "target/s136-unix-echo.sock"
+    if fs_exists(path) {
+        fs_remove(path)?
+    }
+    var served = true
+    let srv = net_listen_unix(path) else |e| match e {
+        unsupported => {
+            served = false
+            0 - 1
+        },
+        _ => {
+            print("bind failed with a path row on a host that serves the family")
+            return 3
+        },
+    }
+    var echo = true
+    var port_is_io = true
+    var cleaned = true
+    if served {
+        port_is_io = false
+        let _p = net_port(srv) else |_| {
+            port_is_io = true
+            0
+        }
+        let cli = net_connect_unix(path)?
+        net_write(cli, "ping")?
+        let conn = net_accept(srv)?
+        let got = net_read(conn, 16)?
+        net_write(conn, "pong {got}")?
+        let reply = net_read(cli, 16)?
+        echo = got == "ping" && reply == "pong ping"
+        net_close(cli)?
+        net_close(conn)?
+        net_close(srv)?
+        cleaned = !fs_exists(path)
+    }
+    let named = true
+    print(
+        "unix sockets | served_or_named {named} | echo {echo} | port_is_io {port_is_io} | cleaned {cleaned}",
+    )
+    if !echo { return 1 }
+    if !cleaned { return 2 }
+    0
+}

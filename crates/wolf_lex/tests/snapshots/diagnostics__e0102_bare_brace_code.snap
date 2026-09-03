@@ -1,0 +1,26 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0102,
+        severity: Error,
+        message: "this string never closes",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 13,
+            },
+            label: "it opens here, and an interpolation `{` inside it is still open when the line ends",
+        },
+        secondary: [],
+        notes: [
+            "a `\"…\"` string — and every `{…}` interpolation inside it — must close before the line ends. Close the interpolation with `}` and the string with `\"`; for a literal brace, write `{{`.",
+        ],
+        suggestions: [],
+    },
+]

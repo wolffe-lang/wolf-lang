@@ -48,7 +48,7 @@
 //! ruled-trap precedent), and `os_random` types as plain `List[int]`
 //! with no error row at all.
 
-use crate::fs::write_bytes_list;
+use crate::fs::write_int_list;
 
 /// Wire codes the WIR lowering keys on. ANY nonzero code is the
 /// deterministic trap `assert` at the call site — there is no row to
@@ -176,14 +176,14 @@ pub unsafe extern "C" fn __wolf_rt_os_random(n: i64, out: i64) -> i64 {
         return rand_code::FAIL; // n < 0: caller contract — trap
     };
     if len == 0 {
-        unsafe { write_bytes_list(out, b"") };
+        unsafe { write_int_list(out, b"") };
         return rand_code::OK;
     }
     let mut buf = vec![0u8; len];
     if !fill(&mut buf) {
         return rand_code::FAIL; // no entropy — trap, never a fallback
     }
-    unsafe { write_bytes_list(out, &buf) };
+    unsafe { write_int_list(out, &buf) };
     rand_code::OK
 }
 

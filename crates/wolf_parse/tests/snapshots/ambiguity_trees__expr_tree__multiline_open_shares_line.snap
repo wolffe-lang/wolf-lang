@@ -1,0 +1,54 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 402..485
+  FnDecl 402..484
+    FnKw 402..404 "fn"
+    Ident 405..409 "main"
+    ParamList 409..411
+      LParen 409..410 "("
+      RParen 410..411 ")"
+    RetType 412..419
+      Arrow 412..414 "->"
+      ErrorUnionType 415..419
+        Not 415..416 "!"
+        PathType 416..419
+          Path 416..419
+            Ident 416..419 "int"
+    Block 420..484
+      LBrace 420..421 "{"
+      LetDecl 426..464
+        LetKw 426..429 "let"
+        IdentPat 430..431
+          Ident 430..431 "p"
+        Eq 432..433 "="
+        StringExpr 434..463
+          StrBegin 434..437 "\"\"\""
+          StrFragment 437..460 "oops\n        a\n        "
+          StrEnd 460..463 "\"\"\""
+        Term 463..464 "\n"
+      ExprStmt 468..477
+        CallExpr 468..476
+          PathExpr 468..473
+            Ident 468..473 "print"
+          ArgList 473..476
+            LParen 473..474 "("
+            Arg 474..475
+              PathExpr 474..475
+                Ident 474..475 "p"
+            RParen 475..476 ")"
+        Term 476..477 "\n"
+      ExprStmt 481..483
+        LiteralExpr 481..482
+          Int 481..482 "0"
+        Term 482..483 "\n"
+      RBrace 483..484 "}"
+  Term 484..485 "\n"
+  Eof 485..485 ""
+== diagnostics ==
+E0103 [Error] 437..441 a multiline string's content starts on the line after the opening `"""`
+    label move this text down to the next line
+    secondary 434..437 the multiline string opens here
+    note the opener must be the last thing on its line: the whitespace before the closing `"""` sets the margin stripped from every content line.

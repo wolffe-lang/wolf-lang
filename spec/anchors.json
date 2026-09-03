@@ -334,6 +334,8 @@
     "mem.unsafe.raw.2": "02-memory-model.md",
     "mem.unsafe.raw.3": "02-memory-model.md",
     "mem.unsafe.scope": "02-memory-model.md",
+    "os.net": "11-os.md",
+    "os.net.unix": "11-os.md",
     "os.random": "11-os.md",
     "os.random.checked": "11-os.md",
     "os.random.fill": "11-os.md",

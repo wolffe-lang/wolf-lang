@@ -1,0 +1,16 @@
+﻿//! check: run(exit=0, stdout="bom ok")
+//! phase: run
+//! conforms: gram.lex.source
+//!
+//! D74 (s136, #230) — a byte order mark at the very START of a file is
+//! stripped: tolerated, never a diagnostic, kept in place by the
+//! formatter. This file's first three bytes are `EF BB BF` (look with
+//! `xxd`); every lane runs it. Anywhere else the same bytes are E0107,
+//! a stray character (`wolf_lex`'s `e0107_bom_mid_file` snapshot — a
+//! corpus row cannot pin it alone, since the stray token the lexer
+//! leaves behind is also the parser's E0201).
+
+fn main() -> !int {
+    print("bom ok")
+    0
+}

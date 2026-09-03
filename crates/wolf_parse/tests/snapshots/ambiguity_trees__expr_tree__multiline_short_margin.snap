@@ -1,0 +1,54 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 471..563
+  FnDecl 471..562
+    FnKw 471..473 "fn"
+    Ident 474..478 "main"
+    ParamList 478..480
+      LParen 478..479 "("
+      RParen 479..480 ")"
+    RetType 481..488
+      Arrow 481..483 "->"
+      ErrorUnionType 484..488
+        Not 484..485 "!"
+        PathType 485..488
+          Path 485..488
+            Ident 485..488 "int"
+    Block 489..562
+      LBrace 489..490 "{"
+      LetDecl 495..542
+        LetKw 495..498 "let"
+        IdentPat 499..500
+          Ident 499..500 "p"
+        Eq 501..502 "="
+        StringExpr 503..541
+          StrBegin 503..506 "\"\"\""
+          StrFragment 506..538 "\n        good\n      bad\n    …"
+          StrEnd 538..541 "\"\"\""
+        Term 541..542 "\n"
+      ExprStmt 546..555
+        CallExpr 546..554
+          PathExpr 546..551
+            Ident 546..551 "print"
+          ArgList 551..554
+            LParen 551..552 "("
+            Arg 552..553
+              PathExpr 552..553
+                Ident 552..553 "p"
+            RParen 553..554 ")"
+        Term 554..555 "\n"
+      ExprStmt 559..561
+        LiteralExpr 559..560
+          Int 559..560 "0"
+        Term 560..561 "\n"
+      RBrace 561..562 "}"
+  Term 562..563 "\n"
+  Eof 563..563 ""
+== diagnostics ==
+E0104 [Error] 520..526 this line starts left of the string's margin
+    label the line starts here
+    secondary 530..538 the margin is set here
+    note the whitespace before the closing `"""` is the margin stripped from every content line. Indent this line at least that far, or move the closing `"""` left.

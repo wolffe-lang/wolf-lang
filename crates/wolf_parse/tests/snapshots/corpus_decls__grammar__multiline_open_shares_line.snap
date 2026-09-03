@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 402..484 name=main body=Block
+-- diagnostics --
+E0103 [Error] 437..441 a multiline string's content starts on the line after the opening `"""`

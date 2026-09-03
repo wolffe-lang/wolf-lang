@@ -1,0 +1,54 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 539..620
+  FnDecl 539..619
+    FnKw 539..541 "fn"
+    Ident 542..546 "main"
+    ParamList 546..548
+      LParen 546..547 "("
+      RParen 547..548 ")"
+    RetType 549..556
+      Arrow 549..551 "->"
+      ErrorUnionType 552..556
+        Not 552..553 "!"
+        PathType 553..556
+          Path 553..556
+            Ident 553..556 "int"
+    Block 557..619
+      LBrace 557..558 "{"
+      LetDecl 563..599
+        LetKw 563..566 "let"
+        IdentPat 567..568
+          Ident 567..568 "p"
+        Eq 569..570 "="
+        StringExpr 571..598
+          StrBegin 571..574 "\"\"\""
+          StrFragment 574..595 "\n\t\t\t\t\t\t\t\tbad\n        "
+          StrEnd 595..598 "\"\"\""
+        Term 598..599 "\n"
+      ExprStmt 603..612
+        CallExpr 603..611
+          PathExpr 603..608
+            Ident 603..608 "print"
+          ArgList 608..611
+            LParen 608..609 "("
+            Arg 609..610
+              PathExpr 609..610
+                Ident 609..610 "p"
+            RParen 610..611 ")"
+        Term 611..612 "\n"
+      ExprStmt 616..618
+        LiteralExpr 616..617
+          Int 616..617 "0"
+        Term 617..618 "\n"
+      RBrace 618..619 "}"
+  Term 619..620 "\n"
+  Eof 620..620 ""
+== diagnostics ==
+E0105 [Error] 575..583 this line's margin mixes tabs and spaces differently from the closing `"""`
+    label the mismatch starts here
+    secondary 587..595 the margin is set here
+    note wolf compares the margin byte-for-byte, never by visual width. Re-indent this line with the same tab/space mix as the closing `"""`'s line.

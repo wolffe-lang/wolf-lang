@@ -21,6 +21,10 @@
 
 use std::collections::{HashMap, HashSet};
 
+/// The UTF-8 byte order mark: stripped by the lexer at byte 0 (D74),
+/// kept in place by the formatter — no line of its own.
+const BOM: &[u8] = b"\xEF\xBB\xBF";
+
 use wolf_ast::{Child, GreenNode, GreenToken, SyntaxKind as K};
 use wolf_span::Span;
 
@@ -691,10 +695,23 @@ impl<'a> Fmt<'a> {
             let mut consumed = self.consumed.borrow_mut();
             for s in &first.leading {
                 let bytes = self.slice(*s);
-                // `#!` at byte 0 is the script's interpreter line; the
-                // `//!` lines are the module header. Both pin to the
-                // top, in source order.
-                if (bytes.starts_with(b"#!") && s.lo == 0) || bytes.starts_with(b"//!") {
+                // A leading byte order mark (D74, s136) stays exactly
+                // where it is: stripped by the lexer, kept by the
+                // formatter — byte 0, no line of its own.
+                if s.lo == 0 && bytes == BOM {
+                    consumed.insert((s.lo, s.hi));
+                    continue;
+                }
+                // `#!` at the file start (byte 0, or behind a BOM) is
+                // the script's interpreter line; the `//!` lines are
+                // the module header. Both pin to the top, in source
+                // order.
+                let shebang_at = if self.src.starts_with(BOM) {
+                    BOM.len() as u32
+                } else {
+                    0
+                };
+                if (bytes.starts_with(b"#!") && s.lo == shebang_at) || bytes.starts_with(b"//!") {
                     consumed.insert((s.lo, s.hi));
                     header_end = Some(s.hi);
                 } else if is_comment(bytes) {
@@ -711,6 +728,10 @@ impl<'a> Fmt<'a> {
             let mut first_line = true;
             for s in &first.leading {
                 if !self.consumed.borrow().contains(&(s.lo, s.hi)) {
+                    continue;
+                }
+                if s.lo == 0 && self.slice(*s) == BOM {
+                    out.push(Doc::Text(BOM.to_vec()));
                     continue;
                 }
                 if !first_line {

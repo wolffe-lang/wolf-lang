@@ -2,6 +2,102 @@
 
 ## Unreleased
 
+### The producers speak bytes (s136, wolf-lang#231)
+
+`byte` arrived at s135 and nothing produced one: `str.bytes()`,
+`str_from_utf8`, `fs_read_bytes`, `fs_write_bytes`, `fs_read_chunk`,
+`fs_write_chunk`, `net_read_bytes` and `net_write_bytes` were all
+declared over `List[int]`, so a library reader substituted to
+`List[byte]` had to convert elementwise against a builtin and charged
+17x/18x its payload where the `List[int]` reader charged 16x (wolf-std
+sc34's measurement, F-0104). **The eight now speak `List[byte]`** —
+producers return it, consumers take it — on every tier: the native
+runtime mints a byte read as one 1-byte-element buffer at exact
+capacity (a 64 KiB `fs_read_bytes` charges the region one list header
+plus 65,536 bytes, measured 65,584 on macOS/arm64 — not the 1,048,560
+of the `List[int]` shape and not even the 131,120 the push-grown
+`List[byte]` charged, since a producer that knows its length has no
+growth history to pay), and the checked machine's byte slots charge
+the payload exactly. `corpus/memory/byte_producers_ledger.lu` pins the
+relations on every tier (a read holds its payload, at most the payload
+plus a header, the same octets as `List[int]` charge at least seven
+times more; `str_from_utf8` over the read list is the text);
+`strings/bytes_roundtrip.lu` and `net/echo_bytes.lu` are the round
+trip and the echo. **This is a breaking change** for any program that
+used a `.bytes()` element as an `int` without saying so — a comparison
+against a literal (`b == 10`), a literal `match` arm, an index, a
+binding typed `int` — or bound a producer's result as `List[int]`. The
+refusal is E0401 and every note names the spelling, `b as int`
+(`typecheck/byte_elem_arith_fail.lu`). Measured at the landing with
+the compiler itself: 33 sites in 11 corpus files (moved here), 87 in
+13 of wolf-book's files, 198 in 45 of wolf-std's, 217 in 30 of lobo's
+— comparisons against int literals are the majority everywhere. The
+`invalid` row stays declared on the two writes (the vocabulary is
+stable; a byte element is in range by construction, so typed code can
+no longer reach it). `os_random` keeps its `List[int]` (`[os.random]`
+says so; it is not a byte surface). lupin does not know the shapes
+yet — wolf-interp is36's flip set; wolf-std sc35's substitution is a
+rename now.
+
+### The phantom 16x (s136, wolf-lang#232)
+
+The checked machine charged 1,048,576 ledger bytes for `for b in
+s.bytes()` over a 64 KiB `str` — a walk that allocates nothing, and
+that native and lupin charge 0 for — because it evaluated the
+consumed view as the materializing fallback. The consumed positions
+(`for b in s.bytes()`, `s.bytes()[i]`, `s.bytes().len` and the query
+family) are the receiver's own storage on this tier too now, charged
+to no region; `let bs = s.bytes()` still materializes and still
+charges. `corpus/memory/consumed_walk_charges_nothing.lu` prints the
+relation on every tier.
+
+### Unix-domain sockets (s136, wolf-lang#227)
+
+`net_listen_unix(path)` / `net_connect_unix(path)` — `AF_UNIX` stream
+sockets in the TCP pair's shape (`[os.net.unix]`, the spec's first
+socket clause). The fd is an ordinary net stream/listener: `accept`,
+`read`/`write`, the byte pair, `net_deadline`, `net_close` serve it
+call for call. The rows tell a host apart from a path: `unsupported`
+is the host, by name — never a bare `io`; `exists` a stale socket file
+at bind (the operator's to remove; the runtime never clobbers a path
+it did not bind), `not_found` a missing directory or file, `denied`,
+and `refused` a file nobody listens on. Cleanup posture: the runtime
+created the socket file, so `net_close` of the listener unlinks it.
+linux and macOS serve the family on every tier; windows answers
+`unsupported` — `AF_UNIX` exists there since 10 1803 and the runtime's
+test suite measures the kernel's answer on the runner, but `std::net`
+has no unix-domain surface on that host and the runtime carries no
+winsock binding beyond `WSAPoll`, so the serving rung is named in
+`docs/platforms.md` rather than claimed. `corpus/net/unix_echo.lu` is
+the three-lane witness (the same stdout on every host by
+construction: an echo where the family is served, a refusal by name
+where it is not). lobo's control endpoint gains its second transport
+at ws16; lupin's half rides is36.
+
+### The string-layout codes (s136, D74 — wolf-lang#230)
+
+One rule per code. **E0103** is the delimiter rule — a `"""` shares
+its line with text, opening (text after it) or closing (text before
+it), delimiters stand alone; the closing case answered E0104 before,
+while the spec sentence and the catalog disagreed about what E0104
+meant. **E0104** is the margin rule only (a content line left of the
+closing delimiter's column); **E0105** the tab/space rule, unchanged.
+**E0102** owns the bare `{` in a plain string: `"hello {world"` is a
+string whose interpolation never closes before its line ends —
+wolfc answered E0109 ("unterminated generalized literal", because the
+`world"` inside the open interpolation happened to spell one), the
+wrong family; lupin was right. A **byte order mark at the very start
+of a file is stripped** — tolerated, never a diagnostic, and the
+formatter keeps it in place; anywhere else it is E0107. The spec's
+`[gram.lex.str.multi]` and `[gram.lex.source]` sentences and the
+catalog agree line for line; six corpus witnesses under `grammar/`
+(`multiline_open_shares_line`, `multiline_close_shares_line` — both
+E0103; `multiline_short_margin` E0104; `multiline_mixed_margin`
+E0105; `str_bare_brace` E0102; `bom_at_start` runs) pin the codes
+and spans for both machines, and the mid-file BOM's E0107 is the
+lexer's `e0107_bom_mid_file` snapshot (the stray token it leaves is
+also the parser's E0201, so a corpus row cannot pin that one alone).
+
 ### The byte arrives (s135, D72)
 
 wolf has a byte-width scalar: **`byte`**, an 8-bit unsigned octet,

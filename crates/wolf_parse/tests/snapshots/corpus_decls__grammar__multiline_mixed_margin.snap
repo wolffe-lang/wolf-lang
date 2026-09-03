@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 539..619 name=main body=Block
+-- diagnostics --
+E0105 [Error] 575..583 this line's margin mixes tabs and spaces differently from the closing `"""`

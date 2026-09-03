@@ -1,0 +1,18 @@
+//! check: fail(E0102)
+//! phase: none
+//! conforms: gram.lex.str.multi, gram.lex.source
+//!
+//! D74 (s136, #230) — the bare `{` in a plain string. `{` opens an
+//! interpolation, so `"hello {world"` is a string whose interpolation
+//! never closes before its line ends: E0102, the unterminated family
+//! (lupin was right; wolfc answered E0109 — "unterminated generalized
+//! literal", because the `world"` inside the open interpolation
+//! happened to spell one — the wrong family). Span: the string, from
+//! its opening `"` to the end of its line. The fix the note names:
+//! `}` to close the interpolation, or `{{` for a literal brace.
+
+fn main() -> !int {
+    let s = "hello {world"
+    print(s)
+    0
+}

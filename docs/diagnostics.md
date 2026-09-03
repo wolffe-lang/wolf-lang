@@ -114,21 +114,28 @@ inside one is almost always a missing closing quote, so wolf ends the
 string there, reports it once, and carries on lexing the next line
 cleanly. If you meant the text to span lines, use a multiline `"""`
 string, which closes at the next `"""`. The same recovery applies to a
-format spec (`{value:…}`) left open at the end of a line, and to a
-string still open when the file ends.
+format spec (`{value:…}`) left open at the end of a line, to a string
+still open when the file ends, and to a bare `{` in a plain string: `{`
+opens an interpolation, so `"hello {world"` is a string whose
+interpolation never closes before its line ends — close it with `}`, or
+write `{{` for a literal brace (D74 assigns the bare brace here, one
+family for everything that fails to close).
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0102_eol.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_multiline_eof.snap, crates/wolf_lex/tests/snapshots/render__render_e0102_unterminated.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace_code.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_eol.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_multiline_eof.snap, crates/wolf_lex/tests/snapshots/render__render_e0102_unterminated.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_bare_brace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_bare_brace.snap
 
-## E0103 — text after the opening `\
+## E0103 — a `\
 
-A multiline string's content starts on the line *after* the opening
-`"""` — the opener must be the last thing on its line (SE-0168 lineage:
-the layout is part of the literal). Text on the opening line has no
-column to measure the margin against, so wolf rejects it. Move the text
-down to the next line; the whitespace before the closing `"""` then
-defines the margin stripped from every content line.
+A multiline string's delimiters stand alone on their lines, opening and
+closing alike (D74: one rule, one code). The content starts on the line
+*after* the opening `"""` — the opener must be the last thing on its
+line (SE-0168 lineage: the layout is part of the literal), because text
+on the opening line has no column to measure the margin against. And
+the closing `"""` must be the first thing on its line after whitespace,
+because its column *is* the margin stripped from every content line, so
+nothing else can share it. Move the text down to the next line, or the
+closing delimiter down to its own.
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0103.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_close_shares_line.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_open_shares_line.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0103.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0103_closing.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_close_shares_line.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_open_shares_line.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_close_shares_line.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_open_shares_line.snap
 
 ## E0104 — a multiline string line sits left of the margin
 
@@ -138,10 +145,10 @@ which wolf strips when it builds the value ([gram.lex.str]). A line
 indented less than the margin has bytes the margin would eat, so wolf
 asks you to choose: indent the line to at least the margin, or move the
 closing `"""` left to the shallowest content line. Blank lines are
-exempt. This code also fires when the closing `"""` is not alone on its
-line — its column *is* the margin, so it must stand alone.
+exempt. (A closing `"""` that is not alone on its line is the
+delimiter rule, E0103.)
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0104.snap, crates/wolf_lex/tests/snapshots/render__render_e0104_two_locus.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_close_shares_line.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_short_margin.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0104.snap, crates/wolf_lex/tests/snapshots/render__render_e0104_two_locus.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_short_margin.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_short_margin.snap
 
 ## E0105 — margin tabs and spaces do not match the closing `\
 
@@ -153,7 +160,7 @@ width, so it is an error instead. Re-indent the flagged line with the
 same tab/space mix as the closing delimiter's line — most editors fix
 this with one select-and-reindent.
 
-Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0105.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_mixed_margin.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0105.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_mixed_margin.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_mixed_margin.snap
 
 ## E0106 — source bytes are not valid UTF-8
 
@@ -171,12 +178,15 @@ Fixtures: crates/wolf_lex/tests/snapshots/diagnostics__e0106.snap
 
 This character cannot start any wolf token — commonly a `$` or `` ` ``
 from another language's syntax, an invisible Unicode character pasted
-from a web page, or a byte-order mark (wolf sources are BOM-less
-UTF-8). Delete the character. A related case is a lone `}` inside a
-string: `}` closes an interpolation there, so a literal closing brace
-must be written `}}` (just as `{{` is a literal `{`).
+from a web page, or a byte-order mark anywhere but the very start of
+the file (a leading BOM is stripped and tolerated — wolf sources are
+BOM-less UTF-8, and an editor that writes one has not made the file
+wrong; a BOM in the middle of a file is a stray character, D74).
+Delete the character. A related case is a lone `}` inside a string:
+`}` closes an interpolation there, so a literal closing brace must be
+written `}}` (just as `{{` is a literal `{`).
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__tab_expansion.snap, crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_lone_brace.snap, crates/wolf_lex/tests/snapshots/render__render_e0107_lone_brace.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__tab_expansion.snap, crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_bom_mid_file.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0107_lone_brace.snap, crates/wolf_lex/tests/snapshots/render__render_e0107_lone_brace.snap
 
 ## E0108 — string/interpolation nesting exceeds the lexer's 32-level rail
 
@@ -465,7 +475,7 @@ of making you eyeball two long renderings. Note that wolf never
 converts numbers implicitly — `int` and `i64` are simply different
 types, and the fix is an explicit `as` conversion.
 
-Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
@@ -1555,7 +1565,7 @@ past the call (returned the parameter, stored it, handed it on) was
 REFUSED with this code. The refusal was correct about the lend — a lent
 `{ptr, len}` that outlives its call is a dangling pointer — and wrong
 about the response: the compiler had a safe compilation for exactly
-this program the whole time (materialize the bytes into a `List[int]`
+this program the whole time (materialize the bytes into a `List[byte]`
 at the call, bit-for-bit what every call did before views crossed
 calls), and this was the only refusal in the language standing between
 a program and a meaning it already had.

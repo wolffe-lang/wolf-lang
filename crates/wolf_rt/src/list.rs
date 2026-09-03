@@ -113,6 +113,31 @@ pub(crate) fn push_raw(hdr: *mut ListHdr, elem_ptr: *const u8) {
     }
 }
 
+/// A `List[byte]` minted from a byte slice at EXACT capacity (s136,
+/// wolf-lang#231): one 1-byte-element buffer of `bytes.len()`, one
+/// `copy_nonoverlapping`, no growth history. Every byte PRODUCER in
+/// the runtime — `str.bytes()`'s materializing fallback, the fs and
+/// net byte reads — mints through here, so a 64 KiB read charges the
+/// region one header plus 64 KiB and never the doubled buffer the
+/// `push`-grown shape charged (`[mem.region.account.1]` keeps
+/// abandoned buffers charged; there are none). The list is an
+/// ordinary list afterwards: a `push` past `cap` grows it exactly as
+/// [`push_raw`] grows any other.
+pub(crate) fn from_bytes(bytes: &[u8]) -> *mut ListHdr {
+    let hdr = new_list(1);
+    if !bytes.is_empty() {
+        unsafe {
+            let h = &mut *hdr;
+            let data = alloc_in(h.region, bytes.len());
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());
+            h.data = data;
+            h.len = bytes.len() as i64;
+            h.cap = bytes.len() as i64;
+        }
+    }
+    hdr
+}
+
 /// Push one `int` element onto an 8-byte-element list.
 pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
     let cell = [v];
@@ -239,19 +264,22 @@ pub unsafe extern "C" fn __wolf_rt_list_clear(hdr: i64) {
 /// header is not an 8-byte-element list (s81).
 ///
 /// A shim that consumes a whole list at once — [`crate::str`]'s byte
-/// source is the first — should not pay a `copy_nonoverlapping` per
-/// element through [`__wolf_rt_list_read`]'s caller slot. The width
-/// CHECK is the point of the `Option`: compiled code cannot reach this
-/// with the wrong list (sema types the argument `List[int]`), but a
-/// direct FFI caller could hand over a `List[str]` whose 16-byte
-/// elements would overrun an 8-byte read slot, and refusing is the only
-/// answer that is not undefined behaviour.
+/// source was the first, until s136 moved the byte tier to
+/// [`u8_elems`] — should not pay a `copy_nonoverlapping` per element
+/// through [`__wolf_rt_list_read`]'s caller slot. The width CHECK is
+/// the point of the `Option`: compiled code cannot reach this with the
+/// wrong list (sema types the argument), but a direct FFI caller could
+/// hand over a `List[str]` whose 16-byte elements would overrun an
+/// 8-byte read slot, and refusing is the only answer that is not
+/// undefined behaviour. No shim consumes a whole `List[int]` today
+/// (`os_random` only PRODUCES one), so this is the unit tests' reader.
 ///
 /// # Safety
 ///
 /// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
 /// returned slice borrows its buffer — it must not outlive a `push`
 /// that reallocates.
+#[cfg(test)]
 pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
     let h = unsafe { &*(hdr as *const ListHdr) };
     if h.elem != 8 || h.len < 0 {
@@ -261,6 +289,30 @@ pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
         return Some(&[]);
     }
     Some(unsafe { core::slice::from_raw_parts(h.data.cast::<i64>(), h.len as usize) })
+}
+
+/// The elements of a `List[byte]` (s136, D72: 1-byte octet elements)
+/// as a plain byte slice — [`i64_elems`]'s posture at the `byte`
+/// width. Every byte CONSUMER in the runtime (`str_from_utf8`, the fs
+/// and net byte writes) reads through here; a header of any other
+/// element width is refused (`None`), which is the FFI caller's
+/// `invalid` — compiled code cannot produce one, sema types the
+/// argument `List[byte]`.
+///
+/// # Safety
+///
+/// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
+/// returned slice borrows its buffer — it must not outlive a `push`
+/// that reallocates.
+pub(crate) unsafe fn u8_elems<'a>(hdr: i64) -> Option<&'a [u8]> {
+    let h = unsafe { &*(hdr as *const ListHdr) };
+    if h.elem != 1 || h.len < 0 {
+        return None;
+    }
+    if h.len == 0 || h.data.is_null() {
+        return Some(&[]);
+    }
+    Some(unsafe { core::slice::from_raw_parts(h.data, h.len as usize) })
 }
 
 /// The elements of a `List[char]` (s121, D58: 4-byte scalar elements,

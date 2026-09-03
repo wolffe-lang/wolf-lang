@@ -191,17 +191,24 @@ inside one is almost always a missing closing quote, so wolf ends the
 string there, reports it once, and carries on lexing the next line
 cleanly. If you meant the text to span lines, use a multiline `"""`
 string, which closes at the next `"""`. The same recovery applies to a
-format spec (`{value:…}`) left open at the end of a line, and to a
-string still open when the file ends.
+format spec (`{value:…}`) left open at the end of a line, to a string
+still open when the file ends, and to a bare `{` in a plain string: `{`
+opens an interpolation, so `"hello {world"` is a string whose
+interpolation never closes before its line ends — close it with `}`, or
+write `{{` for a literal brace (D74 assigns the bare brace here, one
+family for everything that fails to close).
 "#);
 
-code!(E0103, "text after the opening `\"\"\"` on the same line", r#"
-A multiline string's content starts on the line *after* the opening
-`"""` — the opener must be the last thing on its line (SE-0168 lineage:
-the layout is part of the literal). Text on the opening line has no
-column to measure the margin against, so wolf rejects it. Move the text
-down to the next line; the whitespace before the closing `"""` then
-defines the margin stripped from every content line.
+code!(E0103, "a `\"\"\"` delimiter shares its line with text", r#"
+A multiline string's delimiters stand alone on their lines, opening and
+closing alike (D74: one rule, one code). The content starts on the line
+*after* the opening `"""` — the opener must be the last thing on its
+line (SE-0168 lineage: the layout is part of the literal), because text
+on the opening line has no column to measure the margin against. And
+the closing `"""` must be the first thing on its line after whitespace,
+because its column *is* the margin stripped from every content line, so
+nothing else can share it. Move the text down to the next line, or the
+closing delimiter down to its own.
 "#);
 
 code!(E0104, "a multiline string line sits left of the margin", r#"
@@ -211,8 +218,8 @@ which wolf strips when it builds the value ([gram.lex.str]). A line
 indented less than the margin has bytes the margin would eat, so wolf
 asks you to choose: indent the line to at least the margin, or move the
 closing `"""` left to the shallowest content line. Blank lines are
-exempt. This code also fires when the closing `"""` is not alone on its
-line — its column *is* the margin, so it must stand alone.
+exempt. (A closing `"""` that is not alone on its line is the
+delimiter rule, E0103.)
 "#);
 
 code!(E0105, "margin tabs and spaces do not match the closing `\"\"\"`", r#"
@@ -238,10 +245,13 @@ source.
 code!(E0107, "a stray character that fits no token", r#"
 This character cannot start any wolf token — commonly a `$` or `` ` ``
 from another language's syntax, an invisible Unicode character pasted
-from a web page, or a byte-order mark (wolf sources are BOM-less
-UTF-8). Delete the character. A related case is a lone `}` inside a
-string: `}` closes an interpolation there, so a literal closing brace
-must be written `}}` (just as `{{` is a literal `{`).
+from a web page, or a byte-order mark anywhere but the very start of
+the file (a leading BOM is stripped and tolerated — wolf sources are
+BOM-less UTF-8, and an editor that writes one has not made the file
+wrong; a BOM in the middle of a file is a stray character, D74).
+Delete the character. A related case is a lone `}` inside a string:
+`}` closes an interpolation there, so a literal closing brace must be
+written `}}` (just as `{{` is a literal `{`).
 "#);
 
 code!(E0108, "string/interpolation nesting exceeds the lexer's 32-level rail", r#"
@@ -1490,7 +1500,7 @@ past the call (returned the parameter, stored it, handed it on) was
 REFUSED with this code. The refusal was correct about the lend — a lent
 `{ptr, len}` that outlives its call is a dangling pointer — and wrong
 about the response: the compiler had a safe compilation for exactly
-this program the whole time (materialize the bytes into a `List[int]`
+this program the whole time (materialize the bytes into a `List[byte]`
 at the call, bit-for-bit what every call did before views crossed
 calls), and this was the only refusal in the language standing between
 a program and a meaning it already had.

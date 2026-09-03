@@ -43,6 +43,36 @@ fn e0103_tokens_after_opening_multiline() {
     diag_snapshot("e0103", "let p = \"\"\"oops\n    a\n    \"\"\"\n");
 }
 
+/// D74 (s136, wolf-lang#230): the closing delimiter sharing its line
+/// is the SAME rule as the opening one — delimiters stand alone — and
+/// answers E0103, not E0104.
+#[test]
+fn e0103_closing_delimiter_shares_line() {
+    diag_snapshot("e0103_closing", "let p = \"\"\"\n    a\n    b\"\"\"\n");
+}
+
+/// D74: the bare `{` in a plain string is E0102 (the interpolation it
+/// opened never closes before the line ends), not E0109 for the
+/// generalized literal the `world"` happened to open inside it.
+#[test]
+fn e0102_bare_brace_opens_an_interpolation() {
+    diag_snapshot("e0102_bare_brace", "print(\"hello {world\")\nlet t = 1\n");
+}
+
+/// D74: the same bare `{` with plain code after it — the interpolation
+/// reaches the line end still open; the next line lexes cleanly.
+#[test]
+fn e0102_bare_brace_code_to_line_end() {
+    diag_snapshot("e0102_bare_brace_code", "let s = \"a {b\nlet t = 1\n");
+}
+
+/// D74: a byte order mark in the MIDDLE of a file is a stray character;
+/// at byte 0 it is trivia (`lexer_tests::bom_at_file_start_is_trivia`).
+#[test]
+fn e0107_bom_mid_file() {
+    diag_snapshot("e0107_bom_mid_file", "let x = 1\n\u{feff}let y = 2\n");
+}
+
 #[test]
 fn e0104_under_indented_line() {
     diag_snapshot("e0104", "let p = \"\"\"\n  bad\n    \"\"\"\n");

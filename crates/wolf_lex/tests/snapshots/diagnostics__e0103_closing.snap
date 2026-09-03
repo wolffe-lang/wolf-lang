@@ -1,0 +1,37 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0103,
+        severity: Error,
+        message: "the closing `\"\"\"` must stand alone on its line",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 23,
+                hi: 26,
+            },
+            label: "only whitespace may sit before it",
+        },
+        secondary: [
+            LabeledSpan {
+                span: Span {
+                    file: FileId(
+                        0,
+                    ),
+                    lo: 8,
+                    hi: 11,
+                },
+                label: "the multiline string opens here",
+            },
+        ],
+        notes: [
+            "a `\"\"\"` delimiter stands alone on its line, opening and closing alike: the closing delimiter's column sets the margin stripped from every content line, so nothing else can share its line. Move it to its own line.",
+        ],
+        suggestions: [],
+    },
+]

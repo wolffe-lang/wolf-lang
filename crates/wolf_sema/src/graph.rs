@@ -132,6 +132,9 @@ impl StandaloneMark {
 /// header at all — is a member (directory = module, D32). `name` is
 /// the base file name (`foo_test.lu`), not a path.
 pub fn standalone_mark(name: &str, src: &[u8]) -> Option<StandaloneMark> {
+    // A leading byte order mark is stripped (D74, s136) — the header
+    // scan starts behind it, as the lexer's does.
+    let src = src.strip_prefix(b"\xEF\xBB\xBF".as_slice()).unwrap_or(src);
     let text = String::from_utf8_lossy(src);
     let mut lines = text.lines().peekable();
     let is_script_line = lines.peek().is_some_and(|l| l.starts_with("#!"));

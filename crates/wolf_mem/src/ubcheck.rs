@@ -533,6 +533,84 @@ struct Frame<'t> {
 enum NetSock {
     Listener(std::net::TcpListener),
     Stream(std::net::TcpStream),
+    /// s136 (#227, `[os.net.unix]`): an `AF_UNIX` listener and its
+    /// path — unlinked at `net_close` (the runtime's posture, mirrored).
+    #[cfg(unix)]
+    UnixListener(std::os::unix::net::UnixListener, std::path::PathBuf),
+    #[cfg(unix)]
+    UnixStream(std::os::unix::net::UnixStream),
+}
+
+impl NetSock {
+    fn is_stream(&self) -> bool {
+        match self {
+            NetSock::Stream(_) => true,
+            #[cfg(unix)]
+            NetSock::UnixStream(_) => true,
+            _ => false,
+        }
+    }
+
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use std::io::Read as _;
+        match self {
+            NetSock::Stream(s) => s.read(buf),
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => s.read(buf),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
+
+    fn write_all(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+        use std::io::Write as _;
+        match self {
+            NetSock::Stream(s) => s.write_all(bytes),
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => s.write_all(bytes),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
+
+    fn set_timeouts(&mut self, budget: Option<std::time::Duration>) -> std::io::Result<()> {
+        match self {
+            NetSock::Stream(s) => s
+                .set_read_timeout(budget)
+                .and_then(|()| s.set_write_timeout(budget)),
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => s
+                .set_read_timeout(budget)
+                .and_then(|()| s.set_write_timeout(budget)),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
+
+    /// Is the stream's handle still live (EBADF says no)? The #224
+    /// reset-socket probe, either family.
+    fn alive(&self) -> bool {
+        match self {
+            NetSock::Stream(s) => s.local_addr().is_ok(),
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => s.local_addr().is_ok(),
+            _ => false,
+        }
+    }
+
+    /// One accepted connection of the listener's family; an armed
+    /// budget bounds the park (s106 — the `timeout` tag, reachable).
+    fn accept_with(&self, budget: Option<std::time::Duration>) -> std::io::Result<NetSock> {
+        match self {
+            NetSock::Listener(l) => match budget {
+                Some(b) => accept_deadline(l, b).map(|(s, _)| NetSock::Stream(s)),
+                None => l.accept().map(|(s, _)| NetSock::Stream(s)),
+            },
+            #[cfg(unix)]
+            NetSock::UnixListener(l, _) => match budget {
+                Some(b) => accept_deadline_unix(l, b).map(|(s, _)| NetSock::UnixStream(s)),
+                None => l.accept().map(|(s, _)| NetSock::UnixStream(s)),
+            },
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
 }
 
 /// The s39 net row-tag mapping: `io::ErrorKind` → net row tag. Mirrors
@@ -546,6 +624,12 @@ pub fn net_err_tag(kind: std::io::ErrorKind) -> &'static str {
         K::ConnectionRefused => "refused",
         K::TimedOut | K::WouldBlock => "timeout",
         K::ConnectionReset | K::ConnectionAborted | K::BrokenPipe | K::NotConnected => "closed",
+        // s136 (#227): the unix-domain path rows — declared only by
+        // `net_listen_unix`/`net_connect_unix`; `coarse` folds them to
+        // `io` everywhere else.
+        K::NotFound => "not_found",
+        K::PermissionDenied => "denied",
+        K::AddrInUse => "exists",
         _ => "io",
     }
 }
@@ -640,6 +724,36 @@ fn os_entropy_fill(_buf: &mut [u8]) -> bool {
 /// so the emulation polls nonblocking until the budget elapses — the
 /// checked twin of the native reactor's timer wheel. A fired budget
 /// is `TimedOut`, which [`net_err_tag`] resolves as the `timeout` row.
+/// `accept_deadline`'s unix-domain twin (s136): the same 1 ms poll
+/// against the budget, over an `AF_UNIX` listener.
+#[cfg(unix)]
+fn accept_deadline_unix(
+    l: &std::os::unix::net::UnixListener,
+    budget: std::time::Duration,
+) -> std::io::Result<(
+    std::os::unix::net::UnixStream,
+    std::os::unix::net::SocketAddr,
+)> {
+    let t0 = std::time::Instant::now();
+    l.set_nonblocking(true)?;
+    let out = loop {
+        match l.accept() {
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                if t0.elapsed() >= budget {
+                    break Err(std::io::Error::from(std::io::ErrorKind::TimedOut));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            other => break other,
+        }
+    };
+    let _ = l.set_nonblocking(false);
+    if let Ok((s, _)) = &out {
+        let _ = s.set_nonblocking(false);
+    }
+    out
+}
+
 fn accept_deadline(
     l: &std::net::TcpListener,
     budget: std::time::Duration,
@@ -955,6 +1069,47 @@ impl<'t> Machine<'t> {
         self.lists.push(items);
         self.list_region.push(rid);
         Ok(id)
+    }
+
+    /// s77's byte VIEW on this tier (s136, wolf-lang#232): `<str>.bytes()`
+    /// in a position that consumes it on the spot — iterated, indexed,
+    /// asked for `len`/`count`/`is_empty`/`get`/`first`/`last` — is the
+    /// receiver's own `{ptr, len}` and allocates nothing
+    /// (`[mem.str.view]`). The machine models the view as a list it
+    /// does NOT charge: the octets are the `str`'s storage, already
+    /// paid for wherever that `str` lives, so a consumed walk moves
+    /// the region ledger by zero — what native and lupin report.
+    /// Before s136 every such position evaluated the call as the
+    /// materializing fallback and charged a full `List[int]` for a
+    /// walk that allocated nothing: 1,048,576 for a 64 KiB `str` on
+    /// this tier against 0 on the other two (#232's table).
+    ///
+    /// `Some(list)` when `e` is that call (the receiver read as a
+    /// place or evaluated); `None` for every other expression — the
+    /// caller evaluates as before, and `let bs = s.bytes()` still
+    /// materializes through the `"bytes"` method arm, charged.
+    fn eval_bytes_view(&mut self, e: &'t GreenNode) -> E<Option<Value>> {
+        let src = &self.pkg.files[self.ctx().src_file].raw.src;
+        let Some(recv) = crate::byteview::view_recv(e, src, &|sp| self.expr_ty(sp).cloned()) else {
+            return Ok(None);
+        };
+        let sv = if let Some(place) = self.place_of(recv)? {
+            self.read_place(&place, recv.span)?
+        } else {
+            match self.eval(recv)? {
+                Flow::Val(v) => v,
+                _ => return Ok(None),
+            }
+        };
+        let Value::Str(s) = sv else {
+            return Ok(None);
+        };
+        let items: Vec<Value> = s.bytes().map(Value::Byte).collect();
+        let rid = self.ambient.last().copied().unwrap_or(0);
+        let id = self.lists.len();
+        self.lists.push(items);
+        self.list_region.push(rid);
+        Ok(Some(Value::List(id)))
     }
 
     /// A region's `cap:` budget, evaluated at creation (s132,
@@ -2534,7 +2689,11 @@ impl<'t> Machine<'t> {
                 if let Some(recv) = b.callee()
                     && matches!(self.expr_ty(recv.span), Some(TyKind::List(_)))
                 {
-                    let base = val!(self.eval(recv));
+                    // `s.bytes()[i]` reads the view (#232): uncharged.
+                    let base = match self.eval_bytes_view(recv)? {
+                        Some(v) => v,
+                        None => val!(self.eval(recv)),
+                    };
                     let Some(ix) = b
                         .args()
                         .into_iter()
@@ -3155,9 +3314,14 @@ impl<'t> Machine<'t> {
             // mirror is the v0.1.8 interpreter's scope, and the
             // static E1013 rejects the mutating shapes before this
             // lane ever runs them.
-            Some(it) => match self.place_of(it)? {
-                Some(place) => self.read_place(&place, it.span)?,
-                None => val!(self.eval(it)),
+            // `for b in s.bytes()` is the canonical consumed position
+            // (#232): the view, uncharged.
+            Some(it) => match self.eval_bytes_view(it)? {
+                Some(v) => v,
+                None => match self.place_of(it)? {
+                    Some(place) => self.read_place(&place, it.span)?,
+                    None => val!(self.eval(it)),
+                },
             },
             None => Value::Unit,
         };
@@ -4339,23 +4503,43 @@ impl<'t> Machine<'t> {
     /// rules out; `Some(Err(()))` is an element that is not a byte —
     /// the `invalid` row, and the same refusal `str_from_utf8` makes
     /// with a different name on it (writing is not decoding).
+    /// The octets of a `List[byte]` argument (s136, wolf-lang#231): a
+    /// `Value::Byte` element IS a byte, so typed code can never reach
+    /// the `invalid` row here — it stays for an `int` element (the
+    /// pre-s136 carrier, unreachable through sema now) outside
+    /// `0..=255`, the native shim's wrong-width refusal mirrored.
     fn bytes_of(&self, v: Option<&Value>) -> Option<Result<Vec<u8>, ()>> {
         let Some(Value::List(id)) = v else {
             return None;
         };
         let mut out = Vec::with_capacity(self.lists[*id].len());
         for e in &self.lists[*id] {
-            let Value::Int(n) = e else { return None };
-            match u8::try_from(*n) {
-                Ok(b) => out.push(b),
-                Err(_) => return Some(Err(())),
+            match e {
+                Value::Byte(b) => out.push(*b),
+                Value::Int(n) => match u8::try_from(*n) {
+                    Ok(b) => out.push(b),
+                    Err(_) => return Some(Err(())),
+                },
+                _ => return None,
             }
         }
         Some(Ok(out))
     }
 
-    /// Bytes as a fresh `List[int]` value.
+    /// Bytes as a fresh `List[byte]` value (s136): one `Value::Byte`
+    /// per octet, so the list charges its region one byte per byte
+    /// (`slot_bytes`) — the 1x wolf-lang#203 asked this tier for.
     fn byte_list_value(&mut self, bytes: &[u8], span: Span) -> E<Value> {
+        let items: Vec<Value> = bytes.iter().map(|&b| Value::Byte(b)).collect();
+        let id = self.mint_list(items, span)?;
+        Ok(Value::List(id))
+    }
+
+    /// Bytes as a fresh `List[int]` value — the pre-s136 carrier, kept
+    /// for the one producer whose clause still says `List[int]`:
+    /// `os_random` (`[os.random]`; not a byte surface, not one of
+    /// #231's eight).
+    fn int_list_value(&mut self, bytes: &[u8], span: Span) -> E<Value> {
         let items: Vec<Value> = bytes.iter().map(|&b| Value::Int(i64::from(b))).collect();
         let id = self.mint_list(items, span)?;
         Ok(Value::List(id))
@@ -4371,7 +4555,6 @@ impl<'t> Machine<'t> {
     /// the s35 reactor owns the async story and appends its own
     /// completion-arrival kind when it lands.
     fn net_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
-        use std::io::{Read as _, Write as _};
         fn tag(t: &str) -> Flow {
             raise(Value::ErrTag {
                 tag: t.to_string(),
@@ -4408,6 +4591,63 @@ impl<'t> Machine<'t> {
                     }
                 }
             }
+            // s136 (#227, `[os.net.unix]`): the unix-domain family —
+            // real `AF_UNIX` sockets on a unix host, the rows by name
+            // (`exists` for a stale path at bind, `not_found` for no
+            // path at dial, `denied`, `refused` for a path nobody
+            // listens on); on a host the machine does not serve,
+            // `unsupported`, by name — never a bare `io`.
+            "net_listen_unix" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                #[cfg(unix)]
+                {
+                    match std::os::unix::net::UnixListener::bind(&path) {
+                        Err(e) => Ok(tag(&coarse(
+                            e.kind(),
+                            &["exists", "not_found", "denied", "io"],
+                        ))),
+                        Ok(l) => {
+                            let fd = self.socks.len() as i64;
+                            self.socks.push(Some(NetSock::UnixListener(
+                                l,
+                                std::path::PathBuf::from(path),
+                            )));
+                            Ok(Flow::Val(Value::Int(fd)))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            "net_connect_unix" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                #[cfg(unix)]
+                {
+                    match std::os::unix::net::UnixStream::connect(&path) {
+                        Err(e) => Ok(tag(&coarse(
+                            e.kind(),
+                            &["refused", "not_found", "denied", "io"],
+                        ))),
+                        Ok(s) => {
+                            let fd = self.socks.len() as i64;
+                            self.socks.push(Some(NetSock::UnixStream(s)));
+                            Ok(Flow::Val(Value::Int(fd)))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
             "net_port" => {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);
@@ -4415,7 +4655,8 @@ impl<'t> Machine<'t> {
                 let addr = match self.sock(fd) {
                     Some(NetSock::Listener(l)) => l.local_addr(),
                     Some(NetSock::Stream(s)) => s.local_addr(),
-                    None => return Ok(tag("io")),
+                    // A unix-domain socket has no port: `io`.
+                    _ => return Ok(tag("io")),
                 };
                 match addr {
                     Ok(a) => Ok(Flow::Val(Value::Int(i64::from(a.port())))),
@@ -4428,19 +4669,16 @@ impl<'t> Machine<'t> {
                 };
                 let budget = self.sock_deadlines.get(&fd).copied();
                 let accepted = match self.sock(fd) {
-                    Some(NetSock::Listener(l)) => match budget {
-                        // s106: an armed budget bounds the park —
-                        // the `timeout` tag, reachable.
-                        Some(b) => accept_deadline(l, b),
-                        None => l.accept(),
-                    },
+                    // s106: an armed budget bounds the park — the
+                    // `timeout` tag, reachable. Either family (s136).
+                    Some(l) if !l.is_stream() => l.accept_with(budget),
                     _ => return Ok(tag("io")),
                 };
                 match accepted {
                     Err(e) => Ok(tag(&coarse(e.kind(), &["timeout", "io"]))),
-                    Ok((s, _peer)) => {
+                    Ok(s) => {
                         let fd = self.socks.len() as i64;
-                        self.socks.push(Some(NetSock::Stream(s)));
+                        self.socks.push(Some(s));
                         Ok(Flow::Val(Value::Int(fd)))
                     }
                 }
@@ -4462,7 +4700,7 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
-                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
                 if max <= 0 {
@@ -4486,7 +4724,7 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(payload)) = (int_arg(0), str_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
-                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
                 match s.write_all(payload.as_bytes()) {
@@ -4502,7 +4740,7 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
-                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
                 if max <= 0 {
@@ -4528,7 +4766,7 @@ impl<'t> Machine<'t> {
                     Some(Err(())) => return Ok(tag("invalid")),
                     Some(Ok(b)) => b,
                 };
-                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
                 match s.write_all(&bytes) {
@@ -4543,7 +4781,17 @@ impl<'t> Machine<'t> {
                 self.sock_deadlines.remove(&fd);
                 match usize::try_from(fd).ok().and_then(|i| self.socks.get_mut(i)) {
                     Some(slot @ Some(_)) => {
-                        *slot = None; // drop closes; double close is `io`
+                        // drop closes; double close is `io`. A unix
+                        // listener's path is unlinked (s136, the
+                        // runtime's cleanup posture, mirrored).
+                        let gone = slot.take();
+                        #[cfg(unix)]
+                        if let Some(NetSock::UnixListener(l, path)) = gone {
+                            drop(l);
+                            let _ = std::fs::remove_file(path);
+                        }
+                        #[cfg(not(unix))]
+                        drop(gone);
                         Ok(Flow::Val(Value::Unit))
                     }
                     _ => Ok(tag("io")),
@@ -4564,20 +4812,17 @@ impl<'t> Machine<'t> {
                     .ok()
                     .filter(|&m| m > 0)
                     .map(std::time::Duration::from_millis);
-                if matches!(self.sock(fd), Some(NetSock::Listener(_))) {
+                if self.sock(fd).is_some_and(|l| !l.is_stream()) {
                     match budget {
                         Some(b) => self.sock_deadlines.insert(fd, b),
                         None => self.sock_deadlines.remove(&fd),
                     };
                     return Ok(Flow::Val(Value::Unit));
                 }
-                let Some(NetSock::Stream(s)) = self.sock(fd) else {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
-                match s
-                    .set_read_timeout(budget)
-                    .and_then(|()| s.set_write_timeout(budget))
-                {
+                match s.set_timeouts(budget) {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                     // wolf-lang#224: a peer that closed over UNREAD
                     // receive data reset the connection, and on macOS
@@ -4594,10 +4839,7 @@ impl<'t> Machine<'t> {
                     // setsockopt) reports on the same socket. A
                     // genuinely dead fd still fails `local_addr`
                     // (EBADF) and stays `io`.
-                    Err(e)
-                        if e.kind() == std::io::ErrorKind::InvalidInput
-                            && s.local_addr().is_ok() =>
-                    {
+                    Err(e) if e.kind() == std::io::ErrorKind::InvalidInput && s.alive() => {
                         match budget {
                             Some(b) => self.sock_deadlines.insert(fd, b),
                             None => self.sock_deadlines.remove(&fd),
@@ -4901,7 +5143,8 @@ impl<'t> Machine<'t> {
                 if !os_entropy_fill(&mut buf) {
                     return self.trap("assert", "os.random.trap", span);
                 }
-                Ok(Flow::Val(self.byte_list_value(&buf, span)?))
+                // `[os.random]` says `List[int]` — not a byte surface.
+                Ok(Flow::Val(self.int_list_value(&buf, span)?))
             }
             _ => self.refuse("this os builtin", span),
         }
@@ -5039,20 +5282,19 @@ impl<'t> Machine<'t> {
         }
     }
 
-    /// `str_from_utf8(b: List[int]) -> str ! {utf8}` (s81, wolf-lang#58)
-    /// — the checked lane's half of the border post, and the ONLY way a
-    /// wolf program can build a `str` out of numbers on any lane.
+    /// `str_from_utf8(b: List[byte]) -> str ! {utf8}` (s81, wolf-lang#58;
+    /// `List[byte]` since s136, #231) — the checked lane's half of the
+    /// border post, and the ONLY way a wolf program can build a `str`
+    /// out of bytes on any lane.
     ///
     /// It VALIDATES, which is the whole point: s77 refused an unchecked
     /// bytes-to-str path because that is the forging hole, and the
     /// language's "every `str` is valid UTF-8" invariant has to survive
-    /// construction, not just narrowing. Elements outside `0..=255` are
-    /// not bytes and are refused before decoding; the sequence then goes
-    /// through `std::str::from_utf8`, so the refused set is exactly
-    /// UTF-8's — lone continuations, truncations, overlong forms,
-    /// surrogates, scalars past U+10FFFF. An interior NUL is valid text
-    /// and is accepted (a wolf `str` carries its length; nothing
-    /// terminates).
+    /// construction, not just narrowing. The octets go through
+    /// `std::str::from_utf8`, so the refused set is exactly UTF-8's —
+    /// lone continuations, truncations, overlong forms, surrogates,
+    /// scalars past U+10FFFF. An interior NUL is valid text and is
+    /// accepted (a wolf `str` carries its length; nothing terminates).
     ///
     /// The refusal is the `utf8` ROW, never a trap: bytes from a file or
     /// a socket are data, and mis-encoded data is an outcome a caller
@@ -5071,12 +5313,16 @@ impl<'t> Machine<'t> {
         let elems = self.lists[*id].clone();
         let mut bytes: Vec<u8> = Vec::with_capacity(elems.len());
         for v in elems {
-            let Value::Int(n) = v else {
-                return self.refuse("a `str_from_utf8` list of non-integers", span);
-            };
-            match u8::try_from(n) {
-                Ok(b) => bytes.push(b),
-                Err(_) => return utf8(),
+            match v {
+                Value::Byte(b) => bytes.push(b),
+                // The pre-s136 carrier: unreachable through sema, kept
+                // as the same `utf8` answer the native shim gives a
+                // wrong-width list.
+                Value::Int(n) => match u8::try_from(n) {
+                    Ok(b) => bytes.push(b),
+                    Err(_) => return utf8(),
+                },
+                _ => return self.refuse("a `str_from_utf8` list of non-bytes", span),
             }
         }
         match String::from_utf8(bytes) {
@@ -5161,7 +5407,11 @@ impl<'t> Machine<'t> {
             let m = MemberExpr::cast(e).expect("kind");
             if let (Some(base), Some(member)) = (m.base(), m.member()) {
                 let field = self.text(member.span);
-                let bv = val!(self.eval(base));
+                // `s.bytes().len` reads the view (#232): uncharged.
+                let bv = match self.eval_bytes_view(base)? {
+                    Some(v) => v,
+                    None => val!(self.eval(base)),
+                };
                 return match bv {
                     Value::Struct { fields } => match fields.into_iter().find(|(n, _)| n == &field)
                     {
@@ -5844,7 +6094,8 @@ impl<'t> Machine<'t> {
             }
             // The s39 net builtin tier: same posture as fs — real host
             // operations, D30 rows, comptime is the one refusal site.
-            "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read" | "net_write"
+            "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_port" | "net_accept"
+            | "net_connect" | "net_read" | "net_write"
             | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
@@ -6262,7 +6513,12 @@ impl<'t> Machine<'t> {
                 let recv_place = self.place_of(recv)?;
                 let recv_val = match &recv_place {
                     Some(place) => self.read_place(place, recv.span)?,
-                    None => val!(self.eval(recv)),
+                    // `s.bytes().len` and the query family read the
+                    // view (#232): uncharged.
+                    None => match self.eval_bytes_view(recv)? {
+                        Some(v) => v,
+                        None => val!(self.eval(recv)),
+                    },
                 };
                 let Value::List(id) = recv_val else {
                     return self.refuse("List method on a non-list", e.span);
@@ -6533,9 +6789,18 @@ impl<'t> Machine<'t> {
                         }
                         Ok(Flow::Val(Value::Str(s[a..z].to_string())))
                     }
+                    // `bytes()` is `List[byte]` (s136, wolf-lang#231):
+                    // one `Value::Byte` per octet, charged one byte per
+                    // byte. This is the MATERIALIZING position — a
+                    // binding, an argument, a return; the consumed
+                    // positions (`for b in s.bytes()`, `s.bytes()[i]`,
+                    // the `len` family) read the receiver's own bytes
+                    // and mint nothing (s77's view; #232 on this tier).
                     "bytes" => {
-                        let items: Vec<Value> = s.bytes().map(|b| Value::Int(b as i64)).collect();
-                        make_list(self, items)
+                        let items: Vec<Value> = s.bytes().map(Value::Byte).collect();
+                        self.charge_mem(items.len() as u64 + 16)?;
+                        let id = self.mint_list(items, e.span)?;
+                        Ok(Flow::Val(Value::List(id)))
                     }
                     // s120 (#17, [mem.str.chars]): code-point
                     // iteration — the Unicode scalar values in string

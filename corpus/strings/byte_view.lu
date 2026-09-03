@@ -9,6 +9,10 @@
 //! file pins is that every lane still answers the same). The bytes are
 //! UNSIGNED 0..=255 — the two continuation bytes of `é` are 195 and
 //! 169, never negative — and the view's length is the byte length.
+//! Since s136 (#231) the element is a `byte`: the sum widens at the
+//! operator ([type.byte.op]) and an element compared against an int
+//! literal is spelled `as int` — the two casts below are the s136
+//! blast radius of this file, two of the corpus's 33 sites.
 
 fn sum_bytes(text: str) -> int {
     var n = 0
@@ -23,8 +27,8 @@ fn main() -> !int {
     let total = sum_bytes(s)
     let empty = sum_bytes("")
     let bs = s.bytes()
-    let lead = bs[5]
-    let cont = bs[6]
+    let lead = bs[5] as int
+    let cont = bs[6] as int
     print("{total} {empty} {lead} {cont} {bs.len} {s.len}")
     if total == 836 && empty == 0 && lead == 195 && cont == 169 && bs.len == 7 {
         0

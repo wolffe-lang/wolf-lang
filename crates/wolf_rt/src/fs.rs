@@ -30,9 +30,11 @@
 //!   stops reading the file it is appending to. An unknown mode is
 //!   [`fs_code::INVALID`], decided before the filesystem is touched.
 //! - **Bytes.** `read_bytes`/`write_bytes` (whole file) and
-//!   `read_chunk`/`write_chunk` (handle) carry `List[int]`, the byte
-//!   carrier s77/s81 established. No `utf8` row: a lone `0x80` is
-//!   data, not a decode failure.
+//!   `read_chunk`/`write_chunk` (handle) carry `List[byte]` (s136,
+//!   wolf-lang#231 — `List[int]`, the carrier s77/s81 established,
+//!   before that), minted at exact capacity so a read charges its
+//!   region one header plus the payload. No `utf8` row: a lone
+//!   `0x80` is data, not a decode failure.
 //! - **Directories.** `read_dir` lists ENTRY NAMES, **sorted** — see
 //!   its doc for why the alternative is untestable. `create_dir` /
 //!   `remove_dir` take a recursive flag.
@@ -53,8 +55,9 @@ use crate::str::{ambient_copy, view, write_pair, write_word};
 /// Error codes of the fs family (lowering maps them to row tags).
 ///
 /// 0–5 are s38's. 6–8 are s90's: `INVALID` is a caller mistake the
-/// runtime decides itself (a mode outside [`fs_mode`], a `List[int]`
-/// element that is not a byte), while `EXISTS` and `CROSS_DEVICE`
+/// runtime decides itself (a mode outside [`fs_mode`], a byte list of
+/// the wrong element width — an FFI caller's, since s136 typed the
+/// argument `List[byte]`), while `EXISTS` and `CROSS_DEVICE`
 /// come out of `io::ErrorKind` like `NOT_FOUND`/`DENIED` and take the
 /// same checked-parity coarsening: a builtin whose row does not
 /// declare the tag reports `io`.
@@ -117,31 +120,42 @@ fn unix_ms(t: SystemTime) -> Option<i64> {
     }
 }
 
-/// Read a `List[int]` header as bytes, or `None` when an element is
-/// not one (outside `0..=255`, or the header's element width is wrong)
-/// — the caller reports [`fs_code::INVALID`]. Same refusal the s81
-/// byte source makes, with a write's spelling of the answer: writing
-/// is not decoding, so `utf8` would be a lie.
+/// Read a `List[byte]` header as bytes, or `None` when the header's
+/// element width is not one — the caller reports [`fs_code::INVALID`].
+/// Since s136 (wolf-lang#231) the consumers are typed `List[byte]`, so
+/// an out-of-range element is unconstructible and the only `invalid` a
+/// direct FFI caller can earn is a list of the wrong width (the s81
+/// byte source's refusal, with a write's spelling of the answer:
+/// writing is not decoding, so `utf8` would be a lie).
 ///
 /// # Safety
 ///
-/// `hdr` must be a live `List[int]` header.
+/// `hdr` must be a live list header.
 pub(crate) unsafe fn byte_elems(hdr: i64) -> Option<Vec<u8>> {
-    let elems = unsafe { crate::list::i64_elems(hdr) }?;
-    let mut bytes = Vec::with_capacity(elems.len());
-    for &v in elems {
-        bytes.push(u8::try_from(v).ok()?);
-    }
-    Some(bytes)
+    unsafe { crate::list::u8_elems(hdr) }.map(<[u8]>::to_vec)
 }
 
-/// Materialize `bytes` as a `List[int]` and write its header through
-/// `out`.
+/// Materialize `bytes` as a `List[byte]` — one buffer at exact
+/// capacity ([`crate::list::from_bytes`]) — and write its header
+/// through `out`.
 ///
 /// # Safety
 ///
 /// `out` must address 8 writable bytes.
 pub(crate) unsafe fn write_bytes_list(out: i64, bytes: &[u8]) {
+    let hdr = crate::list::from_bytes(bytes);
+    unsafe { write_word(out, hdr as i64) };
+}
+
+/// Materialize `bytes` as a `List[int]` — one `int` per octet — and
+/// write its header through `out`. The pre-s136 byte carrier, kept for
+/// the one producer whose clause still says `List[int]`: `os_random`
+/// (`[os.random]`). Not a byte surface, so not one of #231's eight.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+pub(crate) unsafe fn write_int_list(out: i64, bytes: &[u8]) {
     let hdr = new_list(8);
     for &b in bytes {
         push_int(hdr, i64::from(b));
@@ -315,8 +329,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_exists(pp: i64, pl: i64) -> i64 {
 
 // ------------------------------------- s90: bytes (wolf-lang#51) --
 
-/// `fs_read_bytes(path) -> List[int] ! {not_found, denied, io}` — the
-/// whole file as bytes. No `utf8` row: bytes are bytes.
+/// `fs_read_bytes(path) -> List[byte] ! {not_found, denied, io}` — the
+/// whole file as bytes (`List[byte]` since s136, wolf-lang#231: one
+/// ledger byte per payload byte). No `utf8` row: bytes are bytes.
 ///
 /// # Safety
 ///
@@ -334,12 +349,13 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_bytes(pp: i64, pl: i64, out: i64) -> 
 }
 
 /// `fs_write_bytes(path, bytes) -> () ! {not_found, denied, invalid,
-/// io}` — the whole file from bytes; a list element outside `0..=255`
-/// is `invalid` and nothing is written.
+/// io}` — the whole file from a `List[byte]`; a list of the wrong
+/// element width (an FFI caller's, never typed code's) is `invalid`
+/// and nothing is written.
 ///
 /// # Safety
 ///
-/// A valid str pair; `hdr` a live `List[int]` header.
+/// A valid str pair; `hdr` a live `List[byte]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_write_bytes(pp: i64, pl: i64, hdr: i64) -> i64 {
     let path = unsafe { view(pp, pl) };
@@ -352,7 +368,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_bytes(pp: i64, pl: i64, hdr: i64) ->
     }
 }
 
-/// `fs_read_chunk(fd, max) -> List[int] ! {eof, io}` — the byte twin
+/// `fs_read_chunk(fd, max) -> List[byte] ! {eof, io}` — the byte twin
 /// of `fs_read`, with the identical 1 MiB clamp and the identical
 /// "0 bytes at a positive `max` is `eof`" rule. Unlike `fs_read` it
 /// cannot land inside a code point, so a chunked reader over binary
@@ -389,11 +405,12 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
     }
 }
 
-/// `fs_write_chunk(fd, bytes) -> () ! {invalid, io}`.
+/// `fs_write_chunk(fd, bytes) -> () ! {invalid, io}` — `bytes` a
+/// `List[byte]` (s136).
 ///
 /// # Safety
 ///
-/// `hdr` must be a live `List[int]` header.
+/// `hdr` must be a live `List[byte]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_write_chunk(fd: i64, hdr: i64) -> i64 {
     let Some(bytes) = (unsafe { byte_elems(hdr) }) else {
@@ -718,11 +735,14 @@ mod tests {
         dir
     }
 
-    fn list_i64(hdr: i64) -> Vec<i64> {
+    /// The octets of a `List[byte]` read back one at a time through the
+    /// caller-slot entry — the compiled lanes' `b[i]` shape, so the
+    /// exact-capacity mint is checked against the ordinary read path.
+    fn list_u8(hdr: i64) -> Vec<u8> {
         let n = unsafe { crate::list::__wolf_rt_list_len(hdr) };
         (0..n)
             .map(|i| {
-                let mut cell = [0i64; 1];
+                let mut cell = [0u8; 1];
                 let rc =
                     unsafe { crate::list::__wolf_rt_list_read(hdr, i, cell.as_mut_ptr() as i64) };
                 assert_eq!(rc, 1);
@@ -744,8 +764,21 @@ mod tests {
             .collect()
     }
 
-    /// A list of bytes, the shape a compiled `List[int]` argument has.
-    fn bytes_list(bs: &[i64]) -> i64 {
+    /// A list of bytes, the shape a compiled `List[byte]` argument has.
+    /// A `List[byte]` of the given octets — pushed one at a time, the
+    /// shape compiled code builds (`from_bytes` is the producers'
+    /// shape; a consumer must take both).
+    fn bytes_list(bs: &[u8]) -> i64 {
+        let hdr = crate::list::new_list(1);
+        for b in bs {
+            crate::list::push_raw(hdr, core::ptr::from_ref(b));
+        }
+        hdr as i64
+    }
+
+    /// A `List[int]` — the WRONG width for a byte consumer (s136): the
+    /// one `invalid` a direct FFI caller can still earn.
+    fn int_list(bs: &[i64]) -> i64 {
         let hdr = crate::list::new_list(8);
         for &b in bs {
             crate::list::push_int(hdr, b);
@@ -830,24 +863,26 @@ mod tests {
                 fs_code::UTF8
             );
             assert_eq!(__wolf_rt_fs_read_bytes(pp, pl, o), fs_code::OK);
-            assert_eq!(list_i64(out[0]), vec![0x80, 0, 0xff, 0x41]);
+            assert_eq!(list_u8(out[0]), vec![0x80, 0, 0xff, 0x41]);
             // Chunked, over a handle, at a boundary that would have
             // split a code point for `fs_read`.
             let fd = __wolf_rt_fs_open(pp, pl, fs_mode::READ);
             assert_eq!(__wolf_rt_fs_read_chunk(fd, 1, o), fs_code::OK);
-            assert_eq!(list_i64(out[0]), vec![0x80]);
+            assert_eq!(list_u8(out[0]), vec![0x80]);
             assert_eq!(__wolf_rt_fs_read_chunk(fd, 8, o), fs_code::OK);
-            assert_eq!(list_i64(out[0]), vec![0, 0xff, 0x41]);
+            assert_eq!(list_u8(out[0]), vec![0, 0xff, 0x41]);
             assert_eq!(__wolf_rt_fs_read_chunk(fd, 8, o), fs_code::EOF);
             assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
-            // Not-a-byte is `invalid`, on both entry points.
+            // Not-a-byte-list is `invalid`, on both entry points: since
+            // s136 the consumers take `List[byte]`, so the one shape an
+            // FFI caller can still get wrong is the element width.
             assert_eq!(
-                __wolf_rt_fs_write_bytes(pp, pl, bytes_list(&[256])),
+                __wolf_rt_fs_write_bytes(pp, pl, int_list(&[256])),
                 fs_code::INVALID
             );
             let fd = __wolf_rt_fs_open(pp, pl, fs_mode::APPEND);
             assert_eq!(
-                __wolf_rt_fs_write_chunk(fd, bytes_list(&[-1])),
+                __wolf_rt_fs_write_chunk(fd, int_list(&[0x2e])),
                 fs_code::INVALID
             );
             assert_eq!(
@@ -858,7 +893,7 @@ mod tests {
             // The refused write left the file alone; the accepted one
             // appended one byte.
             assert_eq!(__wolf_rt_fs_read_bytes(pp, pl, o), fs_code::OK);
-            assert_eq!(list_i64(out[0]), vec![0x80, 0, 0xff, 0x41, 0x2e]);
+            assert_eq!(list_u8(out[0]), vec![0x80, 0, 0xff, 0x41, 0x2e]);
             // A forged fd is io, never a trap — the s38 rule holds.
             assert_eq!(__wolf_rt_fs_read_chunk(9999, 8, o), fs_code::IO);
             assert_eq!(

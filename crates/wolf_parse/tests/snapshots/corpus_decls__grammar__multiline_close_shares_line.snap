@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 543..622 name=main body=Block
+-- diagnostics --
+E0103 [Error] 598..601 the closing `"""` must stand alone on its line

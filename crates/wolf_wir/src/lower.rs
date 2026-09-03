@@ -2262,7 +2262,7 @@ enum LocalBind {
         /// would need a token this frame does not hold (s105).
         owned: bool,
     },
-    /// s89 — a `List[int]` parameter that arrived as a byte VIEW: the
+    /// s89 — a `List[byte]` parameter that arrived as a byte VIEW: the
     /// receiver's own `{ptr, len}`, exactly what `s.bytes()` is at the
     /// call site. Entry-block values, so they dominate every use; the
     /// binding is read-only by construction (there is no store path in
@@ -7963,6 +7963,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_write"
                 | "net_read_bytes"
                 | "net_write_bytes"
+                | "net_listen_unix"
+                | "net_connect_unix"
                 | "net_close"
                 | "net_deadline"
         ) {
@@ -8156,7 +8158,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // Arguments under their declared modes.
         //
         // s89 (#86): which arguments cross as a byte VIEW rather than a
-        // materialized `List[int]`. Two conditions, both necessary: the
+        // materialized `List[byte]`. Two conditions, both necessary: the
         // argument is a view here (`s.bytes()`, or a view this function
         // was itself lent), and the memory checker's lend analysis
         // proved the callee's parameter `Lendable` — every use inside
@@ -9464,8 +9466,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// coarsening checked-parity as #40 established it. `invalid` (6)
     /// does not coarsen: it is never an `ErrorKind`, it is a caller
     /// mistake the runtime decides itself (a mode outside the set, a
-    /// `List[int]` element that is not a byte), and only the builtins
-    /// that declare it can produce it.
+    /// byte list of the wrong element width — an FFI caller's shape
+    /// since s136 typed the argument `List[byte]`), and only the
+    /// builtins that declare it can produce it.
     fn fs_code_tag(&mut self, code: Value, declared: &[String]) -> Value {
         let io_id = self.b.module.tag_id("io");
         let merge = self.b.create_block();
@@ -9985,9 +9988,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s77: `bytes()` in a position lowering consumes on the
             // spot is a VIEW (see the byte-view block below), and never
             // reaches this arm. Here it is the fallback — a view that
-            // must become a first-class `List[int]` value (a binding, an
-            // argument, a return) materializes exactly as it always
-            // did, threading the foreign chain like `List[T]()`.
+            // must become a first-class `List[byte]` value (a binding,
+            // an argument, a return) materializes exactly as it always
+            // did, threading the foreign chain like `List[T]()`; the
+            // runtime mints a 1-byte-element list at exact capacity
+            // (s136, wolf-lang#231).
             "bytes" => {
                 let r = self
                     .rt_call_foreign("__wolf_rt_str_bytes", &[sp, sl], None, Some(types::PTR))
@@ -10578,7 +10583,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            // s90: a list result (`List[int]` bytes, `List[str]` names)
+            // s90: a list result (`List[byte]` bytes, `List[str]` names)
             // or a single word (size, timestamp) rides an out slot the
             // same way a str pair does. The list-minting calls go
             // through `rt_call_foreign` — the shim allocates into the
@@ -10669,7 +10674,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let fd = arg(0)?;
                         self.rt_call("__wolf_rt_fs_close", &[fd], Some(types::I64))
                     }
-                    // s90 byte writes: the `List[int]` argument is one
+                    // s90 byte writes: the `List[byte]` argument is one
                     // header pointer, and the shim READS the caller's
                     // buffer — `rt_call_foreign`, like `str_from_utf8`.
                     "fs_write_bytes" => {
@@ -10805,12 +10810,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // `net_read`'s and `invalid` only `net_write_bytes`'s (s115,
         // #137); on every other row each coarsens like the rest.
         let declared = self.row_tag_names(e.span);
+        // s136 (#227): 7–10 are the unix-domain family's — declared
+        // only by `net_listen_unix`/`net_connect_unix`.
         let tag_pairs: Vec<(i64, &str)> = [
             (1, "refused"),
             (2, "timeout"),
             (3, "closed"),
             (4, "utf8"),
             (6, "invalid"),
+            (7, "unsupported"),
+            (8, "not_found"),
+            (9, "denied"),
+            (10, "exists"),
         ]
         .into_iter()
         .map(|(c, t)| {
@@ -10836,16 +10847,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .one()
         };
         match name {
-            // The fd family: the handle (>= 0), or `-code`.
-            "net_listen" | "net_connect" | "net_port" | "net_accept" => {
+            // The fd family: the handle (>= 0), or `-code`. The
+            // unix-domain pair (s136, #227) rides the same shape.
+            "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix" | "net_port"
+            | "net_accept" => {
                 let rc = match name {
-                    "net_listen" | "net_connect" => {
+                    "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix" => {
                         let s = arg(0)?;
                         let (p, l) = self.str_parts(s);
-                        let sym = if name == "net_listen" {
-                            "__wolf_rt_net_listen"
-                        } else {
-                            "__wolf_rt_net_connect"
+                        let sym = match name {
+                            "net_listen" => "__wolf_rt_net_listen",
+                            "net_connect" => "__wolf_rt_net_connect",
+                            "net_listen_unix" => "__wolf_rt_net_listen_unix",
+                            _ => "__wolf_rt_net_connect_unix",
                         };
                         self.rt_call(sym, &[p, l], Some(types::I64))
                     }
@@ -10909,7 +10923,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            // s115/#137: the byte read mints a `List[int]` into the
+            // s115/#137: the byte read mints a `List[byte]` into the
             // container regions and hands its header back through the
             // out slot — the `fs_read_bytes` shape, so no `data`/`len`
             // the caller loaded survives the shim.
@@ -10943,7 +10957,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let (sp, sl) = self.str_parts(s);
                         self.rt_call("__wolf_rt_net_write", &[fd, sp, sl], Some(types::I64))
                     }
-                    // s115/#137: the `List[int]` argument is one header
+                    // s115/#137: the `List[byte]` argument is one header
                     // the shim READS (`rt_call_foreign`, like
                     // `fs_write_bytes`); an out-of-range element is
                     // `invalid` and nothing is sent.
@@ -11286,9 +11300,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
-    /// `str_from_utf8(b: List[int]) -> str ! {utf8}` (s81, wolf-lang#58)
-    /// — the byte SOURCE s77 deliberately did not add, added the honest
-    /// way.
+    /// `str_from_utf8(b: List[byte]) -> str ! {utf8}` (s81, wolf-lang#58;
+    /// `List[byte]` since s136, #231) — the byte SOURCE s77 deliberately
+    /// did not add, added the honest way.
     ///
     /// One call to `__wolf_rt_str_from_utf8` with the list header and a
     /// 16-byte out slot: code 0 hands back the materialized `{ptr, len}`
@@ -11708,7 +11722,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             if self.list_bounds_trap(idx, n) {
                 return Ok(Flow::Diverged);
             }
-            return Ok(Flow::Val(Some(self.bytes_load_at(base, idx))));
+            return Ok(Flow::Val(Some(self.bytes_elem_at(base, idx))));
         }
         match self.table.kind(self.strip_sema(base_sema)) {
             TyKind::Prim(Prim::Str) => {
@@ -12196,12 +12210,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// two roots are a `!noalias` claim), and G7 is where earned
     /// disjointness lands.
     fn bytes_load_at(&mut self, base: Value, idx: Value) -> Value {
-        let r = self.foreign_buf_region();
-        let p = self.b.ins_ptr_off(base, idx, 1);
-        let byte = self.b.ins_load(types::I8, p, r);
+        let byte = self.bytes_elem_at(base, idx);
         self.b
             .ins(Opcode::Zext, &[byte], &[types::I64], Aux::None)
             .one()
+    }
+
+    /// Element `idx` of a byte view AS A `byte` (s136, wolf-lang#231):
+    /// the same `ptr.off` + `load.i8`, handed over as the I8 cell
+    /// `[type.byte]` gives every `byte` value — what `for b in
+    /// s.bytes()`, `s.bytes()[i]` and `get`/`first`/`last` yield now
+    /// that `bytes()` is `List[byte]`. The zero-extension is not lost:
+    /// it moves to the operator (`widen_byte_operand`) and to `b as
+    /// int`, exactly where the clause puts it. [`Self::bytes_load_at`]
+    /// stays for lowering's OWN byte scans (str equality, the words/
+    /// lines walks), which compare against i64 constants.
+    fn bytes_elem_at(&mut self, base: Value, idx: Value) -> Value {
+        let r = self.foreign_buf_region();
+        let p = self.b.ins_ptr_off(base, idx, 1);
+        self.b.ins_load(types::I8, p, r)
     }
 
     /// `==` / `!=` on `str`, INLINE (s81, the last call out of family
@@ -12642,8 +12669,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_br(cond, body_bb, &[], exit, &[]);
         self.b.seal_block(body_bb);
         self.b.switch_to_block(body_bb);
-        let elem = self.bytes_load_at(base, iparam);
-        let frame = self.run_for_body(d, elem, types::I64, false, bind_name, Some(exit));
+        // The binding is a `byte` (s136): an I8 cell on the unsigned
+        // rail, widened at the operator like any other byte.
+        let elem = self.bytes_elem_at(base, iparam);
+        let frame = self.run_for_body(d, elem, types::I8, true, bind_name, Some(exit));
         let frame = match frame {
             Ok(f) => f,
             Err(x) => {
@@ -12727,7 +12756,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let out = self.eu_join(
                     eu,
                     hit,
-                    |z| Ok(Some(z.bytes_load_at(base, idx))),
+                    |z| Ok(Some(z.bytes_elem_at(base, idx))),
                     |z| Ok(z.none_tag()),
                 )?;
                 Ok(Flow::Val(Some(out)))

@@ -190,8 +190,12 @@ fn corpus_parse_expectations() {
     // UNKNOWN escape inside a multiline — wolf-lang#215, the first
     // entry to pin `\q` anywhere, which is how it turned up #225's
     // code divergence — plus 1 member-sibling case (s124's
-    // broken_sibling, D59); everything else must pass.
-    assert_eq!(fail, 17, "syntax-tier fail-file count drifted");
+    // broken_sibling, D59); plus s136's five D74 string-layout
+    // witnesses (grammar/multiline_open_shares_line and
+    // multiline_close_shares_line — E0103, multiline_short_margin —
+    // E0104, multiline_mixed_margin — E0105, str_bare_brace — E0102;
+    // wolf-lang#230); everything else must pass.
+    assert_eq!(fail, 22, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

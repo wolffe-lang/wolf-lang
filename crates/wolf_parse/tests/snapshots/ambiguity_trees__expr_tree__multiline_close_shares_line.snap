@@ -1,0 +1,54 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 543..623
+  FnDecl 543..622
+    FnKw 543..545 "fn"
+    Ident 546..550 "main"
+    ParamList 550..552
+      LParen 550..551 "("
+      RParen 551..552 ")"
+    RetType 553..560
+      Arrow 553..555 "->"
+      ErrorUnionType 556..560
+        Not 556..557 "!"
+        PathType 557..560
+          Path 557..560
+            Ident 557..560 "int"
+    Block 561..622
+      LBrace 561..562 "{"
+      LetDecl 567..602
+        LetKw 567..570 "let"
+        IdentPat 571..572
+          Ident 571..572 "p"
+        Eq 573..574 "="
+        StringExpr 575..601
+          StrBegin 575..578 "\"\"\""
+          StrFragment 578..598 "\n        a\n        b"
+          StrEnd 598..601 "\"\"\""
+        Term 601..602 "\n"
+      ExprStmt 606..615
+        CallExpr 606..614
+          PathExpr 606..611
+            Ident 606..611 "print"
+          ArgList 611..614
+            LParen 611..612 "("
+            Arg 612..613
+              PathExpr 612..613
+                Ident 612..613 "p"
+            RParen 613..614 ")"
+        Term 614..615 "\n"
+      ExprStmt 619..621
+        LiteralExpr 619..620
+          Int 619..620 "0"
+        Term 620..621 "\n"
+      RBrace 621..622 "}"
+  Term 622..623 "\n"
+  Eof 623..623 ""
+== diagnostics ==
+E0103 [Error] 598..601 the closing `"""` must stand alone on its line
+    label only whitespace may sit before it
+    secondary 575..578 the multiline string opens here
+    note a `"""` delimiter stands alone on its line, opening and closing alike: the closing delimiter's column sets the margin stripped from every content line, so nothing else can share its line. Move it to its own line.

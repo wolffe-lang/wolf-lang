@@ -1,0 +1,19 @@
+//! check: fail(E0104)
+//! phase: none
+//! conforms: gram.lex.str.multi
+//!
+//! D74 (s136, #230) — the margin rule: the whitespace before the
+//! closing `"""` is stripped from every content line, so a content
+//! line that sits LEFT of that margin has bytes the margin would eat.
+//! E0104 is this rule and only this rule (the catalog's meaning; the
+//! spec sentence amended to it). Span: the short line's leading
+//! whitespace (its first byte when there is none).
+
+fn main() -> !int {
+    let p = """
+        good
+      bad
+        """
+    print(p)
+    0
+}

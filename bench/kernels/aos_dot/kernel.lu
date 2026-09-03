@@ -15,7 +15,8 @@ fn ops_arg(fallback: int) -> int {
     let args = env_args()
     let first = args.first() else { return fallback }
     var n = 0
-    for b in first.bytes() {
+    for raw in first.bytes() {
+        let b = raw as int
         if b < 48 { return fallback }
         if b > 57 { return fallback }
         n = n * 10 + (b - 48)

@@ -1,0 +1,43 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0107,
+        severity: Error,
+        message: "a byte order mark (BOM) in the middle of a wolf source file",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 10,
+                hi: 13,
+            },
+            label: "the invisible BOM character sits here",
+        },
+        secondary: [],
+        notes: [
+            "wolf reads sources as plain UTF-8: a BOM at the very start of the file is stripped, and anywhere else it is a stray character ([gram.lex.source]). Delete it.",
+        ],
+        suggestions: [
+            Suggestion {
+                message: "delete the byte order mark",
+                edits: [
+                    (
+                        Span {
+                            file: FileId(
+                                0,
+                            ),
+                            lo: 10,
+                            hi: 13,
+                        },
+                        "",
+                    ),
+                ],
+                applicability: MachineApplicable,
+            },
+        ],
+    },
+]
