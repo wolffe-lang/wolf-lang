@@ -151,7 +151,9 @@ impl Sock {
 
     /// The raw OS handle for a readiness park: the stream's when
     /// `want_stream`, else the listener's; `None` for the wrong kind.
-    #[cfg(unix)]
+    /// Reactor hosts only (the module is gated the same way; a tier-2
+    /// host without a reactor parks in the syscall itself).
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn raw(&self, want_stream: bool) -> Option<crate::reactor::RawFd> {
         use std::os::fd::AsRawFd as _;
         match (self, want_stream) {
