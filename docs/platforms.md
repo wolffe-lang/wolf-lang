@@ -123,6 +123,16 @@ a link error, never a silent stub.
   reporter is installed at pool init (D15: no spawn, no handler),
   measured on the runner.
 - **Async file io** (the reactor's fs flavor): IOCP's — s60c.
+- **Unix-domain sockets** (`net_listen_unix`/`net_connect_unix`,
+  `[os.net.unix]`, s136): the `unsupported` row, by name — never a
+  bare `io`. `AF_UNIX` exists on Windows since 10 1803 and
+  `wolf_rt`'s windows test suite measures the kernel's answer on the
+  runner (`socket(AF_UNIX, SOCK_STREAM, 0)` through ws2_32 —
+  `shim_unix_refuses_by_name_and_measures_af_unix`), but `std::net`
+  has no unix-domain surface on this host and the runtime carries no
+  winsock binding beyond `WSAPoll` (D15), so the serving rung is
+  named here rather than claimed. A lobo-shaped program keeps its
+  loopback-TCP + token control endpoint on this host (wolf-lang#227).
 
 ### The floor line
 

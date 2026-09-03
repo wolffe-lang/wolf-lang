@@ -39,11 +39,27 @@ fn runtime_and_checked_lane_agree_on_every_tag() {
 }
 
 /// The vocabulary itself is closed: v0 tags are exactly
-/// {refused, timeout, closed, io} — the contract's row classes.
+/// {refused, timeout, closed, io} — the contract's row classes — plus
+/// the three path rows the unix-domain family declares since s136
+/// (`[os.net.unix]`, #227): `exists`, `not_found`, `denied`. A builtin
+/// that does not declare one folds it to `io` (lowering's tag pairs,
+/// the machine's `coarse`), so the TCP surface's vocabulary is
+/// unchanged.
 #[test]
 fn the_tag_vocabulary_is_closed() {
     let mut seen: Vec<&str> = KINDS.iter().map(|&k| wolf_rt::net::err_tag(k)).collect();
     seen.sort();
     seen.dedup();
-    assert_eq!(seen, ["closed", "io", "refused", "timeout"]);
+    assert_eq!(
+        seen,
+        [
+            "closed",
+            "denied",
+            "exists",
+            "io",
+            "not_found",
+            "refused",
+            "timeout"
+        ]
+    );
 }

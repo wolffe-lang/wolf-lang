@@ -416,5 +416,7 @@
     "type.str.concat.cost": "10-types.md",
     "type.str.concat.mix": "10-types.md"
   },
+  "os.net": "11-os.md",
+  "os.net.unix": "11-os.md",
   "version": 1
 }
