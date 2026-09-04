@@ -645,3 +645,48 @@ fn adoption_and_an_inherit_set_refuse_with_the_construct_named() {
         "-1\n",
     );
 }
+
+/// s137 (#127, `[os.net.wait]`): readiness over a SET on the checked
+/// machine — the twin of `corpus/net/wait_readiness.lu`. Quiet is the
+/// EMPTY answer (not a row), the wait names the socket that spoke and
+/// only it, asking again answers the same (level-triggered), the
+/// accept drains it, a peer's departure makes the stream ready, and a
+/// forged handle is `io` with nothing waited on.
+#[test]
+fn wait_names_the_socket_that_spoke() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let a = net_listen(\"127.0.0.1:0\")?\n\
+         let b = net_listen(\"127.0.0.1:0\")?\n\
+         let pb = net_port(b)?\n\
+         let set = List[int]()\n\
+         (mut set).push(a)\n\
+         (mut set).push(b)\n\
+         let quiet = net_wait(set, 20)?.len\n\
+         let cli = net_connect(\"127.0.0.1:{pb}\")?\n\
+         let woke = net_wait(set, 5000)?\n\
+         let again = net_wait(set, 0)?\n\
+         var right = false\n\
+         var level = false\n\
+         if woke.len == 1 { right = woke[0] == b }\n\
+         if again.len == 1 { level = again[0] == b }\n\
+         let conn = net_accept(b)?\n\
+         let drained = net_wait(set, 20)?.len\n\
+         net_close(cli)?\n\
+         let streams = List[int]()\n\
+         (mut streams).push(conn)\n\
+         let woken = net_wait(streams, 5000)?.len\n\
+         let forged = List[int]()\n\
+         (mut forged).push(99999)\n\
+         var io_row = false\n\
+         let bad = net_wait(forged, 0) else |_| { io_row = true\nList[int]() }\n\
+         let _n = bad.len\n\
+         net_close(conn)?\n\
+         net_close(a)?\n\
+         net_close(b)?\n\
+         print(\"{quiet} {right} {level} {drained} {woken} {io_row}\")\n\
+         0\n\
+         }\n",
+        "0 true true 0 1 true\n",
+    );
+}
