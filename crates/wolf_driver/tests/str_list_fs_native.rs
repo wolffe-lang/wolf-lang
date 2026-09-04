@@ -596,10 +596,26 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // region.new, breach = trap(alloc-contract) at the alloc site);
     // s136 the unix-domain pair (#227: net_listen_unix /
     // net_connect_unix — a path pair in, the fd or the negated code
-    // back, `[os.net.unix]`).
+    // back, `[os.net.unix]`); s137 the listener a prefork server can
+    // share (#234/#235: net_listen_with — the address pair plus the
+    // reuse flag and the backlog hint, `[os.net.listen.opts]`;
+    // net_adopt_listener and os_spawn_with — the two halves of
+    // descriptor inheritance, `[os.proc.inherit]`).
+    for sym in [
+        "__wolf_rt_net_listen_with",
+        "__wolf_rt_net_adopt_listener",
+        "__wolf_rt_os_spawn_with",
+    ] {
+        assert!(
+            wolf_codegen_clif::RT_SYMBOLS
+                .iter()
+                .any(|(name, ..)| *name == sym),
+            "{sym} is not declared in RT_SYMBOLS"
+        );
+    }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        124,
+        127,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
