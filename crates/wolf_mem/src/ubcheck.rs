@@ -754,6 +754,105 @@ fn accept_deadline_unix(
     out
 }
 
+/// s137 (#234, `[os.net.listen.opts]`): the checked machine's bind
+/// with listener options — the HAND MIRROR of `wolf_rt::net::bind_with`
+/// (wolf_mem and wolf_rt may not see each other; D15), call for call:
+/// a close-on-exec stream socket, `SO_REUSEADDR` as std sets it,
+/// `SO_REUSEPORT` before the bind when asked, the caller's backlog
+/// hint (`<= 0`: std's 128). The driver's `net_parity` test pins the
+/// two tables' rows; the option semantics per host are the runtime's
+/// module doc and the clause.
+#[cfg(unix)]
+fn checked_bind_with(
+    addr: &str,
+    reuse_port: bool,
+    backlog: i64,
+) -> std::io::Result<std::net::TcpListener> {
+    use std::net::{SocketAddr, ToSocketAddrs as _};
+    use std::os::fd::FromRawFd as _;
+    let sa = addr
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    let family = match sa {
+        SocketAddr::V4(_) => libc::AF_INET,
+        SocketAddr::V6(_) => libc::AF_INET6,
+    };
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    let ty = libc::SOCK_STREAM | libc::SOCK_CLOEXEC;
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    let ty = libc::SOCK_STREAM;
+    // SAFETY: plain socket creation; the result is checked below.
+    let fd = unsafe { libc::socket(family, ty, 0) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: a fresh, open stream socket nothing else owns; owned
+    // from here so every early return closes it.
+    let l = unsafe { std::net::TcpListener::from_raw_fd(fd) };
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    {
+        // SAFETY: valid fd.
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    let one: libc::c_int = 1;
+    let optlen = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    for (want, opt) in [(true, libc::SO_REUSEADDR), (reuse_port, libc::SO_REUSEPORT)] {
+        if !want {
+            continue;
+        }
+        // SAFETY: valid fd, a live c_int and its true length.
+        if unsafe { libc::setsockopt(fd, libc::SOL_SOCKET, opt, (&raw const one).cast(), optlen) }
+            < 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    // SAFETY: a zeroed sockaddr_storage is a valid, oversized buffer
+    // for either family.
+    let mut storage: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let len: libc::socklen_t = match sa {
+        SocketAddr::V4(v4) => {
+            // SAFETY: sockaddr_in fits inside sockaddr_storage.
+            let sin = unsafe { &mut *(&raw mut storage).cast::<libc::sockaddr_in>() };
+            sin.sin_family = libc::AF_INET as libc::sa_family_t;
+            sin.sin_port = v4.port().to_be();
+            sin.sin_addr = libc::in_addr {
+                s_addr: u32::from_ne_bytes(v4.ip().octets()),
+            };
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t
+        }
+        SocketAddr::V6(v6) => {
+            // SAFETY: sockaddr_in6 fits inside sockaddr_storage.
+            let sin6 = unsafe { &mut *(&raw mut storage).cast::<libc::sockaddr_in6>() };
+            sin6.sin6_family = libc::AF_INET6 as libc::sa_family_t;
+            sin6.sin6_port = v6.port().to_be();
+            sin6.sin6_flowinfo = v6.flowinfo();
+            sin6.sin6_addr = libc::in6_addr {
+                s6_addr: v6.ip().octets(),
+            };
+            sin6.sin6_scope_id = v6.scope_id();
+            std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t
+        }
+    };
+    // SAFETY: valid fd, a live sockaddr and its length.
+    if unsafe { libc::bind(fd, (&raw const storage).cast(), len) } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let queue = if backlog > 0 {
+        i32::try_from(backlog).unwrap_or(i32::MAX)
+    } else {
+        128
+    };
+    // SAFETY: valid, bound fd.
+    if unsafe { libc::listen(fd, queue) } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(l)
+}
+
 fn accept_deadline(
     l: &std::net::TcpListener,
     budget: std::time::Duration,
@@ -4648,6 +4747,48 @@ impl<'t> Machine<'t> {
                     Ok(tag("unsupported"))
                 }
             }
+            // s137 (#234, `[os.net.listen.opts]`): the listener
+            // options, served — a socket option is host state the
+            // checked machine holds like any other; the hand mirror of
+            // `wolf_rt::net::bind_with` sets `SO_REUSEPORT` before the
+            // bind. Rows by name: `exists` for a held address, `denied`
+            // for a privileged port; windows refuses `reuse_port` by
+            // name (`SO_REUSEADDR` is not it) and serves the option-
+            // less shape through std's bind.
+            "net_listen_with" => {
+                let (Some(addr), Some(Value::Bool(reuse)), Some(backlog)) =
+                    (str_arg(0), argv.get(1), int_arg(2))
+                else {
+                    return self.refuse("this net call shape", span);
+                };
+                #[cfg(unix)]
+                let bound = checked_bind_with(&addr, *reuse, backlog);
+                #[cfg(not(unix))]
+                let bound = {
+                    let _ = backlog;
+                    if *reuse {
+                        return Ok(tag("unsupported"));
+                    }
+                    std::net::TcpListener::bind(&addr)
+                };
+                match bound {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["exists", "denied", "io"]))),
+                    Ok(l) => {
+                        let fd = self.socks.len() as i64;
+                        self.socks.push(Some(NetSock::Listener(l)));
+                        Ok(Flow::Val(Value::Int(fd)))
+                    }
+                }
+            }
+            // s137 (#235, `[os.proc.inherit]`): the checked machine
+            // runs no descriptor handoff — it is the `wolf` binary
+            // interpreting a program, so a "child of this program"
+            // would be a child of the compiler — and says so BY NAME
+            // (the s134 records rule: the record names the construct;
+            // `os_spawn_with`'s non-empty set is the other half).
+            "net_adopt_listener" => {
+                self.refuse("listener adoption in checked execution", span)
+            }
             "net_port" => {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);
@@ -5008,6 +5149,56 @@ impl<'t> Machine<'t> {
                     // buffered print stream cannot capture fd-level
                     // writes, a documented asymmetry (capture is the
                     // named upstream ask).
+                    .stdout(std::process::Stdio::inherit())
+                    .stderr(std::process::Stdio::inherit())
+                    .spawn();
+                match spawned {
+                    Err(e) => Ok(tag(match e.kind() {
+                        std::io::ErrorKind::NotFound => "not_found",
+                        std::io::ErrorKind::PermissionDenied => "denied",
+                        _ => "io",
+                    })),
+                    Ok(child) => {
+                        let h = self.children.len() as i64;
+                        self.children.push(Some(child));
+                        Ok(Flow::Val(Value::Int(h)))
+                    }
+                }
+            }
+            // s137 (#235, `[os.proc.inherit]`): with an EMPTY inherit
+            // set this is `os_spawn` with the program named apart from
+            // its arguments; a non-empty set is refused BY NAME — the
+            // checked machine is the `wolf` binary interpreting the
+            // program, and a descriptor handed to "its child" would be
+            // handed to the compiler's child (the s134 records rule:
+            // the record names the construct, never a bare
+            // `unsupported`).
+            "os_spawn_with" => {
+                let (Some(exe), Some(Value::List(args_id)), Some(Value::List(inherit_id))) =
+                    (str_arg(0), argv.get(1), argv.get(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let inherited = self.lists.get(*inherit_id).is_some_and(|l| !l.is_empty());
+                if inherited {
+                    return self.refuse(
+                        "fd inheritance across os_spawn_with in checked execution",
+                        span,
+                    );
+                }
+                if exe.is_empty() {
+                    return Ok(tag("not_found"));
+                }
+                let mut words = Vec::new();
+                for v in self.lists.get(*args_id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => words.push(s.clone()),
+                        _ => return self.refuse("a non-str argv element", span),
+                    }
+                }
+                let spawned = std::process::Command::new(&exe)
+                    .args(&words)
+                    .stdin(std::process::Stdio::null())
                     .stdout(std::process::Stdio::inherit())
                     .stderr(std::process::Stdio::inherit())
                     .spawn();
@@ -6094,9 +6285,10 @@ impl<'t> Machine<'t> {
             }
             // The s39 net builtin tier: same posture as fs — real host
             // operations, D30 rows, comptime is the one refusal site.
-            "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_port" | "net_accept"
-            | "net_connect" | "net_read" | "net_write"
-            | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline" => {
+            "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_listen_with"
+            | "net_adopt_listener" | "net_port" | "net_accept" | "net_connect" | "net_read"
+            | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
+            | "net_deadline" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -6116,8 +6308,8 @@ impl<'t> Machine<'t> {
             // the declared D30 rows, and the comptime sandbox is the
             // one refusal site.
             "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_exit"
-            | "os_spawn" | "os_wait" | "os_kill" | "os_signal_listen" | "os_signal_wait"
-            | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
+            | "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_signal_listen"
+            | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8" => {
                 let mut argv = Vec::new();
