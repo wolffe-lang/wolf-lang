@@ -1423,12 +1423,26 @@ const ALL_THREE_FLOOR: usize = 0;
 // byte-view files moved TYPES, not lanes: each still executes where
 // it did (the blast radius inside this corpus, spelled `as int` /
 // `List[byte]`). Counts measured by this gate, not predicted.
+// s137 ratchet over 471 entries: the listener a prefork server needs
+// (#234/#235). Two new run-phase witnesses. `net/reuse_port` executes
+// on all three lanes — the checked machine serves `net_listen_with`
+// through a hand mirror of the runtime's bind — so every count moves
+// by one for it; `net/inherit_listener` executes on the two native
+// lanes only, because the checked machine refuses an inherit set BY
+// NAME with the construct named (it is the `wolf` binary interpreting
+// a program, so the child would be the compiler's), which is the
+// refused@mem residue growing by one rather than a hole. So checked
+// and all-three move by exactly one (273/256) and native/release/union
+// by exactly two (292/292/309). No pre-existing file moved lanes: both
+// builtins are new surface, and the two fixes this sprint carries (a
+// test pipe's CLOEXEC, `zext` from `bool`) change no lane's verdict on
+// any existing file. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 272), ("native", 290), ("release", 290)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 273), ("native", 292), ("release", 292)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 307;
+const UNION_FLOOR: usize = 309;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 255;
+const ALL_THREE_FLOOR: usize = 256;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
