@@ -1437,12 +1437,21 @@ const ALL_THREE_FLOOR: usize = 0;
 // builtins are new surface, and the two fixes this sprint carries (a
 // test pipe's CLOEXEC, `zext` from `bool`) change no lane's verdict on
 // any existing file. Counts measured by this gate, not predicted.
+// s137 ratchet #2 over 472 entries: the reactor's readiness surface
+// (#127). ONE new run-phase witness — `net/wait_readiness` — and it
+// executes on all three lanes, because `[os.net.wait]` is the one
+// clause this sprint carries that names no host: every tier-1 kernel
+// answers the readiness question (`poll(2)`, `WSAPoll`) and the
+// checked machine mirrors the runtime call for call. So every count
+// moves by exactly one (274/293/293, union 310, all-three 257). No
+// pre-existing file moved lanes. Counts measured by this gate, not
+// predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 273), ("native", 292), ("release", 292)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 274), ("native", 293), ("release", 293)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 309;
+const UNION_FLOOR: usize = 310;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 256;
+const ALL_THREE_FLOOR: usize = 257;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
