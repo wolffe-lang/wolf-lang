@@ -337,6 +337,7 @@
     "os.net": "11-os.md",
     "os.net.listen.opts": "11-os.md",
     "os.net.unix": "11-os.md",
+    "os.net.wait": "11-os.md",
     "os.proc": "11-os.md",
     "os.proc.inherit": "11-os.md",
     "os.random": "11-os.md",
