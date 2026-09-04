@@ -7965,6 +7965,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_write_bytes"
                 | "net_listen_unix"
                 | "net_connect_unix"
+                // s137 (#234/#235): the listener options and the adopt
+                // half of descriptor inheritance — `[os.net.listen.
+                // opts]`, `[os.proc.inherit]`. Both ride the fd shape.
+                | "net_listen_with"
+                | "net_adopt_listener"
                 | "net_close"
                 | "net_deadline"
         ) {
@@ -8000,7 +8005,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // tags, the exit code back through an out word. Wait reaps;
         // kill never tombstones — the zombie discipline is the
         // runtime's module doc.
-        if matches!(callee_text.as_str(), "os_spawn" | "os_wait" | "os_kill") {
+        if matches!(
+            callee_text.as_str(),
+            // s137 (#235, `[os.proc.inherit]`): `os_spawn_with` joins
+            // the trio — the program apart from its arguments, plus an
+            // inherit set of this process's NET handles the shim maps
+            // to descriptors before any child exists.
+            "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill"
+        ) {
             return self.lower_process_builtin(&callee_text, d, e);
         }
         // signal RECEPTION (s114, #126): the receive side, by MEANING.
@@ -10849,8 +10861,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         match name {
             // The fd family: the handle (>= 0), or `-code`. The
             // unix-domain pair (s136, #227) rides the same shape.
-            "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix" | "net_port"
-            | "net_accept" => {
+            "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix"
+            | "net_listen_with" | "net_adopt_listener" | "net_port" | "net_accept" => {
                 let rc = match name {
                     "net_listen" | "net_connect" | "net_listen_unix" | "net_connect_unix" => {
                         let s = arg(0)?;
@@ -10862,6 +10874,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             _ => "__wolf_rt_net_connect_unix",
                         };
                         self.rt_call(sym, &[p, l], Some(types::I64))
+                    }
+                    // s137 (#234): the address, then the two options —
+                    // `reuse_port` widened to the wire word the shim
+                    // reads as nonzero-is-set, and the backlog hint as
+                    // it stands (`<= 0` is the runtime's default).
+                    "net_listen_with" => {
+                        let s = arg(0)?;
+                        let (p, l) = self.str_parts(s);
+                        let reuse = self.widen_to_wire(arg(1)?, e.span)?;
+                        let backlog = arg(2)?;
+                        self.rt_call(
+                            "__wolf_rt_net_listen_with",
+                            &[p, l, reuse, backlog],
+                            Some(types::I64),
+                        )
+                    }
+                    // s137 (#235): an OS descriptor number in (this
+                    // process was HANDED it), a table handle out.
+                    "net_adopt_listener" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_net_adopt_listener", &[fd], Some(types::I64))
                     }
                     "net_port" => {
                         let fd = arg(0)?;
@@ -11128,11 +11161,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .ok_or_else(|| refuse("a process call with missing arguments", e.span))
         };
         match name {
-            "os_spawn" => {
-                let hdr = arg(0)?;
-                let rc = self
-                    .rt_call_foreign("__wolf_rt_os_spawn", &[hdr], None, Some(types::I64))
-                    .expect("rc");
+            "os_spawn" | "os_spawn_with" => {
+                let rc = if name == "os_spawn" {
+                    let hdr = arg(0)?;
+                    self.rt_call_foreign("__wolf_rt_os_spawn", &[hdr], None, Some(types::I64))
+                } else {
+                    // s137 (#235, `[os.proc.inherit]`): the exe as a
+                    // str pair, then TWO list headers the shim reads in
+                    // the caller's regions — the argv `List[str]` and
+                    // the inherit `List[int]` of net handles. The shim
+                    // maps handles to descriptors first, so a forged
+                    // one is `io` with no child spawned.
+                    let s = arg(0)?;
+                    let (p, l) = self.str_parts(s);
+                    let args_hdr = arg(1)?;
+                    let inherit_hdr = arg(2)?;
+                    self.rt_call_foreign(
+                        "__wolf_rt_os_spawn_with",
+                        &[p, l, args_hdr, inherit_hdr],
+                        None,
+                        Some(types::I64),
+                    )
+                }
+                .expect("rc");
                 let z = self.b.iconst(types::I64, 0);
                 let hit = self
                     .b
@@ -11155,7 +11206,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             .b
                             .ins(Opcode::IsubWrap, &[zz, rc], &[types::I64], Aux::None)
                             .one();
-                        Ok(zelf.code_tag_chain(code, &[(1, "not_found"), (2, "denied")], "io"))
+                        // s137: `unsupported` (5) is `os_spawn_with`'s
+                        // alone — the host that hands no descriptor
+                        // across a spawn, refused BY NAME. `os_spawn`
+                        // never declares it, and the coarsening below
+                        // keeps it out of that call's rows.
+                        let declared = zelf.row_tag_names(e.span);
+                        let pairs: Vec<(i64, &str)> = [
+                            (1, "not_found"),
+                            (2, "denied"),
+                            (5, "unsupported"),
+                        ]
+                        .into_iter()
+                        .filter(|(_, t)| declared.iter().any(|d| d == t))
+                        .collect();
+                        Ok(zelf.code_tag_chain(code, &pairs, "io"))
                     },
                 )?;
                 Ok(Flow::Val(Some(out)))
