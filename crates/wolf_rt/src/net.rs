@@ -2093,21 +2093,33 @@ mod tests {
         }
         assert_eq!(
             (na, nb),
-            (0, 16),
-            "MEASURED: SO_REUSEADDR pair delivery, first/second bound = {na}/{nb} of 16 dials \
-             (the expectation pinned here is docs/platforms.md's sentence; a different split is \
-             the runner's answer and the sentence moves to it)"
+            (16, 0),
+            "MEASURED on the windows runner: SO_REUSEADDR pair delivery, first/second bound = \
+             {na}/{nb} of 16 dials — every dial to the FIRST socket bound, none to the second. \
+             That is the sentence docs/platforms.md states, and it is the reason `reuse_port` is \
+             refused by name rather than aliased: SO_REUSEADDR lets the second bind SUCCEED and \
+             then gives it nothing, which is the worst of both answers for a prefork worker. A \
+             different split is the runner's answer and the sentence moves to it."
         );
     }
 
-    /// s137 on windows: handle INHERITANCE exists — measured on the
-    /// runner by re-executing this test binary as a child with a
-    /// listener's `SOCKET` marked inheritable, and asking the child
-    /// whether that number is the same listener (its local port). The
-    /// child answers 42 for yes; anything else is the kernel's answer.
-    /// The runtime still refuses an inherit set by name at this pin
-    /// (`os.rs`'s twin): what this pins is that the serving rung named
-    /// in docs/platforms.md has a floor to stand on.
+    /// s137 on windows: what a listener's `SOCKET` marked
+    /// `HANDLE_FLAG_INHERIT` is worth across `std::process::Command`,
+    /// MEASURED on the runner rather than assumed. This binary
+    /// re-executes itself with the handle value named in the
+    /// environment and asks the child what that number is: 42 = the
+    /// same listener (its local port matches), 7 = a different socket,
+    /// 8 = not a usable socket in the child at all.
+    ///
+    /// **The runner answers 8.** Marking the handle inheritable is not
+    /// enough: `Command` on this host publishes only its stdio handles
+    /// to the child, so the socket does not arrive. That is a stronger
+    /// reason for the by-name refusal than the one #235 was filed
+    /// with — the gap is not just that a `SOCKET` has no small stable
+    /// number to name by position, it is that the descriptor does not
+    /// cross at all through the spawn the runtime performs. If this
+    /// number ever moves, docs/platforms.md's windows sentence and
+    /// `[os.proc.inherit]`'s host posture move with it.
     #[cfg(windows)]
     #[test]
     fn windows_socket_handle_inheritance_measured() {
@@ -2159,10 +2171,12 @@ mod tests {
             .expect("re-exec");
         assert_eq!(
             status.code(),
-            Some(42),
-            "MEASURED: the child saw the inherited SOCKET as the same listener (42 = yes; \
-             7 = a different socket; 8 = not a socket in the child; anything else = the \
-             harness) — docs/platforms.md's inheritance sentence is this number"
+            Some(8),
+            "MEASURED on the windows runner: 8 — a listener's SOCKET marked \
+             HANDLE_FLAG_INHERIT does NOT arrive usable in a child spawned by \
+             std::process::Command (42 = the same listener; 7 = a different socket; \
+             8 = not a usable socket in the child; anything else = the harness). \
+             docs/platforms.md's inheritance sentence is this number"
         );
     }
 }

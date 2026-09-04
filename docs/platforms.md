@@ -142,27 +142,35 @@ a link error, never a silent stub.
   reaches. Aliasing the option to it would hand a prefork server a
   silent hijack where it asked for a shared queue, so the runtime
   refuses by name instead. `wolf_rt`'s windows test suite MEASURES what
-  the alias would have meant on the runner — two ws2_32 sockets both
-  carrying `SO_REUSEADDR` bind one port and the delivery split is
-  pinned — so the sentence above is the runner's answer rather than a
+  the alias would have meant on the runner, and the answer is worse
+  than the manual suggests: two ws2_32 sockets both carrying
+  `SO_REUSEADDR` bind one port, and **every one of 16 dials went to
+  the FIRST socket bound — none to the second** (16/0, measured). So
+  the second bind succeeds and then serves nothing: a worker that
+  "joined the group" would sit idle forever with no error to report.
+  That is the sentence, and it is the runner's answer rather than a
   manual's. `net_listen_with`'s option-LESS shape serves on this host
   like `net_listen`, backlog hint and all, and a held address is
   `exists` by name (wolf-lang#234).
 - **Descriptor inheritance across a spawn** (`os_spawn_with`'s
   inherit set and `net_adopt_listener`, `[os.proc.inherit]`, s137):
-  the `unsupported` row, by name. Handle inheritance itself EXISTS
-  here and the runtime's windows suite measures it on the runner — a
-  listener marked `HANDLE_FLAG_INHERIT` and named to a re-executed
-  child is the same listener, same local port
-  (`windows_socket_handle_inheritance_measured`). What is missing is
-  the numbering the clause promises: a `SOCKET` is not a small stable
-  descriptor a parent can hand over by POSITION ("the listener is 3"),
-  so a child cannot adopt without being told a handle value that
-  `std::net` will not mint for it. The serving rung is named here for
-  the host's next campaign: `os_spawn_with` with an EMPTY set already
-  serves on this host — it is `os_spawn` with the program named apart
-  from its arguments — so a windows port of a prefork master needs
-  only the handoff, not the spawn (wolf-lang#235).
+  the `unsupported` row, by name — and the gap is deeper than #235
+  guessed. The runtime's windows suite MEASURES it on the runner
+  (`windows_socket_handle_inheritance_measured`): a listener's
+  `SOCKET` marked `HANDLE_FLAG_INHERIT`, its value named to a
+  re-executed child, **is not a usable socket in that child at all**.
+  `std::process::Command` publishes only its stdio handles to the
+  child on this host, so the descriptor does not cross the spawn the
+  runtime performs. Two things are therefore missing, not one: the
+  crossing itself, and the numbering the clause promises (a `SOCKET`
+  is not a small stable descriptor a parent can hand over by POSITION
+  — "the listener is 3"). Both want the same next campaign: a
+  `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` spawn of the runtime's own,
+  which `Command` cannot express. The serving rung is named here for
+  it. `os_spawn_with` with an EMPTY set already serves on this host —
+  it is `os_spawn` with the program named apart from its arguments —
+  so a windows port of a prefork master needs only the handoff, not
+  the spawn (wolf-lang#235).
 
 ### The floor line
 
