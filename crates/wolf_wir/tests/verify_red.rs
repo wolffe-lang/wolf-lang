@@ -680,3 +680,22 @@ fn icmp_signed_order_on_pointers_rejected() {
         ErrClass::Type,
     );
 }
+
+/// s137: the bool -> int bridge. `zext` from `bool` VERIFIES — it is
+/// the one conversion whose source is not an integer type, and the
+/// only way a one-bit value reaches a word (a `channel[bool]`'s wire
+/// payload, s39; a `reuse_port` option crossing to a runtime shim,
+/// #234). `sext` from `bool` stays rejected: sign-extending a truth
+/// value is meaningless, and nothing lowers it.
+#[test]
+fn zext_from_bool_is_the_bridge_and_sext_from_bool_is_not() {
+    let m = wolf_wir::parse_module(
+        "fn @f() -> i64 {\nb0:\n  %b = bconst true\n  %w = zext.i64 %b\n  ret %w\n}\n",
+    )
+    .expect("green input must parse");
+    verify_module(&m).expect("zext from bool is the bool -> int bridge");
+    expect_reject(
+        "fn @f() -> i64 {\nb0:\n  %b = bconst true\n  %w = sext.i64 %b\n  ret %w\n}\n",
+        ErrClass::Type,
+    );
+}
