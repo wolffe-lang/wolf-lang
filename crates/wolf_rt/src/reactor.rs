@@ -865,13 +865,27 @@ mod tests {
     impl Pipe {
         fn new() -> Pipe {
             let mut fds = [0i32; 2];
-            // SAFETY: plain pipe creation; checked below (pipe2 on
-            // linux for atomic CLOEXEC; macOS has no pipe2 and a
-            // test pipe outlives no exec anyway).
+            // SAFETY: plain pipe creation; checked below. Linux gets
+            // the atomic-CLOEXEC pipe2; macOS has no pipe2, so it is
+            // `pipe` + two `fcntl(F_SETFD, FD_CLOEXEC)`, signal.rs's
+            // precedent. s137: a test pipe DOES outlive an exec now —
+            // `os::tests` spawns children and witnesses that a child
+            // holds exactly the descriptors it was handed
+            // (`[os.proc.inherit]`), which a non-CLOEXEC pipe read end
+            // sitting at the next free number would falsify. Every
+            // descriptor this binary opens keeps the runtime's own
+            // posture.
             #[cfg(target_os = "linux")]
             let rc = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
             #[cfg(not(target_os = "linux"))]
-            let rc = unsafe { libc::pipe(fds.as_mut_ptr()) };
+            let rc = unsafe {
+                let rc = libc::pipe(fds.as_mut_ptr());
+                if rc == 0 {
+                    libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC);
+                    libc::fcntl(fds[1], libc::F_SETFD, libc::FD_CLOEXEC);
+                }
+                rc
+            };
             assert_eq!(rc, 0, "pipe failed");
             Pipe {
                 r: fds[0],
