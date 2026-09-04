@@ -306,6 +306,7 @@ net/spawn_accept.lu: lowers
 net/unix_echo.lu: lowers
 net/wait_readiness.lu: lowers
 os/args_cwd.lu: lowers
+os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
 os/random_differs.lu: lowers
