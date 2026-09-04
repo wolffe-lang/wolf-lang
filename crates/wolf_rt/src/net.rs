@@ -622,6 +622,34 @@ impl NetTable {
         }
     }
 
+    /// The raw io handles behind a set of live wolf handles, in order —
+    /// the map [`wait_ready`] takes with the table lock held, so the
+    /// poll itself happens with it RELEASED (the lock discipline every
+    /// blocking call in this module follows). Any live socket
+    /// qualifies: a listener's readiness is a pending connection, a
+    /// stream's is data or an ended peer. `None` when any handle is
+    /// forged or closed — nothing is waited on for a bad set.
+    #[cfg(any(unix, windows))]
+    pub(crate) fn raw_io_of(&mut self, fd: i64) -> Option<crate::reactor::RawFd> {
+        #[cfg(unix)]
+        use std::os::fd::AsRawFd as _;
+        #[cfg(windows)]
+        use std::os::windows::io::AsRawSocket as _;
+        #[cfg(unix)]
+        let raw = match self.get(fd)? {
+            Sock::Listener(l) => l.as_raw_fd(),
+            Sock::Stream(s) => s.as_raw_fd(),
+            Sock::UnixListener(l, _) => l.as_raw_fd(),
+            Sock::UnixStream(s) => s.as_raw_fd(),
+        };
+        #[cfg(windows)]
+        let raw = match self.get(fd)? {
+            Sock::Listener(l) => l.as_raw_socket(),
+            Sock::Stream(s) => s.as_raw_socket(),
+        };
+        Some(raw)
+    }
+
     /// `net_listen_unix(path)` (s136, #227): bind + listen an
     /// `AF_UNIX` stream socket at `path`. The path must not exist —
     /// a stale socket file is `exists`, the operator's to remove (a
@@ -998,6 +1026,90 @@ pub extern "C" fn __wolf_rt_net_adopt_listener(fd: i64) -> i64 {
 pub(crate) fn raw_fds_of(handles: &[i64]) -> Option<Vec<std::os::fd::RawFd>> {
     let mut t = tbl();
     handles.iter().map(|&h| t.raw_fd_of(h)).collect()
+}
+
+/// `net_wait(fds, deadline_ms)` (s137, #127, `[os.net.wait]`): which
+/// of these handles can be read WITHOUT blocking. The answer is the
+/// subset, in the caller's order — a listener whose `net_accept` will
+/// not block, a stream whose `net_read` will answer bytes or `closed`.
+/// An EMPTY answer is the deadline expiring with nothing ready: an
+/// answer, not a failure.
+///
+/// `deadline_ms < 0` waits until something is ready; `0` asks and
+/// returns at once. The table lock is taken only to map handles to raw
+/// io handles and is RELEASED across the poll — this call blocks for
+/// as long as the caller asked, and holding the process's socket table
+/// through that would stop every other socket operation in the
+/// program (the lock discipline this module's blocking calls follow).
+///
+/// `io` when any handle is forged or closed (nothing is waited on),
+/// when the set is empty and the wait would never end (a program that
+/// wants to sleep says `time_sleep_ms`), or when the poll itself
+/// fails.
+#[cfg(any(unix, windows))]
+pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, NetErr> {
+    if handles.is_empty() {
+        // Nothing can ever become ready: a bounded ask is the empty
+        // answer, an unbounded one is a caller mistake with a name.
+        return if deadline_ms < 0 {
+            Err("io")
+        } else {
+            Ok(Vec::new())
+        };
+    }
+    let raws: Vec<crate::reactor::RawFd> = {
+        let mut t = tbl();
+        match handles.iter().map(|&h| t.raw_io_of(h)).collect() {
+            Some(v) => v,
+            None => return Err("io"),
+        }
+    };
+    let timeout = if deadline_ms < 0 {
+        -1
+    } else {
+        i32::try_from(deadline_ms).unwrap_or(i32::MAX)
+    };
+    let flags = crate::reactor::poll_readable(&raws, timeout).map_err(|_| "io")?;
+    Ok(handles
+        .iter()
+        .zip(flags)
+        .filter_map(|(&h, ready)| ready.then_some(h))
+        .collect())
+}
+
+/// `net_wait(fds: List[int], deadline_ms: int) -> List[int] ! {io}`
+/// (s137, #127, `[os.net.wait]`) — 0 with the ready subset minted
+/// through the out slot, or the `io` code. See [`wait_ready`].
+///
+/// # Safety
+///
+/// `hdr` a live `List[int]` header; `out` 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -> i64 {
+    #[cfg(any(unix, windows))]
+    {
+        let Some(handles) = (unsafe { crate::list::i64_elems(hdr) }) else {
+            return net_code::IO;
+        };
+        // The borrow ends before the mint below can reallocate.
+        let handles = handles.to_vec();
+        match wait_ready(&handles, deadline) {
+            Ok(ready) => {
+                let list = crate::list::new_list(8);
+                for h in ready {
+                    crate::list::push_int(list, h);
+                }
+                unsafe { crate::str::write_word(out, list as i64) };
+                net_code::OK
+            }
+            Err(t) => code_of_tag(t),
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (hdr, deadline, out);
+        net_code::IO
+    }
 }
 
 /// `net_connect_unix(path) -> int ! {unsupported, refused, not_found,
@@ -1950,6 +2062,123 @@ mod tests {
             i64::from(parent.local_addr().unwrap().port())
         );
         assert_eq!(__wolf_rt_net_close(h), net_code::OK);
+    }
+
+    /// s137 (#127, `[os.net.wait]`): readiness over a SET. Two
+    /// listeners are parked on and only one speaks — the answer names
+    /// the one that did (the `woke_on_the_right_one` relation), and a
+    /// second wait with the same set answers it again, because the
+    /// readiness is LEVEL-triggered: nothing is consumed by asking.
+    /// After the accept the set goes quiet and the wait times out with
+    /// an EMPTY answer, which is an answer and not a failure. A
+    /// stream whose peer has closed is READY (the read that follows
+    /// answers `closed`, which is how a serving loop learns to drop
+    /// it). `deadline 0` asks without waiting. Rows: a forged handle
+    /// is `io` with nothing waited on; an empty set with an unbounded
+    /// deadline is `io` (nothing could ever end the wait).
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn wait_names_the_socket_that_spoke() {
+        // The PROCESS table, not a local one: `wait_ready` maps
+        // handles through the same table every shim uses.
+        let (a, b, pb) = {
+            let mut t = tbl();
+            let a = t.listen("127.0.0.1:0").expect("bind a");
+            let b = t.listen("127.0.0.1:0").expect("bind b");
+            let pb = t.port(b).expect("port b");
+            (a, b, pb)
+        };
+        // Nothing has spoken: a bounded wait is the empty answer.
+        assert_eq!(wait_ready(&[a, b], 50), Ok(Vec::new()), "quiet is empty");
+        assert_eq!(wait_ready(&[a, b], 0), Ok(Vec::new()), "and asking is free");
+        // One of them speaks.
+        let cli = std::net::TcpStream::connect(("127.0.0.1", pb as u16)).expect("dial b");
+        assert_eq!(
+            wait_ready(&[a, b], 1000),
+            Ok(vec![b]),
+            "woke on the right one"
+        );
+        assert_eq!(
+            wait_ready(&[a, b], 0),
+            Ok(vec![b]),
+            "level-triggered: asking consumes nothing"
+        );
+        let conn = tbl().accept(b).expect("accept");
+        assert_eq!(
+            wait_ready(&[a, b], 50),
+            Ok(Vec::new()),
+            "the accept drained it"
+        );
+        // A stream with bytes is ready; a stream whose peer closed is
+        // ready too — the read that follows is the one that says which.
+        {
+            use std::io::Write as _;
+            let mut cli = cli;
+            cli.write_all(b"hi").expect("send");
+            assert_eq!(wait_ready(&[conn], 1000), Ok(vec![conn]), "bytes are ready");
+            assert_eq!(tbl().read(conn, 8).expect("read"), b"hi");
+            assert_eq!(wait_ready(&[conn], 50), Ok(Vec::new()), "drained");
+            drop(cli);
+        }
+        assert_eq!(
+            wait_ready(&[conn], 1000),
+            Ok(vec![conn]),
+            "an ended peer is READY — the read answers `closed`"
+        );
+        // Rows.
+        assert_eq!(wait_ready(&[a, 99_999], 0), Err("io"), "a forged handle");
+        assert_eq!(wait_ready(&[], 0), Ok(Vec::new()), "an empty bounded ask");
+        assert_eq!(wait_ready(&[], -1), Err("io"), "an empty unbounded wait");
+        let mut t = tbl();
+        for fd in [conn, a, b] {
+            t.close(fd).expect("close");
+        }
+        drop(t);
+        assert_eq!(wait_ready(&[a], 0), Err("io"), "a closed handle");
+    }
+
+    /// s137 (#127): the shim boundary — the ready subset arrives as a
+    /// minted `List[int]` through the out slot, the code is 0 or `io`,
+    /// and a header of the wrong element width is `io`.
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn shim_net_wait_mints_the_ready_subset() {
+        let addr = "127.0.0.1:0";
+        let srv = unsafe { __wolf_rt_net_listen(addr.as_ptr() as i64, addr.len() as i64) };
+        assert!(srv >= 0);
+        let port = __wolf_rt_net_port(srv);
+        let set = crate::list::new_list(8);
+        crate::list::push_int(set, srv);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(
+            unsafe { __wolf_rt_net_wait(set as i64, 50, o) },
+            net_code::OK
+        );
+        assert!(
+            unsafe { crate::list::i64_elems(out[0]) }
+                .expect("a List[int]")
+                .is_empty(),
+            "quiet is the empty list, not a failure"
+        );
+        let _cli = std::net::TcpStream::connect(("127.0.0.1", port as u16)).expect("dial");
+        assert_eq!(
+            unsafe { __wolf_rt_net_wait(set as i64, 1000, o) },
+            net_code::OK
+        );
+        assert_eq!(
+            unsafe { crate::list::i64_elems(out[0]) }.expect("a List[int]"),
+            &[srv],
+            "the ready subset, in the caller's order"
+        );
+        // A List[str] header where the handle set should be.
+        let strs = crate::list::new_list(16);
+        crate::list::push_str(strs, "not a handle set");
+        assert_eq!(
+            unsafe { __wolf_rt_net_wait(strs as i64, 0, o) },
+            net_code::IO
+        );
+        assert_eq!(__wolf_rt_net_close(srv), net_code::OK);
     }
 
     /// s137 on windows: `reuse_port` and adoption refuse BY NAME (the
