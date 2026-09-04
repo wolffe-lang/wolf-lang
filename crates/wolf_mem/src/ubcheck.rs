@@ -853,6 +853,90 @@ fn checked_bind_with(
     Ok(l)
 }
 
+/// s137 (#127, `[os.net.wait]`): the checked machine's readiness poll
+/// — the HAND MIRROR of the runtime's `reactor::poll_readable`
+/// (wolf_mem and wolf_rt may not see each other; D15). One flag per
+/// input descriptor, in the input's order: true when the next read
+/// will not block (data, a pending connection, an ended peer, an
+/// error). `EINTR` retries.
+#[cfg(unix)]
+fn checked_poll_readable(
+    fds: &[std::os::fd::RawFd],
+    timeout_ms: i32,
+) -> std::io::Result<Vec<bool>> {
+    let mut pfds: Vec<libc::pollfd> = fds
+        .iter()
+        .map(|&fd| libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        })
+        .collect();
+    loop {
+        // SAFETY: a live, correctly-counted pollfd array.
+        let rc = unsafe { libc::poll(pfds.as_mut_ptr(), pfds.len() as libc::nfds_t, timeout_ms) };
+        if rc < 0 {
+            let e = std::io::Error::last_os_error();
+            if e.raw_os_error() == Some(libc::EINTR) {
+                for p in &mut pfds {
+                    p.revents = 0;
+                }
+                continue;
+            }
+            return Err(e);
+        }
+        let ready = libc::POLLIN | libc::POLLHUP | libc::POLLERR | libc::POLLNVAL;
+        return Ok(pfds.iter().map(|p| p.revents & ready != 0).collect());
+    }
+}
+
+/// The windows twin of [`checked_poll_readable`] — `WSAPoll` over the
+/// caller's set, declared directly (the runtime's own windows rung is
+/// built on the same call; D15 keeps the two implementations apart,
+/// not the syscall). Without it `net_wait` would be the one net call
+/// with a per-host row, and `[os.net.wait]` would owe a refusal
+/// sentence for a host whose kernel answers the question perfectly
+/// well.
+#[cfg(windows)]
+fn checked_poll_readable(
+    fds: &[std::os::windows::io::RawSocket],
+    timeout_ms: i32,
+) -> std::io::Result<Vec<bool>> {
+    #[repr(C)]
+    struct PollFd {
+        fd: usize,
+        events: i16,
+        revents: i16,
+    }
+    const POLLRDNORM: i16 = 0x0100;
+    const POLLERR: i16 = 0x0001;
+    const POLLHUP: i16 = 0x0002;
+    const POLLNVAL: i16 = 0x0004;
+    #[link(name = "ws2_32")]
+    unsafe extern "system" {
+        fn WSAPoll(fds: *mut PollFd, count: u32, timeout_ms: i32) -> i32;
+        fn WSAGetLastError() -> i32;
+    }
+    let mut pfds: Vec<PollFd> = fds
+        .iter()
+        .map(|&fd| PollFd {
+            fd: fd as usize,
+            events: POLLRDNORM,
+            revents: 0,
+        })
+        .collect();
+    // SAFETY: a live, correctly-counted WSAPOLLFD array.
+    let rc = unsafe { WSAPoll(pfds.as_mut_ptr(), pfds.len() as u32, timeout_ms) };
+    if rc < 0 {
+        // SAFETY: a plain error read.
+        return Err(std::io::Error::from_raw_os_error(unsafe {
+            WSAGetLastError()
+        }));
+    }
+    let ready = POLLRDNORM | POLLHUP | POLLERR | POLLNVAL;
+    Ok(pfds.iter().map(|p| p.revents & ready != 0).collect())
+}
+
 fn accept_deadline(
     l: &std::net::TcpListener,
     budget: std::time::Duration,
@@ -4787,6 +4871,78 @@ impl<'t> Machine<'t> {
             // (the s134 records rule: the record names the construct;
             // `os_spawn_with`'s non-empty set is the other half).
             "net_adopt_listener" => self.refuse("listener adoption in checked execution", span),
+            // s137 (#127, `[os.net.wait]`): readiness over a SET — the
+            // primitive a spawn-free serving loop blocks on instead of
+            // time-slicing every socket. Served here like every other
+            // net call: real host operations, D30 rows, the comptime
+            // sandbox the one refusal site. The empty answer is the
+            // deadline expiring with nothing ready — an answer, not a
+            // row; `io` is a forged handle or a wait nothing could
+            // end. Every tier-1 host answers this question, so unlike
+            // the rest of s137 there is no per-host row: `poll(2)` on
+            // unix, `WSAPoll` on windows.
+            "net_wait" => {
+                let (Some(Value::List(set_id)), Some(deadline)) = (argv.first(), int_arg(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let mut handles: Vec<i64> = Vec::new();
+                for v in self.lists.get(*set_id).into_iter().flatten() {
+                    match v {
+                        Value::Int(h) => handles.push(*h),
+                        _ => return self.refuse("a non-int handle in a net_wait set", span),
+                    }
+                }
+                {
+                    #[cfg(unix)]
+                    use std::os::fd::AsRawFd as _;
+                    #[cfg(windows)]
+                    use std::os::windows::io::AsRawSocket as _;
+                    if handles.is_empty() {
+                        if deadline < 0 {
+                            return Ok(tag("io"));
+                        }
+                        let id = self.mint_list(Vec::new(), span)?;
+                        return Ok(Flow::Val(Value::List(id)));
+                    }
+                    let mut raws = Vec::with_capacity(handles.len());
+                    for &h in &handles {
+                        let live = usize::try_from(h)
+                            .ok()
+                            .and_then(|i| self.socks.get(i))
+                            .and_then(|s| s.as_ref());
+                        let Some(sock) = live else {
+                            return Ok(tag("io"));
+                        };
+                        #[cfg(unix)]
+                        raws.push(match sock {
+                            NetSock::Listener(l) => l.as_raw_fd(),
+                            NetSock::Stream(st) => st.as_raw_fd(),
+                            NetSock::UnixListener(l, _) => l.as_raw_fd(),
+                            NetSock::UnixStream(st) => st.as_raw_fd(),
+                        });
+                        #[cfg(windows)]
+                        raws.push(match sock {
+                            NetSock::Listener(l) => l.as_raw_socket(),
+                            NetSock::Stream(st) => st.as_raw_socket(),
+                        });
+                    }
+                    let timeout = if deadline < 0 {
+                        -1
+                    } else {
+                        i32::try_from(deadline).unwrap_or(i32::MAX)
+                    };
+                    let Ok(flags) = checked_poll_readable(&raws, timeout) else {
+                        return Ok(tag("io"));
+                    };
+                    let ready: Vec<Value> = handles
+                        .iter()
+                        .zip(flags)
+                        .filter_map(|(&h, r)| r.then_some(Value::Int(h)))
+                        .collect();
+                    let id = self.mint_list(ready, span)?;
+                    Ok(Flow::Val(Value::List(id)))
+                }
+            }
             "net_port" => {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);
@@ -6284,8 +6440,8 @@ impl<'t> Machine<'t> {
             // The s39 net builtin tier: same posture as fs — real host
             // operations, D30 rows, comptime is the one refusal site.
             "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_listen_with"
-            | "net_adopt_listener" | "net_port" | "net_accept" | "net_connect" | "net_read"
-            | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
+            | "net_adopt_listener" | "net_wait" | "net_port" | "net_accept" | "net_connect"
+            | "net_read" | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
             | "net_deadline" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
