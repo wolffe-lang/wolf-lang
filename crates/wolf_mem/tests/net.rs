@@ -18,8 +18,30 @@
 use wolf_mem::ubcheck::{self, Budget, Verdict};
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
 
+/// Every program here binds LOOPBACK EPHEMERAL ports, and the host's
+/// ephemeral port space is one shared resource for the whole test
+/// binary. `refused_row_handles_and_propagates` depends on the one
+/// thing that space cannot promise under concurrency: that the port it
+/// just closed is still dead a microsecond later. It is not — macOS
+/// recycles a freed ephemeral port quickly, so a sibling test's bind
+/// can land on it and the "dead port" answers a connection (measured:
+/// 3 failures in 40 16-thread runs once s137 added two more
+/// ephemeral-binding programs to the file).
+///
+/// So the execution of a checked program is SERIAL here. Every entry
+/// below takes this lock for the whole run, which is exactly the
+/// scope that matters: no two programs in this binary hold or release
+/// a port at the same time. The file runs in hundredths of a second;
+/// there is nothing to win by overlapping it.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Statically clean ladder, then checked execution. Panics on refusal.
 fn run(src: &str) -> ubcheck::RunOutcome {
+    let _serial = serial();
     let mut ml = MemoryLoader::new("net");
     ml.add_file(&[], "main.lu", src);
     let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
@@ -514,6 +536,7 @@ fn unix_family_refuses_by_name() {
 /// [`run`] for the two calls the checked machine REFUSES BY NAME
 /// (s137, `[os.proc.inherit]`). Answers the refused construct.
 fn run_or_refusal(src: &str) -> Result<ubcheck::RunOutcome, String> {
+    let _serial = serial();
     let mut ml = MemoryLoader::new("net");
     ml.add_file(&[], "main.lu", src);
     let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
@@ -533,15 +556,20 @@ fn run_or_refusal(src: &str) -> Result<ubcheck::RunOutcome, String> {
 /// call, a held address is `exists` BY NAME (the "in use" row #234
 /// asked for), a `reuse_port` group holds one port with both hands and
 /// a hand without the option cannot join it. The twin of
-/// `corpus/net/reuse_port.lu`.
+/// `corpus/net/reuse_port.lu`. The group's port comes from a plain
+/// ephemeral bind that is then closed, so both hands name the address
+/// explicitly — the shape a prefork master actually writes, and the
+/// one the corpus witness performs too.
 #[cfg(unix)]
 #[test]
 fn listen_with_options_and_rows() {
     assert_stdout(
         "fn main() -> !int {\n\
-         let a = net_listen_with(\"127.0.0.1:0\", true, 16)?\n\
-         let p = net_port(a)?\n\
+         let probe = net_listen(\"127.0.0.1:0\")?\n\
+         let p = net_port(probe)?\n\
+         net_close(probe)?\n\
          let addr = \"127.0.0.1:{p}\"\n\
+         let a = net_listen_with(addr, true, 16)?\n\
          let b = net_listen_with(addr, true, 16)?\n\
          let same = net_port(b)? == p\n\
          var named = false\n\
