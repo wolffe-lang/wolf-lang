@@ -477,6 +477,36 @@ fn main() -> !int {
     );
 }
 
+/// s137 (#233, `[os.cpus]`): the two lanes agree on the NUMBER, not
+/// merely on a relation. That is the claim worth pinning, because
+/// this value decides how many processes a program starts: a
+/// `workers auto` that resolved to 8 under `wolf run` and 64 under
+/// `wolf run --checked` would be a language that cannot answer its
+/// own question. Both lanes read the same source
+/// (`available_parallelism`), so the number is compared against
+/// itself across the seam by printing it and letting `parity` require
+/// identical stdout — the relation is asserted beside it, since the
+/// count on the runner is not something this file may name.
+#[test]
+fn os_cpus_agrees_across_lanes() {
+    parity(
+        "s137_os_cpus",
+        r#"
+fn main() -> !int {
+    let n = os_cpus()?
+    let again = os_cpus()?
+    print("ge1={n >= 1} stable={n == again} n={n}")
+    0
+}
+"#,
+        "exit(0)",
+        &format!(
+            "ge1=true stable=true n={}\n",
+            std::thread::available_parallelism().map_or(1, |n| n.get())
+        ),
+    );
+}
+
 // ------------------------- s81 / #58: the validating byte source --
 
 #[test]
@@ -607,6 +637,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_net_adopt_listener",
         "__wolf_rt_os_spawn_with",
         "__wolf_rt_net_wait",
+        // s137 (#233): the schedulable core count, `[os.cpus]`.
+        "__wolf_rt_os_cpus",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -617,7 +649,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        128,
+        129,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
