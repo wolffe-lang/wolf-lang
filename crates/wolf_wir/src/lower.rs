@@ -11212,14 +11212,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         // never declares it, and the coarsening below
                         // keeps it out of that call's rows.
                         let declared = zelf.row_tag_names(e.span);
-                        let pairs: Vec<(i64, &str)> = [
-                            (1, "not_found"),
-                            (2, "denied"),
-                            (5, "unsupported"),
-                        ]
-                        .into_iter()
-                        .filter(|(_, t)| declared.iter().any(|d| d == t))
-                        .collect();
+                        let pairs: Vec<(i64, &str)> =
+                            [(1, "not_found"), (2, "denied"), (5, "unsupported")]
+                                .into_iter()
+                                .filter(|(_, t)| declared.iter().any(|d| d == t))
+                                .collect();
                         Ok(zelf.code_tag_chain(code, &pairs, "io"))
                     },
                 )?;

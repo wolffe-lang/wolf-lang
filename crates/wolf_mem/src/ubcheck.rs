@@ -4786,9 +4786,7 @@ impl<'t> Machine<'t> {
             // would be a child of the compiler — and says so BY NAME
             // (the s134 records rule: the record names the construct;
             // `os_spawn_with`'s non-empty set is the other half).
-            "net_adopt_listener" => {
-                self.refuse("listener adoption in checked execution", span)
-            }
+            "net_adopt_listener" => self.refuse("listener adoption in checked execution", span),
             "net_port" => {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this net call shape", span);

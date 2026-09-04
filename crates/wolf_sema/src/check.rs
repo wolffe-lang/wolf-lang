@@ -6817,11 +6817,7 @@ impl<'a> Checker<'a> {
                 let list_int = self.lo.table.intern(TyKind::List(int_));
                 (
                     vec![str_, list_str, list_int],
-                    rowed(
-                        self,
-                        int_,
-                        &["unsupported", "not_found", "denied", "io"],
-                    ),
+                    rowed(self, int_, &["unsupported", "not_found", "denied", "io"]),
                 )
             }
             "os_wait" => (vec![int_], rowed(self, int_, &["signal", "io"])),
