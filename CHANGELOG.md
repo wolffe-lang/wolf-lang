@@ -86,6 +86,26 @@ freebsd, `WSAPoll` on windows, and the checked machine mirrors it call
 for call. Spec: `[os.net.wait]`. Witness:
 `corpus/net/wait_readiness.lu`.
 
+### `os_cpus()` (s137 — #233 closes)
+
+**A program can ask how big the machine is.** `os_cpus()` answers the
+count of cores this process may actually be scheduled on, always `>= 1`
+when it answers.
+
+*Schedulable*, not *installed*, is the whole point. On linux the number
+honours a cgroup cpu quota and a cpu affinity mask, so a container
+given two cpus of quota on a sixty-four-core host answers **2** —
+where counting `processor` rows in `/proc/cpuinfo`, which is what a
+program had to do before this existed, answers 64 and starts
+sixty-two workers that will never get a core between them. macOS reads
+`hw.ncpu`, windows `GetSystemInfo`; every tier reads the same source,
+so `wolf run` and `wolf run --checked` agree on the number on one host.
+
+A host that cannot answer is the `io` row, never a silent 1: a program
+resolving `workers auto` can say it did not learn the number instead of
+quietly running one worker and looking healthy. Spec: `[os.cpus]`.
+Witness: `corpus/os/cpus.lu`.
+
 ### Two fixes found on the way (s137)
 
 - **`channel[bool]` compiled to a crash.** A `bool` payload crossing a

@@ -99,6 +99,13 @@ calls wolf's `main` shim.
   (`poll(2)` elsewhere), so `net_wait` is the same call with the same
   row set everywhere, on the native tier and on the checked machine
   alike, and `[os.net.wait]` names no host.
+- **The schedulable core count** (`os_cpus`, `[os.cpus]`, s137) —
+  `GetSystemInfo` here, through the one call that reads the right
+  thing on every host (`available_parallelism`, which honours a cgroup
+  quota and an affinity mask where those exist). Like `net_wait` it
+  refuses on no host, and the native lane and the checked machine
+  answer the SAME number, which is what lets `workers auto` mean one
+  thing.
 - The C membrane for scalars and pointers (`extern "c"` /
   `export` with `int`, `float`, pointer parameters and results).
 
