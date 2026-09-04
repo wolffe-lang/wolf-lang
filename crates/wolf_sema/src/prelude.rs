@@ -132,6 +132,9 @@ pub const PRELUDE: &[&str] = &[
     // even though its reason to exist is std.process's rig, which
     // spawns the test binary as its own child.
     "os_exe",
+    // s137 (#233, `[os.cpus]`): the schedulable core count — a
+    // machine-state read, `env`-tagged with `os_cwd`/`os_exe`.
+    "os_cpus",
     "os_exit",
     "os_spawn",
     // s137 (#235, `[os.proc.inherit]`): the spawn that hands

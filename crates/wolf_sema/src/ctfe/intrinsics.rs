@@ -159,9 +159,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // (s90/#69 adds `os_exe` here rather than under `exec`: it
         // READS process context like `os_cwd` and starts nothing. The
         // program it names still needs `exec` to be spawned.)
-        "env_var" | "env_get" | "env_set" | "env_args" | "env_vars" | "os_cwd" | "os_exe" => {
-            SandboxCategory::Env
-        }
+        "env_var" | "env_get" | "env_set" | "env_args" | "env_vars" | "os_cwd" | "os_exe"
+        // s137 (#233): the core count is machine state that differs
+        // per host — `env`, with the rest of the process-context reads.
+        | "os_cpus" => SandboxCategory::Env,
         "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,
         // signal RECEPTION (s114, #126): process control, so `exec`
         // like the rest of the family — comptime-refused (you cannot

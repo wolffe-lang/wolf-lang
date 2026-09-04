@@ -7990,6 +7990,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "env_vars"
                 | "os_cwd"
                 | "os_exe"
+                // s137 (#233, `[os.cpus]`): the schedulable core
+                // count — `os_cwd`'s shape without the string.
+                | "os_cpus"
                 | "os_exit"
                 // The OS random source (s118, #143): one shim, a
                 // minted List[int] through the out slot, and the one
@@ -11590,6 +11593,35 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     |_| Ok(None),
                     |z| {
                         let id = z.b.module.tag_id("invalid");
+                        Ok(z.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s137 (#233, `[os.cpus]`): the same out-slot shape as
+            // `os_cwd`, carrying an i64 word instead of a str pair.
+            "os_cpus" => {
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_slot("__wolf_rt_os_cpus", &[], slot, region, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| {
+                        let id = z.b.module.tag_id("io");
                         Ok(z.b.iconst(types::I64, id))
                     },
                 )?;

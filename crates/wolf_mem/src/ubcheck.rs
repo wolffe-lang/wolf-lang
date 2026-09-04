@@ -5245,6 +5245,19 @@ impl<'t> Machine<'t> {
                 let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
+            // s137 (#233, `[os.cpus]`): the schedulable core count.
+            // The checked machine reads the SAME source the runtime
+            // does (`available_parallelism`: a cgroup quota and an
+            // affinity mask on linux, `sysctl hw.ncpu` on macOS,
+            // `GetSystemInfo` on windows), so the two lanes answer the
+            // same number on one host — which is the point of a value
+            // that decides how many workers a program starts. It is
+            // machine state, so a witness pins the RELATION (`>= 1`)
+            // and never the number.
+            "os_cpus" => match std::thread::available_parallelism() {
+                Err(_) => Ok(tag("io")),
+                Ok(n) => Ok(Flow::Val(Value::Int(n.get() as i64))),
+            },
             "os_cwd" => match std::env::current_dir() {
                 Err(_) => Ok(tag("io")),
                 Ok(p) => match p.to_str() {
@@ -6461,7 +6474,8 @@ impl<'t> Machine<'t> {
             // host operation (json is pure computation), errors are
             // the declared D30 rows, and the comptime sandbox is the
             // one refusal site.
-            "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_exit"
+            "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_cpus"
+            | "os_exit"
             | "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_signal_listen"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"

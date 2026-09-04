@@ -6797,6 +6797,12 @@ impl<'a> Checker<'a> {
             // cannot hold — is `io`. It exists so std.process's rig can
             // spawn ITSELF and finally witness a child's exit code.
             "os_cwd" | "os_exe" => (Vec::new(), rowed(self, str_, &["io"])),
+            // s137 (#233, `[os.cpus]`): the count of schedulable
+            // cores, `os_cwd`'s shape without the string. Always
+            // `>= 1` when it answers; a host that cannot is `io`, so
+            // `worker_processes auto` can say it did not learn the
+            // number rather than quietly running one worker.
+            "os_cpus" => (Vec::new(), rowed(self, int_, &["io"])),
             // `os_exit` types unit and never returns (the checked
             // machine stops with the code; native calls the runtime
             // exit) — a `never` result is the std facade's refinement.

@@ -146,6 +146,34 @@ pub unsafe extern "C" fn __wolf_rt_os_cwd(out: i64) -> i64 {
     }
 }
 
+/// `os_cpus() -> int ! {io}` (s137, wolf-lang#233, `[os.cpus]`) — the
+/// count of SCHEDULABLE cores, `>= 1`, or the `io` code.
+/// `available_parallelism` is the one call that answers it on every
+/// tier-1 host and answers the right thing: on linux it honours a
+/// cgroup cpu quota and a cpu affinity mask, which `/proc/cpuinfo`
+/// (what a program had to read before this call existed) does not —
+/// a container with two cpus of quota on a 64-core host reads 64
+/// there and 2 here. `sysctl hw.ncpu` on macOS, `GetSystemInfo` on
+/// windows, both behind the same call.
+///
+/// Never 0, and never a silent 1: a host that cannot answer is the
+/// `io` row, so `worker_processes auto` can say it did not learn the
+/// number instead of quietly running one worker.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_cpus(out: i64) -> i64 {
+    match std::thread::available_parallelism() {
+        Err(_) => 1,
+        Ok(n) => {
+            unsafe { crate::str::write_word(out, n.get() as i64) };
+            0
+        }
+    }
+}
+
 /// `os_exe() -> str ! {io}` (s90, wolf-lang#69) — the RUNNING
 /// executable's path. Portable on every tier-1 target through
 /// `std::env::current_exe` (procfs on linux, `_NSGetExecutablePath` on
@@ -698,6 +726,27 @@ mod tests {
         assert_eq!(__wolf_rt_os_kill(h2), proc_code::OK);
         assert_eq!(unsafe { __wolf_rt_os_wait(h2, o) }, proc_code::SIGNAL);
         assert_eq!(unsafe { __wolf_rt_os_wait(h2, o) }, proc_code::IO);
+    }
+
+    /// s137 (#233, `[os.cpus]`): the count is at least one and the
+    /// call answers it — every tier-1 host does. The exact number is
+    /// the machine's, so the relation is what is pinned, never a
+    /// value; it is also compared against the thread pool's own view,
+    /// because both read the same source and a disagreement would
+    /// mean the runtime is telling a program one thing and sizing
+    /// itself by another.
+    #[test]
+    fn cpus_is_at_least_one_and_agrees_with_the_pool() {
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(
+            unsafe { __wolf_rt_os_cpus(o) },
+            0,
+            "every tier-1 host answers"
+        );
+        assert!(out[0] >= 1, "schedulable cores: {}", out[0]);
+        let want = std::thread::available_parallelism().map_or(1, |n| n.get() as i64);
+        assert_eq!(out[0], want, "the same source the pool sizes itself from");
     }
 
     // ---------------- s137: the inherit set (#235, [os.proc.inherit]) --
