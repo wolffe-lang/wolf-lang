@@ -103,6 +103,11 @@ pub const PRELUDE: &[&str] = &[
     // s136 (#227): the unix-domain pair, `[os.net.unix]`.
     "net_listen_unix",
     "net_connect_unix",
+    // s137 (#234/#235): listener options (`reuse_port`, backlog —
+    // `[os.net.listen.opts]`) and the adopt half of descriptor
+    // inheritance (`[os.proc.inherit]`).
+    "net_listen_with",
+    "net_adopt_listener",
     "net_close",
     // s106 (#45's builtin half): the per-socket deadline budget that
     // makes the `timeout` tag reachable — declared with the family
@@ -126,6 +131,9 @@ pub const PRELUDE: &[&str] = &[
     "os_exe",
     "os_exit",
     "os_spawn",
+    // s137 (#235, `[os.proc.inherit]`): the spawn that hands
+    // descriptors to its child — `exec`-tagged with the trio.
+    "os_spawn_with",
     "os_wait",
     "os_kill",
     // signal RECEPTION (s114, wolf-lang#126): the receive side of the

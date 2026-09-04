@@ -6711,6 +6711,28 @@ impl<'a> Checker<'a> {
                     &["unsupported", "refused", "not_found", "denied", "io"],
                 ),
             ),
+            // s137 (#234, `[os.net.listen.opts]`): `net_listen` with
+            // the two listener options a prefork server needs —
+            // `reuse_port` (`SO_REUSEPORT` before the bind: N hands
+            // share one port; what the kernel does with the group is
+            // the host's, named in the clause) and the `listen(2)`
+            // backlog hint (`<= 0`: the runtime's default). The rows
+            // tell the host from the address: `unsupported` is the host
+            // (windows, by name), `exists` an address another socket
+            // holds — the "in use" row #234 asked for, in the
+            // vocabulary s136 gave the family — `denied` a privileged
+            // port. `(addr, false, 0)` is `net_listen(addr)`.
+            "net_listen_with" => (
+                vec![str_, bool_, int_],
+                rowed(self, int_, &["unsupported", "exists", "denied", "io"]),
+            ),
+            // s137 (#235, `[os.proc.inherit]`): take an OS descriptor
+            // this process was HANDED (`os_spawn_with`'s inherit set
+            // arrives as 3, 4, … in the child) as a listener. Not a
+            // socket, not listening, a foreign family, or a number
+            // already adopted: `io`; the host (windows) `unsupported`,
+            // by name.
+            "net_adopt_listener" => (vec![int_], rowed(self, int_, &["unsupported", "io"])),
             "net_port" => (vec![int_], rowed(self, int_, &["io"])),
             "net_accept" => (vec![int_], rowed(self, int_, &["timeout", "io"])),
             "net_connect" => (vec![str_], rowed(self, int_, &["refused", "timeout", "io"])),
@@ -6779,6 +6801,27 @@ impl<'a> Checker<'a> {
                 (
                     vec![list_str],
                     rowed(self, int_, &["not_found", "denied", "io"]),
+                )
+            }
+            // s137 (#235, `[os.proc.inherit]`): `os_spawn` with the
+            // program named apart from its arguments and an INHERIT
+            // set — this process's net handles, which the child
+            // receives as descriptors 3, 4, … in the order given (the
+            // number is the contract: the parent never learns a
+            // descriptor number, the child adopts by position). The
+            // spawn rows plus `unsupported` for a host that hands
+            // nothing across (windows, by name); the checked machine
+            // refuses a non-empty set by name.
+            "os_spawn_with" => {
+                let list_str = self.lo.table.intern(TyKind::List(str_));
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![str_, list_str, list_int],
+                    rowed(
+                        self,
+                        int_,
+                        &["unsupported", "not_found", "denied", "io"],
+                    ),
                 )
             }
             "os_wait" => (vec![int_], rowed(self, int_, &["signal", "io"])),
