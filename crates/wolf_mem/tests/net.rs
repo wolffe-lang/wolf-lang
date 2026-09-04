@@ -507,3 +507,113 @@ fn unix_family_refuses_by_name() {
         "-1 -1\n",
     );
 }
+
+// ---------------- s137: the listener a prefork server shares --------
+
+/// The ladder without the "must execute" assertion — the twin of
+/// [`run`] for the two calls the checked machine REFUSES BY NAME
+/// (s137, `[os.proc.inherit]`). Answers the refused construct.
+fn run_or_refusal(src: &str) -> Result<ubcheck::RunOutcome, String> {
+    let mut ml = MemoryLoader::new("net");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty() && !tc.has_errors(),
+        "input typechecks"
+    );
+    let mem = wolf_mem::check_package(&res.package, &tc);
+    assert!(mem.not_yet.is_empty(), "input stays inside the mem surface");
+    ubcheck::run_checked(&res.package, &tc, Budget::default())
+        .map_err(|nyc| nyc.construct.to_string())
+}
+
+/// s137 (#234, `[os.net.listen.opts]`): the listener options on the
+/// checked machine — the option-less shape is `net_listen` call for
+/// call, a held address is `exists` BY NAME (the "in use" row #234
+/// asked for), a `reuse_port` group holds one port with both hands and
+/// a hand without the option cannot join it. The twin of
+/// `corpus/net/reuse_port.lu`.
+#[cfg(unix)]
+#[test]
+fn listen_with_options_and_rows() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let a = net_listen_with(\"127.0.0.1:0\", true, 16)?\n\
+         let p = net_port(a)?\n\
+         let addr = \"127.0.0.1:{p}\"\n\
+         let b = net_listen_with(addr, true, 16)?\n\
+         let same = net_port(b)? == p\n\
+         var named = false\n\
+         let x = net_listen_with(addr, false, 0) else |e| match e {\n\
+         exists => { named = true\n0 - 1 },\n\
+         _ => 0 - 1,\n\
+         }\n\
+         net_close(a)?\n\
+         net_close(b)?\n\
+         let plain = net_listen_with(\"127.0.0.1:0\", false, 0)?\n\
+         let q = net_port(plain)?\n\
+         let cli = net_connect(\"127.0.0.1:{q}\")?\n\
+         net_write(cli, \"ping\")?\n\
+         let conn = net_accept(plain)?\n\
+         let got = net_read(conn, 16)?\n\
+         net_close(cli)?\n\
+         net_close(conn)?\n\
+         net_close(plain)?\n\
+         print(\"{same} {named} {x} {got}\")\n\
+         0\n\
+         }\n",
+        "true true -1 ping\n",
+    );
+}
+
+/// s137 (#235, `[os.proc.inherit]`): the checked machine runs no
+/// descriptor handoff and says so BY NAME, with the CONSTRUCT named —
+/// never a bare `unsupported`, never a trap (the s134 records rule; a
+/// conform-run record carries the same string in
+/// `x-unsupported-construct`). An EMPTY inherit set is `os_spawn` with
+/// the program named apart from its arguments, and is served.
+#[test]
+fn adoption_and_an_inherit_set_refuse_with_the_construct_named() {
+    let adopt = run_or_refusal(
+        "fn main() -> !int {\n\
+         let l = net_adopt_listener(3) else |_| 0 - 1\n\
+         print(\"{l}\")\n\
+         0\n\
+         }\n",
+    );
+    assert_eq!(
+        adopt.err().as_deref(),
+        Some("listener adoption in checked execution")
+    );
+    let inherit = run_or_refusal(
+        "fn main() -> !int {\n\
+         let srv = net_listen(\"127.0.0.1:0\")?\n\
+         let argv = List[str]()\n\
+         let fds = List[int]()\n\
+         (mut fds).push(srv)\n\
+         let h = os_spawn_with(\"/bin/sh\", argv, fds) else |_| 0 - 1\n\
+         print(\"{h}\")\n\
+         0\n\
+         }\n",
+    );
+    assert_eq!(
+        inherit.err().as_deref(),
+        Some("fd inheritance across os_spawn_with in checked execution")
+    );
+    // The empty set is served: a program that does not exist is the
+    // `not_found` row, exactly as `os_spawn` answers it.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let argv = List[str]()\n\
+         let fds = List[int]()\n\
+         let h = os_spawn_with(\"wolf-s137-no-such-program\", argv, fds) else |e| match e {\n\
+         not_found => 0 - 1,\n\
+         _ => 0 - 2,\n\
+         }\n\
+         print(\"{h}\")\n\
+         0\n\
+         }\n",
+        "-1\n",
+    );
+}
