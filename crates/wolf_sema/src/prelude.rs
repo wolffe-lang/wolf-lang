@@ -108,6 +108,9 @@ pub const PRELUDE: &[&str] = &[
     // inheritance (`[os.proc.inherit]`).
     "net_listen_with",
     "net_adopt_listener",
+    // s137 (#127): readiness over a set, `[os.net.wait]` — the
+    // primitive a spawn-free serving loop blocks on.
+    "net_wait",
     "net_close",
     // s106 (#45's builtin half): the per-socket deadline budget that
     // makes the `timeout` tag reachable — declared with the family

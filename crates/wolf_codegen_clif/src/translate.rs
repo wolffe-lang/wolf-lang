@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 127] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 128] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -196,6 +196,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 127] = [
     // back) — `[os.net.listen.opts]`, `[os.proc.inherit]`.
     ("__wolf_rt_net_listen_with", 4, true),
     ("__wolf_rt_net_adopt_listener", 1, true),
+    // s137/#127: readiness over a SET — the handle list header and a
+    // deadline in, the ready subset minted through the caller out
+    // slot, `[os.net.wait]`.
+    ("__wolf_rt_net_wait", 3, true),
     // The s107 json family (wolf_rt::json, #118's last crossing):
     // pure query kernels — two str pairs in, a code back, the
     // rendered node through a caller out slot; `json_len` rides the

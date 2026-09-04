@@ -6733,6 +6733,16 @@ impl<'a> Checker<'a> {
             // already adopted: `io`; the host (windows) `unsupported`,
             // by name.
             "net_adopt_listener" => (vec![int_], rowed(self, int_, &["unsupported", "io"])),
+            // s137 (#127, `[os.net.wait]`): readiness over a SET —
+            // which of these handles can be read without blocking.
+            // The answer is the subset, in the caller's order; an
+            // EMPTY answer is the deadline expiring with nothing
+            // ready, which is an answer and not a row. `io` is a
+            // forged handle, or a wait that could never end.
+            "net_wait" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (vec![list_int, int_], rowed(self, list_int, &["io"]))
+            }
             "net_port" => (vec![int_], rowed(self, int_, &["io"])),
             "net_accept" => (vec![int_], rowed(self, int_, &["timeout", "io"])),
             "net_connect" => (vec![str_], rowed(self, int_, &["refused", "timeout", "io"])),

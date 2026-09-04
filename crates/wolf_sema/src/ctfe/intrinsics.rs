@@ -149,9 +149,8 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // comptime categorically — sockets are the loudest D33 case.
         "net_fetch" | "net_listen" | "net_port" | "net_accept" | "net_connect" | "net_read"
         | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close" | "net_deadline"
-        | "net_listen_unix" | "net_connect_unix" | "net_listen_with" | "net_adopt_listener" => {
-            SandboxCategory::Net
-        }
+        | "net_listen_unix" | "net_connect_unix" | "net_listen_with" | "net_adopt_listener"
+        | "net_wait" => SandboxCategory::Net,
         // The s40 os/env builtin tier: `env` is I13's capability for
         // the environment family plus the process-context reads
         // (`os_cwd` — machine state that differs per host); `exec`
