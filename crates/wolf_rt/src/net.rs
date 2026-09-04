@@ -154,7 +154,7 @@ impl Sock {
     /// Reactor hosts only (the module is gated the same way; a tier-2
     /// host without a reactor parks in the syscall itself).
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    fn raw(&self, want_stream: bool) -> Option<crate::reactor::RawFd> {
+    fn raw(&self, want_stream: bool) -> Option<crate::poll::RawIo> {
         use std::os::fd::AsRawFd as _;
         match (self, want_stream) {
             (Sock::Stream(s), true) => Some(s.as_raw_fd()),
@@ -166,7 +166,7 @@ impl Sock {
     }
 
     #[cfg(windows)]
-    fn raw(&self, want_stream: bool) -> Option<crate::reactor::RawFd> {
+    fn raw(&self, want_stream: bool) -> Option<crate::poll::RawIo> {
         use std::os::windows::io::AsRawSocket as _;
         match (self, want_stream) {
             (Sock::Stream(s), true) => Some(s.as_raw_socket()),
@@ -438,7 +438,7 @@ impl NetTable {
         &mut self,
         fd: i64,
         want_stream: bool,
-    ) -> Result<(crate::reactor::RawFd, Option<std::time::Instant>), NetErr> {
+    ) -> Result<(crate::poll::RawIo, Option<std::time::Instant>), NetErr> {
         let Some(e) = self.entry(fd) else {
             return Err("io");
         };
@@ -630,7 +630,7 @@ impl NetTable {
     /// stream's is data or an ended peer. `None` when any handle is
     /// forged or closed — nothing is waited on for a bad set.
     #[cfg(any(unix, windows))]
-    pub(crate) fn raw_io_of(&mut self, fd: i64) -> Option<crate::reactor::RawFd> {
+    pub(crate) fn raw_io_of(&mut self, fd: i64) -> Option<crate::poll::RawIo> {
         #[cfg(unix)]
         use std::os::fd::AsRawFd as _;
         #[cfg(windows)]
@@ -1057,7 +1057,7 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
             Ok(Vec::new())
         };
     }
-    let raws: Vec<crate::reactor::RawFd> = {
+    let raws: Vec<crate::poll::RawIo> = {
         let mut t = tbl();
         match handles.iter().map(|&h| t.raw_io_of(h)).collect() {
             Some(v) => v,
@@ -1069,7 +1069,7 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
     } else {
         i32::try_from(deadline_ms).unwrap_or(i32::MAX)
     };
-    let flags = crate::reactor::poll_readable(&raws, timeout).map_err(|_| "io")?;
+    let flags = crate::poll::readable(&raws, timeout).map_err(|_| "io")?;
     Ok(handles
         .iter()
         .zip(flags)
