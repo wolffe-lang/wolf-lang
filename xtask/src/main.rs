@@ -1446,12 +1446,18 @@ const ALL_THREE_FLOOR: usize = 0;
 // moves by exactly one (274/293/293, union 310, all-three 257). No
 // pre-existing file moved lanes. Counts measured by this gate, not
 // predicted.
+// s137 ratchet #3 over 473 entries: `os_cpus` (#233). ONE new
+// run-phase witness — `os/cpus` — on all three lanes (`[os.cpus]`
+// names no host either; every tier reads the same source), so every
+// count moves by exactly one (275/294/294, union 311, all-three 258).
+// No pre-existing file moved lanes. Counts measured by this gate, not
+// predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 274), ("native", 293), ("release", 293)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 275), ("native", 294), ("release", 294)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 310;
+const UNION_FLOOR: usize = 311;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 257;
+const ALL_THREE_FLOOR: usize = 258;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
