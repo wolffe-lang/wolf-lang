@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 124] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 127] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -190,6 +190,12 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 124] = [
     // negated code) back, `[os.net.unix]`.
     ("__wolf_rt_net_listen_unix", 2, true),
     ("__wolf_rt_net_connect_unix", 2, true),
+    // s137/#234 + #235: listener options (addr pair, reuse as i64,
+    // backlog) and the adopt half of descriptor inheritance (an OS
+    // descriptor number in, the table handle or the negated code
+    // back) — `[os.net.listen.opts]`, `[os.proc.inherit]`.
+    ("__wolf_rt_net_listen_with", 4, true),
+    ("__wolf_rt_net_adopt_listener", 1, true),
     // The s107 json family (wolf_rt::json, #118's last crossing):
     // pure query kernels — two str pairs in, a code back, the
     // rendered node through a caller out slot; `json_len` rides the
@@ -217,6 +223,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 124] = [
     // handle >= 0 or the negated code back); `os_wait` writes the
     // exit code through the out word and its 0-code REAPS.
     ("__wolf_rt_os_spawn", 1, true),
+    // s137 (#235): the spawn with an inherit set — the exe as a str
+    // pair, the args `List[str]` header and the inherit `List[int]`
+    // header (both read by the shim), the handle or the negated code.
+    ("__wolf_rt_os_spawn_with", 4, true),
     ("__wolf_rt_os_wait", 2, true),
     ("__wolf_rt_os_kill", 1, true),
     // signal RECEPTION (s114, #126): set in, code/meaning out — plain
