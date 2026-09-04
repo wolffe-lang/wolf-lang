@@ -196,6 +196,198 @@ struct Entry {
 #[derive(Debug, Default)]
 pub struct NetTable {
     socks: Vec<Option<Entry>>,
+    /// s137 (#235, `[os.proc.inherit]`): the OS descriptors this table
+    /// ADOPTED through [`NetTable::adopt_listener`]. An adopted fd is
+    /// owned by exactly one slot; adopting the same number twice would
+    /// give two slots one descriptor (a double close waiting to
+    /// happen), so a second adopt of a live one is `io`. Entries leave
+    /// with the slot's close.
+    #[cfg(unix)]
+    adopted: Vec<std::os::fd::RawFd>,
+}
+
+/// s137 (#234): the `listen(2)` queue hint a `backlog <= 0` asks for —
+/// std's own number, so `net_listen_with(addr, false, 0)` is
+/// `net_listen(addr)` call for call.
+#[cfg(unix)]
+const DEFAULT_BACKLOG: i64 = 128;
+
+/// s137 (#234, `[os.net.listen.opts]`): bind + listen a TCP socket by
+/// hand so the options land BEFORE the bind — `SO_REUSEPORT` after
+/// `bind` is too late, which is why `std::net::TcpListener::bind` (which
+/// sets `SO_REUSEADDR` only) cannot serve this call. The socket is
+/// close-on-exec like every std socket (the #235 posture: a child
+/// inherits nothing it was not handed), `SO_REUSEADDR` is set as std
+/// sets it, `SO_REUSEPORT` when asked, and the backlog is the hint the
+/// caller gave (the host clamps it to its `somaxconn`).
+#[cfg(unix)]
+fn bind_with(addr: &str, reuse_port: bool, backlog: i64) -> std::io::Result<TcpListener> {
+    use std::net::{SocketAddr, ToSocketAddrs as _};
+    use std::os::fd::FromRawFd as _;
+    let sa = addr
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    let family = match sa {
+        SocketAddr::V4(_) => libc::AF_INET,
+        SocketAddr::V6(_) => libc::AF_INET6,
+    };
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    let ty = libc::SOCK_STREAM | libc::SOCK_CLOEXEC;
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    let ty = libc::SOCK_STREAM;
+    // SAFETY: plain socket creation; the result is checked below.
+    let fd = unsafe { libc::socket(family, ty, 0) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // Owned from here: every early return below closes it.
+    // SAFETY: `fd` is a fresh, open stream socket nothing else owns.
+    let l = unsafe { TcpListener::from_raw_fd(fd) };
+    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+    {
+        // SAFETY: valid fd; FD_CLOEXEC is the std posture on this host.
+        if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    let one: libc::c_int = 1;
+    let optlen = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: valid fd, a live c_int and its true length.
+    if unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_REUSEADDR,
+            (&raw const one).cast(),
+            optlen,
+        )
+    } < 0
+    {
+        return Err(std::io::Error::last_os_error());
+    }
+    if reuse_port {
+        // SAFETY: as above.
+        if unsafe {
+            libc::setsockopt(
+                fd,
+                libc::SOL_SOCKET,
+                libc::SO_REUSEPORT,
+                (&raw const one).cast(),
+                optlen,
+            )
+        } < 0
+        {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    // SAFETY: a zeroed sockaddr_storage is a valid, oversized buffer
+    // for either family; the length passed is the family's own.
+    let mut storage: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let len: libc::socklen_t = match sa {
+        SocketAddr::V4(v4) => {
+            // SAFETY: sockaddr_in fits inside sockaddr_storage.
+            let sin = unsafe { &mut *(&raw mut storage).cast::<libc::sockaddr_in>() };
+            sin.sin_family = libc::AF_INET as libc::sa_family_t;
+            sin.sin_port = v4.port().to_be();
+            sin.sin_addr = libc::in_addr {
+                s_addr: u32::from_ne_bytes(v4.ip().octets()),
+            };
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t
+        }
+        SocketAddr::V6(v6) => {
+            // SAFETY: sockaddr_in6 fits inside sockaddr_storage.
+            let sin6 = unsafe { &mut *(&raw mut storage).cast::<libc::sockaddr_in6>() };
+            sin6.sin6_family = libc::AF_INET6 as libc::sa_family_t;
+            sin6.sin6_port = v6.port().to_be();
+            sin6.sin6_flowinfo = v6.flowinfo();
+            sin6.sin6_addr = libc::in6_addr {
+                s6_addr: v6.ip().octets(),
+            };
+            sin6.sin6_scope_id = v6.scope_id();
+            std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t
+        }
+    };
+    // SAFETY: valid fd, a live sockaddr and its length.
+    if unsafe { libc::bind(fd, (&raw const storage).cast(), len) } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let queue = if backlog > 0 {
+        i32::try_from(backlog).unwrap_or(i32::MAX)
+    } else {
+        DEFAULT_BACKLOG as i32
+    };
+    // SAFETY: valid, bound fd.
+    if unsafe { libc::listen(fd, queue) } < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(l)
+}
+
+/// s137 (#235, `[os.proc.inherit]`): what an OS descriptor handed to
+/// this process IS — a listening stream socket of a family the table
+/// serves, or not ours to adopt. Three questions, each answered by the
+/// kernel rather than trusted from the caller: `SO_TYPE` (a stream
+/// socket at all — `ENOTSOCK`/`EBADF` say no), `getpeername` (it has
+/// NO peer — a connected stream is not a listener; `ENOTCONN` is the
+/// answer wanted) with `SO_ACCEPTCONN` beside it where the kernel
+/// keeps a listening flag (linux, freebsd — macOS answers
+/// `ENOPROTOOPT` to that option, measured, so there a bound socket
+/// nobody called `listen` on adopts and its first accept is `io`),
+/// and `getsockname`'s family.
+#[cfg(unix)]
+fn inherited_listener_family(raw: std::os::fd::RawFd) -> Option<libc::c_int> {
+    let mut ty: libc::c_int = 0;
+    let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: a live c_int and its length; the fd is the caller's
+    // number, and a bad one answers an error, never a fault.
+    let rc = unsafe {
+        libc::getsockopt(
+            raw,
+            libc::SOL_SOCKET,
+            libc::SO_TYPE,
+            (&raw mut ty).cast(),
+            &mut len,
+        )
+    };
+    if rc != 0 || ty != libc::SOCK_STREAM {
+        return None;
+    }
+    // SAFETY: a zeroed sockaddr_storage is a valid receive buffer.
+    let mut peer: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let mut plen = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+    // SAFETY: valid buffer and length.
+    let rc = unsafe { libc::getpeername(raw, (&raw mut peer).cast(), &mut plen) };
+    if rc == 0 || std::io::Error::last_os_error().raw_os_error() != Some(libc::ENOTCONN) {
+        return None;
+    }
+    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    {
+        let mut accepting: libc::c_int = 0;
+        let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        // SAFETY: as above.
+        let rc = unsafe {
+            libc::getsockopt(
+                raw,
+                libc::SOL_SOCKET,
+                libc::SO_ACCEPTCONN,
+                (&raw mut accepting).cast(),
+                &mut len,
+            )
+        };
+        if rc != 0 || accepting == 0 {
+            return None;
+        }
+    }
+    // SAFETY: a zeroed sockaddr_storage is a valid receive buffer.
+    let mut storage: libc::sockaddr_storage = unsafe { std::mem::zeroed() };
+    let mut slen = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+    // SAFETY: valid buffer and length.
+    let rc = unsafe { libc::getsockname(raw, (&raw mut storage).cast(), &mut slen) };
+    if rc != 0 {
+        return None;
+    }
+    Some(libc::c_int::from(storage.ss_family))
 }
 
 /// A net operation's failure: the row tag it raises.
@@ -206,7 +398,11 @@ impl NetTable {
     /// `static Mutex` without lazy-init machinery (the fs `FILES`
     /// precedent).
     pub const fn new() -> NetTable {
-        NetTable { socks: Vec::new() }
+        NetTable {
+            socks: Vec::new(),
+            #[cfg(unix)]
+            adopted: Vec::new(),
+        }
     }
 
     fn push(&mut self, s: Sock) -> i64 {
@@ -306,6 +502,123 @@ impl NetTable {
         match TcpListener::bind(addr) {
             Ok(l) => Ok(self.push(Sock::Listener(l))),
             Err(e) => Err(err_tag(e.kind())),
+        }
+    }
+
+    /// `net_listen_with(addr, reuse_port, backlog)` (s137, #234,
+    /// `[os.net.listen.opts]`): [`NetTable::listen`] with the two
+    /// listener options a prefork server needs. `reuse_port` sets
+    /// `SO_REUSEPORT` before the bind, so N processes (or N listeners
+    /// in one) share the port — what the kernel then DOES with the
+    /// group is the host's, measured and named in the clause (linux
+    /// distributes accepts by 4-tuple hash; macOS hands every SYN to
+    /// the newest bound socket and falls to a survivor when it
+    /// closes; windows refuses by name — `SO_REUSEADDR` there lets any
+    /// process hijack the port and promises nothing about delivery,
+    /// which is not this option). `backlog` is the `listen(2)` queue
+    /// hint (`<= 0`: the runtime's default; the host clamps to its
+    /// `somaxconn`). Rows: an address another socket holds without
+    /// the option is `exists` (the "in use" row #234 asked for, in
+    /// the vocabulary s136 already had), a privileged port `denied`,
+    /// the host `unsupported` by name, the rest `io`.
+    pub fn listen_with(
+        &mut self,
+        addr: &str,
+        reuse_port: bool,
+        backlog: i64,
+    ) -> Result<i64, NetErr> {
+        #[cfg(unix)]
+        {
+            match bind_with(addr, reuse_port, backlog) {
+                Ok(l) => Ok(self.push(Sock::Listener(l))),
+                Err(e) => Err(err_tag(e.kind())),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            if reuse_port {
+                return Err("unsupported");
+            }
+            // The backlog hint is the runtime's default on this host
+            // at this pin (std's bind; named in docs/platforms.md).
+            let _ = backlog;
+            match TcpListener::bind(addr) {
+                Ok(l) => Ok(self.push(Sock::Listener(l))),
+                Err(e) => Err(err_tag(e.kind())),
+            }
+        }
+    }
+
+    /// `net_adopt_listener(fd)` (s137, #235, `[os.proc.inherit]`): take
+    /// an OS descriptor this process was HANDED — by a parent's
+    /// `os_spawn_with(.., inherit)`, numbered from 3 in the child in
+    /// the order given — as a listener in this table. The kernel is
+    /// asked what the number is ([`inherited_listener_family`]): a
+    /// listening TCP socket becomes a [`Sock::Listener`], a listening
+    /// `AF_UNIX` one a [`Sock::UnixListener`] whose path the child
+    /// does NOT own (no unlink at close — the parent bound it), and
+    /// anything else — not a socket, a connected stream, a foreign
+    /// family, a number this table already adopted — is `io`, never a
+    /// trap and never a wrapped stranger. The adopted descriptor is
+    /// marked close-on-exec: this process's own children inherit only
+    /// what it hands them. Windows: `unsupported`, by name (a `SOCKET`
+    /// is not a small stable number; the serving rung is named in
+    /// docs/platforms.md).
+    pub fn adopt_listener(&mut self, fd: i64) -> Result<i64, NetErr> {
+        #[cfg(unix)]
+        {
+            use std::os::fd::FromRawFd as _;
+            let Ok(raw) = std::os::fd::RawFd::try_from(fd) else {
+                return Err("io");
+            };
+            if raw < 0 || self.adopted.contains(&raw) {
+                return Err("io");
+            }
+            let Some(family) = inherited_listener_family(raw) else {
+                return Err("io");
+            };
+            let sock = match family {
+                libc::AF_INET | libc::AF_INET6 => {
+                    // SAFETY: the kernel just confirmed `raw` is a
+                    // listening stream socket of the internet family;
+                    // this table becomes its one owner.
+                    Sock::Listener(unsafe { TcpListener::from_raw_fd(raw) })
+                }
+                libc::AF_UNIX => {
+                    // SAFETY: as above, for the unix family.
+                    Sock::UnixListener(
+                        unsafe { UnixListener::from_raw_fd(raw) },
+                        std::path::PathBuf::new(),
+                    )
+                }
+                _ => return Err("io"),
+            };
+            // SAFETY: valid fd we now own.
+            unsafe { libc::fcntl(raw, libc::F_SETFD, libc::FD_CLOEXEC) };
+            self.adopted.push(raw);
+            Ok(self.push(sock))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = fd;
+            Err("unsupported")
+        }
+    }
+
+    /// The OS descriptor behind a live handle — the spawn side's map
+    /// for `os_spawn_with`'s inherit set (s137, #235). Any live socket
+    /// qualifies (a listener is what a prefork master hands over; a
+    /// stream is what an upgrade might); a forged or closed handle is
+    /// `None`, which the caller answers as `io` BEFORE any child is
+    /// spawned.
+    #[cfg(unix)]
+    pub(crate) fn raw_fd_of(&mut self, fd: i64) -> Option<std::os::fd::RawFd> {
+        use std::os::fd::AsRawFd as _;
+        match self.get(fd)? {
+            Sock::Listener(l) => Some(l.as_raw_fd()),
+            Sock::Stream(s) => Some(s.as_raw_fd()),
+            Sock::UnixListener(l, _) => Some(l.as_raw_fd()),
+            Sock::UnixStream(s) => Some(s.as_raw_fd()),
         }
     }
 
@@ -484,13 +797,33 @@ impl NetTable {
             Some(slot @ Some(_)) => {
                 let gone = slot.take();
                 #[cfg(unix)]
-                if let Some(Entry {
-                    sock: Sock::UnixListener(l, path),
-                    ..
-                }) = gone
                 {
-                    drop(l);
-                    let _ = std::fs::remove_file(path);
+                    // s137: an adopted descriptor leaves the adopted
+                    // set with its slot (the number may come back
+                    // through a later adopt, legitimately).
+                    if let Some(e) = &gone {
+                        use std::os::fd::AsRawFd as _;
+                        let raw = match &e.sock {
+                            Sock::Listener(l) => l.as_raw_fd(),
+                            Sock::Stream(s) => s.as_raw_fd(),
+                            Sock::UnixListener(l, _) => l.as_raw_fd(),
+                            Sock::UnixStream(s) => s.as_raw_fd(),
+                        };
+                        self.adopted.retain(|&a| a != raw);
+                    }
+                    if let Some(Entry {
+                        sock: Sock::UnixListener(l, path),
+                        ..
+                    }) = gone
+                    {
+                        drop(l);
+                        // An EMPTY path is an adopted listener (s137,
+                        // `[os.proc.inherit]`): the parent bound the
+                        // file, the parent removes it.
+                        if !path.as_os_str().is_empty() {
+                            let _ = std::fs::remove_file(path);
+                        }
+                    }
                 }
                 #[cfg(not(unix))]
                 drop(gone);
@@ -622,6 +955,49 @@ pub unsafe extern "C" fn __wolf_rt_net_listen_unix(pp: i64, pl: i64) -> i64 {
         Ok(fd) => fd,
         Err(t) => -code_of_tag(t),
     }
+}
+
+/// `net_listen_with(addr, reuse_port, backlog) -> int ! {unsupported,
+/// exists, denied, io}` (s137, #234, `[os.net.listen.opts]`) — the fd
+/// (>= 0), or `-code`. `reuse` is the bool as an i64 (nonzero = set).
+/// See [`NetTable::listen_with`] for the rows and the per-host posture.
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_listen_with(
+    ap: i64,
+    al: i64,
+    reuse: i64,
+    backlog: i64,
+) -> i64 {
+    let addr = unsafe { view(ap, al) };
+    match tbl().listen_with(addr, reuse != 0, backlog) {
+        Ok(fd) => fd,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// `net_adopt_listener(fd) -> int ! {unsupported, io}` (s137, #235,
+/// `[os.proc.inherit]`) — the table handle (>= 0) for an inherited OS
+/// descriptor, or `-code`. See [`NetTable::adopt_listener`].
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_adopt_listener(fd: i64) -> i64 {
+    match tbl().adopt_listener(fd) {
+        Ok(h) => h,
+        Err(t) => -code_of_tag(t),
+    }
+}
+
+/// The OS descriptors behind a set of live handles, in order — the
+/// spawn shim's map for `os_spawn_with`'s inherit set (s137, #235).
+/// `None` when any handle is forged or closed: nothing is spawned on a
+/// bad set.
+#[cfg(unix)]
+pub(crate) fn raw_fds_of(handles: &[i64]) -> Option<Vec<std::os::fd::RawFd>> {
+    let mut t = tbl();
+    handles.iter().map(|&h| t.raw_fd_of(h)).collect()
 }
 
 /// `net_connect_unix(path) -> int ! {unsupported, refused, not_found,
@@ -1303,5 +1679,490 @@ mod tests {
         for fd in [cli, conn, srv] {
             assert_eq!(__wolf_rt_net_close(fd), net_code::OK);
         }
+    }
+
+    // ---------------- s137: listener options and adoption (#234/#235) --
+
+    /// s137 (#234, `[os.net.listen.opts]`): the option rows. Without
+    /// `reuse_port` a second bind of a held address is `exists` — the
+    /// "in use" row #234 asked for, spelled with the tag s136 already
+    /// gave the vocabulary (lowering coarsens it to `io` for the plain
+    /// `net_listen`, whose row is `{io}`); a group needs the option on
+    /// EVERY member, so a reuse bind against a plain listener is
+    /// `exists` too. With the option on both, the second bind
+    /// succeeds and answers the same port. `(addr, false, 0)` is
+    /// `net_listen(addr)` call for call, and a backlog hint of 1 still
+    /// listens.
+    #[cfg(unix)]
+    #[test]
+    fn listen_with_rows_and_reuse_port_shares_the_port() {
+        let mut t = NetTable::new();
+        let a = t.listen_with("127.0.0.1:0", false, 16).expect("bind");
+        let port = t.port(a).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        assert_eq!(t.listen_with(&addr, false, 0), Err("exists"));
+        assert_eq!(
+            t.listen(&addr),
+            Err("exists"),
+            "the table's tag; lowering coarsens"
+        );
+        assert_eq!(
+            t.listen_with(&addr, true, 0),
+            Err("exists"),
+            "the group needs both"
+        );
+        t.close(a).expect("close");
+        let a = t.listen_with("127.0.0.1:0", true, 16).expect("bind a");
+        let port = t.port(a).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let b = t
+            .listen_with(&addr, true, 16)
+            .expect("bind b: the port is shared");
+        assert_eq!(t.port(b).expect("port b"), port);
+        t.close(a).expect("close a");
+        t.close(b).expect("close b");
+        // The default shape echoes exactly like `listen`.
+        let srv = t
+            .listen_with("127.0.0.1:0", false, 0)
+            .expect("default shape");
+        let port = t.port(srv).expect("port");
+        let cli = t.connect(&format!("127.0.0.1:{port}")).expect("connect");
+        t.write(cli, b"ping").expect("write");
+        let conn = t.accept(srv).expect("accept");
+        assert_eq!(t.read(conn, 16).expect("read"), b"ping");
+        for fd in [cli, conn, srv] {
+            t.close(fd).expect("close");
+        }
+        let one = t
+            .listen_with("127.0.0.1:0", false, 1)
+            .expect("backlog hint 1 listens");
+        t.close(one).expect("close");
+        // A privileged port is `denied` — unless the test runs as root,
+        // in which case it binds (both are the truth about the host).
+        match t.listen_with("127.0.0.1:1", false, 0) {
+            Err("denied") => {}
+            Ok(fd) => t.close(fd).expect("close"),
+            other => panic!("port 1: {other:?}"),
+        }
+    }
+
+    /// s137 (#234): what the kernel DOES with a `SO_REUSEPORT` group,
+    /// MEASURED per host and pinned here so `[os.net.listen.opts]` and
+    /// docs/platforms.md can never drift from the runner. Two hands on
+    /// one port; each dial is accepted by whichever hand the kernel
+    /// chose (the other's accept times out). linux distributes by
+    /// 4-tuple hash — both hands accept. macOS hands EVERY SYN to the
+    /// newest bound socket (0 to the older one — measured 0/64 by the
+    /// s137 probe, in one process and across two) and, once that
+    /// socket closes, to the survivor: the port is shared, accepts are
+    /// not distributed, and failover is gap-free. Both hosts: every
+    /// dial is accepted by SOME hand, and the survivor takes every
+    /// dial after the newest closes.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn reuse_port_group_delivery_is_the_hosts_measured_posture() {
+        let mut t = NetTable::new();
+        let a = t.listen_with("127.0.0.1:0", true, 64).expect("bind a");
+        let port = t.port(a).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let b = t.listen_with(&addr, true, 64).expect("bind b");
+        t.set_deadline(a, 60).expect("arm a");
+        t.set_deadline(b, 60).expect("arm b");
+        let mut keep = Vec::new();
+        let (mut na, mut nb) = (0u32, 0u32);
+        for _ in 0..24 {
+            keep.push(std::net::TcpStream::connect(&addr).expect("dial"));
+            match t.accept(a) {
+                Ok(c) => {
+                    na += 1;
+                    t.close(c).expect("close");
+                }
+                Err("timeout") => {
+                    let c = t.accept(b).expect("the other hand holds it");
+                    nb += 1;
+                    t.close(c).expect("close");
+                }
+                Err(e) => panic!("accept a: {e}"),
+            }
+        }
+        assert_eq!(na + nb, 24, "every dial is accepted by one hand: {na}/{nb}");
+        #[cfg(target_os = "linux")]
+        assert!(
+            na > 0 && nb > 0,
+            "linux distributes a reuseport group's accepts — measured {na}/{nb}"
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            (na, nb),
+            (0, 24),
+            "macOS hands every SYN to the newest bound socket — measured older/newest {na}/{nb}; \
+             if this moved, [os.net.listen.opts] and docs/platforms.md move with it"
+        );
+        // Failover: the newest closes, the survivor takes every dial.
+        t.close(b).expect("close b");
+        for _ in 0..8 {
+            keep.push(std::net::TcpStream::connect(&addr).expect("dial after close"));
+            let c = t.accept(a).expect("the survivor accepts");
+            t.close(c).expect("close");
+        }
+        t.close(a).expect("close a");
+    }
+
+    /// s137 (#235, `[os.proc.inherit]`): adoption takes a handed
+    /// descriptor — modelled here as a `dup` of a real listener's fd,
+    /// which is exactly what a spawned child's 3 is — and the handle is
+    /// the same listener (same port, accepts the dial, reads). One
+    /// owner per number: a second adopt of a live number is `io`, and
+    /// a close releases it for a fresh dup. Strangers are `io`, never
+    /// a trap: a pipe end, a CONNECTED stream (a socket, but not
+    /// listening), a negative or absurd number. The adopted fd is
+    /// close-on-exec afterwards. A unix-domain listener adopts too,
+    /// and its close leaves the socket file: the parent bound it.
+    #[cfg(unix)]
+    #[test]
+    fn adopt_listener_takes_a_handed_descriptor_and_refuses_strangers() {
+        use std::os::fd::AsRawFd as _;
+        let mut t = NetTable::new();
+        let parent = std::net::TcpListener::bind("127.0.0.1:0").expect("parent bind");
+        let port = parent.local_addr().expect("addr").port();
+        // SAFETY: a live listener fd; the dup is ours to hand over.
+        let raw = unsafe { libc::dup(parent.as_raw_fd()) };
+        assert!(raw >= 0);
+        // Clear close-on-exec on the dup (a handed 3 has none) so the
+        // adopt's own flag-setting is observable below.
+        // SAFETY: our own fd.
+        unsafe { libc::fcntl(raw, libc::F_SETFD, 0) };
+        let l = t.adopt_listener(i64::from(raw)).expect("adopt");
+        assert_eq!(
+            t.port(l).expect("port"),
+            i64::from(port),
+            "the adopted handle is the same listener"
+        );
+        // SAFETY: our own fd.
+        let flags = unsafe { libc::fcntl(raw, libc::F_GETFD) };
+        assert!(
+            flags & libc::FD_CLOEXEC != 0,
+            "an adopted descriptor is close-on-exec"
+        );
+        let mut cli = std::net::TcpStream::connect(("127.0.0.1", port)).expect("dial");
+        let conn = t.accept(l).expect("accept through the adopted handle");
+        cli.write_all(b"hi").expect("send");
+        assert_eq!(t.read(conn, 8).expect("read"), b"hi");
+        assert_eq!(t.adopt_listener(i64::from(raw)), Err("io"), "one owner");
+        t.close(conn).expect("close conn");
+        t.close(l).expect("close l");
+        // SAFETY: as above.
+        let raw2 = unsafe { libc::dup(parent.as_raw_fd()) };
+        let l2 = t
+            .adopt_listener(i64::from(raw2))
+            .expect("a fresh dup adopts again");
+        t.close(l2).expect("close l2");
+        // Strangers.
+        let mut fds = [0i32; 2];
+        // SAFETY: plain pipe creation; both ends are then marked
+        // close-on-exec, because `os::tests` spawns children in this
+        // same binary and witnesses that a child holds EXACTLY the
+        // descriptors it was handed — a stray inheritable end sitting
+        // at the next free number would falsify it.
+        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0);
+        // SAFETY: our own fds.
+        unsafe {
+            libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC);
+            libc::fcntl(fds[1], libc::F_SETFD, libc::FD_CLOEXEC);
+        }
+        assert_eq!(t.adopt_listener(i64::from(fds[0])), Err("io"), "a pipe");
+        // SAFETY: our own fds.
+        unsafe {
+            libc::close(fds[0]);
+            libc::close(fds[1]);
+        }
+        // SAFETY: a live stream fd; close-on-exec for the reason
+        // above (this binary spawns children).
+        let stream_raw = unsafe { libc::dup(cli.as_raw_fd()) };
+        // SAFETY: our own fd.
+        unsafe { libc::fcntl(stream_raw, libc::F_SETFD, libc::FD_CLOEXEC) };
+        assert_eq!(
+            t.adopt_listener(i64::from(stream_raw)),
+            Err("io"),
+            "a connected stream is not a listener"
+        );
+        // SAFETY: our own fd.
+        unsafe { libc::close(stream_raw) };
+        assert_eq!(t.adopt_listener(-1), Err("io"));
+        assert_eq!(t.adopt_listener(1 << 40), Err("io"));
+        assert_eq!(t.adopt_listener(99_999), Err("io"));
+        // The unix family adopts; close leaves the file to its binder.
+        let dir = std::env::temp_dir().join(format!("wolf-s137-adopt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("l.sock");
+        let ul = UnixListener::bind(&path).expect("unix bind");
+        // SAFETY: a live listener fd.
+        let uraw = unsafe { libc::dup(ul.as_raw_fd()) };
+        let uh = t.adopt_listener(i64::from(uraw)).expect("unix adopt");
+        assert_eq!(t.port(uh), Err("io"), "no port on a unix listener");
+        t.close(uh).expect("close");
+        assert!(
+            path.exists(),
+            "the adopter does not unlink the parent's path"
+        );
+        drop(ul);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s137: the two surfaces through the shim boundary — the fd or
+    /// the negated code, the fs_open convention.
+    #[cfg(unix)]
+    #[test]
+    fn shim_listen_with_and_adopt_codes() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let a = unsafe { __wolf_rt_net_listen_with(ap, al, 1, 8) };
+        assert!(a >= 0, "bind: {a}");
+        let port = __wolf_rt_net_port(a);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        let b = unsafe { __wolf_rt_net_listen_with(cp, cl, 1, 8) };
+        assert!(b >= 0, "the group's second bind: {b}");
+        assert_eq!(__wolf_rt_net_close(a), net_code::OK);
+        assert_eq!(__wolf_rt_net_close(b), net_code::OK);
+        let plain = unsafe { __wolf_rt_net_listen_with(ap, al, 0, 0) };
+        assert!(plain >= 0);
+        let port = __wolf_rt_net_port(plain);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        assert_eq!(
+            unsafe { __wolf_rt_net_listen_with(cp, cl, 0, 0) },
+            -net_code::EXISTS,
+            "in use, by name"
+        );
+        assert_eq!(__wolf_rt_net_close(plain), net_code::OK);
+        assert_eq!(__wolf_rt_net_adopt_listener(-1), -net_code::IO);
+        assert_eq!(__wolf_rt_net_adopt_listener(99_999), -net_code::IO);
+        // A real handed descriptor through the shim.
+        use std::os::fd::AsRawFd as _;
+        let parent = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        // SAFETY: a live listener fd.
+        let raw = unsafe { libc::dup(parent.as_raw_fd()) };
+        let h = __wolf_rt_net_adopt_listener(i64::from(raw));
+        assert!(h >= 0, "adopt: {h}");
+        assert_eq!(
+            __wolf_rt_net_port(h),
+            i64::from(parent.local_addr().unwrap().port())
+        );
+        assert_eq!(__wolf_rt_net_close(h), net_code::OK);
+    }
+
+    /// s137 on windows: `reuse_port` and adoption refuse BY NAME (the
+    /// `unsupported` code, never a bare `io`), the option-less shape
+    /// serves with `exists` for a held address, and the runner MEASURES
+    /// what `SO_REUSEADDR` would have meant: two ws2_32 sockets both
+    /// carrying it bind one port, and the kernel's delivery to the pair
+    /// is pinned so docs/platforms.md states the runner's answer, not
+    /// a manual's. (`SO_REUSEADDR` there lets any process take a bound
+    /// port — nginx's `reuseport` is not that — which is why the option
+    /// is refused rather than aliased.)
+    #[cfg(windows)]
+    #[test]
+    fn shim_listen_opts_refuse_by_name_on_windows_and_measure_so_reuseaddr() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        assert_eq!(
+            unsafe { __wolf_rt_net_listen_with(ap, al, 1, 0) },
+            -net_code::UNSUPPORTED
+        );
+        assert_eq!(__wolf_rt_net_adopt_listener(3), -net_code::UNSUPPORTED);
+        let l = unsafe { __wolf_rt_net_listen_with(ap, al, 0, 16) };
+        assert!(l >= 0, "the option-less shape serves: {l}");
+        let port = __wolf_rt_net_port(l);
+        let addr = format!("127.0.0.1:{port}");
+        let (cp, cl) = pair_of(&addr);
+        assert_eq!(
+            unsafe { __wolf_rt_net_listen_with(cp, cl, 0, 0) },
+            -net_code::EXISTS,
+            "in use, by name"
+        );
+        assert_eq!(__wolf_rt_net_close(l), net_code::OK);
+
+        // THE MEASUREMENT.
+        let _wake = std::net::UdpSocket::bind("127.0.0.1:0").expect("winsock up");
+        #[repr(C)]
+        struct SockAddrIn {
+            family: u16,
+            port: u16,
+            addr: u32,
+            zero: [u8; 8],
+        }
+        #[link(name = "ws2_32")]
+        unsafe extern "system" {
+            fn socket(af: i32, ty: i32, proto: i32) -> usize;
+            fn setsockopt(s: usize, level: i32, name: i32, val: *const u8, len: i32) -> i32;
+            fn bind(s: usize, name: *const SockAddrIn, namelen: i32) -> i32;
+            fn listen(s: usize, backlog: i32) -> i32;
+            fn getsockname(s: usize, name: *mut SockAddrIn, namelen: *mut i32) -> i32;
+            fn accept(s: usize, addr: *mut u8, len: *mut i32) -> usize;
+            fn closesocket(s: usize) -> i32;
+            fn ioctlsocket(s: usize, cmd: i32, argp: *mut u32) -> i32;
+            fn WSAGetLastError() -> i32;
+        }
+        const AF_INET: i32 = 2;
+        const SOCK_STREAM: i32 = 1;
+        const SOL_SOCKET: i32 = 0xffff;
+        const SO_REUSEADDR: i32 = 0x0004;
+        const INVALID_SOCKET: usize = usize::MAX;
+        const FIONBIO: i32 = -2_147_195_266; // 0x8004667e
+        let mk = |port: u16| -> Result<usize, i32> {
+            // SAFETY: plain winsock calls on a socket we own; every
+            // result is checked.
+            unsafe {
+                let s = socket(AF_INET, SOCK_STREAM, 0);
+                if s == INVALID_SOCKET {
+                    return Err(WSAGetLastError());
+                }
+                let one: i32 = 1;
+                if setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (&raw const one).cast(), 4) != 0 {
+                    let e = WSAGetLastError();
+                    closesocket(s);
+                    return Err(e);
+                }
+                let sa = SockAddrIn {
+                    family: AF_INET as u16,
+                    port: port.to_be(),
+                    addr: u32::from_ne_bytes([127, 0, 0, 1]),
+                    zero: [0; 8],
+                };
+                if bind(s, &sa, std::mem::size_of::<SockAddrIn>() as i32) != 0 {
+                    let e = WSAGetLastError();
+                    closesocket(s);
+                    return Err(e);
+                }
+                if listen(s, 16) != 0 {
+                    let e = WSAGetLastError();
+                    closesocket(s);
+                    return Err(e);
+                }
+                let mut nb: u32 = 1;
+                ioctlsocket(s, FIONBIO, &mut nb);
+                Ok(s)
+            }
+        };
+        let a = mk(0).expect("first SO_REUSEADDR bind");
+        let mut sa = SockAddrIn {
+            family: 0,
+            port: 0,
+            addr: 0,
+            zero: [0; 8],
+        };
+        let mut len = std::mem::size_of::<SockAddrIn>() as i32;
+        // SAFETY: a live socket and a correctly sized out struct.
+        assert_eq!(unsafe { getsockname(a, &mut sa, &mut len) }, 0);
+        let port = u16::from_be(sa.port);
+        let b = mk(port);
+        let b = match b {
+            Ok(b) => b,
+            Err(e) => panic!(
+                "MEASURED: a second SO_REUSEADDR bind of a held port was refused with WSA error {e} \
+                 — the runner's answer; docs/platforms.md states the other one"
+            ),
+        };
+        let mut keep = Vec::new();
+        let (mut na, mut nb) = (0u32, 0u32);
+        for _ in 0..16 {
+            keep.push(
+                std::net::TcpStream::connect(("127.0.0.1", port)).expect("dial the shared port"),
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            // SAFETY: live nonblocking listeners; a WOULDBLOCK answers
+            // INVALID_SOCKET, which is the "not here" branch.
+            unsafe {
+                let x = accept(a, std::ptr::null_mut(), std::ptr::null_mut());
+                if x != INVALID_SOCKET {
+                    closesocket(x);
+                    na += 1;
+                    continue;
+                }
+                let y = accept(b, std::ptr::null_mut(), std::ptr::null_mut());
+                if y != INVALID_SOCKET {
+                    closesocket(y);
+                    nb += 1;
+                }
+            }
+        }
+        // SAFETY: our own sockets.
+        unsafe {
+            closesocket(a);
+            closesocket(b);
+        }
+        assert_eq!(
+            (na, nb),
+            (0, 16),
+            "MEASURED: SO_REUSEADDR pair delivery, first/second bound = {na}/{nb} of 16 dials \
+             (the expectation pinned here is docs/platforms.md's sentence; a different split is \
+             the runner's answer and the sentence moves to it)"
+        );
+    }
+
+    /// s137 on windows: handle INHERITANCE exists — measured on the
+    /// runner by re-executing this test binary as a child with a
+    /// listener's `SOCKET` marked inheritable, and asking the child
+    /// whether that number is the same listener (its local port). The
+    /// child answers 42 for yes; anything else is the kernel's answer.
+    /// The runtime still refuses an inherit set by name at this pin
+    /// (`os.rs`'s twin): what this pins is that the serving rung named
+    /// in docs/platforms.md has a floor to stand on.
+    #[cfg(windows)]
+    #[test]
+    fn windows_socket_handle_inheritance_measured() {
+        use std::os::windows::io::{AsRawSocket as _, FromRawSocket as _};
+        if let Ok(v) = std::env::var("WOLF_S137_INHERIT_CHILD") {
+            let (h, port) = v.split_once(':').expect("handle:port");
+            let h: u64 = h.parse().expect("handle");
+            // SAFETY: the parent handed this SOCKET; if it is not a
+            // socket in this process the call below answers an error,
+            // never a fault.
+            let l = unsafe { std::net::TcpListener::from_raw_socket(h) };
+            let code = match l.local_addr() {
+                Ok(a) if a.port().to_string() == port => 42,
+                Ok(_) => 7,
+                Err(_) => 8,
+            };
+            std::process::exit(code);
+        }
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn SetHandleInformation(h: usize, mask: u32, flags: u32) -> i32;
+        }
+        const HANDLE_FLAG_INHERIT: u32 = 1;
+        let l = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = l.local_addr().unwrap().port();
+        // SAFETY: a live socket handle we own.
+        let ok = unsafe {
+            SetHandleInformation(
+                l.as_raw_socket() as usize,
+                HANDLE_FLAG_INHERIT,
+                HANDLE_FLAG_INHERIT,
+            )
+        };
+        assert_ne!(
+            ok, 0,
+            "SetHandleInformation(HANDLE_FLAG_INHERIT) on a socket"
+        );
+        let status = std::process::Command::new(std::env::current_exe().expect("exe"))
+            .args([
+                "--exact",
+                "net::tests::windows_socket_handle_inheritance_measured",
+                "--nocapture",
+            ])
+            .env(
+                "WOLF_S137_INHERIT_CHILD",
+                format!("{}:{port}", l.as_raw_socket()),
+            )
+            .status()
+            .expect("re-exec");
+        assert_eq!(
+            status.code(),
+            Some(42),
+            "MEASURED: the child saw the inherited SOCKET as the same listener (42 = yes; \
+             7 = a different socket; 8 = not a socket in the child; anything else = the \
+             harness) — docs/platforms.md's inheritance sentence is this number"
+        );
     }
 }
