@@ -103,6 +103,14 @@ pub const PRELUDE: &[&str] = &[
     // s136 (#227): the unix-domain pair, `[os.net.unix]`.
     "net_listen_unix",
     "net_connect_unix",
+    // s137 (#234/#235): listener options (`reuse_port`, backlog —
+    // `[os.net.listen.opts]`) and the adopt half of descriptor
+    // inheritance (`[os.proc.inherit]`).
+    "net_listen_with",
+    "net_adopt_listener",
+    // s137 (#127): readiness over a set, `[os.net.wait]` — the
+    // primitive a spawn-free serving loop blocks on.
+    "net_wait",
     "net_close",
     // s106 (#45's builtin half): the per-socket deadline budget that
     // makes the `timeout` tag reachable — declared with the family
@@ -124,8 +132,14 @@ pub const PRELUDE: &[&str] = &[
     // even though its reason to exist is std.process's rig, which
     // spawns the test binary as its own child.
     "os_exe",
+    // s137 (#233, `[os.cpus]`): the schedulable core count — a
+    // machine-state read, `env`-tagged with `os_cwd`/`os_exe`.
+    "os_cpus",
     "os_exit",
     "os_spawn",
+    // s137 (#235, `[os.proc.inherit]`): the spawn that hands
+    // descriptors to its child — `exec`-tagged with the trio.
+    "os_spawn_with",
     "os_wait",
     "os_kill",
     // signal RECEPTION (s114, wolf-lang#126): the receive side of the

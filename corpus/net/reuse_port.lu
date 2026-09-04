@@ -1,0 +1,104 @@
+//! check: run(exit=0, stdout="reuse_port | served_or_named true | one_port true | in_use_named true | both_accepted true | gapless true")
+//! phase: run
+//! conforms: os.net.listen.opts, err.union, err.propagate
+//!
+//! s137 (#234, `[os.net.listen.opts]`) — the listener options a
+//! prefork server needs. Five relations, each true on every host that
+//! serves the option and vacuously true on a host that refuses it BY
+//! NAME (windows at this pin — the `unsupported` row; a bare `io` at
+//! bind on any host is what this witness exists to catch, exit 3):
+//!
+//!   one_port       two hands with `reuse_port` hold ONE address and
+//!                  answer the same port.
+//!   in_use_named   a hand WITHOUT the option cannot join the group,
+//!                  and the refusal has a name — `exists`, the "in
+//!                  use" answer #234 asked for — never a bare `io`.
+//!   both_accepted  each hand accepted a dial. Constructed rather
+//!                  than sampled, because WHICH member of a live
+//!                  group takes a given SYN is the host's (linux
+//!                  distributes by 4-tuple hash, macOS hands every
+//!                  SYN to the newest bound socket): the first hand
+//!                  serves while it is the group's only member, the
+//!                  second serves after the first closes. That is
+//!                  the sequence a prefork master actually performs.
+//!   gapless        the address was never unbound across that
+//!                  handoff — the whole point of the option: the old
+//!                  hand can leave without the port going free.
+//!
+//! The delivery posture itself (who gets the SYN in a live group) is
+//! measured per host by the runtime's own tests and stated in the
+//! clause; a program cannot depend on it, so this file does not.
+
+fn main() -> !int {
+    var served = true
+    var one_port = true
+    var in_use_named = true
+    var both_accepted = true
+    var gapless = true
+    let a = net_listen_with("127.0.0.1:0", true, 16) else |e| match e {
+        unsupported => {
+            served = false
+            0 - 1
+        },
+        _ => {
+            print("bind failed with an address row on a host that serves the option")
+            return 3
+        },
+    }
+    if served {
+        let port = net_port(a)?
+        let addr = "127.0.0.1:{port}"
+        // The first hand is the group's only member: the dial is its.
+        net_deadline(a, 5000)?
+        let c1 = net_connect(addr)?
+        let s1 = net_accept(a)?
+        net_write(s1, "one")?
+        let r1 = net_read(c1, 16)?
+        net_close(c1)?
+        net_close(s1)?
+        // A second hand joins the group on the same address.
+        let b = net_listen_with(addr, true, 16)?
+        one_port = net_port(b)? == port
+        // A hand without the option cannot join, and says so by name.
+        in_use_named = false
+        let x = net_listen_with(addr, false, 0) else |e| match e {
+            exists => {
+                in_use_named = true
+                0 - 1
+            },
+            _ => 0 - 1,
+        }
+        if x >= 0 {
+            net_close(x)?
+        }
+        // The first hand leaves. The address never went free: a
+        // plain bind of it is still `exists`.
+        net_close(a)?
+        gapless = false
+        let y = net_listen_with(addr, false, 0) else |e| match e {
+            exists => {
+                gapless = true
+                0 - 1
+            },
+            _ => 0 - 1,
+        }
+        if y >= 0 {
+            net_close(y)?
+        }
+        // The survivor is now the group's only member: the dial is
+        // its, on the very same port.
+        net_deadline(b, 5000)?
+        let c2 = net_connect(addr)?
+        let s2 = net_accept(b)?
+        net_write(s2, "two")?
+        let r2 = net_read(c2, 16)?
+        net_close(c2)?
+        net_close(s2)?
+        net_close(b)?
+        both_accepted = r1 == "one" && r2 == "two"
+    }
+    print(
+        "reuse_port | served_or_named true | one_port {one_port} | in_use_named {in_use_named} | both_accepted {both_accepted} | gapless {gapless}",
+    )
+    0
+}

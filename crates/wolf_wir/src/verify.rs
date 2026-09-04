@@ -552,10 +552,29 @@ impl<'a> Verifier<'a> {
             }
             Opcode::Sext | Opcode::Zext | Opcode::Itrunc => {
                 self.expect_counts(inst, 1, 1)?;
-                let (Some(from), Some(to)) = (
-                    types.int_bits(self.f.value_ty(args[0])),
-                    types.int_bits(self.f.value_ty(results[0])),
-                ) else {
+                // The bool -> int bridge: `zext` from `bool` is the ONE
+                // conversion whose source is not an integer type, and
+                // it is the only way a one-bit value reaches a word
+                // (a channel's `bool` payload on its wire, s39; a
+                // `reuse_port` option crossing to a runtime shim,
+                // s137). It is `zext` alone — sign-extending a truth
+                // value is meaningless, and `itrunc` TO bool is not a
+                // conversion but a compare (`icmp.ne %w, 0`, which is
+                // what the lowering emits coming back).
+                let src = self.f.value_ty(args[0]);
+                let from = if data.op == Opcode::Zext && src == crate::types::BOOL {
+                    1
+                } else {
+                    match types.int_bits(src) {
+                        Some(b) => b,
+                        None => {
+                            return Err(
+                                self.type_err(inst, "integer conversion needs integer types")
+                            );
+                        }
+                    }
+                };
+                let Some(to) = types.int_bits(self.f.value_ty(results[0])) else {
                     return Err(self.type_err(inst, "integer conversion needs integer types"));
                 };
                 let ok = if data.op == Opcode::Itrunc {

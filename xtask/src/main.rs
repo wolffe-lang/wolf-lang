@@ -1423,12 +1423,41 @@ const ALL_THREE_FLOOR: usize = 0;
 // byte-view files moved TYPES, not lanes: each still executes where
 // it did (the blast radius inside this corpus, spelled `as int` /
 // `List[byte]`). Counts measured by this gate, not predicted.
+// s137 ratchet over 471 entries: the listener a prefork server needs
+// (#234/#235). Two new run-phase witnesses. `net/reuse_port` executes
+// on all three lanes — the checked machine serves `net_listen_with`
+// through a hand mirror of the runtime's bind — so every count moves
+// by one for it; `net/inherit_listener` executes on the two native
+// lanes only, because the checked machine refuses an inherit set BY
+// NAME with the construct named (it is the `wolf` binary interpreting
+// a program, so the child would be the compiler's), which is the
+// refused@mem residue growing by one rather than a hole. So checked
+// and all-three move by exactly one (273/256) and native/release/union
+// by exactly two (292/292/309). No pre-existing file moved lanes: both
+// builtins are new surface, and the two fixes this sprint carries (a
+// test pipe's CLOEXEC, `zext` from `bool`) change no lane's verdict on
+// any existing file. Counts measured by this gate, not predicted.
+// s137 ratchet #2 over 472 entries: the reactor's readiness surface
+// (#127). ONE new run-phase witness — `net/wait_readiness` — and it
+// executes on all three lanes, because `[os.net.wait]` is the one
+// clause this sprint carries that names no host: every tier-1 kernel
+// answers the readiness question (`poll(2)`, `WSAPoll`) and the
+// checked machine mirrors the runtime call for call. So every count
+// moves by exactly one (274/293/293, union 310, all-three 257). No
+// pre-existing file moved lanes. Counts measured by this gate, not
+// predicted.
+// s137 ratchet #3 over 473 entries: `os_cpus` (#233). ONE new
+// run-phase witness — `os/cpus` — on all three lanes (`[os.cpus]`
+// names no host either; every tier reads the same source), so every
+// count moves by exactly one (275/294/294, union 311, all-three 258).
+// No pre-existing file moved lanes. Counts measured by this gate, not
+// predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 272), ("native", 290), ("release", 290)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 275), ("native", 294), ("release", 294)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 307;
+const UNION_FLOOR: usize = 311;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 255;
+const ALL_THREE_FLOOR: usize = 258;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {

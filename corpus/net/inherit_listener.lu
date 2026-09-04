@@ -1,0 +1,79 @@
+//! check: run(exit=0, stdout="inherit | served_or_named true | child_served true | reaped true")
+//! phase: run
+//! conforms: os.proc.inherit, os.net.listen.opts, err.union, err.propagate
+//!
+//! s137 (#235, `[os.proc.inherit]`) — a parent hands a listener to a
+//! spawned child, and the child SERVES on it. The child is this same
+//! program re-executed (`os_exe`) with the marker argument
+//! `serve-inherited`: it adopts descriptor 3 — the number the clause
+//! promises for the first member of the inherit set — and answers one
+//! dial. The parent then dials its own port and reads the child's
+//! reply, which is the whole proof: the descriptor crossed the exec,
+//! it was the SAME listener, and it accepts.
+//!
+//!   served_or_named  the host serves the handoff, or refuses it BY
+//!                    NAME (`unsupported`) — windows at this pin,
+//!                    where a SOCKET is not a small stable number.
+//!   child_served     the reply came from the child, over a listener
+//!                    the child never bound.
+//!   reaped           the child exited 0 and `os_wait` reaped it.
+//!
+//! The parent's own `net_close` of the listener does not disturb the
+//! child's copy: each process owns its own descriptor. The checked
+//! machine refuses a non-empty inherit set BY NAME with the construct
+//! named — it is the `wolf` binary interpreting a program, so the
+//! child would be the compiler's — so this file's run rung is the
+//! native tiers', like `corpus/net/spawn_accept.lu`'s.
+
+fn main() -> !int {
+    let args = env_args()
+    var is_child = false
+    for a in args {
+        if a == "serve-inherited" {
+            is_child = true
+        }
+    }
+    if is_child {
+        let l = net_adopt_listener(3) else |_| return 21
+        net_deadline(l, 10000) else |_| return 22
+        let conn = net_accept(l) else |_| return 23
+        let msg = net_read(conn, 64) else |_| return 24
+        net_write(conn, "child: {msg}") else |_| return 25
+        net_close(conn) else |_| return 26
+        net_close(l) else |_| return 27
+        return 0
+    }
+    var served = true
+    var child_served = true
+    var reaped = true
+    let srv = net_listen_with("127.0.0.1:0", false, 16)?
+    let port = net_port(srv)?
+    let exe = os_exe()?
+    let argv = List[str]()
+    (mut argv).push("serve-inherited")
+    let inherit = List[int]()
+    (mut inherit).push(srv)
+    let kid = os_spawn_with(exe, argv, inherit) else |e| match e {
+        unsupported => {
+            served = false
+            0 - 1
+        },
+        _ => {
+            print("spawn failed with a program row on a host that serves the handoff")
+            return 3
+        },
+    }
+    if served {
+        let cli = net_connect("127.0.0.1:{port}")?
+        net_deadline(cli, 10000)?
+        net_write(cli, "howl")?
+        let reply = net_read(cli, 64)?
+        child_served = reply == "child: howl"
+        net_close(cli)?
+        let code = os_wait(kid)?
+        reaped = code == 0
+    }
+    net_close(srv)?
+    print("inherit | served_or_named true | child_served {child_served} | reaped {reaped}")
+    0
+}

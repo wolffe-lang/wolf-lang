@@ -279,7 +279,6 @@ pub unsafe extern "C" fn __wolf_rt_list_clear(hdr: i64) {
 /// `hdr` must be a live header from [`__wolf_rt_list_new`], and the
 /// returned slice borrows its buffer — it must not outlive a `push`
 /// that reallocates.
-#[cfg(test)]
 pub(crate) unsafe fn i64_elems<'a>(hdr: i64) -> Option<&'a [i64]> {
     let h = unsafe { &*(hdr as *const ListHdr) };
     if h.elem != 8 || h.len < 0 {

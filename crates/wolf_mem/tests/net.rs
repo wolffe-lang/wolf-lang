@@ -18,8 +18,30 @@
 use wolf_mem::ubcheck::{self, Budget, Verdict};
 use wolf_sema::{AliasTable, MemoryLoader, resolve_package_with, typecheck_package_with};
 
+/// Every program here binds LOOPBACK EPHEMERAL ports, and the host's
+/// ephemeral port space is one shared resource for the whole test
+/// binary. `refused_row_handles_and_propagates` depends on the one
+/// thing that space cannot promise under concurrency: that the port it
+/// just closed is still dead a microsecond later. It is not — macOS
+/// recycles a freed ephemeral port quickly, so a sibling test's bind
+/// can land on it and the "dead port" answers a connection (measured:
+/// 3 failures in 40 16-thread runs once s137 added two more
+/// ephemeral-binding programs to the file).
+///
+/// So the execution of a checked program is SERIAL here. Every entry
+/// below takes this lock for the whole run, which is exactly the
+/// scope that matters: no two programs in this binary hold or release
+/// a port at the same time. The file runs in hundredths of a second;
+/// there is nothing to win by overlapping it.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn serial() -> std::sync::MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// Statically clean ladder, then checked execution. Panics on refusal.
 fn run(src: &str) -> ubcheck::RunOutcome {
+    let _serial = serial();
     let mut ml = MemoryLoader::new("net");
     ml.add_file(&[], "main.lu", src);
     let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
@@ -505,5 +527,166 @@ fn unix_family_refuses_by_name() {
 }
 "#,
         "-1 -1\n",
+    );
+}
+
+// ---------------- s137: the listener a prefork server shares --------
+
+/// The ladder without the "must execute" assertion — the twin of
+/// [`run`] for the two calls the checked machine REFUSES BY NAME
+/// (s137, `[os.proc.inherit]`). Answers the refused construct.
+fn run_or_refusal(src: &str) -> Result<ubcheck::RunOutcome, String> {
+    let _serial = serial();
+    let mut ml = MemoryLoader::new("net");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty() && !tc.has_errors(),
+        "input typechecks"
+    );
+    let mem = wolf_mem::check_package(&res.package, &tc);
+    assert!(mem.not_yet.is_empty(), "input stays inside the mem surface");
+    ubcheck::run_checked(&res.package, &tc, Budget::default())
+        .map_err(|nyc| nyc.construct.to_string())
+}
+
+/// s137 (#234, `[os.net.listen.opts]`): the listener options on the
+/// checked machine — the option-less shape is `net_listen` call for
+/// call, a held address is `exists` BY NAME (the "in use" row #234
+/// asked for), a `reuse_port` group holds one port with both hands and
+/// a hand without the option cannot join it. The twin of
+/// `corpus/net/reuse_port.lu`. The group's port comes from a plain
+/// ephemeral bind that is then closed, so both hands name the address
+/// explicitly — the shape a prefork master actually writes, and the
+/// one the corpus witness performs too.
+#[cfg(unix)]
+#[test]
+fn listen_with_options_and_rows() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let probe = net_listen(\"127.0.0.1:0\")?\n\
+         let p = net_port(probe)?\n\
+         net_close(probe)?\n\
+         let addr = \"127.0.0.1:{p}\"\n\
+         let a = net_listen_with(addr, true, 16)?\n\
+         let b = net_listen_with(addr, true, 16)?\n\
+         let same = net_port(b)? == p\n\
+         var named = false\n\
+         let x = net_listen_with(addr, false, 0) else |e| match e {\n\
+         exists => { named = true\n0 - 1 },\n\
+         _ => 0 - 1,\n\
+         }\n\
+         net_close(a)?\n\
+         net_close(b)?\n\
+         let plain = net_listen_with(\"127.0.0.1:0\", false, 0)?\n\
+         let q = net_port(plain)?\n\
+         let cli = net_connect(\"127.0.0.1:{q}\")?\n\
+         net_write(cli, \"ping\")?\n\
+         let conn = net_accept(plain)?\n\
+         let got = net_read(conn, 16)?\n\
+         net_close(cli)?\n\
+         net_close(conn)?\n\
+         net_close(plain)?\n\
+         print(\"{same} {named} {x} {got}\")\n\
+         0\n\
+         }\n",
+        "true true -1 ping\n",
+    );
+}
+
+/// s137 (#235, `[os.proc.inherit]`): the checked machine runs no
+/// descriptor handoff and says so BY NAME, with the CONSTRUCT named —
+/// never a bare `unsupported`, never a trap (the s134 records rule; a
+/// conform-run record carries the same string in
+/// `x-unsupported-construct`). An EMPTY inherit set is `os_spawn` with
+/// the program named apart from its arguments, and is served.
+#[test]
+fn adoption_and_an_inherit_set_refuse_with_the_construct_named() {
+    let adopt = run_or_refusal(
+        "fn main() -> !int {\n\
+         let l = net_adopt_listener(3) else |_| 0 - 1\n\
+         print(\"{l}\")\n\
+         0\n\
+         }\n",
+    );
+    assert_eq!(
+        adopt.err().as_deref(),
+        Some("listener adoption in checked execution")
+    );
+    let inherit = run_or_refusal(
+        "fn main() -> !int {\n\
+         let srv = net_listen(\"127.0.0.1:0\")?\n\
+         let argv = List[str]()\n\
+         let fds = List[int]()\n\
+         (mut fds).push(srv)\n\
+         let h = os_spawn_with(\"/bin/sh\", argv, fds) else |_| 0 - 1\n\
+         print(\"{h}\")\n\
+         0\n\
+         }\n",
+    );
+    assert_eq!(
+        inherit.err().as_deref(),
+        Some("fd inheritance across os_spawn_with in checked execution")
+    );
+    // The empty set is served: a program that does not exist is the
+    // `not_found` row, exactly as `os_spawn` answers it.
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let argv = List[str]()\n\
+         let fds = List[int]()\n\
+         let h = os_spawn_with(\"wolf-s137-no-such-program\", argv, fds) else |e| match e {\n\
+         not_found => 0 - 1,\n\
+         _ => 0 - 2,\n\
+         }\n\
+         print(\"{h}\")\n\
+         0\n\
+         }\n",
+        "-1\n",
+    );
+}
+
+/// s137 (#127, `[os.net.wait]`): readiness over a SET on the checked
+/// machine — the twin of `corpus/net/wait_readiness.lu`. Quiet is the
+/// EMPTY answer (not a row), the wait names the socket that spoke and
+/// only it, asking again answers the same (level-triggered), the
+/// accept drains it, a peer's departure makes the stream ready, and a
+/// forged handle is `io` with nothing waited on.
+#[test]
+fn wait_names_the_socket_that_spoke() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+         let a = net_listen(\"127.0.0.1:0\")?\n\
+         let b = net_listen(\"127.0.0.1:0\")?\n\
+         let pb = net_port(b)?\n\
+         let set = List[int]()\n\
+         (mut set).push(a)\n\
+         (mut set).push(b)\n\
+         let quiet = net_wait(set, 20)?.len\n\
+         let cli = net_connect(\"127.0.0.1:{pb}\")?\n\
+         let woke = net_wait(set, 5000)?\n\
+         let again = net_wait(set, 0)?\n\
+         var right = false\n\
+         var level = false\n\
+         if woke.len == 1 { right = woke[0] == b }\n\
+         if again.len == 1 { level = again[0] == b }\n\
+         let conn = net_accept(b)?\n\
+         let drained = net_wait(set, 20)?.len\n\
+         net_close(cli)?\n\
+         let streams = List[int]()\n\
+         (mut streams).push(conn)\n\
+         let woken = net_wait(streams, 5000)?.len\n\
+         let forged = List[int]()\n\
+         (mut forged).push(99999)\n\
+         var io_row = false\n\
+         let bad = net_wait(forged, 0) else |_| { io_row = true\nList[int]() }\n\
+         let _n = bad.len\n\
+         net_close(conn)?\n\
+         net_close(a)?\n\
+         net_close(b)?\n\
+         print(\"{quiet} {right} {level} {drained} {woken} {io_row}\")\n\
+         0\n\
+         }\n",
+        "0 true true 0 1 true\n",
     );
 }

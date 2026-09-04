@@ -6711,6 +6711,38 @@ impl<'a> Checker<'a> {
                     &["unsupported", "refused", "not_found", "denied", "io"],
                 ),
             ),
+            // s137 (#234, `[os.net.listen.opts]`): `net_listen` with
+            // the two listener options a prefork server needs —
+            // `reuse_port` (`SO_REUSEPORT` before the bind: N hands
+            // share one port; what the kernel does with the group is
+            // the host's, named in the clause) and the `listen(2)`
+            // backlog hint (`<= 0`: the runtime's default). The rows
+            // tell the host from the address: `unsupported` is the host
+            // (windows, by name), `exists` an address another socket
+            // holds — the "in use" row #234 asked for, in the
+            // vocabulary s136 gave the family — `denied` a privileged
+            // port. `(addr, false, 0)` is `net_listen(addr)`.
+            "net_listen_with" => (
+                vec![str_, bool_, int_],
+                rowed(self, int_, &["unsupported", "exists", "denied", "io"]),
+            ),
+            // s137 (#235, `[os.proc.inherit]`): take an OS descriptor
+            // this process was HANDED (`os_spawn_with`'s inherit set
+            // arrives as 3, 4, … in the child) as a listener. Not a
+            // socket, not listening, a foreign family, or a number
+            // already adopted: `io`; the host (windows) `unsupported`,
+            // by name.
+            "net_adopt_listener" => (vec![int_], rowed(self, int_, &["unsupported", "io"])),
+            // s137 (#127, `[os.net.wait]`): readiness over a SET —
+            // which of these handles can be read without blocking.
+            // The answer is the subset, in the caller's order; an
+            // EMPTY answer is the deadline expiring with nothing
+            // ready, which is an answer and not a row. `io` is a
+            // forged handle, or a wait that could never end.
+            "net_wait" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (vec![list_int, int_], rowed(self, list_int, &["io"]))
+            }
             "net_port" => (vec![int_], rowed(self, int_, &["io"])),
             "net_accept" => (vec![int_], rowed(self, int_, &["timeout", "io"])),
             "net_connect" => (vec![str_], rowed(self, int_, &["refused", "timeout", "io"])),
@@ -6765,6 +6797,12 @@ impl<'a> Checker<'a> {
             // cannot hold — is `io`. It exists so std.process's rig can
             // spawn ITSELF and finally witness a child's exit code.
             "os_cwd" | "os_exe" => (Vec::new(), rowed(self, str_, &["io"])),
+            // s137 (#233, `[os.cpus]`): the count of schedulable
+            // cores, `os_cwd`'s shape without the string. Always
+            // `>= 1` when it answers; a host that cannot is `io`, so
+            // `worker_processes auto` can say it did not learn the
+            // number rather than quietly running one worker.
+            "os_cpus" => (Vec::new(), rowed(self, int_, &["io"])),
             // `os_exit` types unit and never returns (the checked
             // machine stops with the code; native calls the runtime
             // exit) — a `never` result is the std facade's refinement.
@@ -6779,6 +6817,23 @@ impl<'a> Checker<'a> {
                 (
                     vec![list_str],
                     rowed(self, int_, &["not_found", "denied", "io"]),
+                )
+            }
+            // s137 (#235, `[os.proc.inherit]`): `os_spawn` with the
+            // program named apart from its arguments and an INHERIT
+            // set — this process's net handles, which the child
+            // receives as descriptors 3, 4, … in the order given (the
+            // number is the contract: the parent never learns a
+            // descriptor number, the child adopts by position). The
+            // spawn rows plus `unsupported` for a host that hands
+            // nothing across (windows, by name); the checked machine
+            // refuses a non-empty set by name.
+            "os_spawn_with" => {
+                let list_str = self.lo.table.intern(TyKind::List(str_));
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![str_, list_str, list_int],
+                    rowed(self, int_, &["unsupported", "not_found", "denied", "io"]),
                 )
             }
             "os_wait" => (vec![int_], rowed(self, int_, &["signal", "io"])),

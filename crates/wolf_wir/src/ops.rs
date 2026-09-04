@@ -315,6 +315,10 @@ pub enum Opcode {
     /// `%r = sext.T %a` — sign-extend integer to the wider type T.
     Sext,
     /// `%r = zext.T %a` — zero-extend integer to the wider type T.
+    /// Also the bool -> int bridge: a `bool` source widens to any
+    /// integer T as 0 or 1 (the only conversion whose source is not an
+    /// integer type). Coming BACK is a compare, not a conversion:
+    /// `icmp.ne %w, 0`.
     Zext,
     /// `%r = itrunc.T %a` — truncate integer to the narrower type T.
     Itrunc,

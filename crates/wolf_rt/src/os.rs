@@ -146,6 +146,34 @@ pub unsafe extern "C" fn __wolf_rt_os_cwd(out: i64) -> i64 {
     }
 }
 
+/// `os_cpus() -> int ! {io}` (s137, wolf-lang#233, `[os.cpus]`) — the
+/// count of SCHEDULABLE cores, `>= 1`, or the `io` code.
+/// `available_parallelism` is the one call that answers it on every
+/// tier-1 host and answers the right thing: on linux it honours a
+/// cgroup cpu quota and a cpu affinity mask, which `/proc/cpuinfo`
+/// (what a program had to read before this call existed) does not —
+/// a container with two cpus of quota on a 64-core host reads 64
+/// there and 2 here. `sysctl hw.ncpu` on macOS, `GetSystemInfo` on
+/// windows, both behind the same call.
+///
+/// Never 0, and never a silent 1: a host that cannot answer is the
+/// `io` row, so `worker_processes auto` can say it did not learn the
+/// number instead of quietly running one worker.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_cpus(out: i64) -> i64 {
+    match std::thread::available_parallelism() {
+        Err(_) => 1,
+        Ok(n) => {
+            unsafe { crate::str::write_word(out, n.get() as i64) };
+            0
+        }
+    }
+}
+
 /// `os_exe() -> str ! {io}` (s90, wolf-lang#69) — the RUNNING
 /// executable's path. Portable on every tier-1 target through
 /// `std::env::current_exe` (procfs on linux, `_NSGetExecutablePath` on
@@ -241,6 +269,116 @@ impl ChildTable {
         }
     }
 
+    /// `os_spawn_with(exe, args, inherit)` (s137, #235,
+    /// `[os.proc.inherit]`): [`ChildTable::spawn`] with an inherit set —
+    /// OS descriptors (already mapped from this process's net handles
+    /// by the shim) the child receives as **3, 4, …** in the order
+    /// given. The numbering is the contract: a parent tells its child
+    /// "the listener is 3" without learning any descriptor number
+    /// itself, and the child's `net_adopt_listener(3)` is a real
+    /// listener on the same port. Mechanics (unix): a `pre_exec` hook
+    /// in the forked child STAGES every source above the target range
+    /// (`F_DUPFD` from `3 + n`, so a source that already sits at some
+    /// target number is never clobbered by an earlier `dup2`), then
+    /// `dup2`s each stage onto its target (which clears close-on-exec
+    /// on the target and only there) and closes the stage; the
+    /// parent's own descriptors stay close-on-exec and vanish at exec.
+    /// The hook runs after `fork` in a multithreaded process, so it
+    /// allocates nothing: the set is bounded at [`MAX_INHERIT`], and a
+    /// larger one is `io` before any child exists. Stdio is
+    /// [`ChildTable::spawn`]'s. Windows: a non-empty set is
+    /// `unsupported`, by name (handle inheritance exists there and
+    /// the runtime's test suite measures it on the runner, but a
+    /// `SOCKET` is not a small stable number the parent can name in
+    /// argv — the serving rung is docs/platforms.md's).
+    #[cfg_attr(not(unix), allow(unused_variables))]
+    pub fn spawn_with(
+        &mut self,
+        exe: &str,
+        args: &[&str],
+        inherit: &[InheritFd],
+    ) -> Result<i64, ProcErr> {
+        self.spawn_with_env(exe, args, inherit, &[])
+    }
+
+    /// [`ChildTable::spawn_with`] with environment additions — the
+    /// SAME call, with one seam the shipping surface does not expose:
+    /// `os_spawn_with` hands a child descriptors, not variables, and
+    /// `env_set` is the program's own way to arrange its environment.
+    /// The seam exists so the inherit witness can re-execute THIS
+    /// binary as its own child and tell it what to check, without a
+    /// second copy of the staging hook that could drift from this one.
+    #[cfg_attr(not(unix), allow(unused_variables))]
+    pub(crate) fn spawn_with_env(
+        &mut self,
+        exe: &str,
+        args: &[&str],
+        inherit: &[InheritFd],
+        env: &[(&str, &str)],
+    ) -> Result<i64, ProcErr> {
+        if exe.is_empty() {
+            return Err("not_found");
+        }
+        if inherit.len() > MAX_INHERIT {
+            return Err("io");
+        }
+        let mut cmd = Command::new(exe);
+        cmd.args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        #[cfg(unix)]
+        if !inherit.is_empty() {
+            use std::os::unix::process::CommandExt as _;
+            let n = inherit.len();
+            let mut set = [-1 as InheritFd; MAX_INHERIT];
+            set[..n].copy_from_slice(inherit);
+            // SAFETY: the hook calls only async-signal-safe functions
+            // (`fcntl`, `dup2`, `close`) on a fixed-size array — no
+            // allocation, no locks — which is the whole `pre_exec`
+            // contract in a process that holds other threads.
+            unsafe {
+                cmd.pre_exec(move || {
+                    let floor = 3 + n as libc::c_int;
+                    let mut staged = [-1 as InheritFd; MAX_INHERIT];
+                    for i in 0..n {
+                        let s = libc::fcntl(set[i], libc::F_DUPFD, floor);
+                        if s < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        staged[i] = s;
+                    }
+                    for (i, &s) in staged[..n].iter().enumerate() {
+                        if libc::dup2(s, 3 + i as libc::c_int) < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        libc::close(s);
+                    }
+                    Ok(())
+                });
+            }
+        }
+        #[cfg(not(unix))]
+        if !inherit.is_empty() {
+            return Err("unsupported");
+        }
+        match cmd.spawn() {
+            Err(e) => Err(match e.kind() {
+                std::io::ErrorKind::NotFound => "not_found",
+                std::io::ErrorKind::PermissionDenied => "denied",
+                _ => "io",
+            }),
+            Ok(child) => {
+                let h = self.children.len() as i64;
+                self.children.push(Some(child));
+                Ok(h)
+            }
+        }
+    }
+
     /// Wait for the child and REAP it (the slot tombstones on any
     /// completed wait). The exit code, or `signal` for a child that
     /// died without one (unix); a forged or already-reaped handle is
@@ -283,6 +421,19 @@ impl ChildTable {
     }
 }
 
+/// The OS descriptor type an inherit set carries (s137): a unix fd; on
+/// windows the set is refused before it is read, so the type only has
+/// to exist.
+#[cfg(unix)]
+pub type InheritFd = std::os::fd::RawFd;
+#[cfg(not(unix))]
+pub type InheritFd = i32;
+
+/// The most descriptors one `os_spawn_with` hands over (s137): the
+/// `pre_exec` hook stages the set on the stack, and no prefork server
+/// hands a child more listeners than this.
+pub const MAX_INHERIT: usize = 64;
+
 /// Error codes of the process family (lowering maps them to row tags,
 /// coarsening any the call's row does not declare to `io`).
 pub mod proc_code {
@@ -291,6 +442,10 @@ pub mod proc_code {
     pub const DENIED: i64 = 2;
     pub const SIGNAL: i64 = 3;
     pub const IO: i64 = 4;
+    /// s137 (#235): an inherit set on a host whose runtime does not
+    /// hand descriptors across a spawn (windows at this pin) — refused
+    /// BY NAME, declared only by `os_spawn_with`.
+    pub const UNSUPPORTED: i64 = 5;
 }
 
 /// The process-wide child table behind the shim trio — the fs
@@ -307,7 +462,43 @@ fn proc_code_of_tag(tag: ProcErr) -> i64 {
         "not_found" => proc_code::NOT_FOUND,
         "denied" => proc_code::DENIED,
         "signal" => proc_code::SIGNAL,
+        "unsupported" => proc_code::UNSUPPORTED,
         _ => proc_code::IO,
+    }
+}
+
+/// `os_spawn_with(exe: str, args: List[str], inherit: List[int]) -> int
+/// ! {unsupported, not_found, denied, io}` (s137, #235,
+/// `[os.proc.inherit]`) — the child's handle (>= 0), or `-code`.
+/// `inherit` holds this process's NET handles; the shim maps each to
+/// its OS descriptor first ([`crate::net::raw_fds_of`]) and a forged
+/// or closed one is the `io` code with no child spawned. A header of
+/// the wrong element width (FFI-only) is `io` too.
+///
+/// # Safety
+///
+/// `ep`/`el` a valid str pair; `args` a live `List[str]` header;
+/// `inherit` a live `List[int]` header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_spawn_with(ep: i64, el: i64, args: i64, inherit: i64) -> i64 {
+    let exe = unsafe { view(ep, el) };
+    let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
+        return -proc_code::IO;
+    };
+    let argv: Vec<&str> = pairs.iter().map(|&[p, l]| unsafe { view(p, l) }).collect();
+    let Some(handles) = (unsafe { crate::list::i64_elems(inherit) }) else {
+        return -proc_code::IO;
+    };
+    #[cfg(unix)]
+    let fds: Vec<InheritFd> = match crate::net::raw_fds_of(handles) {
+        Some(f) => f,
+        None => return -proc_code::IO,
+    };
+    #[cfg(not(unix))]
+    let fds: Vec<InheritFd> = handles.iter().map(|_| -1).collect();
+    match children().spawn_with(exe, &argv, &fds) {
+        Ok(h) => h,
+        Err(t) => -proc_code_of_tag(t),
     }
 }
 
@@ -535,5 +726,225 @@ mod tests {
         assert_eq!(__wolf_rt_os_kill(h2), proc_code::OK);
         assert_eq!(unsafe { __wolf_rt_os_wait(h2, o) }, proc_code::SIGNAL);
         assert_eq!(unsafe { __wolf_rt_os_wait(h2, o) }, proc_code::IO);
+    }
+
+    /// s137 (#233, `[os.cpus]`): the count is at least one and the
+    /// call answers it — every tier-1 host does. The exact number is
+    /// the machine's, so the relation is what is pinned, never a
+    /// value; it is also compared against the thread pool's own view,
+    /// because both read the same source and a disagreement would
+    /// mean the runtime is telling a program one thing and sizing
+    /// itself by another.
+    #[test]
+    fn cpus_is_at_least_one_and_agrees_with_the_pool() {
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(
+            unsafe { __wolf_rt_os_cpus(o) },
+            0,
+            "every tier-1 host answers"
+        );
+        assert!(out[0] >= 1, "schedulable cores: {}", out[0]);
+        let want = std::thread::available_parallelism().map_or(1, |n| n.get() as i64);
+        assert_eq!(out[0], want, "the same source the pool sizes itself from");
+    }
+
+    // ---------------- s137: the inherit set (#235, [os.proc.inherit]) --
+
+    /// s137: a listener handed through `spawn_with` is the child's 3.
+    /// Two children answer it. The SHELL'S child settles the coarse
+    /// question with `test -S /dev/fd/3` — a socket at that number, or
+    /// not — and its negative control is a plain spawn, where 3 is not
+    /// a socket at all (the CLOEXEC posture #235 measured with `lsof`).
+    /// THIS BINARY'S child settles the fine one: re-executed with two
+    /// listeners on DIFFERENT ports, it adopts 3 and 4 and reports
+    /// whether each is the listener the parent put at that position —
+    /// which is the whole contract, since a caller names a descriptor
+    /// only by where it sits. It also asks whether anything ABOVE the
+    /// set is one of the parent's listeners, because "the runtime
+    /// hands exactly this many" is the other half of the promise.
+    ///
+    /// What it deliberately does NOT assert is that descriptor
+    /// `3 + n` is closed outright. A process may hold inheritable
+    /// descriptors that are none of the runtime's business — a test
+    /// harness's pipe, a library's — and `[os.proc.inherit]` promises
+    /// only that nothing above the set is there because the runtime
+    /// put it there. Measured: a `! test -e /dev/fd/5` assertion here
+    /// failed on the GitHub macOS runners against a descriptor this
+    /// crate never opened.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_with_hands_descriptors_to_the_child_from_3() {
+        use std::os::fd::AsRawFd as _;
+        // The re-executed child's half.
+        if let Ok(v) = std::env::var("WOLF_S137_INHERIT_CHILD") {
+            let want: Vec<i64> = v.split(',').filter_map(|w| w.parse().ok()).collect();
+            let mut t = crate::net::NetTable::new();
+            let mut code = 0i32;
+            for (i, &port) in want.iter().enumerate() {
+                let at = 3 + i as i64;
+                let got = t.adopt_listener(at).ok().and_then(|h| t.port(h).ok());
+                if got != Some(port) {
+                    code = 10 + i as i32;
+                }
+            }
+            // Nothing above the set is one of the parent's listeners.
+            let above = 3 + want.len() as i64;
+            if let Ok(h) = t.adopt_listener(above)
+                && t.port(h).is_ok_and(|p| want.contains(&p))
+            {
+                code = 20;
+            }
+            std::process::exit(code);
+        }
+        let l = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let l2 = std::net::TcpListener::bind("127.0.0.1:0").expect("bind 2");
+        let p1 = i64::from(l.local_addr().expect("addr").port());
+        let p2 = i64::from(l2.local_addr().expect("addr 2").port());
+        assert_ne!(p1, p2, "two distinct ports, so ORDER is observable");
+        let mut t = ChildTable::new();
+        let h = t
+            .spawn_with("/bin/sh", &["-c", "test -S /dev/fd/3"], &[l.as_raw_fd()])
+            .expect("spawn");
+        assert_eq!(t.wait(h), Ok(0), "fd 3 in the child is a socket");
+        let h = t
+            .spawn_with("/bin/sh", &["-c", "test -S /dev/fd/3"], &[])
+            .expect("spawn");
+        assert_eq!(
+            t.wait(h),
+            Ok(1),
+            "no inherit set: the child holds no socket"
+        );
+        // The fine question, answered by this binary re-executed.
+        let exe = std::env::current_exe().expect("exe");
+        let mut kids = ChildTable::new();
+        let h = kids
+            .spawn_with_env(
+                exe.to_str().expect("utf8 exe"),
+                &[
+                    "--exact",
+                    "os::tests::spawn_with_hands_descriptors_to_the_child_from_3",
+                    "--nocapture",
+                ],
+                &[l.as_raw_fd(), l2.as_raw_fd()],
+                &[("WOLF_S137_INHERIT_CHILD", &format!("{p1},{p2}"))],
+            )
+            .expect("re-exec");
+        assert_eq!(
+            kids.wait(h),
+            Ok(0),
+            "3 and 4 are the parent's listeners IN ORDER (10/11 = wrong \
+             listener at that position, 20 = a third one above the set)"
+        );
+        // The same descriptor twice is two numbers in the child.
+        let h = t
+            .spawn_with(
+                "/bin/sh",
+                &["-c", "test -S /dev/fd/3 && test -S /dev/fd/4"],
+                &[l.as_raw_fd(), l.as_raw_fd()],
+            )
+            .expect("spawn");
+        assert_eq!(t.wait(h), Ok(0));
+        let big = vec![l.as_raw_fd(); MAX_INHERIT + 1];
+        assert_eq!(t.spawn_with("/bin/sh", &["-c", "true"], &big), Err("io"));
+        assert_eq!(t.spawn_with("", &[], &[]), Err("not_found"));
+        assert_eq!(
+            t.spawn_with("wolf-s137-no-such-program", &[], &[l.as_raw_fd()]),
+            Err("not_found")
+        );
+    }
+
+    /// s137: the shim maps NET HANDLES (this process's table indexes)
+    /// to descriptors — a real listener handle reaches the child as 3;
+    /// a forged handle is the `io` code with nothing spawned; a
+    /// header of the wrong element width is `io` too.
+    #[cfg(unix)]
+    #[test]
+    fn shim_spawn_with_maps_net_handles_and_refuses_forged_ones() {
+        let addr = "127.0.0.1:0";
+        let srv =
+            unsafe { crate::net::__wolf_rt_net_listen(addr.as_ptr() as i64, addr.len() as i64) };
+        assert!(srv >= 0);
+        let exe = "/bin/sh";
+        let args = crate::list::new_list(16);
+        crate::list::push_str(args, "-c");
+        crate::list::push_str(args, "test -S /dev/fd/3");
+        let inherit = crate::list::new_list(8);
+        crate::list::push_int(inherit, srv);
+        let h = unsafe {
+            __wolf_rt_os_spawn_with(
+                exe.as_ptr() as i64,
+                exe.len() as i64,
+                args as i64,
+                inherit as i64,
+            )
+        };
+        assert!(h >= 0, "spawn: {h}");
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        assert_eq!(unsafe { __wolf_rt_os_wait(h, o) }, proc_code::OK);
+        assert_eq!(out[0], 0, "the child saw the listener at 3");
+        let forged = crate::list::new_list(8);
+        crate::list::push_int(forged, 99_999);
+        assert_eq!(
+            unsafe {
+                __wolf_rt_os_spawn_with(
+                    exe.as_ptr() as i64,
+                    exe.len() as i64,
+                    args as i64,
+                    forged as i64,
+                )
+            },
+            -proc_code::IO
+        );
+        // A List[str] header where the inherit list should be.
+        assert_eq!(
+            unsafe {
+                __wolf_rt_os_spawn_with(
+                    exe.as_ptr() as i64,
+                    exe.len() as i64,
+                    args as i64,
+                    args as i64,
+                )
+            },
+            -proc_code::IO
+        );
+        assert_eq!(
+            crate::net::__wolf_rt_net_close(srv),
+            crate::net::net_code::OK
+        );
+    }
+
+    /// s137 on windows: an inherit set is refused BY NAME (the
+    /// `unsupported` code, never a bare `io`) with no child spawned;
+    /// an empty set is `spawn` — the child runs and its code comes
+    /// back through the reap.
+    #[cfg(windows)]
+    #[test]
+    fn spawn_with_refuses_an_inherit_set_by_name_on_windows() {
+        let mut t = ChildTable::new();
+        assert_eq!(
+            t.spawn_with("cmd", &["/c", "exit 0"], &[7]),
+            Err("unsupported")
+        );
+        let h = t.spawn_with("cmd", &["/c", "exit 3"], &[]).expect("spawn");
+        assert_eq!(t.wait(h), Ok(3));
+        let exe = "cmd";
+        let args = crate::list::new_list(16);
+        crate::list::push_str(args, "/c");
+        crate::list::push_str(args, "exit 0");
+        let inherit = crate::list::new_list(8);
+        crate::list::push_int(inherit, 0);
+        assert_eq!(
+            unsafe {
+                __wolf_rt_os_spawn_with(
+                    exe.as_ptr() as i64,
+                    exe.len() as i64,
+                    args as i64,
+                    inherit as i64,
+                )
+            },
+            -proc_code::UNSUPPORTED
+        );
     }
 }

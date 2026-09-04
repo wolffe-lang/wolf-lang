@@ -36,6 +36,13 @@ pub mod random;
 // scale story) is s60c's, behind the same seam.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod reactor;
+// s137 (#127): the reactor's LEVEL-TRIGGERED sibling — `poll(2)` /
+// `WSAPoll` over a borrowed set, for `net_wait`. Separate from the
+// reactor on purpose: it disturbs no task registration, and it
+// compiles on every host with a libc (freebsd included, where the
+// reactor's poller is not written).
+#[cfg(any(unix, windows))]
+pub(crate) mod poll;
 // Signal RECEPTION (s114, #126): the meaning-based receive surface
 // over the self-pipe/sigaction trampoline (linux at s114, macOS since
 // s59 — `pipe` + FD_CLOEXEC where pipe2 does not exist, spec

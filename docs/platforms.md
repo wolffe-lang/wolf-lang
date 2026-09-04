@@ -91,6 +91,21 @@ calls wolf's `main` shim.
   neither of which any row needs today; they land at s60c behind the
   same seam, readiness adapted underneath exactly as kqueue and
   `WSAPoll` were.
+- **Readiness over a set** (`net_wait`, `[os.net.wait]`, s137) —
+  `WSAPoll` again, this time in front of the program rather than under
+  the reactor: a spawn-free serving loop asks which of its sockets can
+  be read and blocks until one can. This is the s137 surface that does
+  NOT refuse on this host. Every tier-1 kernel answers the question
+  (`poll(2)` elsewhere), so `net_wait` is the same call with the same
+  row set everywhere, on the native tier and on the checked machine
+  alike, and `[os.net.wait]` names no host.
+- **The schedulable core count** (`os_cpus`, `[os.cpus]`, s137) —
+  `GetSystemInfo` here, through the one call that reads the right
+  thing on every host (`available_parallelism`, which honours a cgroup
+  quota and an affinity mask where those exist). Like `net_wait` it
+  refuses on no host, and the native lane and the checked machine
+  answer the SAME number, which is what lets `workers auto` mean one
+  thing.
 - The C membrane for scalars and pointers (`extern "c"` /
   `export` with `int`, `float`, pointer parameters and results).
 
@@ -133,6 +148,44 @@ a link error, never a silent stub.
   winsock binding beyond `WSAPoll` (D15), so the serving rung is
   named here rather than claimed. A lobo-shaped program keeps its
   loopback-TCP + token control endpoint on this host (wolf-lang#227).
+- **`reuse_port`** (`net_listen_with`'s option, `[os.net.listen.opts]`,
+  s137): the `unsupported` row, by name — and this one is a REFUSAL ON
+  PURPOSE, not a missing binding. Windows has no `SO_REUSEPORT`.
+  `SO_REUSEADDR` is spelled the same in a manual and means something
+  else entirely there: it lets any process take a port another process
+  already bound, and promises nothing about which of them a connection
+  reaches. Aliasing the option to it would hand a prefork server a
+  silent hijack where it asked for a shared queue, so the runtime
+  refuses by name instead. `wolf_rt`'s windows test suite MEASURES what
+  the alias would have meant on the runner, and the answer is worse
+  than the manual suggests: two ws2_32 sockets both carrying
+  `SO_REUSEADDR` bind one port, and **every one of 16 dials went to
+  the FIRST socket bound — none to the second** (16/0, measured). So
+  the second bind succeeds and then serves nothing: a worker that
+  "joined the group" would sit idle forever with no error to report.
+  That is the sentence, and it is the runner's answer rather than a
+  manual's. `net_listen_with`'s option-LESS shape serves on this host
+  like `net_listen`, backlog hint and all, and a held address is
+  `exists` by name (wolf-lang#234).
+- **Descriptor inheritance across a spawn** (`os_spawn_with`'s
+  inherit set and `net_adopt_listener`, `[os.proc.inherit]`, s137):
+  the `unsupported` row, by name — and the gap is deeper than #235
+  guessed. The runtime's windows suite MEASURES it on the runner
+  (`windows_socket_handle_inheritance_measured`): a listener's
+  `SOCKET` marked `HANDLE_FLAG_INHERIT`, its value named to a
+  re-executed child, **is not a usable socket in that child at all**.
+  `std::process::Command` publishes only its stdio handles to the
+  child on this host, so the descriptor does not cross the spawn the
+  runtime performs. Two things are therefore missing, not one: the
+  crossing itself, and the numbering the clause promises (a `SOCKET`
+  is not a small stable descriptor a parent can hand over by POSITION
+  — "the listener is 3"). Both want the same next campaign: a
+  `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` spawn of the runtime's own,
+  which `Command` cannot express. The serving rung is named here for
+  it. `os_spawn_with` with an EMPTY set already serves on this host —
+  it is `os_spawn` with the program named apart from its arguments —
+  so a windows port of a prefork master needs only the handoff, not
+  the spawn (wolf-lang#235).
 
 ### The floor line
 

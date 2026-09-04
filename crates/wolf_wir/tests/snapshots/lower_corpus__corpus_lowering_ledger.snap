@@ -296,13 +296,17 @@ memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 net/byte_roundtrip.lu: lowers
 net/echo_bytes.lu: lowers
 net/echo_roundtrip.lu: lowers
+net/inherit_listener.lu: lowers
 net/line_reader_bytes.lu: lowers
 net/peer_close_after_serve.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
+net/reuse_port.lu: lowers
 net/spawn_accept.lu: lowers
 net/unix_echo.lu: lowers
+net/wait_readiness.lu: lowers
 os/args_cwd.lu: lowers
+os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
 os/random_differs.lu: lowers

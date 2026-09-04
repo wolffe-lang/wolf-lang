@@ -1,5 +1,125 @@
 # Changelog
 
+## Unreleased
+
+### A listener that hands can share (s137 — #234 and #235 close)
+
+**You can write a prefork server in wolf now.** Two things were
+missing and both are here.
+
+`net_listen_with(addr, reuse_port, backlog)` is `net_listen` with the
+two options a server needs. `reuse_port` sets `SO_REUSEPORT` **before**
+the bind — the only place it works — so several listeners can hold one
+address at once, in one process or across many, and the old hand can
+leave without the port ever going free. `backlog` is the `listen(2)`
+queue hint (`<= 0` asks for the default). The handle it answers is the
+ordinary listener every other net call already serves, so nothing else
+in the surface grew for it. **A held address is `exists` now**, by
+name, instead of a bare `io`: the "already in use" answer a server has
+to tell apart from everything else. What the kernel then does with a
+group is the host's and the clause STATES it rather than promising:
+linux distributes accepts across the group, macOS hands every SYN to
+the newest bound socket and falls to a survivor when it closes — both
+measured on the runner by the runtime's own tests, not quoted from a
+manual. Windows refuses `reuse_port` by name; `SO_REUSEADDR` there
+means "any process may take this port" and aliasing to it would hand
+you a hijack where you asked for a shared queue.
+
+`os_spawn_with(exe, args, inherit)` hands a child real descriptors, and
+`net_adopt_listener(fd)` picks one up. **The child receives them as 3,
+4, … in the order given** — that numbering is the contract, so a parent
+never learns a descriptor number and a child never has to be told one:
+"the listener is 3" is true by position. The adopter asks the kernel
+what the number is rather than trusting it (a stream socket, with no
+peer, listening where the kernel keeps that flag), so a pipe, a
+connected stream or a stranger's number is `io`, never a trap. It owns
+the descriptor from then on — `net_close` closes it, a second adopt of
+a live number is refused — but it owns nothing outside it: an adopted
+unix listener does not unlink the socket file its parent bound. One
+spawn hands at most 64. Windows refuses an inherit set by name (handle
+inheritance exists there and the toolchain measures it on the runner,
+but a `SOCKET` is not a small number you can hand over by position);
+the checked machine refuses both by name with the construct named,
+because a child of the program being interpreted would be a child of
+the compiler.
+
+Spec: `[os.net.listen.opts]`, `[os.proc.inherit]`. Witnesses:
+`corpus/net/reuse_port.lu`, `corpus/net/inherit_listener.lu`.
+Per-host detail in [`docs/platforms.md`](docs/platforms.md).
+
+### The reactor's readiness surface (s137 — #127 closes)
+
+**A serving loop can wait now instead of checking.** `net_wait(fds,
+deadline_ms)` answers which of a set of handles can be read without
+blocking — a listener whose `net_accept` will not block, a stream
+whose `net_read` will answer bytes or `closed` — as the subset, in
+the order you gave. Every other blocking call in the family waits on
+ONE socket; this is the one that waits on many, and it is what a
+program that spawns no tasks has instead of a scheduler.
+
+Before it, a single-loop server had to time-slice: a short deadline on
+the listener, another on every open connection, every idle pass,
+spending its life waking up to learn that nothing happened. **Measured
+on an idle loop holding one connection for five seconds (macOS arm64,
+the same shape lobo's ws16 bench runs):**
+
+| | loop passes | involuntary context switches | cycles |
+|---|---|---|---|
+| deadline time-slicing (25 ms + 12 ms) | 125 | 1,385 | 57.1 M |
+| one `net_wait` on the whole set | 1 | 12 | 8.2 M |
+| a program that only sleeps (the floor) | — | 7 | 6.9 M |
+
+Net of the floor, that is **50.2 M cycles of idle work against 1.3 M —
+about 37x less — and 1,378 involuntary context switches against 5**.
+The loop wakes when a socket speaks, not when a timer says to look.
+
+An empty answer is the deadline expiring with nothing ready: **an
+answer, not a failure**. Readiness is level-triggered, so asking
+consumes nothing and two waits answer the same until you actually read
+or accept; a stream whose peer has gone is READY, and the read that
+follows is what reports `closed`. `io` is a forged handle, or a wait
+nothing could ever end. The call neither parks a task nor disturbs the
+reactor's registrations, so it mixes freely with `spawn`.
+
+Alone in this sprint it names no host: `poll(2)` on linux, macOS and
+freebsd, `WSAPoll` on windows, and the checked machine mirrors it call
+for call. Spec: `[os.net.wait]`. Witness:
+`corpus/net/wait_readiness.lu`.
+
+### `os_cpus()` (s137 — #233 closes)
+
+**A program can ask how big the machine is.** `os_cpus()` answers the
+count of cores this process may actually be scheduled on, always `>= 1`
+when it answers.
+
+*Schedulable*, not *installed*, is the whole point. On linux the number
+honours a cgroup cpu quota and a cpu affinity mask, so a container
+given two cpus of quota on a sixty-four-core host answers **2** —
+where counting `processor` rows in `/proc/cpuinfo`, which is what a
+program had to do before this existed, answers 64 and starts
+sixty-two workers that will never get a core between them. macOS reads
+`hw.ncpu`, windows `GetSystemInfo`; every tier reads the same source,
+so `wolf run` and `wolf run --checked` agree on the number on one host.
+
+A host that cannot answer is the `io` row, never a silent 1: a program
+resolving `workers auto` can say it did not learn the number instead of
+quietly running one worker and looking healthy. Spec: `[os.cpus]`.
+Witness: `corpus/os/cpus.lu`.
+
+### Two fixes found on the way (s137)
+
+- **`channel[bool]` compiled to a crash.** A `bool` payload crossing a
+  channel's one-word wire lowered to `zext.i64`, which the WIR verifier
+  rejected as "integer conversion needs integer types" — an internal
+  compiler error on any native build. `zext` from `bool` is now the
+  bool→int bridge and verifies; `sext` from `bool` still does not,
+  because sign-extending a truth value means nothing.
+- **The runtime's own test pipes could leak into a child.** On hosts
+  without `pipe2` (macOS), the reactor's test pipe was not
+  close-on-exec, so a descriptor nobody handed over could turn up in a
+  spawned child. It now matches the posture every other descriptor the
+  runtime opens already had.
+
 ## 0.2.4 — 2026-09-03
 
 THE BYTE SHIPS. **A 64 KiB read charges what it holds.** wolf has a
