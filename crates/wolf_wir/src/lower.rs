@@ -7970,6 +7970,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // opts]`, `[os.proc.inherit]`. Both ride the fd shape.
                 | "net_listen_with"
                 | "net_adopt_listener"
+                // s137 (#127): readiness over a set, `[os.net.wait]`.
+                | "net_wait"
                 | "net_close"
                 | "net_deadline"
         ) {
@@ -10930,6 +10932,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             .one();
                         Ok(zelf.code_tag_chain(code, &tag_pairs, "io"))
                     },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s137 (#127, `[os.net.wait]`): the handle set crosses as
+            // one list header the shim READS in the caller's regions
+            // (the `os_spawn` posture), and the ready subset is MINTED
+            // into the container regions and handed back through the
+            // out slot (the `os_random`/`net_read_bytes` posture), so
+            // no `data`/`len` the caller loaded survives the shim.
+            "net_wait" => {
+                let set = arg(0)?;
+                let deadline = arg(1)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_net_wait",
+                        &[set, deadline],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
+                    |zelf| Ok(zelf.code_tag_chain(rc, &tag_pairs, "io")),
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
