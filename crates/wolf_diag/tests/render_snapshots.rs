@@ -153,6 +153,59 @@ fn width_truncation_windows_long_lines() {
     );
 }
 
+/// #238 — a group that points TWICE at one long line, far apart.
+///
+/// The E0401 `because` shape, which is the one the wild report carried:
+/// the annotation on the left, the value it disagrees with far to the
+/// right. The window centres on the FIRST row it owes — the annotation —
+/// so the value's underline starts past the cut. Its start used to keep
+/// its true column while only its end was clamped to the width, and
+/// `hi - lo` then underflowed a `usize`: `str::repeat` asked for
+/// near-`usize::MAX` bytes and the process aborted — taking, in
+/// `conform-run`, the whole observation record with it, because there
+/// is no record after a panic. So this test's real assertion is that it
+/// RETURNS; the snapshot pins what a clipped row renders as, a mark on
+/// the `…` plus the label.
+#[test]
+fn a_second_annotation_past_the_cut_clips_instead_of_overflowing() {
+    let pad = "1 + ".repeat(40);
+    let src = format!("let v: bool = if c {{ {pad}1 }} else {{ 0 }}\n");
+    let (sources, f) = one_file(&src);
+    // The `else` arm's value: narrow, and far past the 60-column window
+    // the leftmost annotation puts around itself.
+    let arm = src.rfind('0').expect("the else arm") as u32;
+    let annotation = src.find("bool").expect("the annotation") as u32;
+    let d = Diagnostic::error(
+        codes::E0401,
+        Span::new(f, arm, arm + 1),
+        "this is `{integer}`, but `v` is declared as `bool`",
+    )
+    .with_label("found `{integer}` here")
+    .with_secondary(
+        Span::new(f, annotation, annotation + 4),
+        "the annotation is here",
+    );
+    let out = render_human(
+        &d,
+        &sources,
+        &RenderOptions {
+            width: 60,
+            ..RenderOptions::default()
+        },
+    );
+    // The clipped row keeps its label and marks exactly one column: the
+    // cut edge. Nothing may claim a width it cannot show.
+    for line in out.lines() {
+        let marks = line.chars().filter(|c| *c == '^' || *c == '-').count();
+        assert!(marks <= 60, "an underline wider than the window:\n{out}");
+    }
+    assert!(
+        out.contains("found `{integer}` here"),
+        "the clipped row keeps its label:\n{out}"
+    );
+    insta::assert_snapshot!("width_truncation_two_annotations", out);
+}
+
 /// The mock sema shape (s10 contract): secondary-heavy, three
 /// secondaries across two files — proves the API and layout s13/s18
 /// will lean on, before those clients exist.
