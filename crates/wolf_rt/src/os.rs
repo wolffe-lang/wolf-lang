@@ -270,6 +270,24 @@ impl ChildTable {
         args: &[&str],
         inherit: &[InheritFd],
     ) -> Result<i64, ProcErr> {
+        self.spawn_with_env(exe, args, inherit, &[])
+    }
+
+    /// [`ChildTable::spawn_with`] with environment additions — the
+    /// SAME call, with one seam the shipping surface does not expose:
+    /// `os_spawn_with` hands a child descriptors, not variables, and
+    /// `env_set` is the program's own way to arrange its environment.
+    /// The seam exists so the inherit witness can re-execute THIS
+    /// binary as its own child and tell it what to check, without a
+    /// second copy of the staging hook that could drift from this one.
+    #[cfg_attr(not(unix), allow(unused_variables))]
+    pub(crate) fn spawn_with_env(
+        &mut self,
+        exe: &str,
+        args: &[&str],
+        inherit: &[InheritFd],
+        env: &[(&str, &str)],
+    ) -> Result<i64, ProcErr> {
         if exe.is_empty() {
             return Err("not_found");
         }
@@ -281,6 +299,9 @@ impl ChildTable {
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
         #[cfg(unix)]
         if !inherit.is_empty() {
             use std::os::unix::process::CommandExt as _;
@@ -681,19 +702,57 @@ mod tests {
 
     // ---------------- s137: the inherit set (#235, [os.proc.inherit]) --
 
-    /// s137: a listener handed through `spawn_with` is the child's 3 —
-    /// measured with the shell's own `test -S /dev/fd/3` (a socket at
-    /// that number, or not); a plain spawn hands nothing (3 is not
-    /// open: the CLOEXEC posture #235 measured with `lsof`, now the
-    /// negative control); two listeners are 3 and 4 IN ORDER and 5 is
-    /// closed; an oversized set is `io` before any child exists; the
-    /// spawn rows are `spawn`'s.
+    /// s137: a listener handed through `spawn_with` is the child's 3.
+    /// Two children answer it. The SHELL'S child settles the coarse
+    /// question with `test -S /dev/fd/3` — a socket at that number, or
+    /// not — and its negative control is a plain spawn, where 3 is not
+    /// a socket at all (the CLOEXEC posture #235 measured with `lsof`).
+    /// THIS BINARY'S child settles the fine one: re-executed with two
+    /// listeners on DIFFERENT ports, it adopts 3 and 4 and reports
+    /// whether each is the listener the parent put at that position —
+    /// which is the whole contract, since a caller names a descriptor
+    /// only by where it sits. It also asks whether anything ABOVE the
+    /// set is one of the parent's listeners, because "the runtime
+    /// hands exactly this many" is the other half of the promise.
+    ///
+    /// What it deliberately does NOT assert is that descriptor
+    /// `3 + n` is closed outright. A process may hold inheritable
+    /// descriptors that are none of the runtime's business — a test
+    /// harness's pipe, a library's — and `[os.proc.inherit]` promises
+    /// only that nothing above the set is there because the runtime
+    /// put it there. Measured: a `! test -e /dev/fd/5` assertion here
+    /// failed on the GitHub macOS runners against a descriptor this
+    /// crate never opened.
     #[cfg(unix)]
     #[test]
     fn spawn_with_hands_descriptors_to_the_child_from_3() {
         use std::os::fd::AsRawFd as _;
+        // The re-executed child's half.
+        if let Ok(v) = std::env::var("WOLF_S137_INHERIT_CHILD") {
+            let want: Vec<i64> = v.split(',').filter_map(|w| w.parse().ok()).collect();
+            let mut t = crate::net::NetTable::new();
+            let mut code = 0i32;
+            for (i, &port) in want.iter().enumerate() {
+                let at = 3 + i as i64;
+                let got = t.adopt_listener(at).ok().and_then(|h| t.port(h).ok());
+                if got != Some(port) {
+                    code = 10 + i as i32;
+                }
+            }
+            // Nothing above the set is one of the parent's listeners.
+            let above = 3 + want.len() as i64;
+            if let Ok(h) = t.adopt_listener(above)
+                && t.port(h).is_ok_and(|p| want.contains(&p))
+            {
+                code = 20;
+            }
+            std::process::exit(code);
+        }
         let l = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
         let l2 = std::net::TcpListener::bind("127.0.0.1:0").expect("bind 2");
+        let p1 = i64::from(l.local_addr().expect("addr").port());
+        let p2 = i64::from(l2.local_addr().expect("addr 2").port());
+        assert_ne!(p1, p2, "two distinct ports, so ORDER is observable");
         let mut t = ChildTable::new();
         let h = t
             .spawn_with("/bin/sh", &["-c", "test -S /dev/fd/3"], &[l.as_raw_fd()])
@@ -707,17 +766,27 @@ mod tests {
             Ok(1),
             "no inherit set: the child holds no socket"
         );
-        let h = t
-            .spawn_with(
-                "/bin/sh",
+        // The fine question, answered by this binary re-executed.
+        let exe = std::env::current_exe().expect("exe");
+        let mut kids = ChildTable::new();
+        let h = kids
+            .spawn_with_env(
+                exe.to_str().expect("utf8 exe"),
                 &[
-                    "-c",
-                    "test -S /dev/fd/3 && test -S /dev/fd/4 && ! test -e /dev/fd/5",
+                    "--exact",
+                    "os::tests::spawn_with_hands_descriptors_to_the_child_from_3",
+                    "--nocapture",
                 ],
                 &[l.as_raw_fd(), l2.as_raw_fd()],
+                &[("WOLF_S137_INHERIT_CHILD", &format!("{p1},{p2}"))],
             )
-            .expect("spawn");
-        assert_eq!(t.wait(h), Ok(0), "3 and 4 in order, 5 closed");
+            .expect("re-exec");
+        assert_eq!(
+            kids.wait(h),
+            Ok(0),
+            "3 and 4 are the parent's listeners IN ORDER (10/11 = wrong \
+             listener at that position, 20 = a third one above the set)"
+        );
         // The same descriptor twice is two numbers in the child.
         let h = t
             .spawn_with(
