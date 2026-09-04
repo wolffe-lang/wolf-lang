@@ -1,0 +1,11 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+expression: out
+---
+error[E0401]: this is `{integer}`, but `v` is declared as `bool`
+ --> demo.lu:1:193
+  |
+1 | let v: bool = if c { 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 …
+  |        ---- the annotation is here
+  |                                                            ^ found `{integer}` here
+  |

@@ -25,7 +25,9 @@
 //! f-string interpolations (byte-exact via s07 fragment spans — nothing
 //! special, which is the point), tab expansion (tabs render as 4-column
 //! stops; underlines stay aligned), and width-aware truncation (long
-//! lines are windowed around the annotation with `…` at the cut edges).
+//! lines are windowed around the annotation with `…` at the cut edges;
+//! a second annotation on the same line that falls past a cut marks the
+//! cut and keeps its label — see `render_line`).
 //!
 //! ANSI color is behind [`RenderOptions::color`], default off; the
 //! snapshot renderer is exactly this renderer with color off, so
@@ -457,8 +459,18 @@ fn render_line(
         shown.trim_end(),
     ));
     for (lo, hi, label, primary) in rows {
-        let lo = lo.saturating_sub(shift);
-        let hi = (hi - shift.min(hi)).max(lo + 1).min(opts.width);
+        // BOTH ends clamp into the window (#238). `window` centres on
+        // the FIRST row's start, and one group may point twice at one
+        // long line — the annotation three hundred columns to the right
+        // of the focus lands past the cut. `lo` used to keep its true
+        // column while only `hi` was clamped to the width, so the caret
+        // run was sized `hi - lo` with `hi` LEFT of `lo`: a `usize`
+        // underflow, and `str::repeat` then asked for near-`usize::MAX`
+        // bytes and aborted the process. A clipped row now marks the
+        // cut edge — the `…` the window put there — and keeps its
+        // label, which is the half a reader actually needs.
+        let lo = lo.saturating_sub(shift).min(opts.width.saturating_sub(1));
+        let hi = hi.saturating_sub(shift).min(opts.width).max(lo + 1);
         let mark = if primary { "^" } else { "-" };
         let color = if primary { p.accent } else { p.gutter };
         let mut row = format!(
