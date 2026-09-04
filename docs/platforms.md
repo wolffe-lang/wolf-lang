@@ -91,6 +91,14 @@ calls wolf's `main` shim.
   neither of which any row needs today; they land at s60c behind the
   same seam, readiness adapted underneath exactly as kqueue and
   `WSAPoll` were.
+- **Readiness over a set** (`net_wait`, `[os.net.wait]`, s137) —
+  `WSAPoll` again, this time in front of the program rather than under
+  the reactor: a spawn-free serving loop asks which of its sockets can
+  be read and blocks until one can. This is the s137 surface that does
+  NOT refuse on this host. Every tier-1 kernel answers the question
+  (`poll(2)` elsewhere), so `net_wait` is the same call with the same
+  row set everywhere, on the native tier and on the checked machine
+  alike, and `[os.net.wait]` names no host.
 - The C membrane for scalars and pointers (`extern "c"` /
   `export` with `int`, `float`, pointer parameters and results).
 

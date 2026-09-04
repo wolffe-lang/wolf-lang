@@ -47,6 +47,45 @@ Spec: `[os.net.listen.opts]`, `[os.proc.inherit]`. Witnesses:
 `corpus/net/reuse_port.lu`, `corpus/net/inherit_listener.lu`.
 Per-host detail in [`docs/platforms.md`](docs/platforms.md).
 
+### The reactor's readiness surface (s137 — #127 closes)
+
+**A serving loop can wait now instead of checking.** `net_wait(fds,
+deadline_ms)` answers which of a set of handles can be read without
+blocking — a listener whose `net_accept` will not block, a stream
+whose `net_read` will answer bytes or `closed` — as the subset, in
+the order you gave. Every other blocking call in the family waits on
+ONE socket; this is the one that waits on many, and it is what a
+program that spawns no tasks has instead of a scheduler.
+
+Before it, a single-loop server had to time-slice: a short deadline on
+the listener, another on every open connection, every idle pass,
+spending its life waking up to learn that nothing happened. **Measured
+on an idle loop holding one connection for five seconds (macOS arm64,
+the same shape lobo's ws16 bench runs):**
+
+| | loop passes | involuntary context switches | cycles |
+|---|---|---|---|
+| deadline time-slicing (25 ms + 12 ms) | 125 | 1,385 | 57.1 M |
+| one `net_wait` on the whole set | 1 | 12 | 8.2 M |
+| a program that only sleeps (the floor) | — | 7 | 6.9 M |
+
+Net of the floor, that is **50.2 M cycles of idle work against 1.3 M —
+about 37x less — and 1,378 involuntary context switches against 5**.
+The loop wakes when a socket speaks, not when a timer says to look.
+
+An empty answer is the deadline expiring with nothing ready: **an
+answer, not a failure**. Readiness is level-triggered, so asking
+consumes nothing and two waits answer the same until you actually read
+or accept; a stream whose peer has gone is READY, and the read that
+follows is what reports `closed`. `io` is a forged handle, or a wait
+nothing could ever end. The call neither parks a task nor disturbs the
+reactor's registrations, so it mixes freely with `spawn`.
+
+Alone in this sprint it names no host: `poll(2)` on linux, macOS and
+freebsd, `WSAPoll` on windows, and the checked machine mirrors it call
+for call. Spec: `[os.net.wait]`. Witness:
+`corpus/net/wait_readiness.lu`.
+
 ### Two fixes found on the way (s137)
 
 - **`channel[bool]` compiled to a crash.** A `bool` payload crossing a
