@@ -1,0 +1,84 @@
+//! check: run(exit=0, stdout="net_wait | quiet_is_empty true | woke_on_the_right_one true | level_triggered true | drained true | closed_peer_is_ready true | forged_is_io true")
+//! phase: run
+//! conforms: os.net.wait, err.union, err.propagate
+//!
+//! s137 (#127, `[os.net.wait]`) — readiness over a SET, the primitive
+//! a serving loop that spawns no tasks has instead of a scheduler.
+//! Six relations, every one of them true on every tier-1 host: this
+//! is the one s137 clause that names no refusal, because `poll(2)`
+//! and `WSAPoll` answer the same question.
+//!
+//!   quiet_is_empty          nothing has spoken, so the wait expires
+//!                           with an EMPTY answer — an answer, not a
+//!                           failure. A loop that treats it as one is
+//!                           the mistake the clause warns about.
+//!   woke_on_the_right_one   two listeners are parked on and one is
+//!                           dialled; the answer names THAT one, and
+//!                           only it.
+//!   level_triggered         asking again answers the same. Nothing
+//!                           is consumed by looking.
+//!   drained                 after the accept the set goes quiet
+//!                           again — the readiness followed the
+//!                           actual state, not a stale edge.
+//!   closed_peer_is_ready    a stream whose peer has gone is READY;
+//!                           the `net_read` that follows is what says
+//!                           `closed`. That is how a loop learns to
+//!                           drop a connection instead of parking on
+//!                           it forever.
+//!   forged_is_io            a handle nobody minted is the `io` row,
+//!                           with nothing waited on.
+
+fn main() -> !int {
+    let a = net_listen("127.0.0.1:0")?
+    let b = net_listen("127.0.0.1:0")?
+    let pb = net_port(b)?
+    let set = List[int]()
+    (mut set).push(a)
+    (mut set).push(b)
+
+    let quiet_is_empty = net_wait(set, 20)?.len == 0
+
+    let cli = net_connect("127.0.0.1:{pb}")?
+    let woke = net_wait(set, 5000)?
+    var woke_on_the_right_one = false
+    if woke.len == 1 {
+        woke_on_the_right_one = woke[0] == b
+    }
+    let again = net_wait(set, 0)?
+    var level_triggered = false
+    if again.len == 1 {
+        level_triggered = again[0] == b
+    }
+
+    let conn = net_accept(b)?
+    let drained = net_wait(set, 20)?.len == 0
+
+    // The peer goes away; the stream becomes readable and the read
+    // that follows is the one that names it.
+    net_close(cli)?
+    let streams = List[int]()
+    (mut streams).push(conn)
+    let woken = net_wait(streams, 5000)?
+    var closed_peer_is_ready = false
+    if woken.len == 1 {
+        closed_peer_is_ready = woken[0] == conn
+    }
+
+    let forged = List[int]()
+    (mut forged).push(a)
+    (mut forged).push(99999)
+    var forged_is_io = false
+    let bad = net_wait(forged, 0) else |_| {
+        forged_is_io = true
+        List[int]()
+    }
+    let _ = bad.len
+
+    print(
+        "net_wait | quiet_is_empty {quiet_is_empty} | woke_on_the_right_one {woke_on_the_right_one} | level_triggered {level_triggered} | drained {drained} | closed_peer_is_ready {closed_peer_is_ready} | forged_is_io {forged_is_io}",
+    )
+    net_close(conn)?
+    net_close(a)?
+    net_close(b)?
+    0
+}
