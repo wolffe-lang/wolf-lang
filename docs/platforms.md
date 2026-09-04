@@ -133,6 +133,36 @@ a link error, never a silent stub.
   winsock binding beyond `WSAPoll` (D15), so the serving rung is
   named here rather than claimed. A lobo-shaped program keeps its
   loopback-TCP + token control endpoint on this host (wolf-lang#227).
+- **`reuse_port`** (`net_listen_with`'s option, `[os.net.listen.opts]`,
+  s137): the `unsupported` row, by name — and this one is a REFUSAL ON
+  PURPOSE, not a missing binding. Windows has no `SO_REUSEPORT`.
+  `SO_REUSEADDR` is spelled the same in a manual and means something
+  else entirely there: it lets any process take a port another process
+  already bound, and promises nothing about which of them a connection
+  reaches. Aliasing the option to it would hand a prefork server a
+  silent hijack where it asked for a shared queue, so the runtime
+  refuses by name instead. `wolf_rt`'s windows test suite MEASURES what
+  the alias would have meant on the runner — two ws2_32 sockets both
+  carrying `SO_REUSEADDR` bind one port and the delivery split is
+  pinned — so the sentence above is the runner's answer rather than a
+  manual's. `net_listen_with`'s option-LESS shape serves on this host
+  like `net_listen`, backlog hint and all, and a held address is
+  `exists` by name (wolf-lang#234).
+- **Descriptor inheritance across a spawn** (`os_spawn_with`'s
+  inherit set and `net_adopt_listener`, `[os.proc.inherit]`, s137):
+  the `unsupported` row, by name. Handle inheritance itself EXISTS
+  here and the runtime's windows suite measures it on the runner — a
+  listener marked `HANDLE_FLAG_INHERIT` and named to a re-executed
+  child is the same listener, same local port
+  (`windows_socket_handle_inheritance_measured`). What is missing is
+  the numbering the clause promises: a `SOCKET` is not a small stable
+  descriptor a parent can hand over by POSITION ("the listener is 3"),
+  so a child cannot adopt without being told a handle value that
+  `std::net` will not mint for it. The serving rung is named here for
+  the host's next campaign: `os_spawn_with` with an EMPTY set already
+  serves on this host — it is `os_spawn` with the program named apart
+  from its arguments — so a windows port of a prefork master needs
+  only the handoff, not the spawn (wolf-lang#235).
 
 ### The floor line
 
