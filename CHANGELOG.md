@@ -52,6 +52,29 @@ connection, both hands return; before this fix it reports
 and the checked machine refuse the inherit set by name, so the witness
 is vacuous there by construction.
 
+### The blast-radius bound holds (s138 — #243 closes)
+
+**A keyword where a parameter name goes is one report, not two.**
+`fn f(true, x: int)` said "`true` is a reserved keyword, so it cannot
+name a parameter" and then, on the same token, "expected `:` and a type
+after the parameter name". The second line contradicted the first and
+told you nothing the first had not; now the type is asked for only when
+a `:` says you meant a parameter there (`fn f(true: int)` is still one
+report — the name), and a real name with no type keeps its report
+(`fn f(x)` still asks for one).
+
+That is the whole of #243. The nightly's blast-radius sweep — every
+corpus file, three hundred single-token mutations each, at most five
+cascade diagnostics for a mutation that re-keys structure — had been
+red since the s137 corpus adds: turning the `=` of `let a =
+net_listen_with("127.0.0.1:0", true, 16) else |e| match e {` into `fn`
+drew six. Reduced to the smallest program that draws six and read one
+by one, five of them are one per enclosing tier (the binding, the run
+of non-parameters, the parameter, the phantom header's end, the arm
+list read as its body) and the sixth was the parameter reported twice.
+The recovery is fixed; the bound and its rationale do not move. The
+counter-example is pinned deterministically beside #20's and #109's.
+
 ## 0.2.5 — 2026-09-04
 
 THE SERVER HAS CORES. **A loop that waits costs about 37x less than a
