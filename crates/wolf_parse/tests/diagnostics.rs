@@ -49,6 +49,39 @@ fn e0008_keyword_used_as_identifier() {
     );
 }
 
+/// #243 (s138): a keyword where a parameter name goes is ONE report.
+/// E0008 names the keyword and consumes it as the name; the type is
+/// demanded only when a `:` says the writer meant a parameter here.
+/// Without one, "expected `:` after the parameter name" one line after
+/// "this is not a name" was the same confusion twice — and in a call's
+/// argument list re-keyed as a header by a stray `fn`, the second
+/// report was the one that overran the blast-radius bound.
+#[test]
+fn e0008_keyword_parameter_reports_once() {
+    let count = |src: &str, code: wolf_diag::Code| {
+        util::parse(src)
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == code)
+            .count()
+    };
+    for src in ["fn f(true, x: int) { }\n", "fn f(true) { }\n"] {
+        assert_eq!(count(src, codes::KEYWORD_AS_IDENT), 1, "{src:?}: the name");
+        assert_eq!(
+            count(src, codes::EXPECTED_TOKEN),
+            0,
+            "{src:?}: no second report on the same token"
+        );
+    }
+    // A `:` says the writer meant a parameter: the name is the report,
+    // the type parses.
+    assert_eq!(count("fn f(true: int) { }\n", codes::KEYWORD_AS_IDENT), 1);
+    assert_eq!(count("fn f(true: int) { }\n", codes::EXPECTED_TOKEN), 0);
+    // A REAL name with no type keeps its report — this is not a licence
+    // to stop asking for types.
+    assert_eq!(count("fn f(x) { }\n", codes::EXPECTED_TOKEN), 1);
+}
+
 #[test]
 fn e0201_pattern_separator_fix() {
     // D67 (#190): the pattern family's required separator, with the

@@ -299,6 +299,82 @@ fn swapped_match_keyword_keeps_the_tight_bound() {
     );
 }
 
+/// The exact #243 counter-example, pinned deterministically (no
+/// seed): replacing the `=` of `let a = net_listen_with("127.0.0.1:0",
+/// true, 16) else |e| match e {` in `corpus/net/reuse_port.lu` with
+/// `fn` — the nightly's `[replace token 35 at 1999..2000 with \`fn\`]`
+/// — drew SIX cascade diagnostics against the structural bound of
+/// five. Reduced to the smallest program that produces six:
+///
+/// ```text
+/// fn main() -> !int {
+///     let a fn f("s", true, 16) else |e| match e {
+///         x => {
+///             0
+///         },
+///     }
+///     0
+/// }
+/// ```
+///
+/// and read one by one: (1) the binding has no value — the mutation
+/// site, honest; (2) `"s"` is not a parameter — the argument list read
+/// as a header, one report for the run of non-parameters; (3) `true`
+/// is a reserved keyword and cannot name a parameter; (4) expected `:`
+/// after the parameter name — ON THE SAME TOKEN as (3), one line after
+/// saying it is not a name; (5) expected `{` after the header, at
+/// `else`; (6) expected the line to end, at the arm's `=>` inside the
+/// `{` the phantom function took as its body. Five and six are
+/// independent confusions (the header's end, then the body's
+/// contents); three and four are one confusion reported twice. The
+/// recovery is fixed there — a keyword-named parameter with no `:`
+/// following is one report — and the count is five: one per enclosing
+/// tier (binding, parameter run, parameter, header, body), which is
+/// exactly the module doc's rationale for the structural bound. The
+/// bound itself does not move.
+#[test]
+fn keyword_named_parameter_keeps_the_structural_bound() {
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/net/reuse_port.lu");
+    let src = std::fs::read(&f).expect("read reuse_port.lu");
+    let probe = b"let a = net_listen_with(";
+    let start = src
+        .windows(probe.len())
+        .position(|w| w == probe)
+        .expect("reuse_port.lu still spells `let a = net_listen_with(`")
+        + b"let a ".len();
+    assert_eq!(src[start], b'=');
+    let mut mutated = src.clone();
+    mutated.splice(start..start + 1, b" fn ".iter().copied());
+
+    let mut sm = wolf_span::SourceMap::new();
+    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(&f), &src), &src);
+    let mfile = sm.intern(&f.with_extension("mut_fn"));
+    let parse = wolf_parse::parse_tokens(&wolf_lex::lex(mfile, &mutated), &mutated);
+    wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
+    let cascade = |ds: &[wolf_diag::Diagnostic]| {
+        ds.iter()
+            .filter(|d| d.code != wolf_parse::codes::UNCLOSED_DELIMITER)
+            .count()
+    };
+    let added = cascade(&parse.diagnostics).saturating_sub(cascade(&baseline.diagnostics));
+    assert!(
+        added <= 5,
+        "#243 regression: {added} added cascade diagnostics (max 5): {:?}",
+        parse.diagnostics
+    );
+    // And the reading above stays true: `true` is reported exactly
+    // once, as the name.
+    assert_eq!(
+        parse
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == wolf_parse::codes::KEYWORD_AS_IDENT)
+            .count(),
+        1,
+        "the keyword-named parameter is one report"
+    );
+}
+
 /// A damaged construct may announce its own extent — one E0202 per
 /// opener left unclosed, so the ceiling is how deep the delimiters nest
 /// at the damage, not how much damage there is.
