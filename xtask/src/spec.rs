@@ -307,6 +307,10 @@ pub const REGISTERED_NS: [&str; 11] = [
     // Appended 2026-08-27 by s115 (#120): 08-package.md owns the `pkg`
     // anchors; [conf.anchor.ns] now admits them by its letter too.
     "pkg",
+    // r09 (#239) added no name here: `diag`, `ct`, `type` and `os` were
+    // already in this array and missing from the clause, which is the
+    // whole of the finding. The clause caught up; the guard below is
+    // what stops the two drifting again ([conf.anchor.ns.admit]).
 ];
 pub const FORWARD_NS: [&str; 15] = [
     "str", "err", "task", "proc", "sync", "generics", "arith", "ffi", "unsafe", "comptime", "perf",
@@ -316,9 +320,154 @@ pub const FORWARD_NS: [&str; 15] = [
     "test",
 ];
 
+/// The namespace lists as `[conf.anchor.ns]` writes them, read out of
+/// the clause itself.
+///
+/// #239's teeth. The clause registered seven namespaces while
+/// `REGISTERED_NS` held eleven, and nothing in this repository could
+/// tell — the code is the permissive side, so it published `os`, `type`,
+/// `ct` and `diag` anchors and passed CI for four documents running.
+/// The gap only ever announced itself downstream, in a rig that mirrors
+/// the clause's letter and therefore REJECTED tags that ought to be
+/// legal (wolf-std F-0099). `[conf.anchor.ns.admit]` now says the two
+/// move in one change; this function is how that sentence is enforced
+/// rather than remembered.
+///
+/// Deliberately a parser over the prose and not a second hand-copied
+/// list: a third copy would be a third thing to drift.
+#[cfg(test)]
+fn clause_namespaces() -> (Vec<String>, Vec<String>) {
+    let md = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../spec/05-conformance.md"
+    ))
+    .expect("spec/05-conformance.md is readable from the workspace");
+    // The clause runs from its own anchor to the next top-level bullet.
+    let start = md
+        .find("- `[conf.anchor.ns]`")
+        .expect("05-conformance.md carries [conf.anchor.ns]");
+    let rest = &md[start + 4..];
+    let end = rest.find("\n- `[").map_or(rest.len(), |i| start + 4 + i);
+    let clause = &md[start..end];
+    let (owners, reserved) = clause
+        .split_once("**Reserved forward namespaces**")
+        .expect("the clause names its reserved list");
+    // Registered: the backticked name on the left of every `→`.
+    let registered = owners
+        .split('→')
+        .rev()
+        .skip(1)
+        .filter_map(|seg| {
+            let seg = seg.trim_end();
+            let close = seg.rfind('`')?;
+            let open = seg[..close].rfind('`')?;
+            Some(seg[open + 1..close].to_string())
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>();
+    // Reserved: the backticked run up to the sentence that ends the list.
+    let list = reserved
+        .split_once("A tag outside all")
+        .map_or(reserved, |(l, _)| l);
+    let mut forward = Vec::new();
+    let mut it = list.split('`');
+    // `split` alternates outside/inside; the odd indices are the ticks.
+    let _ = it.next();
+    while let Some(name) = it.next() {
+        if name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+            && !name.is_empty()
+        {
+            forward.push(name.to_string());
+        }
+        let _ = it.next();
+    }
+    (registered, forward)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [conf.anchor.ns.admit]: the clause and the tooling name the same
+    /// registered namespaces. If this fails, one half of an admission
+    /// landed without the other — append to BOTH, and say in the clause
+    /// why the namespace exists.
+    ///
+    /// Compared as SETS, not sequences: a registry has no order, and the
+    /// two sides sort differently by construction — the clause lists
+    /// namespaces in owning-document order, the array in the order they
+    /// were appended (`pkg` is last there and seventh here). Ordering
+    /// them would be a rule with no reader.
+    #[test]
+    fn the_clause_and_registered_ns_agree() {
+        let (mut registered, _) = clause_namespaces();
+        registered.sort();
+        let mut declared: Vec<String> = REGISTERED_NS.iter().map(|s| s.to_string()).collect();
+        declared.sort();
+        assert_eq!(
+            registered, declared,
+            "[conf.anchor.ns] and REGISTERED_NS disagree — #239's defect, \
+             recurring. A namespace is admitted in ONE change \
+             ([conf.anchor.ns.admit]): amend spec/05-conformance.md and \
+             this array together, and state the reason in the clause."
+        );
+    }
+
+    /// The other direction, which is the one that rejects legal input:
+    /// a reserved namespace the tooling forgot makes a *forward* tag a
+    /// hard CI failure. #239 records exactly that lag for `test` in
+    /// wolf-std's copy.
+    #[test]
+    fn the_clause_and_forward_ns_agree() {
+        let (_, mut forward) = clause_namespaces();
+        forward.sort();
+        let mut declared: Vec<String> = FORWARD_NS.iter().map(|s| s.to_string()).collect();
+        declared.sort();
+        assert_eq!(
+            forward, declared,
+            "[conf.anchor.ns]'s reserved list and FORWARD_NS disagree — a \
+             namespace missing here rejects a tag the clause calls legal."
+        );
+    }
+
+    /// Every registered namespace actually owns published anchors, and
+    /// every published anchor's namespace is registered. This is the
+    /// invariant #239 found violated 71 ways.
+    #[test]
+    fn every_published_anchor_sits_in_a_registered_namespace() {
+        let json =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../spec/anchors.json"))
+                .expect("spec/anchors.json is readable");
+        let (registered, _) = clause_namespaces();
+        let mut unadmitted: Vec<&str> = Vec::new();
+        for line in json.lines() {
+            let Some(key) = line.trim().strip_prefix('"') else {
+                continue;
+            };
+            let Some(key) = key.split('"').next() else {
+                continue;
+            };
+            let Some(ns) = key.split('.').next() else {
+                continue;
+            };
+            if key.contains('.') && !registered.iter().any(|r| r == ns) {
+                unadmitted.push(ns);
+            }
+        }
+        unadmitted.sort_unstable();
+        unadmitted.dedup();
+        assert!(
+            unadmitted.is_empty(),
+            "spec/anchors.json publishes anchors in namespaces \
+             [conf.anchor.ns] does not admit: {unadmitted:?}. Admit them \
+             (additively — [conf.anchor.stable] forbids moving a \
+             published anchor) or do not publish them."
+        );
+    }
 
     #[test]
     fn extracts_in_order_and_ignores_other_fences() {
