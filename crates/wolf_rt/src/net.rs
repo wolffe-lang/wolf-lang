@@ -17,7 +17,17 @@
 //! since s59, `WSAPoll` since s60b): readiness is awaited in the reactor
 //! first (a runtime-owned park — blocking compensation applies, kill
 //! teardown reaches it, deadlines compose), then the syscall runs
-//! without blocking. The completion-arrival decision appended its
+//! without blocking. Since s138 (#242, `[os.net.accept]`) that last
+//! clause is TRUE for `accept` rather than assumed: a listener lives
+//! non-blocking under the runtime on the reactor hosts, so a wake that
+//! finds nothing to take — N hands on one inherited listener, one
+//! connection, one winner — answers `WouldBlock` and the runtime goes
+//! back to the reactor against the SAME budget instead of parking in
+//! the kernel's accept queue with the deadline already spent (the
+//! shape ws17 measured: a hand alive at 0.0% CPU that answers nothing
+//! until the next connection). Streams stay blocking: one owner per
+//! stream is the corpus discipline, and no clause recommends sharing
+//! one. The completion-arrival decision appended its
 //! `io.arrive` kind to spec/07 `[sched.point.set]` per
 //! `[sched.stable]` (the reservation v0 recorded here, activated in
 //! reactor.rs). Off the ported hosts this module keeps the v0
@@ -139,13 +149,37 @@ impl Sock {
         }
     }
 
-    /// One accepted connection of the listener's own family.
+    /// One accepted connection of the listener's own family. The
+    /// stream comes back BLOCKING whatever the listener's mode (s138):
+    /// BSD-derived kernels and winsock hand the new socket the
+    /// listener's flags, linux does not, and the runtime makes it one
+    /// posture — a `net_write` of a large body must never answer a
+    /// spurious `timeout` because the listener was non-blocking.
     fn accept(&self) -> std::io::Result<Sock> {
-        match self {
-            Sock::Listener(l) => l.accept().map(|(s, _)| Sock::Stream(s)),
+        let s = match self {
+            Sock::Listener(l) => l.accept().map(|(s, _)| Sock::Stream(s))?,
             #[cfg(unix)]
-            Sock::UnixListener(l, _) => l.accept().map(|(s, _)| Sock::UnixStream(s)),
-            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+            Sock::UnixListener(l, _) => l.accept().map(|(s, _)| Sock::UnixStream(s))?,
+            _ => return Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        };
+        if REACTOR_HOST {
+            s.set_nonblocking(false)?;
+        }
+        Ok(s)
+    }
+
+    /// The socket's blocking mode (s138, `[os.net.accept]`): a listener
+    /// is put non-blocking on the reactor hosts so the accept after a
+    /// readiness wake can never park; an accepted stream is put back
+    /// to blocking (see [`Sock::accept`]).
+    fn set_nonblocking(&self, on: bool) -> std::io::Result<()> {
+        match self {
+            Sock::Listener(l) => l.set_nonblocking(on),
+            Sock::Stream(s) => s.set_nonblocking(on),
+            #[cfg(unix)]
+            Sock::UnixListener(l, _) => l.set_nonblocking(on),
+            #[cfg(unix)]
+            Sock::UnixStream(s) => s.set_nonblocking(on),
         }
     }
 
@@ -390,8 +424,54 @@ fn inherited_listener_family(raw: std::os::fd::RawFd) -> Option<libc::c_int> {
     Some(libc::c_int::from(storage.ss_family))
 }
 
+/// `O_NONBLOCK` on a raw descriptor this table does not own yet (the
+/// adopt path, s138): `true` when the flag is set afterwards. A
+/// `fcntl` refusal answers `false` and the descriptor is left as it
+/// was.
+#[cfg(unix)]
+fn set_nonblocking_raw(raw: std::os::fd::RawFd) -> bool {
+    // SAFETY: a plain flag read on the caller's number; a bad fd
+    // answers -1, never a fault.
+    let flags = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+    if flags < 0 {
+        return false;
+    }
+    // SAFETY: as above, a flag write.
+    unsafe { libc::fcntl(raw, libc::F_SETFL, flags | libc::O_NONBLOCK) == 0 }
+}
+
 /// A net operation's failure: the row tag it raises.
 pub type NetErr = &'static str;
+
+/// The hosts whose parking calls await readiness in the reactor
+/// BEFORE the syscall (linux, macOS, windows — the module doc's
+/// posture). On these a listener lives non-blocking (s138,
+/// `[os.net.accept]`); a tier-2 host with no reactor keeps the v0
+/// blocking syscall, and has no shared listener to lose a race on.
+const REACTOR_HOST: bool = cfg!(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "windows"
+));
+
+/// One readiness park in the reactor, resolved as the row the net
+/// tier answers: `timeout` when the budget fires first, `io` for a
+/// killed proc on a non-unwindable frame (the result is moot but must
+/// be a row — the compiled teardown branch is codegen's; pool.rs's
+/// honest s34 refusal, unchanged). The net flavor of the wait is
+/// kill-only — see reactor.rs's cancellation section.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn wait_raw(
+    raw: crate::poll::RawIo,
+    interest: crate::reactor::Interest,
+    deadline: Option<std::time::Instant>,
+) -> Result<(), NetErr> {
+    match crate::reactor::wait_fd_net(raw, interest, deadline) {
+        crate::reactor::IoWait::Ready => Ok(()),
+        crate::reactor::IoWait::TimedOut => Err("timeout"),
+        crate::reactor::IoWait::Cancelled => Err("io"),
+    }
+}
 
 impl NetTable {
     /// `const` so the shim tier's process table ([`NET`]) can live in a
@@ -412,6 +492,26 @@ impl NetTable {
             deadline: None,
         }));
         fd
+    }
+
+    /// A LISTENER enters the table (s138, #242, `[os.net.accept]`):
+    /// non-blocking on the reactor hosts, so that the accept which
+    /// follows a readiness wake takes the connection or answers
+    /// `WouldBlock` — never parks in the kernel with the deadline
+    /// already spent. Every acquisition call routes here (`listen`,
+    /// `listen_with`, `listen_unix`; `adopt_listener` sets the flag on
+    /// the raw descriptor before taking ownership). A listener the
+    /// runtime cannot put under its posture is `io`: an inert deadline
+    /// is the one thing this module refuses to ship silently. Off the
+    /// reactor hosts the listener stays blocking — there is no
+    /// readiness wait before the syscall there, so a non-blocking
+    /// accept would answer `WouldBlock` to a program that asked to
+    /// wait.
+    fn push_listener(&mut self, s: Sock) -> Result<i64, NetErr> {
+        if REACTOR_HOST && s.set_nonblocking(true).is_err() {
+            return Err("io");
+        }
+        Ok(self.push(s))
     }
 
     fn entry(&mut self, fd: i64) -> Option<&mut Entry> {
@@ -460,14 +560,7 @@ impl NetTable {
         interest: crate::reactor::Interest,
     ) -> Result<(), NetErr> {
         let (raw, deadline) = self.park_spec(fd, want_stream)?;
-        match crate::reactor::wait_fd_net(raw, interest, deadline) {
-            crate::reactor::IoWait::Ready => Ok(()),
-            crate::reactor::IoWait::TimedOut => Err("timeout"),
-            // A killed proc on a non-unwindable frame: the result is
-            // moot but must be a row (the compiled teardown branch is
-            // codegen's — pool.rs's honest s34 refusal, unchanged).
-            crate::reactor::IoWait::Cancelled => Err("io"),
-        }
+        wait_raw(raw, interest, deadline)
     }
 
     /// Arm (`millis > 0`) or clear (`millis <= 0`) this socket's
@@ -500,7 +593,7 @@ impl NetTable {
     /// never a fixed port, never an external host).
     pub fn listen(&mut self, addr: &str) -> Result<i64, NetErr> {
         match TcpListener::bind(addr) {
-            Ok(l) => Ok(self.push(Sock::Listener(l))),
+            Ok(l) => self.push_listener(Sock::Listener(l)),
             Err(e) => Err(err_tag(e.kind())),
         }
     }
@@ -530,7 +623,7 @@ impl NetTable {
         #[cfg(unix)]
         {
             match bind_with(addr, reuse_port, backlog) {
-                Ok(l) => Ok(self.push(Sock::Listener(l))),
+                Ok(l) => self.push_listener(Sock::Listener(l)),
                 Err(e) => Err(err_tag(e.kind())),
             }
         }
@@ -543,7 +636,7 @@ impl NetTable {
             // at this pin (std's bind; named in docs/platforms.md).
             let _ = backlog;
             match TcpListener::bind(addr) {
-                Ok(l) => Ok(self.push(Sock::Listener(l))),
+                Ok(l) => self.push_listener(Sock::Listener(l)),
                 Err(e) => Err(err_tag(e.kind())),
             }
         }
@@ -577,6 +670,17 @@ impl NetTable {
             let Some(family) = inherited_listener_family(raw) else {
                 return Err("io");
             };
+            // s138 (`[os.net.accept]`): the listener lives non-blocking
+            // under this runtime, set on the RAW descriptor before
+            // ownership is taken so a refusal leaves the handed number
+            // open and untouched. `O_NONBLOCK` is a property of the
+            // open file description, shared with every process holding
+            // it — the parent that handed it down is a wolf program
+            // whose own copy already carries the flag, or a supervisor
+            // that never accepts on it.
+            if !set_nonblocking_raw(raw) {
+                return Err("io");
+            }
             let sock = match family {
                 libc::AF_INET | libc::AF_INET6 => {
                     // SAFETY: the kernel just confirmed `raw` is a
@@ -596,7 +700,10 @@ impl NetTable {
             // SAFETY: valid fd we now own.
             unsafe { libc::fcntl(raw, libc::F_SETFD, libc::FD_CLOEXEC) };
             self.adopted.push(raw);
-            Ok(self.push(sock))
+            // The flag is already set; `push_listener` re-asserts the
+            // posture through std and cannot fail on a descriptor that
+            // just took it.
+            self.push_listener(sock)
         }
         #[cfg(not(unix))]
         {
@@ -665,7 +772,7 @@ impl NetTable {
         #[cfg(unix)]
         {
             match UnixListener::bind(path) {
-                Ok(l) => Ok(self.push(Sock::UnixListener(l, std::path::PathBuf::from(path)))),
+                Ok(l) => self.push_listener(Sock::UnixListener(l, std::path::PathBuf::from(path))),
                 Err(e) => Err(err_tag(e.kind())),
             }
         }
@@ -709,26 +816,62 @@ impl NetTable {
             .map_err(|e| err_tag(e.kind()))
     }
 
-    /// Park until one connection arrives (reactor-routed on linux;
-    /// the deadline budget resolves `timeout`); returns the stream's
-    /// fd.
+    /// Park until one connection is this handle's (reactor-routed on
+    /// the reactor hosts; the deadline budget resolves `timeout`);
+    /// returns the stream's fd.
+    ///
+    /// s138 (#242, `[os.net.accept]`): the park and the take are a
+    /// LOOP against one budget. A readiness wake is not exclusivity —
+    /// N processes on one inherited listener all wake for one
+    /// connection and one of them takes it — so the take is
+    /// non-blocking ([`NetTable::push_listener`]) and a hand that
+    /// finds nothing ([`NetTable::accept_ready`] answering `None`)
+    /// goes back to the reactor with the deadline it computed at
+    /// entry, not a fresh one. A lost race is not an ANSWER because it
+    /// carries none: from the program's side it is indistinguishable
+    /// from the connection never having arrived — the same shape as a
+    /// peer that aborted between the wake and the take, which a single
+    /// hand meets too. So it is not a row (a `net_accept(l)?` with no
+    /// deadline armed would fail on a stranger's reset), not a
+    /// sentinel (D30), and never a trap; with a budget armed the call
+    /// returns within it, without one it parks in the RUNTIME's wait
+    /// rather than the kernel's.
     pub fn accept(&mut self, fd: i64) -> Result<i64, NetErr> {
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        self.wait_ready(fd, false, crate::reactor::Interest::Read)?;
-        self.accept_ready(fd)
+        let (raw, deadline) = self.park_spec(fd, false)?;
+        loop {
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+            wait_raw(raw, crate::reactor::Interest::Read, deadline)?;
+            if let Some(nfd) = self.accept_ready(fd)? {
+                return Ok(nfd);
+            }
+        }
     }
 
     /// [`NetTable::accept`]'s syscall half — readiness already awaited
     /// (or the platform's honest v0 posture: the syscall itself
     /// blocks). The shim tier calls this under the table lock AFTER
-    /// parking with the lock released.
-    fn accept_ready(&mut self, fd: i64) -> Result<i64, NetErr> {
+    /// parking with the lock released. `Ok(None)` is "nothing to
+    /// take" (s138): the wake was for a connection another hand took
+    /// (`WouldBlock` off a non-blocking listener), or for one the peer
+    /// aborted before it was taken (`ECONNABORTED`, which linux
+    /// reports at accept and whose manual says to retry). The caller
+    /// waits again against the same budget.
+    fn accept_ready(&mut self, fd: i64) -> Result<Option<i64>, NetErr> {
         let accepted = match self.get(fd) {
             Some(l) if !l.is_stream() => l.accept(),
             _ => return Err("io"),
         };
         match accepted {
-            Ok(s) => Ok(self.push(s)),
+            Ok(s) => Ok(Some(self.push(s))),
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::ConnectionAborted
+                ) =>
+            {
+                Ok(None)
+            }
             Err(e) => Err(err_tag(e.kind())),
         }
     }
@@ -882,8 +1025,12 @@ impl NetTable {
 // ([`NetTable::park_spec`]), wait in the reactor with the lock
 // RELEASED, and relock for the syscall half (`*_ready`). The window
 // between readiness and syscall is the same one `std::net` callers
-// live with; the corpus discipline (one logical owner per socket)
-// keeps it moot. Off-linux the shims keep the v0 blocking-syscall
+// live with. For streams the corpus discipline (one logical owner
+// per socket) keeps it moot; for a LISTENER it is not moot — N
+// processes share one by design (`[os.proc.inherit]`) — so the accept
+// shim loops: a take that finds nothing goes back to the reactor
+// against the budget it computed at entry (s138, `[os.net.accept]`).
+// Off the reactor hosts the shims keep the v0 blocking-syscall
 // posture — the syscall itself blocks under the lock, the honest
 // mirror of the checked lane's own path (native codegen is
 // linux-gated at this tier anyway).
@@ -946,11 +1093,7 @@ fn wait_unlocked(
     interest: crate::reactor::Interest,
 ) -> Result<(), NetErr> {
     let (raw, deadline) = tbl().park_spec(fd, want_stream)?;
-    match crate::reactor::wait_fd_net(raw, interest, deadline) {
-        crate::reactor::IoWait::Ready => Ok(()),
-        crate::reactor::IoWait::TimedOut => Err("timeout"),
-        crate::reactor::IoWait::Cancelled => Err("io"),
-    }
+    wait_raw(raw, interest, deadline)
 }
 
 /// `net_listen(addr) -> int ! {io}` — the fd (>= 0), or `-code` on
@@ -1139,16 +1282,30 @@ pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
 }
 
 /// `net_accept(fd) -> int ! {timeout, io}` — parks until a connection
-/// arrives (or the armed deadline fires); the stream's fd, or `-code`.
+/// is this handle's (or the armed deadline fires); the stream's fd, or
+/// `-code`. The park-and-take loop of [`NetTable::accept`] with the
+/// table lock released across every park (s138, `[os.net.accept]`):
+/// the budget is computed ONCE at entry, so a wake that finds nothing
+/// — another hand on the same listener took the connection — waits
+/// again for what remains of it, never for a fresh budget and never
+/// in the kernel.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    if let Err(t) = wait_unlocked(fd, false, crate::reactor::Interest::Read) {
-        return -code_of_tag(t);
-    }
-    match tbl().accept_ready(fd) {
-        Ok(nfd) => nfd,
-        Err(t) => -code_of_tag(t),
+    let (raw, deadline) = match tbl().park_spec(fd, false) {
+        Ok(spec) => spec,
+        Err(t) => return -code_of_tag(t),
+    };
+    loop {
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        if let Err(t) = wait_raw(raw, crate::reactor::Interest::Read, deadline) {
+            return -code_of_tag(t);
+        }
+        match tbl().accept_ready(fd) {
+            Ok(Some(nfd)) => return nfd,
+            Ok(None) => continue,
+            Err(t) => return -code_of_tag(t),
+        }
     }
 }
 
@@ -1459,6 +1616,202 @@ mod tests {
         assert_eq!(t.read(conn, 16).expect("read"), b"more");
         // A forged fd cannot arm a deadline.
         assert_eq!(t.set_deadline(9999, 40), Err("io"));
+    }
+
+    /// s138 (#242, `[os.net.accept]`): the posture's two flags,
+    /// measured off the kernel. Every listener the table acquires —
+    /// bound, bound with options, unix-domain, adopted — carries
+    /// `O_NONBLOCK`; every stream it accepts does NOT, whatever the
+    /// kernel's inheritance rule (BSD-derived kernels hand the flag
+    /// down, linux does not — the runtime makes it one posture).
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn listeners_are_nonblocking_and_accepted_streams_are_not() {
+        use std::os::fd::AsRawFd as _;
+        fn nonblocking(raw: std::os::fd::RawFd) -> bool {
+            // SAFETY: a flag read on a live fd.
+            let flags = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+            assert!(flags >= 0, "F_GETFL");
+            flags & libc::O_NONBLOCK != 0
+        }
+        let mut t = NetTable::new();
+        let plain = t.listen("127.0.0.1:0").expect("listen");
+        let with = t.listen_with("127.0.0.1:0", false, 8).expect("listen_with");
+        let dir = std::env::temp_dir().join(format!("wolf-s138-nb-{}", std::process::id()));
+        let _ = std::fs::remove_file(&dir);
+        let unix = t
+            .listen_unix(dir.to_str().expect("utf8 path"))
+            .expect("listen_unix");
+        for fd in [plain, with, unix] {
+            let raw = t.raw_fd_of(fd).expect("live");
+            assert!(
+                nonblocking(raw),
+                "listener {fd} is non-blocking under the runtime"
+            );
+        }
+        // An adopted descriptor takes the flag too — on the description
+        // it shares with whoever handed it down.
+        let raw_plain = t.raw_fd_of(plain).expect("live");
+        // SAFETY: dup of a live fd.
+        let handed = unsafe { libc::dup(raw_plain) };
+        assert!(handed >= 0);
+        // SAFETY: clear the flag on the shared description first, so
+        // the adopt is what sets it.
+        let flags = unsafe { libc::fcntl(handed, libc::F_GETFL) };
+        unsafe { libc::fcntl(handed, libc::F_SETFL, flags & !libc::O_NONBLOCK) };
+        assert!(!nonblocking(handed), "cleared for the probe");
+        let adopted = t.adopt_listener(i64::from(handed)).expect("adopt");
+        assert!(
+            nonblocking(handed),
+            "adoption puts the descriptor under the posture"
+        );
+        // The accepted stream is blocking.
+        let port = t.port(plain).expect("port");
+        let cli = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).expect("dial");
+        t.set_deadline(plain, 5_000).expect("arm");
+        let conn = t.accept(plain).expect("accept");
+        assert!(
+            !nonblocking(t.raw_fd_of(conn).expect("live")),
+            "the accepted stream is blocking whatever the listener's mode"
+        );
+        assert!(
+            !nonblocking(cli.as_raw_fd()),
+            "the dialed side was never touched"
+        );
+        for fd in [conn, adopted, unix, with, plain] {
+            t.close(fd).expect("close");
+        }
+        let _ = std::fs::remove_file(&dir);
+    }
+
+    /// s138 (#242): the lost accept race, constructed. A second owner
+    /// of the SAME listener (a `dup` of its descriptor wrapped as a
+    /// std listener — exactly what a spawned child's 3 is) takes the
+    /// pending connection between this table's readiness wake and its
+    /// take. Before s138 the take was a blocking `accept(2)` and this
+    /// test parked forever with the deadline already spent; now the
+    /// take answers "nothing here" without blocking, and the public
+    /// call waits again against the SAME budget and resolves it as
+    /// `timeout` — then accepts the next connection normally.
+    ///
+    /// A watchdog dials the listener two seconds in: a regression that
+    /// parks is unparked by that dial and fails the assertion below
+    /// instead of hanging the suite.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn lost_accept_race_returns_within_its_budget() {
+        use std::os::fd::FromRawFd as _;
+        let mut t = NetTable::new();
+        let l = t.listen("127.0.0.1:0").expect("listen");
+        let port = t.port(l).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let raw = t.raw_fd_of(l).expect("live");
+        // SAFETY: dup of a live listener; `other` owns the copy.
+        let other = unsafe { TcpListener::from_raw_fd(libc::dup(raw)) };
+        let watchdog = {
+            let addr = addr.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                let _ = std::net::TcpStream::connect(addr);
+            })
+        };
+        let _c1 = std::net::TcpStream::connect(&addr).expect("dial 1");
+        // This table wakes for the connection …
+        t.wait_ready(l, false, crate::reactor::Interest::Read)
+            .expect("readable");
+        // … and the other owner takes it first.
+        let (stolen, _) = other.accept().expect("the other hand takes it");
+        // The take that follows the wake finds nothing, and says so
+        // without parking.
+        let t0 = std::time::Instant::now();
+        assert_eq!(
+            t.accept_ready(l),
+            Ok(None),
+            "nothing to take is not an error"
+        );
+        assert!(
+            t0.elapsed() < std::time::Duration::from_millis(500),
+            "the take must not park: {:?}",
+            t0.elapsed()
+        );
+        // The whole call, budgeted: the wake is spent, the budget is
+        // not — it resolves as `timeout`, within the budget.
+        t.set_deadline(l, 300).expect("arm");
+        let t0 = std::time::Instant::now();
+        assert_eq!(t.accept(l), Err("timeout"));
+        let took = t0.elapsed();
+        assert!(
+            took >= std::time::Duration::from_millis(250)
+                && took < std::time::Duration::from_secs(1),
+            "timeout resolves at the budget, not before and not never: {took:?}"
+        );
+        // The listener still serves: the next connection is this
+        // table's.
+        drop(stolen);
+        let _c2 = std::net::TcpStream::connect(&addr).expect("dial 2");
+        t.set_deadline(l, 5_000).expect("rearm");
+        let conn = t.accept(l).expect("accept after a lost race");
+        t.close(conn).expect("close");
+        t.close(l).expect("close");
+        drop(other);
+        watchdog.join().expect("watchdog");
+    }
+
+    /// s138 (#242): the same race through the SHIM tier, timed rather
+    /// than constructed — a thread parks in `__wolf_rt_net_accept`
+    /// under a 400 ms budget while the other owner of the listener
+    /// races it for one connection. Whichever wins, the shim call
+    /// RETURNS within its budget: a stream when it won, `-TIMEOUT`
+    /// when it lost. Before s138 a lost race parked the thread in
+    /// `accept(2)` past every budget; the watchdog dial bounds that
+    /// regression to a failed assertion.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn shim_lost_race_returns_within_budget() {
+        use std::os::fd::FromRawFd as _;
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let l = unsafe { __wolf_rt_net_listen(ap, al) };
+        assert!(l >= 0);
+        let port = __wolf_rt_net_port(l);
+        let addr = format!("127.0.0.1:{port}");
+        let raw = tbl().raw_fd_of(l).expect("live");
+        // SAFETY: dup of a live listener.
+        let other = unsafe { TcpListener::from_raw_fd(libc::dup(raw)) };
+        assert_eq!(__wolf_rt_net_deadline(l, 400), net_code::OK);
+        let hand = std::thread::spawn(move || {
+            let t0 = std::time::Instant::now();
+            (__wolf_rt_net_accept(l), t0.elapsed())
+        });
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let watchdog = {
+            let addr = addr.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                let _ = std::net::TcpStream::connect(addr);
+            })
+        };
+        let _c = std::net::TcpStream::connect(&addr).expect("dial");
+        // Race the parked hand for it. `other` shares the description
+        // and its flag, so a loss here is `WouldBlock`, not a park.
+        let other_won = match other.accept() {
+            Ok(_) => true,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => false,
+            Err(e) => panic!("other accept: {e}"),
+        };
+        let (got, took) = hand.join().expect("hand");
+        assert!(
+            took < std::time::Duration::from_secs(1),
+            "the hand returned within its budget either way: {took:?}"
+        );
+        if other_won {
+            assert_eq!(got, -net_code::TIMEOUT, "lost the race: the budget answers");
+        } else {
+            assert!(got >= 0, "won the race: a stream ({got})");
+            assert_eq!(__wolf_rt_net_close(got), net_code::OK);
+        }
+        assert_eq!(__wolf_rt_net_close(l), net_code::OK);
+        drop(other);
+        watchdog.join().expect("watchdog");
     }
 
     /// Accepting on a stream (or reading on a listener) is `io` —
