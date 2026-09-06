@@ -372,8 +372,21 @@ fn param(p: &mut Parser<'_>) {
             param_type(p);
         }
         TokenKind::Kw(k) if !is_decl_keyword(k) => {
+            // E0008 names the keyword and consumes it as the name. The
+            // type is demanded only when a `:` says the writer meant a
+            // parameter here (`fn f(true: int)` — one report, the
+            // name). With no `:` this token is the parameter's whole
+            // wreck, and "expected `:` after the parameter name" would
+            // be the same confusion reported twice, one line after
+            // saying it is not a name (#243: a call's argument list
+            // re-keyed as a header by a stray `fn` reported `true`
+            // twice and overran the blast-radius bound by exactly one).
             keyword_as_ident(p, "parameter");
-            param_type(p);
+            if p.at_punct(Punct::Colon) {
+                param_type(p);
+            } else {
+                p.missing();
+            }
         }
         _ => {
             p.arg_list_error(p.here(), "expected a parameter");

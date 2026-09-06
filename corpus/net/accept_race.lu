@@ -1,0 +1,153 @@
+//! check: run(exit=0, stdout="accept_race | served_or_named true | one_won true | loser_returned true | reaped true")
+//! phase: run
+//! conforms: os.net.accept, os.proc.inherit, err.union, err.propagate
+//!
+//! s138 (#242, `[os.net.accept]`) — two hands on ONE inherited
+//! listener, one connection, and both hands come back. The hands are
+//! this same program re-executed (`os_exe`) with the marker argument
+//! `hand`: each adopts descriptor 3 (the listener), tells the parent
+//! it is ready, and accepts on it under a two-second budget. The
+//! parent dials ONCE, a beat after both hands have said so. Both hands
+//! wake for that connection — readiness is not exclusivity — and
+//! exactly one of them takes it; the other finds nothing there.
+//! Before s138 that hand parked in a blocking `accept(2)` with its
+//! budget already spent, alive and answering nothing until the next
+//! connection (lobo ws17's measurement: 0.0% CPU, no control verb,
+//! ever). Now the runtime waits again against the SAME budget, and
+//! the budget answers.
+//!
+//!   served_or_named  the host serves the handoff, or refuses it BY
+//!                    NAME (`unsupported`) — windows at this pin, and
+//!                    the checked machine, which refuses an inherit
+//!                    set with the construct named.
+//!   one_won          the parent's dial was answered "won" by one hand
+//!                    over a listener it never bound.
+//!   loser_returned   the OTHER hand's `net_accept` came back — as
+//!                    `timeout`, the row its budget owed it — and the
+//!                    hand proved it by dialing the parent's second
+//!                    listener (descriptor 4, adopted for its port
+//!                    number alone) and saying "lost". This is the
+//!                    relation #242 is about: the loser is a running
+//!                    program again, not a kernel park.
+//!   reaped           both hands exited 0 and `os_wait` reaped them.
+//!
+//! The witness proves the SHAPE, not a distribution: which hand wins
+//! is the kernel's, and a ratio is lobo's measurement to make, not the
+//! compiler's. When `loser_returned` is false the parent kills both
+//! hands rather than waiting on a park that would never end, so a
+//! regression is a wrong line, never a hung gauntlet.
+
+fn main() -> !int {
+    let args = env_args()
+    var is_hand = false
+    for a in args {
+        if a == "hand" {
+            is_hand = true
+        }
+    }
+    if is_hand {
+        let l = net_adopt_listener(3) else |_| return 21
+        let m = net_adopt_listener(4) else |_| return 22
+        let report = net_port(m) else |_| return 23
+        net_close(m) else |_| return 24
+        // Say "ready" first: the parent dials only once BOTH hands are
+        // about to park, so that one connection wakes both of them.
+        let r0 = net_connect("127.0.0.1:{report}") else |_| return 25
+        net_write(r0, "ready") else |_| return 26
+        net_close(r0) else |_| return 27
+        net_deadline(l, 2000) else |_| return 28
+        let c = net_accept(l) else |e| match e {
+            timeout => -1,
+            _ => return 29,
+        }
+        if c >= 0 {
+            net_write(c, "won") else |_| return 30
+            net_close(c) else |_| return 31
+            net_close(l) else |_| return 32
+            return 0
+        }
+        // The wake was for a connection the other hand took. The
+        // runtime waited on against the same budget, the budget
+        // answered, and this hand is here to say so.
+        let r = net_connect("127.0.0.1:{report}") else |_| return 33
+        net_write(r, "lost") else |_| return 34
+        net_close(r) else |_| return 35
+        net_close(l) else |_| return 36
+        return 0
+    }
+    var served = true
+    var one_won = true
+    var loser_returned = true
+    var reaped = true
+    let srv = net_listen_with("127.0.0.1:0", false, 16)?
+    let port = net_port(srv)?
+    let back = net_listen_with("127.0.0.1:0", false, 16)?
+    let exe = os_exe()?
+    let argv = List[str]()
+    (mut argv).push("hand")
+    let inherit = List[int]()
+    (mut inherit).push(srv)
+    (mut inherit).push(back)
+    let kid1 = os_spawn_with(exe, argv, inherit) else |e| match e {
+        unsupported => {
+            served = false
+            -1
+        },
+        _ => {
+            print("spawn failed with a program row on a host that serves the handoff")
+            return 3
+        },
+    }
+    if served {
+        let kid2 = os_spawn_with(exe, argv, inherit)?
+        // Both hands say "ready" before they park; a beat later they
+        // are parked. Then ONE connection for two hands.
+        net_deadline(back, 10000)?
+        var ready = 0
+        while ready < 2 {
+            let h = net_accept(back)?
+            net_deadline(h, 10000)?
+            let word = net_read(h, 16)?
+            if word == "ready" {
+                ready = ready + 1
+            }
+            net_close(h)?
+        }
+        time_sleep_ms(300)
+        let cli = net_connect("127.0.0.1:{port}")?
+        net_deadline(cli, 10000)?
+        let reply = net_read(cli, 16)?
+        one_won = reply == "won"
+        net_close(cli)?
+        // The other hand reports back within its budget, or never.
+        net_deadline(back, 10000)?
+        loser_returned = false
+        let r = net_accept(back) else |e| match e {
+            timeout => -1,
+            _ => return 4,
+        }
+        if r >= 0 {
+            net_deadline(r, 10000)?
+            let word = net_read(r, 16)?
+            loser_returned = word == "lost"
+            net_close(r)?
+        }
+        if loser_returned {
+            let c1 = os_wait(kid1)?
+            let c2 = os_wait(kid2)?
+            reaped = c1 == 0 && c2 == 0
+        } else {
+            // A hand that never came back is parked in the kernel: end
+            // it rather than wait on it, and say so in the line.
+            os_kill(kid1) else |_| print("kill 1 failed")
+            os_kill(kid2) else |_| print("kill 2 failed")
+            reaped = false
+        }
+    }
+    net_close(back)?
+    net_close(srv)?
+    print(
+        "accept_race | served_or_named true | one_won {one_won} | loser_returned {loser_returned} | reaped {reaped}",
+    )
+    0
+}

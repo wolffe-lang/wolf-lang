@@ -81,7 +81,16 @@ calls wolf's `main` shim.
   reactor thread with the pool compensating, kill teardown reaches
   them, and `net_deadline` arms the timer wheel so the `timeout` row
   fires (`corpus/net/read_deadline.lu` answers `timeout`, the same
-  verdict as linux/macOS). The poller keeps the armed list itself
+  verdict as linux/macOS). Since s138 (`[os.net.accept]`) a listener
+  lives non-blocking here as on the other reactor hosts (`FIONBIO`
+  through std), so the accept after a readiness wake takes the
+  connection or answers `WSAEWOULDBLOCK` and waits again against the
+  same budget, never parks; the accepted socket inherits the mode on
+  winsock and is put back to blocking, one posture on every host. The
+  race that clause is about cannot be constructed on this host at
+  this pin — the inherit set is refused by name — so
+  `corpus/net/accept_race.lu` is vacuous here by construction, same
+  stdout. The poller keeps the armed list itself
   (`WSAPoll` has no kernel set) and rebuilds the array per wake; the
   wake token is a self-connected loopback UDP socket. **Measured** on
   windows-latest: 24 tasks each parked on a 200 ms read deadline against a silent peer resolved **24/24 `timeout` in 207 ms wall** (4 cores; probe run 33614917814) — the deadlines fired at the deadline, and the poller's whole cost across 24 armed sockets and 24 timers was the 7 ms above the budget. That is the corpus's shape — a handful
