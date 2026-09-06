@@ -14,10 +14,12 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   **namespace**; the owning document defines every anchor of its
   namespace.
 - `[conf.anchor.ns]` Registered namespaces and owners:
-  `gram` → 01-grammar.md · `mem` → 02-memory-model.md ·
-  `conc` → 03-concurrency.md · `abi` → 04-abi.md ·
-  `conf` → 05-conformance.md · `proto` → 06-differential-protocol.md ·
-  `pkg` → 08-package.md.
+  `gram` → 01-grammar.md · `diag` → 01-grammar.md (§9) ·
+  `mem` → 02-memory-model.md · `conc` → 03-concurrency.md ·
+  `abi` → 04-abi.md · `conf` → 05-conformance.md ·
+  `proto` → 06-differential-protocol.md · `pkg` → 08-package.md ·
+  `ct` → 09-constant-time.md · `type` → 10-types.md ·
+  `os` → 11-os.md.
   **Reserved forward namespaces** (owned by spec documents not yet
   written; tags in them are legal, reported as *forward*): `str`, `err`,
   `task`, `proc`, `sync`, `generics`, `arith`, `ffi`, `unsafe`,
@@ -28,7 +30,40 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   this clause's own contract, nothing renumbered. `pkg` appended
   2026-08-27 by s115 for #120: 08-package.md's sixteen anchors were
   registered in the extractor index but never admitted by this clause's
-  letter — the append reconciles the two, additive, nothing renumbered.)
+  letter — the append reconciles the two, additive, nothing renumbered.
+  `diag`, `ct`, `type` and `os` appended 2026-09-06 by r09 for #239 —
+  the same reconciliation, four documents over. 01-grammar.md §9 (s67),
+  09-constant-time.md (s112), 10-types.md (s113) and 11-os.md (s114)
+  each went normative and entered the extractor's registered set with no
+  append here, so **seventy-one published anchors stood outside this
+  clause's letter** at the moment of this append while `[conf.tag.valid]`
+  made citing any one of them a CI failure. That is not cosmetic: a rig
+  that mirrors this letter rather than an extractor's output cannot name
+  the clause its own witness holds, which is where the bill came due
+  (wolf-std F-0099 — six `[os.net.unix]` witnesses at sc36 carried the
+  forward tag `std.net.unix` and recorded the real clause in a comment).
+  The anchors did not move, and could not: `[conf.anchor.stable]` forbids
+  moving a published anchor, and the citations that would have had to
+  move with these number 3,273 across nine repositories against the one
+  paragraph an append costs. `ty` stays reserved and unused —
+  10-types.md chose `type`, and a reservation nothing cites is cheaper
+  to leave standing than to withdraw.)
+- `[conf.anchor.ns.admit]` **A namespace is admitted in one change or
+  not at all.** When the document that owns a namespace becomes
+  normative, that same change appends the namespace to the registered
+  list above AND to the registered set of the anchor tooling on every
+  implementation track (`[conf.anchor.index]`). A namespace present in
+  one and absent from the other is the defect #120 and #239 each name,
+  and it is **silent on whichever side is permissive** — a track whose
+  tooling admits the namespace goes on publishing anchors and passing
+  CI, so the gap only ever announces itself on a track that mirrors this
+  letter, by rejecting a tag that ought to be legal. Admission is
+  additive and one-way: a namespace that has published anchors may be
+  registered late, never un-registered, because `[conf.anchor.stable]`
+  pins the anchors that carry it. One document may own several
+  namespaces (01-grammar.md owns `gram` and `diag`); no namespace has
+  two owners. A namespace whose document is not yet written is
+  **reserved**, not registered, and its tags are *forward*.
 - `[conf.anchor.stable]` Anchors are **stable once published**: never
   renumbered, never reused. A deleted clause leaves a tombstone (the
   anchor with the text "*tombstone — see <replacement or rationale>*").
