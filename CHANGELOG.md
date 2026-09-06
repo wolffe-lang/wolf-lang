@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+### The accept is fair (s138 — #242 closes)
+
+**A hand that loses an accept race comes back.** With several
+processes accepting on one inherited listener — the prefork shape
+0.2.5 made writable — one connection wakes all of them and one takes
+it. Until now the others then called a *blocking* `accept(2)` with
+their deadline already spent, and parked in the kernel until the next
+connection arrived, which on a quiet server is never: alive at 0.0%
+CPU, answering no control verb, reaped by their master as dead (lobo
+ws17's measurement, wolf-lang#242). Now a listener lives non-blocking
+under the runtime, the take after a wake finds the connection or finds
+nothing, and a hand that finds nothing **waits again against the same
+budget** — the one its `net_deadline` armed when the call began, never
+a fresh one. With a budget armed, `net_accept` returns within it;
+without one it parks in the runtime's wait, where kill teardown
+reaches it, not the kernel's.
+
+**A lost race is not an answer, because it carries none.** From the
+program's side it is indistinguishable from the connection never
+having arrived — the same thing a single hand sees when a peer aborts
+between the wake and the take. So it is not a new row (a
+`net_accept(l)?` with no deadline armed would fail on a stranger's
+reset, and a `timeout` before any deadline would lie about a clock),
+not an empty handle, and never a trap: nothing about `net_accept`'s
+signature or its rows moved, and a program written against 0.2.5 runs
+unchanged. A loop that multiplexes a shared listener with `net_wait`
+and must keep serving its other sockets arms a short budget on the
+listener; that budget is the most a lost race can cost it. The
+accepted stream is blocking whatever the listener's mode — BSD kernels
+hand the flag down, linux does not, and the runtime makes it one
+posture — so reads and writes are exactly as before.
+
+Measured on macOS arm64, three hands free-for-all on one inherited
+listener, `ab -n 6000 -c 32`, one connection per request: about
+**30,000 req/s before and after** (29.7–30.8k parking, 29.7–33.1k
+fixed; one hand serves 23–28k, six serve 25–30k, the loopback client
+being the ceiling). Under load the fix costs nothing and buys nothing,
+because the next connection unparks every loser microseconds later.
+What it buys is the quiet server — and the ten-millisecond accept turn
+lobo shipped to avoid the park, which cost it 11,622 req/s against
+17,347 and deletes itself now.
+
+Spec: `[os.net.accept]` (new), with a sentence each in `[os.net.wait]`
+(readiness is not exclusivity) and `[os.proc.inherit]`. Witness:
+`corpus/net/accept_race.lu` — two hands on one inherited listener, one
+connection, both hands return; before this fix it reports
+`loser_returned false` in twelve seconds rather than hanging. Windows
+and the checked machine refuse the inherit set by name, so the witness
+is vacuous there by construction.
+
 ## 0.2.5 — 2026-09-04
 
 THE SERVER HAS CORES. **A loop that waits costs about 37x less than a
