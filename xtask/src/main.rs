@@ -1452,10 +1452,21 @@ const ALL_THREE_FLOOR: usize = 0;
 // count moves by exactly one (275/294/294, union 311, all-three 258).
 // No pre-existing file moved lanes. Counts measured by this gate, not
 // predicted.
+// s138 ratchet over 474 entries: the accept race (#242,
+// `[os.net.accept]`). ONE new run-phase witness — `net/accept_race`
+// — and it executes on the two native lanes only, like
+// `net/inherit_listener` before it: the race needs two processes on
+// one inherited listener, and the checked machine refuses an inherit
+// set BY NAME (the refused@mem residue grows by one, not a hole). So
+// native/release/union move by exactly one (295/295/312) and
+// checked/all-three hold (275/258). No pre-existing file moved lanes:
+// the fix changes what a lost race DOES, not any verdict — every
+// listener the corpus binds is single-owner and never loses one.
+// Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 275), ("native", 294), ("release", 294)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 275), ("native", 295), ("release", 295)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 311;
+const UNION_FLOOR: usize = 312;
 #[cfg(target_os = "macos")]
 const ALL_THREE_FLOOR: usize = 258;
 
