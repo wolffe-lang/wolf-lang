@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 354
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -293,6 +294,7 @@ memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer wri
 memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
+net/accept_race.lu: lowers
 net/byte_roundtrip.lu: lowers
 net/echo_bytes.lu: lowers
 net/echo_roundtrip.lu: lowers
