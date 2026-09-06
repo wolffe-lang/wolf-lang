@@ -1652,8 +1652,12 @@ mod tests {
         // An adopted descriptor takes the flag too — on the description
         // it shares with whoever handed it down.
         let raw_plain = t.raw_fd_of(plain).expect("live");
-        // SAFETY: dup of a live fd.
-        let handed = unsafe { libc::dup(raw_plain) };
+        // SAFETY: dup of a live fd — CLOSE-ON-EXEC, because a sibling
+        // test in this process spawns children and asserts they hold
+        // no socket the runtime did not hand them (a plain `dup` here
+        // leaked into `os::tests::spawn_with_hands_descriptors_to_the_
+        // child_from_3` one run in five).
+        let handed = unsafe { libc::fcntl(raw_plain, libc::F_DUPFD_CLOEXEC, 0) };
         assert!(handed >= 0);
         // SAFETY: clear the flag on the shared description first, so
         // the adopt is what sets it.
@@ -1706,8 +1710,9 @@ mod tests {
         let port = t.port(l).expect("port");
         let addr = format!("127.0.0.1:{port}");
         let raw = t.raw_fd_of(l).expect("live");
-        // SAFETY: dup of a live listener; `other` owns the copy.
-        let other = unsafe { TcpListener::from_raw_fd(libc::dup(raw)) };
+        // SAFETY: dup of a live listener (close-on-exec — see the
+        // flags test); `other` owns the copy.
+        let other = unsafe { TcpListener::from_raw_fd(libc::fcntl(raw, libc::F_DUPFD_CLOEXEC, 0)) };
         let watchdog = {
             let addr = addr.clone();
             std::thread::spawn(move || {
@@ -1775,8 +1780,8 @@ mod tests {
         let port = __wolf_rt_net_port(l);
         let addr = format!("127.0.0.1:{port}");
         let raw = tbl().raw_fd_of(l).expect("live");
-        // SAFETY: dup of a live listener.
-        let other = unsafe { TcpListener::from_raw_fd(libc::dup(raw)) };
+        // SAFETY: dup of a live listener, close-on-exec.
+        let other = unsafe { TcpListener::from_raw_fd(libc::fcntl(raw, libc::F_DUPFD_CLOEXEC, 0)) };
         assert_eq!(__wolf_rt_net_deadline(l, 400), net_code::OK);
         let hand = std::thread::spawn(move || {
             let t0 = std::time::Instant::now();
