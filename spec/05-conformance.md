@@ -17,7 +17,8 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   `gram` → 01-grammar.md · `diag` → 01-grammar.md (§9) ·
   `mem` → 02-memory-model.md · `conc` → 03-concurrency.md ·
   `abi` → 04-abi.md · `conf` → 05-conformance.md ·
-  `proto` → 06-differential-protocol.md · `pkg` → 08-package.md ·
+  `proto` → 06-differential-protocol.md ·
+  `sched` → 07-schedule-points.md · `pkg` → 08-package.md ·
   `ct` → 09-constant-time.md · `type` → 10-types.md ·
   `os` → 11-os.md.
   **Reserved forward namespaces** (owned by spec documents not yet
@@ -45,7 +46,20 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   The anchors did not move, and could not: `[conf.anchor.stable]` forbids
   moving a published anchor, and the citations that would have had to
   move with these number 3,273 across nine repositories against the one
-  paragraph an append costs. `ty` stays reserved and unused —
+  paragraph an append costs. `sched` appended 2026-09-07 by s139 for
+  #246, the MIRROR of that: 07-schedule-points.md declared seven
+  `[sched.*]` anchors while standing in neither this list nor the
+  extractor's document table, so the registry published NONE of them —
+  and a document nothing reads raises no alarm, which is the restrictive
+  half of the same silence. #239 let permissive tooling publish past the
+  clause; this let a document declare past the tooling, leaving anchors
+  that `[conf.tag.valid]` could only ever reject. It was not idle prose:
+  the native runtime cites four of the seven by name from
+  `wolf_rt::task::det`, `::reactor`, `::net` and `::task::hooks`, and
+  `wolf_driver`'s `--schedules`/`--replay` surface implements §5
+  (X12/D23, locked). Additive, nothing renumbered — the seven had never
+  been published, so `[conf.anchor.stable]` had nothing to pin.
+  `ty` stays reserved and unused —
   10-types.md chose `type`, and a reservation nothing cites is cheaper
   to leave standing than to withdraw.)
 - `[conf.anchor.ns.admit]` **A namespace is admitted in one change or

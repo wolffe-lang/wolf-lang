@@ -1,6 +1,11 @@
 # Wolf Spec — 07: Schedule Points (s36 Phase A + Phase B)
 
-Status: normative for hook SHAPE and vocabulary; `sched-ev/1` numbering
+Status: normative for hook SHAPE and vocabulary. The `sched` namespace
+is REGISTERED to this document ([conf.anchor.ns], admitted 2026-09-07 by
+s139 for #246): from that change the seven anchors below are published
+in `spec/anchors.json` and citable by `conforms:` tags. Before it they
+were declared here and in no registry, so `[conf.tag.valid]` failed
+every citation of them — the mirror of #239. `sched-ev/1` numbering
 is ASSIGNED (s36 Phase B, §1.1) and append-only from here per
 `[sched.stable]`. `sched-ev/0` (the reference interpreter's stream) is
 stable and unchanged. This document gates c07 implementation merges
