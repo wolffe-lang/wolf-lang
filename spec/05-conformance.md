@@ -17,7 +17,8 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   `gram` → 01-grammar.md · `diag` → 01-grammar.md (§9) ·
   `mem` → 02-memory-model.md · `conc` → 03-concurrency.md ·
   `abi` → 04-abi.md · `conf` → 05-conformance.md ·
-  `proto` → 06-differential-protocol.md · `pkg` → 08-package.md ·
+  `proto` → 06-differential-protocol.md ·
+  `sched` → 07-schedule-points.md · `pkg` → 08-package.md ·
   `ct` → 09-constant-time.md · `type` → 10-types.md ·
   `os` → 11-os.md.
   **Reserved forward namespaces** (owned by spec documents not yet
@@ -45,7 +46,20 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   The anchors did not move, and could not: `[conf.anchor.stable]` forbids
   moving a published anchor, and the citations that would have had to
   move with these number 3,273 across nine repositories against the one
-  paragraph an append costs. `ty` stays reserved and unused —
+  paragraph an append costs. `sched` appended 2026-09-07 by s139 for
+  #246, the MIRROR of that: 07-schedule-points.md declared seven
+  `[sched.*]` anchors while standing in neither this list nor the
+  extractor's document table, so the registry published NONE of them —
+  and a document nothing reads raises no alarm, which is the restrictive
+  half of the same silence. #239 let permissive tooling publish past the
+  clause; this let a document declare past the tooling, leaving anchors
+  that `[conf.tag.valid]` could only ever reject. It was not idle prose:
+  the native runtime cites four of the seven by name from
+  `wolf_rt::task::det`, `::reactor`, `::net` and `::task::hooks`, and
+  `wolf_driver`'s `--schedules`/`--replay` surface implements §5
+  (X12/D23, locked). Additive, nothing renumbered — the seven had never
+  been published, so `[conf.anchor.stable]` had nothing to pin.
+  `ty` stays reserved and unused —
   10-types.md chose `type`, and a reservation nothing cites is cheaper
   to leave standing than to withdraw.)
 - `[conf.anchor.ns.admit]` **A namespace is admitted in one change or
@@ -57,12 +71,19 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   and it is **silent on whichever side is permissive** — a track whose
   tooling admits the namespace goes on publishing anchors and passing
   CI, so the gap only ever announces itself on a track that mirrors this
-  letter, by rejecting a tag that ought to be legal. Admission is
-  additive and one-way: a namespace that has published anchors may be
-  registered late, never un-registered, because `[conf.anchor.stable]`
-  pins the anchors that carry it. One document may own several
-  namespaces (01-grammar.md owns `gram` and `diag`); no namespace has
-  two owners. A namespace whose document is not yet written is
+  letter, by rejecting a tag that ought to be legal. The reverse
+  omission is quieter still: a document owning a namespace NEITHER side
+  registers is read by no extractor, so its anchors are declared and
+  never published and no gate anywhere holds an opinion (#246,
+  07-schedule-points.md, seven anchors for a year). Admission is
+  therefore checkable in BOTH directions and must be checked both ways:
+  every registered namespace publishes anchors, and every anchor a spec
+  document writes sits in a namespace this clause registers or reserves.
+  Admission is additive and one-way: a namespace that has published
+  anchors may be registered late, never un-registered, because
+  `[conf.anchor.stable]` pins the anchors that carry it. One document
+  may own several namespaces (01-grammar.md owns `gram` and `diag`); no
+  namespace has two owners. A namespace whose document is not yet written is
   **reserved**, not registered, and its tags are *forward*.
 - `[conf.anchor.stable]` Anchors are **stable once published**: never
   renumbered, never reused. A deleted clause leaves a tombstone (the

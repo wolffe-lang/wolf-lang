@@ -2719,18 +2719,10 @@ fn fmt_fuzz(args: &[String]) -> ExitCode {
 /// spec/grammar.ebnf; `--check` verifies sync instead of writing (CI).
 fn spec_extract(check: bool) -> ExitCode {
     // link pass first: dangling cross-references fail regardless of mode
-    let names = [
-        "01-grammar.md",
-        "02-memory-model.md",
-        "03-concurrency.md",
-        "04-abi.md",
-        "05-conformance.md",
-        "06-differential-protocol.md",
-        "08-package.md",
-        "09-constant-time.md",
-        "10-types.md",
-        "11-os.md",
-    ];
+    // Derived from `NS_OWNERS`, never hand-listed (#246): a document
+    // that owns a registered namespace and is absent from this list is
+    // read by nothing, so its anchors are declared and never published.
+    let names = xtask::spec::spec_docs();
     let bodies: Vec<(String, String)> = names
         .iter()
         .filter_map(|n| {
@@ -3536,7 +3528,7 @@ fn conformance_cmd(args: &[String]) -> ExitCode {
         }
         for tag in &d.conforms {
             let ns = tag.split('.').next().unwrap_or("");
-            if xtask::spec::REGISTERED_NS.contains(&ns) {
+            if xtask::spec::is_registered_ns(ns) {
                 if registry.contains_key(tag) {
                     *tests_per_clause.entry(tag.clone()).or_default() += 1;
                 } else {
