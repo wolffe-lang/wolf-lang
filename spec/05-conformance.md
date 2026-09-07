@@ -71,12 +71,19 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   and it is **silent on whichever side is permissive** — a track whose
   tooling admits the namespace goes on publishing anchors and passing
   CI, so the gap only ever announces itself on a track that mirrors this
-  letter, by rejecting a tag that ought to be legal. Admission is
-  additive and one-way: a namespace that has published anchors may be
-  registered late, never un-registered, because `[conf.anchor.stable]`
-  pins the anchors that carry it. One document may own several
-  namespaces (01-grammar.md owns `gram` and `diag`); no namespace has
-  two owners. A namespace whose document is not yet written is
+  letter, by rejecting a tag that ought to be legal. The reverse
+  omission is quieter still: a document owning a namespace NEITHER side
+  registers is read by no extractor, so its anchors are declared and
+  never published and no gate anywhere holds an opinion (#246,
+  07-schedule-points.md, seven anchors for a year). Admission is
+  therefore checkable in BOTH directions and must be checked both ways:
+  every registered namespace publishes anchors, and every anchor a spec
+  document writes sits in a namespace this clause registers or reserves.
+  Admission is additive and one-way: a namespace that has published
+  anchors may be registered late, never un-registered, because
+  `[conf.anchor.stable]` pins the anchors that carry it. One document
+  may own several namespaces (01-grammar.md owns `gram` and `diag`); no
+  namespace has two owners. A namespace whose document is not yet written is
   **reserved**, not registered, and its tags are *forward*.
 - `[conf.anchor.stable]` Anchors are **stable once published**: never
   renumbered, never reused. A deleted clause leaves a tombstone (the

@@ -494,6 +494,100 @@ mod tests {
         );
     }
 
+    /// The direction #239's guard could not see: a namespace the clause
+    /// and the tooling BOTH admit, whose document the extractor never
+    /// reads, publishes nothing. That is #246 — `sched` was registered
+    /// nowhere, so nothing looked at 07-schedule-points.md, so its seven
+    /// anchors were declared and unpublishable and no gate said a word.
+    /// Registration and publication now have to arrive together.
+    #[test]
+    fn every_registered_namespace_publishes_anchors() {
+        let json =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../spec/anchors.json"))
+                .expect("spec/anchors.json is readable");
+        let published: Vec<&str> = json
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix('"'))
+            .filter_map(|k| k.split('"').next())
+            .filter(|k| k.contains('.'))
+            .filter_map(|k| k.split('.').next())
+            .collect();
+        let mut silent: Vec<&str> = Vec::new();
+        for (ns, file) in NS_OWNERS {
+            assert!(
+                std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../spec"))
+                    .join(file)
+                    .exists(),
+                "[conf.anchor.ns] gives `{ns}` the owner spec/{file}, which does not exist"
+            );
+            if !published.contains(&ns) {
+                silent.push(ns);
+            }
+        }
+        assert!(
+            silent.is_empty(),
+            "registered namespaces publish no anchor: {silent:?}. Either the \
+             owning document is missing from the extractor's list (#246 — \
+             `spec_docs` derives it from NS_OWNERS, so check the owner \
+             filename) or the namespace was registered before its document \
+             had clauses, which [conf.anchor.ns.admit] does not allow."
+        );
+    }
+
+    /// And the shape that let #246 sit unseen for a year: a spec
+    /// document declaring anchors in a namespace nobody registered or
+    /// reserved. Red at v0.2.6 on `sched`, by construction — this is the
+    /// gate that would have caught 07-schedule-points.md the day it
+    /// landed. It scans spec/ rather than the extractor's list, because
+    /// the whole defect was a document nothing listed.
+    #[test]
+    fn no_spec_document_names_an_unregistered_namespace() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/../spec");
+        let mut bad: Vec<String> = Vec::new();
+        let mut seen = 0usize;
+        for entry in std::fs::read_dir(dir).expect("spec/ is readable") {
+            let path = entry.expect("spec/ entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            let body = std::fs::read_to_string(&path).expect("spec document is readable");
+            seen += 1;
+            for anchor in anchors_in(&body) {
+                // Prose slice syntax is not an anchor: `[a..b]`,
+                // `[0..s.len]` and `[1..]` all reach `anchors_in`, and
+                // every real namespace is two or more characters with no
+                // empty segment.
+                let ns = anchor.split('.').next().unwrap_or_default();
+                if ns.len() < 2 || anchor.split('.').any(str::is_empty) {
+                    continue;
+                }
+                if is_registered_ns(ns) || FORWARD_NS.contains(&ns) {
+                    continue;
+                }
+                bad.push(format!("{name}: [{anchor}]"));
+            }
+        }
+        assert!(
+            seen >= NS_OWNERS.len() - 1,
+            "spec/ scan found {seen} documents"
+        );
+        bad.sort();
+        bad.dedup();
+        assert!(
+            bad.is_empty(),
+            "spec documents name anchors in namespaces [conf.anchor.ns] \
+             neither registers nor reserves: {bad:?}. Admit the namespace \
+             in ONE change ([conf.anchor.ns.admit]: the clause, NS_OWNERS \
+             and every implementation track's list) or stop writing the \
+             anchors — declared-but-unpublished is #246."
+        );
+    }
+
     #[test]
     fn extracts_in_order_and_ignores_other_fences() {
         let md =
