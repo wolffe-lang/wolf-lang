@@ -1,13 +1,16 @@
 //! check: run(exit=0)
 //! phase: run
-//! conforms: test.discovery, conc.select.fair, conc.det.events
+//! conforms: test.discovery, conc.select.fair, conc.det.events, sched.stable
 //!
 //! The s73 dogfood witness (X12 end to end): a main-shaped concurrent
 //! test body `wolf test --schedules=N` explores NATIVELY — each run's
 //! derived seed lands in the runtime scheduler's PRNG root, so the
 //! select tie-break below genuinely varies across seeds while the
 //! VERDICT stays stable (both outcomes exit 0 — [sched.stable]'s
-//! CI-checkable property). `--replay=SEED` reruns one schedule.
+//! CI-checkable property, cited above now that s139 published the
+//! `sched` anchors: before #246 this file could only name the clause
+//! in prose, exactly the F-0099 shape in reverse).
+//! `--replay=SEED` reruns one schedule.
 //! The driver's `test_cmd` CLI tests pin the exploration surface.
 
 fn main() -> !int {
