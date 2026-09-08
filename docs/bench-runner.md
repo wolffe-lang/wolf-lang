@@ -6,30 +6,30 @@ a machine that does nothing else (`.github/workflows/m2-ritual.yml`,
 established the protocol the ritual codifies; this page is the one part
 no tool can do: plugging in the hardware.
 
-The ritual **refuses** on a busy machine — load ≥ 1.0 after a bounded
-wait, or any foreign cargo/rustc/clang process, is a named failure, not
-a measurement. So a mislabeled shared runner fails loudly. Do not fight
-that; it is the design.
+The ritual refuses on a busy machine: load ≥ 1.0 after a bounded wait,
+or any foreign cargo/rustc/clang process, fails the run and says which
+condition tripped. That refusal is the design, and a mislabeled shared
+runner will hit it.
 
 ## 1. Pick the machine
 
-- Idle by construction: nothing else scheduled — no desktop session, no
-  other CI, no cron builds. The quiet check will hold you to this.
-- Any x86-64 Linux box is legitimate: the gate is a **ratio against
-  naive clang -O3 on the same machine**, so absolute speed does not
-  matter. What matters is that it is the *same* box every night — the
-  layout-noise floors only mean something across runs on one host.
+- Idle by construction: nothing else scheduled (no desktop session, no
+  other CI, no cron builds). The quiet check will hold you to this.
+- Any x86-64 Linux box is legitimate: the gate is a ratio against naive
+  clang -O3 on the same machine, so absolute speed does not matter. Use
+  the *same* box every night; the layout-noise floors only mean
+  something across runs on one host.
 - The nine hand-runs ran on an i7-10870H under `powersave`. The
   governor's *choice* matters less than its *consistency*; pin one and
-  the conditions file will name it every night:
+  the conditions file will record it every night:
 
   ```sh
   # pick one and make it stick (cpupower survives reboots via its service)
   sudo cpupower frequency-set -g performance
   ```
 
-- Leave SMT and ASLR as the distribution ships them — the ritual
-  records both; changing them mid-series is what invalidates a series.
+- Leave SMT and ASLR as the distribution ships them. The ritual records
+  both, and changing them mid-series invalidates the series.
 
 ## 2. Install the toolchain the lanes need
 
@@ -66,9 +66,9 @@ sudo ./svc.sh install && sudo ./svc.sh start
 ```
 
 The `bench` label is the contract: `m2-ritual.yml` targets
-`[self-hosted, bench]` with **no hosted fallback**, so the job queues
-until a machine wearing the label exists, and never silently runs on
-shared iron.
+`[self-hosted, bench]` with no hosted fallback, so the job queues
+until a machine wearing the label exists. It will not run on shared
+iron.
 
 ## 4. What happens nightly, and what to read
 
@@ -77,15 +77,15 @@ conditions file → the t1 suite (10 runs/kernel) → the gate → a line
 appended to `bench/ritual-ledger.jsonl` (pushed to trunk as a bot
 commit) → artifacts archived to the `bench-data` branch.
 
-- **The ledger is the s44 clock.** Its header states the tick rule: a
+- The ledger is the s44 clock. Its header states the tick rule: a
   HOLDS advances the count only ≥ 12 h after the previously counted
   hold; a DOES-NOT-HOLD resets it. At three consecutive holds the run
-  log prints the declaration-threshold banner — the declaration itself
+  log prints the declaration-threshold banner; the declaration itself
   is still yours to announce.
-- A **red job** means the ritual could not be performed honestly (busy
-  machine, dirty tree, suite failure) — read the refusal, it names
-  itself. A **refuted gate is a green job**: the verdict is data, in
-  the ledger and the step summary.
+- A red job means the ritual could not be performed (busy machine,
+  dirty tree, suite failure); read the refusal, which says which one. A
+  refuted gate is a green job: the verdict is data, in the ledger and
+  the step summary.
 - First nights on a new box: expect the numbers' *texture* to differ
   from the hand-runs (different host, PGO lane now live). The gate is
   ratio-based so the verdict is comparable; the per-kernel absolute
