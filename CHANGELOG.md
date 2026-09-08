@@ -2,78 +2,78 @@
 
 ## 0.2.6 — 2026-09-06
 
-THE ACCEPT IS FAIR. **A hand that loses an accept race now costs you a
-budget, not a process.** Start several hands on one listening socket —
-the prefork shape 0.2.5 made writable, whether they share the address
-with `reuse_port` or inherit one listener from a parent — and each
-arriving connection wakes more than one of them while exactly one takes
-it. Until now the losers then called a *blocking* `accept(2)` with their
-deadline already spent, and parked in the kernel until the **next**
-connection arrived: microseconds on a busy server, and on a quiet one,
-never. Alive at 0.0% CPU, answering no control verb, reaped by their
-master as dead. Now a loser comes back — inside the budget its
-`net_deadline` armed when the call began, never a fresh one — so the
-most a lost race can cost a serving loop is that budget, and **N
-processes may share one listener without one of them going silent.**
+THE ACCEPT IS FAIR. A hand that loses an accept race now costs you a
+budget instead of a process. Start several hands on one listening
+socket (the prefork shape 0.2.5 made writable, whether they share the
+address with `reuse_port` or inherit one listener from a parent) and
+each arriving connection wakes more than one of them while exactly one
+takes it. Until now the losers then called a *blocking* `accept(2)`
+with their deadline already spent, and parked in the kernel until the
+next connection arrived: microseconds on a busy server, and on a quiet
+one, never. Alive at 0.0% CPU, answering no control verb, reaped by
+their master as dead. Now a loser comes back inside the budget its
+`net_deadline` armed when the call began, never a fresh one, so the
+most a lost race can cost a serving loop is that budget, and N
+processes may share one listener without one of them going silent.
 Nothing in `net_accept`'s signature or its rows moved, so a program
-written against 0.2.5 runs unchanged; what changed is that the shape
-0.2.5 invited you to write now survives an idle Sunday.
+written against 0.2.5 runs unchanged, and the shape 0.2.5 invited you
+to write now survives an idle Sunday.
 
 ### A lost race is not an answer, because it carries none (s138 — #242 closes)
 
-A listener lives **non-blocking** under the runtime now. The take after
+A listener lives non-blocking under the runtime now. The take after
 a wake finds the connection or finds nothing, and a hand that finds
 nothing waits again against the budget its `net_deadline` already armed.
 With a budget armed, `net_accept` returns within it; without one it
-parks in the runtime's wait, where kill teardown reaches it — not in the
-kernel's, where nothing does.
+parks in the runtime's wait, where kill teardown reaches it, and not in
+the kernel's, where nothing does.
 
-**Why nothing new appears in the rows.** From the program's side a lost
-race is indistinguishable from the connection never having arrived — the
-same thing a single hand sees when a peer aborts between the wake and
-the take. So it is not a new row (a `net_accept(l)?` with no deadline
+Nothing new appears in the rows. From the program's side a lost race is
+indistinguishable from the connection never having arrived, the same
+thing a single hand sees when a peer aborts between the wake and the
+take. So it is not a new row (a `net_accept(l)?` with no deadline
 armed would then fail on a stranger's reset, and a `timeout` before any
 deadline would lie about a clock), not an empty handle, and never a
 trap. A loop that multiplexes a shared listener with `net_wait` and must
 keep serving its other sockets arms a short budget on the listener; that
 budget is the most a lost race can cost it. The accepted stream is
-blocking whatever the listener's mode — BSD kernels hand the flag down,
-linux does not, and the runtime makes it one posture — so reads and
-writes are exactly as before.
+blocking whatever the listener's mode (BSD kernels hand the flag down,
+linux does not, and the runtime makes it one posture), so reads and
+writes are as before.
 
 Measured on macOS arm64, three hands free-for-all on one inherited
-listener, `ab -n 6000 -c 32`, one connection per request: about **30,000
-req/s before and after** (29.7–30.8k parking, 29.7–33.1k fixed; one hand
+listener, `ab -n 6000 -c 32`, one connection per request: about 30,000
+req/s before and after (29.7–30.8k parking, 29.7–33.1k fixed; one hand
 serves 23–28k, six serve 25–30k, the loopback client being the ceiling).
 Under load the fix costs nothing and buys nothing, because the next
-connection unparks every loser microseconds later. What it buys is the
-quiet server — and it deletes a workaround downstream: the
-ten-millisecond accept turn lobo shipped to avoid the park cost it
-11,622 req/s against 17,347, and comes out now.
+connection unparks every loser microseconds later. It buys the quiet
+server, and it deletes a workaround downstream: the ten-millisecond
+accept turn lobo shipped to avoid the park cost it 11,622 req/s against
+17,347, and comes out now.
 
 Spec: `[os.net.accept]` (new), with a sentence each in `[os.net.wait]`
 (readiness is not exclusivity) and `[os.proc.inherit]`. Witness:
-`corpus/net/accept_race.lu` — two hands on one inherited listener, one
+`corpus/net/accept_race.lu`, two hands on one inherited listener, one
 connection, both hands return; before this fix it reports
-`loser_returned false` in twelve seconds rather than hanging. Windows
-and the checked machine refuse the inherit set by name, so the witness
-is vacuous there by construction.
+`loser_returned false` in twelve seconds instead of hanging. Windows
+and the checked machine refuse the inherit set, so the witness is
+vacuous there.
 
 ### The blast-radius bound holds (s138 — #243 closes)
 
-**A keyword where a parameter name goes is one report, not two.**
+A keyword where a parameter name goes is one report, not two.
 `fn f(true, x: int)` said "`true` is a reserved keyword, so it cannot
 name a parameter" and then, on the same token, "expected `:` and a type
 after the parameter name". The second line contradicted the first and
 told you nothing the first had not; now the type is asked for only when
 a `:` says you meant a parameter there (`fn f(true: int)` is still one
-report — the name), and a real name with no type keeps its report
+report, the name), and a real name with no type keeps its report
 (`fn f(x)` still asks for one).
 
-That is the whole of #243. The nightly's blast-radius sweep — every
-corpus file, three hundred single-token mutations each, at most five
-cascade diagnostics for a mutation that re-keys structure — had been
-red since the s137 corpus adds: turning the `=` of `let a =
+That is all of #243. The nightly's blast-radius sweep (every corpus
+file, three hundred single-token mutations each, at most five cascade
+diagnostics for a mutation that re-keys structure) had been red since
+the s137 corpus adds: turning the `=` of `let a =
 net_listen_with("127.0.0.1:0", true, 16) else |e| match e {` into `fn`
 drew six. Reduced to the smallest program that draws six and read one
 by one, five of them are one per enclosing tier (the binding, the run
@@ -84,43 +84,43 @@ counter-example is pinned deterministically beside #20's and #109's.
 
 ### The letters
 
-**`[conf.anchor.ns]` admits the namespaces it publishes** (#239). The
+`[conf.anchor.ns]` admits the namespaces it publishes (#239). The
 clause that registers anchor namespaces named seven of them while the
 spec published anchors in eleven, and had done since `diag` (s67), `ct`
 (s112), `type` (s113) and `os` (s114) each went normative without an
-append. At this release that was **71 published anchors outside the
-clause's own letter** — every one of them a clause `[conf.tag.valid]`
+append. At this release that was 71 published anchors outside the
+clause's own letter, every one of them a clause `[conf.tag.valid]`
 made a CI failure to cite. Inside this repository the gap was invisible,
 because the extractor is the permissive side and admitted all eleven; it
 only ever announced itself downstream, in a rig that mirrors the letter
-and therefore *rejected* tags that ought to be legal — wolf-std's F-0099,
+and therefore *rejected* tags that ought to be legal: wolf-std's F-0099,
 where six witnesses for `[os.net.unix]` could not name the clause they
-conform to. **The clause caught up; not one anchor moved.** Moving them
+conform to. The clause caught up, and not one anchor moved. Moving them
 was never the option: `[conf.anchor.stable]` forbids renumbering a
 published anchor, and the citations that would have had to move number
-**3,273 across nine repositories** against the one paragraph an append
+3,273 across nine repositories against the one paragraph an append
 costs. The append is additive on #120's precedent, with the reason
-written into the clause rather than into a commit message, and a new
+written into the clause instead of a commit message, and a new
 `[conf.anchor.ns.admit]` says how the next namespace is admitted: in one
 change, clause and tooling together, on every implementation track. Three
 tests in `cargo xtask ci` now hold the two halves equal, so the fifth
 recurrence fails a gauntlet instead of a downstream rig. Anchors 423 →
 424.
 
-**The pairing holds at lupin 0.1.26** (pin `982f857`) — unchanged from
+The pairing holds at lupin 0.1.26 (pin `982f857`), unchanged from
 v0.2.5, because the interpreter published no release between the two
 tags, and the first pairing in this series that needed no re-stamp at
 all. Re-run at this head against the v0.1.26 release build (bare, no
-`LUPIN=` override; D57's second half applies, so version AND pin were
-both compared and both matched). The ritual over **508 files**: checked
-**266 agreements / 124 completeness notes / 2 soundness / 111
-unsupported / 8 hard**, native **287 / 124 / 0 / 93 / 5**. Hard
+`LUPIN=` override; D57's second half applies, so version and pin were
+both compared and both matched). The ritual over 508 files: checked
+266 agreements / 124 completeness notes / 2 soundness / 111
+unsupported / 8 hard, native 287 / 124 / 0 / 93 / 5. Hard
 divergence is flat against v0.2.5's 8 and 5, and decomposes with nothing
-left over — six (five) `Diag` rows are #167's warning-channel asymmetry,
+left over: six (five) `Diag` rows are #167's warning-channel asymmetry,
 lupin emitting no warnings at all, and the two soundness findings are
 #168's float-cast twins, where wolfc's own checked lane exits 0 and the
 native lanes trap. Every surviving row is a filed issue older than this
-release; **no class opened at this pin.** The one corpus file this
+release, and no class opened at this pin. The one corpus file this
 release adds, `corpus/net/accept_race.lu`, is unsupported on both lanes
 (the interpreter is handed no listener to inherit), which is where the
 507 → 508 and the two `unsupported` counts moved.
