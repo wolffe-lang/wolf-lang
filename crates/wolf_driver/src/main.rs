@@ -19,6 +19,7 @@ use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter
 mod cimport_cmd;
 mod doc_cmd;
 mod doctest_cmd;
+mod help;
 mod pkg_cmd;
 mod profile_cmd;
 mod script_cmd;
@@ -100,6 +101,17 @@ fn pairing() -> (String, String) {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // `wolf <command> --help` (#250). Only in the SECOND position: in
+    // run mode everything after the entry file is the program's own
+    // argv, and a toolchain that swallows a program's `--help` is a
+    // worse bug than the one this fixes.
+    if let (Some(cmd), Some(flag)) = (args.first(), args.get(1))
+        && (flag == "--help" || flag == "-h")
+        && help::find(cmd).is_some()
+    {
+        print!("{}", help::command_help(cmd));
+        return;
+    }
     match args.first().map(String::as_str) {
         // D38: the compiler is named wolfgang; the command stays `wolf`.
         // First line: the build's own identity (D57, r03) — bare version
@@ -117,6 +129,41 @@ fn main() {
             println!("paired with lupin {lupin_version} (reference interpreter), pin {lupin_pin}");
         }
         Some("--explain") => explain(&args[1..]),
+        // The front door (#250). `wolf help build` and `wolf build
+        // --help` are the same question, so they get the same answer.
+        Some("--help" | "-h" | "help") => match args.get(1).map(String::as_str) {
+            None | Some("--help" | "-h" | "help") => print!("{}", help::overview()),
+            Some(name) if help::find(name).is_some() => {
+                print!("{}", help::command_help(name));
+            }
+            Some(name) => {
+                eprintln!("{}", help::not_a_command(name));
+                std::process::exit(2);
+            }
+        },
+        // Generated from the one verb table, so a packager has a man
+        // page and completions to install without either being a
+        // hand-kept copy that goes stale.
+        Some("--man") => print!("{}", help::man_page(env!("CARGO_PKG_VERSION"))),
+        Some("--completions") => match args.get(1).map(String::as_str) {
+            Some(shell) => match help::completions(shell) {
+                Some(script) => print!("{script}"),
+                None => {
+                    eprintln!(
+                        "wolf --completions: no completion for `{shell}` (have: {})",
+                        help::SHELLS.join(", ")
+                    );
+                    std::process::exit(2);
+                }
+            },
+            None => {
+                eprintln!(
+                    "wolf --completions: name a shell ({})",
+                    help::SHELLS.join(", ")
+                );
+                std::process::exit(2);
+            }
+        },
         Some("build") => build(&args[1..]),
         Some("run") => run(&args[1..]),
         Some("fix") => fix(&args[1..]),
@@ -148,10 +195,17 @@ fn main() {
             eprintln!("wolf {cmd}: not yet (grows at its own campaign; D34's single binary)");
             std::process::exit(2);
         }
-        _ => {
-            eprintln!(
-                "usage: wolf build|run|test|doc|fix|fmt|lsp|init|add|rm|update|audit|tree|why|vendor|publish|cache|profile|interface|audit-surface|c-import|conform-run|--explain|--version"
-            );
+        // The old one-line list of twenty-three verbs told a stranger
+        // nothing and had nowhere to send them. Nothing at all is
+        // someone at the front door, so they get the front door; a word
+        // that is not a verb is a typo, so they get the near-miss and a
+        // pointer, not a wall of text (VOICE rule 4).
+        None => {
+            print!("{}", help::overview());
+            std::process::exit(2);
+        }
+        Some(cmd) => {
+            eprintln!("{}", help::not_a_command(cmd));
             std::process::exit(2);
         }
     }
@@ -206,8 +260,7 @@ fn fmt(args: &[String]) {
         }
     }
     if paths.is_empty() {
-        eprintln!("usage: wolf fmt [--check] <file.lu|dir|->...");
-        std::process::exit(2);
+        crate::help::usage_exit("fmt");
     }
 
     let mut sm = wolf_span::SourceMap::new();
@@ -476,8 +529,7 @@ fn interface(args: &[String]) {
         }
     };
     let Some(path) = args.first() else {
-        eprintln!("usage: wolf interface [--std-root <dir>] <file.lu|dir>");
-        std::process::exit(2);
+        crate::help::usage_exit("interface");
     };
     let p = Path::new(path);
     let mut sm = wolf_span::SourceMap::new();
@@ -568,8 +620,7 @@ fn audit_surface(args: &[String]) {
         }
     };
     let Some(path) = args.first() else {
-        eprintln!("usage: wolf audit-surface [--std-root <dir>] <file.lu|dir>");
-        std::process::exit(2);
+        crate::help::usage_exit("audit-surface");
     };
     let p = Path::new(path);
     let mut sm = wolf_span::SourceMap::new();
@@ -636,8 +687,12 @@ fn audit_surface(args: &[String]) {
 /// Why a native compile did not produce an executable — every case an
 /// HONEST refusal or a user error, never a silent fallback.
 enum BuildStop {
-    /// Diagnostics were reported; the package does not compile.
-    Errors,
+    /// Diagnostics were reported; the package does not compile. The
+    /// payload is the code of the FIRST error in the report the reader
+    /// just saw — the one `--explain` should be pointed at (#249).
+    /// `None` only if nothing carried a code, which the gate makes
+    /// impossible today; the footer falls back to generic phrasing.
+    Errors(Option<wolf_diag::Code>),
     /// A construct the pipeline cannot handle yet (conservatism
     /// ledger): the deepest phase that DID complete + the reason.
     Refused { phase: &'static str, reason: String },
@@ -772,6 +827,19 @@ fn report_capped(
     out
 }
 
+/// The code the compile-failure footer names (#249): the first
+/// ERROR-severity diagnostic in the report the reader just saw, falling
+/// back to the first diagnostic of any severity. Report order is the
+/// slice order [`report_capped`] renders, so this is literally the code
+/// at the top of the reader's screen.
+fn first_reported_code(diags: &[Diagnostic]) -> Option<wolf_diag::Code> {
+    diags
+        .iter()
+        .find(|d| d.severity == wolf_diag::Severity::Error)
+        .or_else(|| diags.first())
+        .map(|d| d.code)
+}
+
 /// Parse a lint selector as given on a flag: shape via
 /// [`Selector::parse`], and exact codes must be registered — a `--deny
 /// W9999` is a user error at the CLI (the *attribute* form warns W0302
@@ -887,7 +955,7 @@ fn compile_native(
                 reporter.report(d);
             }
             eprint!("{}", reporter.take_output());
-            return Err(BuildStop::Errors);
+            return Err(BuildStop::Errors(first_reported_code(&project.diagnostics)));
         }
     }
     let res = resolve_from_entry(file, &mut sm, sources, std_root, pkg_project)
@@ -919,7 +987,7 @@ fn compile_native(
         if has_errors(pending) {
             wolf_diag::sort_diagnostics(pending);
             render(sources, pending);
-            return Err(BuildStop::Errors);
+            return Err(BuildStop::Errors(first_reported_code(pending)));
         }
         Ok(())
     };
@@ -2194,18 +2262,7 @@ struct BuildCli {
 /// `--checked`, `--debug` (the default; accepted), `--release` (the
 /// s41 LLVM tier), `--std-root`.
 fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
-    let usage = || -> ! {
-        eprintln!(
-            "usage: wolf {cmd} <file.lu> [-o OUT] [--emit=wir|obj|bin|llvm-ir] [--no-cache] \
-             [--verbose] [--checked] [--release] [--codegen-report] \
-             [--profile-gen[=<dir>]] [--profile=<file.wprof>] \
-             [--std-root <dir>] \
-             [--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings] \
-             [--error-limit=N]{}",
-            if run_mode { " [prog args…]" } else { "" }
-        );
-        std::process::exit(2);
-    };
+    let usage = || -> ! { crate::help::usage_exit(cmd) };
     let fail = |msg: &str| -> ! {
         eprintln!("wolf {cmd}: {msg}");
         std::process::exit(2);
@@ -2386,14 +2443,21 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
 
 fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
     match stop {
-        BuildStop::Errors => {
+        BuildStop::Errors(first) => {
             // Every code carries an explanation, and nothing in the
             // report said so: a reader who does not already know the
-            // catalog exists never finds it.
-            eprintln!(
-                "wolf {cmd}: the package does not compile; fix the errors above \
-                 (`wolf --explain E0201` explains any code by name)"
-            );
+            // catalog exists never finds it. The code named is the one
+            // at the TOP of the report the reader just saw — a fixed
+            // `E0201` sent them to a different error's entry, which is
+            // worse than silence for exactly the reader this line
+            // exists to help (#249).
+            let explain = match first {
+                Some(code) => {
+                    format!("`wolf --explain {code}` explains this code, or any other, by name")
+                }
+                None => "`wolf --explain E####` explains any code by name".to_string(),
+            };
+            eprintln!("wolf {cmd}: the package does not compile; fix the errors above ({explain})");
             std::process::exit(1);
         }
         BuildStop::Refused { phase, reason } => {
@@ -2670,8 +2734,7 @@ fn fix(args: &[String]) {
         }
     }
     let Some(file) = file else {
-        eprintln!("usage: wolf fix <file.lu> [--apply] [--std-root <dir>]");
-        std::process::exit(2);
+        crate::help::usage_exit("fix");
     };
     let path = Path::new(&file);
     if !path.is_file() {
@@ -2894,7 +2957,7 @@ fn native_run(
                 }
             }
         }
-        Err(BuildStop::Errors) => {
+        Err(BuildStop::Errors(_)) => {
             // The static ladder already ran clean before this rung; an
             // error here is a pipeline inconsistency.
             eprintln!("wolf conform-run: ICE: native rung found errors after a clean ladder");
@@ -3055,7 +3118,7 @@ fn ct_build_gate(
     let mut ds: Vec<Diagnostic> = violations.iter().map(|v| v.diagnostic(fallback)).collect();
     wolf_diag::sort_diagnostics(&mut ds);
     render(sources, &ds);
-    Err(BuildStop::Errors)
+    Err(BuildStop::Errors(first_reported_code(&ds)))
 }
 
 /// c28 — the shared constant-time gate ([ct.taint.verify]): when any
@@ -3295,12 +3358,7 @@ fn conform_run(args: &[String]) {
         file = Some(a.clone());
     }
     let Some(file) = file else {
-        eprintln!(
-            "usage: wolf conform-run <file.lu> [--phase=<p>] [--seed=N] [--json] \
-             [--error-format=human|json] [--dump=regions|cfg|wir] [--zstats] \
-             [--checked] [--native] [--release] [--std-root <dir>]"
-        );
-        std::process::exit(2);
+        crate::help::usage_exit("conform-run");
     };
     if !Path::new(&file).is_file() {
         eprintln!("wolf conform-run: no such file: {file}");

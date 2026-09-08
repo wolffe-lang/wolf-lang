@@ -541,8 +541,7 @@ pub fn cache(args: &[String]) {
             );
         }
         _ => {
-            eprintln!("usage: wolf cache <path|gc [--dry-run] [--all]>");
-            std::process::exit(2);
+            crate::help::usage_exit("cache");
         }
     }
 }

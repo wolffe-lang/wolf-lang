@@ -3,6 +3,7 @@
 
 pub mod corpus;
 pub mod protocol;
+pub mod readme;
 pub mod spec;
 pub mod stats;
 pub mod t1;

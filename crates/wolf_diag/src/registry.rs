@@ -434,6 +434,14 @@ name you asked for is defined in such a file, or an imported directory
 contains only such files, the message says so — the fix is to remove
 the standalone marker from the file that belongs to the module.
 
+A `use std.…` that misses is usually neither a typo nor a module
+mistake. The standard library is a separate release, wolf-std, and no
+package of the compiler ships it: with no std tree configured, `std` is
+a small built-in stub and almost everything is absent from it. Point
+wolf at a wolf-std checkout with `--std-root <dir>` or the `WOLF_STD`
+environment variable and the real tree answers — the message says so
+whenever the stub was the one that answered.
+
 Names never resolve through types here — a capitalized name used as an
 error-row tag (D30) is deferred to the type checker rather than
 reported by this pass.

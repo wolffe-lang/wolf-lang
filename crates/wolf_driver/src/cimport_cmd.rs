@@ -30,24 +30,7 @@ struct Cli {
 }
 
 fn usage() -> ! {
-    eprintln!(
-        "usage: wolf c-import [options] <header.h>…\n\
-         \n\
-         options:\n\
-         \x20 --dump              print the artifact (the reviewable form)\n\
-         \x20 --refusals          print only what the importer refused\n\
-         \x20 -I <dir>            add an include directory (repeatable, order matters)\n\
-         \x20 -D <name>[=<value>] define a macro (repeatable)\n\
-         \x20 --cflag <flag>      pass a flag to the importer (repeatable)\n\
-         \x20 --target <triple>   import for this target (default: the host)\n\
-         \x20 --sysroot <id>      the sysroot identity to key the cache on\n\
-         \x20 --no-cache          import even if a cached artifact exists\n\
-         \n\
-         The importer runs as a separate program (`{}`); the compiler\n\
-         never links a C frontend.",
-        worker::WORKER_NAME
-    );
-    std::process::exit(2)
+    crate::help::usage_exit("c-import")
 }
 
 fn parse_cli(args: &[String]) -> Cli {

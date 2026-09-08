@@ -129,3 +129,50 @@ fn bad_std_root_is_a_loud_error() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("std root"), "loud, named error: {err}");
 }
+
+/// The stderr of `wolf conform-run --phase=resolve` under the given
+/// extra args and env — the diagnostics a reader actually sees.
+fn resolve_stderr(entry: &Path, extra: &[&str], env: &[(&str, &str)]) -> String {
+    let mut cmd = Command::new(wolf());
+    cmd.arg("conform-run")
+        .arg(entry)
+        .arg("--phase=resolve")
+        .args(extra)
+        .env_remove("WOLF_STD");
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let out = cmd.output().expect("wolf runs");
+    String::from_utf8_lossy(&out.stderr).into_owned()
+}
+
+/// #251: a packaged wolf ships no standard library, and nothing told
+/// the reader one existed. The resolver knows `WOLF_STD` is unset at
+/// exactly the moment the reader needs to hear it, so the miss says so.
+#[test]
+fn a_std_miss_without_a_root_names_wolf_std() {
+    let (_std_root, entry) = fixture("no_root_names_mechanism", USE_NESTED);
+    let err = resolve_stderr(&entry, &[], &[]);
+    assert!(err.contains("E0301"), "the miss is still reported:\n{err}");
+    assert!(
+        err.contains("WOLF_STD") && err.contains("--std-root") && err.contains("wolf-std"),
+        "the note names the mechanism and the library:\n{err}"
+    );
+}
+
+/// …and only then. With a root configured the sentence would be false,
+/// and a reader who already pointed wolf at a std tree does not need it.
+#[test]
+fn a_std_miss_with_a_root_does_not_name_wolf_std() {
+    // A real std root that simply has no `std.list` in it.
+    let (std_root, entry) = fixture(
+        "root_set_missing_module",
+        "use std.list\nfn main() -> !int {\n    0\n}\n",
+    );
+    let err = resolve_stderr(&entry, &["--std-root", std_root.to_str().unwrap()], &[]);
+    assert!(err.contains("E0301"), "the miss is still reported:\n{err}");
+    assert!(
+        !err.contains("WOLF_STD"),
+        "no root-is-unset note when a root IS set:\n{err}"
+    );
+}

@@ -25,7 +25,7 @@ and the release tier's M2 gate — the thirteen-kernel suite against naive
 traps report and exit 134, `spawn` and scopes, `proc`, channels and
 `select`, `sync`/`when` and `os.signal` all serve, and what refuses by
 name there is the release tier and EXTERNAL `reload`/`upgrade` signal
-delivery — [`docs/platforms.md`](docs/platforms.md) is the per-host
+delivery — [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md) is the per-host
 ledger and the road.
 
 ```sh
@@ -43,27 +43,45 @@ the one above included — answers `version+dev.<commit>`, so an off-tag build
 never claims to be the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and says `+dev.unknown`.
 
-[`CHANGELOG.md`](CHANGELOG.md) tells v0.2.6 by campaign;
-[`docs/release/NOTES-v0.1.0.md`](docs/release/NOTES-v0.1.0.md) says what the
+[`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md) tells v0.2.6 by campaign;
+[`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md) says what the
 first release was, feature by feature.
+
+## The standard library
+
+The standard library is a separate repository,
+[wolf-std](https://github.com/wolffe-lang/wolf-std), on its own release
+cadence: no package of the compiler ships it, and until one does `use std.…`
+answers from a small built-in stub — which is why `use std.list` reports that
+module `std` has no item named `list`. Point the compiler at a wolf-std
+checkout and the real tree answers instead:
+
+```sh
+git clone https://github.com/wolffe-lang/wolf-std
+export WOLF_STD="$PWD/wolf-std/std"
+wolf run main.lu
+```
+
+`--std-root <dir>` does the same for one invocation and beats `WOLF_STD`.
+The tree is the namespace (D32): `use std.list` names `<root>/list/`.
 
 ## Where things are
 
 | path | what |
 |---|---|
-| [`spec/`](spec/) | the normative language specification: grammar, memory model, concurrency, ABI, conformance |
-| [`corpus/`](corpus/) | the conformance corpus. Every program states its own expected outcome in a `//!` header, and CI checks the claim |
+| [`spec/`](https://github.com/wolffe-lang/wolf-lang/tree/trunk/spec) | the normative language specification: grammar, memory model, concurrency, ABI, conformance |
+| [`corpus/`](https://github.com/wolffe-lang/wolf-lang/tree/trunk/corpus) | the conformance corpus. Every program states its own expected outcome in a `//!` header, and CI checks the claim |
 | `crates/` | the compiler, the runtime (`wolf_rt`), and the driver |
-| [`docs/`](docs/) | the diagnostic catalog, the module rules, the lint triage ledger, the release notes |
+| [`docs/`](https://github.com/wolffe-lang/wolf-lang/tree/trunk/docs) | the diagnostic catalog, the module rules, the lint triage ledger, the release notes |
 
 The reference interpreter is a separate implementation in
 [wolf-interp](https://github.com/wolffe-lang/wolf-interp). The two share no
 code, only the spec and the corpus, and each is tested against the other.
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the gates and the commit conventions.
+[CONTRIBUTING.md](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CONTRIBUTING.md) has the gates and the commit conventions.
 
 ## License
 
-Licensed under [GPL-3.0-or-later](LICENSE). The runtime library
-(`wolf_rt`) carries the [wolf Runtime Library Exception](crates/wolf_rt/LICENSE-EXCEPTION):
+Licensed under [GPL-3.0-or-later](https://github.com/wolffe-lang/wolf-lang/blob/trunk/LICENSE). The runtime library
+(`wolf_rt`) carries the [wolf Runtime Library Exception](https://github.com/wolffe-lang/wolf-lang/blob/trunk/crates/wolf_rt/LICENSE-EXCEPTION):
 programs you compile with wolf are yours, under any license you choose.

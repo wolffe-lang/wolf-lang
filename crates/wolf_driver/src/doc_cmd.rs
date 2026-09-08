@@ -40,11 +40,7 @@ struct Cli {
 }
 
 fn usage() -> ! {
-    eprintln!(
-        "usage: wolf doc [--private] [--out DIR] [--check] [--open] [--json] [--coverage]\n\
-         \x20               [--require-docs] [--deny-warnings] [--std-root DIR] [<file.lu|dir>]"
-    );
-    std::process::exit(2);
+    crate::help::usage_exit("doc")
 }
 
 fn parse_cli(args: &[String]) -> Cli {

@@ -153,8 +153,7 @@ fn report_cap_deltas(project: &Project, lock: &Lock) -> bool {
 pub fn init(args: &[String]) {
     let (args, dir) = take_dir(args, "init");
     let usage = || -> ! {
-        eprintln!("usage: wolf init --from-script <file.lu> [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("init");
     };
     let mut from: Option<PathBuf> = None;
     let mut i = 0;
@@ -302,8 +301,7 @@ fn strip_frontmatter(text: &str, fm: Option<&wolf_pkg::Frontmatter>) -> String {
 pub fn add(args: &[String]) {
     let (args, dir) = take_dir(args, "add");
     let usage = || -> ! {
-        eprintln!("usage: wolf add <alias> (--path DIR | --git URL --tag TAG) [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("add");
     };
     let mut name: Option<String> = None;
     let mut path: Option<String> = None;
@@ -464,8 +462,7 @@ pub fn add(args: &[String]) {
 pub fn rm(args: &[String]) {
     let (args, dir) = take_dir(args, "rm");
     let [alias] = args.as_slice() else {
-        eprintln!("usage: wolf rm <alias> [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("rm");
     };
     let text = require_manifest(&dir, "rm");
     let manifest_path = dir.join("wolf.pkg");
@@ -503,8 +500,7 @@ pub fn rm(args: &[String]) {
 pub fn update(args: &[String]) {
     let (args, dir) = take_dir(args, "update");
     if !args.is_empty() {
-        eprintln!("usage: wolf update [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("update");
     }
     require_manifest(&dir, "update");
     let old_lock = read_lock(&dir, "update").unwrap_or_default();
@@ -557,8 +553,7 @@ pub fn audit(args: &[String]) {
         match a.as_str() {
             "--ci" => ci = true,
             _ => {
-                eprintln!("usage: wolf audit [--ci] [--dir DIR]");
-                std::process::exit(2);
+                crate::help::usage_exit("audit");
             }
         }
     }
@@ -594,8 +589,7 @@ pub fn audit(args: &[String]) {
 pub fn tree(args: &[String]) {
     let (args, dir) = take_dir(args, "tree");
     if !args.is_empty() {
-        eprintln!("usage: wolf tree [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("tree");
     }
     require_manifest(&dir, "tree");
     let opts = ResolveOpts {
@@ -614,8 +608,7 @@ pub fn tree(args: &[String]) {
 pub fn why(args: &[String]) {
     let (args, dir) = take_dir(args, "why");
     let [alias] = args.as_slice() else {
-        eprintln!("usage: wolf why <alias> [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("why");
     };
     require_manifest(&dir, "why");
     let opts = ResolveOpts {
@@ -799,8 +792,7 @@ fn copy_tree_portable(from: &Path, to: &Path) -> Result<(), String> {
 pub fn vendor(args: &[String]) {
     let (args, dir) = take_dir(args, "vendor");
     if !args.is_empty() {
-        eprintln!("usage: wolf vendor [--dir DIR]");
-        std::process::exit(2);
+        crate::help::usage_exit("vendor");
     }
     require_manifest(&dir, "vendor");
     let opts = ResolveOpts {
@@ -861,8 +853,7 @@ pub fn publish(args: &[String]) {
                 key_file = args.get(i).map(PathBuf::from);
             }
             _ => {
-                eprintln!("usage: wolf publish [--dir DIR] [--log DIR --key FILE]");
-                std::process::exit(2);
+                crate::help::usage_exit("publish");
             }
         }
         i += 1;
