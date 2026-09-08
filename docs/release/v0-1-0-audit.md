@@ -37,15 +37,15 @@ without any diagnostic.
   v0.1.7 → pending.
 - wolf-lang **#27** "read-mode immutability unenforced by BOTH
   implementations (differentially invisible)". A memory-model
-  guarantee unenforced everywhere is invisible to the differ. **No
-  concurrent sprint owns it.** RED until it is fixed or a human ruling
+  guarantee unenforced everywhere is invisible to the differ. No
+  concurrent sprint owns it. RED until it is fixed or a human ruling
   records why it does not block v0.1.0.
 - wolf-lang **#15** "mutate-while-iterating disagrees: wolfc
   fail(E1001), lupin runs it silently, `[conf.trap.map]` predicts
-  exclusivity". It rides the **open S-11 spec ruling** (`for` operand
+  exclusivity". It rides the open S-11 spec ruling (`for` operand
   semantics; confirmed open in wolf-interp's divergence log and
-  lint-triage). A missed exclusivity trap is soundness-class. **No
-  owner named.** RED until ruled.
+  lint-triage). A missed exclusivity trap is soundness-class. No owner
+  is named. RED until ruled.
 
 ## Row 2: argv/env, files, stdin (checked), sockets (checked), print (natively where the ledger says run)
 
@@ -57,7 +57,7 @@ without any diagnostic.
   `phase: run` (native).
 - stdin, checked lane: `read_line` is prelude surface; probe verified:
   `echo howl | wolf run stdin_probe.lu` → `line: howl`. (`conform-run`
-  deliberately postures stdin at EOF for determinism, so there is no
+  postures stdin at EOF for determinism, so there is no
   `phase: run` stdin corpus file. The checked-lane criterion is met
   by `wolf run`.)
 - sockets, checked lane: `wolf conform-run --checked
@@ -77,16 +77,16 @@ Run in-worktree: `cargo xtask differ target/debug/wolf …/lupin
 note(s), 0 SOUNDNESS finding(s), 75 unsupported; 21 hard
 divergence(s)`.
 
-- **1 verdict divergence**. `corpus/faults/overflow_elem_write.lu`:
+- 1 verdict divergence. `corpus/faults/overflow_elem_write.lu`:
   wolf `Trap("overflow")` vs lupin `Exit(0)`. Filed: wolf-interp #21
   (the s70 X3 litmus wave postdates lupin's tenth differential round
   at pin `13b811f`). Owner: lupin v0.1.7.
-- **20 warning-parity divergences** (`warnings [W…] vs []`): the
+- 20 warning-parity divergences (`warnings [W…] vs []`): the
   s68/s69 lint wave (W03xx/W06xx/W08xx/W10xx/W13xx + E0802-as-warning)
   landed at `e5f7ea8`/`e94b879`, after lupin's last round. lupin emits
   a present-but-empty `warnings` array, so `[proto.cmp.warn]` set
   equality fires (honest-absent per `[proto.record.warn]` would not).
-  **Not yet filed as a DIV family.** Filing it is required, or lupin
+  Not yet filed as a DIV family. Filing it is required, or lupin
   drops to honest-absent or grows the lints. Owner: lupin v0.1.7.
 - Filed families: DIV-2026-001…010, 013 closed. **DIV-2026-011** (+
   riders 012, 014: rung placement) carries its ruling
@@ -148,9 +148,9 @@ end-to-end, including `differ-self`: `254 file(s), 0 divergence(s),
 
 `docs/release/NOTES-v0.1.0.md` written this sprint: present tense
 throughout, debug tier stated as real with corpus-ledger evidence,
-release tier attributed to c09 plainly, checked-lane vs native-lane
-distinctions kept honest (compiled concurrent execution named as not
-built), no promises.
+release tier attributed to c09, checked-lane and native-lane
+distinctions kept (compiled concurrent execution stated as not built),
+no promises.
 
 ## Row 9: Synced annotated tags across the six repos + metarepo
 
@@ -172,8 +172,8 @@ elsewhere today**
   fixed by the rung-grep repairs).
 - wolf-std `ci success` @ `1123428`; wolf-book `book success` @
   `2e67446`; wolf-lsp `ci success` @ `2ae8f63`.
-- **tree-sitter-wolf and the metarepo (`wolf`) have no workflows and
-  no runs at all** (`gh run list` empty; `.github/workflows` 404). A
+- tree-sitter-wolf and the metarepo (`wolf`) have no workflows and no
+  runs at all (`gh run list` empty; `.github/workflows` 404). A
   repo with no CI cannot be green at its release sha. RED until CI
   exists there or a human ruling amends the criterion (no waiving
   here).
