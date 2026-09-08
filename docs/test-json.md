@@ -1,12 +1,12 @@
 # `wolf test --json`: the wolf-test/0 event stream
 
 The machine half of the built-in test framework (D34/D36, sprint s39).
-One JSON object per line on **stdout**; stderr stays the human channel
+One JSON object per line on stdout; stderr stays the human channel
 and carries the diagnostics and warnings. Every object carries
 `"schema": "wolf-test/0"`.
 
 Versioning: the schema is versioned from day one. `wolf-test/0` is
-**pre-stable**. It may change only by bumping the version string, and
+pre-stable. It may change only by bumping the version string, and
 the D36 fossilization point is s51 (`wolf test --json` consumed by CI
 tooling), where the then-current version freezes. Within a version,
 additions are new optional keys only. Consumers must ignore unknown
@@ -37,8 +37,8 @@ rejects unknown *events*.
   refusal).
 - `status` (string): `pass`, `fail`, or `unsupported`. `unsupported` is
   the conservatism ledger: the checked machine refused the construct.
-  It fails the run, because green must mean everything discovered
-  actually ran.
+  It fails the run, since a green run means every discovered test
+  ran.
 - `detail` (string): the verdict. `exit(N)`, `trap(kind)`,
   `ub(mem.ub)`, a refusal construct, or `does not compile`.
 - `stdout`, `stderr` (strings): present when `status != "pass"`, and
@@ -65,7 +65,7 @@ rejects unknown *events*.
   printed: the driver re-runs the diverging seed a few times, and
   `detail` either states that the replay was confirmed or states what
   the seed does not pin. A decimal seed reaches `wolf_rt`'s scheduler
-  PRNG — steal victims, `select` tie-breaks — while cross-task arrival
+  PRNG (steal victims, `select` tie-breaks), while cross-task arrival
   order on the worker pool is not derived from it, so an
   arrival-order divergence need not come back. `[sched.stable]`'s
   byte-identical guarantee is stated over a recorded decision stream
