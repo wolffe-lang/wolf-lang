@@ -35,7 +35,8 @@ sound).
 
 ## container disjointness owed to the checker (2026-08-12, s75)
 
-s75 made `List` element access ordinary memory the optimizer can see. Two
+The s75 sprint made `List` element access ordinary memory the optimizer
+can see. Two
 regions carry it: container headers and container element buffers, which the
 runtime always allocates separately, so the pair is a theorem. Within
 each region nothing is claimed, because nothing is
@@ -318,8 +319,8 @@ Closing it needs both halves:
 `flat_offsets` packs fields end to end while `Opcode::Load`/`Store` claim
 `natural_align` at the LLVM tier, so an aggregate like `{i32, i64}` puts an
 `i64` at offset 4 and loads it `align 8`. This predates s75 (it is the v0
-`mut`-arg spill layout) and no corpus shape reaches it. s75 did not widen
-it: `List` element access refused a stride that does not tile at the
+`mut`-arg spill layout) and no corpus shape reaches it. The sprint did
+not widen it: `List` element access refused a stride that does not tile at the
 element's alignment, and emits no misaligned access at `k*esize`.
 
 s119 (#144) delta: the refusal retired, and the element stride now rounds

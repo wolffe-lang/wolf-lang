@@ -48,8 +48,8 @@ loop {
 A supervisor task parks on `os_signal_wait` (a real thread parked with
 blocking compensation, the c19 model). When the surface composes with
 `select` (a later widening), ws04 can `select` a signal against its
-other work; today it waits. This sprint delivers the EVENT; ws04 owns
-the reload/drain/upgrade LOGIC (its ungated half).
+other work; today it waits. This sprint delivers the event; the
+reload, drain and upgrade logic is ws04's (its ungated half).
 
 ## Blocking honesty (`[os.signal.wait]`)
 

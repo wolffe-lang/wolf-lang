@@ -1102,9 +1102,10 @@ lights, with the Apple-arm64 C ABI (`wolf-abi-2`, differentially green
 against Apple clang), Mach-O emission with dSYM and lldb parity, the
 kqueue reactor, deterministic links, and all 21 linux-only test
 headers flipped to runtime skips that distinguish environment from
-breakage. s127 brought the release tier along: triple and datalayout
-are host-derived from clang's own emission (never hand-composed),
-and macOS holds three-tier parity at full linux floors. A nine-commit
+breakage. The s127 sprint brought the release tier along: triple and
+datalayout
+is host-derived from clang's own emission (never hand-composed), and
+macOS holds three-tier parity at full linux floors. A nine-commit
 Windows sweep then hardened what the s59 flip exposed: environment
 refusals became exit 2 (so Windows stopped reading every native suite
 as a program refusal), fixtures learned RFC 8089 file URLs, and a
