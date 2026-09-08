@@ -4160,6 +4160,35 @@ fn dist() -> ExitCode {
         let dest = stage.join(Path::new(f).file_name().expect("named file"));
         std::fs::copy(f, dest).expect("stage metadata file");
     }
+    // The man page and the shell completions (#250): a packager had
+    // neither to install, because neither existed. The binary that just
+    // built is the one that emits them, so they cannot be a stale
+    // hand-kept copy of the verb table — and staging them here is what
+    // puts them in the archive the formula and the PKGBUILD unpack.
+    let staged_wolf = stage.join(exe);
+    for (arg_a, arg_b, dest) in [
+        ("--man", None, "wolf.1"),
+        ("--completions", Some("bash"), "wolf.bash"),
+        ("--completions", Some("zsh"), "_wolf"),
+        ("--completions", Some("fish"), "wolf.fish"),
+    ] {
+        let mut c = Command::new(&staged_wolf);
+        c.arg(arg_a);
+        if let Some(b) = arg_b {
+            c.arg(b);
+        }
+        let out = c.output();
+        let ok = out.as_ref().map(|o| o.status.success()).unwrap_or(false);
+        let Ok(out) = out else {
+            eprintln!("dist: cannot run the staged wolf for {dest}");
+            return ExitCode::FAILURE;
+        };
+        if !ok || out.stdout.is_empty() {
+            eprintln!("dist: the staged wolf produced no {dest}");
+            return ExitCode::FAILURE;
+        }
+        std::fs::write(stage.join(dest), &out.stdout).expect("stage generated doc");
+    }
     let archive = format!("target/dist/{name}.tar.gz");
     if !run_ok("tar", &["-C", "target/dist", "-czf", &archive, &name]) {
         eprintln!("dist: tar failed");
