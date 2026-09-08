@@ -383,11 +383,19 @@ name you asked for is defined in such a file, or an imported directory
 contains only such files, the message says so — the fix is to remove
 the standalone marker from the file that belongs to the module.
 
+A `use std.…` that misses is usually neither a typo nor a module
+mistake. The standard library is a separate release, wolf-std, and no
+package of the compiler ships it: with no std tree configured, `std` is
+a small built-in stub and almost everything is absent from it. Point
+wolf at a wolf-std checkout with `--std-root <dir>` or the `WOLF_STD`
+environment variable and the real tree answers — the message says so
+whenever the stub was the one that answered.
+
 Names never resolve through types here — a capitalized name used as an
 error-row tag (D30) is deferred to the type checker rather than
 reported by this pass.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -444,7 +452,7 @@ in a *sibling* file must be imported there, not here. There is no
 `import _` escape at v1; if you need an import purely for its side
 effects, comptime registration (D29) is the sanctioned pattern.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__unused__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0305_unused.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__unused__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0305_unused.snap
 
 ## E0306 — an import that collides with another binding
 

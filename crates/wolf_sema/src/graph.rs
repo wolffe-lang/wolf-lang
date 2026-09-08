@@ -1041,24 +1041,24 @@ impl LoadState<'_> {
         {
             Some(hit) => hit,
             None => {
-                self.diags.push(unresolved_import(
+                self.diags.push(no_std_root_note(unresolved_import(
                     path_span,
                     &texts.join("."),
                     &std_suggestions(),
                     None,
-                ));
+                )));
                 return vec![poisoned(u, segments)];
             }
         };
         let rest = &segments[k..];
         if let Some(group) = &u.group {
             if !rest.is_empty() {
-                self.diags.push(unresolved_import(
+                self.diags.push(no_std_root_note(unresolved_import(
                     path_span,
                     &texts.join("."),
                     &std_suggestions(),
                     None,
-                ));
+                )));
                 return vec![poisoned(u, segments)];
             }
             return group
@@ -1076,8 +1076,12 @@ impl LoadState<'_> {
                             .iter()
                             .map(|s| s.to_string())
                             .collect();
-                        self.diags
-                            .push(no_such_item(*gspan, gname, &texts[..k].join("."), &items));
+                        self.diags.push(no_std_root_note(no_such_item(
+                            *gspan,
+                            gname,
+                            &texts[..k].join("."),
+                            &items,
+                        )));
                         BindTarget::Poisoned
                     };
                     group_binding(u, gname, *gspan, target)
@@ -1095,18 +1099,22 @@ impl LoadState<'_> {
                         .iter()
                         .map(|s| s.to_string())
                         .collect();
-                    self.diags
-                        .push(no_such_item(*ispan, iname, &texts[..k].join("."), &items));
+                    self.diags.push(no_std_root_note(no_such_item(
+                        *ispan,
+                        iname,
+                        &texts[..k].join("."),
+                        &items,
+                    )));
                     vec![poisoned(u, segments)]
                 }
             }
             _ => {
-                self.diags.push(unresolved_import(
+                self.diags.push(no_std_root_note(unresolved_import(
                     path_span,
                     &texts.join("."),
                     &std_suggestions(),
                     None,
-                ));
+                )));
                 vec![poisoned(u, segments)]
             }
         }
@@ -1298,6 +1306,19 @@ impl LoadState<'_> {
 }
 
 // ------------------------------------------------- diagnostic builders --
+
+/// The rider on every `use std.…` miss that reaches the prelude stub
+/// tables (#251): reaching them AT ALL means no std root is configured,
+/// and that is the one fact the reader needs and cannot guess. A
+/// packaged wolf ships no standard library, so `use std.list` reported
+/// only what was absent and never what would supply it.
+fn no_std_root_note(d: Diagnostic) -> Diagnostic {
+    d.with_note(
+        "no standard library is configured, so `std` here is a small built-in stub. \
+         The standard library is a separate release (wolf-std): point wolf at a \
+         checkout with `--std-root <dir>` or the `WOLF_STD` environment variable.",
+    )
+}
 
 fn std_suggestions() -> Vec<String> {
     prelude::STD_MODULES

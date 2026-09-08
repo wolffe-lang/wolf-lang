@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0301]: module `std` has no item named `list`
+ --> mem:///main.lu:1:9
+  |
+1 | use std.list
+  |         ^^^^ not found in the module
+  |
+  = note: no standard library is configured, so `std` here is a small built-in stub. The standard
+    library is a separate release (wolf-std): point wolf at a checkout with `--std-root
+    <dir>` or the `WOLF_STD` environment variable.

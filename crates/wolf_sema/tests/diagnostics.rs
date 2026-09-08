@@ -307,3 +307,29 @@ fn e0410_scope_shapes_stay_clean() {
     let res = resolve(&[(&[], "main.lu", src)]);
     assert_eq!(render(&res), "");
 }
+
+/// #251: `use std.list` on a wolf with no std root configured. The
+/// stub tables answer, so the miss is real — but reaching them at all
+/// means `WOLF_STD` is unset, and that is the fact the reader needs
+/// and cannot guess. A packaged wolf said only what was absent.
+#[test]
+fn e0301_std_item_names_the_missing_std_root() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "use std.list\n\nfn main() -> !int {\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0301_std_item_no_std_root", render(&res));
+}
+
+/// The same rider on the *group* form and on a path that names no std
+/// module at all — every way into the stub tables says it.
+#[test]
+fn e0301_std_group_and_deep_path_name_the_missing_std_root() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "use std.fs.{read_text, write_text}\nuse std.net.http\n\nfn main() -> !int {\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0301_std_group_no_std_root", render(&res));
+}

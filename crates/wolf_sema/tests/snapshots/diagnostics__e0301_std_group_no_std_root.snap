@@ -1,0 +1,38 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0305]: the import `read_text` is never used
+ --> mem:///main.lu:1:13
+  |
+1 | use std.fs.{read_text, write_text}
+  |             ^^^^^^^^^ imported here, used nowhere in this file
+  |
+  = note: imports are file-scoped (D32): a name used only in a sibling file must be imported there
+    instead.
+help: delete the unused import
+  |
+1 | use std.fs.{ write_text}
+  |
+
+error[E0301]: module `std.fs` has no item named `write_text`
+ --> mem:///main.lu:1:24
+  |
+1 | use std.fs.{read_text, write_text}
+  |                        ^^^^^^^^^^ not found in the module
+  |
+  = note: no standard library is configured, so `std` here is a small built-in stub. The standard
+    library is a separate release (wolf-std): point wolf at a checkout with `--std-root
+    <dir>` or the `WOLF_STD` environment variable.
+
+error[E0301]: there is no module named `std.net.http` to import
+ --> mem:///main.lu:2:5
+  |
+2 | use std.net.http
+  |     ^^^^^^^^^^^^ cannot be resolved
+  |
+  = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
+    one (D32), and `std.…` or a package alias also resolves here.
+  = note: no standard library is configured, so `std` here is a small built-in stub. The standard
+    library is a separate release (wolf-std): point wolf at a checkout with `--std-root
+    <dir>` or the `WOLF_STD` environment variable.
