@@ -687,8 +687,12 @@ fn audit_surface(args: &[String]) {
 /// Why a native compile did not produce an executable — every case an
 /// HONEST refusal or a user error, never a silent fallback.
 enum BuildStop {
-    /// Diagnostics were reported; the package does not compile.
-    Errors,
+    /// Diagnostics were reported; the package does not compile. The
+    /// payload is the code of the FIRST error in the report the reader
+    /// just saw — the one `--explain` should be pointed at (#249).
+    /// `None` only if nothing carried a code, which the gate makes
+    /// impossible today; the footer falls back to generic phrasing.
+    Errors(Option<wolf_diag::Code>),
     /// A construct the pipeline cannot handle yet (conservatism
     /// ledger): the deepest phase that DID complete + the reason.
     Refused { phase: &'static str, reason: String },
@@ -823,6 +827,19 @@ fn report_capped(
     out
 }
 
+/// The code the compile-failure footer names (#249): the first
+/// ERROR-severity diagnostic in the report the reader just saw, falling
+/// back to the first diagnostic of any severity. Report order is the
+/// slice order [`report_capped`] renders, so this is literally the code
+/// at the top of the reader's screen.
+fn first_reported_code(diags: &[Diagnostic]) -> Option<wolf_diag::Code> {
+    diags
+        .iter()
+        .find(|d| d.severity == wolf_diag::Severity::Error)
+        .or_else(|| diags.first())
+        .map(|d| d.code)
+}
+
 /// Parse a lint selector as given on a flag: shape via
 /// [`Selector::parse`], and exact codes must be registered — a `--deny
 /// W9999` is a user error at the CLI (the *attribute* form warns W0302
@@ -938,7 +955,7 @@ fn compile_native(
                 reporter.report(d);
             }
             eprint!("{}", reporter.take_output());
-            return Err(BuildStop::Errors);
+            return Err(BuildStop::Errors(first_reported_code(&project.diagnostics)));
         }
     }
     let res = resolve_from_entry(file, &mut sm, sources, std_root, pkg_project)
@@ -970,7 +987,7 @@ fn compile_native(
         if has_errors(pending) {
             wolf_diag::sort_diagnostics(pending);
             render(sources, pending);
-            return Err(BuildStop::Errors);
+            return Err(BuildStop::Errors(first_reported_code(pending)));
         }
         Ok(())
     };
@@ -2426,14 +2443,21 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
 
 fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
     match stop {
-        BuildStop::Errors => {
+        BuildStop::Errors(first) => {
             // Every code carries an explanation, and nothing in the
             // report said so: a reader who does not already know the
-            // catalog exists never finds it.
-            eprintln!(
-                "wolf {cmd}: the package does not compile; fix the errors above \
-                 (`wolf --explain E0201` explains any code by name)"
-            );
+            // catalog exists never finds it. The code named is the one
+            // at the TOP of the report the reader just saw — a fixed
+            // `E0201` sent them to a different error's entry, which is
+            // worse than silence for exactly the reader this line
+            // exists to help (#249).
+            let explain = match first {
+                Some(code) => {
+                    format!("`wolf --explain {code}` explains this code, or any other, by name")
+                }
+                None => "`wolf --explain E####` explains any code by name".to_string(),
+            };
+            eprintln!("wolf {cmd}: the package does not compile; fix the errors above ({explain})");
             std::process::exit(1);
         }
         BuildStop::Refused { phase, reason } => {
@@ -2933,7 +2957,7 @@ fn native_run(
                 }
             }
         }
-        Err(BuildStop::Errors) => {
+        Err(BuildStop::Errors(_)) => {
             // The static ladder already ran clean before this rung; an
             // error here is a pipeline inconsistency.
             eprintln!("wolf conform-run: ICE: native rung found errors after a clean ladder");
@@ -3094,7 +3118,7 @@ fn ct_build_gate(
     let mut ds: Vec<Diagnostic> = violations.iter().map(|v| v.diagnostic(fallback)).collect();
     wolf_diag::sort_diagnostics(&mut ds);
     render(sources, &ds);
-    Err(BuildStop::Errors)
+    Err(BuildStop::Errors(first_reported_code(&ds)))
 }
 
 /// c28 — the shared constant-time gate ([ct.taint.verify]): when any

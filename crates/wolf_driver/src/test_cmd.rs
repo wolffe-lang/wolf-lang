@@ -923,7 +923,7 @@ fn native_schedule_runs(
             Ok(runs)
         }
         Err(crate::BuildStop::Refused { reason, .. }) => Err((Status::Unsupported, reason)),
-        Err(crate::BuildStop::Errors) => Err((Status::Fail, "does not compile".to_string())),
+        Err(crate::BuildStop::Errors(_)) => Err((Status::Fail, "does not compile".to_string())),
         Err(crate::BuildStop::Environment(msg)) => Err((Status::Fail, msg)),
     };
     let _ = std::fs::remove_dir_all(&dir);
