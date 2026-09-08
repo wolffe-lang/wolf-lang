@@ -30,11 +30,7 @@ use std::path::{Path, PathBuf};
 use wolf_wir::profile::Profile;
 
 fn usage() -> ! {
-    eprintln!(
-        "usage: wolf profile show <file.wprof>\n       \
-         wolf profile merge <out.wprof> <in.wprof> [in.wprof…]"
-    );
-    std::process::exit(2)
+    crate::help::usage_exit("profile")
 }
 
 fn fail(msg: String) -> ! {
