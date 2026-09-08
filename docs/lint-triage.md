@@ -2,7 +2,7 @@
 
 Every recorded case of "wolf let someone write something legal that was
 wrong, confusing, or unidiomatic" from every mandated source, each with
-a verdict. **Zero unexamined entries** is the acceptance bar; the
+a verdict. Zero unexamined entries is the acceptance bar; the
 per-source coverage receipts are at each section head, the totals at
 the bottom. Sources mined 2026-08-11 (the mining mandate: lints come
 from what actually bit people, not from imagination).
@@ -14,7 +14,7 @@ Verdicts:
 - **LINT (deferred)**: accepted as lint territory, held past the
   first wave; the rationale names what it waits on.
 - **PROMOTE**: should be (or already is being) an error, not a
-  warning; routed, never silently dropped.
+  warning; each one is routed.
 - **ALREADY-ERROR**: the hazard closed as a hard error before s68;
   recorded so the class is never re-mined.
 - **DECLINE**: not lint material, with the reason.
@@ -45,7 +45,7 @@ analysis (honest-absent under `[proto.record.warn]`).
 | W1102 | closure captured a `var` assigned after creation | BOOK ch04:447 | syn | none (reorder) |
 | W1302 | `assume noalias` operand reassigned afterwards | INT B30 (AC §7.8) | syn | none (re-state after last write) |
 
-Plus one lint on ourselves: the **catalog-text test**
+Plus one lint on ourselves, the catalog-text test
 (`wolf_diag::registry::tests::explanations_carry_no_internal_identifiers`)
 bars sprint/campaign identifiers and nonexistent commands from
 `--explain` prose (BOOK ch07:950, ch08:1126, ch09:980/992/1001,
@@ -369,14 +369,14 @@ declined/already-error.**
 
 ## Cross-implementation classification (target 3)
 
-**Shared-analysis (lupin can implement, filed):** W0304, W0305,
+Shared-analysis (lupin can implement, filed): W0304, W0305,
 W0306, W0307, W0308, W0309, W0602, W1101, W1102, W1302 (syntax +
 name-resolution only), and W0401's trigger (literal + spelled target
 type). Filed against wolf-interp with spans and fixture pointers.
 Warning parity per `[proto.cmp.warn]` grows lint-by-lint; `#[allow]`
 is part of the program and suppresses identically on both sides.
 
-**Compiler-only (conformance posture: honest-absent):** W0601 (row
+Compiler-only (conformance posture: honest-absent): W0601 (row
 typing), W0402 (float typing of the subtraction), W0801 (scrutinee
 case tables), W1001 (region inference). Lupin reports no warnings
 array entry for these until it grows the analysis; absence is never a
@@ -448,7 +448,7 @@ diagnostics-polish pass extends.
 
 ## Cross-implementation classification
 
-All eleven are **shared-analysis** (parse tree + module graph + name
+All eleven are shared-analysis (parse tree + module graph + name
 facts only, no types): filed for the next lupin batch alongside the
 first wave's ten. `[proto.record.warn]` parity grows lint-by-lint;
 absence stays honest. The std tree remains exempt as a library
@@ -461,8 +461,8 @@ deny-warnings run stays owned by its rig at its next toolchain pin.
 - **S-11: RESOLVED (D40, s72)** (was: re-verified open via the issue
   tracker for mutate-while-iterating, wolf-lang#15). The
   for-over-mutated-container lint held per the s68 contract's
-  "coordinate" was **promoted to E1013**: the ruling's extent-hold
-  read claim makes the shape an error, not a warning.
+  "coordinate" was promoted to E1013: the ruling's extent-hold read
+  claim makes the shape an error, not a warning.
 - **The cancellation-absorption ask (net-tier sprint, evaluated):**
   `ch.recv() else …` at a cancellation point absorbs the cancellation
   row along with `closed`, turning structured cancellation into a
@@ -473,18 +473,18 @@ deny-warnings run stays owned by its rig at its next toolchain pin.
   discriminating analysis is not writable today: it needs the
   blocking-point set as a queryable fact (an effect notion, the
   G-21/B38/B39 family this table already defers), and the fix the lint
-  would demand (re-raise the cancel tag, handle the rest) is exactly
-  the multi-tag handler branch that lang#43 records as unwritable and
+  would demand (re-raise the cancel tag, handle the rest) is the
+  multi-tag handler branch that lang#43 records as unwritable and
   F-0052 records as wrong on the executing lane. Filed with the
   cancellation family for the wave that gets the effect notion; a lint
   whose fix cannot be written trains workarounds.
-- **F-0018 offset-provenance cluster**: unchanged, still the named
-  wave-two lead; it needs the byte-type/provenance analysis, which is
+- **F-0018 offset-provenance cluster**: unchanged, still the wave-two
+  lead; it needs the byte-type/provenance analysis, which is
   deeper than this wave's name-level footprint and was not started
   here.
 - **L-63 module-budget lint**: stays deferred (needs the lane-cost
-  model); the s69 structure lints deliberately took only the
-  graph-shape advisories that need no cost model.
+  model); the s69 structure lints took only the graph-shape
+  advisories that need no cost model.
 - **Corpus posture:** the tree stays `--deny-warnings` green with the
   second wave live. Conforming fixes were preferred over declarations
   (CapCase marks renamed lowercase, member `pub` items documented,
