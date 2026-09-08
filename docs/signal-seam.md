@@ -14,7 +14,7 @@ os_signal_wait(set: int)   -> int ! {io}  // park until one arrives; returns it
 os_signal_raise(sig: int)  -> () ! {io}   // deliver one meaning to THIS process
 ```
 
-`set` is a bitmask of MEANINGS; `os_signal_wait` returns the single
+`set` is a bitmask of meanings; `os_signal_wait` returns the single
 meaning that arrived. Nothing is received without a prior `listen`.
 There is no ambient global handler, and no wolf code ever runs in a
 signal handler: the runtime's async-signal-safe trampoline writes one
@@ -56,7 +56,7 @@ reload, drain and upgrade logic is ws04's (its ungated half).
 - The wait parks a thread; delivery reaches it through the runtime's
   self-pipe drain and the pool's blocking compensation.
 - Empty / all-unmapped set → `io` at once (never a hang).
-- The wait is a KILL teardown point: a killed supervisor terminates
+- The wait is a kill teardown point: a killed supervisor terminates
   there even when no signal ever arrives. Plain cancellation keeps
   waiting, since the `{io}` row has no cancellation row (the kill-only
   posture).
@@ -76,7 +76,7 @@ reload, drain and upgrade logic is ws04's (its ungated half).
 
 ## Determinism (`[os.signal.det]`)
 
-Signal arrival is external non-determinism, EXCLUDED from
+Signal arrival is external non-determinism, excluded from
 `--schedules`/`--replay`: it emits no `sched-ev` record. ws04 tests that
 need reproducibility drive the loopback (`os_signal_raise` in-process),
-whose OUTPUT is causally pinned; they do not replay real OS signals.
+whose output is causally pinned; they do not replay real OS signals.

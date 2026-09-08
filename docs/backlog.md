@@ -224,7 +224,7 @@ versioning instead of by s80's explicit rule, which is the same
 conservatism relocated. licm likewise: the token stops being
 loop-invariant. Restoring the motion needs a transitive per-callee
 effect summary ("never stores through its role-R token, mints no role-R
-root, reaches no tokenless seam that could") used to RE-KEY availability
+root, reaches no tokenless seam that could") used to re-key availability
 across the call. `midend/summary.rs` is the home and its schema is
 frozen at v1, so that is a version bump with c12 and the tooling
 track downstream of it. The blocker for memopt/licm is the summary, not

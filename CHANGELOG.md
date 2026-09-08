@@ -779,8 +779,8 @@ then rustup's bundled `rust-lld` (a learner with a Rust toolchain
 already has one), then MSVC `link.exe`, and `wolf build --verbose`
 names the choice.
 
-What the bring-up does not serve, it refuses by name, before the link,
-in these words:
+What the bring-up does not serve, it refuses before the link, in these
+words:
 
 ```text
 wolf build: cannot compile this yet — windows-native serves no
@@ -1009,7 +1009,7 @@ depth, and products nested through enum/row payloads (`Pair(a, 0)`,
 `Dot(Point { x, y: 0 })`) compile on both native tiers and execute on
 the checked lane, with exhaustiveness and the redundant-arm warning,
 which already reasoned over products, finally carrying running
-witnesses. Two shapes stay refused by name on the native pipe: an
+witnesses. Two shapes stay refused on the native pipe: an
 enum/row test inside a product, and a `str` literal inside one.
 
 An arm still takes the whole scrutinee when it binds a non-`Copy`
