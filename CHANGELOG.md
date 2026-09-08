@@ -455,8 +455,8 @@ in place; anywhere else it is E0107. Six corpus witnesses under
 `wolf add` and `wolf publish` printed their status paths with the host's
 separator (`app\wolf.pkg` on windows) while every diagnostic path in the
 same binary is slash-normalized (`--> app/main.lu:3:5`). Every path a
-package verb prints — `add`, `rm`, `init`, `vendor`, `publish`, and
-their error lines, goes through the diagnostics' own spelling now:
+package verb prints (`add`, `rm`, `init`, `vendor`, `publish`, and
+their error lines) goes through the diagnostics' own spelling now:
 forward slashes on every host. Found by wolf-book's samples lane the
 week it was first lit.
 
@@ -586,7 +586,7 @@ token carries `declaration`; a name the compiler never bound gets no
 token. The legend is closed and fixed: eight types in one order, two
 modifiers. Inlay hints are the inferred type of an unascribed
 `let`/`var` binder and the parameter name before a positional
-argument that is not already that name — only at calls the checker
+argument that is not already that name, and only at calls the checker
 resolved to a declaration, so a fn-typed value and a prelude name
 offer none; each class switches off through
 `initializationOptions.inlayHints.{types, parameterNames}` and the
@@ -614,7 +614,7 @@ tier under every partition. lobo ws13 measured the gap while
 adopting the region cap: its budget helper spawns a proc from a leaf
 module, and `wolf build --release` answered “cannot compile this yet —
 func.addr of `@work.run.task0.entry` outside this object's subset”
-while `wolf run` executed the same program — #136's proc twin, one
+while `wolf run` executed the same program: #136's proc twin, one
 partition over. s117's `refs=` edge keeps a spawner and its entry shim
 in one cluster; the per-module partition (`WOLF_MIDEND=0`, the
 measurement mode lobo's gauntlet runs in while #146 is open) never
@@ -688,7 +688,7 @@ Blast radius, measured before the change: wolf-lang, 37 snapshot files
 and the eight `check: fail(E0201)` corpus pins unchanged, since the
 walk compares codes and the directive grammar pins no spans); wolf-book, 5
 diagnostic snapshots carrying 7 E0201 renderings whose carets widen
-(read-only count — the book's lane re-records at its pin bump);
+(a read-only count; the book's lane re-records at its pin bump);
 wolf-lsp, 0 transcripts (none carries an E0201; the two E0202s are at
 the opener and the E0203 in the two smoke transcripts already spanned
 its token). `cargo xtask differ` gains a span-width class: two
@@ -866,8 +866,8 @@ model); a workspace-root model is s57's.
 ### The region answers, and holds (s131, s132, D68 — #187 closes)
 
 Region accounting became readable and then became a contract. Three
-tiers gained `region_bytes(r)` — a named region's byte ledger, the
-count `wolf_rt` has kept since s76, now surfaced — and
+tiers gained `region_bytes(r)`, a named region's byte ledger and the
+count `wolf_rt` has kept since s76, now surfaced, and
 `live_region_bytes()`, the process-wide live total, with
 `[mem.region.account]` pinning what every tier guarantees (zero at
 creation, monotone within the lifetime, stable between allocations,
@@ -1191,7 +1191,7 @@ split away from the body that references it.
 
 The loop and the layout: the versioning pass routes live-outs against
 the current CFG, token linearity refined to the edge target, and List
-element stride rounds up to the element's alignment — witnessed on
+element stride rounds up to the element's alignment, witnessed on
 session-shaped and mixed-width layouts.
 
 ### c33 — strings
@@ -1234,7 +1234,7 @@ part of a cluster's key.
 
 ### c38 — the origin
 
-D61: the index chooses its origin — `#![index(0|1)]` as a lexical
+D61: the index chooses its origin, with `#![index(0|1)]` as a lexical
 marker, 1-mode coupling inclusive ranges, the shift landing as one
 checked subtraction on both executing lanes, and zero cost when the
 marker is absent: 422 files, zero verdict flips.
@@ -1253,7 +1253,7 @@ tiers, byte-identical to lupin.
 
 The conformance machinery hardened alongside: lane coverage became a
 gated ratchet, `cargo xtask peel` reads the fail-fast ledger, and the
-anchor registry now holds 403 anchors — including `gram.lex.ident`,
+anchor registry now holds 403 anchors, including `gram.lex.ident`,
 which the spec-extract bracket scanner had silently dropped twice by
 pairing a bare `[` literal in prose with the next anchor's `]`
 (F-0100, #170/#177; fixed this release, with the s126 shebang prose
