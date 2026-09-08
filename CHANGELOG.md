@@ -333,78 +333,78 @@ opened here.
 
 ## 0.2.4 — 2026-09-03
 
-THE BYTE SHIPS. **A 64 KiB read charges what it holds.** wolf has a
-byte-width scalar now — `byte`, an 8-bit unsigned octet, `0..=255`, one
-byte of storage — and every builtin that produces or takes raw octets
+THE BYTE SHIPS. A 64 KiB read charges what it holds. wolf has a
+byte-width scalar now (`byte`, an 8-bit unsigned octet, `0..=255`, one
+byte of storage) and every builtin that produces or takes raw octets
 speaks `List[byte]`. So `fs.read_bytes` of a 64 KiB file charges its
-region **65,584 bytes natively and 65,536 on the checked machine**,
-where v0.2.3 charged **1,048,560** for the same octets: eight times the
+region 65,584 bytes natively and 65,536 on the checked machine,
+where v0.2.3 charged 1,048,560 for the same octets: eight times the
 width and twice again for the growth history a push-grown list carries.
 Sixteen times the payload, down to one. Read a file, walk a string's
-bytes, echo a socket — the number in the ledger is now the number of
+bytes, echo a socket, and the number in the ledger is now the number of
 octets you actually have.
 
-**This is a breaking change, and it is one line of fix per site.** The
-elements of `str.bytes()` — and of `fs_read_bytes`, `fs_read_chunk`,
-`net_read_bytes` and `str_from_utf8`'s input — are `byte`, not `int`.
+This is a breaking change, and it is one line of fix per site. The
+elements of `str.bytes()`, and of `fs_read_bytes`, `fs_read_chunk`,
+`net_read_bytes` and `str_from_utf8`'s input, are `byte`, not `int`.
 A `byte` never adopts a numeric literal and never quietly widens: `b ==
 10` is E0401, so is a literal `match` arm, so is `let n: int = b`, and
 so is binding a reader's result as `List[int]`. Every note names the
-spelling. **Arithmetic and comparisons against integers want `as int`
+spelling. Arithmetic and comparisons against integers want `as int`
 (`b as int == 10`, `(b as int) + 1`); a value going back into a byte
 list wants `as byte` (`out.push(n as byte)`, which truncates to the low
-eight bits and never traps).** Nothing is inferred behind your back —
-that is the whole point of a width-bearing scalar — and the compiler
-counts the sites for you: 33 in 11 corpus files here, 87 in 13 of
-wolf-book's, 198 in 45 of wolf-std's, 217 in 30 of lobo's. Comparisons
-against int literals are the majority everywhere.
+eight bits and never traps). A width-bearing scalar infers nothing
+behind your back, and the compiler counts the sites for you: 33 in 11
+corpus files here, 87 in 13 of wolf-book's, 198 in 45 of wolf-std's,
+217 in 30 of lobo's. Comparisons against int literals are the majority
+everywhere.
 
-**And wolf speaks unix-domain sockets.** `net_listen_unix(path)` /
-`net_connect_unix(path)` on linux and macOS, in the TCP pair's exact
-shape — the fd is an ordinary net stream, so `accept`, `read`/`write`,
+wolf speaks unix-domain sockets too. `net_listen_unix(path)` /
+`net_connect_unix(path)` on linux and macOS, in the TCP pair's own
+shape: the fd is an ordinary net stream, so `accept`, `read`/`write`,
 the byte pair, `net_deadline` and `net_close` all serve it call for
-call. Windows answers `unsupported` by name rather than pretending.
+call. Windows answers `unsupported` instead of pretending.
 [`docs/platforms.md`](docs/platforms.md) is the per-host ledger.
 
-It pairs with **lupin 0.1.24** at pin `3befc3e` (D57: the pin is part of
+It pairs with lupin 0.1.24 at pin `3befc3e` (D57: the pin is part of
 this release's identity).
 
 ### The producers speak bytes (s136 — #231 closes)
 
 `byte` arrived in the language at s135 and nothing produced one. All
-eight octet builtins — `str.bytes()`, `str_from_utf8`, `fs_read_bytes`,
+eight octet builtins (`str.bytes()`, `str_from_utf8`, `fs_read_bytes`,
 `fs_write_bytes`, `fs_read_chunk`, `fs_write_chunk`, `net_read_bytes`,
-`net_write_bytes` — were declared over `List[int]`, which made the type
+`net_write_bytes`) were declared over `List[int]`, which made the type
 worse than useless downstream: wolf-std measured a reader substituted to
-`List[byte]` charging **17x/18x** its payload where the `List[int]`
+`List[byte]` charging 17x/18x its payload where the `List[int]`
 reader it replaced charged 16x, because the substitute had to convert
 elementwise against a builtin and `[mem.region.account.1]` keeps the
-list it converted FROM charged for the region's life. sc34 refused the
-substitution with that table rather than shipping the regression, and
-this release is the answer.
+list it converted from charged for the region's life. The sc34 sprint
+refused the substitution with that table instead of shipping the
+regression, and this release is the answer.
 
 The eight speak `List[byte]` on every tier. The native runtime mints a
-byte read as one 1-byte-element buffer **at exact capacity** — a
-producer that knows its length has no growth history to pay, which is
-why the 64 KiB read costs 65,584 (one list header plus the payload) and
-not the 131,120 a push-grown `List[byte]` would — and the checked
-machine's byte slots charge the payload exactly.
+byte read as one 1-byte-element buffer at exact capacity, so a producer
+that knows its length has no growth history to pay. That is why the
+64 KiB read costs 65,584 (one list header plus the payload) and not the
+131,120 a push-grown `List[byte]` would, and the checked machine's byte
+slots charge the payload exactly.
 `corpus/memory/byte_producers_ledger.lu` pins the relations on every
 tier (a read holds its payload; at most the payload plus a header; the
 same octets as `List[int]` charge at least seven times more);
 `strings/bytes_roundtrip.lu` is the round trip and `net/echo_bytes.lu`
-the echo. The refusal for a `byte` used as an `int` is **E0401** with the
+the echo. The refusal for a `byte` used as an `int` is E0401 with the
 spelling in the note (`typecheck/byte_elem_arith_fail.lu`). The
-`invalid` row stays declared on the two writes — the vocabulary is
-stable, and a byte element is in range by construction, so typed code
-can no longer reach it. `os_random` keeps its `List[int]`:
-`[os.random]` says so, and it is not a byte surface.
+`invalid` row stays declared on the two writes: the vocabulary is
+stable, and a byte element is always in range, so typed code can no
+longer reach it. `os_random` keeps its `List[int]`, because
+`[os.random]` says so and it is not a byte surface.
 
 ### The phantom 16x (s136 — #232 closes)
 
-The checked machine charged **1,048,576** ledger bytes for `for b in
-s.bytes()` over a 64 KiB `str` — a walk that allocates nothing, and that
-the native tier and lupin both charge **0** for — because it evaluated
+The checked machine charged 1,048,576 ledger bytes for `for b in
+s.bytes()` over a 64 KiB `str`, a walk that allocates nothing and that
+the native tier and lupin both charge 0 for, because it evaluated
 the consumed view as the materializing fallback. The consumed positions
 (`for b in s.bytes()`, `s.bytes()[i]`, `s.bytes().len` and the query
 family) are the receiver's own storage on that tier too now, charged to
@@ -417,7 +417,7 @@ every tier.
 
 `[os.net.unix]`, the spec's first socket clause. `AF_UNIX` stream
 sockets in the TCP pair's shape, and the error rows tell a host apart
-from a path: `unsupported` is the host, by name — never a bare `io`;
+from a path: `unsupported` is the host, and never a bare `io`;
 `exists` is a stale socket file at bind (the operator's to remove; the
 runtime never clobbers a path it did not bind), `not_found` a missing
 directory or file, `denied`, and `refused` a file nobody listens on.
@@ -425,28 +425,28 @@ The runtime created the socket file, so `net_close` of the listener
 unlinks it. Windows answers `unsupported`: `AF_UNIX` has existed there
 since 10 1803 and the test suite measures the kernel's answer on the
 runner, but `std::net` has no unix-domain surface on that host and the
-runtime carries no winsock binding beyond `WSAPoll`, so the rung is
-named in `docs/platforms.md` rather than claimed.
+runtime carries no winsock binding beyond `WSAPoll`, so
+`docs/platforms.md` names the rung instead of the runtime claiming it.
 `corpus/net/unix_echo.lu` is the three-lane witness, and it prints the
-same stdout on every host by construction: an echo where the family is
-served, a refusal by name where it is not. lobo's control endpoint gains its
-second transport at ws16.
+same stdout on every host either way: an echo where the family is
+served, a named refusal where it is not. lobo's control endpoint gains
+its second transport at ws16.
 
 ### The string-layout codes (s136 — D74, #230 closes)
 
 One rule per code, which is what the catalog and the spec had stopped
-agreeing about. **E0103** is the delimiter rule — a `"""` shares its
-line with text, opening or closing; delimiters stand alone. **E0104** is
+agreeing about. E0103 is the delimiter rule: a `"""` shares its
+line with text, opening or closing; delimiters stand alone. E0104 is
 the margin rule only (a content line left of the closing delimiter's
 column); the closing-delimiter case used to answer E0104 too, and the
 spec sentence and the catalog disagreed about which meaning it had.
-**E0105** is the tab/space rule, unchanged. **E0102** owns the bare `{`
+E0105 is the tab/space rule, unchanged. E0102 owns the bare `{`
 in a plain string: `"hello {world"` is a string whose interpolation
 never closes before its line ends, and wolfc answered E0109
 ("unterminated generalized literal", because the `world"` inside the
-open interpolation happened to spell one) — the wrong family; lupin was
-right. And **a byte order mark at the very start of a file is
-stripped** — tolerated, never a diagnostic, and the formatter keeps it
+open interpolation happened to spell one), which is the wrong family;
+lupin was right. And a byte order mark at the very start of a file is
+stripped: tolerated, never a diagnostic, and the formatter keeps it
 in place; anywhere else it is E0107. Six corpus witnesses under
 `grammar/` pin the codes and spans for both machines.
 
@@ -456,42 +456,41 @@ in place; anywhere else it is E0107. Six corpus witnesses under
 separator (`app\wolf.pkg` on windows) while every diagnostic path in the
 same binary is slash-normalized (`--> app/main.lu:3:5`). Every path a
 package verb prints — `add`, `rm`, `init`, `vendor`, `publish`, and
-their error lines — goes through the diagnostics' own spelling now:
+their error lines, goes through the diagnostics' own spelling now:
 forward slashes on every host. Found by wolf-book's samples lane the
 week it was first lit.
 
 ### The deadline and the closed peer (#224 closes)
 
 `wolf conform-run --checked` killed a connected client at `net_deadline`
-after the peer closed. Not a handle-lifetime bug: lobo's serve sequence
-hands the parsed head to `serve_request` and never drains the socket, so
-the server's close is a close over unread receive data — an RST close —
-and on macOS `setsockopt(SO_RCVTIMEO)` answers EINVAL on a reset socket
-(linux keeps answering 0) while the reply the server wrote is still
-readable. The checked machine implements deadlines with exactly that
+after the peer closed. The cause is not handle lifetime: lobo's serve
+sequence hands the parsed head to `serve_request` and never drains the
+socket, so the server's close is a close over unread receive data, an
+RST close, and on macOS `setsockopt(SO_RCVTIMEO)` answers EINVAL on a
+reset socket (linux keeps answering 0) while the reply the server wrote
+is still readable. The checked machine implements deadlines with that
 setsockopt pair and reported the EINVAL as an `io` row. The deadline now
-ARMS on a reset socket (the native reactor's timer wheel never asked the
+arms on a reset socket (the native reactor's timer wheel never asked the
 kernel and always did), the buffered reply is read, and the reset is the
 ordinary `closed` row after it. `net/peer_close_after_serve.lu` pins it
 on every tier; the checked twin lives in `crates/wolf_mem/tests/net.rs`.
 
 ### The letters
 
-**The release publishes itself** (#226). This page has been created as a
-DRAFT since v0.2.0, which is right — no half-uploaded release should be
-public — but the un-draft was a hand step, and it is the step that left
-v0.2.0 and v0.2.1 unpublished for a day (#200) and v0.2.3 sitting behind
-a complete, green matrix. `release.yml` gains a final `publish` job that
-`needs:` the whole four-host `dist` matrix: it runs only when every
-archive uploaded, it lists the assets into its own log before it moves
-the flag, and it refuses (leaving the draft alone) if fewer than four
-archives are on the page. A fully-green matrix publishes itself; a red
-one stays a draft. **If you are reading this on a published release page
-that no one edited by hand, that is the proof.**
+The release publishes itself (#226). This page has been created as a
+draft since v0.2.0, which is right, since no half-uploaded release
+should be public. But the un-draft was a hand step, and it is the step
+that left v0.2.0 and v0.2.1 unpublished for a day (#200) and v0.2.3
+sitting behind a complete, green matrix. `release.yml` gains a final
+`publish` job that `needs:` the whole four-host `dist` matrix: it runs
+only when every archive uploaded, it lists the assets into its own log
+before it moves the flag, and it refuses (leaving the draft alone) if
+fewer than four archives are on the page. A fully-green matrix
+publishes itself; a red one stays a draft.
 
-**The pairing moved to lupin 0.1.24** (pin `3befc3e`), and this is the
-one release where the differential is honestly behind. The reference
-interpreter released `byte` in the mirror at is35 — but the type landed
+The pairing moved to lupin 0.1.24 (pin `3befc3e`), and this is the one
+release where the differential is behind. The reference interpreter
+released `byte` in the mirror at is35, but the type landed
 at s135 and its producers at s136, both after that tag, so lupin 0.1.24
 refuses `as byte` at resolve and nine corpus files go dark on it:
 `fs/bytes_dirs`, `memory/byte_list_ledger`, `net/byte_roundtrip`,
@@ -499,11 +498,11 @@ refuses `as byte` at resolve and nine corpus files go dark on it:
 `strings/from_utf8_border`, `typecheck/byte_casts`,
 `typecheck/byte_shapes`. D74's byte order mark costs one more:
 `corpus/grammar/bom_at_start.lu` opens with `ef bb bf`, wolfc strips it
-and lupin 0.1.24 refuses it — and because the interpreter loads a file's
+and lupin 0.1.24 refuses it, and because the interpreter loads a file's
 directory siblings as modules, that single refusal names itself in
 twenty other rows of `corpus/grammar/`. The ritual run over 503 files:
 checked 238 agreements / 2 soundness / 38 hard, native 261 / 0 / 33,
-and the hard counts decompose with nothing left over — 6 and 5 are
+and the hard counts decompose with nothing left over: 6 and 5 are
 #167's warning-channel asymmetry, 2 are #168's float-cast twins, 21 and
 19 are that one BOM, 9 and 9 are the byte flip set. Two named classes,
 both retiring at the interpreter's next release.
