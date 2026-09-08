@@ -11,6 +11,25 @@ profile, including release.
 
 Wolf is pre-alpha. The surface still moves.
 
+## Install
+
+```sh
+brew tap wolffe-lang/wolf && brew install wolf     # builds from source
+yay -S wolf-lang-bin                              # Arch, prebuilt (wolf-lang builds)
+```
+
+Or take an archive from [releases](https://github.com/wolffe-lang/wolf-lang/releases)
+— linux x86-64, linux aarch64, macOS aarch64, windows x86-64. Which hosts run
+which tier is in [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md).
+
+```sh
+printf 'fn main() {\n  print("hello, wolf")\n}\n' > hello.lu
+wolf run hello.lu
+```
+
+The interpreter, [lupin](https://github.com/wolffe-lang/wolf-interp), installs
+the same two ways (`lupin`, `lupin-bin`).
+
 ## What runs today
 
 v0.2.6 is tagged, under the codename wolfgang. The codenames go on like that.
@@ -21,12 +40,14 @@ loop, and `wolf build --release` goes through LLVM instead. The tiers agree
 on every corpus program that runs, on linux x86-64 and macOS aarch64 alike,
 and the release tier's M2 gate — the thirteen-kernel suite against naive
 `clang -O3` — is declared held. Windows x86-64 runs the native tier
-(s60a) with the task layer on it (s60b): `hello.exe` builds and runs,
+with the task layer on it: `hello.exe` builds and runs,
 traps report and exit 134, `spawn` and scopes, `proc`, channels and
 `select`, `sync`/`when` and `os.signal` all serve, and what refuses by
 name there is the release tier and EXTERNAL `reload`/`upgrade` signal
 delivery — [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md) is the per-host
 ledger and the road.
+
+### Building from source
 
 ```sh
 cargo build --release -p wolf_driver
