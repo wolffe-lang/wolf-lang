@@ -257,6 +257,69 @@ conversion, and its numeric arms are closed and total:
   spec surface (`{b:x}` is `ff` at most), the same surface `int` has,
   because the hole widens the byte to `int` before formatting.
 
+## §4c Interpolation of every value `[type.interp]`
+
+(Appended 2026-09-09, s143 — wolf-lang#268. `{x}` was ruled per
+primitive — `[type.char.interp]`, `[type.byte.interp]`, the s38 float
+rendering — and for nothing else: the reference interpreter rendered
+every value it holds, the compiler refused every hole that was not a
+primitive, and the book's largest one-machine family (10 samples at
+wolf 0.2.8) was exactly that gap. These clauses adopt the
+interpreter's rendering, byte for byte, as the language's — it was
+the only rendering anyone had written down, in code — and name the
+values that have none.)
+
+- `[type.interp.value]` A hole renders its value by the value's type,
+  recursively, and **the same bytes whether the hole is printed or
+  built into a `str`** (`"{x}"` in value position materializes exactly
+  what `print("{x}")` writes). A `str` inside a composite renders as
+  its bytes, unquoted — `Doc { title: regions, words: 900 }`, not
+  `"regions"`; interpolation is for reading, not for round-tripping.
+  A format spec (`{x:>8}`) is defined on the primitive holes
+  (`[type.char.interp]`'s `str` surface, the integer surface, the
+  float surface) and on nothing composite: a spec on a composite is a
+  refusal, never silently ignored (wolf-lang#10's rule).
+- `[type.interp.agg]` **`()` renders `()`**; a tuple `(a, b)` — the
+  elements in order, `, `-separated, in parentheses; a struct
+  `Name { f: v, g: w }` — the type's name, a space, `{`, then each
+  field as ` f: v` with `,` between, then ` }` (a zero-field struct is
+  `Name { }`); a `List` `[a, b]` — the elements in order,
+  `, `-separated, `[]` when empty. An enum value renders its variant
+  **qualified**, `Enum.Variant`, with the payload as `(p1, p2)` when
+  the variant carries one — the spelling the program constructs it
+  by. Weighed and rejected: the bare variant name — `Rgb(1, 2, 3)`
+  reads as a row tag, and rows and variants are different things
+  (D30 rows are structural; a variant belongs to its enum).
+- `[type.interp.row]` A caught row value (`else |err|`, a `match`
+  binding) renders as **the tag's name**, then `(p1, p2)` when the
+  tag carries a payload, each payload rendered by its own rule:
+  `too_short`, `BadDigit(q, 1)`, `closed`. The name is the tag as the
+  program spells it, module-qualified by nothing — tags are
+  structural (D30), so there is nothing to qualify by.
+- `[type.interp.union]` A `!T` value renders as **its ok payload when
+  it holds one, and as its row (`[type.interp.row]`) when it does
+  not** — the value's two halves are two values, and the hole prints
+  whichever is there. `{popped}` after `let popped = xs.pop()` reads
+  `3` or `none`. This is a reading rule, not a handling rule: `?` and
+  `else` still decide what the program does with the row.
+- `[type.interp.reason]` An exit reason (`[conc.proc.exit]`) renders
+  as its class name with its payload in parentheses: **`normal(v)`**
+  with the proc's `int` result (the value the body returned — a body
+  whose result is not an `int` reports `normal(0)`), **`error(Tag)`**
+  with the row that crossed the boundary rendered per
+  `[type.interp.row]`, **`killed`**, **`cancelled`**, and
+  **`fault(kind)`** with the trap kind from `[conf.trap.set]`'s
+  vocabulary (`fault(bounds)`).
+- `[type.interp.none]` Some values have **no rendering the language
+  promises**: a channel, a proc, a task scope, a region value, a raw
+  pointer, a fn value, a `dyn` object, a shared-tier handle. An
+  implementation may print its own bookkeeping for them (the
+  interpreter prints `channel#3`, `region#1@2`) or refuse the hole by
+  name (the compiler does); a program must not depend on either, and
+  a conformance witness may not interpolate one. Weighed and
+  rejected: ruling the interpreter's bookkeeping as the rendering —
+  it names ids the compiled program does not have.
+
 ## §5 `str` concatenation `[type.str]`
 
 - `[type.str.concat]` **`+` and `+=` on two `str`s are
