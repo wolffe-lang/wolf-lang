@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### The `else` may start a line (s144 — #276 closes)
+
+A reader wrote an aligned `if` / `else if` / `else`, each `else`
+leading its line, and both machines refused it with E0005: the
+newline after `}` inserted a terminator, and the orphaned `else` was
+the one place the termination rule constrained layout. The rule was
+Go's. The ruling (wolf-lang#276) is that readers do not learn it: **a
+line whose first token is `else` continues the previous statement.**
+`[gram.lex.newline]` gains one more lookahead exception beside the
+attribute one — no terminator is inserted at a newline when the next
+token is `else` (trivia between does not count) — and `[gram.amb.else]`
+now says the two `else`s are disjoint by binding, not by line: after
+an `if`'s `}` it is the branch, after a complete expression it is the
+defaulting operator, on one line or across two. The lexer looks one
+token ahead; the parser's two E0005 sites are gone and E0005 is
+retired from the catalog (its number is never reused).
+
+**The formatter does not change.** `[gram.fmt.brace]` keeps `} else`
+on one line and `[gram.fmt.inline]` keeps its guard-clause rule, so
+`wolf fmt` re-lays what the parser now accepts: the aligned layout
+formats to the canonical `} else` chain and is a fixed point from
+there (`crates/wolf_fmt/tests/style.rs` pins the maintainer's layout
+verbatim and what it becomes). Witnesses: `grammar/else_chain.lu`
+carries the aligned layout verbatim and the `}` newline `else {`
+shape; `grammar/else_default_newline.lu` pins `let v = f()` newline
+`else 0`. Both are refused under lupin 0.1.28 (E0005 at the leading
+`else`) and stay so until the interpreter mirrors (wolf-interp, same
+wave): they are the two corpus files the pair parts on at this tree,
+named here so the pairing re-stamp can count them.
+
+One delta from the plan, found before the gauntlet: `[gram.fmt.canon]`
+requires every corpus file to be formatter-canonical, and a witness
+whose point is a leading `else` cannot be. The clause gains its one
+exception — a header `//! fmt: relaid` declares a source layout the
+parser admits and the formatter re-lays; `xtask fmt-lu` and the
+formatter's stability property read past such a file (its count is
+pinned at two), idempotence and round-trip still hold on it, and
+`wolf fmt corpus` by hand would re-lay it, so the gate's hint now
+names files. lupin's directive reader treats an unknown key as prose.
+Predicted before the gauntlet: lexer one helper, parser two deletions,
+corpus +1 file and 1 edited, catalog −1 code; measured: that, plus the
+canon exception (directive, two gates, one clause sentence).
+
 ### The parse family is ruled, and its row is spelled `parse` (s143 — #265 closes)
 
 `str.to_int()` was served by every implementation and ruled by none.
@@ -38,6 +81,39 @@ same wave, and until the mirror lands `rows/to_int_parse.lu` is the
 one corpus witness the two machines part on — `strings/to_int.lu`,
 the battery, was rewritten not to spell the mark and stays
 byte-identical under lupin 0.1.28. No interface moved.
+
+### Three spellings a chapter was waiting on (s144 — #273, #274 ruled; #275 measured)
+
+`[conc.chan.close]` now spells its tag: the closed error is the
+payload-free row **`closed`**, and the cancellation an operation
+answers at a channel's blocking point is **`cancelled`** — the
+compiler's `recv` row as it has been, the OS families' spelling, and
+W0603's pact (a payload-free mark is a lowercase word). The
+interpreter mints `Closed`/`Cancelled` and the book's chapter 12
+prints it; both follow in the same wave (#273). Witness:
+`conc/chan_closed_row.lu` (native; the checked lane declines channel
+methods), `nothing left: closed` here and `Closed` under lupin 0.1.28
+until the mirror lands.
+
+`[mem.list.pop]` is the clause `grep pop spec/` could not find: the
+recoverable `List` reads — `pop`, `get`, `first`, `last` — answer the
+`none` row and never fault; `pop` on an empty list is `none`, not
+`bounds` (`[mem.ub.defined]` rules indices, and `pop` takes none). The
+compiler had answered the row since s37 on both tiers; the interpreter
+trapped and the book's chapter 5 taught `pop` bounds-checked — both
+move in the same wave (#274). Witness: `memory/list_pop_empty.lu`,
+both tiers, `trap(bounds)` under lupin 0.1.28 until the mirror lands.
+
+**#275 is measured, not fixed.** `chan.send` is typed `()` where the
+clause says a send after close returns an error value. Making it
+`() ! {closed, cancelled}` on the compiler is one sema arm and one
+wir join the `recv` path already has — and then every `ch.send(v)`
+in a unit context is refused: a `for` body and an else-less `if`
+check their tail against `()`, and a non-trailing statement of `!T`
+is W0601. Thirteen corpus witnesses send that way, chapter 12 sends
+that way on every page, and no clause says what a `!()` tail in a
+unit context means. That rule is the real cost and it is a language
+question, not a type fix; it is recorded on #275 for its own sprint.
 
 ### Two of the book's families stand on both machines (s143 — #268)
 
