@@ -23,6 +23,11 @@
       "naive": 113,
       "ratio": 1.0
     },
+    "corpus/conc/chan_param_for.lu": {
+      "midend": 330,
+      "naive": 304,
+      "ratio": 1.086
+    },
     "corpus/conc/freeze_publish.lu": {
       "midend": 261,
       "naive": 261,
@@ -62,6 +67,11 @@
       "midend": 40,
       "naive": 44,
       "ratio": 0.909
+    },
+    "corpus/conc/reason_interp.lu": {
+      "midend": 969,
+      "naive": 840,
+      "ratio": 1.154
     },
     "corpus/conc/select_seeded.lu": {
       "midend": 85,
@@ -341,6 +351,11 @@
     "corpus/grammar/else_chain.lu": {
       "midend": 4,
       "naive": 4,
+      "ratio": 1.0
+    },
+    "corpus/grammar/else_default.lu": {
+      "midend": 182,
+      "naive": 182,
       "ratio": 1.0
     },
     "corpus/grammar/index_origin_closure.lu": {
@@ -1163,7 +1178,7 @@
       "naive": 34,
       "ratio": 0.294
     },
-    "corpus/rows/to_int_not_an_int.lu": {
+    "corpus/rows/to_int_parse.lu": {
       "midend": 80,
       "naive": 80,
       "ratio": 1.0
@@ -1257,6 +1272,11 @@
       "midend": 18,
       "naive": 50,
       "ratio": 0.36
+    },
+    "corpus/strings/interp_values.lu": {
+      "midend": 1068,
+      "naive": 959,
+      "ratio": 1.114
     },
     "corpus/strings/match_str_const_scrutinee.lu": {
       "midend": 226,
@@ -1469,5 +1489,5 @@
       "ratio": 1.0
     }
   },
-  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759"
+  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759 || folded from run 34363520386 (s143 at 3103577, the lowering changes gated by name: 0 regressed, 0 improved): +5 new paths, -1 renamed path; 297 paths, corpus geomean 0.763"
 }
