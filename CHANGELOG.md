@@ -2,30 +2,106 @@
 
 ## Unreleased
 
-### The parse family is ruled (s143 — #265 closes)
+### The parse family is ruled, and its row is spelled `parse` (s143 — #265 closes)
 
-`str.to_int() -> int ! {NotAnInt}` was served by every implementation
-and ruled by none. `[mem.str.parse]` and `[mem.str.to_int]` in
-spec/02 now say what the four agreeing implementations had been
-doing: the family is one method (`to_float` and `to_bool` do not exist
-— a float parse needs the float text grammar ruled, which s38 never
-did, and a bool parse answers nothing `s == "true"` does not); the
-surrounding `[mem.str.ws]` run is ignored, exactly `trim`'s set; the
-value is an optional sign and one or more ASCII digits that fit
-`int`, leading zeros included; everything else is the row, never a
-trap — the empty and blank text, a sign alone, an interior space,
-`_`, a radix prefix, a fraction, an exponent, a non-ASCII digit,
-trailing text, and a magnitude outside `int`. `NotAnInt` is blessed
-as spelled: the snake_case rows of the OS families name conditions of
-the host and coarsen to `io`; this one is a verdict about the caller's
-own value, the register of a user-declared tag, and the spelling a
-program matches on in `else |err| match err { NotAnInt => … }`. A
-rename would have moved the interpreter, wolf-std's corpus, the
-book's chapter 1 and both compiler tiers in one wave for a case
-convention. The three magnitude-outside-`int` rows join the corpus
-battery (`strings/to_int.lu`): wolf-interp#69 closed at lupin 0.1.28
-and both machines answer the row, so the inputs that lived in the
-driver's crate test alone now pin both sides. No interface moved.
+`str.to_int()` was served by every implementation and ruled by none.
+`[mem.str.parse]` and `[mem.str.to_int]` in spec/02 now say what the
+four agreeing implementations had been doing: the family is one
+method (`to_float` and `to_bool` do not exist — a float parse needs
+the float text grammar ruled, which s38 never did, and a bool parse
+answers nothing `s == "true"` does not); the surrounding
+`[mem.str.ws]` run is ignored, exactly `trim`'s set; the value is an
+optional sign and one or more ASCII digits that fit `int`, leading
+zeros included; everything else is the row, never a trap — the empty
+and blank text, a sign alone, an interior space, `_`, a radix prefix,
+a fraction, an exponent, a non-ASCII digit, trailing text, and a
+magnitude outside `int` (both machines agree since lupin 0.1.28,
+wolf-interp#69; r12 brought those rows into the corpus battery).
+
+The row is **`parse`** now, not `NotAnInt`. s142 copied the
+interpreter's spelling, which made it the one CapCase payload-free
+mark on the builtin surface, and the language's own pact says
+otherwise: payload-free marks are lowercase words and CapCase names a
+payload's type — W0603 warns a program that breaks it and lists
+`parse` among its examples, the OS families spell their conditions
+that way (`not_found`, `utf8`, `closed`), and the json builtins
+already answer `parse` for exactly this condition. A spec that
+enshrines a spelling the compiler's own lint calls a contradiction
+was weighed against one wave's rename and lost. The cost, stated in
+the clause: the interpreter's builtin and its two tests, the book's
+chapter 1 (one printed block, two lines of prose, exercise 6-9 and its
+solution — which also declares a CapCase mark W0603 flags), and here
+the three implementations, their tests, the `str` completion's
+signature and two witnesses. The compiler moves first: this release
+raises `parse`; the mirror (wolf-interp) and the book move in the
+same wave, and until the mirror lands `rows/to_int_parse.lu` is the
+one corpus witness the two machines part on — `strings/to_int.lu`,
+the battery, was rewritten not to spell the mark and stays
+byte-identical under lupin 0.1.28. No interface moved.
+
+### Two of the book's families stand on both machines (s143 — #268)
+
+The book measured its samples against both machines for the first
+time (wolf-book#9) and found 133 of 478 running on the interpreter
+alone, 106 after r12. The two largest families by the compiler's own
+refusal are gone.
+
+**String interpolation of a non-primitive value** (10 samples, plus
+the `{err}` that held `grammar/else_default.lu` at resolve). `{x}`
+renders every value both machines can show the same way, and spec/10
+`[type.interp.*]` now says how — the interpreter's rendering adopted
+byte for byte: `()`; a tuple `(a, b)`; a struct `Doc { title:
+regions, words: 900 }` (a `str` inside a composite is its bytes,
+unquoted); a `List` `[1, 2]`; an enum variant qualified,
+`Shape.Line(4)`; a caught row as its tag's name with its payload,
+`too_short`, `BadDigit(q, 1)`; a `!T` as its ok payload or its row,
+so chapter 5's `{popped}` prints without an `else`; an exit reason
+`normal(1540)`, `error(Corrupt)`, `killed`, `cancelled`,
+`fault(bounds)`. A format spec on a composite refuses, never silently
+ignores. What has no promised rendering — a channel, a proc, a scope,
+a region, a pointer, a fn, a `dyn`, the shared tier — refuses by
+name (`[type.interp.none]`). Both tiers render: the checked machine
+type-directs its renderer (a positional value is a tuple or a struct
+by its type), the native tier walks the value's shape and reads a
+tag's name through a per-module tag table synthesized after every
+body has interned its tags (`wolf.tag_name`, one compare chain — a
+site cannot switch over tags a later function is the first to
+raise). One runtime fact moved with it: a proc's `int` result now
+rides the exit reason (`__wolf_rt_task_value`, the entry shim hands it
+over), so `{reason}` reads `normal(1540)` where the native tier said
+`normal(0)` for every ok body. Witnesses: `strings/interp_values.lu`
+(both tiers), `conc/reason_interp.lu` (native; the checked lane
+refuses procs), `grammar/else_default.lu` (runs now), each
+byte-identical under lupin 0.1.28. Predicted before the gauntlet:
+sema's hole check, the checked renderer, the lowerer's print and
+value-position paths, no runtime surface beyond the value stash;
+measured: that, plus the tag table and the stash.
+
+The samples, measured at this tree against lupin 0.1.28: four of the
+ten close (ch05 §5.1's `{last}` block and exercise 5-1; ch14's and
+ch15's opening `{reason}` blocks), and the other six now refuse or
+reject for a reason that is not interpolation — ch05's `pop` on an
+empty list (`none` here, `trap(bounds)` on the interpreter: `pop`'s
+empty case is unruled, filed), ch10's and ch14-10's `channel[str]`
+(payloads beyond one word), ch12's and ch14's `channel[Doc]` (E1102,
+a static rejection), ch15's self-`link()` (E0402) and `?` in a fn
+that cannot fail (E0604). The book's runner flips the four at its
+next pin bump.
+
+**The iteration protocol (for-trait wiring)** (7 samples). Not the
+protocol at all: every one was a worker taking its inbox as a
+PARAMETER, and `channel[T]` in a signature position — a parameter, a
+field — stayed opaque where the expression `channel[T](n)` typed
+`Chan`, so `for d in inbox` refused with the protocol's name. One arm
+in signature elaboration types it; `conc/chan_param_for.lu` is the
+witness (a plain call, a proc body, a struct field), byte-identical
+under lupin 0.1.28. Predicted: one arm and no lowering change;
+measured: exactly that. Five of the seven close (exercises 14-6,
+14-7, 14-9; ch17's two `worker` blocks — the first prints its bug on
+this machine's schedule, as the chapter says it may); ch14's shelver
+and exercise 14-10 now stop at `channel[Doc]` (E1102) and
+`channel[str]` (payloads beyond one word) — interpolation's leftovers,
+not iteration's.
 
 ### The ratchet that can tell composition from regression (s143 — #270 closes)
 
