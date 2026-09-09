@@ -47,6 +47,28 @@ use super::proc::{ProcOutcome, spawn_proc};
 /// ≥ 1; -1 is `TRAP_ERROR_TAG`.
 pub const CANCEL_TAG: i64 = -2;
 
+thread_local! {
+    /// The value a proc's entry shim hands over just before it returns
+    /// its protocol word (s143, wolf-lang#268): `[conc.proc.exit]`'s
+    /// `normal(value)` for a compiled body whose result is an `int`.
+    /// Thread-local and read by [`__wolf_rt_proc_spawn_outcome`] the
+    /// instant `entry` returns, with no blocking point between the
+    /// stash and the read — the two run on one OS thread in sequence.
+    /// Scope tasks never stash (their value is nobody's to report), so
+    /// a task the body ran on this thread cannot leave a stale value.
+    static PROC_VALUE: core::cell::Cell<i64> = const { core::cell::Cell::new(0) };
+}
+
+/// The proc body's `int` result (s143, `[conc.proc.exit]`): the entry
+/// shim of a `spawn proc` body calls this before returning 0, and the
+/// monitor's reason carries the value as `normal(value)`. A body whose
+/// result is not an `int` — a `str`, unit — reports `normal(0)`, the
+/// s32 answer.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_task_value(value: i64) {
+    PROC_VALUE.with(|c| c.set(value));
+}
+
 /// The kill-teardown poll for compiled bodies: 1 when the calling
 /// task's scope sits in a killed tree (`[conc.proc.kill]` step 1 —
 /// the caller must return without running further user code), else 0.
@@ -117,6 +139,7 @@ pub unsafe extern "C" fn __wolf_rt_proc_spawn_outcome(
         // C ABI frames below: suppress the kill-teardown unwind for
         // their whole extent (`[conc.cancel.c]`); the compiled body
         // carries its own teardown branch.
+        PROC_VALUE.with(|c| c.set(0));
         let tag = pool::suppress_kill_unwind(|| {
             // SAFETY: caller contract — lowered proc body + the proc's
             // own copy of its env.
@@ -124,7 +147,7 @@ pub unsafe extern "C" fn __wolf_rt_proc_spawn_outcome(
         });
         drop(owned);
         match tag {
-            0 => ProcOutcome::Value(0),
+            0 => ProcOutcome::Value(PROC_VALUE.with(|c| c.replace(0))),
             CANCEL_TAG => ProcOutcome::Cancelled,
             tag => ProcOutcome::Fail { tag },
         }
@@ -178,6 +201,13 @@ mod tests {
         unsafe extern "C" fn cancelled_body(_env: *mut c_void) -> i64 {
             CANCEL_TAG
         }
+        // s143: a body whose `int` result rides the stash reports
+        // `normal(value)`; the stash is consumed, so the next plain
+        // body on this thread is back to `normal(0)`.
+        unsafe extern "C" fn valued_body(_env: *mut c_void) -> i64 {
+            __wolf_rt_task_value(1540);
+            0
+        }
         for (body, want) in [
             (
                 ok_body as unsafe extern "C" fn(*mut c_void) -> i64,
@@ -185,6 +215,8 @@ mod tests {
             ),
             (err_body, ProcExit::Error { tag: 7 }),
             (cancelled_body, ProcExit::Cancelled),
+            (valued_body, ProcExit::Normal { value: 1540 }),
+            (ok_body, ProcExit::Normal { value: 0 }),
         ] {
             // SAFETY: entry points used per their documented contract.
             let id = unsafe {
