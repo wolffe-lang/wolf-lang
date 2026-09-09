@@ -190,9 +190,15 @@ lupin binary and no runner had one. Two lanes tripped over it
 independently, in work that had nothing to do with the pairing. This
 release re-measures the pairing against the interpreter as released, and
 gives the linux CI job the pinned lupin release archive so the same
-comparison runs on the runner. Nothing about building or using wolf
-changes. What changes is that the sentence `wolf --version` prints about
-the reference interpreter is now checked somewhere that is watching.
+comparison runs on the runner, so the sentence `wolf --version` prints
+about the reference interpreter is checked somewhere that is watching.
+
+The tag carries two more pieces of work that a reader meets sooner than
+the pairing. `wolf --help` answers a stranger now, with per-verb help, a
+man page and shell completions in the archive, and three other things a
+newcomer hit in their first five minutes are fixed beside it. And the
+seven `[sched.*]` spec anchors are published, so a program may cite them.
+Both are below.
 
 ### The one gate CI could not run (r10 — #253 closes)
 
@@ -270,6 +276,70 @@ newer pin, which reads to this gate as a release build declaring the wrong
 pin. That is the sibling's stamp being stale, not `PAIRING`. Rebuilding
 the sibling with its build script forced to re-run (`touch build.rs`)
 restores the `+dev` suffix and the row goes quiet.
+
+### The stranger's five minutes (s140 — #249, #250, #251, #252 close)
+
+`wolf --help` was one line of twenty-three pipe-separated verbs, printed
+to stderr, exiting 2. Asking the compiler what it does was an error, and
+the answer gave no verb's arguments. It exits 0 on stdout now, so it
+pipes into a pager, and it says what wolf is, gives a first program that
+can be pasted and run, points at the documentation, and states the D32
+rule that a directory is a module before that rule bites. Every verb the
+overview lists answers `--help` itself, both `wolf build --help` and
+`wolf help build`. A wrong flag prints the same usage line `--help`
+shows, because both read one table, so the two cannot drift apart.
+`wolf run prog.lu --help` still belongs to the program: everything after
+the entry file is the program's argv.
+
+`cargo xtask dist` stages a man page and shell completions into the
+archive the formula and the PKGBUILD unpack (`wolf.1`, `wolf.bash`,
+`_wolf`, `wolf.fish`). The binary that just built emits them from the
+same table the help reads, so a packager has something to install and it
+describes the verbs that exist.
+
+The compile-failure footer names the code the reader was shown (#249).
+It said `wolf --explain E0201` whatever error had been reported, so a
+package that failed with E0302 sent its author to a different error's
+entry, on the second command a newcomer types.
+
+A `use std.…` that misses says that no standard library is configured,
+that the standard library is a separate release (wolf-std), and that
+`--std-root <dir>` or `WOLF_STD` points wolf at a checkout (#251).
+Reaching that miss is itself the evidence that no root is set. With a
+root configured the note stays silent, and a test asserts that silence,
+because the sentence would be false.
+
+The README's links are absolute (#252). `dist` stages that file and the
+packages install it to `share/doc/wolf/README.md`, where nine
+repo-relative links resolved to nothing. A gauntlet check reads the
+shipped file, and a second check asserts the README still links
+somewhere, so an empty scan cannot pass the first one.
+
+### The schedule is named (s139 — #246 closes)
+
+`spec/07-schedule-points.md` is normative for the `sched` namespace, and
+that namespace is registered under `[conf.anchor.ns]`. Its seven anchors
+(`sched.engine`, `sched.ev1`, `sched.flags`, `sched.point.hook`,
+`sched.point.set`, `sched.seed`, `sched.stable`) are published in
+`spec/anchors.json`, taking it from 424 to 431. The change is additive:
+nothing was renumbered or dropped, because none of the seven had ever
+been published for `[conf.anchor.stable]` to pin.
+
+Before this the document declared those anchors and no registry carried
+them, so `[conf.tag.valid]` rejected every citation of them while the
+scheduler implemented the clauses: `wolf_rt::task::det` carries
+`[sched.seed]`'s packed seed and `[sched.stable]`'s append rule,
+`::task::hooks` the kind table, `::reactor` and `::net` the
+`io.arrive`/`timer.fire` appends. `corpus/test/conc_schedules_test.lu`
+cites `sched.stable` in a `conforms:` tag, the first citation the
+admission makes legal.
+
+The cause was four hand-copied namespace lists that all omitted document
+07. They are one `NS_OWNERS` table now, and the admission gate reads both
+directions: a registered namespace must publish anchors, and a spec
+document may not declare a namespace nobody registered. The second guard
+scans `spec/` on disk, because the defect was a document that nothing in
+the tooling listed.
 
 ## 0.2.6 — 2026-09-06
 
