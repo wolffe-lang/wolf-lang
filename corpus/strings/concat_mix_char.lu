@@ -1,13 +1,31 @@
-//! check: fail(E0409)
-//! phase: resolve
-//! conforms: type.str.concat.mix
+//! check: run(exit=0, stdout="abc cab abéß🐺 éab wolf")
+//! phase: run
+//! conforms: type.str.concat, type.str.concat.cost
 //!
-//! D62's second mix pin: `str + char` stays E0409 — a char joins a
-//! str through a hole (`"{s}{c}"`), never by `+`.
+//! `[type.str.concat]` (wolf-lang#278): a `char` is text, so `s + c`
+//! and `c + s` are interpolation-append in either order — `"{s}{c}"`,
+//! `"{c}{s}"` — the char contributing its scalar's UTF-8 bytes, and
+//! `s += c` is `s = s + c`. Two-, three- and four-byte scalars ride
+//! the same path. The `int` mixes stay E0409 (`concat_mix_int.lu`,
+//! `concat_int_str.lu`). lupin 0.1.29 refuses every arm here as
+//! `+` on a str and a char; the mirror is the same wave's.
 
 fn main() -> !int {
     let s = "ab"
     let t = s + 'c'
-    print(t)
-    0
+    let u = 'c' + s
+    var v = s
+    v += 'é'
+    v += 'ß'
+    v += '🐺'
+    let w = 'é' + s
+    var x = ""
+    let cs = "wolf".chars()
+    var i = 0
+    while i < cs.count() {
+        x += cs[i]
+        i += 1
+    }
+    print("{t} {u} {v} {w} {x}")
+    if t.len == 3 && u.len == 3 && v.len == 10 && w.len == 4 && x.len == 4 { 0 } else { 1 }
 }

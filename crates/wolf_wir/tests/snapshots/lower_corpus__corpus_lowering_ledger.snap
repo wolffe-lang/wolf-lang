@@ -388,7 +388,7 @@ strings/char_interp.lu: lowers
 strings/char_order.lu: lowers
 strings/chars_walk.lu: lowers
 strings/concat_int_str.lu: not mem-clean (pre-wir rungs own it)
-strings/concat_mix_char.lu: not mem-clean (pre-wir rungs own it)
+strings/concat_mix_char.lu: lowers
 strings/concat_mix_int.lu: not mem-clean (pre-wir rungs own it)
 strings/concat_plus.lu: lowers
 strings/empty_needle.lu: lowers
