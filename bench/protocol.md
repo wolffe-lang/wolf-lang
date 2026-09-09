@@ -278,7 +278,7 @@ the wall numbers become publishable, not so they become gates.
 
 | metric | why it can gate |
 |---|---|
-| LLVM IR instruction ratio (mid-end vs naive), kernels and corpus | same input, same count, any machine |
+| LLVM IR instruction ratio (mid-end vs naive): a geomean ceiling over the kernel suite, and since s143 (#270) a ratio **per corpus path** in `bench/ir-volume.json` — an existing path that grows past its slack reds by name, a new path is reported and never red, the corpus geomean is a reference line | same input, same count, any machine — and per path, because a geomean over a growing population cannot tell a witness entering from a lowering that grew |
 | vectorization witness counts per kernel per lane | remark counts are a function of the IR and the clang version |
 | **the naive-C baseline still makes the calls its thesis needs** (s79, `baseline_calls` in the manifest vs `nm -u`) | symbol presence is a property of the binary. Not stable across clang majors — and a clang that deletes our baseline's workload is exactly the event worth a red build |
 | correctness sinks across all lanes | equality, not timing |

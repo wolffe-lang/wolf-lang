@@ -1,0 +1,6 @@
+{
+  "note": "The per-file IR-volume ratchet (wolf-lang#270, s143). `files` maps every run-phase corpus path the release tier emits to its LLVM IR instruction counts with the mid-end on (`midend`) and off (`naive`) and their ratio, measured on the linux/x86-64 CI lane (D5: gates are rig-pinned). `cargo xtask bench-gates` reds BY NAME when an existing path's ratio rises past its record by more than `slack` (relative: the ratios span 0.5 to 2.4, so one absolute tick would gate noise on the large and nothing on the small); a path absent from `files` is reported and never red; a recorded path the run cannot emit is reported as conservatism. `cargo xtask bench-gates --record` rewrites `files` from a run on the rig; the rest of this document is carried through. The corpus geomean that gated before s143 is printed as a reference only (bench/gates.json `corpus_geomean_reference`, and its history).",
+  "lane": "linux/x86-64",
+  "slack": 0.05,
+  "files": {}
+}
