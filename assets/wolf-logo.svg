@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>wolf</title>
+  <!-- the wolf language mark: black silhouette, circular cutout.
+       full moon upper-left; wolf baying from a rock outcrop, its body
+       merging into the crag. single color: favicon-safe, inverts clean. -->
+  <defs>
+    <clipPath id="disc">
+      <circle cx="256" cy="256" r="244"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#disc)" fill="#000">
+    <!-- full moon -->
+    <circle cx="168" cy="148" r="78"/>
+    <!-- rock outcrop: jagged rise from the left, plateau under the wolf -->
+    <path d="M -10 474
+             L 58 442 L 108 456 L 148 432 L 198 444
+             L 252 410 L 302 396 L 322 378
+             L 470 378 L 502 402 L 512 512 L -10 512 Z"/>
+    <!-- the wolf, head thrown back at the moon, feet lost in the rock -->
+    <path d="M 296 138
+             C 306 148, 316 168, 326 184
+             L 342 166 L 346 190
+             L 360 176 L 361 200
+             C 376 222, 386 244, 392 262
+             C 402 276, 414 286, 422 296
+             C 436 306, 446 322, 449 342
+             C 452 358, 450 370, 444 380
+             L 330 380
+             C 324 350, 318 320, 310 292
+             C 302 260, 296 228, 290 200
+             C 286 186, 282 172, 278 160
+             C 284 150, 290 142, 296 138 Z"/>
+  </g>
+  <!-- the cutout ring -->
+  <circle cx="256" cy="256" r="244" fill="none" stroke="#000" stroke-width="15"/>
+</svg>

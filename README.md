@@ -1,6 +1,6 @@
 # wolf
 
-<img src="https://raw.githubusercontent.com/wolffe-lang/wolf/trunk/assets/wolf-logo.svg" alt="the wolf mark" width="120" align="right"/>
+<img src="assets/wolf-logo.svg" alt="the wolf mark" width="120" align="right"/>
 
 Wolf is a compiled systems language. Memory lives in regions that the
 compiler infers, so programs carry no lifetime annotations. Allocation
