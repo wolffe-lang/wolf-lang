@@ -68,7 +68,7 @@ use wolf_ast::{
 use wolf_diag::{Diagnostic, codes};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
 use wolf_sema::sig::ItemSig;
-use wolf_sema::types::{Prim, TyId, TyKind};
+use wolf_sema::types::{Prim, TyId, TyKind, TypeTable};
 use wolf_sema::{BodyResult, Fold, NotYet, Package, Typecheck, TypedBody};
 use wolf_span::Span;
 
@@ -4146,7 +4146,7 @@ impl<'t> Machine<'t> {
                     } else {
                         val!(self.eval(hole))
                     };
-                    let rendered = format_value(&hv);
+                    let rendered = self.render(&hv, self.ctx().expr_tys.get(&hole.span).copied());
                     match i.format_spec() {
                         Some(spec) => self.apply_format_spec(spec, &hv, rendered)?,
                         None => rendered,
@@ -6539,7 +6539,8 @@ impl<'t> Machine<'t> {
                         } else {
                             val!(self.eval(v))
                         };
-                        out.push_str(&format_value(&x));
+                        let ty = self.ctx().expr_tys.get(&v.span).copied();
+                        out.push_str(&self.render(&x, ty));
                     }
                 }
                 if callee_name.ends_with("print") {
@@ -7367,8 +7368,8 @@ impl<'t> Machine<'t> {
                     "lower" => Ok(Flow::Val(Value::Str(s.to_lowercase()))),
                     "upper" => Ok(Flow::Val(Value::Str(s.to_uppercase()))),
                     // s142 (wolf-lang#263): `to_int() -> int !
-                    // {NotAnInt}`, ruled by `[mem.str.to_int]` (s143,
-                    // #265). Surrounding `[mem.str.ws]` is ignored
+                    // {parse}`, ruled by `[mem.str.to_int]` (s143,
+                    // #265; the mark was `NotAnInt` until then). Surrounding `[mem.str.ws]` is ignored
                     // (`trim`'s set, which is `char::is_whitespace`'s
                     // twenty-five); then an optionally signed run of
                     // ASCII digits that fits `i64`, or the row. Out of
@@ -7378,7 +7379,7 @@ impl<'t> Machine<'t> {
                     "to_int" => match s.trim().parse::<i64>() {
                         Ok(v) => Ok(Flow::Val(Value::Int(v))),
                         Err(_) => Ok(raise(Value::ErrTag {
-                            tag: "NotAnInt".to_string(),
+                            tag: "parse".to_string(),
                             payload: Vec::new(),
                         })),
                     },
@@ -7830,22 +7831,162 @@ fn decode_codepoint_escape(bytes: &[u8]) -> Option<(char, usize)> {
     }
 }
 
-fn format_value(v: &Value) -> String {
-    match v {
-        Value::Int(n) => n.to_string(),
-        Value::Bool(b) => b.to_string(),
-        // The shortest round-trip decimal, `std.fmt.decimal.to_str`'s
-        // layout — the s38 reference rendering (spec §7.4 candidate).
-        Value::F64(x) => wolf_sema::fmtspec::f64_shortest(*x),
-        Value::Str(s) => s.clone(),
-        // `{c}` prints the CHARACTER (D58), never the code point.
-        Value::Char(c) => c.to_string(),
-        // `{b}` prints the NUMBER (D72), never a character.
-        Value::Byte(b) => b.to_string(),
-        Value::Unit => "()".to_string(),
-        Value::Range { start, end } => format!("{start}..{end}"),
-        Value::ErrTag { tag, .. } => format!("{{{tag}}}"),
-        _ => "<value>".to_string(),
+impl<'t> Machine<'t> {
+    /// Render a hole or print value (s143, wolf-lang#268 —
+    /// `[type.interp.value]`): the reference interpreter's `Display`,
+    /// byte for byte. Type-directed where the value alone cannot tell:
+    /// a positional `Struct` is a tuple or a named struct by its type,
+    /// a nested field's type comes from the signature table, and a
+    /// `!T` hole's ok half renders as its payload.
+    fn render(&self, v: &Value, ty: Option<TyId>) -> String {
+        let table = &self.ctx().tb.table;
+        self.render_in(v, table, ty)
+    }
+
+    fn render_in(&self, v: &Value, table: &TypeTable, ty: Option<TyId>) -> String {
+        let mut ty = ty;
+        for _ in 0..32 {
+            match ty.map(|t| table.kind(t)) {
+                Some(TyKind::Wrapping(i) | TyKind::Distinct(i)) => ty = Some(*i),
+                _ => break,
+            }
+        }
+        // A `!T` hole: the ok payload as `T`, the row as itself.
+        if let Some(TyKind::ErrUnion(ok, row)) = ty.map(|t| table.kind(t)) {
+            return match v {
+                Value::ErrTag { .. } => self.render_in(v, table, Some(*row)),
+                _ => self.render_in(v, table, Some(*ok)),
+            };
+        }
+        let kind = ty.map(|t| table.kind(t));
+        match v {
+            Value::Int(n) => n.to_string(),
+            Value::Bool(b) => b.to_string(),
+            // The shortest round-trip decimal, `std.fmt.decimal.to_str`'s
+            // layout — the s38 reference rendering (spec §7.4 candidate).
+            Value::F64(x) => wolf_sema::fmtspec::f64_shortest(*x),
+            Value::Str(s) => s.clone(),
+            // `{c}` prints the CHARACTER (D58), never the code point.
+            Value::Char(c) => c.to_string(),
+            // `{b}` prints the NUMBER (D72), never a character.
+            Value::Byte(b) => b.to_string(),
+            Value::Unit => "()".to_string(),
+            Value::Range { start, end } => format!("{start}..{end}"),
+            Value::Struct { fields } => match kind {
+                Some(TyKind::Nominal { module, name, .. }) => {
+                    let sig_table = &self.tc.sigs.table;
+                    let ftys: Vec<Option<TyId>> = match self.tc.sigs.get(*module as usize, name) {
+                        Some(ItemSig::Struct(ss)) => fields
+                            .iter()
+                            .map(|(n, _)| ss.fields.iter().find(|f| &f.name == n).map(|f| f.ty))
+                            .collect(),
+                        _ => vec![None; fields.len()],
+                    };
+                    let mut out = format!("{name} {{");
+                    for (i, ((fname, fv), fty)) in fields.iter().zip(ftys).enumerate() {
+                        if i > 0 {
+                            out.push(',');
+                        }
+                        out.push(' ');
+                        out.push_str(fname);
+                        out.push_str(": ");
+                        out.push_str(&self.render_in(fv, sig_table, fty));
+                    }
+                    out.push_str(" }");
+                    out
+                }
+                other => {
+                    // A tuple (positional fields), typed or not.
+                    let tys: Vec<Option<TyId>> = match other {
+                        Some(TyKind::Tuple(ts)) if ts.len() == fields.len() => {
+                            ts.iter().map(|t| Some(*t)).collect()
+                        }
+                        _ => vec![None; fields.len()],
+                    };
+                    let items: Vec<String> = fields
+                        .iter()
+                        .zip(tys)
+                        .map(|((_, fv), t)| self.render_in(fv, table, t))
+                        .collect();
+                    format!("({})", items.join(", "))
+                }
+            },
+            Value::List(id) => {
+                let et = match kind {
+                    Some(TyKind::List(e)) => Some(*e),
+                    _ => None,
+                };
+                let items: Vec<String> = self.lists[*id]
+                    .iter()
+                    .map(|item| self.render_in(item, table, et))
+                    .collect();
+                format!("[{}]", items.join(", "))
+            }
+            // A caught row value: the tag's name, then `(p1, p2)` when
+            // the tag carries a payload — `[type.interp.row]`.
+            Value::ErrTag { tag, payload } => {
+                let ptys: Vec<Option<TyId>> = match kind {
+                    Some(TyKind::Row { tags, .. }) => tags
+                        .iter()
+                        .find(|(n, _)| n == tag)
+                        .map(|(_, p)| p.iter().map(|t| Some(*t)).collect())
+                        .unwrap_or_else(|| vec![None; payload.len()]),
+                    _ => vec![None; payload.len()],
+                };
+                let mut out = tag.clone();
+                if !payload.is_empty() {
+                    let items: Vec<String> = payload
+                        .iter()
+                        .zip(ptys)
+                        .map(|(pv, t)| self.render_in(pv, table, t))
+                        .collect();
+                    out.push('(');
+                    out.push_str(&items.join(", "));
+                    out.push(')');
+                }
+                out
+            }
+            // An enum variant: `Enum.Variant`, as the interpreter
+            // spells it (the machine records the qualified callee for
+            // the call form; the bare member form is qualified here
+            // from the type), then its payload.
+            Value::Enum { variant, payload } => {
+                let vname = variant.rsplit('.').next().unwrap_or(variant);
+                let sig_table = &self.tc.sigs.table;
+                let qualified = match kind {
+                    _ if variant.contains('.') => variant.clone(),
+                    Some(TyKind::Nominal { name, .. }) => format!("{name}.{vname}"),
+                    _ => variant.clone(),
+                };
+                let ptys: Vec<Option<TyId>> = match kind {
+                    Some(TyKind::Nominal { module, name, .. }) => {
+                        match self.tc.sigs.get(*module as usize, name) {
+                            Some(ItemSig::Enum { variants, .. }) => variants
+                                .iter()
+                                .find(|vs| vs.name == vname)
+                                .map(|vs| vs.payload.iter().map(|t| Some(*t)).collect())
+                                .unwrap_or_else(|| vec![None; payload.len()]),
+                            _ => vec![None; payload.len()],
+                        }
+                    }
+                    _ => vec![None; payload.len()],
+                };
+                let mut out = qualified;
+                if !payload.is_empty() {
+                    let items: Vec<String> = payload
+                        .iter()
+                        .zip(ptys)
+                        .map(|(pv, t)| self.render_in(pv, sig_table, t))
+                        .collect();
+                    out.push('(');
+                    out.push_str(&items.join(", "));
+                    out.push(')');
+                }
+                out
+            }
+            Value::Dyn { inner, .. } => self.render_in(inner, table, None),
+            _ => "<value>".to_string(),
+        }
     }
 }
 

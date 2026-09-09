@@ -726,7 +726,7 @@ fn raise_resolves_declared_row_before_value_namespace() {
 
 // ------------------------------------------ s142: to_int (#263) --
 
-/// `str.to_int() -> int ! {NotAnInt}` under checked execution: the
+/// `str.to_int() -> int ! {parse}` under checked execution: the
 /// value for a trimmed, optionally signed run of ASCII digits in
 /// `int`'s range; the row — never a trap — for everything else,
 /// including a magnitude outside `i64` (there is no `int` the text
@@ -735,8 +735,8 @@ fn raise_resolves_declared_row_before_value_namespace() {
 fn to_int_parses_a_trimmed_decimal_or_rows() {
     let out = run("fn show(label: str, s: str) {\n\
          let v = s.to_int() else |err| match err {\n\
-         NotAnInt => {\n\
-         print(\"{label} NotAnInt\")\n\
+         parse => {\n\
+         print(\"{label} parse\")\n\
          0 - 1\n\
          },\n\
          }\n\
@@ -771,11 +771,100 @@ fn to_int_parses_a_trimmed_decimal_or_rows() {
         out.stdout,
         "plain 42\nspaces 7\nuni_ws 12\nneg -13\nplus 5\nzeros 7\n\
          max 9223372036854775807\nmin -9223372036854775808\n\
-         over NotAnInt\nhuge NotAnInt\nword NotAnInt\nempty NotAnInt\n\
-         inner_space NotAnInt\nunderscore NotAnInt\nfraction NotAnInt\nsum 8\n"
+         over parse\nhuge parse\nword parse\nempty parse\n\
+         inner_space parse\nunderscore parse\nfraction parse\nsum 8\n"
     );
     // The row propagates out of `main` the documented way.
     let out = run("fn main() -> !int {\n    let n = \"four\".to_int()?\n    n\n}\n");
     assert!(matches!(out.verdict, Verdict::Exit(1)), "{:?}", out.verdict);
-    assert_eq!(out.stdout, "error: NotAnInt\n");
+    assert_eq!(out.stdout, "error: parse\n");
+}
+
+// ------------------------------ s143: interpolation holes (#268) --
+
+/// `[type.interp.value]` under checked execution: the corpus battery
+/// (`strings/interp_values.lu`) byte for byte — a struct by its name
+/// and fields, a tuple, a `List` of ints and of structs, a `!T` in
+/// both states, a caught row with and without a payload, an enum
+/// variant qualified, and the same holes building a `str`.
+#[test]
+fn interpolation_renders_composite_values() {
+    let out = run(r#"struct Doc { title: str, words: int }
+struct Pair { a: int, b: Doc }
+enum Shape { Dot, Line(int), Rect(int, int) }
+
+fn half(n: int) -> int ! {odd} {
+    if n % 2 == 1 { return odd }
+    n / 2
+}
+fn digit(s: str) -> int ! {BadDigit(str, int), too_short} {
+    if s.len < 1 { return too_short }
+    if s < "0" || s > "9" { return BadDigit(s, s.len) }
+    s.to_int() else 0
+}
+
+fn main() -> !int {
+    let d = Doc { title: "regions", words: 900 }
+    print("struct {d}")
+    let t = (1, "two", 3.5, true, 'c')
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    let s = "built {d} {t} {xs}"
+    let p = Pair { a: 1, b: d }
+    print("nested {p}")
+    print("tuple {t}")
+    print("list {xs}")
+    let empty = List[str]()
+    print("empty {empty}")
+    var ds = List[Doc]()
+    (mut ds).push(Doc { title: "moves", words: 640 })
+    print("docs {ds}")
+    let ok = half(14)
+    print("union ok {ok}")
+    let bad = half(3)
+    print("union err {bad}")
+    let a = digit("q") else |err| { print("caught {err}"); 0 }
+    let b = digit("") else |err| { print("caught {err}"); 0 }
+    let c = digit("4") else |err| { print("caught {err}"); 0 }
+    print("abc {a} {b} {c}")
+    let e = half(5) else |err| { print("row {err}"); 0 }
+    print("shape {Shape.Line(4)} {Shape.Rect(2, 3)}")
+    print(s)
+    let popped = (mut xs).pop()
+    print("popped {popped}")
+    0
+}
+"#);
+    assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
+    assert_eq!(
+        out.stdout,
+        "struct Doc { title: regions, words: 900 }\nnested Pair { a: 1, b: Doc { title: regions, words: 900 } }\ntuple (1, two, 3.5, true, c)\nlist [1, 2, 3]\nempty []\ndocs [Doc { title: moves, words: 640 }]\nunion ok 7\nunion err odd\ncaught BadDigit(q, 1)\ncaught too_short\nabc 0 0 4\nrow odd\nshape Shape.Line(4) Shape.Rect(2, 3)\nbuilt Doc { title: regions, words: 900 } (1, two, 3.5, true, c) [1, 2, 3]\npopped 3\n"
+    );
+}
+
+/// A format spec on a composite hole is a refusal, never silently
+/// ignored (`[type.interp.value]`, wolf-lang#10's rule).
+#[test]
+fn a_format_spec_on_a_composite_hole_refuses() {
+    let src = "struct P { x: int }\nfn main() -> !int {\n    let p = P { x: 1 }\n    print(\"{p:>8}\")\n    0\n}\n";
+    let mut ml = MemoryLoader::new("strb");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        tc.not_yet.is_empty() && !tc.has_errors(),
+        "{:?}",
+        tc.diagnostics
+    );
+    let out = ubcheck::run_checked(&res.package, &tc, Budget::default());
+    let refused = match out {
+        Err(e) => format!("{e:?}"),
+        Ok(o) => panic!("expected a refusal, got {:?}", o.verdict),
+    };
+    assert!(
+        refused.contains("a format spec on a non-primitive value"),
+        "{refused}"
+    );
 }
