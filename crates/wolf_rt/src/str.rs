@@ -618,8 +618,9 @@ fn trim_bounds(s: &str, mode: i64) -> (usize, usize) {
     (lo, hi)
 }
 
-/// `to_int() -> int ! {NotAnInt}` (s142, wolf-lang#263) — the
-/// parsed `i64` through `out`, 0 on success; 1 is the `NotAnInt` row.
+/// `to_int() -> int ! {parse}` (s142, wolf-lang#263) — the parsed
+/// `i64` through `out`, 0 on success; 1 is the `parse` row (spelled
+/// `NotAnInt` until s143, #265).
 /// `[mem.str.to_int]` (s143, #265) is the clause this implements.
 ///
 /// The text is trimmed with `[mem.str.ws]`'s set (the trim above, so

@@ -1,12 +1,17 @@
-//! check: run(exit=1, stdout="error: NotAnInt")
+//! check: run(exit=1, stdout="error: parse")
 //! phase: run
 //! conforms: err.union, err.propagate, abi.err.repr, mem.str.to_int
 //!
 //! s142 (wolf-lang#263): `to_int`'s row propagates like any other —
-//! `?` on the text that is not an int carries `NotAnInt` out of
-//! `main`, and the process ends the documented way (`error: <tag>`
-//! on stdout, exit 1; `rows/eu_main_err_exit.lu`). The row is the
-//! one the reference interpreter answers, spelled as it spells it.
+//! `?` on the text that is not an int carries the row out of `main`,
+//! and the process ends the documented way (`error: <tag>` on stdout,
+//! exit 1; `rows/eu_main_err_exit.lu`). This file pins the row's
+//! SPELLING: `parse`, the lowercase payload-free mark `[mem.str.parse]`
+//! rules (s143, wolf-lang#265) — s142 had copied the interpreter's
+//! `NotAnInt`, the one CapCase mark on the builtin surface and the
+//! shape W0603 warns a program about. lupin 0.1.28 still answers
+//! `NotAnInt`; the mirror is the same wave's (wolf-interp), and until
+//! it lands this is the one witness the two machines part on.
 
 fn main() -> !int {
     let n = "four".to_int()?

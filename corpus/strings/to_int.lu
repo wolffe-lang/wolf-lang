@@ -1,22 +1,26 @@
-//! check: run(exit=0, stdout="plain 42\nspaces 7\nascii_ws 12\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nzero 0\nneg_zero 0\nmax 9223372036854775807\nmin -9223372036854775808\nover NotAnInt\nunder NotAnInt\nhuge NotAnInt\nempty NotAnInt\nblank NotAnInt\nword NotAnInt\ninner_space NotAnInt\nunderscore NotAnInt\nfraction NotAnInt\nexponent NotAnInt\nhex NotAnInt\narabic NotAnInt\nlone_sign NotAnInt\ntrailing NotAnInt\nsum 8\nvia_fn 7 0")
+//! check: run(exit=0, stdout="plain 42\nspaces 7\nascii_ws 12\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nzero 0\nneg_zero 0\nmax 9223372036854775807\nmin -9223372036854775808\nover row\nunder row\nhuge row\nempty row\nblank row\nword row\ninner_space row\nunderscore row\nfraction row\nexponent row\nhex row\narabic row\nlone_sign row\ntrailing row\nsum 8\nvia_fn 7 0")
 //! phase: run
 //! conforms: err.union, err.else, mem.str.ws, mem.str.parse, mem.str.to_int
 //!
-//! s142 (wolf-lang#263) — `str.to_int() -> int ! {NotAnInt}`, the
+//! s142 (wolf-lang#263) — `str.to_int() -> int ! {parse}`, the
 //! first non-trivial string call the book's chapter 1 makes, row for
 //! row with the reference interpreter. What decides the clause is
 //! not `"42"`: it is the whitespace, the sign, the leading zeros and
 //! every shape that is NOT an int. s143 (wolf-lang#265) wrote the
 //! clause this battery had been executing — `[mem.str.parse]` (one
-//! method, `NotAnInt` blessed) and `[mem.str.to_int]` (the trim, the
-//! value, the row) — and the battery cites it.
+//! method; the row is the lowercase mark `parse`, s142's `NotAnInt`
+//! retired) and `[mem.str.to_int]` (the trim, the value, the row) —
+//! and the battery cites it. The mark is not SPELLED here on purpose:
+//! this file pins what is a value and what is the row on both
+//! machines, and stays byte-identical under a lupin that still says
+//! `NotAnInt`; `rows/to_int_parse.lu` pins the spelling.
 //!
 //!   the value     an optionally signed (`+`/`-`) run of ASCII digits
 //!                 that fits `int`; leading zeros are digits.
 //!   whitespace    the surrounding `[mem.str.ws]` run is ignored —
 //!                 ASCII and the non-ASCII separators alike — so
 //!                 `s.to_int()` and `s.trim().to_int()` are one value.
-//!   the row       everything else is `NotAnInt`, never a trap: the
+//!   the row       everything else is the row, never a trap: the
 //!                 empty and the blank text, a word, an interior
 //!                 space, `_` separators, a fraction, an exponent, a
 //!                 radix prefix, a non-ASCII digit, a lone sign,
@@ -37,13 +41,8 @@
 //! method existed on either compiler tier.
 
 fn show(label: str, s: str) {
-    let v = s.to_int() else |err| match err {
-        NotAnInt => {
-            print("{label} NotAnInt")
-            0 - 1
-        },
-    }
-    if v != 0 - 1 { print("{label} {v}") }
+    let v = s.to_int() else 0 - 1
+    if v == 0 - 1 { print("{label} row") } else { print("{label} {v}") }
 }
 
 fn parse(s: str) -> !int { s.to_int() }

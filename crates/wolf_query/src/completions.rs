@@ -985,8 +985,8 @@ const STR_MEMBERS: &[(&str, &str, &str)] = &[
     ),
     (
         "to_int",
-        "fn to_int() -> int ! {NotAnInt}",
-        "The string parsed as a decimal `int` (surrounding whitespace ignored), or `{NotAnInt}`.",
+        "fn to_int() -> int ! {parse}",
+        "The string parsed as a decimal `int` (surrounding whitespace ignored), or `{parse}`.",
     ),
 ];
 

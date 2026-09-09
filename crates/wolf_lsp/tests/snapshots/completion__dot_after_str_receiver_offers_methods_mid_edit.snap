@@ -24,4 +24,4 @@ strip_prefix · fn strip_prefix(needle: str) -> str ! {none}
 strip_suffix · fn strip_suffix(needle: str) -> str ! {none}
 repeat · fn repeat(count: int) -> str
 replace · fn replace(from: str, to: str) -> str
-to_int · fn to_int() -> int ! {NotAnInt}
+to_int · fn to_int() -> int ! {parse}
