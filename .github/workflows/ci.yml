@@ -52,6 +52,14 @@ jobs:
         # against the bytes that arrived. This runs BEFORE the gauntlet so
         # `cargo xtask ci`'s own test step is the one that compares, which
         # keeps the runner's gauntlet and the laptop's the same gauntlet.
+        #
+        # r12 is the first re-stamp since r10 wrote this, and it is the
+        # evidence the design holds: moving the job from lupin v0.1.27 to
+        # v0.1.28 took ZERO edits here, because neither the version nor
+        # the digest is written down anywhere in it. Never type either in
+        # — a stamp is bumped in `crates/wolf_driver/PAIRING` and this
+        # step follows it, or the two go stale apart, which is #87's rot
+        # wearing a different hat one directory over.
         run: |
           set -euo pipefail
           ver=$(sed -n 's/^lupin-version *= *//p' crates/wolf_driver/PAIRING | tr -d '[:space:]')
