@@ -325,7 +325,7 @@ non-obvious rows:
 | all others (lang#1,3–8,10–14,16–21,23–26,31–38; interp#1–3,6,7,10,12,13,15,16) | build/plumbing/feature/spec/oracle chores, honest refusals, or already-errors | DECLINE / ALREADY-ERROR | per-issue rationale in the mining record |
 
 **Issue totals: 57 examined. 5 feed shipped lints, 1 gated (S-11), 6
-promotions routed, 12 already-error, 38 declined.**
+promotions routed, 12 already-error, 33 declined.**
 
 ---
 
