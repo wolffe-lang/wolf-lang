@@ -236,6 +236,7 @@
     "mem.iter.impl": "02-memory-model.md",
     "mem.iter.range": "02-memory-model.md",
     "mem.iter.trait": "02-memory-model.md",
+    "mem.list.pop": "02-memory-model.md",
     "mem.list.slice": "02-memory-model.md",
     "mem.model": "02-memory-model.md",
     "mem.model.alloc": "02-memory-model.md",

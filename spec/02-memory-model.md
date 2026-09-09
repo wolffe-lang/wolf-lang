@@ -554,6 +554,25 @@ adopt that design and give `for` its desugar.)
   iterates the fresh `List` by `[mem.iter.impl]`; nothing new is
   ruled. The full-open `[..]` spelling stays refused at the grammar
   (`[gram.expr.primary]` requires an endpoint — lupin's letter).
+- `[mem.list.pop]` **The recoverable `List` reads answer the `none`
+  row** (ruled 2026-09-09, wolf-lang#274; the s37 posture, D25's:
+  absence is a row, not a sentinel and not a trap). `xs.pop() ->
+  T ! {none}` removes and answers the last element, and on an empty
+  list answers the payload-free tag `none`. `xs.get(i) -> T ! {none}`
+  answers the element at the 0-based `i` — `get` is origin-free, the
+  origin marker shifts subscripts only (W0317) — and `none` for any
+  `i` outside `0..xs.len`; `xs.first()` and `xs.last()` are `get(0)`
+  and `get(xs.len - 1)`, so an empty list answers `none` to both. No
+  third outcome exists: none of the four faults on any input, and the
+  tag is `none` in every case (never `OutOfBounds` — `[mem.str.parse]`'s
+  pact, W0603). The subscript `xs[i]` stays the faulting twin: an
+  index outside the list traps `bounds` (`[mem.ub.defined]`), which is
+  exactly the relation `s.get(a..b)` has to `s[a..b]` (`[mem.str.get]`).
+  `[mem.ub.defined]` rules indices and slices; `pop` takes no index,
+  and reading it as one was an analogy, not a clause. Cost stated: the
+  interpreter's `pop` arm and one of its REPL tests, and the book's
+  chapter 5 (one fence, one sentence — `pop` is not bounds-checked).
+  Witness: `corpus/memory/list_pop_empty.lu`, both tiers.
 
 ### `str` ordering `[mem.str]`
 

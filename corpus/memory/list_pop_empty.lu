@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="2 3\nnone\n7 8 9 10")
+//! phase: run
+//! conforms: mem.list.pop, type.interp.union
+//! `[mem.list.pop]` (wolf-lang#274): the recoverable `List` reads answer
+//! the `none` row. `pop` on an empty list is the payload-free tag
+//! `none` — never a `bounds` trap (`[mem.ub.defined]` rules indices,
+//! and `pop` takes none); `get` outside `0..len`, `first` and `last`
+//! on an empty list answer the same tag. `{empty}` renders the `!T`
+//! hole as its row (`[type.interp.union]`). lupin 0.1.28 traps
+//! `bounds` at the empty `pop`; the mirror is the same wave's.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(3)
+    (mut xs).push(2)
+    let last = (mut xs).pop() else 0
+    let first = (mut xs).pop() else 0
+    print("{last} {first}")
+    let empty = (mut xs).pop()
+    print("{empty}")
+    let d = (mut xs).pop() else 7
+    let g = xs.get(0) else 8
+    let f = xs.first() else 9
+    let l = xs.last() else 10
+    print("{d} {g} {f} {l}")
+    if d == 7 && g == 8 && f == 9 && l == 10 { 0 } else { 1 }
+}
