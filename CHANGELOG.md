@@ -1,5 +1,128 @@
 # Changelog
 
+## Unreleased
+
+### The syscall goes first (s141 — #257 closes)
+
+A ready socket is answered by the syscall alone. Every parking call
+in the net family (`net_accept`, `net_read`/`net_read_bytes`,
+`net_write`/`net_write_bytes`, and the new `net_writev`) now tries the
+syscall before it waits, and waits only when the kernel answers that
+it would block. Until now each of them parked on the `wolf-reactor`
+thread first (a waiter cell, a lock handshake, a `kevent` to arm, a
+`kevent` to wake, a condvar, two context switches) and only then ran
+the syscall, on sockets the program's own `net_wait` had just
+reported ready. lobo ws22 profiled it with `sample(1)` on macOS arm64
+(one serving process, keepalive): 63 µs per request against nginx's
+19 on the same box, and about 30 of the 63 was that round-trip, taken
+three times per request, 37.8% of the serving thread parked in a
+condvar, 8% in its own `kevent`, the syscalls themselves 12%. Now a
+read on a ready socket touches no lock handshake, no condvar and no
+`kevent`; a park happens on `WouldBlock` only, and the retry after
+the wake goes against the budget computed when the call began, never
+a fresh one (`[os.net.accept]`'s rule, now every call's).
+
+Nothing a program can observe in the rows moves; the cost does.
+Predicted first, from ws22's arithmetic: about 30 of 63 µs. Measured
+the way the finding was made: lobo (trunk `023ec64`, its source
+untouched) built once at the v0.2.6 pin and once at this branch
+(`aec4d9f`, a dev-stamped `.wolf-bin` staged the way lobo's CI stages
+one), `tools/lobo-parity` (five interleaved pairs, `ab -t 5 -c 32`
+over four generators, both shapes, both cells) and the same
+`sample(1)` for ten seconds at one millisecond on the N=1 serving
+process under `ab -k -t 20 -c 32`, one session, same box, six minutes
+apart. nomad-1, Apple M5 Pro, 18 cpus, macOS 26.4.1, 2026-09-09
+01:15Z–01:21Z:
+
+| | before (wolf 0.2.6, pin 398e5f5) | after (this branch) |
+|---|---|---|
+| N=1 keepalive, lobo req/s (median), µs per request | 18,766, 53.3 µs | 47,162, 21.2 µs |
+| N=1 keepalive, nginx ÷ lobo, median [min, max] | 3.799x [3.612, 4.075] | 1.579x [0.943, 1.792] |
+| N=1 close, nginx ÷ lobo | 2.273x [2.165, 2.687] | 1.116x [0.988, 1.324] |
+| N=18 keepalive, nginx ÷ lobo | 2.446x [2.347, 2.536] | 1.597x [1.581, 1.602] |
+| N=18 close, nginx ÷ lobo | 1.118x [1.072, 1.166] | 1.055x [1.045, 1.101] |
+| main thread in `__psynch_cvwait` (of its samples) | 3,396 of 8,352, 40.7% | 95 of 8,450, 1.1% |
+| main thread in its own `kevent` | 610, 7.3% | 0 |
+| threads the process ran | main, `wolf-reactor`, `wolf-signal` | main, `wolf-signal` |
+
+Thirty-two microseconds per request on the N=1 keepalive cell, and
+the `wolf-reactor` thread never started: the reactor is lazy, and a
+serving loop that never parks never asks for it. What remains at 21 µs
+is the syscalls (`open` 33% of the thread, `sendto` 17%, `recvfrom`
+5%) and lobo's own three stats, which are lobo's (wolffe-lang/lobo#3,
+ws23). Both sets are marked REFUSED by the tool's quiet-rig rule,
+load(1m) 5.05 and 5.10 before each set with two sibling lanes on the
+box (the bar's rule is 3.0; the after set also saw nginx spread 1.86x
+on the N=1 keepalive shape), so they are not an entry in lobo's
+ledger; they are the same box, the same hour, the same load, and the
+ratio between them is the number this entry claims. The bar itself
+(1.10x) is not met on the keepalive shape and this entry does not say
+it is; a quiet set and the linux runner's number are lobo's to take
+at the next pin that carries this change (v0.2.7 shipped while this
+branch was still red on the runner, and does not).
+
+One consequence is stated because a program can build on it: a
+write's budget covers the whole drain. A body larger than the send
+buffer leaves in chunks with a park between them, each park against
+the call's budget, so a `net_deadline` armed on a stream now bounds a
+large `net_write` to a peer that stopped reading; before, the drain
+rode a blocking syscall past any budget. The row is `net_write`'s `io`
+(its `timeout` coarsened, as the call declares), and the bytes the
+kernel took before the budget fired have been sent.
+
+Every socket the runtime holds lives non-blocking on the three reactor
+hosts (linux, macOS, windows), a listener since 0.2.6 and a stream
+since now, the flag set on acquisition rather than trusted to a
+kernel's inheritance rule; a tier-2 host with no reactor keeps the
+blocking syscall. The checked machine answers the same rows through
+its own blocking sockets and their timeouts; the reference interpreter
+polls first and waits on not-yet already, so the differential is the
+proof. Spec: `[os.net.io]` (new), one sentence in `[os.net.accept]`
+(the accepted stream is under the same posture, its rows unchanged).
+Witness: `corpus/net/syscall_first.lu`, a read on a socket `net_wait`
+reported answers, and a budgeted large write to a peer that never
+reads returns at the budget with the row, not a park. The runtime's
+tests count this thread's parks: an accept with a connection queued,
+a write into an empty buffer and a read of bytes `poll(2)` reported
+park zero times.
+
+### `TCP_NODELAY` by default, and a gathered write (s141 — #254 closes)
+
+Nagle's algorithm is off on every TCP stream the runtime hands out,
+accepted or dialed, and `net_nodelay(fd, on) -> () ! {io}` sets it
+either way. lobo measured the reason on the CI runner (linux x86-64):
+a server that answers with a head and then a body, two writes, the
+second small, stalled behind the peer's delayed ACK, 40 ms per
+request, 780 req/s against nginx's 84,493 on the same runner, a 108x
+gap for a program that did nothing wrong. The posture Go, nginx and
+node take is the one that makes a naive two-write server correct
+without knowing this entry exists. lobo has carried `tcp_nodelay` as
+`planned` in its directive table for twenty waves because nothing in
+the language could honor it; now both directions can be. It is one
+option, named, with a stated default and its rows, not a generic
+`setsockopt`, and none is planned; the clause says what else that
+shape admits (a keepalive switch) and what it does not (linger,
+buffer sizes).
+
+`net_writev(fd, parts: List[List[byte]]) -> () ! {closed, io}` sends
+every part in order as one write, `writev(2)` on unix and `WSASend` on
+windows, gathered by the kernel and never copied by the runtime, with
+`net_write`'s rows exactly and the same posture: the syscall first, a
+park on would-block against the budget computed at entry, the drain
+resumed from the byte the kernel stopped at in whichever part it
+stopped in. Empty parts send nothing. A head and a body now leave in
+one syscall, and where two writes were two segments, one. The macOS
+numbers above were taken with lobo still writing twice, so nothing in
+them is this entry's; the linux number is, and it is lobo's to take.
+
+Both are served on every tier-1 host and every tier: native, release,
+and the checked machine, whose streams enter its table under the same
+default and whose gather is the same std vectored write driven to
+completion. The reference interpreter's mirror is filed with the
+clause text as wolffe-lang/wolf-interp#67. Spec: `[os.net.nodelay]`,
+`[os.net.writev]` (new). Witnesses: `corpus/net/nodelay.lu`,
+`corpus/net/writev_gather.lu`.
+
 ## 0.2.7 — 2026-09-08
 
 THE PAIRING IS CHECKED WHERE IT ROTS. `wolf --version` prints the lupin
