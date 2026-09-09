@@ -27,6 +27,30 @@ battery (`strings/to_int.lu`): wolf-interp#69 closed at lupin 0.1.28
 and both machines answer the row, so the inputs that lived in the
 driver's crate test alone now pin both sides. No interface moved.
 
+### The ratchet that can tell composition from regression (s143 — #270 closes)
+
+`cargo xtask bench-gates` gated the corpus's IR volume as one number,
+the geomean of `IR(midend) / IR(naive)` over every run-phase file the
+release tier emits, ratcheted against a ceiling. Nine consecutive
+re-records of that ceiling (s86 through s142) were population changes
+— a witness entering at 2.3 because the mid-end inlines a twenty-call
+helper — and not one was a regression; the gate fired on exactly the
+event it was not meant to catch and never, in that history, on the
+one it was. The gate is per file now: `bench/ir-volume.json` records
+a ratio per corpus path with its two instruction counts, measured on
+the linux/x86-64 lane like every gate number; an existing path whose
+ratio rises past its record by more than the relative slack (5%) reds
+by name with its counts; a path the record has never seen is reported
+beside the table and never reds on its own; a recorded path the run
+cannot emit is reported as conservatism. `cargo xtask bench-gates
+--record` writes the table from the rig. The corpus geomean is still
+printed on every run as the number the contract's 0.50 target is
+stated against, but it is a reference line, not a verdict — its key
+is `corpus_geomean_reference`, and its history in `bench/gates.json`
+ends with the entry that says so. The kernel suite keeps its geomean
+ceiling: the manifest fixes that population, so a move there is a
+lowering change.
+
 ## 0.2.8 — 2026-09-09
 
 THE FIRST CHAPTER COMPILES, AND THE SYSCALL GOES FIRST. This release
