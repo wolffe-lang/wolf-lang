@@ -667,11 +667,12 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
 // ------------------------------------------ s142: to_int (#263) --
 
 /// `str.to_int() -> int ! {NotAnInt}` on both lanes, byte-identical —
-/// the corpus battery (`strings/to_int.lu`) plus the one input the
-/// corpus cannot carry: a magnitude outside `i64` is the row on both
-/// wolf tiers (there is no `int` the text names; X3 forbids a quiet
-/// wrap), where the reference interpreter at this pin parses a wider
-/// integer (filed against wolf-interp).
+/// the corpus battery (`strings/to_int.lu`) including the magnitudes
+/// outside `i64`, which are the row on both wolf tiers (there is no
+/// `int` the text names; X3 forbids a quiet wrap). Those three inputs
+/// lived here alone while the reference interpreter parsed a wider
+/// integer; wolf-interp#69 closed at lupin 0.1.28 and s143 moved them
+/// into the corpus battery too (`[mem.str.to_int]`, wolf-lang#265).
 #[test]
 fn to_int_agrees_across_lanes_including_overflow() {
     parity(

@@ -1,6 +1,6 @@
 //! check: run(exit=1, stdout="error: NotAnInt")
 //! phase: run
-//! conforms: err.union, err.propagate, abi.err.repr
+//! conforms: err.union, err.propagate, abi.err.repr, mem.str.to_int
 //!
 //! s142 (wolf-lang#263): `to_int`'s row propagates like any other —
 //! `?` on the text that is not an int carries `NotAnInt` out of
