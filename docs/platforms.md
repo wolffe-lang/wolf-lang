@@ -199,11 +199,16 @@ of them is a link error or a silent stub.
 ### The floor line
 
 `cargo xtask lane-coverage` on windows-latest at 306d0fc (probe run
-33614917814) over 449 entries: checked 259 · native 278 ·
+33614917814) over 449 entries: checked 261 · native 278 ·
 release 0 (dark by design until s60c) · union 295 · all-three 0.
 At the s60a bring-up the line read 259/255/0/274/0 with 21 rows
-refused by construct name; at s60b 0 remain. The by-name table
-retired with its last row, and the 36 rows the native lane does not
+refused by construct name; at s60b 0 remain. (Checked read 259 here
+until 2026-09-08. That is the s60a FLOOR, not the s60b measurement:
+the run's own last line is `floors held (checked/native/release/union/
+all-three >= 259/255/0/274/0)` and the line above it is `checked
+executes 261 at run`. Re-read from run 33614917814's log; the 0.2.3
+changelog entry's 261/278/0/295/0 was the one that agreed with it.)
+The by-name table retired with its last row, and the 36 rows the native lane does not
 execute here are the same 36 it does not execute on macOS (the lanes'
 own scope gaps, none of them a host's).
 
