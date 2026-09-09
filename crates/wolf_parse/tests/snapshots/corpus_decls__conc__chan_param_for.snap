@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 865..900 name=Desk fields=1
+FnDecl 902..1004 name=total body=Block
+FnDecl 1006..1118 name=shelver body=Block
+FnDecl 1120..1206 name=drain body=Block
+FnDecl 1208..1925 name=main body=Block

@@ -1,0 +1,64 @@
+//! check: run(exit=0, stdout="plain 1540\nproc normal 1540\nfield 3")
+//! phase: run
+//! conforms: conc.chan.close, conc.chan.type, conc.proc.exit
+//!
+//! s143 (wolf-lang#268) — `for v in ch` where `ch` is a PARAMETER (or
+//! a field), not a local. The expression `channel[T](n)` always minted
+//! `TyKind::Chan`; the same spelling in a signature position stayed
+//! opaque, so the drive loop refused with "the iteration protocol
+//! (for-trait wiring)" as its reason — seven of the book's proc
+//! programs, every one a worker taking its inbox as a parameter.
+//! `[conc.chan.close]` rules the loop: it ends at drained-close, on a
+//! parameter exactly as on a local. Three positions: a plain call, a
+//! `spawn proc` body (the total comes back over a reply channel; the
+//! exit reason's own rendering is `conc/reason_interp.lu`'s), and a
+//! struct field.
+
+struct Desk { inbox: channel[int] }
+
+fn total(queue: channel[int]) -> int {
+    var words = 0
+    for w in queue { words += w }
+    words
+}
+
+fn shelver(queue: channel[int], reply: channel[int]) -> int {
+    let n = total(queue)
+    reply.send(n)
+    n
+}
+
+fn drain(desk: Desk) -> int {
+    var n = 0
+    for _ in desk.inbox { n += 1 }
+    n
+}
+
+fn main() -> !int {
+    let q = channel[int](4)
+    q.send(900)
+    q.send(640)
+    q.close()
+    print("plain {total(q)}")
+    let p = channel[int](4)
+    p.send(900)
+    p.send(640)
+    p.close()
+    let reply = channel[int](1)
+    let worker = spawn proc shelver(p, reply)
+    let m = worker.monitor()
+    let n = reply.recv() else |_| { return 1 }
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() { print("proc normal {n}") } else { print("proc other") }
+        },
+        timeout(1.s) => { print("proc stuck") },
+    }
+    let d = Desk { inbox: channel[int](4) }
+    d.inbox.send(1)
+    d.inbox.send(2)
+    d.inbox.send(3)
+    d.inbox.close()
+    print("field {drain(d)}")
+    0
+}
