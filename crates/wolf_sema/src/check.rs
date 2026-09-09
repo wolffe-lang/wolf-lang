@@ -6770,6 +6770,21 @@ impl<'a> Checker<'a> {
                     rowed(self, unit, &["closed", "invalid", "io"]),
                 )
             }
+            // s141 (#254, `[os.net.writev]`): the gathered write — a
+            // `List[List[byte]]`, every part in order in one syscall,
+            // with `net_write`'s rows exactly: `invalid` is
+            // `net_write_bytes`'s FFI-shaped refusal, and a typed
+            // nested list has no such row to declare.
+            "net_writev" => {
+                let list_byte = self.byte_list_ty();
+                let parts = self.lo.table.intern(TyKind::List(list_byte));
+                (vec![int_, parts], rowed(self, unit, &["closed", "io"]))
+            }
+            // s141 (#254, `[os.net.nodelay]`): Nagle off (`true`, the
+            // posture every stream is handed out with) or on for a
+            // TCP stream; a listener, a unix stream or a forged
+            // handle is `io`.
+            "net_nodelay" => (vec![int_, bool_], rowed(self, unit, &["io"])),
             "net_close" => (vec![int_], rowed(self, unit, &["io"])),
             // s106 (#45's builtin half): arm (`ms > 0`) or clear
             // (`ms <= 0`) a per-socket deadline budget — every

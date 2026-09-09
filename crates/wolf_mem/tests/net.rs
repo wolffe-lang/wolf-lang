@@ -690,3 +690,88 @@ fn wait_names_the_socket_that_spoke() {
         "0 true true 0 1 true\n",
     );
 }
+
+// ---------------------------------------------- s141 (#254): the gather --
+
+/// s141 (#254, `[os.net.writev]`): the corpus/net/writev_gather.lu twin
+/// on the checked machine — a head, an empty part and a body leave as
+/// one gathered write and arrive in order; all-empty parts send
+/// nothing; a listener and a forged handle are the `io` row.
+#[test]
+fn writev_gathers_parts_in_order() {
+    assert_stdout(
+        "fn bytes_of(s: str) -> List[byte] {\n\
+             var out = List[byte]()\n\
+             for b in s.bytes() { (mut out).push(b) }\n\
+             out\n\
+         }\n\
+         fn main() -> !int {\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             let port = net_port(srv)?\n\
+             let cli = net_connect(\"127.0.0.1:{port}\")?\n\
+             let conn = net_accept(srv)?\n\
+             var parts = List[List[byte]]()\n\
+             (mut parts).push(bytes_of(\"head\\r\\n\"))\n\
+             (mut parts).push(List[byte]())\n\
+             (mut parts).push(bytes_of(\"body!\"))\n\
+             net_writev(conn, parts)?\n\
+             net_deadline(cli, 5000)?\n\
+             var got = \"\"\n\
+             while got.len < 11 {\n\
+                 let piece = net_read(cli, 64)?\n\
+                 got = \"{got}{piece}\"\n\
+             }\n\
+             var none = List[List[byte]]()\n\
+             (mut none).push(List[byte]())\n\
+             net_writev(conn, none)?\n\
+             net_deadline(cli, 100)?\n\
+             var nothing = false\n\
+             let quiet = net_read(cli, 8) else |e| match e { timeout => { nothing = true\n\"\" }, _ => \"\" }\n\
+             let _ = quiet.len\n\
+             var lis = false\n\
+             net_writev(srv, parts) else |e| match e { io => { lis = true }, _ => {} }\n\
+             var forged = false\n\
+             net_writev(99999, parts) else |e| match e { io => { forged = true }, _ => {} }\n\
+             let in_order = got == \"head\\r\\nbody!\"\n\
+             print(\"{in_order} {nothing} {lis} {forged}\")\n\
+             net_close(conn)?\n\
+             net_close(cli)?\n\
+             net_close(srv)?\n\
+             0\n\
+         }\n",
+        "true true true true\n",
+    );
+}
+
+/// s141 (#254, `[os.net.nodelay]`): the corpus/net/nodelay.lu twin —
+/// the toggle is accepted both ways on an accepted and a dialed
+/// stream; a listener and a forged handle are `io`. The default (Nagle
+/// OFF on entry) is the machine's `under_posture`, set through the
+/// same std call the runtime uses; a program cannot read it back and
+/// this test does not pretend to.
+#[test]
+fn nodelay_toggles_and_its_rows() {
+    assert_stdout(
+        "fn main() -> !int {\n\
+             let srv = net_listen(\"127.0.0.1:0\")?\n\
+             let port = net_port(srv)?\n\
+             let cli = net_connect(\"127.0.0.1:{port}\")?\n\
+             let conn = net_accept(srv)?\n\
+             var toggles = true\n\
+             net_nodelay(conn, false) else |_| { toggles = false }\n\
+             net_nodelay(conn, true) else |_| { toggles = false }\n\
+             net_nodelay(cli, false) else |_| { toggles = false }\n\
+             net_nodelay(cli, true) else |_| { toggles = false }\n\
+             var lis = false\n\
+             net_nodelay(srv, true) else |e| match e { io => { lis = true } }\n\
+             var forged = false\n\
+             net_nodelay(99999, true) else |e| match e { io => { forged = true } }\n\
+             print(\"{toggles} {lis} {forged}\")\n\
+             net_close(conn)?\n\
+             net_close(cli)?\n\
+             net_close(srv)?\n\
+             0\n\
+         }\n",
+        "true true true\n",
+    );
+}

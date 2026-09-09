@@ -100,6 +100,12 @@ pub const PRELUDE: &[&str] = &[
     // for the socket). The str variants stay for text.
     "net_read_bytes",
     "net_write_bytes",
+    // s141 (#254): the gathered write — every part of a
+    // `List[List[byte]]` in one syscall, `net_write`'s rows —
+    // `[os.net.writev]`; and the one socket option a stream takes
+    // after acquisition, `[os.net.nodelay]`.
+    "net_writev",
+    "net_nodelay",
     // s136 (#227): the unix-domain pair, `[os.net.unix]`.
     "net_listen_unix",
     "net_connect_unix",

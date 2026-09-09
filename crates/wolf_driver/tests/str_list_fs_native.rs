@@ -632,6 +632,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // net_adopt_listener and os_spawn_with — the two halves of
     // descriptor inheritance, `[os.proc.inherit]`).
     // s137 (#127): readiness over a set, `[os.net.wait]`.
+    // s141 (#254): the gathered write and the stream option —
+    // `[os.net.writev]`, `[os.net.nodelay]`.
     for sym in [
         "__wolf_rt_net_listen_with",
         "__wolf_rt_net_adopt_listener",
@@ -639,6 +641,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_net_wait",
         // s137 (#233): the schedulable core count, `[os.cpus]`.
         "__wolf_rt_os_cpus",
+        "__wolf_rt_net_writev",
+        "__wolf_rt_net_nodelay",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -649,7 +653,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        129,
+        131,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

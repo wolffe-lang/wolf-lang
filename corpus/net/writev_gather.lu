@@ -1,0 +1,99 @@
+//! check: run(exit=0, stdout="writev | in_order true | nothing_sent true | listener_is_io true | forged_is_io true")
+//! phase: run
+//! conforms: os.net.writev, err.union, err.propagate
+//!
+//! s141 (#254, `[os.net.writev]`) — the gathered write. A head, an
+//! empty part and a body go out as ONE `net_writev`, and the peer
+//! reads them back in order, byte for byte: what an HTTP server's
+//! response is, in one syscall instead of two, with nothing copied by
+//! the runtime. Four relations, true on every tier-1 host and every
+//! tier:
+//!
+//!   in_order        the bytes arrive as the concatenation of the
+//!                   parts, in the order given, the empty part
+//!                   contributing nothing.
+//!   nothing_sent    parts that are all empty are a completed write
+//!                   that sends nothing: the peer's budgeted read
+//!                   finds nothing there.
+//!   listener_is_io  a listener is the `io` row, by the rows
+//!                   `net_write` declares.
+//!   forged_is_io    a handle nobody minted is `io`.
+
+fn bytes_of(s: str) -> List[byte] {
+    var out = List[byte]()
+    for b in s.bytes() {
+        (mut out).push(b)
+    }
+    out
+}
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+
+    let head = bytes_of("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n")
+    let body = bytes_of("hello")
+    var parts = List[List[byte]]()
+    (mut parts).push(head)
+    (mut parts).push(List[byte]())
+    (mut parts).push(body)
+    net_writev(conn, parts)?
+
+    let want = bytes_of("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+    net_deadline(cli, 5000)?
+    var got = List[byte]()
+    while got.len < want.len {
+        let piece = net_read_bytes(cli, 64)?
+        for b in piece {
+            (mut got).push(b)
+        }
+    }
+    var in_order = got.len == want.len
+    var i = 0
+    for b in got {
+        if i < want.len && b != want[i] {
+            in_order = false
+        }
+        i = i + 1
+    }
+
+    var none = List[List[byte]]()
+    (mut none).push(List[byte]())
+    (mut none).push(List[byte]())
+    net_writev(conn, none)?
+    net_deadline(cli, 100)?
+    var nothing_sent = false
+    let quiet = net_read(cli, 8) else |e| match e {
+        timeout => {
+            nothing_sent = true
+            ""
+        },
+        _ => "",
+    }
+    let _ = quiet.len
+
+    var listener_is_io = false
+    net_writev(srv, parts) else |e| match e {
+        io => {
+            listener_is_io = true
+        },
+        _ => {},
+    }
+    var forged_is_io = false
+    net_writev(99999, parts) else |e| match e {
+        io => {
+            forged_is_io = true
+        },
+        _ => {},
+    }
+
+    print(
+        "writev | in_order {in_order} | nothing_sent {nothing_sent} | listener_is_io {listener_is_io} | forged_is_io {forged_is_io}",
+    )
+    net_close(conn)?
+    net_close(cli)?
+    net_close(srv)?
+    0
+}

@@ -7974,6 +7974,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "net_wait"
                 | "net_close"
                 | "net_deadline"
+                // s141 (#254): the gathered write and the stream
+                // option — `[os.net.writev]`, `[os.net.nodelay]`.
+                | "net_writev"
+                | "net_nodelay"
         ) {
             return self.lower_net_builtin(&callee_text, d, e);
         }
@@ -11015,7 +11019,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            "net_write" | "net_close" | "net_deadline" | "net_write_bytes" => {
+            "net_write" | "net_close" | "net_deadline" | "net_write_bytes" | "net_writev"
+            | "net_nodelay" => {
                 let rc = match name {
                     "net_write" => {
                         let fd = arg(0)?;
@@ -11036,6 +11041,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             None,
                             Some(types::I64),
                         )
+                    }
+                    // s141 (#254): the `List[List[byte]]` header is one
+                    // word the shim READS through to every part (the
+                    // `net_write_bytes` shape, one level deeper).
+                    "net_writev" => {
+                        let fd = arg(0)?;
+                        let hdr = arg(1)?;
+                        self.rt_call_foreign(
+                            "__wolf_rt_net_writev",
+                            &[fd, hdr],
+                            None,
+                            Some(types::I64),
+                        )
+                    }
+                    // s141 (#254): the flag widened to the wire word the
+                    // shim reads as nonzero-is-on.
+                    "net_nodelay" => {
+                        let fd = arg(0)?;
+                        let on = self.widen_to_wire(arg(1)?, e.span)?;
+                        self.rt_call("__wolf_rt_net_nodelay", &[fd, on], Some(types::I64))
                     }
                     "net_close" => {
                         let fd = arg(0)?;

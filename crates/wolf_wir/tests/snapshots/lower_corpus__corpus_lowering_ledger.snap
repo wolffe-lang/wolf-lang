@@ -299,6 +299,7 @@ net/echo_bytes.lu: lowers
 net/echo_roundtrip.lu: lowers
 net/inherit_listener.lu: lowers
 net/line_reader_bytes.lu: lowers
+net/nodelay.lu: lowers
 net/peer_close_after_serve.lu: lowers
 net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
@@ -307,6 +308,7 @@ net/spawn_accept.lu: lowers
 net/syscall_first.lu: lowers
 net/unix_echo.lu: lowers
 net/wait_readiness.lu: lowers
+net/writev_gather.lu: lowers
 os/args_cwd.lu: lowers
 os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers

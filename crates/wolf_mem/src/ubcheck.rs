@@ -571,6 +571,54 @@ impl NetSock {
         }
     }
 
+    /// s141 (#254, `[os.net.writev]`): every part in order as one
+    /// gathered write — std's `write_vectored` (`writev(2)` on
+    /// unix, `WSASend` on windows) driven to completion, the mirror
+    /// of the runtime's `NetTable::writev`. Empty parts never reach
+    /// the kernel; the checked machine's streams are blocking, so a
+    /// short write is followed by the next syscall, never a park.
+    fn write_all_vectored(&mut self, parts: &[Vec<u8>]) -> std::io::Result<()> {
+        use std::io::Write as _;
+        let mut slices: Vec<std::io::IoSlice<'_>> = parts
+            .iter()
+            .filter(|p| !p.is_empty())
+            .map(|p| std::io::IoSlice::new(p))
+            .collect();
+        let mut bufs: &mut [std::io::IoSlice<'_>] = &mut slices;
+        while !bufs.is_empty() {
+            let n = match self {
+                NetSock::Stream(s) => s.write_vectored(bufs),
+                #[cfg(unix)]
+                NetSock::UnixStream(s) => s.write_vectored(bufs),
+                _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+            }?;
+            if n == 0 {
+                return Err(std::io::Error::from(std::io::ErrorKind::WriteZero));
+            }
+            std::io::IoSlice::advance_slices(&mut bufs, n);
+        }
+        Ok(())
+    }
+
+    /// s141 (#254, `[os.net.nodelay]`): the TCP stream's Nagle
+    /// switch; any other socket is `io` (the option is TCP's).
+    fn set_nodelay(&mut self, on: bool) -> std::io::Result<()> {
+        match self {
+            NetSock::Stream(s) => s.set_nodelay(on),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
+
+    /// s141 (#254): the posture a TCP stream enters the table with,
+    /// the runtime's `push_stream` mirrored — Nagle OFF. A unix
+    /// stream has no such option and passes through.
+    fn under_posture(self) -> std::io::Result<NetSock> {
+        if let NetSock::Stream(s) = &self {
+            s.set_nodelay(true)?;
+        }
+        Ok(self)
+    }
+
     fn set_timeouts(&mut self, budget: Option<std::time::Duration>) -> std::io::Result<()> {
         match self {
             NetSock::Stream(s) => s
@@ -956,7 +1004,8 @@ fn accept_deadline(
     };
     let _ = l.set_nonblocking(false);
     // The accepted stream must come back BLOCKING whatever the
-    // listener's mode was during the poll.
+    // listener's mode was during the poll (the checked machine's
+    // budgets are the socket's own timeouts, not a reactor's).
     if let Ok((s, _)) = &out {
         let _ = s.set_nonblocking(false);
     }
@@ -4969,7 +5018,7 @@ impl<'t> Machine<'t> {
                     Some(l) if !l.is_stream() => l.accept_with(budget),
                     _ => return Ok(tag("io")),
                 };
-                match accepted {
+                match accepted.and_then(NetSock::under_posture) {
                     Err(e) => Ok(tag(&coarse(e.kind(), &["timeout", "io"]))),
                     Ok(s) => {
                         let fd = self.socks.len() as i64;
@@ -4982,11 +5031,13 @@ impl<'t> Machine<'t> {
                 let Some(addr) = str_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
-                match std::net::TcpStream::connect(&addr) {
+                match std::net::TcpStream::connect(&addr)
+                    .and_then(|s| NetSock::Stream(s).under_posture())
+                {
                     Err(e) => Ok(tag(&coarse(e.kind(), &["refused", "timeout", "io"]))),
                     Ok(s) => {
                         let fd = self.socks.len() as i64;
-                        self.socks.push(Some(NetSock::Stream(s)));
+                        self.socks.push(Some(s));
                         Ok(Flow::Val(Value::Int(fd)))
                     }
                 }
@@ -5066,6 +5117,48 @@ impl<'t> Machine<'t> {
                 };
                 match s.write_all(&bytes) {
                     Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // s141 (#254, `[os.net.writev]`): the gather — every
+            // element of the `List[List[byte]]` read as a byte list,
+            // in order, then one vectored write. The rows are
+            // `net_write`'s; a nested list of the wrong shape cannot
+            // arrive from typed code, and refuses the call shape.
+            "net_writev" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(Value::List(outer)) = argv.get(1) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let heads: Vec<Value> = self.lists[*outer].clone();
+                let mut parts = Vec::with_capacity(heads.len());
+                for h in &heads {
+                    match self.bytes_of(Some(h)) {
+                        Some(Ok(b)) => parts.push(b),
+                        _ => return self.refuse("this net call shape", span),
+                    }
+                }
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                    return Ok(tag("io"));
+                };
+                match s.write_all_vectored(&parts) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // s141 (#254, `[os.net.nodelay]`): Nagle off or on for a
+            // TCP stream; anything else is `io`, never a trap.
+            "net_nodelay" => {
+                let (Some(fd), Some(Value::Bool(on))) = (int_arg(0), argv.get(1)) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                    return Ok(tag("io"));
+                };
+                match s.set_nodelay(*on) {
+                    Err(_) => Ok(tag("io")),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
@@ -6455,7 +6548,7 @@ impl<'t> Machine<'t> {
             "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_listen_with"
             | "net_adopt_listener" | "net_wait" | "net_port" | "net_accept" | "net_connect"
             | "net_read" | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
-            | "net_deadline" => {
+            | "net_deadline" | "net_writev" | "net_nodelay" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {

@@ -1,0 +1,75 @@
+//! check: run(exit=0, stdout="nodelay | toggles true | listener_is_io true | forged_is_io true | two_writes_arrive true")
+//! phase: run
+//! conforms: os.net.nodelay, err.union, err.propagate
+//!
+//! s141 (#254, `[os.net.nodelay]`) — Nagle's algorithm is OFF on every
+//! TCP stream the runtime hands out, and `net_nodelay` sets it either
+//! way. What a witness can prove about a socket option is its rows and
+//! that the toggle is accepted; the 40 ms stall the default exists to
+//! prevent is a timing on one host's TCP stack and is measured by lobo
+//! (wolf-lang#254), not asserted here. Four relations, true on every
+//! tier-1 host and every tier:
+//!
+//!   toggles            Nagle back on, then off again, on an accepted
+//!                      stream and on a dialed one: four calls, no
+//!                      row.
+//!   listener_is_io     a listener has no Nagle: `io`, by name.
+//!   forged_is_io       a handle nobody minted is `io`.
+//!   two_writes_arrive  the shape the default is for — a head, then a
+//!                      body, two writes — arrives whole and in order.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+
+    var toggles = true
+    net_nodelay(conn, false) else |_| {
+        toggles = false
+    }
+    net_nodelay(conn, true) else |_| {
+        toggles = false
+    }
+    net_nodelay(cli, false) else |_| {
+        toggles = false
+    }
+    net_nodelay(cli, true) else |_| {
+        toggles = false
+    }
+
+    var listener_is_io = false
+    net_nodelay(srv, true) else |e| match e {
+        io => {
+            listener_is_io = true
+        },
+    }
+    var forged_is_io = false
+    net_nodelay(99999, true) else |e| match e {
+        io => {
+            forged_is_io = true
+        },
+    }
+
+    net_write(conn, "head\r\n")?
+    var body = List[byte]()
+    for b in "body!".bytes() {
+        (mut body).push(b)
+    }
+    net_write_bytes(conn, body)?
+    net_deadline(cli, 5000)?
+    var got = ""
+    while got.len < 11 {
+        let piece = net_read(cli, 64)?
+        got = "{got}{piece}"
+    }
+    let two_writes_arrive = got == "head\r\nbody!"
+
+    print(
+        "nodelay | toggles {toggles} | listener_is_io {listener_is_io} | forged_is_io {forged_is_io} | two_writes_arrive {two_writes_arrive}",
+    )
+    net_close(conn)?
+    net_close(cli)?
+    net_close(srv)?
+    0
+}
