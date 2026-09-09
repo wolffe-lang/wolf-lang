@@ -20,13 +20,16 @@
 //! native-only rendering of it lives in the driver's parity test.
 
 struct Doc { title: str, words: int }
+
 struct Pair { a: int, b: Doc }
+
 enum Shape { Dot, Line(int), Rect(int, int) }
 
 fn half(n: int) -> int ! {odd} {
     if n % 2 == 1 { return odd }
     n / 2
 }
+
 fn digit(s: str) -> int ! {BadDigit(str, int), too_short} {
     if s.len < 1 { return too_short }
     if s < "0" || s > "9" { return BadDigit(s, s.len) }

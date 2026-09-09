@@ -3,7 +3,7 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 FnDecl 893..918 name=fine body=Block
-FnDecl 919..950 name=broken body=Block
-FnDecl 951..1041 name=parked body=Block
-FnDecl 1042..1099 name=faulty body=Block
-FnDecl 1100..1890 name=main body=Block
+FnDecl 920..951 name=broken body=Block
+FnDecl 953..1043 name=parked body=Block
+FnDecl 1045..1102 name=faulty body=Block
+FnDecl 1104..1894 name=main body=Block

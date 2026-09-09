@@ -15,16 +15,20 @@
 //! witness, byte-identical with lupin 0.1.28.
 
 fn fine() -> int { 1540 }
+
 fn broken() -> !int { Corrupt }
+
 fn parked() -> int {
     let idle = channel[int](0)
     let v = idle.recv() else 0
     v
 }
+
 fn faulty() -> int {
     var xs = List[int]()
     xs[3]
 }
+
 fn main() -> !int {
     let a = spawn proc fine()
     let ma = a.monitor()
