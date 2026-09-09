@@ -1474,12 +1474,23 @@ const ALL_THREE_FLOOR: usize = 0;
 // 261). No pre-existing file moved lanes: the posture change moves a
 // cost, not a verdict — every row the corpus reads off a socket is the
 // row it read before. Counts measured by this gate, not predicted.
+// s142 ratchet over 483 entries: the first chapter compiles (#263,
+// `str.to_int`) and the stat on a handle (#261, `[os.fs.fstat]`).
+// THREE new run-phase witnesses — `strings/to_int` (the parse battery,
+// byte-identical to lupin 0.1.27), `rows/to_int_not_an_int` (the row
+// out of `main`) and `fs/fstat` (the handle stat's relations) — and
+// every one executes on all three lanes, so every count moves by
+// exactly three (281/301/301, union 318, all-three 264). No
+// pre-existing file moved lanes: `errors.lu` and
+// `grammar/else_default.lu` already used `to_int` at resolve and stay
+// where their other constructs hold them. Counts measured by this
+// gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 278), ("native", 298), ("release", 298)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 281), ("native", 301), ("release", 301)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 315;
+const UNION_FLOOR: usize = 318;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 261;
+const ALL_THREE_FLOOR: usize = 264;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
