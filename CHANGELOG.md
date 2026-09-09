@@ -1,5 +1,98 @@
 # Changelog
 
+## 0.2.7 — 2026-09-08
+
+THE PAIRING IS CHECKED WHERE IT ROTS. `wolf --version` prints the lupin
+release this compiler is differentially tested against, and that line has
+one job: to be true. It stopped being true when the interpreter published
+0.1.27 and `crates/wolf_driver/PAIRING` still said 0.1.26. The gate that
+exists to catch exactly that did catch it, on every machine in the house
+at once and on none of the six CI jobs, because the comparison needs a
+lupin binary and no runner had one. Two lanes tripped over it
+independently, in work that had nothing to do with the pairing. This
+release re-measures the pairing against the interpreter as released, and
+gives the linux CI job the pinned lupin release archive so the same
+comparison runs on the runner. Nothing about building or using wolf
+changes. What changes is that the sentence `wolf --version` prints about
+the reference interpreter is now checked somewhere that is watching.
+
+### The one gate CI could not run (r10 — #253 closes)
+
+The pairing test compares this build against the lupin release `PAIRING`
+names, and per D57 it compares both halves of that claim: the version
+always, and the declared conformance pin whenever the sibling is a release
+build. It fires only where a sibling lupin binary exists. Runners had
+none, so the single gate that compares the two implementations was the
+single gate CI never ran, and rot in it arrived as a laptop surprise in
+whatever sprint happened to be next.
+
+A sibling checkout on the runner would be a campaign: a second repository,
+its own toolchain pin, a build, and a cache to keep that build from being
+paid every run. The pinned release archive is none of those things. It is
+public, it is already built, it is two megabytes, and per D57 it is a
+release build that prints its bare version, so both halves compare on the
+runner exactly as they do beside a sibling checkout at the tag. The whole
+of it is one step and two environment variables in a job that already
+exists, and it cost one second of runner time on the run that proved it.
+
+The step reads the version out of `PAIRING` rather than repeating it, so
+it tracks the stamp and cannot go stale on its own; a stamp naming a
+release that does not exist reds by name. The digest is never typed: it is
+read off the release asset GitHub reports and checked against the bytes
+that arrived. The fetch runs before the gauntlet with `LUPIN` set for the
+job, so `cargo xtask ci`'s own test step is what compares, and the runner
+runs the same gauntlet a laptop does rather than a second copy of one
+test. `WOLF_PAIRING_REQUIRE_SIBLING` closes the way this could have been
+worthless: an absent sibling is honest on a bare box and dishonest on a
+runner that just downloaded one, so the test now decides which it is
+looking at, and a failed download reds as a failed download instead of
+arriving as a green skip.
+
+### The pairing
+
+The pairing moves to lupin 0.1.27 (pin `6ade878`), stamped against the
+release as published rather than against its successor on the
+interpreter's trunk: a release's pin is part of what that release is
+(D57), and the release that exists declares `6ade878`, wolf-lang's own
+v0.2.5 tag. The interpreter's trunk has since re-vendored to v0.2.6's
+`398e5f5`, which is advance notice for the next stamp and not rot in this
+one, exactly as the dev-sibling skip says out loud.
+
+Re-measured bare, no `LUPIN=` override, against a clean checkout of the
+`v0.1.27` tag built by itself, so D57's second half applied and version
+and pin were both compared and both matched. The ritual over 508 files:
+checked 269 agreements / 124 completeness notes / 2 soundness / 108
+unsupported / 8 hard, native 290 / 124 / 0 / 90 / 5. Against v0.2.6's
+measurement over the same 508 files (266 / 124 / 2 / 111 / 8 and 287 /
+124 / 0 / 93 / 5) every row is flat but one, and that one is the same
+move twice: agreements +3 and unsupported −3 on both lanes, with run-rung
+coverage carrying the same fact (the interpreter executed 360 entries at
+the previous stamp and executes 363 now). It is the sibling growing, not
+this compiler. The three constructs the interpreter landed in its mirror
+at 0.1.27 turn `unsupported` at resolve into `exit(0)` at run on its side,
+so `corpus/net/reuse_port.lu`, `corpus/net/wait_readiness.lu` and
+`corpus/os/cpus.lu` leave the conservatism ledger and enter agreements.
+
+Hard divergence is flat at 8 and 5 and decomposes with nothing left over,
+over the same two terms as v0.2.6: six (five) `Diag` rows are #167's
+warning-channel asymmetry, the interpreter emitting no warnings at all,
+and the two soundness findings are #168's float-cast twins, where wolfc's
+own checked lane exits 0 and the native lanes trap. Every surviving row is
+a filed issue older than this release. No class opened at this pin and
+none was deferred. The interpreter's `[os.net.accept]` evaluation, landed
+after the tag, moves no row here: `corpus/net/accept_race.lu` needs an
+inherited listener the interpreter is never handed, so it stays
+unsupported on both lanes as it was at v0.2.6.
+
+One note for anyone whose gauntlet reds at this stamp with a pin
+complaint. The suffix a lupin build prints is written by its build script,
+and a build script's output is cached: a tree built once at the tag and
+then moved off it can keep printing the bare version while compiling a
+newer pin, which reads to this gate as a release build declaring the wrong
+pin. That is the sibling's stamp being stale, not `PAIRING`. Rebuilding
+the sibling with its build script forced to re-run (`touch build.rs`)
+restores the `+dev` suffix and the row goes quiet.
+
 ## 0.2.6 — 2026-09-06
 
 THE ACCEPT IS FAIR. A hand that loses an accept race now costs you a
