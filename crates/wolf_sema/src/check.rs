@@ -5870,6 +5870,22 @@ impl<'a> Checker<'a> {
                 vec![p("self", recv_ty), p("from", str_), p("to", str_)],
                 str_,
             ),
+            // s142 (wolf-lang#263): `to_int() -> int ! {NotAnInt}` —
+            // the parse the book's chapter 1 reaches for first
+            // (`row.to_int() else 0`). The row is the one lupin
+            // answers, spelled as lupin spells it; the surrounding
+            // `[mem.str.ws]` whitespace is ignored, a sign is
+            // accepted, and anything else that is not an optionally
+            // signed run of ASCII digits in `int`'s range is the row,
+            // never a trap. Parsing is a method and not a cast (E0805).
+            "to_int" => {
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("NotAnInt".to_string(), Vec::new())], None);
+                let ret = self.lo.table.intern(TyKind::ErrUnion(int_, row));
+                (vec![p("self", recv_ty)], ret)
+            }
             _ => {
                 // Name the method (wolf-lang#263): the reader had to
                 // count bytes to learn which call a bare span refused.

@@ -983,6 +983,11 @@ const STR_MEMBERS: &[(&str, &str, &str)] = &[
         "fn replace(from: str, to: str) -> str",
         "Every occurrence of `from` replaced with `to`.",
     ),
+    (
+        "to_int",
+        "fn to_int() -> int ! {NotAnInt}",
+        "The string parsed as a decimal `int` (surrounding whitespace ignored), or `{NotAnInt}`.",
+    ),
 ];
 
 fn str_members() -> Vec<Completion> {

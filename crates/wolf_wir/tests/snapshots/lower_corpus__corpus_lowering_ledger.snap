@@ -369,6 +369,7 @@ rows/qmark_defer.lu: lowers
 rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers
+rows/to_int_not_an_int.lu: lowers
 strings/boundary_battery.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
@@ -401,6 +402,7 @@ strings/slice_boundary_sweep.lu: lowers
 strings/slice_oob_trap.lu: lowers
 strings/split_clause.lu: lowers
 strings/str_uni_leading_zeros.lu: lowers
+strings/to_int.lu: lowers
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 test/conc_schedules_test.lu: lowers

@@ -1,0 +1,73 @@
+//! check: run(exit=0, stdout="plain 42\nspaces 7\nascii_ws 12\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nzero 0\nmax 9223372036854775807\nmin -9223372036854775808\nempty NotAnInt\nblank NotAnInt\nword NotAnInt\ninner_space NotAnInt\nunderscore NotAnInt\nfraction NotAnInt\nhex NotAnInt\narabic NotAnInt\nlone_sign NotAnInt\ntrailing NotAnInt\nsum 8\nvia_fn 7 0")
+//! phase: run
+//! conforms: err.union, err.else, mem.str.ws
+//!
+//! s142 (wolf-lang#263) — `str.to_int() -> int ! {NotAnInt}`, the
+//! first non-trivial string call the book's chapter 1 makes, row for
+//! row with the reference interpreter. What decides the clause is
+//! not `"42"`: it is the whitespace, the sign, the leading zeros and
+//! every shape that is NOT an int.
+//!
+//!   the value     an optionally signed (`+`/`-`) run of ASCII digits
+//!                 that fits `int`; leading zeros are digits.
+//!   whitespace    the surrounding `[mem.str.ws]` run is ignored —
+//!                 ASCII and the non-ASCII separators alike — so
+//!                 `s.to_int()` and `s.trim().to_int()` are one value.
+//!   the row       everything else is `NotAnInt`, never a trap: the
+//!                 empty and the blank text, a word, an interior
+//!                 space, `_` separators, a fraction, a radix prefix,
+//!                 a non-ASCII digit, a lone sign, trailing letters.
+//!
+//! The last two lines are chapter 1's own idiom (`row.to_int() else
+//! 0` over a multiline literal's `lines()`) and the `?`-inside-a-fn
+//! shape `grammar/else_default.lu` pinned at resolve before the
+//! method existed on either compiler tier.
+
+fn show(label: str, s: str) {
+    let v = s.to_int() else |err| match err {
+        NotAnInt => {
+            print("{label} NotAnInt")
+            0 - 1
+        },
+    }
+    if v != 0 - 1 { print("{label} {v}") }
+}
+
+fn parse(s: str) -> !int { s.to_int() }
+
+fn main() -> !int {
+    show("plain", "42")
+    show("spaces", "  7  ")
+    show("ascii_ws", "\t\n 12 \r\n")
+    show("uni_ws", "\u{a0}12\u{2003}")
+    show("neg", "-13")
+    show("plus", "+5")
+    show("zeros", "007")
+    show("zero", "0")
+    show("max", "9223372036854775807")
+    show("min", "-9223372036854775808")
+    show("empty", "")
+    show("blank", "   ")
+    show("word", "four")
+    show("inner_space", "4 2")
+    show("underscore", "1_000")
+    show("fraction", "3.5")
+    show("hex", "0x10")
+    show("arabic", "\u{663}")
+    show("lone_sign", "-")
+    show("trailing", "12a")
+    let amounts = """
+        3
+        four
+        5
+        """
+    var total = 0
+    for row in amounts.lines() {
+        total += row.to_int() else 0
+    }
+    print("sum {total}")
+    let a = parse("7") else 0
+    let b = parse("x") else 0
+    print("via_fn {a} {b}")
+    0
+}

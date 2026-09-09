@@ -122,6 +122,16 @@ fn e0805_str_to_int() {
     );
 }
 
+/// s142 (#263): `to_int`'s signature, in the mismatch that shows it —
+/// `int ! {NotAnInt}` is what a `str` binding is offered.
+#[test]
+fn e0401_to_int_row_in_the_mismatch() {
+    snap_one(
+        "e0401_to_int_row",
+        "fn main() -> !int {\n    let n: str = \"5\".to_int()\n    0\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0807 -----
 
 /// The method exists, but its trait was never imported in this file.

@@ -634,6 +634,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // s137 (#127): readiness over a set, `[os.net.wait]`.
     // s141 (#254): the gathered write and the stream option —
     // `[os.net.writev]`, `[os.net.nodelay]`.
+    // s142 (#263, #261): the parse behind `to_int` (str_to_int — pair
+    // in, code out, the word through the slot).
     for sym in [
         "__wolf_rt_net_listen_with",
         "__wolf_rt_net_adopt_listener",
@@ -643,6 +645,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_cpus",
         "__wolf_rt_net_writev",
         "__wolf_rt_net_nodelay",
+        "__wolf_rt_str_to_int",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -653,12 +656,69 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        131,
+        132,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
 
 // ------------------------------------------ s142: to_int (#263) --
+
+/// `str.to_int() -> int ! {NotAnInt}` on both lanes, byte-identical —
+/// the corpus battery (`strings/to_int.lu`) plus the one input the
+/// corpus cannot carry: a magnitude outside `i64` is the row on both
+/// wolf tiers (there is no `int` the text names; X3 forbids a quiet
+/// wrap), where the reference interpreter at this pin parses a wider
+/// integer (filed against wolf-interp).
+#[test]
+fn to_int_agrees_across_lanes_including_overflow() {
+    parity(
+        "s142_to_int",
+        r#"
+fn show(label: str, s: str) {
+    let v = s.to_int() else |err| match err {
+        NotAnInt => {
+            print("{label} NotAnInt")
+            0 - 1
+        },
+    }
+    if v != 0 - 1 { print("{label} {v}") }
+}
+
+fn main() -> !int {
+    show("plain", "42")
+    show("spaces", "  7  ")
+    show("uni_ws", "\u{a0}12\u{2003}")
+    show("neg", "-13")
+    show("plus", "+5")
+    show("zeros", "007")
+    show("max", "9223372036854775807")
+    show("min", "-9223372036854775808")
+    show("over", "9223372036854775808")
+    show("under", "-9223372036854775809")
+    show("huge", "99999999999999999999")
+    show("word", "four")
+    show("empty", "")
+    let total = ("3".to_int() else 0) + ("four".to_int() else 0) + ("5".to_int() else 0)
+    print("sum {total}")
+    0
+}
+"#,
+        "exit(0)",
+        "plain 42\nspaces 7\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nmax 9223372036854775807\nmin -9223372036854775808\nover NotAnInt\nunder NotAnInt\nhuge NotAnInt\nword NotAnInt\nempty NotAnInt\nsum 8\n",
+    );
+}
+
+/// The row propagates out of `main` the documented way on both
+/// lanes (`error: NotAnInt`, exit 1 — `rows/to_int_not_an_int.lu`).
+#[test]
+fn to_int_row_escapes_main_on_both_lanes() {
+    parity(
+        "s142_to_int_row",
+        "fn main() -> !int {\n    let n = \"four\".to_int()?\n    print(\"{n}\")\n    0\n}\n",
+        "exit(1)",
+        "error: NotAnInt\n",
+    );
+}
 
 /// wolf-lang#263's first half: a `str` method outside the builtin set
 /// is refused BY NAME — the record's `x-unsupported-construct` and the

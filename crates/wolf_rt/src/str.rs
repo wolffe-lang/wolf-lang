@@ -578,6 +578,18 @@ pub unsafe extern "C" fn __wolf_rt_str_count(sp: i64, sl: i64, np: i64, nl: i64)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_trim(sp: i64, sl: i64, mode: i64, out: i64) {
     let s = unsafe { view(sp, sl) };
+    let (lo, hi) = trim_bounds(s, mode);
+    let t = &s[lo..hi];
+    let off = t.as_ptr() as i64 - s.as_ptr() as i64;
+    let ptr = if sl == 0 { sp } else { sp + off };
+    unsafe { write_pair(out, ptr, t.len() as i64) };
+}
+
+/// The `[mem.str.ws]` trim as byte bounds: `s[lo..hi]` is `s` with
+/// its leading (`mode` 0 or 1) and trailing (`mode` 0 or 2) separator
+/// runs removed. Shared by `trim`'s three modes and by `to_int`, so
+/// the parse ignores exactly the whitespace `trim` removes.
+fn trim_bounds(s: &str, mode: i64) -> (usize, usize) {
     let b = s.as_bytes();
     let mut lo = 0usize;
     if mode != 2 {
@@ -603,10 +615,37 @@ pub unsafe extern "C" fn __wolf_rt_str_trim(sp: i64, sl: i64, mode: i64, out: i6
             hi = st;
         }
     }
-    let t = &s[lo..hi];
-    let off = t.as_ptr() as i64 - s.as_ptr() as i64;
-    let ptr = if sl == 0 { sp } else { sp + off };
-    unsafe { write_pair(out, ptr, t.len() as i64) };
+    (lo, hi)
+}
+
+/// `to_int() -> int ! {NotAnInt}` (s142, wolf-lang#263) — the
+/// parsed `i64` through `out`, 0 on success; 1 is the `NotAnInt` row.
+///
+/// The text is trimmed with `[mem.str.ws]`'s set (the trim above, so
+/// `"  7  ".to_int()` and `"  7  ".trim().to_int()` are one value),
+/// then read as an optionally signed (`+`/`-`) run of ASCII digits —
+/// `i64::from_str`'s grammar, which is also the reference
+/// interpreter's (wolf-interp#69 is the one input the two part on —
+/// its `i128` parse): leading zeros are digits, `_`, a radix prefix, a
+/// fraction, an interior space, a lone sign, an empty text and a
+/// non-ASCII digit are all the row. A value outside `int`'s range is
+/// the row as well: there is no `int` the text names, and X3's
+/// checked arithmetic never answers with a quiet wrap.
+///
+/// # Safety
+///
+/// A valid str pair; `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_str_to_int(sp: i64, sl: i64, out: i64) -> i64 {
+    let s = unsafe { view(sp, sl) };
+    let (lo, hi) = trim_bounds(s, 0);
+    match s[lo..hi].parse::<i64>() {
+        Ok(v) => {
+            unsafe { write_word(out, v) };
+            0
+        }
+        Err(_) => 1,
+    }
 }
 
 /// `lower` (0) / `upper` (1) — Unicode case mapping, materialized in
@@ -1413,6 +1452,58 @@ mod tests {
 
     /// `trim` moved off `str::trim` onto [`ws_at`] so one frozen set
     /// serves the whole family; the answers must not have moved with it.
+    /// s142 (wolf-lang#263): the parse behind `to_int`, row for row
+    /// with the reference interpreter's `str::parse` grammar over a
+    /// `[mem.str.ws]` trim — and the one place the two part: a
+    /// magnitude outside `i64` is the row here, not a wider integer.
+    #[test]
+    fn to_int_parses_trimmed_decimal_i64_or_rows() {
+        let ok: &[(&str, i64)] = &[
+            ("42", 42),
+            ("  7  ", 7),
+            ("\t\n 12 \r\n", 12),
+            ("\u{a0}12\u{2003}", 12),
+            ("-13", -13),
+            ("+5", 5),
+            ("007", 7),
+            ("0", 0),
+            ("9223372036854775807", i64::MAX),
+            ("-9223372036854775808", i64::MIN),
+        ];
+        let row: &[&str] = &[
+            "",
+            "   ",
+            "-",
+            "+",
+            "+-3",
+            "- 3",
+            "4 2",
+            "1_000",
+            "0x10",
+            "3.5",
+            "four",
+            "12a",
+            "\u{663}",
+            "9223372036854775808",
+            "-9223372036854775809",
+            "99999999999999999999",
+        ];
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        for (text, want) in ok {
+            let (sp, sl) = pair_of(text);
+            out[0] = -1;
+            assert_eq!(unsafe { __wolf_rt_str_to_int(sp, sl, o) }, 0, "{text:?}");
+            assert_eq!(out[0], *want, "{text:?}");
+        }
+        for text in row {
+            let (sp, sl) = pair_of(text);
+            assert_eq!(unsafe { __wolf_rt_str_to_int(sp, sl, o) }, 1, "{text:?}");
+        }
+        // The empty pair — a `sp` nothing should read through.
+        assert_eq!(unsafe { __wolf_rt_str_to_int(0, 0, o) }, 1);
+    }
+
     #[test]
     fn trim_uses_the_frozen_set() {
         let mut out = [0i64; 2];

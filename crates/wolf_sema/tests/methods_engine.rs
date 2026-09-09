@@ -248,6 +248,33 @@ fn unreachable_arm_warns_but_body_checks() {
 
 // ------------------------------------------ s142: to_int (#263) --
 
+/// `str.to_int()` is in the builtin set: a program built on it checks
+/// fully — the `int ! {NotAnInt}` row propagates through `?` and
+/// defaults through `else` with the existing machinery.
+#[test]
+fn to_int_is_in_the_builtin_set() {
+    let tc = check_one(
+        "fn parse(s: str) -> !int { s.to_int() }\n\
+         \n\
+         fn main() -> !int {\n\
+         let a = \"7\".to_int()?\n\
+         let b = \"x\".to_int() else 0\n\
+         let c = parse(\"3\") else 0\n\
+         a + b + c\n\
+         }\n",
+    );
+    assert_clean(&tc);
+    let names: Vec<_> = body(&tc, "main")
+        .dispatch
+        .iter()
+        .filter_map(|(_, d)| match d {
+            Dispatch::Inherent { ty, method } if ty == "str" => Some(method.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names, ["to_int", "to_int"]);
+}
+
 /// wolf-lang#263's first half: the refusal for a `str` method outside
 /// the set NAMES the method. The siblings the interpreter does not
 /// serve either (`to_float`, `to_bool`) are exactly the shape a

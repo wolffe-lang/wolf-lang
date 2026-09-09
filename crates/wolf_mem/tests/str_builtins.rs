@@ -723,3 +723,59 @@ fn raise_resolves_declared_row_before_value_namespace() {
         0,
     );
 }
+
+// ------------------------------------------ s142: to_int (#263) --
+
+/// `str.to_int() -> int ! {NotAnInt}` under checked execution: the
+/// value for a trimmed, optionally signed run of ASCII digits in
+/// `int`'s range; the row — never a trap — for everything else,
+/// including a magnitude outside `i64` (there is no `int` the text
+/// names, and X3 forbids a quiet wrap).
+#[test]
+fn to_int_parses_a_trimmed_decimal_or_rows() {
+    let out = run("fn show(label: str, s: str) {\n\
+         let v = s.to_int() else |err| match err {\n\
+         NotAnInt => {\n\
+         print(\"{label} NotAnInt\")\n\
+         0 - 1\n\
+         },\n\
+         }\n\
+         if v != 0 - 1 { print(\"{label} {v}\") }\n\
+         }\n\
+         \n\
+         fn main() -> !int {\n\
+         show(\"plain\", \"42\")\n\
+         show(\"spaces\", \"  7  \")\n\
+         show(\"uni_ws\", \"\\u{a0}12\\u{2003}\")\n\
+         show(\"neg\", \"-13\")\n\
+         show(\"plus\", \"+5\")\n\
+         show(\"zeros\", \"007\")\n\
+         show(\"max\", \"9223372036854775807\")\n\
+         show(\"min\", \"-9223372036854775808\")\n\
+         show(\"over\", \"9223372036854775808\")\n\
+         show(\"huge\", \"99999999999999999999\")\n\
+         show(\"word\", \"four\")\n\
+         show(\"empty\", \"\")\n\
+         show(\"inner_space\", \"4 2\")\n\
+         show(\"underscore\", \"1_000\")\n\
+         show(\"fraction\", \"3.5\")\n\
+         var total = 0\n\
+         for row in \"3\\nfour\\n5\".lines() {\n\
+         total += row.to_int() else 0\n\
+         }\n\
+         print(\"sum {total}\")\n\
+         0\n\
+         }\n");
+    assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
+    assert_eq!(
+        out.stdout,
+        "plain 42\nspaces 7\nuni_ws 12\nneg -13\nplus 5\nzeros 7\n\
+         max 9223372036854775807\nmin -9223372036854775808\n\
+         over NotAnInt\nhuge NotAnInt\nword NotAnInt\nempty NotAnInt\n\
+         inner_space NotAnInt\nunderscore NotAnInt\nfraction NotAnInt\nsum 8\n"
+    );
+    // The row propagates out of `main` the documented way.
+    let out = run("fn main() -> !int {\n    let n = \"four\".to_int()?\n    n\n}\n");
+    assert!(matches!(out.verdict, Verdict::Exit(1)), "{:?}", out.verdict);
+    assert_eq!(out.stdout, "error: NotAnInt\n");
+}

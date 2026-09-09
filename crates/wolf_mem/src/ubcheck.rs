@@ -7329,6 +7329,21 @@ impl<'t> Machine<'t> {
                     "trim_end" => Ok(Flow::Val(Value::Str(s.trim_end().to_string()))),
                     "lower" => Ok(Flow::Val(Value::Str(s.to_lowercase()))),
                     "upper" => Ok(Flow::Val(Value::Str(s.to_uppercase()))),
+                    // s142 (wolf-lang#263): `to_int() -> int !
+                    // {NotAnInt}`. Surrounding `[mem.str.ws]` is
+                    // ignored (`trim`'s set, which is `char::
+                    // is_whitespace`'s twenty-five); then an optionally
+                    // signed run of ASCII digits that fits `i64`, or
+                    // the row. Out of range is the row too — there is
+                    // no `int` the text names, and X3 forbids a quiet
+                    // wrap. Never a trap.
+                    "to_int" => match s.trim().parse::<i64>() {
+                        Ok(v) => Ok(Flow::Val(Value::Int(v))),
+                        Err(_) => Ok(raise(Value::ErrTag {
+                            tag: "NotAnInt".to_string(),
+                            payload: Vec::new(),
+                        })),
+                    },
                     "strip_prefix" | "strip_suffix" => {
                         let Some(n) = needle(0) else {
                             return self.refuse("strip without a str needle", e.span);

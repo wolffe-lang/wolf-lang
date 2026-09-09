@@ -10143,6 +10143,43 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // s142 (wolf-lang#263): `to_int() -> int ! {NotAnInt}`. The
+            // runtime trims `[mem.str.ws]` and parses an optionally
+            // signed decimal `i64` into the out slot; a nonzero code is
+            // the row — the fs family's shape, one tag.
+            "to_int" => {
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_str_to_int",
+                        &[sp, sl],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| {
+                        let id = z.b.module.tag_id("NotAnInt");
+                        Ok(z.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             "repeat" => {
                 let n = arg_val(self, 0)?;
                 // A negative count is a caller contract violation:

@@ -1,0 +1,15 @@
+//! check: run(exit=1, stdout="error: NotAnInt")
+//! phase: run
+//! conforms: err.union, err.propagate, abi.err.repr
+//!
+//! s142 (wolf-lang#263): `to_int`'s row propagates like any other —
+//! `?` on the text that is not an int carries `NotAnInt` out of
+//! `main`, and the process ends the documented way (`error: <tag>`
+//! on stdout, exit 1; `rows/eu_main_err_exit.lu`). The row is the
+//! one the reference interpreter answers, spelled as it spells it.
+
+fn main() -> !int {
+    let n = "four".to_int()?
+    print("{n}")
+    0
+}
