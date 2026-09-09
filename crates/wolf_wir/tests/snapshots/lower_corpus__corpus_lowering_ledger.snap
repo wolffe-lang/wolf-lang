@@ -442,6 +442,7 @@ typecheck/byte_shapes.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
 typecheck/cast_int_to_float.lu: lowers
 typecheck/cast_set.lu: lowers
+typecheck/closure_return.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/field_typo.lu: not mem-clean (pre-wir rungs own it)
 typecheck/float_nan_cmp.lu: lowers

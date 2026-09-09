@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="2 100\ngot 3\nafter\ntask got 4\njoined\n7 0")
+//! phase: run
+//! conforms: type.closure.return
+//! `[type.closure.return]` (wolf-lang#268): `return` inside a closure
+//! returns from the CLOSURE — its operand types against the closure's
+//! own result, and the enclosing function is out of reach. The three
+//! closure shapes: a closure whose context fixes its result (`pick`,
+//! `return 100` meets the `int` the call needs), a closure whose
+//! result is synthesized (`show`, the bare `return` in an `else`
+//! handler is the book's shape — chapter 16's receivers), a spawned
+//! task body, and a nested `fn` with a declared return type. Both
+//! tiers and lupin 0.1.29 print the same six lines.
+
+fn g(n: int) -> int ! {none} {
+    if n > 0 { n } else { none }
+}
+
+fn main() -> !int {
+    let pick = fn(n: int) {
+        if n > 2 { return 100 }
+        n * 2
+    }
+    print("{pick(1)} {pick(5)}")
+    let show = fn(n: int) {
+        let v = g(n) else |_| { return }
+        print("got {v}")
+    }
+    show(3)
+    show(0)
+    print("after")
+    let ch = channel[int](1)
+    scope s {
+        s.spawn(fn() {
+            let v = ch.recv() else |_| { return }
+            print("task got {v}")
+        })
+        ch.send(4)
+    }
+    print("joined")
+    fn clamp(n: int) -> int {
+        if n < 0 { return 0 }
+        n
+    }
+    print("{clamp(7)} {clamp(-3)}")
+    0
+}
