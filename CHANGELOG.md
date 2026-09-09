@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+### The first chapter compiles (s142 — #263 closes)
+
+`str.to_int() -> int ! {NotAnInt}` joins the builtin set on both
+tiers. The book's chapter 1 reaches for it twice (`row.to_int() else
+0` in the cold open and in exercise 1-10), the reference interpreter
+has served it all along, and the compiler had refused it since the
+set was drawn at s37 — so the first non-trivial string call a
+learner meets was the first program that did not build. The row is
+the one lupin 0.1.27 answers, spelled as it spells it. What the parse
+accepts: the surrounding `[mem.str.ws]` run is ignored (ASCII and the
+non-ASCII separators alike, so `s.to_int()` and `s.trim().to_int()`
+are one value), then an optionally signed (`+`/`-`) run of ASCII
+digits that fits `int`, leading zeros included. Everything else is
+`NotAnInt`, never a trap — the empty and the blank text, a word, an
+interior space, `_`, a fraction, a radix prefix, a non-ASCII digit, a
+lone sign, trailing letters. A magnitude outside `int` is the row on
+both wolf tiers: there is no `int` the text names, and checked
+arithmetic never answers with a quiet wrap. The reference interpreter
+at this pin parses that one input to a wider integer and prints it as
+an `int`; filed as wolffe-lang/wolf-interp#69, and the corpus witness
+(`strings/to_int.lu`, row for row with lupin) leaves that input to the
+crate tests. `to_float`/`to_bool` are NOT added: neither the spec nor
+lupin defines them, and the family is mirrored, not invented. The
+spec is silent on the row — filed as #265; the clause will say what
+this entry says.
+
+And the refusal names the method. `wolf build: cannot compile this yet
+— this `str` method (outside the builtin set) @155..167` made the
+maintainer count bytes to learn that the span was `row.to_int()`; it
+now reads ``this `str` method, `to_int`, is outside the builtin set``,
+on the stderr line and in the observation record's
+`x-unsupported-construct`, for every method outside the set.
+
+### One stat on the handle (s142 — #261 closes)
+
+`fs_fstat(fd: int) -> List[int] ! {not_found, denied, io}` —
+`[kind, size, modified_ms]` from ONE metadata read on the open handle
+(`[os.fs.fstat]`). lobo ws23 found a static-file request paying four
+path stats (`fs_is_dir`, `fs_is_file`, `fs_size`, `fs_modified_ms`,
+~0.5 µs each on macOS arm64) where nginx pays one `open` and one
+`fstat`; the router's reorder took one away and the last two could not
+move because nothing answered off the handle the request was about to
+read. `kind` is 0 for a regular file, 1 for a directory, 2 for
+anything else; `size` and `modified_ms` are `fs_size`'s and
+`fs_modified_ms`'s words in their units. The rows are the path stat's;
+a closed or forged handle is `io`. Every tier-1 host, every tier — the
+checked machine reads the same handle metadata the runtime does. The
+one host difference is `fs_open`'s and is stated in the clause rather
+than papered: unix opens a directory read-only (`kind` 1 is
+reachable); windows refuses the open first (`denied`), so there a
+server still classifies directories by path. Witness
+`corpus/fs/fstat.lu`; the directory case is the crate tests'
+(`#[cfg(unix)]`). The `O_NONBLOCK` open mode #261 mentions as a
+nice-to-have is not in this entry.
+
 ### The syscall goes first (s141 — #257 closes)
 
 A ready socket is answered by the syscall alone. Every parking call
