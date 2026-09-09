@@ -3,17 +3,17 @@ source: crates/wolf_sema/tests/interface_pretty.rs
 expression: out
 ---
 module pkg :: geometry
-  wolfi v0 · toolchain 0.2.7 · edition v1
-  export_hash 371de8cc21f3b6a65bf24682f70cce1ed5efc00db6a15351e3e1029c0369b4be
-  pkg_hash    371de8cc21f3b6a65bf24682f70cce1ed5efc00db6a15351e3e1029c0369b4be
+  wolfi v0 · toolchain 0.2.8 · edition v1
+  export_hash 75c649f27e0be81e8d962a59444de068bcd2a0caa656241b80f4461c75768cda
+  pkg_hash    75c649f27e0be81e8d962a59444de068bcd2a0caa656241b80f4461c75768cda
   deps: (none)
   items:
     [0] pub area — fn area(side: int) -> int
 
 module pkg :: (root)
-  wolfi v0 · toolchain 0.2.7 · edition v1
-  export_hash 2c20840ee5ba0f83a27bc3e1dc1b34a1b3126460899d8284b965bd1cf7ce4e88
-  pkg_hash    2c20840ee5ba0f83a27bc3e1dc1b34a1b3126460899d8284b965bd1cf7ce4e88
+  wolfi v0 · toolchain 0.2.8 · edition v1
+  export_hash 0ffb27822af76d51009141e8c5be164a19aa837247e5b0e1e1232bd60c8a1640
+  pkg_hash    0ffb27822af76d51009141e8c5be164a19aa837247e5b0e1e1232bd60c8a1640
   deps:
-    geometry  371de8cc21f3b6a65bf24682f70cce1ed5efc00db6a15351e3e1029c0369b4be
+    geometry  75c649f27e0be81e8d962a59444de068bcd2a0caa656241b80f4461c75768cda
   items: (none)
