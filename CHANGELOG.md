@@ -1,6 +1,87 @@
 # Changelog
 
-## Unreleased
+## 0.2.9 — 2026-09-09
+
+THREE THINGS A READER RAN INTO THIS WEEK, AND NONE OF THEM WAS
+SOMETHING WOLF MEANT TO TEACH. A rule about where a line may begin, a
+mark spelled against the language's own pact, and a `char` that could
+not join a `str`. 0.2.9 is those three and the rulings behind them.
+
+The first was layout. An aligned chain —
+
+    if n > 0 {
+        ...
+    }
+    else if n < 0 {
+        ...
+    }
+    else {
+        ...
+    }
+
+— was an error, E0005, because the newline after `}` inserted a
+statement terminator and left the `else` orphaned. The rule was Go's,
+and it was the one place in the language where layout was load-bearing.
+It is retired: **a line whose first token is `else` continues the
+previous statement.** The chain above compiles, and so does a
+defaulting `else` on the line below the call it defaults. E0005 leaves
+the catalog and its number is never reused.
+
+**The formatter did not move.** `wolf fmt` still lays a chain as
+`} else {` on one line, so the canonical shape is exactly what it was;
+the aligned source above formats to it and stays there. What changed is
+that the parser no longer refuses the reader who writes it the other
+way before running the formatter.
+
+The second was a name. `"12x".to_int()` answers an error row, and until
+this release that row was `NotAnInt` — the one CapCase payload-free
+mark on the whole builtin surface, in a language whose own lint says
+otherwise. W0603 has always warned that a payload-free mark is a
+lowercase word and that CapCase names a payload's type; the OS families
+spell their conditions `not_found`, `utf8`, `closed`; the json builtins
+already answered `parse` for exactly this condition. The row is
+**`parse`** now. This is the one source-breaking change in 0.2.9 and it
+announces itself: a program that still matches `NotAnInt` is refused by
+name, with a note reading `the cases are: parse`. `str.to_int` is also
+ruled for the first time — `[mem.str.parse]` says which text parses,
+which is the row, and that nothing here ever traps — and `to_float` and
+`to_bool` are ruled out of existence rather than left ambiguous.
+
+The third was `t += cs[i]`, building a string one character at a time,
+which both machines refused with E0409. **A `char` is text, not a
+number.** A Unicode scalar appended to a `str` is closed under UTF-8
+and has exactly one rendering, so `s + c` and `c + s` are
+interpolation-append in either order and `s += c` follows. `str + int`
+still refuses, and the clause now says why rather than leaving it to be
+inferred: `+` is not a formatter, and an `int` has more than one
+rendering — sign, radix, width — so the interpolation hole stays the
+place to choose one.
+
+Around those three, the release is mostly the language saying out loud
+what it had been doing. `{x}` renders every value both machines can
+show — a tuple, a struct, a `List`, an enum variant, a caught row, a
+`!T`, an exit reason — and refuses by name what has no promised
+rendering. `return` inside a closure returns from the closure, typed
+against the closure's own result, which is how both lowering tiers and
+the interpreter had always run it. `channel[T]` in a signature position
+is a channel, so a worker taking its inbox as a parameter can iterate
+it. `[conc.chan.close]` spells its tags `closed` and `cancelled`, and
+`[mem.list.pop]` says the recoverable `List` reads answer `none` and
+never fault. And the corpus IR-volume gate is per file now, so the
+ratchet can tell a composition change from a regression instead of
+firing on every witness that enters.
+
+The pairing is stamped at **lupin 0.1.29** (pin `e9a17cb`). The `parse`
+row is mirrored there, so `rows/to_int_parse.lu` and
+`grammar/else_default.lu` are byte-identical across the two machines
+for the first time. Five witnesses still part, and every one is a
+ruling from this release whose mirror is filed and not yet tagged:
+`grammar/else_chain.lu` and `grammar/else_default_newline.lu` (E0005
+under lupin), `memory/list_pop_empty.lu` (`trap(bounds)` for `none`),
+`conc/chan_closed_row.lu` (`Closed` for `closed`) and
+`strings/concat_mix_char.lu` (lupin refuses `+` on `str` and `char`).
+The first three close at lupin 0.1.30; the last waits on
+wolf-interp#78.
 
 ### A `char` joins a `str` (s145 — #278 closes)
 
@@ -109,10 +190,11 @@ there (`crates/wolf_fmt/tests/style.rs` pins the maintainer's layout
 verbatim and what it becomes). Witnesses: `grammar/else_chain.lu`
 carries the aligned layout verbatim and the `}` newline `else {`
 shape; `grammar/else_default_newline.lu` pins `let v = f()` newline
-`else 0`. Both are refused under lupin 0.1.28 (E0005 at the leading
+`else 0`. Both are refused under lupin 0.1.29 (E0005 at the leading
 `else`) and stay so until the interpreter mirrors (wolf-interp, same
-wave): they are the two corpus files the pair parts on at this tree,
-named here so the pairing re-stamp can count them.
+wave): they are two of the five corpus files the pair parts on at the
+release's pairing, and the re-stamp counts them as `Verdict`
+divergences on both tiers.
 
 One delta from the plan, found before the gauntlet: `[gram.fmt.canon]`
 requires every corpus file to be formatter-canonical, and a witness
@@ -159,10 +241,14 @@ solution — which also declares a CapCase mark W0603 flags), and here
 the three implementations, their tests, the `str` completion's
 signature and two witnesses. The compiler moves first: this release
 raises `parse`; the mirror (wolf-interp) and the book move in the
-same wave, and until the mirror lands `rows/to_int_parse.lu` is the
-one corpus witness the two machines part on — `strings/to_int.lu`,
-the battery, was rewritten not to spell the mark and stays
-byte-identical under lupin 0.1.28. No interface moved.
+same wave. The mirror landed inside this wave: **lupin 0.1.29 spells
+`parse`**, so `rows/to_int_parse.lu` — the witness the two machines
+would have parted on — is byte-identical across them at the release's
+pairing (`error: parse`, stdout sha `3e419546`, both tiers), and so is
+`grammar/else_default.lu`, whose `{err}` prints the same mark.
+`strings/to_int.lu`, the battery, was rewritten not to spell the mark
+and is byte-identical under both 0.1.28 and 0.1.29. No interface
+moved.
 
 ### Three spellings a chapter was waiting on (s144 — #273, #274 ruled; #275 measured)
 
@@ -174,8 +260,11 @@ W0603's pact (a payload-free mark is a lowercase word). The
 interpreter mints `Closed`/`Cancelled` and the book's chapter 12
 prints it; both follow in the same wave (#273). Witness:
 `conc/chan_closed_row.lu` (native; the checked lane declines channel
-methods), `nothing left: closed` here and `Closed` under lupin 0.1.28
-until the mirror lands.
+methods), `nothing left: closed` here and `Closed` under lupin 0.1.29
+until the mirror lands. The two verdicts are both `exit(0)`, so this
+one parts only in the printed bytes — which the differential ledger
+compares solely between `seeded` records and therefore never counts.
+It is measured by hand at every re-stamp and named there.
 
 `[mem.list.pop]` is the clause `grep pop spec/` could not find: the
 recoverable `List` reads — `pop`, `get`, `first`, `last` — answer the
@@ -184,7 +273,9 @@ recoverable `List` reads — `pop`, `get`, `first`, `last` — answer the
 compiler had answered the row since s37 on both tiers; the interpreter
 trapped and the book's chapter 5 taught `pop` bounds-checked — both
 move in the same wave (#274). Witness: `memory/list_pop_empty.lu`,
-both tiers, `trap(bounds)` under lupin 0.1.28 until the mirror lands.
+both tiers, `trap(bounds)` under lupin 0.1.29 until the mirror lands —
+the release's one new soundness-direction finding, and the only one of
+the five standing partings that reads as one.
 
 **#275 is measured, not fixed.** `chan.send` is typed `()` where the
 clause says a send after close returns an error value. Making it
@@ -230,7 +321,10 @@ over), so `{reason}` reads `normal(1540)` where the native tier said
 `normal(0)` for every ok body. Witnesses: `strings/interp_values.lu`
 (both tiers), `conc/reason_interp.lu` (native; the checked lane
 refuses procs), `grammar/else_default.lu` (runs now), each
-byte-identical under lupin 0.1.28. Predicted before the gauntlet:
+byte-identical under lupin 0.1.29. `else_default.lu` is the one of the
+three that needed the interpreter to move as well: its `{err}` prints
+the caught row's mark, so it parted under 0.1.28's `NotAnInt` and is
+byte-equal under 0.1.29's `parse`. Predicted before the gauntlet:
 sema's hole check, the checked renderer, the lowerer's print and
 value-position paths, no runtime surface beyond the value stash;
 measured: that, plus the tag table and the stash.
@@ -253,7 +347,7 @@ field — stayed opaque where the expression `channel[T](n)` typed
 `Chan`, so `for d in inbox` refused with the protocol's name. One arm
 in signature elaboration types it; `conc/chan_param_for.lu` is the
 witness (a plain call, a proc body, a struct field), byte-identical
-under lupin 0.1.28. Predicted: one arm and no lowering change;
+under lupin 0.1.29. Predicted: one arm and no lowering change;
 measured: exactly that. Five of the seven close (exercises 14-6,
 14-7, 14-9; ch17's two `worker` blocks — the first prints its bug on
 this machine's schedule, as the chapter says it may); ch14's shelver
@@ -284,6 +378,18 @@ is `corpus_geomean_reference`, and its history in `bench/gates.json`
 ends with the entry that says so. The kernel suite keeps its geomean
 ceiling: the manifest fixes that population, so a move there is a
 lowering change.
+
+### The README's mark renders for everyone (found in the wave)
+
+The logo at the top of the README was a hotlink into the private
+planning repo, so every reader who was not the maintainer got a broken
+image — on GitHub, on crates.io, and in the AUR page's rendered
+README. The mark is vendored here now (`assets/wolf-logo.svg`) and the
+tag is an absolute `raw.githubusercontent.com` URL onto this repo's
+own `trunk`. Absolute on purpose: the README travels in the release
+archive and is re-rendered by hosts that resolve no relative path, so
+a relative `src` would break in exactly the places the hotlink already
+had.
 
 ## 0.2.8 — 2026-09-09
 
