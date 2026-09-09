@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `int`, but the closure returns `str`
+ --> mem:///main.lu:2:24
+  |
+2 |     let f = fn(n: int) {
+  |             ------------
+  |                        ^
+3 |         if n > 2 { return "big" }
+4 |         n * 2
+5 |     }
+  | ----- the closure starts here
+  | ^^^^^ found `int` here
+  |
+  = note: expected `str`, found `int`
+  = note: build strings with interpolation: "{value}" formats any primitive.

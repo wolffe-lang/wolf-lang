@@ -549,3 +549,31 @@ fn e0415_fitting_stays_clean() {
         ""
     );
 }
+
+// -------------------------------------------------- closure return -----
+
+/// `[type.closure.return]` (#268): `return` inside a closure returns
+/// from the closure and types against ITS result — the context's, the
+/// synthesized tail's, or the nested fn's declared one — never the
+/// enclosing function's. The three shapes type clean; a `return` that
+/// disagrees with the body's tail is E0401 against the closure.
+#[test]
+fn closure_return_types_against_the_closure() {
+    let out = render_types(&[(
+        &[],
+        "main.lu",
+        "fn g(n: int) -> int ! {none} {\n    if n > 0 { n } else { none }\n}\nfn main() -> !int {\n    let pick = fn(n: int) {\n        if n > 2 { return 100 }\n        n * 2\n    }\n    let show = fn(n: int) {\n        let v = g(n) else |_| { return }\n        print(\"got {v}\")\n    }\n    fn clamp(n: int) -> int {\n        if n < 0 { return 0 }\n        n\n    }\n    show(1)\n    print(\"{pick(1)} {clamp(2)}\")\n    0\n}\n",
+    )]);
+    assert!(
+        out.is_empty(),
+        "return inside a closure types against the closure:\n{out}"
+    );
+}
+
+#[test]
+fn closure_return_disagreeing_with_the_tail() {
+    snap_one(
+        "e0401_closure_return_vs_tail",
+        "fn main() -> !int {\n    let f = fn(n: int) {\n        if n > 2 { return \"big\" }\n        n * 2\n    }\n    print(\"{f(1)}\")\n    0\n}\n",
+    );
+}

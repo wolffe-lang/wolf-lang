@@ -305,6 +305,10 @@ pub enum Reason {
     /// Loop bodies produce `()`.
     LoopBody,
     ClosureBody,
+    /// `return` inside a closure returns from the closure (#268,
+    /// `[type.closure.return]`): its operand types against the
+    /// closure's own result, never the enclosing function's.
+    ClosureReturn,
     GlobalInit(String),
     /// An error tag's declared payload type (s15).
     TagPayload {
@@ -353,6 +357,7 @@ impl Reason {
             Reason::BareIf => "an `if` without `else` produces".to_string(),
             Reason::LoopBody => "a loop body produces".to_string(),
             Reason::ClosureBody => "the closure's context needs".to_string(),
+            Reason::ClosureReturn => "the closure returns".to_string(),
             Reason::GlobalInit(n) => format!("`{n}` is declared as"),
             Reason::TagPayload { tag, index } => {
                 format!(
@@ -387,6 +392,7 @@ impl Reason {
             Reason::BareIf => "there is no `else` branch on this `if`",
             Reason::LoopBody => "the loop starts here",
             Reason::ClosureBody => "the closure starts here",
+            Reason::ClosureReturn => "the closure starts here",
             Reason::GlobalInit(_) => "the annotation is here",
             Reason::TagPayload { .. } => "the row is declared here",
             Reason::ElseFallback => "the fallible expression is here",
@@ -533,6 +539,13 @@ struct Checker<'a> {
     /// a closure absorbs its operand's tags into the innermost frame,
     /// and the closure's return type wraps into `!T` with the union.
     closure_rows: Vec<Vec<(String, Vec<TyId>)>>,
+    /// The innermost closure's result type and span (#268,
+    /// `[type.closure.return]`): what a `return` inside a closure
+    /// types against — the context's result on a checked closure, a
+    /// fresh var the body's tail also meets on a synthesized one, the
+    /// declared return type on a nested fn. Pushed and popped beside
+    /// `closure_rows`.
+    closure_rets: Vec<(TyId, Span)>,
     /// Active task-capture collection frames (s73 handoff): pushed
     /// around a spawn argument's checking; a local resolving BELOW
     /// the frame's depth limit records into the frame — the
@@ -695,6 +708,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         when_stack: Vec::new(),
         spawn_ctx: None,
         closure_rows: Vec::new(),
+        closure_rets: Vec::new(),
         capture_frames: Vec::new(),
         task_captures: Vec::new(),
         last_closure_row: Vec::new(),
@@ -849,6 +863,7 @@ pub(crate) fn collect_body_rows(
         when_stack: Vec::new(),
         spawn_ctx: None,
         closure_rows: Vec::new(),
+        closure_rets: Vec::new(),
         capture_frames: Vec::new(),
         task_captures: Vec::new(),
         last_closure_row: Vec::new(),
@@ -10136,13 +10151,34 @@ impl<'a> Checker<'a> {
     }
 
     fn synth_return(&mut self, e: &GreenNode) -> R<TyId> {
-        if self.in_closure {
-            return Err(NotYet {
-                construct: "`return` inside a closure (control typing)",
-                span: e.span,
-            });
-        }
         let d = ReturnExpr::cast(e).expect("kind");
+        if self.in_closure {
+            // #268 (`[type.closure.return]`): a `return` inside a
+            // closure returns from the CLOSURE — its operand types
+            // against the closure's own result (the frame every
+            // closure path pushes), and the enclosing function is
+            // out of reach. Both lowering tiers and lupin already
+            // run it that way; only the typing was withheld.
+            let Some(&(cty, cspan)) = self.closure_rets.last() else {
+                return Err(NotYet {
+                    construct: "`return` inside a closure (control typing)",
+                    span: e.span,
+                });
+            };
+            let exp = Expect {
+                ty: cty,
+                reason: Reason::ClosureReturn,
+                because: Some(cspan),
+            };
+            match d.value() {
+                Some(v) => self.check_expr(v, &exp)?,
+                None => {
+                    let unit = self.lo.table.unit();
+                    self.expect_unify(e.span, unit, &exp);
+                }
+            }
+            return Ok(self.lo.table.never());
+        }
         let Some((ret, name, because)) = self.ret.clone() else {
             return Ok(self.lo.table.never());
         };
@@ -10244,8 +10280,10 @@ impl<'a> Checker<'a> {
                 // The body checks against its OWN result var; the
                 // context's `ret` unifies afterwards, wrapped in the
                 // closure's raised row when its `?`s made it fallible
-                // (s73 closure rows).
+                // (s73 closure rows). A `return` in the body meets
+                // the same var (#268).
                 let body_t = self.fresh(NumKind::Any, e.span);
+                self.closure_rets.push((body_t, e.span));
                 let r = if let Some(body) = d.body() {
                     let exp2 = Expect {
                         ty: body_t,
@@ -10257,6 +10295,7 @@ impl<'a> Checker<'a> {
                     Ok(())
                 };
                 let raised = self.closure_rows.pop().expect("closure row frame");
+                self.closure_rets.pop();
                 self.in_closure = was;
                 self.level -= 1;
                 self.pop_scope();
@@ -10331,11 +10370,17 @@ impl<'a> Checker<'a> {
         let was = self.in_closure;
         self.in_closure = true;
         self.closure_rows.push(Vec::new());
+        // A synthesized body has no context result: a fresh var
+        // stands for it, so a `return` inside (#268) and the body's
+        // tail meet at one type.
+        let body_t = self.fresh(NumKind::Any, e.span);
+        self.closure_rets.push((body_t, e.span));
         let ret = match d.body() {
             Some(body) => self.synth_expr(body),
             None => Ok(self.lo.table.unit()),
         };
         let raised = self.closure_rows.pop().expect("closure row frame");
+        self.closure_rets.pop();
         self.in_closure = was;
         self.level -= 1;
         self.pop_scope();
@@ -10347,6 +10392,12 @@ impl<'a> Checker<'a> {
             .collect();
         self.task_captures.push((e.span, caps));
         let ret = ret?;
+        let tail_exp = Expect {
+            ty: body_t,
+            reason: Reason::ClosureReturn,
+            because: Some(e.span),
+        };
+        self.expect_unify(d.body().map(|b| b.span).unwrap_or(e.span), ret, &tail_exp);
         // A closure whose `?`s raised becomes fallible: its return
         // type wraps into `!T` with the collected row (s73).
         let ret = if raised.is_empty() {
@@ -10423,6 +10474,9 @@ impl<'a> Checker<'a> {
         let was = self.in_closure;
         self.in_closure = true;
         self.closure_rows.push(Vec::new());
+        // A `return` in the nested fn's body types against its
+        // declared return type (#268).
+        self.closure_rets.push((ret, s.span));
         let r = match d.body() {
             Some(body) => {
                 let exp = Expect {
@@ -10435,6 +10489,7 @@ impl<'a> Checker<'a> {
             None => Ok(()),
         };
         let raised = self.closure_rows.pop().expect("closure row frame");
+        self.closure_rets.pop();
         self.in_closure = was;
         self.level -= 1;
         self.pop_scope();
