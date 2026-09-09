@@ -25,9 +25,19 @@
 //! back to the reactor against the SAME budget instead of parking in
 //! the kernel's accept queue with the deadline already spent (the
 //! shape ws17 measured: a hand alive at 0.0% CPU that answers nothing
-//! until the next connection). Streams stay blocking: one owner per
-//! stream is the corpus discipline, and no clause recommends sharing
-//! one. The completion-arrival decision appended its
+//! until the next connection). Since s141 (#257, `[os.net.io]`) THE
+//! SYSCALL GOES FIRST on every socket: streams live non-blocking under
+//! the runtime too, and `read`, `write`, `writev` and `accept` try the
+//! syscall before asking the reactor anything. A park (the
+//! runtime-owned one: blocking compensation applies, kill teardown
+//! reaches it, deadlines compose) happens only when the kernel answers
+//! `WouldBlock`, and the retry after the wake goes against the budget
+//! computed when the call began, never a fresh one. lobo ws22 measured
+//! the pre-syscall park at ~30 of 63 µs per keepalive request — three
+//! round-trips through the `wolf-reactor` thread for sockets `net_wait`
+//! had already reported ready — and a read on a ready socket now
+//! touches no lock handshake, no condvar and no `kevent`. The
+//! completion-arrival decision appended its
 //! `io.arrive` kind to spec/07 `[sched.point.set]` per
 //! `[sched.stable]` (the reservation v0 recorded here, activated in
 //! reactor.rs). Off the ported hosts this module keeps the v0
@@ -48,7 +58,11 @@
 //! [`NetTable::set_deadline`] arms a per-socket budget applied to
 //! each subsequent parking call; a fired deadline resolves as the
 //! `timeout` row (v0 declared the tag with no way to reach it — the
-//! reactor's timer wheel makes it real). Reactor hosts only (linux,
+//! reactor's timer wheel makes it real). Since s141 a write's budget
+//! covers the WHOLE drain, not admission alone: a body larger than the
+//! send buffer parks on `WouldBlock` between chunks, every park against
+//! the budget computed when the call began (before s141 the drain rode
+//! a blocking syscall past any budget). Reactor hosts only (linux,
 //! macOS, windows), like the route itself: elsewhere the call is an
 //! honest `io` refusal, never a silently-inert deadline.
 //!
@@ -76,7 +90,7 @@ use std::net::{TcpListener, TcpStream};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::Mutex;
 
-use crate::fs::{byte_elems, write_bytes_list};
+use crate::fs::write_bytes_list;
 use crate::str::{ambient_copy, view, write_pair};
 
 /// The v0 row-tag mapping: `io::ErrorKind` → net row tag. One table,
@@ -140,38 +154,49 @@ impl Sock {
         }
     }
 
-    fn write_all(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+    /// One write: what the kernel took, which a non-blocking stream
+    /// may answer short (s141 — the drain loop is the caller's).
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         match self {
-            Sock::Stream(s) => s.write_all(bytes),
+            Sock::Stream(s) => s.write(bytes),
             #[cfg(unix)]
-            Sock::UnixStream(s) => s.write_all(bytes),
+            Sock::UnixStream(s) => s.write(bytes),
             _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
         }
     }
 
-    /// One accepted connection of the listener's own family. The
-    /// stream comes back BLOCKING whatever the listener's mode (s138):
-    /// BSD-derived kernels and winsock hand the new socket the
-    /// listener's flags, linux does not, and the runtime makes it one
-    /// posture — a `net_write` of a large body must never answer a
-    /// spurious `timeout` because the listener was non-blocking.
-    fn accept(&self) -> std::io::Result<Sock> {
-        let s = match self {
-            Sock::Listener(l) => l.accept().map(|(s, _)| Sock::Stream(s))?,
+    /// One gathered write (s141, #254): std's `write_vectored`, which
+    /// is `writev(2)` on unix and `WSASend` on windows — no copy, one
+    /// syscall for every part the kernel takes at once.
+    fn write_vectored(&mut self, bufs: &[std::io::IoSlice<'_>]) -> std::io::Result<usize> {
+        match self {
+            Sock::Stream(s) => s.write_vectored(bufs),
             #[cfg(unix)]
-            Sock::UnixListener(l, _) => l.accept().map(|(s, _)| Sock::UnixStream(s))?,
-            _ => return Err(std::io::Error::from(std::io::ErrorKind::Other)),
-        };
-        if REACTOR_HOST {
-            s.set_nonblocking(false)?;
+            Sock::UnixStream(s) => s.write_vectored(bufs),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
         }
-        Ok(s)
     }
 
-    /// The socket's blocking mode (s138, `[os.net.accept]`): a listener
-    /// is put non-blocking on the reactor hosts so the accept after a
-    /// readiness wake can never park; an accepted stream is put back
-    /// to blocking (see [`Sock::accept`]).
+    /// One accepted connection of the listener's own family, as the
+    /// kernel hands it over; the runtime's posture for it (non-blocking
+    /// on the reactor hosts, Nagle off) is [`NetTable::push_stream`]'s
+    /// — one place, whatever the listener's mode and whichever kernel
+    /// hands flags down (BSD-derived kernels and winsock do, linux
+    /// does not).
+    fn accept(&self) -> std::io::Result<Sock> {
+        match self {
+            Sock::Listener(l) => l.accept().map(|(s, _)| Sock::Stream(s)),
+            #[cfg(unix)]
+            Sock::UnixListener(l, _) => l.accept().map(|(s, _)| Sock::UnixStream(s)),
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
+
+    /// The socket's blocking mode: every socket the table holds lives
+    /// non-blocking on the reactor hosts — a listener since s138
+    /// (`[os.net.accept]`), a stream since s141 (`[os.net.io]`) — so
+    /// the syscall can go first and the runtime parks only on the
+    /// kernel's `WouldBlock`.
     fn set_nonblocking(&self, on: bool) -> std::io::Result<()> {
         match self {
             Sock::Listener(l) => l.set_nonblocking(on),
@@ -454,6 +479,117 @@ const REACTOR_HOST: bool = cfg!(any(
     target_os = "windows"
 ));
 
+/// The readiness a park asks for: the reactor's own kind on the
+/// reactor hosts; off them, a name the never-parking fallback ignores.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+use crate::reactor::Interest;
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+enum Interest {
+    Read,
+    Write,
+}
+
+/// What a park needs ([`NetTable::park_spec`]): the raw OS handle and
+/// the absolute deadline the call computed at entry. Off the reactor
+/// hosts, nothing — the syscall itself parks there.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+type ParkSpec = (crate::poll::RawIo, Option<std::time::Instant>);
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+type ParkSpec = ();
+
+/// THE SYSCALL GOES FIRST (s141, #257, `[os.net.io]`): run `attempt`;
+/// `Some` is the answer, `None` is the kernel saying not yet
+/// (`WouldBlock`, or an accept's aborted connection), after which the
+/// caller parks in the reactor for `interest` against `spec`'s budget
+/// and tries again. A socket that is ready — the one `net_wait` just
+/// reported, the freshly accepted stream whose send buffer is empty —
+/// is answered by the first attempt and never touches the reactor: no
+/// waiter cell, no lock handshake, no `kevent`, no condvar. That
+/// round-trip was ~30 of the 63 µs a wolf HTTP server spent per
+/// keepalive request (lobo ws22, `sample(1)`, macOS arm64).
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn try_then_park<T>(
+    spec: ParkSpec,
+    interest: Interest,
+    mut attempt: impl FnMut() -> Result<Option<T>, NetErr>,
+) -> Result<T, NetErr> {
+    let (raw, deadline) = spec;
+    loop {
+        if let Some(answer) = attempt()? {
+            return Ok(answer);
+        }
+        wait_raw(raw, interest, deadline)?;
+    }
+}
+
+/// Off the reactor hosts the sockets are blocking and the syscall
+/// itself parks (the v0 posture): `None` can only be an accept's
+/// aborted connection, retried as the manual says.
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+fn try_then_park<T>(
+    _spec: ParkSpec,
+    _interest: Interest,
+    mut attempt: impl FnMut() -> Result<Option<T>, NetErr>,
+) -> Result<T, NetErr> {
+    loop {
+        if let Some(answer) = attempt()? {
+            return Ok(answer);
+        }
+    }
+}
+
+/// The whole of `bytes`, from the top, through `ready` (a
+/// [`NetTable::write_ready`]-shaped step that records its progress),
+/// parking between steps — the table-level and shim-level writes share
+/// this one loop.
+fn drain(
+    spec: ParkSpec,
+    bytes: &[u8],
+    mut ready: impl FnMut(&[u8], &mut usize) -> Result<bool, NetErr>,
+) -> Result<(), NetErr> {
+    let mut at = 0;
+    try_then_park(spec, Interest::Write, || {
+        ready(bytes, &mut at).map(|done| done.then_some(()))
+    })
+}
+
+/// [`drain`] for a gather: the parts become one `IoSlice` run the step
+/// advances as the kernel takes bytes. Empty parts never reach the
+/// kernel; all-empty parts are a completed write with no syscall.
+fn drain_vectored(
+    spec: ParkSpec,
+    parts: &[&[u8]],
+    mut ready: impl FnMut(&mut &mut [std::io::IoSlice<'_>]) -> Result<bool, NetErr>,
+) -> Result<(), NetErr> {
+    let mut slices: Vec<std::io::IoSlice<'_>> = parts
+        .iter()
+        .copied()
+        .filter(|p| !p.is_empty())
+        .map(std::io::IoSlice::new)
+        .collect();
+    let mut bufs: &mut [std::io::IoSlice<'_>] = &mut slices;
+    if bufs.is_empty() {
+        return Ok(());
+    }
+    try_then_park(spec, Interest::Write, || {
+        ready(&mut bufs).map(|done| done.then_some(()))
+    })
+}
+
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+thread_local! {
+    /// How many times THIS thread parked in the reactor through
+    /// [`wait_raw`] — the tests' proof that a ready socket is answered
+    /// by the syscall alone (s141). Thread-local so parallel tests
+    /// parking on their own sockets cannot be mistaken for ours.
+    static PARKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// One readiness park in the reactor, resolved as the row the net
 /// tier answers: `timeout` when the budget fires first, `io` for a
 /// killed proc on a non-unwindable frame (the result is moot but must
@@ -463,9 +599,11 @@ const REACTOR_HOST: bool = cfg!(any(
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn wait_raw(
     raw: crate::poll::RawIo,
-    interest: crate::reactor::Interest,
+    interest: Interest,
     deadline: Option<std::time::Instant>,
 ) -> Result<(), NetErr> {
+    #[cfg(test)]
+    PARKS.with(|p| p.set(p.get() + 1));
     match crate::reactor::wait_fd_net(raw, interest, deadline) {
         crate::reactor::IoWait::Ready => Ok(()),
         crate::reactor::IoWait::TimedOut => Err("timeout"),
@@ -514,6 +652,31 @@ impl NetTable {
         Ok(self.push(s))
     }
 
+    /// A STREAM enters the table (s141): accepted or dialed, TCP or
+    /// unix-domain, every one takes the same posture here and nowhere
+    /// else. Non-blocking on the reactor hosts (#257, `[os.net.io]`),
+    /// so `read`/`write` try the syscall first and park only on
+    /// `WouldBlock`; and, for a TCP stream, `TCP_NODELAY` ON (#254,
+    /// `[os.net.nodelay]`) — Nagle off is the posture every HTTP
+    /// server in every language sets, and the one that keeps a
+    /// head-then-body response from stalling 40 ms behind linux's
+    /// delayed ACK; `net_nodelay(fd, false)` puts Nagle back for the
+    /// program that wants it. A stream the runtime cannot put under
+    /// its posture is `io`. Off the reactor hosts the stream stays
+    /// blocking (the syscall itself parks there), Nagle off all the
+    /// same.
+    fn push_stream(&mut self, s: Sock) -> Result<i64, NetErr> {
+        if REACTOR_HOST && s.set_nonblocking(true).is_err() {
+            return Err("io");
+        }
+        if let Sock::Stream(t) = &s
+            && t.set_nodelay(true).is_err()
+        {
+            return Err("io");
+        }
+        Ok(self.push(s))
+    }
+
     fn entry(&mut self, fd: i64) -> Option<&mut Entry> {
         usize::try_from(fd)
             .ok()
@@ -525,20 +688,18 @@ impl NetTable {
         self.entry(fd).map(|e| &mut e.sock)
     }
 
-    /// The park parameters of a readiness wait — the raw OS fd (a
-    /// stream when `want_stream`, else a listener; the wrong kind or a
-    /// tombstone is `io`) and the socket's armed deadline as an
-    /// absolute instant. Split out of [`NetTable::wait_ready`] so the
-    /// SHIM tier (one process table behind a `Mutex`) can snapshot
-    /// these under a short lock and park with the lock RELEASED — a
-    /// blocked accept holding the table would deadlock the connect
-    /// that resolves it.
+    /// What a park needs, snapshotted under the table lock BEFORE the
+    /// first syscall attempt (s141): the raw OS fd (a stream when
+    /// `want_stream`, else a listener; the wrong kind or a tombstone is
+    /// `io`) and the socket's armed deadline as an absolute instant —
+    /// so every park a call makes goes against the budget computed when
+    /// the call began, never a fresh one (`[os.net.accept]`'s rule, now
+    /// every call's). The SHIM tier (one process table behind a
+    /// `Mutex`) takes this under a short lock and parks with the lock
+    /// RELEASED — a blocked accept holding the table would deadlock the
+    /// connect that resolves it.
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn park_spec(
-        &mut self,
-        fd: i64,
-        want_stream: bool,
-    ) -> Result<(crate::poll::RawIo, Option<std::time::Instant>), NetErr> {
+    fn park_spec(&mut self, fd: i64, want_stream: bool) -> Result<ParkSpec, NetErr> {
         let Some(e) = self.entry(fd) else {
             return Err("io");
         };
@@ -548,21 +709,30 @@ impl NetTable {
         Ok((raw, e.deadline.map(|d| std::time::Instant::now() + d)))
     }
 
+    /// Off the reactor hosts there is nothing to park on: the spec is
+    /// the bare check that the handle is the right kind.
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    fn park_spec(&mut self, fd: i64, want_stream: bool) -> Result<ParkSpec, NetErr> {
+        match self.get(fd) {
+            Some(s) if s.is_stream() == want_stream => Ok(()),
+            _ => Err("io"),
+        }
+    }
+
     /// Park in the reactor until `fd` (a stream when `want_stream`,
     /// else a listener) is ready for `interest`, or its deadline
-    /// budget fires (`timeout`). The net flavor of the wait is
-    /// kill-only — see reactor.rs's cancellation section.
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn wait_ready(
-        &mut self,
-        fd: i64,
-        want_stream: bool,
-        interest: crate::reactor::Interest,
-    ) -> Result<(), NetErr> {
+    /// budget fires (`timeout`) — the s35 shape, without a syscall
+    /// first. Kept for the tests that construct a race between the
+    /// wake and the take; no runtime path parks before trying since
+    /// s141.
+    #[cfg(all(
+        test,
+        any(target_os = "linux", target_os = "macos", target_os = "windows")
+    ))]
+    fn wait_ready(&mut self, fd: i64, want_stream: bool, interest: Interest) -> Result<(), NetErr> {
         let (raw, deadline) = self.park_spec(fd, want_stream)?;
         wait_raw(raw, interest, deadline)
     }
-
     /// Arm (`millis > 0`) or clear (`millis <= 0`) this socket's
     /// deadline budget: every subsequent parking call (`accept`,
     /// `read`, `write`) resolves as the `timeout` row when readiness
@@ -791,7 +961,7 @@ impl NetTable {
         #[cfg(unix)]
         {
             match UnixStream::connect(path) {
-                Ok(s) => Ok(self.push(Sock::UnixStream(s))),
+                Ok(s) => self.push_stream(Sock::UnixStream(s)),
                 Err(e) => Err(err_tag(e.kind())),
             }
         }
@@ -820,8 +990,10 @@ impl NetTable {
     /// the reactor hosts; the deadline budget resolves `timeout`);
     /// returns the stream's fd.
     ///
-    /// s138 (#242, `[os.net.accept]`): the park and the take are a
-    /// LOOP against one budget. A readiness wake is not exclusivity —
+    /// s138 (#242, `[os.net.accept]`): the take and the park are a
+    /// LOOP against one budget, and since s141 (`[os.net.io]`) the
+    /// take comes FIRST — a connection already in the backlog is
+    /// answered with no park at all. A readiness wake is not exclusivity —
     /// N processes on one inherited listener all wake for one
     /// connection and one of them takes it — so the take is
     /// non-blocking ([`NetTable::push_listener`]) and a hand that
@@ -837,33 +1009,27 @@ impl NetTable {
     /// returns within it, without one it parks in the RUNTIME's wait
     /// rather than the kernel's.
     pub fn accept(&mut self, fd: i64) -> Result<i64, NetErr> {
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        let (raw, deadline) = self.park_spec(fd, false)?;
-        loop {
-            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-            wait_raw(raw, crate::reactor::Interest::Read, deadline)?;
-            if let Some(nfd) = self.accept_ready(fd)? {
-                return Ok(nfd);
-            }
-        }
+        let spec = self.park_spec(fd, false)?;
+        try_then_park(spec, Interest::Read, || self.accept_ready(fd))
     }
 
-    /// [`NetTable::accept`]'s syscall half — readiness already awaited
-    /// (or the platform's honest v0 posture: the syscall itself
-    /// blocks). The shim tier calls this under the table lock AFTER
-    /// parking with the lock released. `Ok(None)` is "nothing to
-    /// take" (s138): the wake was for a connection another hand took
-    /// (`WouldBlock` off a non-blocking listener), or for one the peer
-    /// aborted before it was taken (`ECONNABORTED`, which linux
-    /// reports at accept and whose manual says to retry). The caller
-    /// waits again against the same budget.
+    /// [`NetTable::accept`]'s syscall half — tried FIRST (s141), and
+    /// again after every readiness wake. `Ok(None)` is "nothing to
+    /// take": no connection is pending (`WouldBlock` off the
+    /// non-blocking listener — the ordinary answer of a call that
+    /// arrives before any dial, and the lost-race answer of s138), or
+    /// the one that was pending was aborted by its peer before the take
+    /// (`ECONNABORTED`, which linux reports at accept and whose manual
+    /// says to retry). The caller parks against its budget and tries
+    /// again. The shim tier calls this under the table lock, which the
+    /// park never holds.
     fn accept_ready(&mut self, fd: i64) -> Result<Option<i64>, NetErr> {
         let accepted = match self.get(fd) {
             Some(l) if !l.is_stream() => l.accept(),
             _ => return Err("io"),
         };
         match accepted {
-            Ok(s) => Ok(Some(self.push(s))),
+            Ok(s) => self.push_stream(s).map(Some),
             Err(e)
                 if matches!(
                     e.kind(),
@@ -877,10 +1043,11 @@ impl NetTable {
     }
 
     /// Dial `addr` (blocking connect — see the module doc: connect's
-    /// reactor route awaits the raw-socket floor).
+    /// reactor route awaits the raw-socket floor). The stream enters
+    /// the table under the runtime's posture ([`NetTable::push_stream`]).
     pub fn connect(&mut self, addr: &str) -> Result<i64, NetErr> {
         match TcpStream::connect(addr) {
-            Ok(s) => Ok(self.push(Sock::Stream(s))),
+            Ok(s) => self.push_stream(Sock::Stream(s)),
             Err(e) => Err(err_tag(e.kind())),
         }
     }
@@ -901,29 +1068,28 @@ impl NetTable {
             return Err("io");
         };
         match TcpStream::connect_timeout(&sa, std::time::Duration::from_millis(m)) {
-            Ok(s) => Ok(self.push(Sock::Stream(s))),
+            Ok(s) => self.push_stream(Sock::Stream(s)),
             Err(e) => Err(err_tag(e.kind())),
         }
     }
 
-    /// Park until some bytes arrive (at most `max`; reactor-routed on
-    /// linux — the deadline budget resolves `timeout`); the peer's
-    /// orderly close is the `closed` row, the socket `eof`.
+    /// Some bytes (at most `max`), the syscall first (s141): a socket
+    /// that has bytes answers them with no park; one that has none
+    /// parks until they arrive or the deadline budget fires
+    /// (`timeout`). The peer's orderly close is the `closed` row, the
+    /// socket `eof`.
     pub fn read(&mut self, fd: i64, max: i64) -> Result<Vec<u8>, NetErr> {
-        if !self.get(fd).is_some_and(|s| s.is_stream()) {
-            return Err("io");
-        }
+        let spec = self.park_spec(fd, true)?;
         if max <= 0 {
             return Ok(Vec::new());
         }
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        self.wait_ready(fd, true, crate::reactor::Interest::Read)?;
-        self.read_ready(fd, max)
+        try_then_park(spec, Interest::Read, || self.read_ready(fd, max))
     }
 
-    /// [`NetTable::read`]'s syscall half (see [`NetTable::accept_ready`]
-    /// for the split's reason). `max` is already known positive.
-    fn read_ready(&mut self, fd: i64, max: i64) -> Result<Vec<u8>, NetErr> {
+    /// [`NetTable::read`]'s syscall half. `max` is already known
+    /// positive. `Ok(None)` is `WouldBlock`: nothing there yet, the
+    /// caller parks.
+    fn read_ready(&mut self, fd: i64, max: i64) -> Result<Option<Vec<u8>>, NetErr> {
         let Some(s) = self.get(fd).filter(|s| s.is_stream()) else {
             return Err("io");
         };
@@ -932,31 +1098,91 @@ impl NetTable {
             Ok(0) => Err("closed"),
             Ok(n) => {
                 buf.truncate(n);
-                Ok(buf)
+                Ok(Some(buf))
             }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
             Err(e) => Err(err_tag(e.kind())),
         }
     }
 
-    /// Write the whole buffer (send space awaited through the
-    /// reactor on linux — the deadline budget resolves `timeout` at
-    /// admission; the whole-buffer drain then rides the syscall, the
-    /// short-write completion loop being io_uring-parity work).
+    /// Write the whole buffer, the syscall first (s141): what the send
+    /// buffer takes leaves at once, and a body larger than it parks on
+    /// `WouldBlock` between chunks — every park against the budget
+    /// computed when the call began, so `timeout` covers the whole
+    /// drain rather than admission alone.
     pub fn write(&mut self, fd: i64, bytes: &[u8]) -> Result<(), NetErr> {
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        self.wait_ready(fd, true, crate::reactor::Interest::Write)?;
-        self.write_ready(fd, bytes)
+        let spec = self.park_spec(fd, true)?;
+        drain(spec, bytes, |bytes, at| self.write_ready(fd, bytes, at))
     }
 
-    /// [`NetTable::write`]'s syscall half (see
-    /// [`NetTable::accept_ready`] for the split's reason).
-    fn write_ready(&mut self, fd: i64, bytes: &[u8]) -> Result<(), NetErr> {
+    /// [`NetTable::write`]'s syscall half: drain from `at`, recording
+    /// progress there. `Ok(false)` is `WouldBlock` with the buffer not
+    /// yet drained — the caller parks and calls again from `at`.
+    fn write_ready(&mut self, fd: i64, bytes: &[u8], at: &mut usize) -> Result<bool, NetErr> {
         let Some(s) = self.get(fd).filter(|s| s.is_stream()) else {
             return Err("io");
         };
-        s.write_all(bytes).map_err(|e| err_tag(e.kind()))
+        while *at < bytes.len() {
+            match s.write(&bytes[*at..]) {
+                // std's `write_all` verdict on a zero-length write of a
+                // non-empty buffer (`WriteZero`): `io`.
+                Ok(0) => return Err("io"),
+                Ok(n) => *at += n,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(err_tag(e.kind())),
+            }
+        }
+        Ok(true)
     }
 
+    /// `net_writev` (s141, #254, `[os.net.writev]`): every part, in
+    /// order, as one gathered write — `writev(2)` on unix, `WSASend` on
+    /// windows, both std's own `write_vectored` — with
+    /// [`NetTable::write`]'s posture and rows: the syscall first, a park
+    /// on `WouldBlock` against the budget computed at entry, the drain
+    /// continued from the byte the kernel stopped at. Empty parts are
+    /// skipped; parts that are all empty send nothing.
+    pub fn writev(&mut self, fd: i64, parts: &[&[u8]]) -> Result<(), NetErr> {
+        let spec = self.park_spec(fd, true)?;
+        drain_vectored(spec, parts, |bufs| self.writev_ready(fd, bufs))
+    }
+
+    /// [`NetTable::writev`]'s syscall half: `bufs` is advanced past
+    /// what the kernel took, so a retry after a park continues from the
+    /// right byte of the right part. `Ok(false)` is `WouldBlock` with
+    /// parts remaining.
+    fn writev_ready(
+        &mut self,
+        fd: i64,
+        bufs: &mut &mut [std::io::IoSlice<'_>],
+    ) -> Result<bool, NetErr> {
+        let Some(s) = self.get(fd).filter(|s| s.is_stream()) else {
+            return Err("io");
+        };
+        while !bufs.is_empty() {
+            match s.write_vectored(bufs) {
+                Ok(0) => return Err("io"),
+                Ok(n) => std::io::IoSlice::advance_slices(bufs, n),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(err_tag(e.kind())),
+            }
+        }
+        Ok(true)
+    }
+
+    /// `net_nodelay(fd, on)` (s141, #254, `[os.net.nodelay]`): Nagle's
+    /// algorithm off (`true`, the posture every stream enters the table
+    /// with) or on (`false`) for a TCP stream. A listener, a
+    /// unix-domain stream (the option is TCP's), a forged or closed
+    /// handle: `io`.
+    pub fn set_nodelay(&mut self, fd: i64, on: bool) -> Result<(), NetErr> {
+        match self.get(fd) {
+            Some(Sock::Stream(s)) => s.set_nodelay(on).map_err(|_| "io"),
+            _ => Err("io"),
+        }
+    }
     /// Close a socket; drop closes. Double close (or a forged fd) is
     /// the `io` row. A unix-domain LISTENER's path is unlinked here
     /// (s136, `[os.net.unix]`): the runtime bound it, the runtime
@@ -1018,18 +1244,20 @@ impl NetTable {
 //
 // LOCK DISCIPLINE (the one place this family may not be fs-verbatim):
 // the process table is one `Mutex<NetTable>`, and accept/read/write
-// PARK — under native tasks a blocked accept holds its thread until
-// the connect that resolves it runs on another. Holding the table
-// across the park would deadlock exactly that pair, so the parking
-// shims snapshot the park parameters under a short lock
-// ([`NetTable::park_spec`]), wait in the reactor with the lock
-// RELEASED, and relock for the syscall half (`*_ready`). The window
-// between readiness and syscall is the same one `std::net` callers
-// live with. For streams the corpus discipline (one logical owner
-// per socket) keeps it moot; for a LISTENER it is not moot — N
-// processes share one by design (`[os.proc.inherit]`) — so the accept
-// shim loops: a take that finds nothing goes back to the reactor
-// against the budget it computed at entry (s138, `[os.net.accept]`).
+// may PARK — under native tasks a blocked accept holds its thread
+// until the connect that resolves it runs on another. Holding the
+// table across a park would deadlock exactly that pair, so the
+// parking shims snapshot the park parameters under a short lock
+// ([`NetTable::park_spec`]), try the syscall half (`*_ready`) under
+// another short lock, and only when the kernel answers `WouldBlock`
+// park in the reactor with the lock RELEASED, then relock and try
+// again (s141, [`try_then_park`]). The window between readiness and
+// syscall is the same one `std::net` callers live with. For streams
+// the corpus discipline (one logical owner per socket) keeps it
+// moot; for a LISTENER it is not moot — N processes share one by
+// design (`[os.proc.inherit]`) — and a take that finds nothing goes
+// back to the reactor against the budget computed at entry (s138,
+// `[os.net.accept]`).
 // Off the reactor hosts the shims keep the v0 blocking-syscall
 // posture — the syscall itself blocks under the lock, the honest
 // mirror of the checked lane's own path (native codegen is
@@ -1081,19 +1309,6 @@ fn code_of_tag(tag: NetErr) -> i64 {
         "exists" => net_code::EXISTS,
         _ => net_code::IO,
     }
-}
-
-/// Await readiness with the table lock RELEASED (see the lock
-/// discipline note above). Off-linux this is a no-op: the syscall
-/// half blocks by itself, the v0 posture.
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-fn wait_unlocked(
-    fd: i64,
-    want_stream: bool,
-    interest: crate::reactor::Interest,
-) -> Result<(), NetErr> {
-    let (raw, deadline) = tbl().park_spec(fd, want_stream)?;
-    wait_raw(raw, interest, deadline)
 }
 
 /// `net_listen(addr) -> int ! {io}` — the fd (>= 0), or `-code` on
@@ -1288,24 +1503,17 @@ pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
 /// the budget is computed ONCE at entry, so a wake that finds nothing
 /// — another hand on the same listener took the connection — waits
 /// again for what remains of it, never for a fresh budget and never
-/// in the kernel.
+/// in the kernel. Since s141 the take comes first: a connection
+/// already queued is answered with no park.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    let (raw, deadline) = match tbl().park_spec(fd, false) {
+    let spec = match tbl().park_spec(fd, false) {
         Ok(spec) => spec,
         Err(t) => return -code_of_tag(t),
     };
-    loop {
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        if let Err(t) = wait_raw(raw, crate::reactor::Interest::Read, deadline) {
-            return -code_of_tag(t);
-        }
-        match tbl().accept_ready(fd) {
-            Ok(Some(nfd)) => return nfd,
-            Ok(None) => continue,
-            Err(t) => return -code_of_tag(t),
-        }
+    match try_then_park(spec, Interest::Read, || tbl().accept_ready(fd)) {
+        Ok(nfd) => nfd,
+        Err(t) => -code_of_tag(t),
     }
 }
 
@@ -1325,49 +1533,65 @@ pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
     }
 }
 
-/// `net_read(fd, max) -> str ! {closed, timeout, utf8, io}` — parks
-/// until bytes arrive (at most `max`, clamped to 1 MiB); the peer's
-/// orderly close is `CLOSED`, a non-UTF-8 arrival is `UTF8`.
+/// The read shims' shared head: the park spec is also the `io` check
+/// for a wrong-kind or forged fd, which wins whatever `max` says (the
+/// #40 ordering); `max <= 0` owes no syscall and no wait. `Err` is a
+/// code to return as is; `Ok(None)` is the empty answer.
+fn read_shim(fd: i64, max: i64) -> Result<Option<Vec<u8>>, i64> {
+    let spec = match tbl().park_spec(fd, true) {
+        Ok(spec) => spec,
+        Err(t) => return Err(code_of_tag(t)),
+    };
+    if max <= 0 {
+        return Ok(None);
+    }
+    try_then_park(spec, Interest::Read, || tbl().read_ready(fd, max))
+        .map(Some)
+        .map_err(code_of_tag)
+}
+
+/// The write shims' shared body: snapshot, then drain from the top
+/// ([`drain`]), each park with the table lock released.
+fn write_shim(fd: i64, bytes: &[u8]) -> i64 {
+    let spec = match tbl().park_spec(fd, true) {
+        Ok(spec) => spec,
+        Err(t) => return code_of_tag(t),
+    };
+    match drain(spec, bytes, |bytes, at| tbl().write_ready(fd, bytes, at)) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
+    }
+}
+
+/// `net_read(fd, max) -> str ! {closed, timeout, utf8, io}` — the
+/// syscall first (s141): bytes that are there come back with no park;
+/// otherwise parks until they arrive (at most `max`, clamped to 1 MiB)
+/// or the budget fires. The peer's orderly close is `CLOSED`, a
+/// non-UTF-8 arrival is `UTF8`.
 ///
 /// # Safety
 ///
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
-    {
-        // The no-park fast paths, under one short lock: wrong-kind or
-        // forged fd is `io` whatever `max` says (the #40 ordering),
-        // and `max <= 0` is the empty str with no wait owed.
-        let mut t = tbl();
-        if !t.get(fd).is_some_and(|s| s.is_stream()) {
-            return net_code::IO;
+    let bytes = match read_shim(fd, max) {
+        Err(code) => return code,
+        Ok(None) => Vec::new(),
+        Ok(Some(bytes)) => bytes,
+    };
+    match String::from_utf8(bytes) {
+        Ok(s) => {
+            let p = ambient_copy(s.as_bytes());
+            unsafe { write_pair(out, p as i64, s.len() as i64) };
+            net_code::OK
         }
-        if max <= 0 {
-            let p = ambient_copy(b"");
-            unsafe { write_pair(out, p as i64, 0) };
-            return net_code::OK;
-        }
-    }
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Read) {
-        return code_of_tag(t);
-    }
-    match tbl().read_ready(fd, max) {
-        Err(t) => code_of_tag(t),
-        Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(s) => {
-                let p = ambient_copy(s.as_bytes());
-                unsafe { write_pair(out, p as i64, s.len() as i64) };
-                net_code::OK
-            }
-            Err(_) => net_code::UTF8,
-        },
+        Err(_) => net_code::UTF8,
     }
 }
 
-/// `net_write(fd, s) -> () ! {closed, io}` — send space awaited at
-/// admission (a fired deadline surfaces as `TIMEOUT`, which the row
-/// coarsens to `io`); then the whole buffer drains.
+/// `net_write(fd, s) -> () ! {closed, io}` — the whole buffer, the
+/// syscall first; a park on `WouldBlock` against the budget, and a
+/// fired budget is `TIMEOUT`, which the row coarsens to `io`.
 ///
 /// # Safety
 ///
@@ -1375,77 +1599,94 @@ pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
     let s = unsafe { view(sp, sl) };
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Write) {
-        return code_of_tag(t);
-    }
-    match tbl().write_ready(fd, s.as_bytes()) {
-        Ok(()) => net_code::OK,
-        Err(t) => code_of_tag(t),
-    }
+    write_shim(fd, s.as_bytes())
 }
 
 /// `net_read_bytes(fd, max) -> List[byte] ! {closed, timeout, io}` —
-/// the byte twin of [`__wolf_rt_net_read`] (s115, #137): parks until
-/// bytes arrive (at most `max`, clamped to 1 MiB); no `UTF8` verdict,
-/// bytes are bytes, so a binary body finally survives the crossing.
-/// The `fs_read_bytes` shape, family for family.
+/// the byte twin of [`__wolf_rt_net_read`] (s115, #137): the same
+/// syscall-first read, no `UTF8` verdict — bytes are bytes, so a
+/// binary body survives the crossing. The `fs_read_bytes` shape,
+/// family for family.
 ///
 /// # Safety
 ///
 /// `out` must address 8 writable bytes (the list header word).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
-    {
-        // The no-park fast paths (mirror [`__wolf_rt_net_read`]):
-        // wrong-kind or forged fd is `io` whatever `max` says, and
-        // `max <= 0` is the empty list with no wait owed.
-        let mut t = tbl();
-        if !t.get(fd).is_some_and(|s| s.is_stream()) {
-            return net_code::IO;
-        }
-        if max <= 0 {
-            unsafe { write_bytes_list(out, b"") };
-            return net_code::OK;
-        }
-    }
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Read) {
-        return code_of_tag(t);
-    }
-    match tbl().read_ready(fd, max) {
-        Err(t) => code_of_tag(t),
-        Ok(bytes) => {
-            unsafe { write_bytes_list(out, &bytes) };
-            net_code::OK
-        }
-    }
+    let bytes = match read_shim(fd, max) {
+        Err(code) => return code,
+        Ok(None) => Vec::new(),
+        Ok(Some(bytes)) => bytes,
+    };
+    unsafe { write_bytes_list(out, &bytes) };
+    net_code::OK
 }
 
 /// `net_write_bytes(fd, bytes) -> () ! {closed, invalid, io}` — the
 /// byte twin of [`__wolf_rt_net_write`] (s115, #137): `bytes` is a
 /// `List[byte]` (s136); a list of the wrong element width is `INVALID`
 /// and nothing is sent (the `fs_write_bytes` refusal, mirrored);
-/// otherwise the whole buffer drains with no UTF-8 gate.
+/// otherwise the whole buffer drains with no UTF-8 gate. The list is
+/// borrowed, not copied (s141): the caller holds it for the call's
+/// duration, park included.
 ///
 /// # Safety
 ///
 /// `hdr` must be a live `List[byte]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
-    let Some(bytes) = (unsafe { byte_elems(hdr) }) else {
+    let Some(bytes) = (unsafe { crate::list::u8_elems(hdr) }) else {
         return net_code::INVALID;
     };
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    if let Err(t) = wait_unlocked(fd, true, crate::reactor::Interest::Write) {
-        return code_of_tag(t);
+    write_shim(fd, bytes)
+}
+
+/// `net_writev(fd, parts) -> () ! {closed, io}` (s141, #254,
+/// `[os.net.writev]`): `parts` is a `List[List[byte]]` header — every
+/// part in order as one gathered write ([`NetTable::writev`]), with
+/// `net_write`'s posture and rows. A header of the wrong shape (an FFI
+/// caller's only; sema types the argument) is `IO` and nothing is
+/// sent.
+///
+/// # Safety
+///
+/// `hdr` must be a live `List[List[byte]]` header whose elements are
+/// live `List[byte]` headers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
+    let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
+        return net_code::IO;
+    };
+    let mut parts: Vec<&[u8]> = Vec::with_capacity(heads.len());
+    for &h in heads {
+        if h == 0 {
+            return net_code::IO;
+        }
+        let Some(part) = (unsafe { crate::list::u8_elems(h) }) else {
+            return net_code::IO;
+        };
+        parts.push(part);
     }
-    match tbl().write_ready(fd, &bytes) {
+    let spec = match tbl().park_spec(fd, true) {
+        Ok(spec) => spec,
+        Err(t) => return code_of_tag(t),
+    };
+    match drain_vectored(spec, &parts, |bufs| tbl().writev_ready(fd, bufs)) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
     }
 }
 
+/// `net_nodelay(fd, on) -> () ! {io}` (s141, #254, `[os.net.nodelay]`):
+/// Nagle off (`on != 0`, the default every stream is handed out with)
+/// or back on, for a TCP stream; anything else is `IO`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_nodelay(fd: i64, on: i64) -> i64 {
+    match tbl().set_nodelay(fd, on != 0) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
+    }
+}
 /// `net_close(fd) -> () ! {io}` — tombstones the slot; double close
 /// (or a forged fd) is `io`.
 #[unsafe(no_mangle)]
@@ -1618,15 +1859,16 @@ mod tests {
         assert_eq!(t.set_deadline(9999, 40), Err("io"));
     }
 
-    /// s138 (#242, `[os.net.accept]`): the posture's two flags,
-    /// measured off the kernel. Every listener the table acquires —
-    /// bound, bound with options, unix-domain, adopted — carries
-    /// `O_NONBLOCK`; every stream it accepts does NOT, whatever the
-    /// kernel's inheritance rule (BSD-derived kernels hand the flag
-    /// down, linux does not — the runtime makes it one posture).
+    /// s138 put every LISTENER non-blocking under the runtime; s141
+    /// (#257, `[os.net.io]`) puts every STREAM there too — accepted or
+    /// dialed, TCP or unix — so the syscall can go first and the park
+    /// waits on the kernel's `WouldBlock`. Measured on the flag, not
+    /// assumed from the kernel's inheritance rule (BSD-derived kernels
+    /// hand it down, linux does not; the runtime sets it either way).
+    /// A foreign socket the runtime never held is never touched.
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
-    fn listeners_are_nonblocking_and_accepted_streams_are_not() {
+    fn every_socket_lives_nonblocking_under_the_runtime() {
         use std::os::fd::AsRawFd as _;
         fn nonblocking(raw: std::os::fd::RawFd) -> bool {
             // SAFETY: a flag read on a live fd.
@@ -1669,23 +1911,269 @@ mod tests {
             nonblocking(handed),
             "adoption puts the descriptor under the posture"
         );
-        // The accepted stream is blocking.
+        // The accepted stream and the dialed stream are non-blocking
+        // (s141); the foreign client the runtime never held is not.
         let port = t.port(plain).expect("port");
         let cli = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).expect("dial");
         t.set_deadline(plain, 5_000).expect("arm");
         let conn = t.accept(plain).expect("accept");
         assert!(
-            !nonblocking(t.raw_fd_of(conn).expect("live")),
-            "the accepted stream is blocking whatever the listener's mode"
+            nonblocking(t.raw_fd_of(conn).expect("live")),
+            "the accepted stream is non-blocking whatever the listener's mode"
+        );
+        let dialed = t
+            .connect(&format!("127.0.0.1:{port}"))
+            .expect("dial through the table");
+        assert!(
+            nonblocking(t.raw_fd_of(dialed).expect("live")),
+            "the dialed stream is non-blocking"
+        );
+        let ucli = t
+            .connect_unix(dir.to_str().expect("utf8 path"))
+            .expect("unix dial");
+        assert!(
+            nonblocking(t.raw_fd_of(ucli).expect("live")),
+            "a unix-domain stream is non-blocking"
         );
         assert!(
             !nonblocking(cli.as_raw_fd()),
-            "the dialed side was never touched"
+            "the foreign side was never touched"
         );
-        for fd in [conn, adopted, unix, with, plain] {
+        for fd in [ucli, dialed, conn, adopted, unix, with, plain] {
             t.close(fd).expect("close");
         }
         let _ = std::fs::remove_file(&dir);
+    }
+
+    /// s141 (#257, `[os.net.io]`): THE SYSCALL GOES FIRST. Counted on
+    /// this thread's own parks ([`PARKS`]): an accept with a connection
+    /// already queued, a write into an empty send buffer, and a read of
+    /// bytes `poll(2)` just reported — the three calls lobo makes per
+    /// request — touch the reactor zero times. A read with nothing
+    /// there parks exactly once and the budget answers `timeout`; a
+    /// read whose bytes arrive later parks exactly once and answers
+    /// the bytes.
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn ready_sockets_never_touch_the_reactor() {
+        let parks = || PARKS.with(std::cell::Cell::get);
+        let mut t = NetTable::new();
+        let l = t.listen("127.0.0.1:0").expect("listen");
+        let port = t.port(l).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let mut cli = std::net::TcpStream::connect(&addr).expect("dial");
+        // A readiness the program already has: the listener, then the
+        // stream, each reported by the same `poll(2)` `net_wait` uses.
+        let ready =
+            |raw: crate::poll::RawIo| crate::poll::readable(&[raw], 5_000).expect("poll")[0];
+        assert!(ready(t.raw_io_of(l).expect("live")), "the dial is queued");
+        let p0 = parks();
+        let conn = t.accept(l).expect("accept");
+        assert_eq!(
+            parks(),
+            p0,
+            "an accept with a connection queued never parks"
+        );
+        t.write(conn, b"pong").expect("write");
+        assert_eq!(parks(), p0, "a write into an empty send buffer never parks");
+        cli.write_all(b"ping").expect("client write");
+        assert!(
+            ready(t.raw_io_of(conn).expect("live")),
+            "the bytes are there"
+        );
+        assert_eq!(t.read(conn, 16).expect("read"), b"ping");
+        assert_eq!(parks(), p0, "a read of bytes poll reported never parks");
+        // Nothing there: one park, and the budget answers.
+        t.set_deadline(conn, 200).expect("arm");
+        let t0 = std::time::Instant::now();
+        assert_eq!(t.read(conn, 16), Err("timeout"));
+        assert!(
+            t0.elapsed() >= std::time::Duration::from_millis(150),
+            "the budget is a budget: {:?}",
+            t0.elapsed()
+        );
+        assert_eq!(parks(), p0 + 1, "a read with nothing there parks once");
+        // Bytes that arrive later: one park, then the bytes.
+        t.set_deadline(conn, 5_000).expect("rearm");
+        let late = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(80));
+            cli.write_all(b"late").expect("client write");
+            cli
+        });
+        assert_eq!(t.read(conn, 16).expect("read"), b"late");
+        assert_eq!(parks(), p0 + 2, "a read that waits parks once");
+        let cli = late.join().expect("writer");
+        drop(cli);
+        t.close(conn).expect("close");
+        t.close(l).expect("close");
+    }
+
+    /// s141: a body larger than the send buffer drains through parks
+    /// — every chunk the kernel takes leaves, `WouldBlock` parks, the
+    /// drain resumes from the byte it stopped at — and the budget now
+    /// covers the WHOLE drain: a peer that never reads turns a bounded
+    /// write into `timeout` at the budget, never a kernel park past it.
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    #[test]
+    fn write_drains_a_large_body_through_parks_and_the_budget_covers_the_drain() {
+        let parks = || PARKS.with(std::cell::Cell::get);
+        let mut t = NetTable::new();
+        let l = t.listen("127.0.0.1:0").expect("listen");
+        let port = t.port(l).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let body = vec![0xA5u8; 8 << 20];
+        // A slow reader: it starts late and reads everything.
+        let mut cli = std::net::TcpStream::connect(&addr).expect("dial");
+        let want = body.len();
+        let reader = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let mut got = Vec::with_capacity(want);
+            let mut buf = vec![0u8; 1 << 16];
+            while got.len() < want {
+                let n = cli.read(&mut buf).expect("client read");
+                assert!(n > 0, "peer closed early at {}", got.len());
+                got.extend_from_slice(&buf[..n]);
+            }
+            got
+        });
+        let conn = t.accept(l).expect("accept");
+        t.set_deadline(conn, 10_000).expect("arm");
+        let p0 = parks();
+        t.write(conn, &body).expect("the whole body drains");
+        assert!(parks() > p0, "a body larger than the send buffer parked");
+        t.close(conn).expect("close");
+        let got = reader.join().expect("reader");
+        assert_eq!(got.len(), body.len());
+        assert!(got.iter().all(|&b| b == 0xA5), "every byte arrived intact");
+        // A peer that never reads: the budget answers, within itself.
+        let _stuck = std::net::TcpStream::connect(&addr).expect("dial");
+        let conn = t.accept(l).expect("accept");
+        t.set_deadline(conn, 300).expect("arm");
+        let t0 = std::time::Instant::now();
+        assert_eq!(t.write(conn, &body), Err("timeout"));
+        let took = t0.elapsed();
+        assert!(
+            took >= std::time::Duration::from_millis(250)
+                && took < std::time::Duration::from_secs(3),
+            "timeout at the budget, not before and not never: {took:?}"
+        );
+        t.close(conn).expect("close");
+        t.close(l).expect("close");
+    }
+
+    /// s141 (#254, `[os.net.writev]`): the parts leave in order as one
+    /// gather, empty parts included in the list and excluded from the
+    /// wire; a gather larger than the send buffer resumes from the
+    /// right byte of the right part after each park; all-empty parts
+    /// send nothing; a listener or a forged handle is `io`.
+    #[test]
+    fn writev_gathers_parts_in_order() {
+        let mut t = NetTable::new();
+        let l = t.listen("127.0.0.1:0").expect("listen");
+        let port = t.port(l).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let mut cli = std::net::TcpStream::connect(&addr).expect("dial");
+        let conn = t.accept(l).expect("accept");
+        let head = b"HTTP/1.1 200 OK\r\n";
+        let mid = b"Content-Length: 5\r\n\r\n";
+        let body = b"hello";
+        t.writev(conn, &[head, b"", mid, body]).expect("gather");
+        let mut got = vec![0u8; head.len() + mid.len() + body.len()];
+        cli.read_exact(&mut got).expect("client read");
+        assert_eq!(got, [&head[..], &mid[..], &body[..]].concat());
+        t.writev(conn, &[b"", b""])
+            .expect("all-empty parts are a completed write");
+        assert_eq!(t.writev(l, &[body]), Err("io"), "a listener is io");
+        assert_eq!(
+            t.writev(99_999, &[body]),
+            Err("io"),
+            "a forged handle is io"
+        );
+        // Larger than any send buffer, in two parts with a distinct
+        // byte each, read back by a late reader: the resume after a
+        // park lands on the right byte of the right part.
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        {
+            let a = vec![1u8; 3 << 20];
+            let b = vec![2u8; 3 << 20];
+            let want = a.len() + b.len();
+            let reader = std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                let mut got = Vec::with_capacity(want);
+                let mut buf = vec![0u8; 1 << 16];
+                while got.len() < want {
+                    let n = cli.read(&mut buf).expect("client read");
+                    assert!(n > 0, "peer closed early at {}", got.len());
+                    got.extend_from_slice(&buf[..n]);
+                }
+                got
+            });
+            t.set_deadline(conn, 10_000).expect("arm");
+            t.writev(conn, &[&a, &b]).expect("the whole gather drains");
+            t.close(conn).expect("close");
+            let got = reader.join().expect("reader");
+            assert_eq!(got.len(), want);
+            assert!(
+                got[..a.len()].iter().all(|&x| x == 1),
+                "part one first, intact"
+            );
+            assert!(
+                got[a.len()..].iter().all(|&x| x == 2),
+                "part two after, intact"
+            );
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+        {
+            drop(cli);
+            t.close(conn).expect("close");
+        }
+        t.close(l).expect("close");
+    }
+
+    /// s141 (#254, `[os.net.nodelay]`): every TCP stream the table hands
+    /// out has Nagle OFF — accepted or dialed — and `set_nodelay`
+    /// toggles it; a listener, a unix stream and a forged handle are
+    /// `io`. Read back from the kernel, not from what was asked.
+    #[test]
+    fn nodelay_is_on_by_default_and_toggles() {
+        let mut t = NetTable::new();
+        let l = t.listen("127.0.0.1:0").expect("listen");
+        let port = t.port(l).expect("port");
+        let addr = format!("127.0.0.1:{port}");
+        let cli = t.connect(&addr).expect("dial");
+        let conn = t.accept(l).expect("accept");
+        let nodelay = |t: &mut NetTable, fd: i64| match t.get(fd) {
+            Some(Sock::Stream(s)) => s.nodelay().expect("TCP_NODELAY read"),
+            _ => panic!("not a tcp stream"),
+        };
+        assert!(nodelay(&mut t, conn), "an accepted stream has Nagle off");
+        assert!(nodelay(&mut t, cli), "a dialed stream has Nagle off");
+        t.set_nodelay(conn, false).expect("nagle back on");
+        assert!(!nodelay(&mut t, conn));
+        t.set_nodelay(conn, true).expect("and off again");
+        assert!(nodelay(&mut t, conn));
+        assert_eq!(t.set_nodelay(l, true), Err("io"), "a listener is io");
+        assert_eq!(
+            t.set_nodelay(99_999, true),
+            Err("io"),
+            "a forged handle is io"
+        );
+        #[cfg(unix)]
+        {
+            let dir = std::env::temp_dir().join(format!("wolf-s141-nd-{}", std::process::id()));
+            let _ = std::fs::remove_file(&dir);
+            let ul = t
+                .listen_unix(dir.to_str().expect("utf8"))
+                .expect("listen_unix");
+            let uc = t.connect_unix(dir.to_str().expect("utf8")).expect("dial");
+            assert_eq!(t.set_nodelay(uc, true), Err("io"), "the option is TCP's");
+            t.close(uc).expect("close");
+            t.close(ul).expect("close");
+            let _ = std::fs::remove_file(&dir);
+        }
+        for fd in [conn, cli, l] {
+            t.close(fd).expect("close");
+        }
     }
 
     /// s138 (#242): the lost accept race, constructed. A second owner
@@ -1817,6 +2305,51 @@ mod tests {
         assert_eq!(__wolf_rt_net_close(l), net_code::OK);
         drop(other);
         watchdog.join().expect("watchdog");
+    }
+
+    /// s141 (#254): the shim tier's gather and nodelay codes. The
+    /// `List[List[byte]]` header is built as lowering builds it — an
+    /// 8-byte-element list of `List[byte]` header words; a header of
+    /// any other shape is `IO` and nothing is sent.
+    #[test]
+    fn shim_writev_and_nodelay_codes() {
+        let (ap, al) = pair_of("127.0.0.1:0");
+        let l = unsafe { __wolf_rt_net_listen(ap, al) };
+        assert!(l >= 0);
+        let port = __wolf_rt_net_port(l);
+        let mut cli = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).expect("dial");
+        let conn = __wolf_rt_net_accept(l);
+        assert!(conn >= 0);
+        let head = bytes_list(b"HTTP/1.1 200 OK\r\n\r\n");
+        let none = bytes_list(b"");
+        let body = bytes_list(b"hello");
+        let parts = int_list(&[head, none, body]);
+        assert_eq!(unsafe { __wolf_rt_net_writev(conn, parts) }, net_code::OK);
+        let mut got = vec![0u8; 24];
+        cli.read_exact(&mut got).expect("client read");
+        assert_eq!(&got, b"HTTP/1.1 200 OK\r\n\r\nhello");
+        // A byte list where a list of lists was owed: the wrong shape.
+        assert_eq!(unsafe { __wolf_rt_net_writev(conn, head) }, net_code::IO);
+        // A list of lists holding a null: refused before any syscall.
+        let holed = int_list(&[head, 0]);
+        assert_eq!(unsafe { __wolf_rt_net_writev(conn, holed) }, net_code::IO);
+        assert_eq!(
+            unsafe { __wolf_rt_net_writev(l, parts) },
+            net_code::IO,
+            "a listener"
+        );
+        assert_eq!(
+            unsafe { __wolf_rt_net_writev(99_999, parts) },
+            net_code::IO,
+            "forged"
+        );
+        // Nodelay: on by default, toggles, io on a listener.
+        assert_eq!(__wolf_rt_net_nodelay(conn, 0), net_code::OK);
+        assert_eq!(__wolf_rt_net_nodelay(conn, 1), net_code::OK);
+        assert_eq!(__wolf_rt_net_nodelay(l, 1), net_code::IO);
+        assert_eq!(__wolf_rt_net_nodelay(99_999, 1), net_code::IO);
+        assert_eq!(__wolf_rt_net_close(conn), net_code::OK);
+        assert_eq!(__wolf_rt_net_close(l), net_code::OK);
     }
 
     /// Accepting on a stream (or reading on a listener) is `io` —

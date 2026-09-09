@@ -1,0 +1,100 @@
+//! check: run(exit=0, stdout="syscall_first | ready_read_answers true | budget_answers true | row_is_io true | sent_some true")
+//! phase: run
+//! conforms: os.net.io, os.net.wait, err.union, err.propagate
+//!
+//! s141 (#257, `[os.net.io]`) — the syscall goes first. The clause
+//! moves a COST, not a row: every call answers what it answered
+//! before, and what a program can observe is the two consequences
+//! the clause states. Four relations, true on every tier-1 host and
+//! every tier:
+//!
+//!   ready_read_answers  a stream `net_wait` reported ready is read
+//!                       and answers its bytes. That is the lobo
+//!                       shape — wait over the set, then read the one
+//!                       that spoke — and since s141 that read is one
+//!                       syscall with no reactor round-trip in front
+//!                       of it (the ~30 of 63 µs ws22 measured); the
+//!                       row is what it always was.
+//!   budget_answers      a `net_deadline` armed on a stream bounds a
+//!                       LARGE write to a peer that never reads: the
+//!                       body leaves in chunks with a park between
+//!                       them, each against the call's budget, and
+//!                       the write that finds the buffers full comes
+//!                       back at the budget (here: at least 200 ms of
+//!                       a 300 ms arm, well under five seconds), never
+//!                       parked in the kernel past it. Before s141
+//!                       the drain rode a blocking syscall past any
+//!                       budget.
+//!   row_is_io           what that write answers is `net_write`'s own
+//!                       row — `io`, its `timeout` coarsened as the
+//!                       call declares — never a trap, never a new
+//!                       tag.
+//!   sent_some           the bytes the kernel took before the budget
+//!                       fired were sent: the chunks before the one
+//!                       that failed all completed, so the count of
+//!                       completed writes is positive.
+//!
+//! The chunk is 64 KiB of `x`, built by doubling; the loop is bounded
+//! (1024 chunks, 64 MiB) so a regression that never fails is a wrong
+//! line, not a hung gauntlet.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+
+    // A readiness the program already has, then the read.
+    net_write(cli, "ping")?
+    let set = List[int]()
+    (mut set).push(conn)
+    let woke = net_wait(set, 5000)?
+    var ready_read_answers = false
+    if woke.len == 1 {
+        ready_read_answers = net_read(conn, 16)? == "ping"
+    }
+
+    // 64 KiB by doubling.
+    var chunk = "x"
+    var i = 0
+    while i < 16 {
+        chunk = "{chunk}{chunk}"
+        i = i + 1
+    }
+
+    // A budgeted drain into a peer that never reads.
+    net_deadline(conn, 300)?
+    var budget_answers = false
+    var row_is_io = false
+    var failed = false
+    var completed = 0
+    var n = 0
+    while n < 1024 && failed == false {
+        let t0 = time_now_ms()
+        net_write(conn, chunk) else |e| match e {
+            io => {
+                failed = true
+                row_is_io = true
+            },
+            _ => {
+                failed = true
+            },
+        }
+        if failed {
+            let took = time_now_ms() - t0
+            budget_answers = took >= 200 && took < 5000
+        } else {
+            completed = completed + 1
+        }
+        n = n + 1
+    }
+    let sent_some = completed > 0
+
+    print(
+        "syscall_first | ready_read_answers {ready_read_answers} | budget_answers {budget_answers} | row_is_io {row_is_io} | sent_some {sent_some}",
+    )
+    net_close(conn)?
+    net_close(cli)?
+    net_close(srv)?
+    0
+}

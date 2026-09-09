@@ -338,6 +338,7 @@
     "os.cpus": "11-os.md",
     "os.net": "11-os.md",
     "os.net.accept": "11-os.md",
+    "os.net.io": "11-os.md",
     "os.net.listen.opts": "11-os.md",
     "os.net.unix": "11-os.md",
     "os.net.wait": "11-os.md",

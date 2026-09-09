@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 354
 expression: "lines.join(\"\\n\")"
 ---
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
@@ -305,6 +304,7 @@ net/read_deadline.lu: lowers
 net/refused_row.lu: lowers
 net/reuse_port.lu: lowers
 net/spawn_accept.lu: lowers
+net/syscall_first.lu: lowers
 net/unix_echo.lu: lowers
 net/wait_readiness.lu: lowers
 os/args_cwd.lu: lowers
