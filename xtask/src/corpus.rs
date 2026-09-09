@@ -115,6 +115,11 @@ pub struct Directives {
     /// compiler stops on (s91). An intention, not an enforced rule; the
     /// counts keep the two apart on the strength of this field.
     pub forward: Option<String>,
+    /// `fmt: relaid` — this file pins a source layout the formatter
+    /// re-lays (`[gram.fmt.canon]`'s one exception, wolf-lang#276): the
+    /// canon gates (`xtask fmt-lu`, wolf_fmt's stability property) read
+    /// past it; every other gate treats it as any entry.
+    pub relaid: bool,
 }
 
 impl Directives {
@@ -213,6 +218,16 @@ pub fn parse_directives(src: &str) -> Result<Directives, String> {
                 return Err(format!("line {lineno}: duplicate `forward:` directive"));
             }
             d.forward = Some(v.to_string());
+        } else if let Some(v) = rest.strip_prefix("fmt:") {
+            match v.trim() {
+                "relaid" => d.relaid = true,
+                other => {
+                    return Err(format!(
+                        "line {lineno}: bad `fmt:` value `{other}` (the one value is `relaid`: \
+                         a layout the formatter re-lays, [gram.fmt.canon])"
+                    ));
+                }
+            }
         } else if let Some(v) = rest.strip_prefix("member:") {
             if d.member.is_some() {
                 return Err(format!("line {lineno}: duplicate `member:` directive"));
@@ -430,6 +445,19 @@ mod tests {
     fn header_ends_at_first_code_line() {
         let d = parse_directives("//! phase: lex\nlet x = 1\n//! phase: run\n").unwrap();
         assert_eq!(d.phase.as_deref(), Some("lex"));
+    }
+
+    #[test]
+    fn fmt_relaid_is_the_one_fmt_value() {
+        let d = parse_directives("//! check: pass\n//! phase: run\n//! fmt: relaid\n").unwrap();
+        assert!(d.relaid);
+        assert!(
+            !parse_directives("//! check: pass\n//! phase: run\n")
+                .unwrap()
+                .relaid
+        );
+        let e = parse_directives("//! check: pass\n//! phase: run\n//! fmt: keep\n").unwrap_err();
+        assert!(e.contains("bad `fmt:` value `keep`"), "{e}");
     }
 
     #[test]

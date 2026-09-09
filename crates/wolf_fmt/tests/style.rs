@@ -58,12 +58,35 @@ fn fitting_lists_collapse_to_one_line_without_trailing_comma() {
 
 #[test]
 fn open_brace_on_construct_line_and_else_on_close_line() {
-    // `[gram.fmt.brace]` is mostly grammar-enforced (a newline before
-    // `{` or `else` cannot parse); the formatter's half is keeping the
-    // canonical multiline shape stable.
+    // `[gram.fmt.brace]`'s `{` half is grammar-enforced (a newline
+    // before `{` cannot parse); the `} else` half is the formatter's
+    // since wolf-lang#276 admitted a leading `else` (the test below),
+    // and this one keeps the canonical multiline shape stable.
     check(
         "fn main() {\n    if c {\n        a()\n    } else {\n        b()\n    }\n}\n",
         "fn main() {\n    if c {\n        a()\n    } else {\n        b()\n    }\n}\n",
+    );
+}
+
+#[test]
+fn a_leading_else_is_relaid_onto_the_closing_brace_line() {
+    // wolf-lang#276: the parser admits an `else` that starts a line
+    // (`[gram.lex.newline]`'s lookahead); `[gram.fmt.brace]` does not
+    // move, so the maintainer's aligned layout formats to the canonical
+    // `} else` form — and `check` proves the result is a fixed point.
+    check(
+        "fn main() {\n    if (s[i..i+1] == \"\\t\")      { t += \"<tab>\" }\n    else if (s[i..i+1] == \"\\n\") { t += \"<nl>\" }\n    else                        { t += s[i..i+1] }\n}\n",
+        "fn main() {\n    if s[i..i + 1] == \"\\t\" { t += \"<tab>\" } else if s[i..i + 1] == \"\\n\" { t += \"<nl>\" } else {\n        t += s[i..i + 1]\n    }\n}\n",
+    );
+    // The multiline shape: `}` newline `else {` becomes `} else {`.
+    check(
+        "fn main() {\n    if c {\n        a()\n    }\n    else {\n        b()\n    }\n}\n",
+        "fn main() {\n    if c {\n        a()\n    } else {\n        b()\n    }\n}\n",
+    );
+    // And the defaulting operator across lines is re-laid trailing.
+    check(
+        "fn main() {\n    let v = f()\n        else 0\n}\n",
+        "fn main() {\n    let v = f() else 0\n}\n",
     );
 }
 

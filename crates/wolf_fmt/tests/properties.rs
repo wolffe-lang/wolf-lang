@@ -68,21 +68,44 @@ fn corpus_idempotence_and_round_trip() {
     }
 }
 
+/// Does this corpus file's `//!` header declare `fmt: relaid` —
+/// `[gram.fmt.canon]`'s one exception (wolf-lang#276): the file pins a
+/// source layout the parser admits and the formatter re-lays, so the
+/// stability property reads past it. Idempotence and round-trip
+/// (`corpus_idempotence_and_round_trip`) still hold on it.
+fn relaid(src: &[u8]) -> bool {
+    String::from_utf8_lossy(src)
+        .lines()
+        .take_while(|l| l.trim_start().starts_with("//!"))
+        .any(|l| l.trim_start().trim_start_matches("//!").trim() == "fmt: relaid")
+}
+
 /// Stability: the committed corpus is formatter-canonical — formatting
 /// it is the identity, byte-for-byte (`[gram.fmt.canon]`). This is the
 /// gate every later sprint feels.
 #[test]
 fn corpus_stability_formatting_is_identity() {
+    let mut relaid_seen = 0;
     for f in corpus_files() {
         let src = std::fs::read(&f).expect("read corpus file");
+        if relaid(&src) {
+            relaid_seen += 1;
+            continue;
+        }
         let out = wolf_fmt::format_text(&src);
         assert_eq!(
             out.text,
             src,
-            "{} is not formatter-canonical — run `wolf fmt corpus`",
+            "{} is not formatter-canonical — run `wolf fmt` on it",
             f.display()
         );
     }
+    // The exception is for the leading-`else` witnesses, and the count
+    // is pinned so a stray `fmt: relaid` cannot hide a drift.
+    assert_eq!(
+        relaid_seen, 2,
+        "the `fmt: relaid` witnesses are else_chain and else_default_newline"
+    );
 }
 
 // ------------------------------------------------------ proptest side ---

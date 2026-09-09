@@ -3374,18 +3374,63 @@ fn collect_snap_files(dir: &Path, out: &mut Vec<PathBuf>) {
 
 /// Canonical-style gate (s11): every `.lu` file in the tree passes
 /// `wolf fmt --check`. Runs through the driver so xtask stays independent
-/// of compiler crates.
+/// of compiler crates. `[gram.fmt.canon]`'s one exception: a witness
+/// whose header declares `//! fmt: relaid` pins a source layout the
+/// formatter re-lays (wolf-lang#276's leading-`else` witnesses), so the
+/// driver reports it and this gate reads past it — and the fix-up hint
+/// names files, never `wolf fmt corpus`, which would re-lay them.
 fn fmt_lu() -> ExitCode {
     if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
         eprintln!("fmt-lu: failed to build wolf");
         return ExitCode::FAILURE;
     }
-    let ok = run_ok("target/debug/wolf", &["fmt", "--check", "corpus"]);
-    if ok {
-        eprintln!("fmt-lu: corpus is canonical");
+    let mut files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut files);
+    let relaid: BTreeSet<String> = files
+        .iter()
+        .filter(|f| {
+            std::fs::read_to_string(f)
+                .ok()
+                .and_then(|src| corpus::parse_directives(&src).ok())
+                .is_some_and(|d| d.relaid)
+        })
+        .map(|f| f.display().to_string().replace('\\', "/"))
+        .collect();
+    let out = match Command::new("target/debug/wolf")
+        .args(["fmt", "--check", "corpus"])
+        .output()
+    {
+        Ok(out) => out,
+        Err(e) => {
+            eprintln!("fmt-lu: wolf fmt --check: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let mut unformatted = Vec::new();
+    let mut other_noise = false;
+    for line in stderr.lines() {
+        let named = line
+            .strip_prefix("wolf fmt --check: ")
+            .and_then(|r| r.strip_suffix(" is not canonically formatted"));
+        match named {
+            Some(f) if relaid.contains(&f.replace('\\', "/")) => continue,
+            Some(f) => unformatted.push(f.to_string()),
+            None => other_noise = true,
+        }
+        eprintln!("{line}");
+    }
+    if unformatted.is_empty() && (out.status.success() || !other_noise) {
+        eprintln!(
+            "fmt-lu: corpus is canonical ({} relaid witness(es) read past)",
+            relaid.len()
+        );
         ExitCode::SUCCESS
     } else {
-        eprintln!("fmt-lu: unformatted .lu files — run `wolf fmt corpus`");
+        eprintln!(
+            "fmt-lu: unformatted .lu files — run `wolf fmt <file>` on each named file \
+             (not `wolf fmt corpus`: the `fmt: relaid` witnesses must keep their layout)"
+        );
         ExitCode::FAILURE
     }
 }
