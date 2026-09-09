@@ -1501,6 +1501,12 @@ enum Sink {
     Buf(Value),
 }
 
+/// One arm of a tagged value's rendering (s143, #268): the tag's
+/// runtime value, its name when the arm prints it itself (an enum
+/// variant — statically known; `None` for a row tag, whose name the
+/// module tag table answers at run time), and its payload types.
+type TagArm = (i64, Option<Vec<u8>>, Vec<TyId>);
+
 /// The module's tag-name table as a function (s143, wolf-lang#268):
 /// `wolf.tag_name(tag) -> str` answers the spelling of a module-interned
 /// error tag at run time — what `{err}` prints for a caught row value
@@ -14314,7 +14320,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         sink: Sink,
         tag: Value,
         slots: &[Value],
-        arms: &[(i64, Option<Vec<u8>>, Vec<TyId>)],
+        arms: &[TagArm],
         table: &'t TypeTable,
         span: Span,
     ) -> R<()> {
@@ -14323,7 +14329,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let s = self.tag_name_str(tag);
             self.emit_seg(sink, PrintSeg::Str { v: s, spec: 0 });
         }
-        let live: Vec<&(i64, Option<Vec<u8>>, Vec<TyId>)> = arms
+        let live: Vec<&TagArm> = arms
             .iter()
             .filter(|(_, n, p)| n.is_some() || !p.is_empty())
             .collect();
@@ -14440,7 +14446,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let Some(v) = v else {
                             return Err(refuse("a unit-shaped enum value in interpolation", span));
                         };
-                        let arms: Vec<(i64, Option<Vec<u8>>, Vec<TyId>)> = variants
+                        let arms: Vec<TagArm> = variants
                             .iter()
                             .enumerate()
                             .map(|(i, vs)| {
@@ -14501,7 +14507,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     return Err(refuse("a valueless row in interpolation", span));
                 };
                 let (tag, slots) = self.tagged_parts(v);
-                let arms: Vec<(i64, Option<Vec<u8>>, Vec<TyId>)> = tags
+                let arms: Vec<TagArm> = tags
                     .iter()
                     .filter(|(_, p)| !p.is_empty())
                     .map(|(n, p)| (self.b.module.tag_id(n), None, p.clone()))
@@ -14567,7 +14573,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let slots: Vec<Value> = (0..slots.len())
             .map(|k| self.b.ins_eu_err_slot(v, k))
             .collect();
-        let arms: Vec<(i64, Option<Vec<u8>>, Vec<TyId>)> = match table.kind(row) {
+        let arms: Vec<TagArm> = match table.kind(row) {
             TyKind::Row { tags, .. } => tags
                 .iter()
                 .filter(|(_, p)| !p.is_empty())
