@@ -2253,7 +2253,7 @@ because "there is nothing here" and "this went wrong, here is how"
 are different answers on purpose. Rename the tag to match its
 payload, or move the payload to a tag whose case admits it.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_case_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_exhaustive.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0603_none_payload.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0603_tag_case_payload.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__tag_case_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__to_int_parse.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_exhaustive.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0603_none_payload.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0603_tag_case_payload.snap
 
 ## W0604 — bare `get` is the checked-access spelling, and this one cannot miss
 
