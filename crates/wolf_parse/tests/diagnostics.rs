@@ -334,15 +334,6 @@ fn e0003_comparison_chain() {
 }
 
 #[test]
-fn e0005_else_on_new_line() {
-    snap(
-        "e0005_else_new_line",
-        "fn f() { let x = if c { 1 }\n    else { 2 }\n}\n",
-        codes::ELSE_ON_NEW_LINE,
-    );
-}
-
-#[test]
 fn e0006_struct_literal_in_condition() {
     // corpus/grammar/structlit_cond.lu is the conformance fixture.
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

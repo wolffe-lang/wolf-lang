@@ -30,7 +30,6 @@
 //! | E0001 | leading-operator continuation (`[gram.amb.newline]`)        |
 //! | E0002 | empty statement — a `;` that terminates nothing             |
 //! | E0003 | comparison chaining (`a < b < c`)                           |
-//! | E0005 | `else` on a new line (`[gram.amb.else]`)                    |
 //! | E0006 | struct literal in condition position (`[gram.amb.structlit]`)|
 //! | E0007 | string interpolations nested deeper than 8                  |
 //! | E0008 | reserved keyword used as an identifier (spec §9)            |
@@ -67,7 +66,6 @@ pub mod codes {
     pub const LEADING_OPERATOR: Code = c::E0001;
     pub const EMPTY_STATEMENT: Code = c::E0002;
     pub const COMPARISON_CHAIN: Code = c::E0003;
-    pub const ELSE_ON_NEW_LINE: Code = c::E0005;
     pub const STRUCT_LIT_IN_COND: Code = c::E0006;
     pub const INTERP_TOO_DEEP: Code = c::E0007;
     pub const KEYWORD_AS_IDENT: Code = c::E0008;

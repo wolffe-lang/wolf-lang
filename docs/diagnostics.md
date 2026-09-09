@@ -48,17 +48,6 @@ suggested edit does exactly that ([gram.amb.intdot]).
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__intdot_exponent.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0004_float_exponent.snap
 
-## E0005 — `else` may not start a new line
-
-The newline after the `}` of the then-block ends the `if` statement, so
-an `else` on the next line belongs to nothing — wolf will not guess
-whether it was meant for the `if` above it. Put the `else` on the same
-line as the closing brace of the block before it: `} else {`. This is
-the one place wolf's newline-termination rule constrains layout
-([gram.amb.else]).
-
-Fixtures: crates/wolf_parse/tests/snapshots/diagnostics__e0005_else_new_line.snap
-
 ## E0006 — a struct literal cannot sit bare in condition position
 
 In a condition or scrutinee — after `if`, `while`, `match`, or `for

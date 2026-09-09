@@ -288,9 +288,27 @@ fn else_after_complete_expression_is_defaulting_even_after_if() {
 }
 
 #[test]
-fn else_on_new_line_is_e0005() {
-    let codes = util::codes("fn f() { let x = if c { 1 }\n    else { 2 }\n}\n");
-    assert_eq!(codes, ["E0005"]);
+fn else_starting_a_line_continues_the_if() {
+    // wolf-lang#276: no terminator before a leading `else`
+    // ([gram.lex.newline]), so the aligned layout is one chain — the
+    // same tree as the one-line spelling. E0005 is retired.
+    let src = "fn f() { let x = if c { 1 }\n    else if d { 2 }\n    else { 3 }\n}\n";
+    let root = clean(src);
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    assert_eq!(count(&root, SyntaxKind::IfExpr), 2);
+    let outer = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert_eq!(outer.else_branch().expect("else").kind, SyntaxKind::IfExpr);
+}
+
+#[test]
+fn else_starting_a_line_after_a_complete_expression_is_defaulting() {
+    // The binding decides, not the line ([gram.amb.else]): after a
+    // complete expression a leading `else` is the defaulting operator.
+    let src = "fn f() { let v = g()\n    else 0\n}\n";
+    let root = clean(src);
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 1);
+    let e = ElseExpr::cast(first(&root, SyntaxKind::ElseExpr)).expect("else");
+    assert_eq!(e.scrutinized().expect("lhs").kind, SyntaxKind::CallExpr);
 }
 
 // ------------------------------------------------------------ closures --

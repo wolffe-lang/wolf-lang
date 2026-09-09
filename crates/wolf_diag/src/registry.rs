@@ -132,15 +132,6 @@ meant spells the fraction out: `1.0e5`. Write digits after the dot
 suggested edit does exactly that ([gram.amb.intdot]).
 "#);
 
-code!(E0005, "`else` may not start a new line", r#"
-The newline after the `}` of the then-block ends the `if` statement, so
-an `else` on the next line belongs to nothing — wolf will not guess
-whether it was meant for the `if` above it. Put the `else` on the same
-line as the closing brace of the block before it: `} else {`. This is
-the one place wolf's newline-termination rule constrains layout
-([gram.amb.else]).
-"#);
-
 code!(E0006, "a struct literal cannot sit bare in condition position", r#"
 In a condition or scrutinee — after `if`, `while`, `match`, or `for
 … in` — a `{` must open the construct's block, so a bare struct literal
@@ -2432,10 +2423,9 @@ mod tests {
     #[test]
     fn frontend_codes_all_registered() {
         for c in [
-            "E0001", "E0002", "E0003", "E0005", "E0006", "E0007", "E0008", "E0101", "E0102",
-            "E0103", "E0104", "E0105", "E0106", "E0107", "E0108", "E0109", "E0110", "E0201",
-            "E0202", "E0203", "E0204", "E0205", "E0206", "E0207", "E0208", "E0209", "E0210",
-            "E0211",
+            "E0001", "E0002", "E0003", "E0006", "E0007", "E0008", "E0101", "E0102", "E0103",
+            "E0104", "E0105", "E0106", "E0107", "E0108", "E0109", "E0110", "E0201", "E0202",
+            "E0203", "E0204", "E0205", "E0206", "E0207", "E0208", "E0209", "E0210", "E0211",
         ] {
             assert!(explain(c).is_some(), "{c} missing from the registry");
         }

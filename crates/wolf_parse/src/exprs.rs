@@ -384,18 +384,6 @@ fn stmt(p: &mut Parser<'_>) {
             grammar::inner_attribute(p, true);
             m.complete(p, SyntaxKind::ErrorNode);
         }
-        TokenKind::Kw(Keyword::Else) => {
-            // E0005: the inserted terminator after `}` orphaned this
-            // `else` ([gram.amb.else] — `} else` must share the line).
-            p.error(
-                codes::ELSE_ON_NEW_LINE,
-                p.current_span(),
-                "`else` must be on the same line as the `}` that closes the \
-                 preceding block — move it up to `} else`",
-            );
-            p.skip_until(true, |k| k == TokenKind::Term);
-            m.complete(p, SyntaxKind::ErrorNode);
-        }
         k if is_leading_operator(k) => {
             let op = String::from_utf8_lossy(p.current_text()).into_owned();
             p.error(
@@ -1390,30 +1378,15 @@ fn interp(p: &mut Parser<'_>, ctx: Ctx) {
 /// `if expr block ('else' (if_expr | block))?` (`[gram.expr.flow]`).
 /// An `else` here belongs to the `if` only when `if` or `{` follows —
 /// otherwise it is the defaulting operator on the completed if
-/// expression (`[gram.amb.else]`, report 05's corner case).
+/// expression (`[gram.amb.else]`, report 05's corner case). An `else`
+/// that starts a line arrives without a terminator before it
+/// (`[gram.lex.newline]`'s lookahead, wolf-lang#276), so the binding
+/// here is the same on one line and across two.
 fn if_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
     p.bump(); // if
     condition_required(p, ctx, "the `if` condition");
     block_required(p);
-    // E0005: `else` on the next line — the inserted terminator after
-    // `}` would orphan it. Diagnose, absorb the terminator, continue.
-    if p.at(TokenKind::Term)
-        && p.nth(1) == TokenKind::Kw(Keyword::Else)
-        && matches!(
-            p.nth(2),
-            TokenKind::Kw(Keyword::If) | TokenKind::Punct(Punct::LBrace)
-        )
-        && p.current_text() != b";"
-    {
-        p.error(
-            codes::ELSE_ON_NEW_LINE,
-            p.nth_span(1),
-            "`else` must be on the same line as the `}` that closes the \
-             then-block — write `} else`",
-        );
-        p.bump(); // the terminator joins the if
-    }
     if p.at_kw(Keyword::Else)
         && matches!(
             p.nth(1),
