@@ -774,6 +774,57 @@ the scalar's value before the value had a type, and it still is.)
   arithmetic on a byte without `as int` reads the E0401 note that
   names the cast), and `char` is the scalar tier, never a byte.
 
+(Appended 2026-09-09, s143 — wolf-lang#265. The parse family. Every
+implementation served `str.to_int() -> int ! {NotAnInt}` — the
+reference interpreter since before 0.1.13, wolf-std's corpus, the
+book's first chapter, and from s142 both compiler tiers — and no
+clause said a word about it: `grep to_int spec/` was empty. Four
+agreeing implementations of an unwritten rule are four chances to
+drift apart on the next input, so the rule is written down here, in
+the `[mem.str]` group because parsing is a read of the string's bytes
+by a builtin method, the same register as searching and splitting.
+The witnesses predate the clause: `corpus/strings/to_int.lu` is the
+battery and `corpus/rows/to_int_not_an_int.lu` the row leaving
+`main`; this is a ruling of executed behaviour, not a change to it.)
+
+- `[mem.str.parse]` The parse family is **one method: `to_int`**.
+  `to_float` and `to_bool` do not exist — not "not yet": a float parse
+  needs the float TEXT grammar ruled (exponents, `inf`/`nan`, `_`,
+  hex floats — s38 ruled only the rendering direction, shortest
+  round-trip), and a bool parse has no row to answer that
+  `s == "true"` does not already answer. A lane that serves either
+  has diverged. The row's spelling is **`NotAnInt`**, blessed as
+  written: it is the one CamelCase tag on the builtin surface, and the
+  difference is meant — the snake_case rows of the OS families
+  (`not_found`, `denied`, `io`, `closed`) name conditions of the HOST
+  and coarsen to `io` by the wolf-std taxonomy, while `NotAnInt` is a
+  verdict about the caller's own value, the register of a
+  user-declared tag (`BadDigit`, `Overloaded`) and the one a program
+  spells in `else |err| match err { NotAnInt => … }`. A rename would
+  move that spelling in the interpreter, wolf-std's corpus, the
+  book's chapter 1 (prose and samples) and both compiler tiers with
+  their snapshots in one wave, for a case convention — weighed and
+  rejected. The row carries no payload: the text is the caller's, and
+  a payload would copy it.
+- `[mem.str.to_int]` `s.to_int() -> int ! {NotAnInt}`. The
+  surrounding `[mem.str.ws]` run is **ignored** — exactly the set
+  `trim` removes, so `s.to_int()` and `s.trim().to_int()` are one
+  value on every input. What remains must be an **optional sign
+  (`+` or `-`) followed by one or more ASCII digits `0`–`9`**, and the
+  number they spell must fit `int`; that number is the value. Leading
+  zeros are digits (`"007"` is `7`), `"+5"` is `5`, `"-0"` is `0`.
+  **Everything else is the row `NotAnInt`, never a trap**: the empty
+  and the blank text, a sign alone, an interior space, a `_`
+  separator, a radix prefix (`0x10`), a fraction, an exponent, a
+  non-ASCII digit (U+0663), trailing text (`12a`) — and a magnitude
+  outside `int`'s range (`9223372036854775808`), because there is no
+  `int` the text names and X3 forbids a quiet wrap (the interpreter
+  parsed a wider integer there until wolf-interp#69; both machines
+  answer the row from lupin 0.1.28). The grammar is deliberately the
+  literal's integer subset without its conveniences: `1_000` and
+  `0x10` are things a PROGRAM spells, and a value read from the world
+  gets no such courtesy.
+
 ---
 
 - `[mem.dyn.unsize]` A trait object is constructed by an **explicit
