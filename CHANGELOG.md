@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### A `char` joins a `str` (s145 — #278 closes)
+
+A reader built a string one character at a time — `t += cs[i]` in a
+reverse-words loop — and both machines refused it with E0409, the
+D62 note pointing at an interpolation hole. The ruling
+(wolf-lang#278) is that **a `char` is text, not a number**: a
+Unicode scalar appended to a `str` is closed under UTF-8 and has
+exactly one rendering, so `s + c` and `c + s` are interpolation-
+append in either order — `"{s}{c}"`, `"{c}{s}"`, the `char`
+contributing its scalar's UTF-8 bytes — and `s += c` is `s = s + c`.
+`[type.str.concat]` gains the sentence; `[type.str.concat.mix]`
+drops its two `char` rows and says why the `int` rows stay: `+` is
+not a formatter, and an `int` has more than one rendering (sign,
+radix, width), so `str + int` and `int + str` keep E0409 and the
+hole. The two sema arms admit a `char` on either side of `+` and as
+the value of `+=`; lowering reuses the `{c}` hole's own path on both
+tiers (`__wolf_rt_strbuf_char` natively, the scalar's bytes on the
+checked machine); E0409's note now names what `+` joins, and its
+catalog entry moves with it (the `str_plus_char` fixture retires).
+Witness: `strings/concat_mix_char.lu` flips from `fail(E0409)` to
+`run` — both orders, `+=`, two- and four-byte scalars, a `chars()`
+loop — exit 0 on both tiers; `concat_mix_int.lu` and
+`concat_int_str.lu` do not move. The maintainer's `reverse.lu` runs
+on both tiers and prints what lupin printed for the hole spelling.
+Under lupin 0.1.29 the witness is refused at its first `+`
+(`unsupported: `+` is not defined on str and char`, exit 4) and stays
+so until the interpreter mirrors — wolf-interp#78 names the two arms
+beside `(Str, Str)` in `eval/mod.rs`; it is the one corpus file the
+pair parts on for this ruling, named here so the pairing re-stamp
+can count it. Predicted before the edit: eleven files, the spec one
+sentence and one reason, sema two arms and a note, one helper in the
+native lowering, two arms on the checked one, one witness rewritten
+and its three snapshots regenerated; measured: that, with the
+lowering helper factored out (`str_concat_operand`) and the three
+E0409 snapshots re-rendered for the note.
+
 ### The `else` may start a line (s144 — #276 closes)
 
 A reader wrote an aligned `if` / `else if` / `else`, each `else`
