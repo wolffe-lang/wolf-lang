@@ -241,17 +241,13 @@ fn e0408_missing_struct_field() {
 // ---------------------------------------------------------- E0409 -----
 
 /// D62 (s128): `first + "lf"` on two strs is LEGAL now —
-/// interpolation-append. The mixes keep E0409, each with the
+/// interpolation-append. The `int` mixes keep E0409, each with the
 /// interpolation-hole note and its cost-model neighbor.
 #[test]
 fn e0409_str_plus_mixes() {
     snap_one(
         "e0409_str_plus_int",
         "fn main() -> !int {\n    let s = \"wo\"\n    let t = s + 1\n    0\n}\n",
-    );
-    snap_one(
-        "e0409_str_plus_char",
-        "fn main() -> !int {\n    let s = \"wo\"\n    let t = s + 'c'\n    0\n}\n",
     );
     snap_one(
         "e0409_int_plus_str",
@@ -261,6 +257,19 @@ fn e0409_str_plus_mixes() {
         "e0409_str_compound_int",
         "fn main() -> !int {\n    var s = \"wo\"\n    s += 1\n    0\n}\n",
     );
+}
+
+/// #278 (`[type.str.concat]`): a `char` is text, so `s + c`, `c + s`
+/// and `s += c` are interpolation-append, not E0409 — on either side,
+/// through a `+=`, and for a non-ASCII scalar.
+#[test]
+fn str_plus_char_is_append() {
+    let out = render_types(&[(
+        &[],
+        "main.lu",
+        "fn main() -> !int {\n    let s = \"wo\"\n    let t = s + 'l'\n    let u = 'w' + s\n    var v = t + u\n    v += 'f'\n    v += 'é'\n    let w: str = v + 'ß' + \"!\"\n    print(w)\n    0\n}\n",
+    )]);
+    assert!(out.is_empty(), "str + char is append, not E0409:\n{out}");
 }
 
 #[test]

@@ -1697,11 +1697,11 @@ impl<'a> Checker<'a> {
         self.diags.push(d);
     }
 
-    /// E0409, the D62 mixed-operand face: `+`/`+=` joins two `str`s
-    /// and nothing else — the conversion is spelled inside an
-    /// interpolation hole, and the cost model rides as the note's
-    /// neighbor so `+=` in a loop is never mistaken for an amortized
-    /// push.
+    /// E0409, the D62 mixed-operand face: `+`/`+=` joins a `str` with
+    /// a `str` or a `char` (#278) and nothing else — the conversion
+    /// is spelled inside an interpolation hole, and the cost model
+    /// rides as the note's neighbor so `+=` in a loop is never
+    /// mistaken for an amortized push.
     fn report_str_plus_mix(&mut self, op: &str, span: Span, other: TyId) {
         let o = self.show(other);
         self.diags.push(
@@ -1712,8 +1712,9 @@ impl<'a> Checker<'a> {
             )
             .with_label(format!("this is `{o}`"))
             .with_note(format!(
-                "`{op}` joins two `str`s (D62). Spell the conversion inside an \
-                 interpolation hole: `t += \"{{count}}\"` formats any primitive."
+                "`{op}` joins a `str` with a `str` or a `char` (D62). Spell any \
+                 other conversion inside an interpolation hole: `t += \"{{count}}\"` \
+                 formats any primitive."
             ))
             .with_note(
                 "each `+` builds a fresh `str` — interpolation's cost model; \
@@ -3560,15 +3561,19 @@ impl<'a> Checker<'a> {
         {
             let op_text = a.op().map(|t| self.text(t.span)).unwrap_or_default();
             // D62 (s128): `s += u` is `s = s + u` — legal exactly when
-            // both are `str`; mixes keep E0409 with the
-            // interpolation-hole note.
+            // both are `str`, or the value is a `char` (#278,
+            // `[type.str.concat]`: a char is text, appended as its
+            // scalar's UTF-8 bytes); the `int` mix keeps E0409 with
+            // the interpolation-hole note.
             if op_kind == SyntaxKind::PlusEq
                 && matches!(self.kind_of(place_ty), TyKind::Prim(Prim::Str))
             {
                 if let Some(v) = a.value() {
                     let vt = self.synth_expr(v)?;
                     let sp = self.lo.table.prim(Prim::Str);
-                    if unify(&mut self.lo.table, &mut self.vars, vt, sp).is_err() {
+                    if !matches!(self.kind_of(vt), TyKind::Prim(Prim::Char))
+                        && unify(&mut self.lo.table, &mut self.vars, vt, sp).is_err()
+                    {
                         self.report_str_plus_mix("+=", v.span, vt);
                     }
                 }
@@ -4418,11 +4423,17 @@ impl<'a> Checker<'a> {
                 // D62 (s128): `s + u` is legal exactly when BOTH are
                 // `str` and means `"{s}{u}"` — a builtin on the
                 // builtin type, like `==` on `str`; no trait bridge
-                // (D49 untouched). The three mixes keep E0409.
+                // (D49 untouched). #278 (`[type.str.concat]`): a
+                // `char` on either side is the same append — `s + c`
+                // is `"{s}{c}"`, `c + s` is `"{c}{s}"` — because a
+                // char is text with one rendering. The `int` mixes
+                // keep E0409 (`[type.str.concat.mix]`).
                 if op_kind == Some(SyntaxKind::Plus) {
                     let l_str = matches!(self.kind_of(lt), TyKind::Prim(Prim::Str));
                     let r_str = matches!(self.kind_of(rt), TyKind::Prim(Prim::Str));
-                    if l_str && r_str {
+                    let l_char = matches!(self.kind_of(lt), TyKind::Prim(Prim::Char));
+                    let r_char = matches!(self.kind_of(rt), TyKind::Prim(Prim::Char));
+                    if (l_str && (r_str || r_char)) || (l_char && r_str) {
                         return Ok(self.lo.table.prim(Prim::Str));
                     }
                     if l_str || r_str {
