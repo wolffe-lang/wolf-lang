@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="fell back: parse")
+//! phase: run
+//! conforms: gram.amb.else, gram.lex.newline
+//! fmt: relaid
+//! A leading `else` after a complete expression is the defaulting
+//! operator across lines: no terminator is inserted before an `else`
+//! (`[gram.lex.newline]`, wolf-lang#276), and the binding — not the
+//! line — says which `else` it is (`[gram.amb.else]`). `wolf fmt`
+//! re-lays it trailing. Diverges under lupin 0.1.28 until is42 mirrors.
+
+fn parse(s: str) -> !int { s.to_int() }
+
+fn main() -> !int {
+    let a = parse("7")
+        else 0
+    let b = parse("x")
+        else 0
+    let c = parse("x")
+        else |err| { print("fell back: {err}"); 1 }
+    if a == 7 && b == 0 && c == 1 { 0 } else { 1 }
+}

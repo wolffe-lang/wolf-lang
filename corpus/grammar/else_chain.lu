@@ -1,10 +1,30 @@
 //! check: pass
 //! phase: run
-//! conforms: gram.amb.else
-//! `} else` must share the line; the chain binds to the nearest `if`.
+//! conforms: gram.amb.else, gram.lex.newline
+//! fmt: relaid
+//! The chain binds to the nearest `if`, on one line or across lines:
+//! a line whose first token is `else` continues the previous statement
+//! (`[gram.lex.newline]`'s lookahead, wolf-lang#276 — E0005 retired).
+//! The aligned layout is the maintainer's, verbatim; `wolf fmt` re-lays
+//! both new-line forms to `} else` (`[gram.fmt.brace]`).
+
+fn classify(s: str, i: int) -> str {
+    var t = ""
+    if (s[i..i+1] == "\t")      { t += "<tab>" }
+    else if (s[i..i+1] == "\n") { t += "<nl>" }
+    else                        { t += s[i..i+1] }
+    t
+}
 
 fn main() -> !int {
     let x = 2
     let r = if x == 1 { 10 } else if x == 2 { 20 } else { 30 }
-    if r == 20 { 0 } else { 1 }
+    let s = if x == 1 {
+        10
+    }
+    else {
+        20
+    }
+    let c = classify("a\tb", 1)
+    if r == 20 && s == 20 && c == "<tab>" { 0 } else { 1 }
 }

@@ -2,13 +2,279 @@
 source: crates/wolf_wir/tests/lower_corpus.rs
 expression: out
 ---
+decl @__wolf_rt_strbuf_finish(ptr, ptr, mem.r0)
+decl @__wolf_rt_strbuf_new() -> ptr
+decl @__wolf_rt_strbuf_str(ptr, ptr, i64, i64)
+decl @classify({ptr, i64}, i64) -> {ptr, i64}
+data @str.0 = "\x00"
+data @str.1 = "\t"
+data @str.2 = "<tab>"
+data @str.3 = "\n"
+data @str.4 = "<nl>"
+data @str.5 = "a\tb"
+
+fn @classify({ptr, i64}, i64) -> {ptr, i64} {
+  fact deref %116 16 : op
+  fact deref %50 16 : op
+  fact deref %90 16 : op
+  fact region %116 r4 : op
+  fact region %50 r2 : op
+  fact region %90 r3 : op
+b0(%0: {ptr, i64}, %1: i64):
+  %2: mem.r1 = region.foreign 1
+  %3: mem.r0 = region.foreign 0
+  %4 = data.addr @str.0
+  %5 = iconst.i64 0
+  %6 = agg.get %0, 0
+  %7 = agg.get %0, 1
+  %8 = iconst.i64 1
+  %9 = iadd.chk %1, %8
+  %10 = iconst.i64 192
+  %11 = iconst.i64 128
+  %12 = icmp.ule %1, %9
+  %13 = bconst false
+  br %12, b1, b9(%13)
+b1:
+  %14 = icmp.ule %9, %7
+  br %14, b2, b9(%13)
+b2:
+  %15 = icmp.eq %1, %7
+  %16 = bconst true
+  br %15, b4(%16), b3
+b3:
+  %17 = ptr.off %6, %1, 1
+  %18 = load.i8 %17, %2
+  %19 = zext.i64 %18
+  %20 = band %19, %10
+  %21 = icmp.ne %20, %11
+  jmp b4(%21)
+b4(%22: bool):
+  br %22, b5, b9(%13)
+b5:
+  %23 = icmp.eq %9, %7
+  br %23, b7(%16), b6
+b6:
+  %24 = ptr.off %6, %9, 1
+  %25 = load.i8 %24, %2
+  %26 = zext.i64 %25
+  %27 = band %26, %10
+  %28 = icmp.ne %27, %11
+  jmp b7(%28)
+b7(%29: bool):
+  br %29, b8, b9(%13)
+b8:
+  jmp b9(%16)
+b9(%30: bool):
+  br %30, b10, b47
+b10:
+  %31 = ptr.off %6, %1, 1
+  %32 = data.addr @str.1
+  %33 = bconst true
+  %34 = bconst false
+  jmp b11(%5)
+b11(%35: i64):
+  %36 = icmp.slt %35, %8
+  br %36, b12, b14(%33)
+b12:
+  %37 = ptr.off %31, %35, 1
+  %38 = load.i8 %37, %2
+  %39 = zext.i64 %38
+  %40 = ptr.off %32, %35, 1
+  %41 = load.i8 %40, %2
+  %42 = zext.i64 %41
+  %43 = icmp.eq %39, %42
+  br %43, b13, b14(%34)
+b13:
+  %44 = iadd.wrap %35, %8
+  jmp b11(%44)
+b14(%45: bool):
+  br %45, b15, b16
+b15:
+  %46 = data.addr @str.2
+  %47 = iconst.i64 5
+  %48 = call @__wolf_rt_strbuf_new()
+  call @__wolf_rt_strbuf_str(%48, %4, %5, %5)
+  call @__wolf_rt_strbuf_str(%48, %46, %47, %5)
+  %49 = iconst.i64 16
+  %50: ptr, %51: mem.r2 = stack.alloc %49
+  %52 = call @__wolf_rt_strbuf_finish(%48, %50, %51)
+  %53 = load.ptr %50, %52
+  %54 = iconst.i64 8
+  %55 = ptr.off %50, %54, 1
+  %56 = load.i64 %55, %52
+  %57 = agg.make %53, %56
+  jmp b44(%57)
+b16:
+  %58 = icmp.ule %1, %9
+  br %58, b17, b25(%34)
+b17:
+  %59 = icmp.ule %9, %7
+  br %59, b18, b25(%34)
+b18:
+  %60 = icmp.eq %1, %7
+  br %60, b20(%33), b19
+b19:
+  %61 = load.i8 %31, %2
+  %62 = zext.i64 %61
+  %63 = band %62, %10
+  %64 = icmp.ne %63, %11
+  jmp b20(%64)
+b20(%65: bool):
+  br %65, b21, b25(%34)
+b21:
+  %66 = icmp.eq %9, %7
+  br %66, b23(%33), b22
+b22:
+  %67 = ptr.off %6, %9, 1
+  %68 = load.i8 %67, %2
+  %69 = zext.i64 %68
+  %70 = band %69, %10
+  %71 = icmp.ne %70, %11
+  jmp b23(%71)
+b23(%72: bool):
+  br %72, b24, b25(%34)
+b24:
+  jmp b25(%33)
+b25(%73: bool):
+  br %73, b26, b46
+b26:
+  %74 = data.addr @str.3
+  jmp b27(%5)
+b27(%75: i64):
+  %76 = icmp.slt %75, %8
+  br %76, b28, b30(%33)
+b28:
+  %77 = ptr.off %31, %75, 1
+  %78 = load.i8 %77, %2
+  %79 = zext.i64 %78
+  %80 = ptr.off %74, %75, 1
+  %81 = load.i8 %80, %2
+  %82 = zext.i64 %81
+  %83 = icmp.eq %79, %82
+  br %83, b29, b30(%34)
+b29:
+  %84 = iadd.wrap %75, %8
+  jmp b27(%84)
+b30(%85: bool):
+  br %85, b31, b32
+b31:
+  %86 = data.addr @str.4
+  %87 = iconst.i64 4
+  %88 = call @__wolf_rt_strbuf_new()
+  call @__wolf_rt_strbuf_str(%88, %4, %5, %5)
+  call @__wolf_rt_strbuf_str(%88, %86, %87, %5)
+  %89 = iconst.i64 16
+  %90: ptr, %91: mem.r3 = stack.alloc %89
+  %92 = call @__wolf_rt_strbuf_finish(%88, %90, %91)
+  %93 = load.ptr %90, %92
+  %94 = iconst.i64 8
+  %95 = ptr.off %90, %94, 1
+  %96 = load.i64 %95, %92
+  %97 = agg.make %93, %96
+  jmp b43(%97)
+b32:
+  %98 = icmp.ule %1, %9
+  br %98, b33, b41(%34)
+b33:
+  %99 = icmp.ule %9, %7
+  br %99, b34, b41(%34)
+b34:
+  %100 = icmp.eq %1, %7
+  br %100, b36(%33), b35
+b35:
+  %101 = load.i8 %31, %2
+  %102 = zext.i64 %101
+  %103 = band %102, %10
+  %104 = icmp.ne %103, %11
+  jmp b36(%104)
+b36(%105: bool):
+  br %105, b37, b41(%34)
+b37:
+  %106 = icmp.eq %9, %7
+  br %106, b39(%33), b38
+b38:
+  %107 = ptr.off %6, %9, 1
+  %108 = load.i8 %107, %2
+  %109 = zext.i64 %108
+  %110 = band %109, %10
+  %111 = icmp.ne %110, %11
+  jmp b39(%111)
+b39(%112: bool):
+  br %112, b40, b41(%34)
+b40:
+  jmp b41(%33)
+b41(%113: bool):
+  br %113, b42, b45
+b42:
+  %114 = call @__wolf_rt_strbuf_new()
+  call @__wolf_rt_strbuf_str(%114, %4, %5, %5)
+  call @__wolf_rt_strbuf_str(%114, %31, %8, %5)
+  %115 = iconst.i64 16
+  %116: ptr, %117: mem.r4 = stack.alloc %115
+  %118 = call @__wolf_rt_strbuf_finish(%114, %116, %117)
+  %119 = load.ptr %116, %118
+  %120 = iconst.i64 8
+  %121 = ptr.off %116, %120, 1
+  %122 = load.i64 %121, %118
+  %123 = agg.make %119, %122
+  jmp b43(%123)
+b43(%124: {ptr, i64}):
+  jmp b44(%124)
+b44(%125: {ptr, i64}):
+  ret %125
+b45:
+  trap.bounds
+b46:
+  trap.bounds
+b47:
+  trap.bounds
+}
+
 fn @main() -> i64 {
 b0:
-  %0 = iconst.i32 2
-  %1 = iconst.i32 1
-  %2 = bconst false
-  %3 = bconst true
-  %4 = iconst.i32 20
-  %5 = iconst.i64 0
-  ret %5
+  %0: mem.r1 = region.foreign 1
+  %1: mem.r0 = region.foreign 0
+  %2 = iconst.i32 2
+  %3 = iconst.i32 1
+  %4 = bconst false
+  %5 = bconst true
+  %6 = iconst.i32 20
+  %7 = data.addr @str.5
+  %8 = iconst.i64 3
+  %9 = agg.make %7, %8
+  %10 = iconst.i64 1
+  %11 = call @classify(%9, %10)
+  %12 = data.addr @str.2
+  %13 = iconst.i64 5
+  %14 = agg.get %11, 0
+  %15 = agg.get %11, 1
+  %16 = icmp.eq %15, %13
+  br %16, b1, b5(%4)
+b1:
+  %17 = iconst.i64 0
+  jmp b2(%17)
+b2(%18: i64):
+  %19 = icmp.slt %18, %13
+  br %19, b3, b5(%5)
+b3:
+  %20 = ptr.off %14, %18, 1
+  %21 = load.i8 %20, %0
+  %22 = zext.i64 %21
+  %23 = ptr.off %12, %18, 1
+  %24 = load.i8 %23, %0
+  %25 = zext.i64 %24
+  %26 = icmp.eq %22, %25
+  br %26, b4, b5(%4)
+b4:
+  %27 = iadd.wrap %18, %10
+  jmp b2(%27)
+b5(%28: bool):
+  br %28, b6, b7
+b6:
+  %29 = iconst.i64 0
+  jmp b8(%29)
+b7:
+  jmp b8(%10)
+b8(%30: i64):
+  ret %30
 }
