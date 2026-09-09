@@ -230,7 +230,8 @@ impl Lexer<'_> {
 
     /// Would a terminator be inserted at a newline right now?
     /// `[gram.lex.newline]`: last-token class, innermost-delimiter
-    /// suppression, and the attribute-`]` exception.
+    /// suppression, the attribute-`]` exception, and the `else`
+    /// lookahead (`self.pos` is the newline byte).
     fn term_due(&self) -> bool {
         if self.attr_close {
             return false;
@@ -241,7 +242,34 @@ impl Lexer<'_> {
         ) {
             return false;
         }
-        self.tokens.last().is_some_and(|t| t.kind.ends_statement())
+        self.tokens.last().is_some_and(|t| t.kind.ends_statement()) && !self.else_follows()
+    }
+
+    /// Is the next token after `self.pos` the keyword `else`? One token
+    /// of lookahead over trivia (inline whitespace, newlines, `//`
+    /// comments), `[gram.lex.newline]`'s `else` exception (wolf-lang#276):
+    /// a line whose first token is `else` continues the previous
+    /// statement, so no terminator is inserted at the newline before it.
+    /// `elsewhere` is an identifier, not the keyword.
+    fn else_follows(&self) -> bool {
+        let mut i = self.pos;
+        loop {
+            match self.src.get(i) {
+                Some(b'\n') => i += 1,
+                Some(&b) if is_inline_ws(b) => i += 1,
+                Some(b'/') if self.src.get(i + 1) == Some(&b'/') => {
+                    while self.src.get(i).is_some_and(|&b| b != b'\n') {
+                        i += 1;
+                    }
+                }
+                _ => break,
+            }
+        }
+        self.src[i..].starts_with(b"else")
+            && !self
+                .src
+                .get(i + 4)
+                .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_' || b >= 0x80)
     }
 
     // ------------------------------------------------------------- normal

@@ -75,7 +75,9 @@
 //! `}`, or postfix `?` — unless the innermost enclosing delimiter is `(`,
 //! `[`, or an interpolation (a `{…}` block re-enables insertion whatever
 //! it is nested in), or the previous token is the `]` closing an
-//! attribute `#[…]`. An inserted `Term` spans the newline byte; an
+//! attribute `#[…]`, or the next token is `else` (one token of
+//! lookahead over trivia, wolf-lang#276: a line whose first token is
+//! `else` continues the previous statement). An inserted `Term` spans the newline byte; an
 //! explicit `;` is the same `Term` kind spanning the `;` (empty-statement
 //! detection, E0002, is the parser's job). A zero-width `Term` is emitted
 //! at end of file when the last line qualifies and lacks a newline.

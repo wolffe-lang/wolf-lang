@@ -335,6 +335,33 @@ fn term_inserted_after_each_terminator_class() {
 }
 
 #[test]
+fn term_not_inserted_before_a_leading_else() {
+    // [gram.lex.newline]'s `else` lookahead (wolf-lang#276): a line
+    // whose first token is `else` continues the previous statement —
+    // after a `}` (the branch) and after a complete expression (the
+    // defaulting operator). Blank lines and comments between do not
+    // count; only the terminator before the `else` is withheld.
+    for src in [
+        "if c { 1 }\nelse { 2 }\n",
+        "if c { 1 }\n    else if d { 2 }\n    else { 3 }\n",
+        "let v = f()\n    else 0\n",
+        "x?\nelse 0\n",
+        "{ a }\n\n\nelse { b }\n",
+        "{ a }\n// why\nelse { b }\n",
+        "{ a } // trailing\nelse { b }\n",
+    ] {
+        assert_eq!(
+            term_count(src),
+            1,
+            "only the final newline terminates in {src:?}"
+        );
+    }
+    // `elsewhere` is an identifier: the terminator is inserted.
+    assert_eq!(term_count("{ a }\nelsewhere\n"), 2);
+    assert_eq!(term_count("{ a }\nelse_x\n"), 2);
+}
+
+#[test]
 fn term_not_inserted_after_non_terminators() {
     for src in [
         "x +\n", "x,\n", "let\n", "x.\n", "x =\n", "(\n", "[\n", "{\n", "x &&\n", "if\n", "x <\n",
