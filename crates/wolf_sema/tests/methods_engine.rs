@@ -245,3 +245,35 @@ fn unreachable_arm_warns_but_body_checks() {
     let tb = body(&tc, "main");
     assert_eq!(tb.warnings.len(), 1);
 }
+
+// ------------------------------------------ s142: to_int (#263) --
+
+/// wolf-lang#263's first half: the refusal for a `str` method outside
+/// the set NAMES the method. The siblings the interpreter does not
+/// serve either (`to_float`, `to_bool`) are exactly the shape a
+/// reader meets next.
+#[test]
+fn a_str_method_outside_the_set_is_refused_by_name() {
+    for (m, src) in [
+        (
+            "to_float",
+            "fn main() -> !int {\n    let x = \"3.5\".to_float() else 0.0\n    0\n}\n",
+        ),
+        (
+            "to_bool",
+            "fn main() -> !int {\n    let x = \"true\".to_bool() else false\n    0\n}\n",
+        ),
+    ] {
+        let tc = check_one(src);
+        assert_eq!(tc.not_yet.len(), 1, "{m}: {:?}", tc.not_yet);
+        assert_eq!(
+            tc.not_yet[0].construct,
+            format!("this `str` method, `{m}`, is outside the builtin set"),
+        );
+        let refused = &src[tc.not_yet[0].span.lo as usize..tc.not_yet[0].span.hi as usize];
+        assert!(
+            refused.ends_with(&format!(".{m}()")),
+            "the span is the call: {refused}"
+        );
+    }
+}

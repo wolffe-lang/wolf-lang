@@ -10178,8 +10178,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 );
                 Ok(Flow::Val(Some(self.load_str_slot(slot, region, e.span)?)))
             }
-            _ => Err(refuse(
-                "this `str` method (outside the s37 builtin set)",
+            // Named (wolf-lang#263), as sema's twin names it: a bare
+            // span made the reader count bytes.
+            _ => Err(refuse_named(
+                format!("this `str` method, `{mname}`, is outside the builtin set"),
                 e.span,
             )),
         }

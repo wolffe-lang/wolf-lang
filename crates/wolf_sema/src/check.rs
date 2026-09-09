@@ -5871,8 +5871,14 @@ impl<'a> Checker<'a> {
                 str_,
             ),
             _ => {
+                // Name the method (wolf-lang#263): the reader had to
+                // count bytes to learn which call a bare span refused.
+                // `construct` is `&'static str` by design (the ledger
+                // keys on it), so the text is leaked once per refusal
+                // — a path that ends the build, never a hot one.
+                let text = format!("this `str` method, `{mname}`, is outside the builtin set");
                 return Err(NotYet {
-                    construct: "this `str` method (outside the builtin set)",
+                    construct: Box::leak(text.into_boxed_str()),
                     span: e.span,
                 });
             }

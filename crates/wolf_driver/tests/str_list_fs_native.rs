@@ -657,3 +657,63 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
+
+// ------------------------------------------ s142: to_int (#263) --
+
+/// wolf-lang#263's first half: a `str` method outside the builtin set
+/// is refused BY NAME — the record's `x-unsupported-construct` and the
+/// stderr line both say which method, so nobody counts bytes to learn
+/// it. The refusal is sema's (before either lane), so the checked rung
+/// shows it without a toolchain.
+#[test]
+fn a_str_method_outside_the_set_is_refused_by_name() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s142_refusal_names");
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let entry = dir.join("s142_refusal_names.lu");
+    std::fs::write(
+        &entry,
+        "fn main() -> !int {\n    let x = \"3.5\".to_float() else 0.0\n    print(\"{x}\")\n    0\n}\n",
+    )
+    .expect("write fixture");
+    let out = Command::new(wolf())
+        .arg("conform-run")
+        .arg(&entry)
+        .args(["--json", "--checked"])
+        .output()
+        .expect("wolf runs");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let rec: serde_json::Value = serde_json::from_slice(&out.stdout).expect("a record");
+    assert_eq!(rec["verdict"], "unsupported");
+    let construct = rec["x-unsupported-construct"]
+        .as_str()
+        .expect("the record names the refused construct");
+    assert_eq!(
+        construct, "this `str` method, `to_float`, is outside the builtin set",
+        "the refusal names the method"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("unsupported — this `str` method, `to_float`, is outside the builtin set"),
+        "stderr names it too: {stderr}"
+    );
+    // And `wolf build`'s own voice — the line the maintainer read.
+    let out = Command::new(wolf())
+        .arg("build")
+        .arg(&entry)
+        .arg("-o")
+        .arg(dir.join("never-linked"))
+        .output()
+        .expect("wolf runs");
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains(
+            "wolf build: cannot compile this yet — this `str` method, `to_float`, is outside the builtin set @"
+        ),
+        "build names the method: {stderr}"
+    );
+}
