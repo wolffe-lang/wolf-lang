@@ -620,14 +620,15 @@ fn trim_bounds(s: &str, mode: i64) -> (usize, usize) {
 
 /// `to_int() -> int ! {NotAnInt}` (s142, wolf-lang#263) — the
 /// parsed `i64` through `out`, 0 on success; 1 is the `NotAnInt` row.
+/// `[mem.str.to_int]` (s143, #265) is the clause this implements.
 ///
 /// The text is trimmed with `[mem.str.ws]`'s set (the trim above, so
 /// `"  7  ".to_int()` and `"  7  ".trim().to_int()` are one value),
 /// then read as an optionally signed (`+`/`-`) run of ASCII digits —
 /// `i64::from_str`'s grammar, which is also the reference
 /// interpreter's: leading zeros are digits, `_`, a radix prefix, a
-/// fraction, an interior space, a lone sign, an empty text and a
-/// non-ASCII digit are all the row. A value outside `int`'s range is
+/// fraction, an exponent, an interior space, a lone sign, an empty
+/// text and a non-ASCII digit are all the row. A value outside `int`'s range is
 /// the row as well: there is no `int` the text names, and X3's
 /// checked arithmetic never answers with a quiet wrap. That last one
 /// was the one input the two implementations parted on (lupin parsed

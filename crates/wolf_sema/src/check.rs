@@ -5872,12 +5872,13 @@ impl<'a> Checker<'a> {
             ),
             // s142 (wolf-lang#263): `to_int() -> int ! {NotAnInt}` —
             // the parse the book's chapter 1 reaches for first
-            // (`row.to_int() else 0`). The row is the one lupin
-            // answers, spelled as lupin spells it; the surrounding
-            // `[mem.str.ws]` whitespace is ignored, a sign is
-            // accepted, and anything else that is not an optionally
-            // signed run of ASCII digits in `int`'s range is the row,
-            // never a trap. Parsing is a method and not a cast (E0805).
+            // (`row.to_int() else 0`). Ruled by `[mem.str.to_int]`
+            // (s143, #265): the surrounding `[mem.str.ws]` whitespace
+            // is ignored, a sign is accepted, and anything else that
+            // is not an optionally signed run of ASCII digits in
+            // `int`'s range is the row, never a trap. `[mem.str.parse]`
+            // blesses the spelling and makes `to_int` the family's one
+            // method. Parsing is a method and not a cast (E0805).
             "to_int" => {
                 let row = self
                     .lo
