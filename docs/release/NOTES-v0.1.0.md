@@ -22,6 +22,15 @@ What a wolf program does today, evidenced by the 262-file conformance
 corpus (94 files execute natively; the corpus ledger is enforced in CI
 by `cargo xtask corpus`, and a directive that lies fails the gate):
 
+> **Note added 2026-09-08 (wolf-lang#259 item 3).** The r01 criteria
+> audit (`v0-1-0-audit.md`), dated one day earlier, records 254 corpus
+> files and 89 at `phase: run`, and a reader meeting the two together
+> will notice. Both are right on their own baselines, measured at the
+> shas each names: at `e94b879` (the audit's) the corpus holds 254 `.lu`
+> files, 89 carrying `phase: run`; at the `v0.1.0` tag it holds 262 and
+> 94. Eight files and five native rows landed in the day between. Real
+> growth, not an error, and neither number is edited.
+
 - Native execution: `str` (all 21 methods, f-string interpolation
   with format specs in every literal), `List` (including `for` over
   lists and checked element arithmetic), the 9 `fs` builtins, `os`

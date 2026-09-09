@@ -67,6 +67,13 @@ without any diagnostic.
   witnesses (`corpus/projects/{count,rpn,wordtree}.lu`) all
   `phase: run`. 89 corpus files carry `phase: run` (native).
 
+  > **Note added 2026-09-08 (wolf-lang#259 item 3).** The release notes
+  > (`NOTES-v0.1.0.md`), written a day later, cite a 262-file corpus
+  > with 94 native. This audit's baseline is `e94b879`; the notes' is
+  > the `v0.1.0` tag. Counted at both: 254 `.lu` / 89 `phase: run` at
+  > `e94b879`, 262 / 94 at the tag. The audit's figures stand as
+  > recorded on 2026-08-11.
+
 ## Row 3: Differential shows zero unexplained divergences; every filed family closed or carries its [proto.cmp] ruling
 
 **VERDICT: PENDING(lupin v0.1.7), with an unfiled residue that is RED
