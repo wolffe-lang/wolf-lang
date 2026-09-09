@@ -196,7 +196,19 @@ premise by construction.
 - `[conc.chan.close]` `close` makes further sends return an error value
   (never UB, never a fault); buffered items drain; receives on a
   drained-closed channel return the closed error. Iterating a channel
-  (`for v in ch`) ends at drained-close.
+  (`for v in ch`) ends at drained-close. The closed error is the
+  payload-free row tag **`closed`**, and the cancellation that surfaces
+  as an error value at a channel's blocking points
+  (`[conc.cancel.points]`) is **`cancelled`**: lowercase, the house
+  pact `[mem.str.parse]` restated — a payload-free mark is a lowercase
+  word, CapCase names a payload's type (W0603). `recv`'s row is
+  `T ! {closed, cancelled}`. (Spelled 2026-09-09, wolf-lang#273: the
+  clause named the value and not its tag, the compiler's row said
+  `closed` and the interpreter minted `Closed`; since `{err}` renders a
+  caught row by its tag's name (`[type.interp.row]`) the spelling is
+  observable, so it is one. The interpreter and the book's chapter 12
+  follow in the same wave; `corpus/conc/chan_closed_row.lu` witnesses
+  the receive side.)
 - `[conc.chan.mailbox]` Procs communicate exclusively via typed channels
   + `select` (03 Q3): there is no selective receive; a proc's message
   handlers are atomic and non-blocking (a handler that must block

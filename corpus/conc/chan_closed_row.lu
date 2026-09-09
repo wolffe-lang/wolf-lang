@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="drained 6\nnothing left: closed")
+//! phase: run
+//! conforms: conc.chan.close, type.interp.row
+//! `[conc.chan.close]` spells its tag (wolf-lang#273): a receive on a
+//! drained-closed channel answers the payload-free row `closed`, and
+//! `{err}` renders it by its tag's name (`[type.interp.row]`). The
+//! checked lane declines channel methods (no resolvable bodies); this
+//! is a native witness. lupin 0.1.28 mints `Closed`; the mirror is the
+//! same wave's, so the two machines part on this file until it lands.
+
+fn main() -> !int {
+    let ch = channel[int](4)
+    for i in 1..=3 { ch.send(i) }
+    ch.close()
+    var sum = 0
+    for v in ch { sum += v }
+    print("drained {sum}")
+    let v = ch.recv() else |err| { print("nothing left: {err}"); 0 }
+    if v == 0 { 0 } else { 1 }
+}
