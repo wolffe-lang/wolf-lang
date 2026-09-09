@@ -287,6 +287,12 @@ pub(crate) struct Lowerer<'t> {
     places: crate::place::PlaceTable,
     cur: BlockId,
     exit: BlockId,
+    /// The scope index a `return` unwinds to (#268,
+    /// `[type.closure.return]`): 0 in a function body; inside a
+    /// closure or nested fn, the index of that body's own scope, so
+    /// the `return` runs the closure's defers and joins the closure's
+    /// exit — never the enclosing function's.
+    ret_depth: usize,
     scopes: Vec<Scope<'t>>,
     loops: Vec<LoopFrame>,
     /// Callee-side view-set context: (`self` local, viewed fields,
@@ -2199,7 +2205,7 @@ impl<'t> Lowerer<'t> {
                     let val = self.eval_value(v)?;
                     self.demand_outlives_frame(&val, v.span);
                 }
-                self.emit_defers(0, false)?;
+                self.emit_defers(self.ret_depth, false)?;
                 let exit = self.exit;
                 self.goto(self.cur, exit);
                 let dead = self.new_block();
@@ -2726,7 +2732,15 @@ impl<'t> Lowerer<'t> {
             self.emit_read(place, e.span);
             borrowed.push(place);
         }
+        // The closure body is walked inline in the enclosing CFG, but
+        // a `return` in it leaves the CLOSURE (#268): its exit is a
+        // join block of its own, and its defers run from the
+        // closure's scope inward.
+        let (saved_exit, saved_depth) = (self.exit, self.ret_depth);
+        let closure_exit = self.new_block();
+        self.exit = closure_exit;
         self.push_scope();
+        self.ret_depth = self.scopes.len() - 1;
         if let Some(params) = d.params() {
             for p in params.params() {
                 if let Some(n) = p.name() {
@@ -2745,6 +2759,10 @@ impl<'t> Lowerer<'t> {
         };
         r?;
         self.close_scope(end_span(e.span))?;
+        self.goto(self.cur, closure_exit);
+        self.cur = closure_exit;
+        self.exit = saved_exit;
+        self.ret_depth = saved_depth;
         if borrowed.is_empty() {
             return Ok(Val::none());
         }
@@ -3835,7 +3853,14 @@ impl<'t> Lowerer<'t> {
                 // Copy local (a fn value is one code pointer).
                 SyntaxKind::FnDecl => {
                     let d = wolf_ast::FnDecl::cast(stmt).expect("kind");
+                    // A `return` in the nested fn leaves the nested fn
+                    // (#268): its own exit join and defer depth, as
+                    // `eval_closure`.
+                    let (saved_exit, saved_depth) = (self.exit, self.ret_depth);
+                    let fn_exit = self.new_block();
+                    self.exit = fn_exit;
                     self.push_scope();
+                    self.ret_depth = self.scopes.len() - 1;
                     if let Some(params) = d.params() {
                         for p in params.params() {
                             if let Some(n) = p.name() {
@@ -3848,6 +3873,10 @@ impl<'t> Lowerer<'t> {
                         self.walk_block(b, false)?;
                     }
                     self.close_scope(end_span(stmt.span))?;
+                    self.goto(self.cur, fn_exit);
+                    self.cur = fn_exit;
+                    self.exit = saved_exit;
+                    self.ret_depth = saved_depth;
                     if let Some(n) = d.name() {
                         let nm = self.text(n.span);
                         self.declare_init(&nm, n.span);
@@ -4359,6 +4388,7 @@ impl<'t> Lowerer<'t> {
             places: crate::place::PlaceTable::new(),
             cur: BlockId(0),
             exit: BlockId(1),
+            ret_depth: 0,
             scopes: Vec::new(),
             loops: Vec::new(),
             view: None,
