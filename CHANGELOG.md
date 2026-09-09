@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### The parse family is ruled (s143 — #265 closes)
+
+`str.to_int() -> int ! {NotAnInt}` was served by every implementation
+and ruled by none. `[mem.str.parse]` and `[mem.str.to_int]` in
+spec/02 now say what the four agreeing implementations had been
+doing: the family is one method (`to_float` and `to_bool` do not exist
+— a float parse needs the float text grammar ruled, which s38 never
+did, and a bool parse answers nothing `s == "true"` does not); the
+surrounding `[mem.str.ws]` run is ignored, exactly `trim`'s set; the
+value is an optional sign and one or more ASCII digits that fit
+`int`, leading zeros included; everything else is the row, never a
+trap — the empty and blank text, a sign alone, an interior space,
+`_`, a radix prefix, a fraction, an exponent, a non-ASCII digit,
+trailing text, and a magnitude outside `int`. `NotAnInt` is blessed
+as spelled: the snake_case rows of the OS families name conditions of
+the host and coarsen to `io`; this one is a verdict about the caller's
+own value, the register of a user-declared tag, and the spelling a
+program matches on in `else |err| match err { NotAnInt => … }`. A
+rename would have moved the interpreter, wolf-std's corpus, the
+book's chapter 1 and both compiler tiers in one wave for a case
+convention. The three magnitude-outside-`int` rows join the corpus
+battery (`strings/to_int.lu`): wolf-interp#69 closed at lupin 0.1.28
+and both machines answer the row, so the inputs that lived in the
+driver's crate test alone now pin both sides. No interface moved.
+
 ## 0.2.8 — 2026-09-09
 
 THE FIRST CHAPTER COMPILES, AND THE SYSCALL GOES FIRST. This release
