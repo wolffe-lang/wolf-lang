@@ -20,6 +20,18 @@ jobs:
     name: lint + test + corpus (linux x86-64)
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # r10/#253: the pairing gate (crates/wolf_driver/tests/pairing.rs, D57)
+    # only fires where a sibling lupin binary exists, and no runner had one,
+    # so the single gate that compares the two implementations was the single
+    # gate CI never ran. PAIRING went stale at lupin v0.1.27 and reddened
+    # every laptop in the house at once while six CI jobs stayed green. A
+    # sibling checkout on the runner would be a campaign (a second repo, its
+    # own toolchain, a build); the pinned release ARCHIVE is public and
+    # already built, so the runner gets one for a 2 MB download.
+    env:
+      LUPIN: ${{ github.workspace }}/.lupin/lupin
+      # ...and may not answer a broken download with a green skip.
+      WOLF_PAIRING_REQUIRE_SIBLING: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -30,6 +42,30 @@ jobs:
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script)
         run: sudo apt-get update && sudo apt-get install -y gdb lld clang
+      - name: the sibling lupin that PAIRING names, from its own release page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The version comes out of PAIRING, so this step tracks the stamp
+        # rather than repeating it, and a bumped stamp pointing at a release
+        # that does not exist reds here by name. The digest is never typed
+        # (ws21): it is read off the release asset GitHub reports and checked
+        # against the bytes that arrived. This runs BEFORE the gauntlet so
+        # `cargo xtask ci`'s own test step is the one that compares, which
+        # keeps the runner's gauntlet and the laptop's the same gauntlet.
+        run: |
+          set -euo pipefail
+          ver=$(sed -n 's/^lupin-version *= *//p' crates/wolf_driver/PAIRING | tr -d '[:space:]')
+          test -n "$ver" || { echo "::error::PAIRING names no lupin-version"; exit 1; }
+          asset="lupin-$ver-x86_64-unknown-linux-gnu.tar.gz"
+          want=$(gh release view "v$ver" --repo wolffe-lang/wolf-interp \
+                   --json assets --jq ".assets[]|select(.name==\"$asset\")|.digest")
+          test -n "$want" || { echo "::error::wolf-interp v$ver publishes no $asset"; exit 1; }
+          mkdir -p .lupin
+          gh release download "v$ver" --repo wolffe-lang/wolf-interp \
+             --pattern "$asset" --dir .lupin
+          echo "${want#sha256:}  .lupin/$asset" | sha256sum -c -
+          tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
+          .lupin/lupin --version
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
         run: cargo xtask ci
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)

@@ -18,12 +18,15 @@
 //!    suffix nor the pin, so the gauntlet stayed green while two
 //!    different interpreters both answered `lupin 0.1.13`. A dev sibling
 //!    makes no release claim, so its pin is advance notice, not rot; the
-//!    skip says so out loud. On a box with no sibling (bare CI), layer 3
-//!    notes itself absent and layers 1–2 still hold; the local gauntlet
-//!    is the gate the house trusts, and every box that runs
-//!    differentials has the sibling by definition. The verdict logic
-//!    itself is pure and unit-tested below, so the gate's teeth are
-//!    exercised on every run of this suite, sibling or not.
+//!    skip says so out loud. On a box with no sibling, layer 3 notes
+//!    itself absent and layers 1–2 still hold; every box that runs
+//!    differentials has the sibling by definition. CI is no longer such
+//!    a box: r10 gave the linux job the pinned lupin RELEASE ARCHIVE, so
+//!    layer 3 runs on the runner too and `WOLF_PAIRING_REQUIRE_SIBLING`
+//!    turns the skip into a red where a sibling was arranged and did not
+//!    arrive. The verdict logic itself is pure and unit-tested below, so
+//!    the gate's teeth are exercised on every run of this suite, sibling
+//!    or not.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -153,13 +156,40 @@ fn sibling_verdict(first_line: &str, version: &str, pin: &str) -> Result<String,
     }
 }
 
+/// What an ABSENT sibling means, which depends on who is asking.
+///
+/// On a laptop with no wolf-interp checkout, absence is a fact about the
+/// box and the skip is honest. On the runner it is not: the job fetched
+/// the pinned lupin release archive on purpose, so an absent sibling
+/// there is the fetch having failed, and a gate that answers a broken
+/// fetch with a green skip teaches people to ignore it (ws21 wrote the
+/// same rule for `doors-fresh`: a fetch failure is a red named as a
+/// fetch failure, never a silent skip). `WOLF_PAIRING_REQUIRE_SIBLING`
+/// is how that job says "there is supposed to be one here".
+fn absent_sibling_verdict(required: bool, lupin_env: Option<&str>) -> Result<String, String> {
+    if required {
+        return Err(format!(
+            "WOLF_PAIRING_REQUIRE_SIBLING is set and no sibling lupin was found \
+             (LUPIN={}) — whoever set that variable arranged for one, so this is \
+             the arrangement having failed, not a box without a checkout; a gate \
+             that skips over its own broken plumbing is not a gate",
+            lupin_env.unwrap_or("<unset>")
+        ));
+    }
+    let note = "no sibling lupin on this box (set LUPIN to point at one) — the rot \
+                check ran elsewhere; layers 1-2 still hold here";
+    Ok(note.to_string())
+}
+
 #[test]
 fn the_pairing_matches_the_sibling_lupin_when_present() {
+    let required = std::env::var_os("WOLF_PAIRING_REQUIRE_SIBLING").is_some();
+    let lupin_env = std::env::var("LUPIN").ok();
     let Some(lupin) = sibling_lupin() else {
-        eprintln!(
-            "pairing: no sibling lupin on this box (set LUPIN to point at one) — \
-             the rot check ran elsewhere; layers 1-2 still hold here"
-        );
+        match absent_sibling_verdict(required, lupin_env.as_deref()) {
+            Ok(note) => eprintln!("pairing: {note}"),
+            Err(broken) => panic!("pairing: {broken}"),
+        }
         return;
     };
     let out = Command::new(&lupin)
@@ -236,6 +266,16 @@ fn a_full_sha_pairing_pin_matches_the_short_spelling() {
         "90c90df91dc314f9d0ae322d387dd10be046c828",
     );
     assert!(verdict.is_ok(), "{verdict:?}");
+}
+
+#[test]
+fn an_absent_sibling_is_a_skip_on_a_bare_box_and_a_red_where_one_was_arranged() {
+    let skip = absent_sibling_verdict(false, None).expect("a bare box may skip layer 3");
+    assert!(skip.contains("layers 1-2 still hold"), "{skip}");
+    let red = absent_sibling_verdict(true, Some("/nope/lupin"))
+        .expect_err("a required sibling that is missing is broken plumbing");
+    assert!(red.contains("/nope/lupin"), "{red}");
+    assert!(red.contains("not a gate"), "{red}");
 }
 
 /// Layer 4 (r03, D57): the FIRST line tells the build's own truth.

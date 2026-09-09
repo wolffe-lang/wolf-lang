@@ -11,3 +11,5 @@ corpus/.lu-cache/
 .lu-cache/
 /hello
 .claude/
+# The pinned lupin release archive the linux CI job unpacks (r10/#253).
+.lupin/
