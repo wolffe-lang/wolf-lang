@@ -1,0 +1,55 @@
+//! check: run(exit=0, stdout="fine normal(1540)\nbroken error(Corrupt)\nkilled killed\nfaulty fault(bounds)")
+//! phase: run
+//! conforms: type.interp.reason, conc.proc.exit
+//!
+//! s143 (wolf-lang#268) — `{reason}` for every exit-reason class a
+//! program can provoke (`[conc.proc.exit]`, rendered per
+//! `[type.interp.reason]`): `normal(1540)` — the proc's `int` result
+//! rides the exit (until s143 the native tier reported `normal(0)`
+//! for every ok body; the entry shim now hands the value to the
+//! runtime through `__wolf_rt_task_value`), `error(Corrupt)` — the
+//! row's tag by name, `killed`, and `fault(bounds)` — the trap kind
+//! contained at the proc boundary (D68), spelled from
+//! `[conf.trap.set]`. `cancelled` is `conc/proc_cancel_defers.lu`'s.
+//! The checked lane refuses procs (C1 deferred); this is a native
+//! witness, byte-identical with lupin 0.1.28.
+
+fn fine() -> int { 1540 }
+fn broken() -> !int { Corrupt }
+fn parked() -> int {
+    let idle = channel[int](0)
+    let v = idle.recv() else 0
+    v
+}
+fn faulty() -> int {
+    var xs = List[int]()
+    xs[3]
+}
+fn main() -> !int {
+    let a = spawn proc fine()
+    let ma = a.monitor()
+    select {
+        exit(reason) from ma => { print("fine {reason}") },
+        timeout(1.s) => { print("fine stuck") },
+    }
+    let b = spawn proc broken()
+    let mb = b.monitor()
+    select {
+        exit(reason) from mb => { print("broken {reason}") },
+        timeout(1.s) => { print("broken stuck") },
+    }
+    let k = spawn proc parked()
+    let mk = k.monitor()
+    k.kill()
+    select {
+        exit(reason) from mk => { print("killed {reason}") },
+        timeout(1.s) => { print("killed stuck") },
+    }
+    let f = spawn proc faulty()
+    let mf = f.monitor()
+    select {
+        exit(reason) from mf => { print("faulty {reason}") },
+        timeout(1.s) => { print("faulty stuck") },
+    }
+    0
+}

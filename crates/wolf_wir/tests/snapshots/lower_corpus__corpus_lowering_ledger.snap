@@ -41,6 +41,7 @@ conc/proc_cross_module/main.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/proc_spawn_loop.lu: lowers
+conc/reason_interp.lu: lowers
 conc/select_seeded.lu: lowers
 conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
@@ -115,7 +116,7 @@ grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_params_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers
-grammar/else_default.lu: not mem-clean (pre-wir rungs own it)
+grammar/else_default.lu: lowers
 grammar/index_origin_bad.lu: not mem-clean (pre-wir rungs own it)
 grammar/index_origin_closure.lu: lowers
 grammar/index_origin_file.lu: lowers
@@ -371,7 +372,7 @@ rows/qmark_defer.lu: lowers
 rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers
-rows/to_int_not_an_int.lu: lowers
+rows/to_int_parse.lu: lowers
 strings/boundary_battery.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
@@ -396,6 +397,7 @@ strings/format_spec_mismatch.lu: not mem-clean (pre-wir rungs own it)
 strings/format_spec_width.lu: lowers
 strings/from_utf8_border.lu: lowers
 strings/interp_value_position.lu: lowers
+strings/interp_values.lu: lowers
 strings/match_str_const_scrutinee.lu: lowers
 strings/match_str_dispatch.lu: lowers
 strings/multiline_escapes.lu: lowers

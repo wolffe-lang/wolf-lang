@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1592..1629 name=Doc fields=2
+StructDecl 1630..1660 name=Pair fields=2
+EnumDecl 1661..1706 name=Shape variants=3
+FnDecl 1708..1785 name=half body=Block
+FnDecl 1786..1963 name=digit body=Block
+FnDecl 1965..2986 name=main body=Block

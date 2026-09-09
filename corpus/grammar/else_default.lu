@@ -1,7 +1,13 @@
-//! check: pass
-//! phase: resolve
-//! conforms: gram.amb.else
+//! check: run(exit=0, stdout="fell back: parse")
+//! phase: run
+//! conforms: gram.amb.else, type.interp.row
 //! `else` after a complete expression is the defaulting operator (D30).
+//! Pinned at resolve until s143 (wolf-lang#268): the `{err}` hole in
+//! the third fallback was "string interpolation of a non-primitive
+//! value"; a caught row renders as its tag's name now
+//! (`[type.interp.row]`), so the file runs on both tiers. The tag is
+//! `to_int`'s `parse` (`[mem.str.parse]`; lupin 0.1.28 still spells
+//! it `NotAnInt` — the mirror is the same wave's).
 
 fn parse(s: str) -> !int { s.to_int() }
 

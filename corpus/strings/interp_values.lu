@@ -1,0 +1,68 @@
+//! check: run(exit=0, stdout="struct Doc { title: regions, words: 900 }\nnested Pair { a: 1, b: Doc { title: regions, words: 900 } }\ntuple (1, two, 3.5, true, c)\nlist [1, 2, 3]\nempty []\ndocs [Doc { title: moves, words: 640 }]\nunion ok 7\nunion err odd\ncaught BadDigit(q, 1)\ncaught too_short\nabc 0 0 4\nrow odd\nshape Shape.Line(4) Shape.Rect(2, 3)\nbuilt Doc { title: regions, words: 900 } (1, two, 3.5, true, c) [1, 2, 3]\npopped 3")
+//! phase: run
+//! conforms: type.interp.value, type.interp.agg, type.interp.row, type.interp.union, err.union, err.else
+//!
+//! s143 (wolf-lang#268) — `{x}` where `x` is not a primitive, the
+//! book's largest one-machine family (10 samples at wolf 0.2.8): a
+//! struct, a nested struct, a tuple, a `List` (empty, of ints, of
+//! structs), a `!T` union in its ok and its row state, a caught row
+//! with and without a payload, an enum variant with a payload, and
+//! the same holes in VALUE position building a `str`. The rendering
+//! is `[type.interp.value]`'s — the reference interpreter's, byte for
+//! byte: a struct is `Name { f: v, g: w }`, a tuple `(a, b)`, a list
+//! `[a, b]`, a row `Tag` or `Tag(p1, p2)`, a union its payload or its
+//! row, an enum `Enum.Variant(p)`; a `str` inside a composite is its
+//! bytes, unquoted. The last line is chapter 5's `{popped}` — the
+//! `!T` a `pop` answers, printed without an `else`.
+//!
+//! Not here, by name: a payload-less variant read bare (`Shape.Dot`)
+//! is a module-item read the checked lane refuses today, so the
+//! native-only rendering of it lives in the driver's parity test.
+
+struct Doc { title: str, words: int }
+struct Pair { a: int, b: Doc }
+enum Shape { Dot, Line(int), Rect(int, int) }
+
+fn half(n: int) -> int ! {odd} {
+    if n % 2 == 1 { return odd }
+    n / 2
+}
+fn digit(s: str) -> int ! {BadDigit(str, int), too_short} {
+    if s.len < 1 { return too_short }
+    if s < "0" || s > "9" { return BadDigit(s, s.len) }
+    s.to_int() else 0
+}
+
+fn main() -> !int {
+    let d = Doc { title: "regions", words: 900 }
+    print("struct {d}")
+    let t = (1, "two", 3.5, true, 'c')
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    let s = "built {d} {t} {xs}"
+    let p = Pair { a: 1, b: d }
+    print("nested {p}")
+    print("tuple {t}")
+    print("list {xs}")
+    let empty = List[str]()
+    print("empty {empty}")
+    var ds = List[Doc]()
+    (mut ds).push(Doc { title: "moves", words: 640 })
+    print("docs {ds}")
+    let ok = half(14)
+    print("union ok {ok}")
+    let bad = half(3)
+    print("union err {bad}")
+    let a = digit("q") else |err| { print("caught {err}"); 0 }
+    let b = digit("") else |err| { print("caught {err}"); 0 }
+    let c = digit("4") else |err| { print("caught {err}"); 0 }
+    print("abc {a} {b} {c}")
+    let e = half(5) else |err| { print("row {err}"); 0 }
+    print("shape {Shape.Line(4)} {Shape.Rect(2, 3)}")
+    print(s)
+    let popped = (mut xs).pop()
+    print("popped {popped}")
+    0
+}
