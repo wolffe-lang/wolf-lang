@@ -30,6 +30,7 @@ conc/cancel_sibling.lu: lowers
 conc/capture_mut_arg.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_mut_lend.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_write_assign.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_closed_row.lu: lowers
 conc/chan_drain_after_inclusive_loop.lu: lowers
 conc/chan_param_for.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
@@ -117,6 +118,7 @@ grammar/closure_params_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers
 grammar/else_default.lu: lowers
+grammar/else_default_newline.lu: lowers
 grammar/index_origin_bad.lu: not mem-clean (pre-wir rungs own it)
 grammar/index_origin_closure.lu: lowers
 grammar/index_origin_file.lu: lowers
@@ -235,6 +237,7 @@ memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime sh
 memory/list_elem_assign.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
+memory/list_pop_empty.lu: lowers
 memory/list_session_struct.lu: lowers
 memory/list_slice.lu: lowers
 memory/list_slice_edges.lu: lowers
