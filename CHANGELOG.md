@@ -1,6 +1,52 @@
 # Changelog
 
-## Unreleased
+## 0.2.8 — 2026-09-09
+
+THE FIRST CHAPTER COMPILES, AND THE SYSCALL GOES FIRST. This release
+answers a learner at one end of the language and a server author at the
+other.
+
+The book's chapter 1 reaches for `row.to_int()` twice, in the cold open
+and again in exercise 1-10. The compiler had refused that call since the
+builtin set was drawn, so the first non-trivial string method a learner
+met was also the first program that did not build. `str.to_int() -> int
+! {NotAnInt}` is in the set on both tiers now, spelled the way the
+reference interpreter has always spelled it, and text it cannot read is
+the `NotAnInt` row rather than a trap. When a method really is outside
+the set, the refusal says which method: ``this `str` method, `to_int`,
+is outside the builtin set``, where it used to give a byte span and
+leave the reader counting.
+
+At the other end, a program that reads a socket the kernel has already
+made ready now makes the read and waits for nothing. Every parking call
+in the net family used to go to the reactor thread first (a waiter cell,
+a lock handshake, a `kevent` to arm it, a `kevent` to wake it, a
+condvar, two context switches) and only then make the syscall, on a
+socket the program's own `net_wait` had just reported ready. lobo, the
+web server written in wolf, paid that round-trip three times per
+request. The same lobo source was built against the old compiler and
+against this one and measured on a single macOS arm64 box in one session
+six minutes apart: 53.3 µs per request before and 21.2 after, 18,766
+req/s to 47,162, and the share of the serving thread parked in a condvar
+fell from 40.7% to 1.1%. The `wolf-reactor` thread never started at all
+in the second run, because the reactor is lazy and a serving loop that
+never parks never asks for one.
+
+Three smaller changes come with that one. `TCP_NODELAY` is on for every
+TCP stream the runtime hands out, accepted or dialed, so the common
+shape (answer with a head, then a body, two writes, the second small) no
+longer stalls 40 ms behind the peer's delayed ACK; `net_nodelay(fd, on)`
+sets it either way, and `net_writev` sends the head and the body as one
+gathered write. `fs_fstat(fd)` answers `[kind, size, modified_ms]` from
+one metadata read on an open handle, where a static-file server
+previously paid four separate path stats for the same facts. And a
+write's budget now covers its whole drain, so a `net_deadline` armed on
+a stream bounds a large `net_write` to a peer that stopped reading;
+before this release that drain rode a blocking syscall and ran past the
+budget.
+
+Every call that existed at 0.2.7 keeps its signature and its error rows,
+so a program written against it compiles and behaves the same way here.
 
 ### The first chapter compiles (s142 — #263 closes)
 
