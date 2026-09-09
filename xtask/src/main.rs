@@ -1463,12 +1463,23 @@ const ALL_THREE_FLOOR: usize = 0;
 // the fix changes what a lost race DOES, not any verdict — every
 // listener the corpus binds is single-owner and never loses one.
 // Counts measured by this gate, not predicted.
+// s141 ratchet over 477 entries: the syscall goes first (#257,
+// `[os.net.io]`) and the gathered write with `TCP_NODELAY` (#254,
+// `[os.net.writev]`, `[os.net.nodelay]`). THREE new run-phase
+// witnesses — `net/syscall_first`, `net/writev_gather`, `net/nodelay`
+// — and every one executes on all three lanes: none of the three
+// clauses names a host, and the checked machine serves the gather and
+// the option through the same std calls the runtime uses. So every
+// count moves by exactly three (278/298/298, union 315, all-three
+// 261). No pre-existing file moved lanes: the posture change moves a
+// cost, not a verdict — every row the corpus reads off a socket is the
+// row it read before. Counts measured by this gate, not predicted.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 275), ("native", 295), ("release", 295)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 278), ("native", 298), ("release", 298)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 312;
+const UNION_FLOOR: usize = 315;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 258;
+const ALL_THREE_FLOOR: usize = 261;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
