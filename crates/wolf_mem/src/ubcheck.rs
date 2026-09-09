@@ -3898,11 +3898,19 @@ impl<'t> Machine<'t> {
         let (l, r) = (widen(l), widen(r));
         match (l, r) {
             // D62 (s128): `+` on two strs is `"{s}{u}"` — UTF-8
-            // concatenation, a fresh str per application. Sema admits
-            // no mix, so a non-str pair here falls through to the
-            // modelled-surface refusal.
+            // concatenation, a fresh str per application. #278
+            // (`[type.str.concat]`): a char on either side is the
+            // same append, the scalar's UTF-8 bytes — `{c}`'s
+            // rendering. Sema admits no other mix, so any other pair
+            // here falls through to the modelled-surface refusal.
             (Value::Str(a), Value::Str(b)) if op == SyntaxKind::Plus => {
                 Ok(Value::Str(format!("{a}{b}")))
+            }
+            (Value::Str(a), Value::Char(c)) if op == SyntaxKind::Plus => {
+                Ok(Value::Str(format!("{a}{c}")))
+            }
+            (Value::Char(c), Value::Str(b)) if op == SyntaxKind::Plus => {
+                Ok(Value::Str(format!("{c}{b}")))
             }
             (Value::Int(a), Value::Int(b)) => {
                 // Wrapping types wrap at their width; checked prims

@@ -9863,19 +9863,38 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// SAME strbuf path interpolation materializes through (`[type.str]`;
     /// no new runtime surface). A fresh `str` per application, by
     /// design: the cost model is interpolation's, and `std.strbuf`
-    /// stays the builder for heavy loops.
+    /// stays the builder for heavy loops. #278 (`[type.str.concat]`):
+    /// either operand may be a `char` (the I32 cell) — it takes the
+    /// `{c}` hole's own shim, `__wolf_rt_strbuf_char`, so `s + c` IS
+    /// `"{s}{c}"` down to the runtime call.
     fn str_concat(&mut self, a: Value, b: Value, span: Span) -> R<Value> {
         let buf = self
             .rt_call("__wolf_rt_strbuf_new", &[], Some(types::PTR))
             .expect("strbuf handle");
-        let sp = self.b.iconst(types::I64, 0);
-        let (pa, la) = self.str_parts(a);
-        self.rt_call("__wolf_rt_strbuf_str", &[buf, pa, la, sp], None);
-        let (pb, lb) = self.str_parts(b);
-        self.rt_call("__wolf_rt_strbuf_str", &[buf, pb, lb, sp], None);
+        self.str_concat_operand(buf, a);
+        self.str_concat_operand(buf, b);
         let (region, slot) = self.rt_slot(16);
         self.rt_call_slot("__wolf_rt_strbuf_finish", &[buf], slot, region, None);
         self.load_str_slot(slot, region, span)
+    }
+
+    /// One operand of `[type.str.concat]` onto the builder: a `str`
+    /// pair through `__wolf_rt_strbuf_str`, a `char` (sema admits
+    /// exactly these two shapes into a `str`-typed `+`) widened to
+    /// the i64 the shim takes, through `__wolf_rt_strbuf_char` — the
+    /// same call `PrintSeg::Char` makes into a buffer sink.
+    fn str_concat_operand(&mut self, buf: Value, v: Value) {
+        let sp = self.b.iconst(types::I64, 0);
+        if self.b.func.value_ty(v) == types::I32 {
+            let wide = self
+                .b
+                .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                .one();
+            self.rt_call("__wolf_rt_strbuf_char", &[buf, wide, sp], None);
+        } else {
+            let (p, l) = self.str_parts(v);
+            self.rt_call("__wolf_rt_strbuf_str", &[buf, p, l, sp], None);
+        }
     }
 
     /// `[mem.str.get]`'s domain, INLINE (s77) — the test
