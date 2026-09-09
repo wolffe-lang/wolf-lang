@@ -724,11 +724,9 @@ impl NetTable {
     /// budget fires (`timeout`) — the s35 shape, without a syscall
     /// first. Kept for the tests that construct a race between the
     /// wake and the take; no runtime path parks before trying since
-    /// s141.
-    #[cfg(all(
-        test,
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
-    ))]
+    /// s141. Those tests are unix-shaped (a `dup` of the listener), so
+    /// the helper is theirs alone.
+    #[cfg(all(test, any(target_os = "linux", target_os = "macos")))]
     fn wait_ready(&mut self, fd: i64, want_stream: bool, interest: Interest) -> Result<(), NetErr> {
         let (raw, deadline) = self.park_spec(fd, want_stream)?;
         wait_raw(raw, interest, deadline)
@@ -2013,9 +2011,15 @@ mod tests {
     /// drain resumes from the byte it stopped at — and the budget now
     /// covers the WHOLE drain: a peer that never reads turns a bounded
     /// write into `timeout` at the budget, never a kernel park past it.
+    /// The park count and the never-reads half are asserted on linux
+    /// and macOS only: the windows runner's receive-window autotuning
+    /// absorbs the whole 8 MiB with no `WouldBlock` (measured on the
+    /// runner, CI run 34298572103), so there the test proves the drain
+    /// arrives intact and says nothing about the buffer.
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[test]
     fn write_drains_a_large_body_through_parks_and_the_budget_covers_the_drain() {
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let parks = || PARKS.with(std::cell::Cell::get);
         let mut t = NetTable::new();
         let l = t.listen("127.0.0.1:0").expect("listen");
@@ -2038,26 +2042,31 @@ mod tests {
         });
         let conn = t.accept(l).expect("accept");
         t.set_deadline(conn, 10_000).expect("arm");
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         let p0 = parks();
         t.write(conn, &body).expect("the whole body drains");
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         assert!(parks() > p0, "a body larger than the send buffer parked");
         t.close(conn).expect("close");
         let got = reader.join().expect("reader");
         assert_eq!(got.len(), body.len());
         assert!(got.iter().all(|&b| b == 0xA5), "every byte arrived intact");
         // A peer that never reads: the budget answers, within itself.
-        let _stuck = std::net::TcpStream::connect(&addr).expect("dial");
-        let conn = t.accept(l).expect("accept");
-        t.set_deadline(conn, 300).expect("arm");
-        let t0 = std::time::Instant::now();
-        assert_eq!(t.write(conn, &body), Err("timeout"));
-        let took = t0.elapsed();
-        assert!(
-            took >= std::time::Duration::from_millis(250)
-                && took < std::time::Duration::from_secs(3),
-            "timeout at the budget, not before and not never: {took:?}"
-        );
-        t.close(conn).expect("close");
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            let _stuck = std::net::TcpStream::connect(&addr).expect("dial");
+            let conn = t.accept(l).expect("accept");
+            t.set_deadline(conn, 300).expect("arm");
+            let t0 = std::time::Instant::now();
+            assert_eq!(t.write(conn, &body), Err("timeout"));
+            let took = t0.elapsed();
+            assert!(
+                took >= std::time::Duration::from_millis(250)
+                    && took < std::time::Duration::from_secs(3),
+                "timeout at the budget, not before and not never: {took:?}"
+            );
+            t.close(conn).expect("close");
+        }
         t.close(l).expect("close");
     }
 
