@@ -424,6 +424,8 @@
     "type.char.interp": "10-types.md",
     "type.char.lit": "10-types.md",
     "type.char.order": "10-types.md",
+    "type.closure": "10-types.md",
+    "type.closure.return": "10-types.md",
     "type.interp": "10-types.md",
     "type.interp.agg": "10-types.md",
     "type.interp.none": "10-types.md",

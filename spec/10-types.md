@@ -353,6 +353,27 @@ values that have none.)
   a loop is quadratic, never an amortized push. `std.strbuf` is the
   builder. The diagnostics say so beside the refusal note.
 
+## §6 Closures `[type.closure]`
+
+(Appended 2026-09-09, s145 — wolf-lang#268's `return` inside a closure
+family: seven of the book's samples, chapter 16's receivers among
+them, spell `let r = ch.recv() else |_| { return }` inside a spawned
+closure. Every machine that ran them agreed on what the `return`
+means; only the compiler's typing withheld it.)
+
+- `[type.closure.return]` **`return` inside a closure returns from the
+  closure.** Its operand types against the closure's own result — the
+  result the context fixes for a closure checked against a fn type,
+  the one inferred from the body's tail otherwise (a `return` and the
+  tail meet at one type), the declared return type on a nested `fn` —
+  and a bare `return` is the unit result. The enclosing function is
+  out of reach: no `return` in a closure body leaves the function the
+  closure was written in, on any tier, and the closure's own `defer`s
+  run on the way out exactly as a function's do. `?` follows the same
+  frame (its row is the closure's, s73). This is the meaning every
+  reader assumed and every machine already ran; it is written down so
+  the typing can admit it.
+
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
 beyond what literal adoption needs) nor the general narrowing integer
