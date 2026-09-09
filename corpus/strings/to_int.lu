@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="plain 42\nspaces 7\nascii_ws 12\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nzero 0\nmax 9223372036854775807\nmin -9223372036854775808\nempty NotAnInt\nblank NotAnInt\nword NotAnInt\ninner_space NotAnInt\nunderscore NotAnInt\nfraction NotAnInt\nhex NotAnInt\narabic NotAnInt\nlone_sign NotAnInt\ntrailing NotAnInt\nsum 8\nvia_fn 7 0")
+//! check: run(exit=0, stdout="plain 42\nspaces 7\nascii_ws 12\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nzero 0\nmax 9223372036854775807\nmin -9223372036854775808\nover NotAnInt\nunder NotAnInt\nhuge NotAnInt\nempty NotAnInt\nblank NotAnInt\nword NotAnInt\ninner_space NotAnInt\nunderscore NotAnInt\nfraction NotAnInt\nhex NotAnInt\narabic NotAnInt\nlone_sign NotAnInt\ntrailing NotAnInt\nsum 8\nvia_fn 7 0")
 //! phase: run
 //! conforms: err.union, err.else, mem.str.ws
 //!
@@ -17,6 +17,15 @@
 //!                 empty and the blank text, a word, an interior
 //!                 space, `_` separators, a fraction, a radix prefix,
 //!                 a non-ASCII digit, a lone sign, trailing letters.
+//!   the magnitude a signed run of digits too large for `int` is the
+//!                 row too — there is no `int` the text names, and X3
+//!                 forbids a quiet wrap. r12 moved `over`/`under`/
+//!                 `huge` here from `wolf_rt`'s crate tests, where
+//!                 s142 had to leave them: the interpreter parsed to
+//!                 `i128` and answered `9223372036854775808 : i64`,
+//!                 so a witness would have pinned one side against
+//!                 the other rather than pinning the language
+//!                 (wolf-interp#69, fixed in lupin 0.1.28).
 //!
 //! The last two lines are chapter 1's own idiom (`row.to_int() else
 //! 0` over a multiline literal's `lines()`) and the `?`-inside-a-fn
@@ -46,6 +55,9 @@ fn main() -> !int {
     show("zero", "0")
     show("max", "9223372036854775807")
     show("min", "-9223372036854775808")
+    show("over", "9223372036854775808")
+    show("under", "-9223372036854775809")
+    show("huge", "99999999999999999999")
     show("empty", "")
     show("blank", "   ")
     show("word", "four")

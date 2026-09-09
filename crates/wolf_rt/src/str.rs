@@ -625,12 +625,15 @@ fn trim_bounds(s: &str, mode: i64) -> (usize, usize) {
 /// `"  7  ".to_int()` and `"  7  ".trim().to_int()` are one value),
 /// then read as an optionally signed (`+`/`-`) run of ASCII digits —
 /// `i64::from_str`'s grammar, which is also the reference
-/// interpreter's (wolf-interp#69 is the one input the two part on —
-/// its `i128` parse): leading zeros are digits, `_`, a radix prefix, a
+/// interpreter's: leading zeros are digits, `_`, a radix prefix, a
 /// fraction, an interior space, a lone sign, an empty text and a
 /// non-ASCII digit are all the row. A value outside `int`'s range is
 /// the row as well: there is no `int` the text names, and X3's
-/// checked arithmetic never answers with a quiet wrap.
+/// checked arithmetic never answers with a quiet wrap. That last one
+/// was the one input the two implementations parted on (lupin parsed
+/// to `i128` and answered `9223372036854775808 : i64`, wolf-interp#69);
+/// lupin 0.1.28 rows it too, so `corpus/strings/to_int.lu` pins it
+/// differentially now and this test is no longer its only reader.
 ///
 /// # Safety
 ///
@@ -1454,8 +1457,12 @@ mod tests {
     /// serves the whole family; the answers must not have moved with it.
     /// s142 (wolf-lang#263): the parse behind `to_int`, row for row
     /// with the reference interpreter's `str::parse` grammar over a
-    /// `[mem.str.ws]` trim — and the one place the two part: a
-    /// magnitude outside `i64` is the row here, not a wider integer.
+    /// `[mem.str.ws]` trim — a magnitude outside `i64` included, which
+    /// is the row here and not a wider integer. That was the one place
+    /// the two parted (wolf-interp#69) and it kept the input out of the
+    /// corpus; lupin 0.1.28 fixed it, r12 moved the input into
+    /// `corpus/strings/to_int.lu`, and the three rows stay here because
+    /// this is the only test that reaches the shim directly.
     #[test]
     fn to_int_parses_trimmed_decimal_i64_or_rows() {
         let ok: &[(&str, i64)] = &[
