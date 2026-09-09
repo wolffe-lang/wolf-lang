@@ -233,8 +233,6 @@ is not separating statements within a single-line block
 (`[gram.fmt.inline]`).
 
 Exceptions (grammar-level):
-- `else` must appear on the same line as the preceding `}` — the inserted
-  terminator after `}` would otherwise orphan it. `[gram.amb.else]`
 - The *innermost* enclosing delimiter decides: when it is `(`, `[`, or an
   interpolation, newlines never terminate. A `{…}` block re-enables
   insertion inside itself whatever it is nested in — statements inside a
@@ -242,6 +240,17 @@ Exceptions (grammar-level):
   suppresses.
 - No terminator is inserted after the `]` that closes an attribute
   (`#[…]`) — the attribute prefixes the construct on the next line.
+- No terminator is inserted at a newline when the next token is `else`
+  (one token of lookahead; trivia between the newline and the `else` —
+  blank lines, comments — does not count). A line whose first token is
+  `else` continues the previous statement: `}` newline `else {` is
+  `} else {`, and `f()` newline `else 0` is `f() else 0`. Which `else`
+  it is, the binding decides (`[gram.amb.else]`); the line never does.
+  (Ruled 2026-09-09, wolf-lang#276. The rule this replaces was Go's —
+  `else` had to share the `}`'s line — and a reader met it as E0005 on
+  an aligned `if` / `else if` / `else`. Readers do not learn a layout
+  rule; the formatter keeps its one shape, `[gram.fmt.brace]`. E0005
+  is retired.)
 - A terminator may be omitted before a closing `}` (Go's rule 2): the
   final statement of a single-line block needs no `;`.
 
@@ -923,6 +932,12 @@ no `goto`, no *required* semicolons (terminators are inserted;
   prefer raw when it contains ≥2 backslash escapes.
 - `[gram.fmt.canon]` `corpus/wordcount.lu` is the canonical formatted
   artifact; `wolf fmt` must fix-point every corpus file byte-identically.
+  One exception, declared per file: a witness whose header carries
+  `//! fmt: relaid` pins a source layout the parser admits and the
+  formatter re-lays (the leading-`else` witnesses of `[gram.amb.else]`,
+  wolf-lang#276), so `wolf fmt` is not the identity on it and the
+  canon gate reads past it; idempotence and round-trip still hold on
+  it, and the formatter's own tests pin what it re-lays to.
 
 ---
 
@@ -942,11 +957,17 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
   format spec: `"{m[k]:>8}"` formats `m[k]`; `"{ {a: 1}.a }"` — the `:`
   inside `{…}` nesting is not top-level. Files: `interp_fmtcolon.lu`,
   `interp_nested.lu`.
-- `[gram.amb.else]` `else` binds to the nearest viable construct on the
-  same logical statement: after an `if`'s `}` it continues the if; after a
-  complete expression it is the defaulting operator. `} else` same-line
-  rule makes the two cases lexically disjoint. Files: `else_default.lu`,
-  `else_chain.lu`.
+- `[gram.amb.else]` `else` binds to the nearest viable construct by the
+  parser's greedy binding: after an `if`'s `}` it continues the if (when
+  `if` or `{` follows); after a complete expression it is the defaulting
+  operator. The two cases are disjoint by binding, not by line:
+  `[gram.lex.newline]` inserts no terminator before an `else`, so an
+  `else` that starts a line binds exactly as it would at the end of the
+  line above — an aligned `if` / `else if` / `else` with each `else`
+  leading its line is one chain, and `let v = f()` newline `else 0` is
+  the defaulting operator across lines. Both are admitted; the formatter
+  re-lays them trailing (`} else`, `f() else 0` — `[gram.fmt.brace]`).
+  Files: `else_default.lu`, `else_chain.lu`, `else_default_newline.lu`.
 - `[gram.amb.bang]` `!` prefix in expression position = not; `!` in type
   position (after `->`, after `:`, inside `[…]` type args) = error union.
   Disjoint by position. Files: `bang_not.lu`, `bang_errunion.lu`.
@@ -970,7 +991,8 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
 Every counter-example above names an expected diagnostic. Codes reserved:
 E0001 (leading-operator continuation), E0002 (empty statement),
 E0003 (comparison chaining), E0004 (float `1.e5`), E0005 (`else` on new
-line), E0006 (struct literal in condition; primary span = the opening `{`), E0007 (interp nesting depth),
+line — retired 2026-09-09 by wolf-lang#276, `[gram.lex.newline]` looks
+ahead for `else` now; the number is never reused), E0006 (struct literal in condition; primary span = the opening `{`), E0007 (interp nesting depth),
 E0008 (keyword as identifier — names the keyword and suggests `r#`-free
 rename; wolf has no raw identifiers, pick another name).
 
