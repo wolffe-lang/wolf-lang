@@ -1481,11 +1481,21 @@ impl<'a> Lower<'a> {
                 if generics.contains(&first) || Prim::from_name(&first).is_some() {
                     // qualified/applied builtin form — not a s13 type
                     self.opaque(file, node)
-                } else if segs.len() == 1 && matches!(first.as_str(), "List" | "Pool") {
+                } else if segs.len() == 1 && matches!(first.as_str(), "List" | "Pool" | "channel")
+                {
                     // The two prelude containers the Tier-2 corpus
                     // rests on (s21): typed as builtins so `handle`
                     // pools and the region litmuses check. Every other
-                    // prelude generic stays opaque until s16/s37.
+                    // prelude generic stays opaque until s16/s37 —
+                    // except `channel[T]` (s143, wolf-lang#268): a
+                    // channel in a SIGNATURE position (a parameter, a
+                    // field) is the same `TyKind::Chan` the expression
+                    // `channel[T](n)` mints, so `for v in ch` over a
+                    // parameter drives the drained-close loop
+                    // ([conc.chan.close]) exactly as it does over a
+                    // local. Opaque until now, which is why seven of
+                    // the book's proc programs refused at the `for`
+                    // with "the iteration protocol" as the reason.
                     let arg_tys: Vec<TyId> = d
                         .args()
                         .into_iter()
@@ -1496,6 +1506,7 @@ impl<'a> Lower<'a> {
                     match (first.as_str(), arg_tys.as_slice()) {
                         ("List", &[elem]) => self.table.intern(TyKind::List(elem)),
                         ("Pool", &[elem]) => self.table.intern(TyKind::Pool(elem)),
+                        ("channel", &[elem]) => self.table.intern(TyKind::Chan(elem)),
                         _ => self.opaque(file, node),
                     }
                 } else {

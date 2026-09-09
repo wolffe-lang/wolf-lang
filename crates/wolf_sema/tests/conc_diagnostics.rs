@@ -180,6 +180,20 @@ fn e1102_clean_sendable_payloads() {
     );
 }
 
+/// s143 (wolf-lang#268): `channel[T]` in a SIGNATURE position — a
+/// parameter, a field — is the same `Chan` the expression mints, so a
+/// worker taking its inbox as a parameter drives `for v in ch` and
+/// calls `send`/`recv` on it. Opaque until s143: seven of the book's
+/// proc programs refused at the `for` with "the iteration protocol"
+/// as the reason, every one a worker with a channel parameter.
+#[test]
+fn channel_in_signature_position_is_chan() {
+    snap_one(
+        "channel_in_signature_position_is_chan",
+        "struct Desk { inbox: channel[int] }\n\n         fn total(queue: channel[int]) -> int {\n    var words = 0\n             for w in queue { words += w }\n    words\n}\n\n         fn drain(desk: Desk) -> int {\n    var n = 0\n             for _ in desk.inbox { n += 1 }\n    n\n}\n\n         fn main() -> !int {\n    let q = channel[int](2)\n    q.send(1)\n    q.close()\n             let d = Desk { inbox: channel[int](1) }\n    d.inbox.close()\n             total(q) + drain(d)\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E1103 -----
 
 /// A `when` lexically inside a `when` body: incremental acquisition
