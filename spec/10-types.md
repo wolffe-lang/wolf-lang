@@ -327,17 +327,25 @@ values that have none.)
   interpreter's behavior is the language): `s + u` is legal exactly
   when BOTH operands are `str`, and means precisely `"{s}{u}"` — a
   new `str` whose bytes are the operands' bytes in order (UTF-8
-  concatenation is closed; no boundary can be violated). `+` chains
-  left-associatively; `s += u` is `s = s + u`, in every place shape
+  concatenation is closed; no boundary can be violated). `+` on a
+  `str` and a `char`, either order, is the same operation: `s + c`
+  is `"{s}{c}"` and `c + s` is `"{c}{s}"` — the `char` contributes
+  its scalar's UTF-8 bytes (a `char` is text, D58, with exactly one
+  rendering; wolf-lang#278). `+` chains left-associatively; `s += u`
+  and `s += c` are `s = s + u` and `s = s + c`, in every place shape
   an assignment admits. This is a builtin operator on the builtin
   type, like `==` on `str` — NOT a trait bridge (no `Add` trait
   opens; D49's bridge shape is untouched).
 
 - `[type.str.concat.mix]` **Mixed operands stay E0409** — `str + int`,
-  `str + char`, `int + str`, and their `+=` forms. The conversion is
-  spelled where it always was: inside an interpolation hole
-  (`t += "{count}"`). Interpolation remains the general surface and
-  is unchanged; `+` is its two-`str` special case, not a replacement.
+  `int + str`, and their `+=` forms. The `int` rows stay because `+`
+  is not a formatter: an integer has more than one rendering (sign,
+  radix, width — `{n}`, `{n:x}`, `{n:>4}`) and a bare `+` would pick
+  one silently. A `char` is not a mix (`[type.str.concat]`): it is
+  text with one rendering. The `int` conversion is spelled where it
+  always was: inside an interpolation hole (`t += "{count}"`).
+  Interpolation remains the general surface and is unchanged; `+` is
+  its `str`-and-text special case, not a replacement.
 
 - `[type.str.concat.cost]` **The cost model is interpolation's**: a
   fresh `str` per application — the compiler lowers `+` onto the same
