@@ -573,6 +573,69 @@ fn fs_dirs_and_metadata_say_what_exists() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// s142 (#261, `[os.fs.fstat]`): the stat on an open handle — kind,
+/// size and mtime from one `metadata()` on the file the program
+/// holds. The relations against the path stats are the pin; a
+/// closed and a forged handle are `io`; a directory handle is `kind`
+/// 1 where `fs_open` opens a directory (unix — on windows `fs_open`
+/// refuses it first, so that host never sees the case).
+#[test]
+fn fs_fstat_reads_the_open_handle() {
+    let dir = scratch("fstat");
+    let leaf = dir.join("leaf.txt");
+    std::fs::write(&leaf, b"12345").expect("fixture");
+    let src = format!(
+        "fn main() -> !int {{\n\
+         let p = \"{p}\"\n\
+         let fd = fs_open(p)?\n\
+         let st = fs_fstat(fd)?\n\
+         print(\"n={{st.len}} kind={{st[0]}} size={{st[1]}}\")\n\
+         print(\"same_size={{st[1] == fs_size(p)?}} same_mtime={{st[2] == fs_modified_ms(p)?}}\")\n\
+         fs_close(fd)?\n\
+         var closed = \"?\"\n\
+         fs_fstat(fd) else |e| match e {{\n\
+         io => {{\n\
+         closed = \"io\"\n\
+         List[int]()\n\
+         }},\n\
+         _ => List[int](),\n\
+         }}\n\
+         var forged = \"?\"\n\
+         fs_fstat(4242) else |e| match e {{\n\
+         io => {{\n\
+         forged = \"io\"\n\
+         List[int]()\n\
+         }},\n\
+         _ => List[int](),\n\
+         }}\n\
+         print(\"closed={{closed}} forged={{forged}}\")\n\
+         0\n\
+         }}\n",
+        p = lit(&leaf)
+    );
+    let out = run(&src);
+    assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
+    assert_eq!(
+        out.stdout,
+        "n=3 kind=0 size=5\nsame_size=true same_mtime=true\nclosed=io forged=io\n"
+    );
+    if cfg!(unix) {
+        let src = format!(
+            "fn main() -> !int {{\n\
+             let fd = fs_open(\"{d}\")?\n\
+             let st = fs_fstat(fd)?\n\
+             print(\"dir_kind={{st[0]}}\")\n\
+             0\n\
+             }}\n",
+            d = lit(&dir)
+        );
+        let out = run(&src);
+        assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
+        assert_eq!(out.stdout, "dir_kind=1\n");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// `fs_rename` moves the entry without reading it — which is what
 /// makes `std.fs.move_file` stop being copy-then-remove. It does NOT
 /// promise atomicity (see `wolf_rt::fs`), and no test here pretends

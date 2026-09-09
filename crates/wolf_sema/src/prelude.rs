@@ -84,6 +84,8 @@ pub const PRELUDE: &[&str] = &[
     "fs_is_dir",
     "fs_size",
     "fs_modified_ms",
+    // s142 (#261): the stat on an open handle, `[os.fs.fstat]`.
+    "fs_fstat",
     // the net builtin tier (s39, blocking TCP v0 on the checked lane;
     // D30 rows {refused, timeout, closed, io}; I13: all tagged `net`
     // in the sandbox table). std.net (stdc02+) DELEGATES to these —

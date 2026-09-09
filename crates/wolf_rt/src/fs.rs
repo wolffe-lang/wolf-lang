@@ -584,6 +584,68 @@ pub unsafe extern "C" fn __wolf_rt_fs_stat(pp: i64, pl: i64, which: i64, out: i6
     fs_code::OK
 }
 
+// ---------------------- s142: the stat on a handle (wolf-lang#261) --
+
+/// `fs_fstat(fd) -> List[int] ! {not_found, denied, io}` — `[kind,
+/// size, modified_ms]` from ONE `metadata()` on the open handle:
+/// nginx's `open` + `fstat`, where a wolf file server was paying path
+/// stats for each answer (#261). `kind` is 0 for a regular file, 1 for
+/// a directory, 2 for anything else (a fifo, a socket, a device);
+/// `size` and `modified_ms` are [`__wolf_rt_fs_stat`]'s words, in its
+/// units and with its `io` for a value outside `i64`. A closed or
+/// forged handle is `io`, the family's rule.
+///
+/// The row set is the path stat's — `not_found` and `denied` are
+/// declared so a caller can write one handler for both spellings —
+/// though on an open handle the hosts answer `io` for nearly
+/// everything: the entry is already resolved.
+///
+/// Host posture: linux, macOS and freebsd open a directory read-only
+/// (`fs_open` on a directory succeeds), so `kind` 1 is reachable there.
+/// Windows refuses to open a directory as a file (`denied` from
+/// `fs_open` — `CreateFileW` without `FILE_FLAG_BACKUP_SEMANTICS`), so
+/// on windows every handle this call sees is a file or a device, and
+/// a server classifies directories by path there, as it did before.
+/// That difference is `fs_open`'s and is stated, not papered.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_fstat(fd: i64, out: i64) -> i64 {
+    let files = FILES.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get(i)) else {
+        return fs_code::IO;
+    };
+    let md = f.metadata();
+    // The fd table is released before the list is minted: allocation
+    // is the ambient region's business (`fs_read_chunk`'s order).
+    drop(files);
+    let md = match md {
+        Err(e) => return code_of(&e),
+        Ok(m) => m,
+    };
+    let kind = if md.is_file() {
+        0
+    } else if md.is_dir() {
+        1
+    } else {
+        2
+    };
+    let Ok(size) = i64::try_from(md.len()) else {
+        return fs_code::IO;
+    };
+    let Some(ms) = md.modified().ok().and_then(unix_ms) else {
+        return fs_code::IO;
+    };
+    let hdr = new_list(8);
+    push_int(hdr, kind);
+    push_int(hdr, size);
+    push_int(hdr, ms);
+    unsafe { write_word(out, hdr as i64) };
+    fs_code::OK
+}
+
 // ------------------------------------ s90: rename (wolf-lang#51) --
 
 /// `fs_rename(from, to) -> () ! {not_found, denied, cross_device,
@@ -936,6 +998,51 @@ mod tests {
             unsafe { __wolf_rt_fs_read_dir(mp, ml, out.as_mut_ptr() as i64) },
             fs_code::NOT_FOUND
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s142 (#261): the stat on an open handle — three words off one
+    /// `metadata()`, agreeing with the path stat; a closed and a
+    /// forged handle are `io`; a directory handle is kind 1 where the
+    /// host opens directories (unix).
+    #[test]
+    fn fstat_reads_the_open_handle() {
+        let dir = scratch("fstat");
+        let f = dir.join("f.bin");
+        std::fs::write(&f, b"12345").unwrap();
+        let fs_ = f.display().to_string();
+        let (fp, fl) = pair_of(&fs_);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            let fd = __wolf_rt_fs_open(fp, fl, fs_mode::READ);
+            assert!(fd >= 0);
+            assert_eq!(__wolf_rt_fs_fstat(fd, o), fs_code::OK);
+            let st = crate::list::i64_elems(out[0])
+                .expect("a List[int]")
+                .to_vec();
+            assert_eq!(st.len(), 3);
+            assert_eq!(st[0], 0, "kind: a regular file");
+            assert_eq!(st[1], 5, "size");
+            assert_eq!(__wolf_rt_fs_stat(fp, fl, 1, o), fs_code::OK);
+            assert_eq!(st[2], out[0], "mtime agrees with the path stat");
+            assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            assert_eq!(__wolf_rt_fs_fstat(fd, o), fs_code::IO, "closed");
+            assert_eq!(__wolf_rt_fs_fstat(1 << 40, o), fs_code::IO, "forged");
+            assert_eq!(__wolf_rt_fs_fstat(-1, o), fs_code::IO, "negative");
+            if cfg!(unix) {
+                let d = dir.display().to_string();
+                let (dp, dl) = pair_of(&d);
+                let dfd = __wolf_rt_fs_open(dp, dl, fs_mode::READ);
+                assert!(dfd >= 0, "unix opens a directory read-only");
+                assert_eq!(__wolf_rt_fs_fstat(dfd, o), fs_code::OK);
+                let st = crate::list::i64_elems(out[0])
+                    .expect("a List[int]")
+                    .to_vec();
+                assert_eq!(st[0], 1, "kind: a directory");
+                assert_eq!(__wolf_rt_fs_close(dfd), fs_code::OK);
+            }
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

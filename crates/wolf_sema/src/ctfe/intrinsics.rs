@@ -143,7 +143,7 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_read_bytes" | "fs_write_bytes" | "fs_read_chunk" | "fs_write_chunk"
         | "fs_read_dir" | "fs_create_dir" | "fs_create_dir_all" | "fs_remove_dir"
         | "fs_remove_dir_all" | "fs_rename" | "fs_is_file" | "fs_is_dir" | "fs_size"
-        | "fs_modified_ms" => SandboxCategory::Fs,
+        | "fs_modified_ms" | "fs_fstat" => SandboxCategory::Fs,
         // The s39 net builtin tier: every entry point carries the
         // `net` capability (I13), and the whole family is refused at
         // comptime categorically — sockets are the loudest D33 case.

@@ -635,7 +635,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     // s141 (#254): the gathered write and the stream option —
     // `[os.net.writev]`, `[os.net.nodelay]`.
     // s142 (#263, #261): the parse behind `to_int` (str_to_int — pair
-    // in, code out, the word through the slot).
+    // in, code out, the word through the slot) and the stat on an
+    // open handle (fs_fstat — `[os.fs.fstat]`, a three-word
+    // `List[int]` through the slot).
     for sym in [
         "__wolf_rt_net_listen_with",
         "__wolf_rt_net_adopt_listener",
@@ -646,6 +648,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_net_writev",
         "__wolf_rt_net_nodelay",
         "__wolf_rt_str_to_int",
+        "__wolf_rt_fs_fstat",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -656,7 +659,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        132,
+        133,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
@@ -776,4 +779,73 @@ fn a_str_method_outside_the_set_is_refused_by_name() {
         ),
         "build names the method: {stderr}"
     );
+}
+
+// ---------------------------------------- s142: fs_fstat (#261) --
+
+/// `fs_fstat(fd)` on both lanes: `[kind, size, modified_ms]` off the
+/// open handle agrees with the path stats, a closed and a forged
+/// handle are `io` — the corpus witness's relations, plus the one it
+/// cannot print on every host: a directory handle is `kind` 1 where
+/// `fs_open` opens a directory (unix), and on windows `fs_open`
+/// refuses the directory first (`denied`), so `kind` 1 is unreachable
+/// there — stated, not papered.
+#[test]
+fn fs_fstat_agrees_across_lanes() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s142_fstat");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("sub")).expect("mkdir");
+    let file = dir.join("f.txt");
+    std::fs::write(&file, b"12345").expect("fixture");
+    let dir_case = if cfg!(unix) {
+        r#"
+    let dfd = fs_open(d)?
+    let dst = fs_fstat(dfd)?
+    print("dir_kind={dst[0]}")
+    fs_close(dfd)?"#
+    } else {
+        r#"
+    var dir_open = "opened"
+    fs_open(d) else |e| match e {
+        denied => {
+            dir_open = "denied"
+            0
+        },
+        _ => 0,
+    }
+    print("dir_open={dir_open}")"#
+    };
+    let src = format!(
+        r#"
+fn main() -> !int {{
+    let p = "{p}"
+    let d = "{d}"
+    let fd = fs_open(p)?
+    let st = fs_fstat(fd)?
+    print("kind={{st[0]}} size={{st[1]}} same_size={{st[1] == fs_size(p)?}} same_mtime={{st[2] == fs_modified_ms(p)?}} recent={{st[2] > 1577836800000}}")
+    fs_close(fd)?
+    let closed = fs_fstat(fd) else |_| List[int]()
+    let forged = fs_fstat(999999) else |_| List[int]()
+    print("closed={{closed.len}} forged={{forged.len}}"){dir_case}
+    0
+}}
+"#,
+        p = lu_path(&file),
+        d = lu_path(&dir.join("sub")),
+        dir_case = dir_case
+    );
+    let tail = if cfg!(unix) {
+        "dir_kind=1\n"
+    } else {
+        "dir_open=denied\n"
+    };
+    parity(
+        "s142_fstat",
+        &src,
+        "exit(0)",
+        &format!(
+            "kind=0 size=5 same_size=true same_mtime=true recent=true\nclosed=0 forged=0\n{tail}"
+        ),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

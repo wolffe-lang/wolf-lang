@@ -7944,6 +7944,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_is_dir"
                 | "fs_size"
                 | "fs_modified_ms"
+                | "fs_fstat"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -10705,6 +10706,32 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     eu,
                     hit,
                     |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s142 (#261, `[os.fs.fstat]`): the stat on an open handle
+            // — kind, size and mtime from ONE `metadata()` on the file
+            // the program holds, minted as a three-word `List[int]`
+            // through the foreign chain (the shim allocates the list).
+            "fs_fstat" => {
+                let fd = arg(0)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_fs_fstat",
+                        &[fd],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
                     |z| Ok(z.fs_code_tag(rc, &declared)),
                 )?;
                 Ok(Flow::Val(Some(out)))

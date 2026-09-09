@@ -6702,6 +6702,19 @@ impl<'a> Checker<'a> {
                 vec![str_],
                 rowed(self, int_, &["not_found", "denied", "io"]),
             ),
+            // s142 (#261, `[os.fs.fstat]`): the stat on an OPEN handle
+            // — kind, size and mtime from one `metadata()` on the file
+            // the program is about to read anyway (nginx's `fstat`),
+            // as `[kind, size, modified_ms]` (kind 0 file, 1 directory,
+            // 2 other). The row set is `fs_size`'s; a closed or forged
+            // handle is `io`, the family's rule.
+            "fs_fstat" => {
+                let list_int = self.lo.table.intern(TyKind::List(int_));
+                (
+                    vec![int_],
+                    rowed(self, list_int, &["not_found", "denied", "io"]),
+                )
+            }
             // The s39 net builtin tier (blocking TCP v0): the row
             // vocabulary is {refused, timeout, closed, io} — `closed`
             // is the peer's finish (the socket `eof`), `timeout` is

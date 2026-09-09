@@ -4718,6 +4718,41 @@ impl<'t> Machine<'t> {
                     None => Ok(tag("io")),
                 }
             }
+            // s142 (#261, `[os.fs.fstat]`): `fs_fstat(fd) -> List[int]
+            // ! {not_found, denied, io}` — `[kind, size, modified_ms]`
+            // from ONE `metadata()` on the handle (kind 0 file, 1
+            // directory, 2 anything else). A closed or forged handle
+            // is `io`, the family's rule; a size or a time outside
+            // `i64` is `io`, `fs_size`/`fs_modified_ms`'s rule.
+            "fs_fstat" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get(i)) else {
+                    return Ok(tag("io"));
+                };
+                let md = match f.metadata() {
+                    Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(m) => m,
+                };
+                let kind = if md.is_file() {
+                    0
+                } else if md.is_dir() {
+                    1
+                } else {
+                    2
+                };
+                let (Ok(size), Some(ms)) = (
+                    i64::try_from(md.len()),
+                    md.modified().ok().and_then(unix_ms),
+                ) else {
+                    return Ok(tag("io"));
+                };
+                let items = vec![Value::Int(kind), Value::Int(size), Value::Int(ms)];
+                self.charge_mem(24)?;
+                let id = self.mint_list(items, span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
             _ => self.refuse("this io/fs builtin", span),
         }
     }
@@ -6529,7 +6564,9 @@ impl<'t> Machine<'t> {
             | "fs_open_mode" | "fs_read_bytes" | "fs_write_bytes" | "fs_read_chunk"
             | "fs_write_chunk" | "fs_read_dir" | "fs_create_dir" | "fs_create_dir_all"
             | "fs_remove_dir" | "fs_remove_dir_all" | "fs_rename" | "fs_is_file"
-            | "fs_is_dir" | "fs_size" | "fs_modified_ms" => {
+            | "fs_is_dir" | "fs_size" | "fs_modified_ms"
+            // s142 (#261): the stat on an open handle.
+            | "fs_fstat" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {

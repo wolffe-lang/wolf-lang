@@ -1,0 +1,57 @@
+//! check: run(exit=0, stdout="kind=0 size=5 same_size=true same_mtime=true recent=true\nclosed_is_io=true forged_is_io=true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.fstat, err.union
+//!
+//! s142 (wolf-lang#261, `[os.fs.fstat]`) — the stat on an open
+//! handle: kind, size and mtime from ONE `metadata()` on the file the
+//! program holds, where a static-file server was paying a path stat
+//! for each (`fs_is_file`, `fs_size`, `fs_modified_ms`). Both lanes
+//! execute this against the real filesystem; the relations, not the
+//! values, are the pin:
+//!
+//!   kind          0 — the handle is a regular file.
+//!   same_size     the handle's size is the path's `fs_size`.
+//!   same_mtime    the handle's mtime is the path's `fs_modified_ms`,
+//!                 in the same unit (ms from the epoch).
+//!   recent        the stamp is after 2020 in that unit — unit
+//!                 sanity, not clock precision.
+//!   closed_is_io  a closed handle is `io`, the family's rule.
+//!   forged_is_io  a handle nobody minted is `io`.
+//!
+//! A directory handle (`kind` 1) is reachable on the unix hosts and
+//! not on windows, where `fs_open` refuses a directory; that case is
+//! the native and checked crate tests' (`#[cfg(unix)]`), so this
+//! file prints one stdout on every host.
+
+fn main() -> !int {
+    let path = "target/s142-fstat.tmp"
+    fs_write_text(path, "12345")?
+    let fd = fs_open(path)?
+    let st = fs_fstat(fd)?
+    let size = fs_size(path)?
+    let mtime = fs_modified_ms(path)?
+    print(
+        "kind={st[0]} size={st[1]} same_size={st[1] == size} same_mtime={st[2] == mtime} recent={st[2] > 1577836800000}",
+    )
+    fs_close(fd)?
+    var closed_is_io = false
+    fs_fstat(fd) else |e| match e {
+        io => {
+            closed_is_io = true
+            List[int]()
+        },
+        _ => List[int](),
+    }
+    var forged_is_io = false
+    fs_fstat(999999) else |e| match e {
+        io => {
+            forged_is_io = true
+            List[int]()
+        },
+        _ => List[int](),
+    }
+    print("closed_is_io={closed_is_io} forged_is_io={forged_is_io}")
+    fs_remove(path)?
+    print("cleaned={!fs_exists(path)}")
+    0
+}

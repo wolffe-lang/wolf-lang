@@ -91,6 +91,7 @@ faults/wrap_top_bit_as_int.lu: lowers
 ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
+fs/fstat.lu: lowers
 fs/roundtrip.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
