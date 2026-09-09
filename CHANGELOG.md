@@ -38,6 +38,52 @@ and its three snapshots regenerated; measured: that, with the
 lowering helper factored out (`str_concat_operand`) and the three
 E0409 snapshots re-rendered for the note.
 
+### `return` inside a closure returns from the closure (s145 — #268's next family)
+
+wolf-lang#268's inventory, by count, after s143: `return` inside a
+closure (7), `fail(E0301)` (7), Pool/shared constructor lowering (6).
+The first lands. Seven of the book's samples — chapter 16's receivers
+among them — spell `let r = ch.recv() else |_| { return }` inside a
+spawned closure; both lowering tiers and lupin already ran the
+`return` as leaving the closure, and only the compiler's typing
+withheld it (`NotYet`: control typing). `[type.closure.return]`
+opens §6 of spec/10 and writes the meaning down: **a `return` inside
+a closure returns from the closure**, its operand typed against the
+closure's own result — the context's on a checked closure, the
+tail's on a synthesized one (the two meet at one type; disagreeing
+is E0401 against the closure), the declared one on a nested `fn` —
+and the enclosing function is out of reach. Sema keeps a
+closure-result frame beside s73's row frame on all three closure
+paths; the mem tier, which walks a closure body inline in the
+enclosing CFG, gives the body its own exit join and return depth so
+the `return` runs the closure's defers and rejoins the function
+instead of jumping to its exit. Witness: `typecheck/closure_return.lu`
+— the four shapes, native and lupin 0.1.29 byte-identical (six
+lines, exit 0); the checked machine declines closures as it always
+has. Measured against the seven, one at a time with `wolf
+conform-run --native`: **exercises 16-2 and 16-10 close** (`sum=42`,
+`seat 4 survives`, both machines) and are the book lane's to
+graduate; exercises 16-7 and 16-8 move to E1001 (`visited[c - w]`
+moves out of the list — `copy`, the `best[T]` finding again); the
+chapter-10 reader block and exercise 10-4 move to E0401 (`return 0`
+in a unit closure — a bare `return` is the program; lupin ran them
+leniently); exercise 17-9 types and compiles, and the native binary
+parks at its two-rendezvous deadlock where lupin traps
+`deadlock` — the runtime's deadlock-detection row, not this family.
+
+The other two families were measured and not started, and the wave
+stops here. `fail(E0301)` (7): `saturating[i32]` (chapter 3),
+`Scope` (chapter 11, four times) and `Proc` (chapter 14, twice) are
+names no clause and no prelude declares — lupin runs the programs
+because it never reads a parameter's type annotation (a `fn f(x:
+Bogus)` runs under lupin 0.1.29 and is E0301 here), so the fence
+cannot stand on both machines by any compiler move: the programs
+are the book's to respell, or `saturating[T]` is a clause to write
+first. Pool/shared constructor lowering (6): the checked machine
+serves `Pool[T]()` and lupin traps `stale-handle` on three of them;
+the native tier has no runtime shape for a pool handle (c06's), a
+sprint of its own, not a rung to slip into this one.
+
 ### The `else` may start a line (s144 — #276 closes)
 
 A reader wrote an aligned `if` / `else if` / `else`, each `else`
