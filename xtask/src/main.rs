@@ -80,7 +80,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("bench") => bench_cmd(&args[1..]),
-        Some("bench-gates") => bench_t1::bench_gates(),
+        Some("bench-gates") => bench_t1::bench_gates(&args[1..]),
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("fmt-fuzz") => fmt_fuzz(&args[1..]),
         Some("dist") => dist(),

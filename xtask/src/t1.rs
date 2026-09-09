@@ -225,6 +225,79 @@ pub fn ir_ratio(with_midend: usize, naive: usize) -> Option<f64> {
     (naive > 0).then(|| with_midend as f64 / naive as f64)
 }
 
+/// One corpus entry's IR-volume measurement (#270): the instruction
+/// counts with the mid-end on and off, from which the ratio derives.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IrVolumeEntry {
+    pub midend: usize,
+    pub naive: usize,
+}
+
+impl IrVolumeEntry {
+    /// `midend / naive`, absent when the naive lowering is empty.
+    pub fn ratio(self) -> Option<f64> {
+        ir_ratio(self.midend, self.naive)
+    }
+}
+
+/// The per-file ratchet's verdict (#270).
+#[derive(Debug, Default, PartialEq)]
+pub struct IrVolumeVerdict {
+    /// Paths whose ratio rose past their record by more than the slack:
+    /// `(path, recorded, measured)`. These RED, by name.
+    pub regressed: Vec<(String, f64, f64)>,
+    /// Paths the record has never seen: reported beside the table,
+    /// never a failure on their own — a population change is not a
+    /// regression, and telling the two apart is this form's whole point.
+    pub new: Vec<(String, IrVolumeEntry)>,
+    /// Recorded paths the run did not measure (a Tier-R refusal is
+    /// conservatism, not a regression): reported, never a failure.
+    pub unmeasured: Vec<String>,
+    /// Paths whose ratio FELL past the slack: `(path, recorded,
+    /// measured)`. Reported so the record can be ratcheted down by a
+    /// deliberate `--record`; never a failure.
+    pub improved: Vec<(String, f64, f64)>,
+}
+
+/// The per-file IR-volume ratchet (#270): compare every measured path
+/// against its recorded ratio. `slack` is RELATIVE — a path reds when
+/// `measured > recorded * (1 + slack)` — because the ratios span 0.5 to
+/// 2.4 across the corpus (an opaque-call body has nothing to fold; an
+/// inlined many-call helper grows) and one absolute tick would gate
+/// noise on the large ones and nothing on the small.
+///
+/// Why this shape replaced the corpus geomean ceiling: nine consecutive
+/// re-records of that ceiling (s86 through s142) were population
+/// changes, none a regression, each a red CI run, and the number could
+/// not tell the two apart. A ratio PER PATH can: a new path has no
+/// record and is reported; an existing path that grows is named.
+pub fn ir_volume_ratchet(
+    recorded: &std::collections::BTreeMap<String, f64>,
+    measured: &std::collections::BTreeMap<String, IrVolumeEntry>,
+    slack: f64,
+) -> IrVolumeVerdict {
+    let mut v = IrVolumeVerdict::default();
+    for (path, entry) in measured {
+        let Some(ratio) = entry.ratio() else { continue };
+        match recorded.get(path) {
+            None => v.new.push((path.clone(), *entry)),
+            Some(&rec) if ratio > rec * (1.0 + slack) => {
+                v.regressed.push((path.clone(), rec, ratio));
+            }
+            Some(&rec) if ratio < rec * (1.0 - slack) => {
+                v.improved.push((path.clone(), rec, ratio));
+            }
+            Some(_) => {}
+        }
+    }
+    for path in recorded.keys() {
+        if !measured.contains_key(path) {
+            v.unmeasured.push(path.clone());
+        }
+    }
+    v
+}
+
 /// Count the LLVM IR instructions in a textual module — the number the
 /// #70 budget is stated against.
 ///
@@ -452,6 +525,87 @@ pub fn sinks_agree(a: &str, b: &str, float: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn entries(xs: &[(&str, usize, usize)]) -> std::collections::BTreeMap<String, IrVolumeEntry> {
+        xs.iter()
+            .map(|(p, m, n)| {
+                (
+                    p.to_string(),
+                    IrVolumeEntry {
+                        midend: *m,
+                        naive: *n,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn record(xs: &[(&str, f64)]) -> std::collections::BTreeMap<String, f64> {
+        xs.iter().map(|(p, r)| (p.to_string(), *r)).collect()
+    }
+
+    /// #270's own event: three witnesses enter at 1.0/0.99/2.35 with no
+    /// pre-existing file moved. The geomean ceiling turned red; the
+    /// per-file form reports three new paths and fails nothing.
+    #[test]
+    fn a_population_change_is_reported_and_never_red() {
+        let rec = record(&[("corpus/a.lu", 0.6), ("corpus/b.lu", 1.385)]);
+        let got = entries(&[
+            ("corpus/a.lu", 60, 100),
+            ("corpus/b.lu", 1385, 1000),
+            ("corpus/strings/to_int.lu", 1339, 570),
+            ("corpus/rows/to_int_not_an_int.lu", 80, 80),
+            ("corpus/fs/fstat.lu", 759, 765),
+        ]);
+        let v = ir_volume_ratchet(&rec, &got, 0.05);
+        assert!(v.regressed.is_empty(), "{:?}", v.regressed);
+        assert!(v.improved.is_empty());
+        assert!(v.unmeasured.is_empty());
+        let new: Vec<&str> = v.new.iter().map(|(p, _)| p.as_str()).collect();
+        assert_eq!(
+            new,
+            [
+                "corpus/fs/fstat.lu",
+                "corpus/rows/to_int_not_an_int.lu",
+                "corpus/strings/to_int.lu"
+            ]
+        );
+    }
+
+    /// The event the ceiling never caught in nine re-records: ONE
+    /// existing file handing LLVM more than it used to. Named.
+    #[test]
+    fn an_existing_path_that_worsens_past_the_slack_is_red_by_name() {
+        let rec = record(&[("corpus/a.lu", 0.6), ("corpus/b.lu", 1.385)]);
+        let got = entries(&[("corpus/a.lu", 64, 100), ("corpus/b.lu", 1385, 1000)]);
+        let v = ir_volume_ratchet(&rec, &got, 0.05);
+        assert_eq!(v.regressed.len(), 1);
+        assert_eq!(v.regressed[0].0, "corpus/a.lu");
+        assert_eq!(v.regressed[0].1, 0.6);
+        assert!((v.regressed[0].2 - 0.64).abs() < 1e-12);
+        // Inside the slack: a 4% move on the other file is not a verdict.
+        let got = entries(&[("corpus/a.lu", 62, 100), ("corpus/b.lu", 1440, 1000)]);
+        let v = ir_volume_ratchet(&rec, &got, 0.05);
+        assert!(v.regressed.is_empty(), "{:?}", v.regressed);
+    }
+
+    /// A refusal is conservatism: a recorded path the run could not
+    /// emit is reported and never red. An improvement past the slack
+    /// is reported so the record can be ratcheted down on purpose.
+    #[test]
+    fn unmeasured_and_improved_paths_are_reported_not_gated() {
+        let rec = record(&[("corpus/a.lu", 0.6), ("corpus/gone.lu", 0.9)]);
+        let got = entries(&[("corpus/a.lu", 50, 100)]);
+        let v = ir_volume_ratchet(&rec, &got, 0.05);
+        assert!(v.regressed.is_empty());
+        assert_eq!(v.unmeasured, ["corpus/gone.lu"]);
+        assert_eq!(v.improved.len(), 1);
+        assert_eq!(v.improved[0].0, "corpus/a.lu");
+        // An empty naive lowering has no ratio and no verdict.
+        let got = entries(&[("corpus/a.lu", 0, 0)]);
+        let v = ir_volume_ratchet(&rec, &got, 0.05);
+        assert!(v.regressed.is_empty() && v.new.is_empty() && v.improved.is_empty());
+    }
 
     #[test]
     fn manifest_round_trip() {

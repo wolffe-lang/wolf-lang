@@ -160,6 +160,79 @@ struct Built {
     config: String,
 }
 
+/// The per-file IR-volume record (#270): a ratio per corpus path,
+/// measured on the linux/x86-64 lane like every other gate number.
+const IR_VOLUME_PATH: &str = "bench/ir-volume.json";
+
+struct IrVolumeTable {
+    slack: f64,
+    files: BTreeMap<String, f64>,
+    /// The parsed document, kept so `--record` rewrites only `files`.
+    doc: serde_json::Value,
+}
+
+/// Read `bench/ir-volume.json`. A missing or unreadable record is an
+/// EMPTY table with a loud line (every path reports as new), never a
+/// failure: the first run on a rig with no record is how the record
+/// gets made.
+fn ir_volume_table() -> IrVolumeTable {
+    let doc: serde_json::Value = match std::fs::read_to_string(IR_VOLUME_PATH) {
+        Ok(text) => match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("bench-gates: {IR_VOLUME_PATH} is not JSON ({e}) — an empty table");
+                serde_json::json!({})
+            }
+        },
+        Err(_) => {
+            eprintln!("bench-gates: {IR_VOLUME_PATH} is missing — an empty table");
+            serde_json::json!({})
+        }
+    };
+    let slack = doc["slack"].as_f64().unwrap_or(0.05);
+    let files = doc["files"]
+        .as_object()
+        .map(|m| {
+            m.iter()
+                .filter_map(|(p, e)| e["ratio"].as_f64().map(|r| (p.clone(), r)))
+                .collect()
+        })
+        .unwrap_or_default();
+    IrVolumeTable { slack, files, doc }
+}
+
+/// `--record`: the measured table replaces `files` — every measured
+/// path with its counts and its ratio at three decimals — and the rest
+/// of the document (note, lane, slack) is carried through untouched.
+/// Recorded paths the run did not measure are dropped: a path that
+/// refuses on Tier-R has no ratio to hold anyone to.
+fn write_ir_volume_table(
+    table: &IrVolumeTable,
+    measured: &BTreeMap<String, t1::IrVolumeEntry>,
+) -> Result<usize, String> {
+    let mut doc = table.doc.clone();
+    if !doc.is_object() {
+        doc = serde_json::json!({});
+    }
+    let mut files = serde_json::Map::new();
+    for (path, e) in measured {
+        let Some(ratio) = e.ratio() else { continue };
+        files.insert(
+            path.clone(),
+            serde_json::json!({
+                "midend": e.midend,
+                "naive": e.naive,
+                "ratio": (ratio * 1000.0).round() / 1000.0,
+            }),
+        );
+    }
+    let n = files.len();
+    doc["files"] = serde_json::Value::Object(files);
+    let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())? + "\n";
+    std::fs::write(IR_VOLUME_PATH, text).map_err(|e| e.to_string())?;
+    Ok(n)
+}
+
 /// `clang <flags> -o <bin> <source>` — one translation unit, which is
 /// what every kernel in this suite is.
 ///
@@ -1444,12 +1517,20 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
 ///
 /// Two gates, both same-input-same-answer on any machine:
 ///
-/// 1. **IR volume** (#70 metric 1): the geomean ratio of LLVM IR handed to
-///    LLVM against the naive s41 lowering, over the kernel suite and over
-///    the corpus, ratcheted against `bench/gates.json`. The contract's
+/// 1. **IR volume** (#70 metric 1): the ratio of LLVM IR handed to LLVM
+///    against the naive s41 lowering. Over the kernel suite it is a
+///    geomean ratcheted against `bench/gates.json` (a fixed population —
+///    the manifest names it). Over the corpus it is PER FILE since s143
+///    (#270): `bench/ir-volume.json` records a ratio per path, an
+///    existing path that worsens past its slack reds by name, a path the
+///    record has never seen is reported beside the table and never reds
+///    on its own, and the corpus geomean is printed as a reference, not
+///    gated — nine consecutive re-records of that ceiling were
+///    population changes and none a regression. `--record` writes the
+///    measured table (linux/x86-64 only, like the gate). The contract's
 ///    0.50 target is NOT met today (57.7% corpus / 87.5% kernels), so the
-///    gate holds the measured value instead of the aspiration and says so
-///    out loud — a gate that is red from birth teaches nobody anything.
+///    gate holds the measured values instead of the aspiration and says
+///    so out loud — a gate that is red from birth teaches nobody anything.
 /// 2. **The baselines execute their workload** (s79): a kernel that
 ///    declares `baseline_calls` must still reference them in its compiled
 ///    naive-C binary. `b3_churn`'s malloc was deleted by clang for five
@@ -1462,7 +1543,12 @@ pub fn irvolume(commit: &str) -> Option<Vec<serde_json::Value>> {
 /// Skips loudly (exit 0) where the release toolchain is unavailable: a
 /// missing clang must not turn into a false red. Same for `nm(1)` on gate
 /// 2, per-kernel.
-pub fn bench_gates() -> ExitCode {
+pub fn bench_gates(args: &[String]) -> ExitCode {
+    let record = args.iter().any(|a| a == "--record");
+    if let Some(bad) = args.iter().find(|a| *a != "--record") {
+        eprintln!("bench-gates: unknown flag `{bad}` (flags: --record)");
+        return ExitCode::from(2);
+    }
     let Ok(gates_text) = std::fs::read_to_string("bench/gates.json") else {
         eprintln!("bench-gates: bench/gates.json is missing");
         return ExitCode::FAILURE;
@@ -1555,51 +1641,123 @@ pub fn bench_gates() -> ExitCode {
             kernel_ratios.push(r);
         }
     }
-    let mut corpus_ratios = Vec::new();
+    let mut corpus: BTreeMap<String, t1::IrVolumeEntry> = BTreeMap::new();
     for f in crate::corpus_run_entries() {
         let on = dir.join("c-on.ll");
         let off = dir.join("c-off.ll");
         let (Some(a), Some(b)) = (emit(&f, &on, true), emit(&f, &off, false)) else {
             continue; // Tier-R refusals are conservatism, not regressions
         };
-        if let Some(r) = t1::ir_ratio(t1::count_ir_instructions(&a), t1::count_ir_instructions(&b))
-        {
-            corpus_ratios.push(r);
+        let path = f.to_string_lossy().replace('\\', "/");
+        corpus.insert(
+            path,
+            t1::IrVolumeEntry {
+                midend: t1::count_ir_instructions(&a),
+                naive: t1::count_ir_instructions(&b),
+            },
+        );
+    }
+    let corpus_ratios: Vec<f64> = corpus.values().filter_map(|e| e.ratio()).collect();
+    let iv = &gates["ir_volume"];
+    let target = iv["contract_target"].as_f64().unwrap_or(0.50);
+    let met = |g: f64| {
+        if g <= target {
+            "MET"
+        } else {
+            "NOT MET, tracked"
+        }
+    };
+    // The kernel suite: a fixed population (the manifest names it), so
+    // its geomean still ratchets.
+    match t1::geomean(&kernel_ratios) {
+        None => failures.push("ir-volume: no kernel suite ratios were measured".to_string()),
+        Some(g) => match iv["kernel_geomean_ceiling"].as_f64() {
+            None => failures
+                .push("bench/gates.json: ir_volume.kernel_geomean_ceiling is missing".to_string()),
+            Some(ceiling) => {
+                eprintln!(
+                    "bench-gates: IR volume, kernel suite: {:.1}% of naive (n={}) — ratchet \
+                     {:.1}%, contract target {:.1}% ({})",
+                    g * 100.0,
+                    kernel_ratios.len(),
+                    ceiling * 100.0,
+                    target * 100.0,
+                    met(g)
+                );
+                if g > ceiling {
+                    failures.push(format!(
+                        "ir-volume: kernel suite geomean {g:.3} exceeds the ratchet \
+                         {ceiling:.3} — the mid-end is handing LLVM MORE than it used to"
+                    ));
+                }
+            }
+        },
+    }
+    // The corpus: per file (#270). The geomean is a reference line, never
+    // a verdict — it cannot tell a population change from a regression.
+    match t1::geomean(&corpus_ratios) {
+        None => failures.push("ir-volume: no corpus ratios were measured".to_string()),
+        Some(g) => {
+            let reference = iv["corpus_geomean_reference"].as_f64().unwrap_or(f64::NAN);
+            eprintln!(
+                "bench-gates: IR volume, corpus: {:.1}% of naive (n={}) — reference {:.1}% \
+                 (report-only since s143), contract target {:.1}% ({})",
+                g * 100.0,
+                corpus_ratios.len(),
+                reference * 100.0,
+                target * 100.0,
+                met(g)
+            );
         }
     }
-    let iv = &gates["ir_volume"];
-    for (label, ratios, key) in [
-        ("kernel suite", &kernel_ratios, "kernel_geomean_ceiling"),
-        ("corpus", &corpus_ratios, "corpus_geomean_ceiling"),
-    ] {
-        let Some(g) = t1::geomean(ratios) else {
-            failures.push(format!("ir-volume: no {label} ratios were measured"));
-            continue;
-        };
-        let Some(ceiling) = iv[key].as_f64() else {
-            failures.push(format!("bench/gates.json: ir_volume.{key} is missing"));
-            continue;
-        };
-        let target = iv["contract_target"].as_f64().unwrap_or(0.50);
+    let table = ir_volume_table();
+    let verdict = t1::ir_volume_ratchet(&table.files, &corpus, table.slack);
+    for (path, rec, got) in &verdict.regressed {
+        let e = corpus[path];
+        failures.push(format!(
+            "ir-volume: {path} = {got:.3} (midend {} / naive {}) exceeds its recorded {rec:.3} \
+             by more than the {:.0}% slack — the mid-end is handing LLVM MORE for this file \
+             than it used to",
+            e.midend,
+            e.naive,
+            table.slack * 100.0
+        ));
+    }
+    for (path, e) in &verdict.new {
         eprintln!(
-            "bench-gates: IR volume, {label}: {:.1}% of naive (n={}) — ratchet {:.1}%, \
-             contract target {:.1}% ({})",
-            g * 100.0,
-            ratios.len(),
-            ceiling * 100.0,
-            target * 100.0,
-            if g <= target {
-                "MET"
-            } else {
-                "NOT MET, tracked"
-            }
+            "bench-gates: ir-volume new path {path} = {:.3} (midend {} / naive {}) — reported, \
+             not gated; `cargo xtask bench-gates --record` on the linux rig records it",
+            e.ratio().unwrap_or(f64::NAN),
+            e.midend,
+            e.naive
         );
-        if g > ceiling {
-            failures.push(format!(
-                "ir-volume: {label} geomean {:.3} exceeds the ratchet {ceiling:.3} — the mid-end \
-                 is handing LLVM MORE than it used to",
-                g
-            ));
+    }
+    for path in &verdict.unmeasured {
+        eprintln!(
+            "bench-gates: ir-volume recorded path {path} was not measured (a Tier-R refusal \
+             is conservatism, not a regression)"
+        );
+    }
+    for (path, rec, got) in &verdict.improved {
+        eprintln!(
+            "bench-gates: ir-volume {path} improved to {got:.3} from its recorded {rec:.3} — \
+             `--record` ratchets it down"
+        );
+    }
+    eprintln!(
+        "bench-gates: ir-volume per-file table: {} recorded, {} measured, {} new, {} \
+         unmeasured, {} improved, {} regressed",
+        table.files.len(),
+        corpus.len(),
+        verdict.new.len(),
+        verdict.unmeasured.len(),
+        verdict.improved.len(),
+        verdict.regressed.len()
+    );
+    if record {
+        match write_ir_volume_table(&table, &corpus) {
+            Ok(n) => eprintln!("bench-gates: recorded {n} path(s) into {IR_VOLUME_PATH}"),
+            Err(e) => failures.push(format!("ir-volume: could not write {IR_VOLUME_PATH}: {e}")),
         }
     }
 
