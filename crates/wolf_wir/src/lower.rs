@@ -358,6 +358,9 @@ fn lower_package_impl(
             Err(nyc) => not_yet.push(nyc),
         }
     }
+    // s143 (#268): the tag-name table, once every body (and every
+    // instance, task body and shim) has interned its tags.
+    build_tag_name_fn(&mut module);
     Build {
         module,
         not_yet,
@@ -1257,6 +1260,29 @@ fn build_task_shim(module: &mut Module, task: &PendingTask<'_>) -> R<()> {
     // Call the body.
     let body_ext = b.func.import_func(task.body_name.clone(), task.body_sig);
     let rets = b.ins_call(body_ext, &args);
+    // s143 (#268): a proc's `int` result rides to the runtime through
+    // `__wolf_rt_task_value` so the monitor's reason is `normal(value)`
+    // ([conc.proc.exit]) — the s32 protocol word itself stays "0 =
+    // normal", and the stash is read by `__wolf_rt_proc_spawn_outcome`
+    // the instant this shim returns.
+    let value_ext = if task.proc {
+        let vs = b.module.make_sig(
+            vec![Param {
+                ty: types::I64,
+                mode: Mode::Val,
+            }],
+            Vec::new(),
+        );
+        Some(b.func.import_func("__wolf_rt_task_value".to_string(), vs))
+    } else {
+        None
+    };
+    if let Some(ext) = value_ext
+        && let (Some(rt), Some(&rv)) = (task.body_ret, rets.first())
+        && rt == types::I64
+    {
+        b.ins_call(ext, &[rv]);
+    }
     // The raw outcome tag: 0 for ok bodies, the eu tag for fallible
     // ones (module-interned, ≥ 1).
     let tag = match (task.body_ret, rets.first()) {
@@ -1273,6 +1299,12 @@ fn build_task_shim(module: &mut Module, task: &PendingTask<'_>) -> R<()> {
             let t = b.ins_eu_err_tag(rv);
             b.ins_jmp(join, &[t]);
             b.switch_to_block(ok_bb);
+            if let Some(ext) = value_ext
+                && matches!(module_types_get(&b, rt), types::TypeData::Eu { ok: Some(t), .. } if t == types::I64)
+            {
+                let okv = b.ins_eu_ok(rv);
+                b.ins_call(ext, &[okv]);
+            }
             let z = b.iconst(types::I64, 0);
             b.ins_jmp(join, &[z]);
             b.seal_block(join);
@@ -1457,6 +1489,124 @@ enum PrintSeg {
     /// to i64 at the shim boundary like every sub-word scalar.
     Char { v: Value, spec: i64 },
 }
+
+/// Where rendered text goes (s143, wolf-lang#268): the print
+/// statement's stream, or the strbuf an interpolated string in value
+/// position materializes through. One renderer ([`Lowerer::emit_value`])
+/// feeds both, so a value prints the same bytes whether it is printed
+/// or built into a `str`.
+#[derive(Clone, Copy)]
+enum Sink {
+    Print { stream: i64 },
+    Buf(Value),
+}
+
+/// The module's tag-name table as a function (s143, wolf-lang#268):
+/// `wolf.tag_name(tag) -> str` answers the spelling of a module-interned
+/// error tag at run time — what `{err}` prints for a caught row value
+/// and what an exit reason's `error(…)` carries. Synthesized ONCE per
+/// module after every body has lowered ([`build_tag_name_fn`]), because
+/// only then is `Module::tags` complete: a hole in one function may
+/// print a tag that a function lowered later is the first to raise, so
+/// no per-site switch over the tags interned so far could be right.
+/// Named outside the `__wolf_rt_` runtime namespace: it is module code,
+/// hashed and emitted like a body.
+const TAG_NAME_FN: &str = "wolf.tag_name";
+
+/// The signature [`TAG_NAME_FN`] is imported and defined under —
+/// `verify_module` holds one signature per name, so every site and the
+/// definition derive it here.
+fn tag_name_sig(module: &mut Module) -> SigId {
+    let sty = str_ty(&mut module.types);
+    module.make_sig(
+        vec![Param {
+            ty: types::I64,
+            mode: Mode::Val,
+        }],
+        vec![sty],
+    )
+}
+
+/// Define [`TAG_NAME_FN`] when some body imported it: a compare chain
+/// over the module's tags (id k = index + 1, `Module::tag_id`'s rule),
+/// each arm answering the name as a `{ptr, len}` pair over module data.
+/// An id the module never interned cannot arise from a well-formed eu;
+/// the fallthrough answers `?` rather than trapping inside a print
+/// (D43: nothing between the bracket calls may strand a line). A module
+/// with no such import gets no function — the IR-volume ratchet counts
+/// every define, and a table nobody reads must not move a file's ratio.
+fn build_tag_name_fn(module: &mut Module) {
+    let referenced = module
+        .funcs
+        .iter()
+        .any(|(_, f)| f.ext_funcs.values().any(|e| e.name == TAG_NAME_FN));
+    if !referenced || module.funcs.iter().any(|(_, f)| f.name == TAG_NAME_FN) {
+        return;
+    }
+    let sig = tag_name_sig(module);
+    let names: Vec<String> = module.tags.clone();
+    let mut b = FuncBuilder::new(module, TAG_NAME_FN.to_string(), sig);
+    b.func.src_file = None; // synthetic: no line table
+    let entry = b.current_block();
+    let tag = b.block_params(entry)[0];
+    let sty = str_ty(b.types());
+    let merge = b.create_block();
+    let out = b.add_block_param(merge, sty);
+    let mut chain_gvn = 0usize;
+    let answer = |b: &mut FuncBuilder<'_>, name: &str| -> Value {
+        let idx = b.module.intern_data(name.as_bytes());
+        let p = b.ins_data_addr(idx);
+        let len = b.iconst(types::I64, name.len() as i64);
+        b.ins(Opcode::AggMake, &[p, len], &[sty], Aux::None).one()
+    };
+    for (i, name) in names.iter().enumerate() {
+        let k = b.iconst(types::I64, (i + 1) as i64);
+        let eq = b
+            .ins(
+                Opcode::Icmp,
+                &[tag, k],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let s = answer(&mut b, name);
+        let next = b.create_block();
+        b.ins_br(eq, merge, &[s], next, &[]);
+        b.seal_block(next);
+        b.switch_to_block(next);
+        b.gvn_push_scope();
+        chain_gvn += 1;
+    }
+    let s = answer(&mut b, "?");
+    b.ins_jmp(merge, &[s]);
+    for _ in 0..chain_gvn {
+        b.gvn_pop_scope();
+    }
+    b.seal_block(merge);
+    b.switch_to_block(merge);
+    b.ins_ret(&[out]);
+    let func = b.finish();
+    module.add_func(func);
+}
+
+/// `[conf.trap.set]`'s vocabulary by runtime code, for rendering a
+/// `fault(kind)` exit reason (`[conc.proc.exit]`): the codes are
+/// `wolf_rt::native::trap_code`'s, pinned by the driver's parity test
+/// against `wolf_rt::trap_kind_name` so the two tables cannot drift.
+pub const TRAP_KIND_NAMES: [(i64, &str); 12] = [
+    (1, "overflow"),
+    (2, "div-zero"),
+    (3, "bounds"),
+    (4, "assert"),
+    (5, "use-after-move"),
+    (6, "exclusivity"),
+    (7, "region-fault"),
+    (8, "stale-handle"),
+    (9, "alloc-contract"),
+    (10, "race"),
+    (11, "ub"),
+    (12, "deadlock"),
+];
 
 /// The module-path-qualified WIR name of item `name` in `module`
 /// (issue #26): `geometry.area` for a child module, the bare name in
@@ -2662,6 +2812,11 @@ struct PendingTask<'t> {
     /// The declaration span (diagnostics + line tables).
     span: Span,
     kind: PendingKind,
+    /// A `spawn proc` body (s143, #268): its entry shim hands the
+    /// body's `int` result to the runtime so the exit reason reads
+    /// `normal(value)` ([conc.proc.exit]); a scope task's value is
+    /// nobody's to report.
+    proc: bool,
 }
 
 impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
@@ -5140,6 +5295,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             cap_offs: layout.1,
             body_ret,
             span: e.span,
+            proc: false,
             kind: PendingKind::Task,
         });
         // The entry pointer: func.addr of the (post-pass) shim.
@@ -5306,6 +5462,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             cap_offs,
             body_ret,
             span: e.span,
+            proc: false,
             kind: PendingKind::Closure { params },
         });
         let ext = self.rt_like_import(&name, entry_sig);
@@ -6037,6 +6194,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             cap_offs: offs,
             body_ret,
             span: e.span,
+            proc: true,
             kind: PendingKind::Task,
         });
         let shim_sig = self.task_shim_sig();
@@ -9675,63 +9833,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let buf = self
             .rt_call("__wolf_rt_strbuf_new", &[], Some(types::PTR))
             .expect("strbuf handle");
+        let sink = Sink::Buf(buf);
         for seg in segs {
             match seg {
-                StrSeg::Lit(bytes) => {
-                    if bytes.is_empty() {
-                        continue;
-                    }
-                    let idx = self.b.module.intern_data(&bytes);
-                    let p = self.b.ins_data_addr(idx);
-                    let len = self.b.iconst(types::I64, bytes.len() as i64);
-                    let sp = self.b.iconst(types::I64, 0);
-                    self.rt_call("__wolf_rt_strbuf_str", &[buf, p, len, sp], None);
-                }
+                StrSeg::Lit(bytes) => self.emit_lit(sink, &bytes),
                 StrSeg::Hole { expr, spec } => {
                     let packed = self.packed_spec(spec)?;
-                    let Some(v) = flow_val!(self.lower_expr(expr)) else {
-                        return Err(refuse("unit-typed interpolation holes", expr.span));
+                    let Some(sema) = self.expr_sema_ty(expr.span) else {
+                        return Err(refuse("an untyped interpolation hole", expr.span));
                     };
-                    match self.classify_print_value(expr, v, packed)? {
-                        PrintSeg::Str { v, spec } => {
-                            let (p, l) = self.str_parts(v);
-                            let sp = self.b.iconst(types::I64, spec);
-                            self.rt_call("__wolf_rt_strbuf_str", &[buf, p, l, sp], None);
-                        }
-                        PrintSeg::Int { v, unsigned, spec } => {
-                            let vty = self.b.func.value_ty(v);
-                            let wide = if vty == types::I64 {
-                                v
-                            } else if unsigned {
-                                self.b
-                                    .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
-                                    .one()
-                            } else {
-                                self.b
-                                    .ins(Opcode::Sext, &[v], &[types::I64], Aux::None)
-                                    .one()
-                            };
-                            let sp = self.b.iconst(types::I64, spec);
-                            self.rt_call("__wolf_rt_strbuf_i64", &[buf, wide, sp], None);
-                        }
-                        PrintSeg::Bool { v, spec } => {
-                            let sp = self.b.iconst(types::I64, spec);
-                            self.rt_call("__wolf_rt_strbuf_bool", &[buf, v, sp], None);
-                        }
-                        PrintSeg::F64 { v, spec } => {
-                            let sp = self.b.iconst(types::I64, spec);
-                            self.rt_call("__wolf_rt_strbuf_f64", &[buf, v, sp], None);
-                        }
-                        PrintSeg::Char { v, spec } => {
-                            let wide = self
-                                .b
-                                .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
-                                .one();
-                            let sp = self.b.iconst(types::I64, spec);
-                            self.rt_call("__wolf_rt_strbuf_char", &[buf, wide, sp], None);
-                        }
-                        PrintSeg::Lit(_) => unreachable!("holes classify as values"),
-                    }
+                    let v = flow_val!(self.lower_expr(expr));
+                    self.emit_value(sink, v, self.table, sema, packed, expr.span)?;
                 }
             }
         }
@@ -10144,7 +10256,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
-            // s142 (wolf-lang#263): `to_int() -> int ! {NotAnInt}`. The
+            // s142 (wolf-lang#263): `to_int() -> int ! {parse}`. The
             // runtime trims `[mem.str.ws]` and parses an optionally
             // signed decimal `i64` into the out slot; a nonzero code is
             // the row — the fs family's shape, one tag.
@@ -10175,7 +10287,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     hit,
                     |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
                     |z| {
-                        let id = z.b.module.tag_id("NotAnInt");
+                        let id = z.b.module.tag_id("parse");
                         Ok(z.b.iconst(types::I64, id))
                     },
                 )?;
@@ -13839,45 +13951,774 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         segs
     }
 
-    /// Classify one evaluated print value by its sema type: str values
-    /// print as bytes, integers widen to i64 per signedness, bools
-    /// print `true`/`false`, `f64` renders shortest-round-trip (s38 —
-    /// the checked executor is the reference, byte for byte). `f32`
-    /// still refuses (its rounding story is unruled). `spec` is the
-    /// packed format spec, `0` for none.
-    fn classify_print_value(&mut self, expr: &'t GreenNode, v: Value, spec: i64) -> R<PrintSeg> {
-        let Some(&sema) = self.expr_tys.get(&expr.span) else {
-            return Err(refuse("print of an untyped expression", expr.span));
-        };
-        let mut ty = sema;
-        while let TyKind::Wrapping(inner) | TyKind::Distinct(inner) = self.table.kind(ty) {
-            ty = *inner;
-        }
-        match self.table.kind(ty) {
-            TyKind::Prim(Prim::Str) => Ok(PrintSeg::Str { v, spec }),
-            TyKind::Prim(Prim::Bool) => Ok(PrintSeg::Bool { v, spec }),
-            TyKind::Prim(Prim::F64) => Ok(PrintSeg::F64 { v, spec }),
-            TyKind::Prim(Prim::F32) => Err(refuse(
-                "`f32` print formatting (f64 is the s38 float)",
-                expr.span,
-            )),
+    /// Classify a PRIMITIVE value by its sema type: str values print as
+    /// bytes, integers widen to i64 per signedness, bools print
+    /// `true`/`false`, `f64` renders shortest-round-trip (s38 — the
+    /// checked executor is the reference, byte for byte). `f32` still
+    /// refuses (its rounding story is unruled). `spec` is the packed
+    /// format spec, `0` for none. `None` is not a primitive: the
+    /// composite walk ([`Self::emit_value`]) takes it from here.
+    fn classify_prim(
+        &mut self,
+        table: &'t TypeTable,
+        ty: TyId,
+        v: Value,
+        spec: i64,
+        span: Span,
+    ) -> R<Option<PrintSeg>> {
+        let ty = strip_sema_in(table, ty);
+        Ok(Some(match table.kind(ty) {
+            TyKind::Prim(Prim::Str) => PrintSeg::Str { v, spec },
+            TyKind::Prim(Prim::Bool) => PrintSeg::Bool { v, spec },
+            TyKind::Prim(Prim::F64) => PrintSeg::F64 { v, spec },
+            TyKind::Prim(Prim::F32) => {
+                return Err(refuse(
+                    "`f32` print formatting (f64 is the s38 float)",
+                    span,
+                ));
+            }
             // `{c}` prints the character (D58), never the number —
             // this arm must sit before the integer catch-all.
-            TyKind::Prim(Prim::Char) => Ok(PrintSeg::Char { v, spec }),
+            TyKind::Prim(Prim::Char) => PrintSeg::Char { v, spec },
             TyKind::Prim(_) => {
-                let unsigned = sema_unsigned(self.table, ty);
+                let unsigned = sema_unsigned(table, ty);
                 let spec = if unsigned && spec != 0 {
                     spec | wolf_sema::fmtspec::PACK_UNSIGNED
                 } else {
                     spec
                 };
-                Ok(PrintSeg::Int { v, unsigned, spec })
+                PrintSeg::Int { v, unsigned, spec }
             }
+            _ => return Ok(None),
+        }))
+    }
+
+    /// Literal bytes into the sink (nothing for an empty run).
+    fn emit_lit(&mut self, sink: Sink, bytes: &[u8]) {
+        if !bytes.is_empty() {
+            self.emit_seg(sink, PrintSeg::Lit(bytes.to_vec()));
+        }
+    }
+
+    /// One primitive segment into the sink. Spec-less stdout segments
+    /// keep the frozen `__wolf_rt_print_*` symbols; everything else
+    /// flows through the stream-parameterized `__wolf_rt_write_*`
+    /// family; a strbuf takes the `__wolf_rt_strbuf_*` twins — the
+    /// same packed-spec renderers, so a value materialized into a
+    /// `str` and a value printed are one byte sequence (s40).
+    fn emit_seg(&mut self, sink: Sink, seg: PrintSeg) {
+        match sink {
+            Sink::Print { stream } => {
+                let stdout = stream == 1;
+                match seg {
+                    PrintSeg::Lit(bytes) => {
+                        if bytes.is_empty() {
+                            return;
+                        }
+                        let idx = self.b.module.intern_data(&bytes);
+                        let p = self.b.ins_data_addr(idx);
+                        let len = self.b.iconst(types::I64, bytes.len() as i64);
+                        if stdout {
+                            self.rt_print_call(
+                                "__wolf_rt_print_str",
+                                &[types::PTR, types::I64],
+                                &[p, len],
+                            );
+                        } else {
+                            let st = self.b.iconst(types::I64, stream);
+                            let sp = self.b.iconst(types::I64, 0);
+                            self.rt_print_call(
+                                "__wolf_rt_write_str",
+                                &[types::I64, types::PTR, types::I64, types::I64],
+                                &[st, p, len, sp],
+                            );
+                        }
+                    }
+                    PrintSeg::Str { v, spec } => {
+                        let p = self
+                            .b
+                            .ins(Opcode::AggGet, &[v], &[types::PTR], Aux::Int(0))
+                            .one();
+                        let len = self
+                            .b
+                            .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(1))
+                            .one();
+                        if stdout && spec == 0 {
+                            self.rt_print_call(
+                                "__wolf_rt_print_str",
+                                &[types::PTR, types::I64],
+                                &[p, len],
+                            );
+                        } else {
+                            let st = self.b.iconst(types::I64, stream);
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_print_call(
+                                "__wolf_rt_write_str",
+                                &[types::I64, types::PTR, types::I64, types::I64],
+                                &[st, p, len, sp],
+                            );
+                        }
+                    }
+                    PrintSeg::Int { v, unsigned, spec } => {
+                        let wide = self.widen_i64(v, unsigned);
+                        if stdout && spec == 0 {
+                            self.rt_print_call("__wolf_rt_print_i64", &[types::I64], &[wide]);
+                        } else {
+                            let st = self.b.iconst(types::I64, stream);
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_print_call(
+                                "__wolf_rt_write_i64",
+                                &[types::I64, types::I64, types::I64],
+                                &[st, wide, sp],
+                            );
+                        }
+                    }
+                    PrintSeg::Bool { v, spec } => {
+                        if stdout && spec == 0 {
+                            self.rt_print_call("__wolf_rt_print_bool", &[types::BOOL], &[v]);
+                        } else {
+                            let st = self.b.iconst(types::I64, stream);
+                            let sp = self.b.iconst(types::I64, spec);
+                            self.rt_print_call(
+                                "__wolf_rt_write_bool",
+                                &[types::I64, types::BOOL, types::I64],
+                                &[st, v, sp],
+                            );
+                        }
+                    }
+                    PrintSeg::F64 { v, spec } => {
+                        let st = self.b.iconst(types::I64, stream);
+                        let sp = self.b.iconst(types::I64, spec);
+                        self.rt_print_call(
+                            "__wolf_rt_write_f64",
+                            &[types::I64, types::F64, types::I64],
+                            &[st, v, sp],
+                        );
+                    }
+                    PrintSeg::Char { v, spec } => {
+                        let wide = self
+                            .b
+                            .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                            .one();
+                        let st = self.b.iconst(types::I64, stream);
+                        let sp = self.b.iconst(types::I64, spec);
+                        self.rt_print_call(
+                            "__wolf_rt_write_char",
+                            &[types::I64, types::I64, types::I64],
+                            &[st, wide, sp],
+                        );
+                    }
+                }
+            }
+            Sink::Buf(buf) => match seg {
+                PrintSeg::Lit(bytes) => {
+                    if bytes.is_empty() {
+                        return;
+                    }
+                    let idx = self.b.module.intern_data(&bytes);
+                    let p = self.b.ins_data_addr(idx);
+                    let len = self.b.iconst(types::I64, bytes.len() as i64);
+                    let sp = self.b.iconst(types::I64, 0);
+                    self.rt_call("__wolf_rt_strbuf_str", &[buf, p, len, sp], None);
+                }
+                PrintSeg::Str { v, spec } => {
+                    let (p, l) = self.str_parts(v);
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_call("__wolf_rt_strbuf_str", &[buf, p, l, sp], None);
+                }
+                PrintSeg::Int { v, unsigned, spec } => {
+                    let wide = self.widen_i64(v, unsigned);
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_call("__wolf_rt_strbuf_i64", &[buf, wide, sp], None);
+                }
+                PrintSeg::Bool { v, spec } => {
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_call("__wolf_rt_strbuf_bool", &[buf, v, sp], None);
+                }
+                PrintSeg::F64 { v, spec } => {
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_call("__wolf_rt_strbuf_f64", &[buf, v, sp], None);
+                }
+                PrintSeg::Char { v, spec } => {
+                    let wide = self
+                        .b
+                        .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                        .one();
+                    let sp = self.b.iconst(types::I64, spec);
+                    self.rt_call("__wolf_rt_strbuf_char", &[buf, wide, sp], None);
+                }
+            },
+        }
+    }
+
+    /// An integer widened to the i64 the shims take, per signedness.
+    fn widen_i64(&mut self, v: Value, unsigned: bool) -> Value {
+        let vty = self.b.func.value_ty(v);
+        if vty == types::I64 {
+            v
+        } else if unsigned {
+            self.b
+                .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
+                .one()
+        } else {
+            self.b
+                .ins(Opcode::Sext, &[v], &[types::I64], Aux::None)
+                .one()
+        }
+    }
+
+    /// The WIR type of a sema type read through `table` (the body's
+    /// table for expression types, the signature table for a struct's
+    /// field or an enum variant's payload).
+    fn wir_ty_in(&mut self, table: &'t TypeTable, ty: TyId, span: Span) -> R<Option<TypeId>> {
+        wir_ty(&mut self.b.module.types, table, self.sigs, ty, span)
+    }
+
+    /// Field `i` of an aggregate value, typed through `table`; `None`
+    /// for a unit-typed field (which the aggregate has no slot for).
+    fn agg_field(
+        &mut self,
+        v: Value,
+        i: usize,
+        table: &'t TypeTable,
+        fty: TyId,
+        span: Span,
+    ) -> R<Option<Value>> {
+        let Some(wt) = self.wir_ty_in(table, fty, span)? else {
+            return Ok(None);
+        };
+        Ok(Some(
+            self.b
+                .ins(Opcode::AggGet, &[v], &[wt], Aux::Int(i as i64))
+                .one(),
+        ))
+    }
+
+    /// `wolf.tag_name(tag)` — a tag's spelling as a `str`, from the
+    /// module's tag table ([`TAG_NAME_FN`]).
+    fn tag_name_str(&mut self, tag: Value) -> Value {
+        let sig = tag_name_sig(self.b.module);
+        let ext = self.rt_like_import(TAG_NAME_FN, sig);
+        self.b.ins_call(ext, &[tag])[0]
+    }
+
+    /// A tagged value's halves: the tag word alone when the row or enum
+    /// carries no payload, else the tag and the payload slots of the
+    /// `{tag, slots…}` aggregate (the else-handler binding's shape, the
+    /// enum mirror).
+    fn tagged_parts(&mut self, v: Value) -> (Value, Vec<Value>) {
+        let vt = self.b.func.value_ty(v);
+        let types::TypeData::Agg(fields) = self.b.module.types.get(vt).clone() else {
+            return (v, Vec::new());
+        };
+        let tag = self
+            .b
+            .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(0))
+            .one();
+        let slots = fields[1..]
+            .iter()
+            .enumerate()
+            .map(|(k, &ft)| {
+                self.b
+                    .ins(Opcode::AggGet, &[v], &[ft], Aux::Int(k as i64 + 1))
+                    .one()
+            })
+            .collect();
+        (tag, slots)
+    }
+
+    /// A compile-time-dispatched switch: `arm(i)` runs when `scrut ==
+    /// keys[i]`, `default` when none matches, and control rejoins after.
+    /// Chain blocks do not dominate the join, so each arm's and each
+    /// fallthrough's GVN scope is popped before it (#151's dominance
+    /// neighbour — `fs_code_tag`'s and `lower_match`'s rule).
+    fn emit_switch(
+        &mut self,
+        scrut: Value,
+        keys: &[i64],
+        mut arm: impl FnMut(&mut Self, usize) -> R<()>,
+        default: impl FnOnce(&mut Self) -> R<()>,
+    ) -> R<()> {
+        let done = self.b.create_block();
+        let mut chain_gvn = 0usize;
+        let mut result = Ok(());
+        let mut decided = false;
+        for (i, &key) in keys.iter().enumerate() {
+            let k = self.b.iconst(types::I64, key);
+            let eq = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[scrut, k],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            // A DECIDED test (an enum literal's variant, a folded tag)
+            // needs no branch: a `br` on a constant folds to a jump and
+            // leaves the other block unreachable, which the verifier
+            // refuses — the same fold `eu_join` and `trap_unless` make.
+            match self.b.as_bool_const(eq) {
+                Some(false) => continue,
+                Some(true) => {
+                    result = arm(self, i);
+                    decided = true;
+                    break;
+                }
+                None => {}
+            }
+            let hit = self.b.create_block();
+            let next = self.b.create_block();
+            self.b.ins_br(eq, hit, &[], next, &[]);
+            self.b.seal_block(hit);
+            self.b.seal_block(next);
+            self.b.switch_to_block(hit);
+            self.b.gvn_push_scope();
+            result = arm(self, i);
+            self.b.gvn_pop_scope();
+            if result.is_err() {
+                break;
+            }
+            self.b.ins_jmp(done, &[]);
+            self.b.switch_to_block(next);
+            self.b.gvn_push_scope();
+            chain_gvn += 1;
+        }
+        if result.is_ok() && !decided {
+            result = default(self);
+        }
+        if result.is_ok() {
+            self.b.ins_jmp(done, &[]);
+        }
+        for _ in 0..chain_gvn {
+            self.b.gvn_pop_scope();
+        }
+        self.b.seal_block(done);
+        self.b.switch_to_block(done);
+        result
+    }
+
+    /// A tagged value's rendering — a caught row (`{err}`) or an enum:
+    /// the tag's name, then `(p1, p2)` when the tag carries a payload
+    /// (`[type.interp.row]`). A row's name comes from the module tag
+    /// table at run time (an open row's tag may be one this function
+    /// never spelled); an enum's variant names are its own, so every
+    /// arm prints its name itself. `arms` pairs each tag value with its
+    /// payload types (in `table`); a tag outside the arms prints its
+    /// name alone — for an open row that is exactly the payload-free
+    /// tag `?` propagated from a callee, and the eu the value rode in
+    /// on has no slot for any other.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_tagged(
+        &mut self,
+        sink: Sink,
+        tag: Value,
+        slots: &[Value],
+        arms: &[(i64, Option<Vec<u8>>, Vec<TyId>)],
+        table: &'t TypeTable,
+        span: Span,
+    ) -> R<()> {
+        let dynamic_name = arms.iter().all(|(_, n, _)| n.is_none());
+        if dynamic_name {
+            let s = self.tag_name_str(tag);
+            self.emit_seg(sink, PrintSeg::Str { v: s, spec: 0 });
+        }
+        let live: Vec<&(i64, Option<Vec<u8>>, Vec<TyId>)> = arms
+            .iter()
+            .filter(|(_, n, p)| n.is_some() || !p.is_empty())
+            .collect();
+        if live.is_empty() {
+            return Ok(());
+        }
+        let keys: Vec<i64> = live.iter().map(|(k, _, _)| *k).collect();
+        self.emit_switch(
+            tag,
+            &keys,
+            |z, i| {
+                let (_, name, payload) = live[i];
+                if let Some(name) = name {
+                    z.emit_lit(sink, name);
+                }
+                if !payload.is_empty() {
+                    z.emit_lit(sink, b"(");
+                    for (k, &pt) in payload.iter().enumerate() {
+                        if k > 0 {
+                            z.emit_lit(sink, b", ");
+                        }
+                        z.emit_value(sink, slots.get(k).copied(), table, pt, 0, span)?;
+                    }
+                    z.emit_lit(sink, b")");
+                }
+                Ok(())
+            },
+            |_| Ok(()),
+        )
+    }
+
+    /// Render one hole value into `sink` by its sema type (s143,
+    /// wolf-lang#268 — `[type.interp.value]`, the reference
+    /// interpreter's `Display` byte for byte). Primitives go through
+    /// the packed-spec renderers as before; composites by structural
+    /// walk — `()`, `(a, b)`, `Name { f: v, g: w }`, `[a, b]`; the
+    /// dynamic shapes — a `!T` (its ok payload, or its row), a caught
+    /// row (`Tag`, `Tag(p)`), an exit reason (`normal(7)`,
+    /// `error(Tag)`, `killed`, `cancelled`, `fault(kind)`) — as
+    /// branches that read the tag's name through the module's tag
+    /// table. A format spec on a non-primitive refuses, as the checked
+    /// executor and the interpreter do. `v` is `None` for a unit-shaped
+    /// value (unit, an empty tuple, a zero-field struct).
+    fn emit_value(
+        &mut self,
+        sink: Sink,
+        v: Option<Value>,
+        table: &'t TypeTable,
+        sema: TyId,
+        spec: i64,
+        span: Span,
+    ) -> R<()> {
+        let ty = strip_sema_in(table, sema);
+        if let Some(v) = v
+            && let Some(seg) = self.classify_prim(table, ty, v, spec, span)?
+        {
+            self.emit_seg(sink, seg);
+            return Ok(());
+        }
+        if spec != 0 {
+            return Err(refuse("a format spec on a non-primitive value", span));
+        }
+        match table.kind(ty).clone() {
+            TyKind::Unit => {
+                self.emit_lit(sink, b"()");
+                Ok(())
+            }
+            TyKind::Tuple(elems) => {
+                let Some(v) = v else {
+                    self.emit_lit(sink, b"()");
+                    return Ok(());
+                };
+                self.emit_lit(sink, b"(");
+                for (i, &et) in elems.iter().enumerate() {
+                    if i > 0 {
+                        self.emit_lit(sink, b", ");
+                    }
+                    let fv = self.agg_field(v, i, table, et, span)?;
+                    self.emit_value(sink, fv, table, et, 0, span)?;
+                }
+                self.emit_lit(sink, b")");
+                Ok(())
+            }
+            TyKind::Nominal { module, name, args } => {
+                if !args.is_empty() {
+                    return Err(refuse(
+                        "string interpolation of an applied generic value (the std surface)",
+                        span,
+                    ));
+                }
+                let sig_table = self.sig_table;
+                match self.sigs.get(module as usize, &name) {
+                    Some(ItemSig::Struct(ss)) if !ss.generic => {
+                        let fields: Vec<(String, TyId)> =
+                            ss.fields.iter().map(|f| (f.name.clone(), f.ty)).collect();
+                        self.emit_lit(sink, format!("{name} {{").as_bytes());
+                        for (i, (fname, fty)) in fields.iter().enumerate() {
+                            self.emit_lit(sink, if i > 0 { b", " } else { b" " });
+                            self.emit_lit(sink, format!("{fname}: ").as_bytes());
+                            let fv = match v {
+                                Some(v) => self.agg_field(v, i, sig_table, *fty, span)?,
+                                None => None,
+                            };
+                            self.emit_value(sink, fv, sig_table, *fty, 0, span)?;
+                        }
+                        self.emit_lit(sink, b" }");
+                        Ok(())
+                    }
+                    Some(ItemSig::Enum {
+                        generic: false,
+                        variants,
+                        ..
+                    }) => {
+                        let Some(v) = v else {
+                            return Err(refuse("a unit-shaped enum value in interpolation", span));
+                        };
+                        let arms: Vec<(i64, Option<Vec<u8>>, Vec<TyId>)> = variants
+                            .iter()
+                            .enumerate()
+                            .map(|(i, vs)| {
+                                (
+                                    i as i64,
+                                    Some(format!("{name}.{}", vs.name).into_bytes()),
+                                    vs.payload.clone(),
+                                )
+                            })
+                            .collect();
+                        let (tag, slots) = self.tagged_parts(v);
+                        self.emit_tagged(sink, tag, &slots, &arms, sig_table, span)
+                    }
+                    Some(ItemSig::Distinct { base, .. }) => {
+                        let base = *base;
+                        self.emit_value(sink, v, sig_table, base, 0, span)
+                    }
+                    _ => Err(refuse(
+                        "string interpolation of a generic struct or enum value",
+                        span,
+                    )),
+                }
+            }
+            TyKind::ErrUnion(ok, row) => {
+                let Some(v) = v else {
+                    return Err(refuse("a valueless union in interpolation", span));
+                };
+                let is_err = self.b.ins_eu_is_err(v);
+                match self.b.as_bool_const(is_err) {
+                    Some(false) => return self.emit_eu_ok(sink, v, table, ok, span),
+                    Some(true) => return self.emit_eu_err(sink, v, table, row, span),
+                    None => {}
+                }
+                let err_bb = self.b.create_block();
+                let ok_bb = self.b.create_block();
+                let merge = self.b.create_block();
+                self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+                self.b.seal_block(err_bb);
+                self.b.seal_block(ok_bb);
+                self.b.switch_to_block(ok_bb);
+                self.b.gvn_push_scope();
+                let r = self.emit_eu_ok(sink, v, table, ok, span);
+                self.b.gvn_pop_scope();
+                r?;
+                self.b.ins_jmp(merge, &[]);
+                self.b.switch_to_block(err_bb);
+                self.b.gvn_push_scope();
+                let r = self.emit_eu_err(sink, v, table, row, span);
+                self.b.gvn_pop_scope();
+                r?;
+                self.b.ins_jmp(merge, &[]);
+                self.b.seal_block(merge);
+                self.b.switch_to_block(merge);
+                Ok(())
+            }
+            TyKind::Row { tags, .. } => {
+                let Some(v) = v else {
+                    return Err(refuse("a valueless row in interpolation", span));
+                };
+                let (tag, slots) = self.tagged_parts(v);
+                let arms: Vec<(i64, Option<Vec<u8>>, Vec<TyId>)> = tags
+                    .iter()
+                    .filter(|(_, p)| !p.is_empty())
+                    .map(|(n, p)| (self.b.module.tag_id(n), None, p.clone()))
+                    .collect();
+                self.emit_tagged(sink, tag, &slots, &arms, table, span)
+            }
+            TyKind::ExitReason => {
+                let Some(word) = v else {
+                    return Err(refuse("a valueless exit reason in interpolation", span));
+                };
+                self.emit_reason(sink, word)
+            }
+            TyKind::List(elem) => {
+                let Some(hdr) = v else {
+                    return Err(refuse("a valueless List in interpolation", span));
+                };
+                self.emit_list(sink, hdr, table, elem, span)
+            }
+            TyKind::Shared(_) | TyKind::Handle(_) | TyKind::Weak(_) | TyKind::Pool(_) => Err(
+                refuse("string interpolation of a shared-tier value (c06)", span),
+            ),
             _ => Err(refuse(
-                "print of a non-primitive value (s16/D26)",
-                expr.span,
+                "string interpolation of a value with no promised rendering (a channel, proc, \
+                 region, scope, pointer or fn)",
+                span,
             )),
         }
+    }
+
+    /// The ok half of a `!T` hole: the payload's own rendering, `()`
+    /// for a unit ok half.
+    fn emit_eu_ok(
+        &mut self,
+        sink: Sink,
+        v: Value,
+        table: &'t TypeTable,
+        ok: TyId,
+        span: Span,
+    ) -> R<()> {
+        let okv = if self.wir_ty_in(table, ok, span)?.is_some() {
+            Some(self.b.ins_eu_ok(v))
+        } else {
+            None
+        };
+        self.emit_value(sink, okv, table, ok, 0, span)
+    }
+
+    /// The row half of a `!T` hole: the tag's name and its payload
+    /// slots, exactly as a caught `{err}` renders.
+    fn emit_eu_err(
+        &mut self,
+        sink: Sink,
+        v: Value,
+        table: &'t TypeTable,
+        row: TyId,
+        span: Span,
+    ) -> R<()> {
+        let tag = self.b.ins_eu_err_tag(v);
+        let vt = self.b.func.value_ty(v);
+        let types::TypeData::Eu { slots, .. } = self.b.module.types.get(vt).clone() else {
+            return Err(refuse("a union hole without a union shape", span));
+        };
+        let slots: Vec<Value> = (0..slots.len())
+            .map(|k| self.b.ins_eu_err_slot(v, k))
+            .collect();
+        let arms: Vec<(i64, Option<Vec<u8>>, Vec<TyId>)> = match table.kind(row) {
+            TyKind::Row { tags, .. } => tags
+                .iter()
+                .filter(|(_, p)| !p.is_empty())
+                .map(|(n, p)| (self.b.module.tag_id(n), None, p.clone()))
+                .collect(),
+            _ => Vec::new(),
+        };
+        self.emit_tagged(sink, tag, &slots, &arms, table, span)
+    }
+
+    /// An exit reason word (`[conc.proc.exit]`; `wolf_rt::ProcExit::
+    /// encode`: the class in the low byte, the payload — a value, a tag
+    /// id, a trap code — in the upper 56 bits): `normal(v)`,
+    /// `error(Tag)`, `killed`, `cancelled`, `fault(kind)`. A class the
+    /// runtime never mints decodes as `error(…)`, as `decode` does.
+    fn emit_reason(&mut self, sink: Sink, word: Value) -> R<()> {
+        let mask = self.b.iconst(types::I64, 0xFF);
+        let kind = self
+            .b
+            .ins(Opcode::Band, &[word, mask], &[types::I64], Aux::None)
+            .one();
+        let eight = self.b.iconst(types::I64, 8);
+        let payload = self
+            .b
+            .ins(Opcode::Ashr, &[word, eight], &[types::I64], Aux::None)
+            .one();
+        self.emit_switch(
+            kind,
+            &[0, 2, 3, 4],
+            |z, i| {
+                match i {
+                    0 => {
+                        z.emit_lit(sink, b"normal(");
+                        z.emit_seg(
+                            sink,
+                            PrintSeg::Int {
+                                v: payload,
+                                unsigned: false,
+                                spec: 0,
+                            },
+                        );
+                        z.emit_lit(sink, b")");
+                    }
+                    1 => z.emit_lit(sink, b"killed"),
+                    2 => z.emit_lit(sink, b"cancelled"),
+                    _ => {
+                        z.emit_lit(sink, b"fault(");
+                        let keys: Vec<i64> = TRAP_KIND_NAMES.iter().map(|(c, _)| *c).collect();
+                        z.emit_switch(
+                            payload,
+                            &keys,
+                            |z, j| {
+                                z.emit_lit(sink, TRAP_KIND_NAMES[j].1.as_bytes());
+                                Ok(())
+                            },
+                            |z| {
+                                z.emit_lit(sink, b"unknown");
+                                Ok(())
+                            },
+                        )?;
+                        z.emit_lit(sink, b")");
+                    }
+                }
+                Ok(())
+            },
+            |z| {
+                z.emit_lit(sink, b"error(");
+                let s = z.tag_name_str(payload);
+                z.emit_seg(sink, PrintSeg::Str { v: s, spec: 0 });
+                z.emit_lit(sink, b")");
+                Ok(())
+            },
+        )
+    }
+
+    /// A `List[T]` hole: `[` the elements, `, `-separated, `]` — an
+    /// index loop over the runtime header, each element rendered by
+    /// its own rule. The index increment wraps rather than checks:
+    /// `i < len` bounds it, and a print may not trap between its
+    /// bracket calls (D43).
+    fn emit_list(
+        &mut self,
+        sink: Sink,
+        hdr: Value,
+        table: &'t TypeTable,
+        elem: TyId,
+        span: Span,
+    ) -> R<()> {
+        let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
+            return Err(refuse("unit-typed List elements", span));
+        };
+        if flat_size(&self.b.module.types, ewty).is_none() {
+            return Err(refuse("List elements without a flat layout", span));
+        }
+        self.emit_lit(sink, b"[");
+        let n = self.list_len_of(hdr);
+        let header = self.b.create_block();
+        let i = self.b.add_block_param(header, types::I64);
+        let zero = self.b.iconst(types::I64, 0);
+        self.b.ins_jmp(header, &[zero]);
+        self.b.switch_to_block(header);
+        self.b.gvn_push_scope();
+        let cond = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[i, n],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let body_bb = self.b.create_block();
+        let exit = self.b.create_block();
+        self.b.ins_br(cond, body_bb, &[], exit, &[]);
+        self.b.seal_block(body_bb);
+        self.b.switch_to_block(body_bb);
+        let z = self.b.iconst(types::I64, 0);
+        let first = self
+            .b
+            .ins(Opcode::Icmp, &[i, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+            .one();
+        let sep_bb = self.b.create_block();
+        let elem_bb = self.b.create_block();
+        self.b.ins_br(first, elem_bb, &[], sep_bb, &[]);
+        self.b.seal_block(sep_bb);
+        self.b.switch_to_block(sep_bb);
+        self.b.gvn_push_scope();
+        self.emit_lit(sink, b", ");
+        self.b.gvn_pop_scope();
+        self.b.ins_jmp(elem_bb, &[]);
+        self.b.seal_block(elem_bb);
+        self.b.switch_to_block(elem_bb);
+        let r = self
+            .list_load_at(hdr, i, ewty, span)
+            .and_then(|ev| self.emit_value(sink, Some(ev), table, elem, 0, span));
+        if let Err(e) = r {
+            self.b.gvn_pop_scope();
+            return Err(e);
+        }
+        let one = self.b.iconst(types::I64, 1);
+        let next = self
+            .b
+            .ins(Opcode::IaddWrap, &[i, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(header, &[next]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(header);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(exit);
+        self.emit_lit(sink, b"]");
+        Ok(())
     }
 
     /// Parse a hole's format spec into its packed form (s38): the
@@ -13935,8 +14776,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// the comptime-packed spec as an immediate (never a runtime
     /// parse).
     fn lower_print(&mut self, d: CallExpr<'t>, newline: bool, stream: i64) -> R<Flow> {
-        let stdout = stream == 1;
-        let mut outs: Vec<PrintSeg> = Vec::new();
+        /// One print segment after evaluation, before emission.
+        enum Pending {
+            Lit(Vec<u8>),
+            Hole {
+                v: Option<Value>,
+                sema: TyId,
+                spec: i64,
+                span: Span,
+            },
+        }
+        let mut outs: Vec<Pending> = Vec::new();
         for a in d.args().into_iter().flat_map(|l| l.args()) {
             let Some(vexpr) = Arg::value(a) else { continue };
             if vexpr.kind == SyntaxKind::StringExpr {
@@ -13954,143 +14804,56 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 for seg in self.string_segments(vexpr) {
                     match seg {
-                        StrSeg::Lit(b) => outs.push(PrintSeg::Lit(b)),
+                        StrSeg::Lit(b) => outs.push(Pending::Lit(b)),
                         StrSeg::Hole { expr: h, spec } => {
                             let packed = self.packed_spec(spec)?;
-                            let Some(v) = flow_val!(self.lower_expr(h)) else {
-                                return Err(refuse("unit-typed interpolation holes", h.span));
+                            let Some(sema) = self.expr_sema_ty(h.span) else {
+                                return Err(refuse("print of an untyped expression", h.span));
                             };
-                            let seg = self.classify_print_value(h, v, packed)?;
-                            outs.push(seg);
+                            let v = flow_val!(self.lower_expr(h));
+                            outs.push(Pending::Hole {
+                                v,
+                                sema,
+                                spec: packed,
+                                span: h.span,
+                            });
                         }
                     }
                 }
             } else {
-                let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
-                    return Err(refuse("unit-typed print arguments", vexpr.span));
+                let Some(sema) = self.expr_sema_ty(vexpr.span) else {
+                    return Err(refuse("print of an untyped expression", vexpr.span));
                 };
-                let seg = self.classify_print_value(vexpr, v, 0)?;
-                outs.push(seg);
+                let v = flow_val!(self.lower_expr(vexpr));
+                outs.push(Pending::Hole {
+                    v,
+                    sema,
+                    spec: 0,
+                    span: vexpr.span,
+                });
             }
         }
         if newline {
-            outs.push(PrintSeg::Lit(b"\n".to_vec()));
+            outs.push(Pending::Lit(b"\n".to_vec()));
         }
         // D43: the statement's segments are ONE line. Every hole has
         // been evaluated by now, so nothing between the bracket calls
-        // can trap and strand a half-written line — and the runtime
-        // takes the stream lock once instead of once per segment.
+        // can trap and strand a half-written line — the composite
+        // walks below are loads, compares and shim calls — and the
+        // runtime takes the stream lock once instead of once per
+        // segment.
         self.rt_print_call("__wolf_rt_print_begin", &[], &[]);
+        let sink = Sink::Print { stream };
+        let table = self.table;
         for out in outs {
             match out {
-                PrintSeg::Lit(bytes) => {
-                    if bytes.is_empty() {
-                        continue;
-                    }
-                    let idx = self.b.module.intern_data(&bytes);
-                    let p = self.b.ins_data_addr(idx);
-                    let len = self.b.iconst(types::I64, bytes.len() as i64);
-                    if stdout {
-                        self.rt_print_call(
-                            "__wolf_rt_print_str",
-                            &[types::PTR, types::I64],
-                            &[p, len],
-                        );
-                    } else {
-                        let st = self.b.iconst(types::I64, stream);
-                        let sp = self.b.iconst(types::I64, 0);
-                        self.rt_print_call(
-                            "__wolf_rt_write_str",
-                            &[types::I64, types::PTR, types::I64, types::I64],
-                            &[st, p, len, sp],
-                        );
-                    }
-                }
-                PrintSeg::Str { v, spec } => {
-                    let p = self
-                        .b
-                        .ins(Opcode::AggGet, &[v], &[types::PTR], Aux::Int(0))
-                        .one();
-                    let len = self
-                        .b
-                        .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(1))
-                        .one();
-                    if stdout && spec == 0 {
-                        self.rt_print_call(
-                            "__wolf_rt_print_str",
-                            &[types::PTR, types::I64],
-                            &[p, len],
-                        );
-                    } else {
-                        let st = self.b.iconst(types::I64, stream);
-                        let sp = self.b.iconst(types::I64, spec);
-                        self.rt_print_call(
-                            "__wolf_rt_write_str",
-                            &[types::I64, types::PTR, types::I64, types::I64],
-                            &[st, p, len, sp],
-                        );
-                    }
-                }
-                PrintSeg::Int { v, unsigned, spec } => {
-                    let vty = self.b.func.value_ty(v);
-                    let wide = if vty == types::I64 {
-                        v
-                    } else if unsigned {
-                        self.b
-                            .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
-                            .one()
-                    } else {
-                        self.b
-                            .ins(Opcode::Sext, &[v], &[types::I64], Aux::None)
-                            .one()
-                    };
-                    if stdout && spec == 0 {
-                        self.rt_print_call("__wolf_rt_print_i64", &[types::I64], &[wide]);
-                    } else {
-                        let st = self.b.iconst(types::I64, stream);
-                        let sp = self.b.iconst(types::I64, spec);
-                        self.rt_print_call(
-                            "__wolf_rt_write_i64",
-                            &[types::I64, types::I64, types::I64],
-                            &[st, wide, sp],
-                        );
-                    }
-                }
-                PrintSeg::Bool { v, spec } => {
-                    if stdout && spec == 0 {
-                        self.rt_print_call("__wolf_rt_print_bool", &[types::BOOL], &[v]);
-                    } else {
-                        let st = self.b.iconst(types::I64, stream);
-                        let sp = self.b.iconst(types::I64, spec);
-                        self.rt_print_call(
-                            "__wolf_rt_write_bool",
-                            &[types::I64, types::BOOL, types::I64],
-                            &[st, v, sp],
-                        );
-                    }
-                }
-                PrintSeg::F64 { v, spec } => {
-                    let st = self.b.iconst(types::I64, stream);
-                    let sp = self.b.iconst(types::I64, spec);
-                    self.rt_print_call(
-                        "__wolf_rt_write_f64",
-                        &[types::I64, types::F64, types::I64],
-                        &[st, v, sp],
-                    );
-                }
-                PrintSeg::Char { v, spec } => {
-                    let wide = self
-                        .b
-                        .ins(Opcode::Zext, &[v], &[types::I64], Aux::None)
-                        .one();
-                    let st = self.b.iconst(types::I64, stream);
-                    let sp = self.b.iconst(types::I64, spec);
-                    self.rt_print_call(
-                        "__wolf_rt_write_char",
-                        &[types::I64, types::I64, types::I64],
-                        &[st, wide, sp],
-                    );
-                }
+                Pending::Lit(bytes) => self.emit_lit(sink, &bytes),
+                Pending::Hole {
+                    v,
+                    sema,
+                    spec,
+                    span,
+                } => self.emit_value(sink, v, table, sema, spec, span)?,
             }
         }
         let st = self.b.iconst(types::I64, stream);

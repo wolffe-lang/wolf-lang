@@ -649,6 +649,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_net_nodelay",
         "__wolf_rt_str_to_int",
         "__wolf_rt_fs_fstat",
+        // s143 (#268): a proc's `int` result rides its exit reason.
+        "__wolf_rt_task_value",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -659,14 +661,14 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        133,
+        134,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
 
 // ------------------------------------------ s142: to_int (#263) --
 
-/// `str.to_int() -> int ! {NotAnInt}` on both lanes, byte-identical —
+/// `str.to_int() -> int ! {parse}` on both lanes, byte-identical —
 /// the corpus battery (`strings/to_int.lu`) including the magnitudes
 /// outside `i64`, which are the row on both wolf tiers (there is no
 /// `int` the text names; X3 forbids a quiet wrap). Those three inputs
@@ -680,8 +682,8 @@ fn to_int_agrees_across_lanes_including_overflow() {
         r#"
 fn show(label: str, s: str) {
     let v = s.to_int() else |err| match err {
-        NotAnInt => {
-            print("{label} NotAnInt")
+        parse => {
+            print("{label} parse")
             0 - 1
         },
     }
@@ -708,19 +710,19 @@ fn main() -> !int {
 }
 "#,
         "exit(0)",
-        "plain 42\nspaces 7\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nmax 9223372036854775807\nmin -9223372036854775808\nover NotAnInt\nunder NotAnInt\nhuge NotAnInt\nword NotAnInt\nempty NotAnInt\nsum 8\n",
+        "plain 42\nspaces 7\nuni_ws 12\nneg -13\nplus 5\nzeros 7\nmax 9223372036854775807\nmin -9223372036854775808\nover parse\nunder parse\nhuge parse\nword parse\nempty parse\nsum 8\n",
     );
 }
 
 /// The row propagates out of `main` the documented way on both
-/// lanes (`error: NotAnInt`, exit 1 — `rows/to_int_not_an_int.lu`).
+/// lanes (`error: parse`, exit 1 — `rows/to_int_parse.lu`).
 #[test]
 fn to_int_row_escapes_main_on_both_lanes() {
     parity(
         "s142_to_int_row",
         "fn main() -> !int {\n    let n = \"four\".to_int()?\n    print(\"{n}\")\n    0\n}\n",
         "exit(1)",
-        "error: NotAnInt\n",
+        "error: parse\n",
     );
 }
 
@@ -849,4 +851,101 @@ fn main() -> !int {{
         ),
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ------------------------------ s143: interpolation holes (#268) --
+
+/// `[type.interp.value]` on both lanes, byte for byte: the corpus
+/// battery (`strings/interp_values.lu`) — the checked machine's
+/// type-directed renderer and the native tier's structural walk
+/// (`emit_value`: aggregate reads, a branch per union state, a
+/// compare chain per tag, the module's tag-name table) agree on
+/// every shape.
+#[test]
+fn interpolation_of_composites_agrees_across_lanes() {
+    parity(
+        "s143_interp_values",
+        r#"struct Doc { title: str, words: int }
+struct Pair { a: int, b: Doc }
+enum Shape { Dot, Line(int), Rect(int, int) }
+
+fn half(n: int) -> int ! {odd} {
+    if n % 2 == 1 { return odd }
+    n / 2
+}
+fn digit(s: str) -> int ! {BadDigit(str, int), too_short} {
+    if s.len < 1 { return too_short }
+    if s < "0" || s > "9" { return BadDigit(s, s.len) }
+    s.to_int() else 0
+}
+
+fn main() -> !int {
+    let d = Doc { title: "regions", words: 900 }
+    print("struct {d}")
+    let t = (1, "two", 3.5, true, 'c')
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    let s = "built {d} {t} {xs}"
+    let p = Pair { a: 1, b: d }
+    print("nested {p}")
+    print("tuple {t}")
+    print("list {xs}")
+    let empty = List[str]()
+    print("empty {empty}")
+    var ds = List[Doc]()
+    (mut ds).push(Doc { title: "moves", words: 640 })
+    print("docs {ds}")
+    let ok = half(14)
+    print("union ok {ok}")
+    let bad = half(3)
+    print("union err {bad}")
+    let a = digit("q") else |err| { print("caught {err}"); 0 }
+    let b = digit("") else |err| { print("caught {err}"); 0 }
+    let c = digit("4") else |err| { print("caught {err}"); 0 }
+    print("abc {a} {b} {c}")
+    let e = half(5) else |err| { print("row {err}"); 0 }
+    print("shape {Shape.Line(4)} {Shape.Rect(2, 3)}")
+    print(s)
+    let popped = (mut xs).pop()
+    print("popped {popped}")
+    0
+}
+"#,
+        "exit(0)",
+        "struct Doc { title: regions, words: 900 }\nnested Pair { a: 1, b: Doc { title: regions, words: 900 } }\ntuple (1, two, 3.5, true, c)\nlist [1, 2, 3]\nempty []\ndocs [Doc { title: moves, words: 640 }]\nunion ok 7\nunion err odd\ncaught BadDigit(q, 1)\ncaught too_short\nabc 0 0 4\nrow odd\nshape Shape.Line(4) Shape.Rect(2, 3)\nbuilt Doc { title: regions, words: 900 } (1, two, 3.5, true, c) [1, 2, 3]\npopped 3\n",
+    );
+}
+
+/// A payload-free variant read bare (`Shape.Dot`) renders qualified
+/// on the native tier (`[type.interp.agg]`); the checked lane refuses
+/// that read as a module item today, so this is native-only.
+#[test]
+fn a_bare_variant_renders_qualified_natively() {
+    let Some(native) = lane(
+        "s143_bare_variant",
+        "enum Shape { Dot, Line(int) }\nfn main() -> !int {\n    let d = Shape.Dot\n    print(\"{d} {Shape.Line(2)}\")\n    0\n}\n",
+        "--native",
+    ) else {
+        return;
+    };
+    assert_eq!(native.verdict, "exit(0)");
+    assert_eq!(native.stdout, "Shape.Dot Shape.Line(2)\n");
+}
+
+/// `[type.interp.reason]`'s `fault(kind)` spells the trap kind from
+/// the lowerer's own table; that table must be the runtime's, code
+/// for code — the two crates cannot share the constants (the
+/// dependency direction is locked), so parity is asserted here.
+#[test]
+fn the_lowerers_trap_kind_table_is_the_runtimes() {
+    for (code, name) in wolf_wir::lower::TRAP_KIND_NAMES {
+        assert_eq!(
+            wolf_rt::native::trap_kind_name(code as i32),
+            name,
+            "trap code {code}"
+        );
+    }
+    assert_eq!(wolf_rt::native::trap_kind_name(999), "unknown");
 }
