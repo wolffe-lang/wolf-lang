@@ -2,11 +2,11 @@
 source: crates/wolf_sema/tests/method_diagnostics.rs
 expression: "render_types(&[(&[], \"main.lu\", src)])"
 ---
-error[E0401]: this is `int ! {NotAnInt}`, but `n` is declared as `str`
+error[E0401]: this is `int ! {parse}`, but `n` is declared as `str`
  --> mem:///main.lu:2:18
   |
 2 |     let n: str = "5".to_int()
   |            --- the annotation is here
-  |                  ^^^^^^^^^^^^ found `int ! {NotAnInt}` here
+  |                  ^^^^^^^^^^^^ found `int ! {parse}` here
   |
-  = note: expected `str`, found `int ! {NotAnInt}`
+  = note: expected `str`, found `int ! {parse}`

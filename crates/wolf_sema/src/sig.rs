@@ -1481,8 +1481,7 @@ impl<'a> Lower<'a> {
                 if generics.contains(&first) || Prim::from_name(&first).is_some() {
                     // qualified/applied builtin form — not a s13 type
                     self.opaque(file, node)
-                } else if segs.len() == 1 && matches!(first.as_str(), "List" | "Pool" | "channel")
-                {
+                } else if segs.len() == 1 && matches!(first.as_str(), "List" | "Pool" | "channel") {
                     // The two prelude containers the Tier-2 corpus
                     // rests on (s21): typed as builtins so `handle`
                     // pools and the region litmuses check. Every other

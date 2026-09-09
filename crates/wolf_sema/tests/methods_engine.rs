@@ -249,7 +249,7 @@ fn unreachable_arm_warns_but_body_checks() {
 // ------------------------------------------ s142: to_int (#263) --
 
 /// `str.to_int()` is in the builtin set: a program built on it checks
-/// fully — the `int ! {NotAnInt}` row propagates through `?` and
+/// fully — the `int ! {parse}` row propagates through `?` and
 /// defaults through `else` with the existing machinery.
 #[test]
 fn to_int_is_in_the_builtin_set() {
@@ -301,6 +301,61 @@ fn a_str_method_outside_the_set_is_refused_by_name() {
         assert!(
             refused.ends_with(&format!(".{m}()")),
             "the span is the call: {refused}"
+        );
+    }
+}
+
+// ------------------------------ s143: interpolation holes (#268) --
+
+/// `[type.interp.value]`: every value both machines render the same
+/// bytes for checks as a hole — a struct, a tuple, a `List`, a `!T`,
+/// a caught row, an enum variant. The book's largest one-machine
+/// family was the refusal these used to meet.
+#[test]
+fn interpolation_holes_accept_the_rendered_kinds() {
+    let tc = check_one(
+        "struct Doc { title: str, words: int }\n\
+         enum Shape { Dot, Line(int) }\n\
+         fn half(n: int) -> int ! {odd} {\n\
+         if n % 2 == 1 { return odd }\n\
+         n / 2\n\
+         }\n\
+         fn main() -> !int {\n\
+         let d = Doc { title: \"regions\", words: 900 }\n\
+         let t = (1, \"two\")\n\
+         var xs = List[int]()\n\
+         (mut xs).push(1)\n\
+         let h = half(3)\n\
+         let e = half(5) else |err| { print(\"{err}\"); 0 }\n\
+         let l = Shape.Line(4)\n\
+         print(\"{d} {t} {xs} {h} {e} {l}\")\n\
+         0\n\
+         }\n",
+    );
+    assert_clean(&tc);
+}
+
+/// `[type.interp.none]`: a value with no promised rendering refuses
+/// BY NAME — a channel, a proc, a scope — and so does the shared tier,
+/// each with its own reason, never the old blanket "non-primitive".
+#[test]
+fn interpolation_holes_refuse_unrendered_kinds_by_name() {
+    for (src, want) in [
+        (
+            "fn main() -> !int {\n    let c = channel[int](1)\n    print(\"{c}\")\n    0\n}\n",
+            "string interpolation of a value with no promised rendering",
+        ),
+        (
+            "fn main() -> !int {\n    let p = Pool[int]()\n    print(\"{p}\")\n    0\n}\n",
+            "string interpolation of a shared-tier value (c06)",
+        ),
+    ] {
+        let tc = check_one(src);
+        assert_eq!(tc.not_yet.len(), 1, "{src}: {:?}", tc.not_yet);
+        assert!(
+            tc.not_yet[0].construct.starts_with(want),
+            "{src}: {}",
+            tc.not_yet[0].construct
         );
     }
 }

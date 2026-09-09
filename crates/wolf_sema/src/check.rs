@@ -3955,18 +3955,56 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// What a hole may hold (s143, wolf-lang#268 — `[type.interp.value]`):
+    /// every primitive as before, and the values both machines render
+    /// the same bytes for — `()`, tuples, non-generic structs and
+    /// enums, `!T` unions, caught rows, exit reasons, lists. What still
+    /// refuses is named by its reason: an applied generic (the std
+    /// surface), the shared tier, and the handles no clause promises a
+    /// rendering for (a channel, a proc, a region, a scope, a pointer,
+    /// a fn — the interpreter prints its own bookkeeping there, and a
+    /// program must not come to depend on it).
     fn hole_ok(&mut self, span: Span, ty: TyId) -> R<()> {
-        match self.kind_of(ty) {
+        let construct = match self.kind_of(ty) {
             TyKind::Prim(_)
             | TyKind::Wrapping(_)
+            | TyKind::Distinct(_)
             | TyKind::Error
             | TyKind::Never
-            | TyKind::Var(_) => Ok(()),
-            _ => Err(NotYet {
-                construct: "string interpolation of a non-primitive value",
-                span,
-            }),
-        }
+            | TyKind::Var(_)
+            | TyKind::Unit
+            | TyKind::Tuple(_)
+            | TyKind::ErrUnion(..)
+            | TyKind::Row { .. }
+            | TyKind::ExitReason
+            | TyKind::List(_) => return Ok(()),
+            TyKind::Nominal { module, name, args } => {
+                let generic = !args.is_empty()
+                    || matches!(
+                        self.sigs.get(module as usize, &name),
+                        Some(ItemSig::Struct(StructSig { generic: true, .. }))
+                            | Some(ItemSig::Enum { generic: true, .. })
+                    );
+                if !generic {
+                    return Ok(());
+                }
+                "string interpolation of an applied generic value (the std surface)"
+            }
+            TyKind::Unsupported(_) => {
+                "string interpolation of an applied generic value (the std surface)"
+            }
+            TyKind::Shared(_) | TyKind::Handle(_) | TyKind::Weak(_) | TyKind::Pool(_) => {
+                "string interpolation of a shared-tier value (c06)"
+            }
+            TyKind::Rigid(_) | TyKind::Proj(..) => {
+                "string interpolation of a generic parameter's value"
+            }
+            _ => {
+                "string interpolation of a value with no promised rendering (a channel, proc, \
+                 region, scope, pointer or fn)"
+            }
+        };
+        Err(NotYet { construct, span })
     }
 
     /// A capitalized name that resolves nowhere is a candidate
@@ -5870,20 +5908,23 @@ impl<'a> Checker<'a> {
                 vec![p("self", recv_ty), p("from", str_), p("to", str_)],
                 str_,
             ),
-            // s142 (wolf-lang#263): `to_int() -> int ! {NotAnInt}` —
-            // the parse the book's chapter 1 reaches for first
+            // s142 (wolf-lang#263): `to_int() -> int ! {parse}` — the
+            // parse the book's chapter 1 reaches for first
             // (`row.to_int() else 0`). Ruled by `[mem.str.to_int]`
             // (s143, #265): the surrounding `[mem.str.ws]` whitespace
             // is ignored, a sign is accepted, and anything else that
             // is not an optionally signed run of ASCII digits in
-            // `int`'s range is the row, never a trap. `[mem.str.parse]`
-            // blesses the spelling and makes `to_int` the family's one
-            // method. Parsing is a method and not a cast (E0805).
+            // `int`'s range is the row, never a trap. The row is the
+            // lowercase mark `parse` — `[mem.str.parse]` retired s142's
+            // `NotAnInt`, the one CapCase payload-free mark on the
+            // builtin surface (W0603's pact; the json family's `parse`
+            // is the same condition) — and `to_int` is the family's
+            // one method. Parsing is a method and not a cast (E0805).
             "to_int" => {
                 let row = self
                     .lo
                     .table
-                    .row(vec![("NotAnInt".to_string(), Vec::new())], None);
+                    .row(vec![("parse".to_string(), Vec::new())], None);
                 let ret = self.lo.table.intern(TyKind::ErrUnion(int_, row));
                 (vec![p("self", recv_ty)], ret)
             }
