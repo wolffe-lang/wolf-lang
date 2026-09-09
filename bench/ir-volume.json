@@ -2,5 +2,1472 @@
   "note": "The per-file IR-volume ratchet (wolf-lang#270, s143). `files` maps every run-phase corpus path the release tier emits to its LLVM IR instruction counts with the mid-end on (`midend`) and off (`naive`) and their ratio, measured on the linux/x86-64 CI lane (D5: gates are rig-pinned). `cargo xtask bench-gates` reds BY NAME when an existing path's ratio rises past its record by more than `slack` (relative: the ratios span 0.5 to 2.4, so one absolute tick would gate noise on the large and nothing on the small); a path absent from `files` is reported and never red; a recorded path the run cannot emit is reported as conservatism. `cargo xtask bench-gates --record` rewrites `files` from a run on the rig; the rest of this document is carried through. The corpus geomean that gated before s143 is printed as a reference only (bench/gates.json `corpus_geomean_reference`, and its history).",
   "lane": "linux/x86-64",
   "slack": 0.05,
-  "files": {}
+  "files": {
+    "corpus/comptime.lu": {
+      "midend": 18,
+      "naive": 40,
+      "ratio": 0.45
+    },
+    "corpus/comptime/fold_reaches_lane.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/conc/cancel_sibling.lu": {
+      "midend": 172,
+      "naive": 211,
+      "ratio": 0.815
+    },
+    "corpus/conc/chan_drain_after_inclusive_loop.lu": {
+      "midend": 113,
+      "naive": 113,
+      "ratio": 1.0
+    },
+    "corpus/conc/freeze_publish.lu": {
+      "midend": 261,
+      "naive": 261,
+      "ratio": 1.0
+    },
+    "corpus/conc/message_passing.lu": {
+      "midend": 136,
+      "naive": 138,
+      "ratio": 0.986
+    },
+    "corpus/conc/proc_cancel_defers.lu": {
+      "midend": 161,
+      "naive": 163,
+      "ratio": 0.988
+    },
+    "corpus/conc/proc_cap_fault_join.lu": {
+      "midend": 151,
+      "naive": 146,
+      "ratio": 1.034
+    },
+    "corpus/conc/proc_cross_module/main.lu": {
+      "midend": 236,
+      "naive": 174,
+      "ratio": 1.356
+    },
+    "corpus/conc/proc_kill_defers.lu": {
+      "midend": 125,
+      "naive": 124,
+      "ratio": 1.008
+    },
+    "corpus/conc/proc_link.lu": {
+      "midend": 262,
+      "naive": 188,
+      "ratio": 1.394
+    },
+    "corpus/conc/proc_spawn_loop.lu": {
+      "midend": 40,
+      "naive": 44,
+      "ratio": 0.909
+    },
+    "corpus/conc/select_seeded.lu": {
+      "midend": 85,
+      "naive": 85,
+      "ratio": 1.0
+    },
+    "corpus/conc/select_single_arm_loop.lu": {
+      "midend": 75,
+      "naive": 82,
+      "ratio": 0.915
+    },
+    "corpus/conc/select_two_timeouts.lu": {
+      "midend": 98,
+      "naive": 98,
+      "ratio": 1.0
+    },
+    "corpus/conc/spawn_cluster_split.lu": {
+      "midend": 3346,
+      "naive": 4741,
+      "ratio": 0.706
+    },
+    "corpus/conc/spawn_fanout_loop.lu": {
+      "midend": 221,
+      "naive": 223,
+      "ratio": 0.991
+    },
+    "corpus/conc/when_multi.lu": {
+      "midend": 157,
+      "naive": 163,
+      "ratio": 0.963
+    },
+    "corpus/ct/public_len.lu": {
+      "midend": 26,
+      "naive": 31,
+      "ratio": 0.839
+    },
+    "corpus/entry_no_return.lu": {
+      "midend": 7,
+      "naive": 7,
+      "ratio": 1.0
+    },
+    "corpus/faults/assert_fails.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/assert_msg_holds.lu": {
+      "midend": 21,
+      "naive": 29,
+      "ratio": 0.724
+    },
+    "corpus/faults/bounds_slice.lu": {
+      "midend": 26,
+      "naive": 27,
+      "ratio": 0.963
+    },
+    "corpus/faults/byte_view_slice_reversed.lu": {
+      "midend": 19,
+      "naive": 43,
+      "ratio": 0.442
+    },
+    "corpus/faults/cast_float_nan_trap.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/faults/cast_float_overflow_trap.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/faults/cast_float_to_int_truncate.lu": {
+      "midend": 40,
+      "naive": 40,
+      "ratio": 1.0
+    },
+    "corpus/faults/char_cast_negative_trap.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/char_cast_range_trap.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/char_cast_surrogate_trap.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/div_zero_rem.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/index_origin_min_overflow.lu": {
+      "midend": 24,
+      "naive": 24,
+      "ratio": 1.0
+    },
+    "corpus/faults/index_origin_zero.lu": {
+      "midend": 33,
+      "naive": 33,
+      "ratio": 1.0
+    },
+    "corpus/faults/list_slice_oob.lu": {
+      "midend": 32,
+      "naive": 32,
+      "ratio": 1.0
+    },
+    "corpus/faults/list_slice_reversed.lu": {
+      "midend": 23,
+      "naive": 32,
+      "ratio": 0.719
+    },
+    "corpus/faults/overflow_add.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_call_result.lu": {
+      "midend": 7,
+      "naive": 17,
+      "ratio": 0.412
+    },
+    "corpus/faults/overflow_elem_read.lu": {
+      "midend": 44,
+      "naive": 44,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_elem_write.lu": {
+      "midend": 46,
+      "naive": 49,
+      "ratio": 0.939
+    },
+    "corpus/faults/overflow_field_read.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_interp_operand.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_list_pop_i32.lu": {
+      "midend": 132,
+      "naive": 132,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_list_pop_i64.lu": {
+      "midend": 131,
+      "naive": 131,
+      "ratio": 1.0
+    },
+    "corpus/faults/region_cap_breach.lu": {
+      "midend": 85,
+      "naive": 90,
+      "ratio": 0.944
+    },
+    "corpus/faults/repeat_negative.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/trap_skips_root_defers.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/faults/wrap_high_as_i32.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/wrap_top_bit_as_int.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/fs/bytes_dirs.lu": {
+      "midend": 1418,
+      "naive": 1423,
+      "ratio": 0.996
+    },
+    "corpus/fs/error_row.lu": {
+      "midend": 275,
+      "naive": 275,
+      "ratio": 1.0
+    },
+    "corpus/fs/fstat.lu": {
+      "midend": 759,
+      "naive": 765,
+      "ratio": 0.992
+    },
+    "corpus/fs/roundtrip.lu": {
+      "midend": 303,
+      "naive": 303,
+      "ratio": 1.0
+    },
+    "corpus/generics/box_method.lu": {
+      "midend": 18,
+      "naive": 67,
+      "ratio": 0.269
+    },
+    "corpus/generics/explicit_apply.lu": {
+      "midend": 68,
+      "naive": 80,
+      "ratio": 0.85
+    },
+    "corpus/generics/first_of_list.lu": {
+      "midend": 125,
+      "naive": 137,
+      "ratio": 0.912
+    },
+    "corpus/generics/hundred_shapes.lu": {
+      "midend": 308,
+      "naive": 218,
+      "ratio": 1.413
+    },
+    "corpus/generics/list_imported_elem/main.lu": {
+      "midend": 94,
+      "naive": 94,
+      "ratio": 1.0
+    },
+    "corpus/generics/list_struct_elem.lu": {
+      "midend": 94,
+      "naive": 94,
+      "ratio": 1.0
+    },
+    "corpus/generics/list_wrapping_elem.lu": {
+      "midend": 196,
+      "naive": 197,
+      "ratio": 0.995
+    },
+    "corpus/generics/pair_of.lu": {
+      "midend": 16,
+      "naive": 16,
+      "ratio": 1.0
+    },
+    "corpus/generics/two_instances.lu": {
+      "midend": 40,
+      "naive": 117,
+      "ratio": 0.342
+    },
+    "corpus/generics/two_level_raise.lu": {
+      "midend": 39,
+      "naive": 298,
+      "ratio": 0.131
+    },
+    "corpus/grammar/bang_errunion.lu": {
+      "midend": 20,
+      "naive": 92,
+      "ratio": 0.217
+    },
+    "corpus/grammar/bang_not.lu": {
+      "midend": 4,
+      "naive": 4,
+      "ratio": 1.0
+    },
+    "corpus/grammar/bom_at_start.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/grammar/brackets_generic_call.lu": {
+      "midend": 41,
+      "naive": 53,
+      "ratio": 0.774
+    },
+    "corpus/grammar/defer_loop_turn.lu": {
+      "midend": 28,
+      "naive": 33,
+      "ratio": 0.848
+    },
+    "corpus/grammar/else_chain.lu": {
+      "midend": 4,
+      "naive": 4,
+      "ratio": 1.0
+    },
+    "corpus/grammar/index_origin_closure.lu": {
+      "midend": 68,
+      "naive": 68,
+      "ratio": 1.0
+    },
+    "corpus/grammar/index_origin_file.lu": {
+      "midend": 218,
+      "naive": 248,
+      "ratio": 0.879
+    },
+    "corpus/grammar/index_origin_scopes.lu": {
+      "midend": 163,
+      "naive": 182,
+      "ratio": 0.896
+    },
+    "corpus/grammar/intdot_range.lu": {
+      "midend": 41,
+      "naive": 49,
+      "ratio": 0.837
+    },
+    "corpus/grammar/interp_nested.lu": {
+      "midend": 30,
+      "naive": 30,
+      "ratio": 1.0
+    },
+    "corpus/grammar/let_group.lu": {
+      "midend": 20,
+      "naive": 20,
+      "ratio": 1.0
+    },
+    "corpus/grammar/let_group_destructure.lu": {
+      "midend": 16,
+      "naive": 40,
+      "ratio": 0.4
+    },
+    "corpus/grammar/match_arm_at_binding.lu": {
+      "midend": 31,
+      "naive": 122,
+      "ratio": 0.254
+    },
+    "corpus/grammar/match_arm_product_nested.lu": {
+      "midend": 65,
+      "naive": 195,
+      "ratio": 0.333
+    },
+    "corpus/grammar/newline_trailing.lu": {
+      "midend": 42,
+      "naive": 42,
+      "ratio": 1.0
+    },
+    "corpus/grammar/shebang.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/grammar/struct_pattern_match_arm.lu": {
+      "midend": 6,
+      "naive": 11,
+      "ratio": 0.545
+    },
+    "corpus/grammar/tuple_pattern_match_arm.lu": {
+      "midend": 59,
+      "naive": 94,
+      "ratio": 0.628
+    },
+    "corpus/hello.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/io/eprint.lu": {
+      "midend": 20,
+      "naive": 20,
+      "ratio": 1.0
+    },
+    "corpus/json/query.lu": {
+      "midend": 454,
+      "naive": 454,
+      "ratio": 1.0
+    },
+    "corpus/json/rows.lu": {
+      "midend": 219,
+      "naive": 219,
+      "ratio": 1.0
+    },
+    "corpus/kernels/churn_b3.lu": {
+      "midend": 44,
+      "naive": 59,
+      "ratio": 0.746
+    },
+    "corpus/kernels/ct_cswap.lu": {
+      "midend": 25,
+      "naive": 25,
+      "ratio": 1.0
+    },
+    "corpus/kernels/ct_tag_compare.lu": {
+      "midend": 28,
+      "naive": 28,
+      "ratio": 1.0
+    },
+    "corpus/kernels/guarded_stencil.lu": {
+      "midend": 166,
+      "naive": 144,
+      "ratio": 1.153
+    },
+    "corpus/kernels/hot_counter.lu": {
+      "midend": 48,
+      "naive": 64,
+      "ratio": 0.75
+    },
+    "corpus/kernels/hot_header.lu": {
+      "midend": 72,
+      "naive": 81,
+      "ratio": 0.889
+    },
+    "corpus/kernels/hot_header_alias.lu": {
+      "midend": 78,
+      "naive": 90,
+      "ratio": 0.867
+    },
+    "corpus/kernels/hot_scale_versioned.lu": {
+      "midend": 147,
+      "naive": 80,
+      "ratio": 1.837
+    },
+    "corpus/kernels/hot_sum_reduce.lu": {
+      "midend": 140,
+      "naive": 150,
+      "ratio": 0.933
+    },
+    "corpus/kernels/sha256_block.lu": {
+      "midend": 1389,
+      "naive": 1451,
+      "ratio": 0.957
+    },
+    "corpus/kernels/walk_twice.lu": {
+      "midend": 26,
+      "naive": 68,
+      "ratio": 0.382
+    },
+    "corpus/lints/allow_item.lu": {
+      "midend": 8,
+      "naive": 14,
+      "ratio": 0.571
+    },
+    "corpus/lints/allow_nothing.lu": {
+      "midend": 8,
+      "naive": 13,
+      "ratio": 0.615
+    },
+    "corpus/lints/allow_unknown_code.lu": {
+      "midend": 8,
+      "naive": 13,
+      "ratio": 0.615
+    },
+    "corpus/lints/ancestor_import/main.lu": {
+      "midend": 10,
+      "naive": 27,
+      "ratio": 0.37
+    },
+    "corpus/lints/as_view_consuming.lu": {
+      "midend": 6,
+      "naive": 26,
+      "ratio": 0.231
+    },
+    "corpus/lints/binder_capitalized.lu": {
+      "midend": 7,
+      "naive": 13,
+      "ratio": 0.538
+    },
+    "corpus/lints/discarded_result.lu": {
+      "midend": 14,
+      "naive": 57,
+      "ratio": 0.246
+    },
+    "corpus/lints/else_comparison.lu": {
+      "midend": 11,
+      "naive": 52,
+      "ratio": 0.212
+    },
+    "corpus/lints/float_zero_minus.lu": {
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    },
+    "corpus/lints/get_prefix.lu": {
+      "midend": 6,
+      "naive": 18,
+      "ratio": 0.333
+    },
+    "corpus/lints/get_without_row.lu": {
+      "midend": 6,
+      "naive": 18,
+      "ratio": 0.333
+    },
+    "corpus/lints/index_origin_get.lu": {
+      "midend": 113,
+      "naive": 113,
+      "ratio": 1.0
+    },
+    "corpus/lints/match_str_arm_unreachable.lu": {
+      "midend": 22,
+      "naive": 154,
+      "ratio": 0.143
+    },
+    "corpus/lints/mut_in_interp.lu": {
+      "midend": 11,
+      "naive": 27,
+      "ratio": 0.407
+    },
+    "corpus/lints/mut_param_unwritten.lu": {
+      "midend": 7,
+      "naive": 22,
+      "ratio": 0.318
+    },
+    "corpus/lints/narrowing_literal.lu": {
+      "midend": 4,
+      "naive": 4,
+      "ratio": 1.0
+    },
+    "corpus/lints/one_item_module/main.lu": {
+      "midend": 6,
+      "naive": 12,
+      "ratio": 0.5
+    },
+    "corpus/lints/pkg_item_unused/main.lu": {
+      "midend": 6,
+      "naive": 13,
+      "ratio": 0.462
+    },
+    "corpus/lints/predicate_shape.lu": {
+      "midend": 8,
+      "naive": 19,
+      "ratio": 0.421
+    },
+    "corpus/lints/prefix_statement.lu": {
+      "midend": 4,
+      "naive": 4,
+      "ratio": 1.0
+    },
+    "corpus/lints/pub_undocumented.lu": {
+      "midend": 6,
+      "naive": 18,
+      "ratio": 0.333
+    },
+    "corpus/lints/raw_interp_braces.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/lints/region_call_allocates.lu": {
+      "midend": 66,
+      "naive": 68,
+      "ratio": 0.971
+    },
+    "corpus/lints/region_never_allocates.lu": {
+      "midend": 4,
+      "naive": 8,
+      "ratio": 0.5
+    },
+    "corpus/lints/shadow_prelude.lu": {
+      "midend": 8,
+      "naive": 13,
+      "ratio": 0.615
+    },
+    "corpus/lints/tag_case_payload.lu": {
+      "midend": 9,
+      "naive": 56,
+      "ratio": 0.161
+    },
+    "corpus/lints/tag_name_collision.lu": {
+      "midend": 13,
+      "naive": 58,
+      "ratio": 0.224
+    },
+    "corpus/lints/take_returned.lu": {
+      "midend": 6,
+      "naive": 12,
+      "ratio": 0.5
+    },
+    "corpus/memory/byte_list_ledger.lu": {
+      "midend": 218,
+      "naive": 221,
+      "ratio": 0.986
+    },
+    "corpus/memory/byte_producers_ledger.lu": {
+      "midend": 800,
+      "naive": 798,
+      "ratio": 1.003
+    },
+    "corpus/memory/byte_view_escape.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/memory/carried_quotient_nested.lu": {
+      "midend": 506,
+      "naive": 403,
+      "ratio": 1.256
+    },
+    "corpus/memory/carried_quotient_pair.lu": {
+      "midend": 423,
+      "naive": 289,
+      "ratio": 1.464
+    },
+    "corpus/memory/checked_unsigned.lu": {
+      "midend": 10,
+      "naive": 22,
+      "ratio": 0.455
+    },
+    "corpus/memory/closure_cluster_split.lu": {
+      "midend": 3194,
+      "naive": 4589,
+      "ratio": 0.696
+    },
+    "corpus/memory/closure_kill_list.lu": {
+      "midend": 91,
+      "naive": 94,
+      "ratio": 0.968
+    },
+    "corpus/memory/closure_value_paths.lu": {
+      "midend": 62,
+      "naive": 62,
+      "ratio": 1.0
+    },
+    "corpus/memory/consumed_walk_charges_nothing.lu": {
+      "midend": 132,
+      "naive": 154,
+      "ratio": 0.857
+    },
+    "corpus/memory/defer_order.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/memory/destructure_bind.lu": {
+      "midend": 28,
+      "naive": 57,
+      "ratio": 0.491
+    },
+    "corpus/memory/destructure_partial_live.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/memory/div_zero.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/memory/excl_disjoint_ok.lu": {
+      "midend": 18,
+      "naive": 54,
+      "ratio": 0.333
+    },
+    "corpus/memory/exclusivity.lu": {
+      "midend": 76,
+      "naive": 107,
+      "ratio": 0.71
+    },
+    "corpus/memory/foreign_root_aliasing.lu": {
+      "midend": 177,
+      "naive": 177,
+      "ratio": 1.0
+    },
+    "corpus/memory/list_elem_assign.lu": {
+      "midend": 213,
+      "naive": 225,
+      "ratio": 0.947
+    },
+    "corpus/memory/list_mixed_width_struct.lu": {
+      "midend": 89,
+      "naive": 95,
+      "ratio": 0.937
+    },
+    "corpus/memory/list_session_struct.lu": {
+      "midend": 196,
+      "naive": 224,
+      "ratio": 0.875
+    },
+    "corpus/memory/list_slice.lu": {
+      "midend": 235,
+      "naive": 245,
+      "ratio": 0.959
+    },
+    "corpus/memory/list_slice_edges.lu": {
+      "midend": 114,
+      "naive": 123,
+      "ratio": 0.927
+    },
+    "corpus/memory/list_slice_inline_owned.lu": {
+      "midend": 102,
+      "naive": 102,
+      "ratio": 1.0
+    },
+    "corpus/memory/list_slice_owned_call.lu": {
+      "midend": 136,
+      "naive": 137,
+      "ratio": 0.993
+    },
+    "corpus/memory/move_ok.lu": {
+      "midend": 42,
+      "naive": 49,
+      "ratio": 0.857
+    },
+    "corpus/memory/mut_param_aggregate_store.lu": {
+      "midend": 44,
+      "naive": 53,
+      "ratio": 0.83
+    },
+    "corpus/memory/mut_param_field_lend.lu": {
+      "midend": 107,
+      "naive": 82,
+      "ratio": 1.305
+    },
+    "corpus/memory/oob_bounds.lu": {
+      "midend": 33,
+      "naive": 33,
+      "ratio": 1.0
+    },
+    "corpus/memory/prov_holy_grail.lu": {
+      "midend": 52,
+      "naive": 59,
+      "ratio": 0.881
+    },
+    "corpus/memory/prov_two_phase.lu": {
+      "midend": 56,
+      "naive": 56,
+      "ratio": 1.0
+    },
+    "corpus/memory/region_ambient_ok.lu": {
+      "midend": 75,
+      "naive": 74,
+      "ratio": 1.014
+    },
+    "corpus/memory/region_bytes_query.lu": {
+      "midend": 115,
+      "naive": 110,
+      "ratio": 1.045
+    },
+    "corpus/memory/region_bytes_value.lu": {
+      "midend": 112,
+      "naive": 117,
+      "ratio": 0.957
+    },
+    "corpus/memory/region_cap_boundary.lu": {
+      "midend": 119,
+      "naive": 119,
+      "ratio": 1.0
+    },
+    "corpus/memory/region_container_freeze_ok.lu": {
+      "midend": 81,
+      "naive": 87,
+      "ratio": 0.931
+    },
+    "corpus/memory/region_container_reclaim.lu": {
+      "midend": 89,
+      "naive": 102,
+      "ratio": 0.873
+    },
+    "corpus/memory/region_freeze_ok.lu": {
+      "midend": 12,
+      "naive": 23,
+      "ratio": 0.522
+    },
+    "corpus/memory/region_infer_list_builder.lu": {
+      "midend": 27,
+      "naive": 75,
+      "ratio": 0.36
+    },
+    "corpus/memory/region_infer_request_handler.lu": {
+      "midend": 27,
+      "naive": 81,
+      "ratio": 0.333
+    },
+    "corpus/memory/region_infer_tree_transform.lu": {
+      "midend": 10,
+      "naive": 92,
+      "ratio": 0.109
+    },
+    "corpus/memory/region_multiopen_ok.lu": {
+      "midend": 101,
+      "naive": 111,
+      "ratio": 0.91
+    },
+    "corpus/memory/region_multiopen_values_ok.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/memory/region_unit_tail_call.lu": {
+      "midend": 132,
+      "naive": 134,
+      "ratio": 0.985
+    },
+    "corpus/memory/region_value_pass.lu": {
+      "midend": 136,
+      "naive": 79,
+      "ratio": 1.722
+    },
+    "corpus/memory/region_value_return.lu": {
+      "midend": 37,
+      "naive": 51,
+      "ratio": 0.725
+    },
+    "corpus/memory/struct_destructure_partial_live.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/memory/struct_pattern_binder.lu": {
+      "midend": 22,
+      "naive": 61,
+      "ratio": 0.361
+    },
+    "corpus/memory/unsafe_c_alloc_native.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/memory/view_set_norm.lu": {
+      "midend": 35,
+      "naive": 43,
+      "ratio": 0.814
+    },
+    "corpus/net/accept_race.lu": {
+      "midend": 3314,
+      "naive": 3378,
+      "ratio": 0.981
+    },
+    "corpus/net/byte_roundtrip.lu": {
+      "midend": 931,
+      "naive": 911,
+      "ratio": 1.022
+    },
+    "corpus/net/echo_bytes.lu": {
+      "midend": 1180,
+      "naive": 1116,
+      "ratio": 1.057
+    },
+    "corpus/net/echo_roundtrip.lu": {
+      "midend": 930,
+      "naive": 935,
+      "ratio": 0.995
+    },
+    "corpus/net/inherit_listener.lu": {
+      "midend": 1576,
+      "naive": 1589,
+      "ratio": 0.992
+    },
+    "corpus/net/line_reader_bytes.lu": {
+      "midend": 1110,
+      "naive": 1127,
+      "ratio": 0.985
+    },
+    "corpus/net/nodelay.lu": {
+      "midend": 1362,
+      "naive": 1384,
+      "ratio": 0.984
+    },
+    "corpus/net/peer_close_after_serve.lu": {
+      "midend": 1064,
+      "naive": 1108,
+      "ratio": 0.96
+    },
+    "corpus/net/read_deadline.lu": {
+      "midend": 619,
+      "naive": 623,
+      "ratio": 0.994
+    },
+    "corpus/net/refused_row.lu": {
+      "midend": 447,
+      "naive": 450,
+      "ratio": 0.993
+    },
+    "corpus/net/reuse_port.lu": {
+      "midend": 1992,
+      "naive": 2005,
+      "ratio": 0.994
+    },
+    "corpus/net/spawn_accept.lu": {
+      "midend": 907,
+      "naive": 911,
+      "ratio": 0.996
+    },
+    "corpus/net/syscall_first.lu": {
+      "midend": 1120,
+      "naive": 1139,
+      "ratio": 0.983
+    },
+    "corpus/net/unix_echo.lu": {
+      "midend": 1150,
+      "naive": 1155,
+      "ratio": 0.996
+    },
+    "corpus/net/wait_readiness.lu": {
+      "midend": 1349,
+      "naive": 1379,
+      "ratio": 0.978
+    },
+    "corpus/net/writev_gather.lu": {
+      "midend": 1552,
+      "naive": 1484,
+      "ratio": 1.046
+    },
+    "corpus/os/args_cwd.lu": {
+      "midend": 114,
+      "naive": 115,
+      "ratio": 0.991
+    },
+    "corpus/os/cpus.lu": {
+      "midend": 134,
+      "naive": 134,
+      "ratio": 1.0
+    },
+    "corpus/os/env_roundtrip.lu": {
+      "midend": 265,
+      "naive": 265,
+      "ratio": 1.0
+    },
+    "corpus/os/exit_code.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/os/random_differs.lu": {
+      "midend": 158,
+      "naive": 142,
+      "ratio": 1.113
+    },
+    "corpus/os/random_edges.lu": {
+      "midend": 61,
+      "naive": 66,
+      "ratio": 0.924
+    },
+    "corpus/os/random_negative_trap.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/os/signal_loopback.lu": {
+      "midend": 165,
+      "naive": 165,
+      "ratio": 1.0
+    },
+    "corpus/os/signal_supervisor.lu": {
+      "midend": 196,
+      "naive": 199,
+      "ratio": 0.985
+    },
+    "corpus/os/spawn_rows.lu": {
+      "midend": 131,
+      "naive": 131,
+      "ratio": 1.0
+    },
+    "corpus/overflow.lu": {
+      "midend": 17,
+      "naive": 22,
+      "ratio": 0.773
+    },
+    "corpus/procs.lu": {
+      "midend": 443,
+      "naive": 443,
+      "ratio": 1.0
+    },
+    "corpus/projects/count.lu": {
+      "midend": 481,
+      "naive": 483,
+      "ratio": 0.996
+    },
+    "corpus/projects/count_dir.lu": {
+      "midend": 782,
+      "naive": 793,
+      "ratio": 0.986
+    },
+    "corpus/projects/rpn.lu": {
+      "midend": 663,
+      "naive": 694,
+      "ratio": 0.955
+    },
+    "corpus/projects/wordtree.lu": {
+      "midend": 379,
+      "naive": 473,
+      "ratio": 0.801
+    },
+    "corpus/resolve/bare_sibling/pair.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/resolve/forward/main.lu": {
+      "midend": 8,
+      "naive": 13,
+      "ratio": 0.615
+    },
+    "corpus/resolve/leaf_twins/main.lu": {
+      "midend": 26,
+      "naive": 44,
+      "ratio": 0.591
+    },
+    "corpus/resolve/pkgvis/main.lu": {
+      "midend": 8,
+      "naive": 13,
+      "ratio": 0.615
+    },
+    "corpus/resolve/plain_subdir/main.lu": {
+      "midend": 12,
+      "naive": 18,
+      "ratio": 0.667
+    },
+    "corpus/resolve/same_name/main.lu": {
+      "midend": 10,
+      "naive": 31,
+      "ratio": 0.323
+    },
+    "corpus/resolve/standalone_pair/left.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/resolve/standalone_pair/right.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/resolve/two_mod/main.lu": {
+      "midend": 8,
+      "naive": 26,
+      "ratio": 0.308
+    },
+    "corpus/rows/cross_module_arms/main.lu": {
+      "midend": 183,
+      "naive": 258,
+      "ratio": 0.709
+    },
+    "corpus/rows/else_tag_payload.lu": {
+      "midend": 157,
+      "naive": 128,
+      "ratio": 1.227
+    },
+    "corpus/rows/eu_main_err_exit.lu": {
+      "midend": 33,
+      "naive": 33,
+      "ratio": 1.0
+    },
+    "corpus/rows/handler_diverge_call.lu": {
+      "midend": 17,
+      "naive": 82,
+      "ratio": 0.207
+    },
+    "corpus/rows/handler_diverge_trap.lu": {
+      "midend": 15,
+      "naive": 82,
+      "ratio": 0.183
+    },
+    "corpus/rows/handler_match_tags.lu": {
+      "midend": 118,
+      "naive": 249,
+      "ratio": 0.474
+    },
+    "corpus/rows/hof_tail.lu": {
+      "midend": 183,
+      "naive": 188,
+      "ratio": 0.973
+    },
+    "corpus/rows/inferred_private.lu": {
+      "midend": 196,
+      "naive": 143,
+      "ratio": 1.371
+    },
+    "corpus/rows/iter_diverging_else_bound.lu": {
+      "midend": 174,
+      "naive": 180,
+      "ratio": 0.967
+    },
+    "corpus/rows/nested_row_merge_payload.lu": {
+      "midend": 24,
+      "naive": 111,
+      "ratio": 0.216
+    },
+    "corpus/rows/nested_row_param.lu": {
+      "midend": 8,
+      "naive": 24,
+      "ratio": 0.333
+    },
+    "corpus/rows/nested_row_return.lu": {
+      "midend": 10,
+      "naive": 48,
+      "ratio": 0.208
+    },
+    "corpus/rows/open_row_growth.lu": {
+      "midend": 12,
+      "naive": 87,
+      "ratio": 0.138
+    },
+    "corpus/rows/propagate/main.lu": {
+      "midend": 27,
+      "naive": 341,
+      "ratio": 0.079
+    },
+    "corpus/rows/qmark_defer.lu": {
+      "midend": 284,
+      "naive": 307,
+      "ratio": 0.925
+    },
+    "corpus/rows/tag_arg_position.lu": {
+      "midend": 14,
+      "naive": 44,
+      "ratio": 0.318
+    },
+    "corpus/rows/tag_let_position.lu": {
+      "midend": 4,
+      "naive": 6,
+      "ratio": 0.667
+    },
+    "corpus/rows/tag_shadow_local.lu": {
+      "midend": 10,
+      "naive": 34,
+      "ratio": 0.294
+    },
+    "corpus/rows/to_int_not_an_int.lu": {
+      "midend": 80,
+      "naive": 80,
+      "ratio": 1.0
+    },
+    "corpus/strings/boundary_battery.lu": {
+      "midend": 960,
+      "naive": 1000,
+      "ratio": 0.96
+    },
+    "corpus/strings/builtin_methods.lu": {
+      "midend": 460,
+      "naive": 470,
+      "ratio": 0.979
+    },
+    "corpus/strings/byte_view.lu": {
+      "midend": 93,
+      "naive": 117,
+      "ratio": 0.795
+    },
+    "corpus/strings/byte_view_lend.lu": {
+      "midend": 182,
+      "naive": 457,
+      "ratio": 0.398
+    },
+    "corpus/strings/byte_view_slice_lent.lu": {
+      "midend": 87,
+      "naive": 245,
+      "ratio": 0.355
+    },
+    "corpus/strings/bytes_roundtrip.lu": {
+      "midend": 340,
+      "naive": 355,
+      "ratio": 0.958
+    },
+    "corpus/strings/char_battery.lu": {
+      "midend": 89,
+      "naive": 94,
+      "ratio": 0.947
+    },
+    "corpus/strings/char_interp.lu": {
+      "midend": 84,
+      "naive": 84,
+      "ratio": 1.0
+    },
+    "corpus/strings/char_order.lu": {
+      "midend": 46,
+      "naive": 67,
+      "ratio": 0.687
+    },
+    "corpus/strings/chars_walk.lu": {
+      "midend": 382,
+      "naive": 400,
+      "ratio": 0.955
+    },
+    "corpus/strings/concat_plus.lu": {
+      "midend": 85,
+      "naive": 85,
+      "ratio": 1.0
+    },
+    "corpus/strings/empty_needle.lu": {
+      "midend": 71,
+      "naive": 71,
+      "ratio": 1.0
+    },
+    "corpus/strings/equality_lanes.lu": {
+      "midend": 362,
+      "naive": 361,
+      "ratio": 1.003
+    },
+    "corpus/strings/float_format.lu": {
+      "midend": 43,
+      "naive": 43,
+      "ratio": 1.0
+    },
+    "corpus/strings/format_spec_full.lu": {
+      "midend": 50,
+      "naive": 50,
+      "ratio": 1.0
+    },
+    "corpus/strings/format_spec_width.lu": {
+      "midend": 22,
+      "naive": 22,
+      "ratio": 1.0
+    },
+    "corpus/strings/from_utf8_border.lu": {
+      "midend": 1305,
+      "naive": 385,
+      "ratio": 3.39
+    },
+    "corpus/strings/interp_value_position.lu": {
+      "midend": 18,
+      "naive": 50,
+      "ratio": 0.36
+    },
+    "corpus/strings/match_str_const_scrutinee.lu": {
+      "midend": 226,
+      "naive": 237,
+      "ratio": 0.954
+    },
+    "corpus/strings/match_str_dispatch.lu": {
+      "midend": 559,
+      "naive": 559,
+      "ratio": 1.0
+    },
+    "corpus/strings/multiline_escapes.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/strings/raw_fences.lu": {
+      "midend": 16,
+      "naive": 16,
+      "ratio": 1.0
+    },
+    "corpus/strings/slice_boundary_sweep.lu": {
+      "midend": 313,
+      "naive": 336,
+      "ratio": 0.932
+    },
+    "corpus/strings/slice_oob_trap.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/strings/split_clause.lu": {
+      "midend": 2005,
+      "naive": 1370,
+      "ratio": 1.464
+    },
+    "corpus/strings/str_uni_leading_zeros.lu": {
+      "midend": 66,
+      "naive": 66,
+      "ratio": 1.0
+    },
+    "corpus/strings/to_int.lu": {
+      "midend": 1629,
+      "naive": 645,
+      "ratio": 2.526
+    },
+    "corpus/test/conc_schedules_test.lu": {
+      "midend": 121,
+      "naive": 123,
+      "ratio": 0.984
+    },
+    "corpus/time/monotonic.lu": {
+      "midend": 22,
+      "naive": 22,
+      "ratio": 1.0
+    },
+    "corpus/traits/dyn_ok.lu": {
+      "midend": 69,
+      "naive": 136,
+      "ratio": 0.507
+    },
+    "corpus/traits/prim_impl.lu": {
+      "midend": 10,
+      "naive": 28,
+      "ratio": 0.357
+    },
+    "corpus/typecheck/bool_cmp.lu": {
+      "midend": 40,
+      "naive": 44,
+      "ratio": 0.909
+    },
+    "corpus/typecheck/byte_casts.lu": {
+      "midend": 39,
+      "naive": 39,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/byte_shapes.lu": {
+      "midend": 178,
+      "naive": 288,
+      "ratio": 0.618
+    },
+    "corpus/typecheck/cast_int_to_float.lu": {
+      "midend": 16,
+      "naive": 16,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/cast_set.lu": {
+      "midend": 4,
+      "naive": 4,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/float_nan_cmp.lu": {
+      "midend": 50,
+      "naive": 50,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/fn_value_import/main.lu": {
+      "midend": 58,
+      "naive": 89,
+      "ratio": 0.652
+    },
+    "corpus/typecheck/let_shadow_var_ok.lu": {
+      "midend": 8,
+      "naive": 31,
+      "ratio": 0.258
+    },
+    "corpus/typecheck/main_unit_row.lu": {
+      "midend": 7,
+      "naive": 7,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/match_arm_product_unreachable.lu": {
+      "midend": 6,
+      "naive": 11,
+      "ratio": 0.545
+    },
+    "corpus/typecheck/match_chain_reuse.lu": {
+      "midend": 96,
+      "naive": 175,
+      "ratio": 0.549
+    },
+    "corpus/typecheck/match_exhaustive.lu": {
+      "midend": 17,
+      "naive": 141,
+      "ratio": 0.121
+    },
+    "corpus/typecheck/match_guard_const.lu": {
+      "midend": 41,
+      "naive": 62,
+      "ratio": 0.661
+    },
+    "corpus/typecheck/match_narrow_scrutinee.lu": {
+      "midend": 43,
+      "naive": 62,
+      "ratio": 0.694
+    },
+    "corpus/typecheck/match_unreachable.lu": {
+      "midend": 5,
+      "naive": 6,
+      "ratio": 0.833
+    },
+    "corpus/typecheck/nested_fn_value.lu": {
+      "midend": 40,
+      "naive": 40,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_annotation_float.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_arith_through.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_c2f.lu": {
+      "midend": 20,
+      "naive": 20,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_compare_adopts.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_div_float.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_div_int.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_extremes.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_list_element_width.lu": {
+      "midend": 131,
+      "naive": 131,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_u64_edge.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/receiver_modes.lu": {
+      "midend": 13,
+      "naive": 48,
+      "ratio": 0.271
+    },
+    "corpus/typecheck/variant_value/main.lu": {
+      "midend": 14,
+      "naive": 53,
+      "ratio": 0.264
+    },
+    "corpus/typecheck/wrap_as_int_in_range.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/wrap_narrow_cast.lu": {
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    }
+  },
+  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759"
 }
