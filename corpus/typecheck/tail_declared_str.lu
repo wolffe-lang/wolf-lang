@@ -1,0 +1,26 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.fn.ret, gram.expr.block, gram.expr.tagident
+//!
+//! wolf-lang#284 witness 1 (from wolf-interp is43, #73): a body whose
+//! last statement is a `while` has no trailing expression, so its
+//! value is `()` ([gram.expr.block]) — and `[type.fn.ret]` checks that
+//! tail against the declared `-> str`. The compiler has answered
+//! E0401 at the `while`, naming the declaration as the origin, since
+//! s13; lupin ran it and printed `()` until is43. Neither machine had
+//! a corpus file that said so, which is the gap wollf wl10 measured
+//! (56 of 2,153 verified programs).
+
+fn detab(s: str) -> str {
+    var t = ""
+    var i = 0
+    while i < s.len {
+        t += s[i..i+1]
+        i += 1
+    }
+}
+
+fn main() -> !int {
+    print(detab("a b"))
+    0
+}

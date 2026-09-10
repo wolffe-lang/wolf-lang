@@ -1,0 +1,20 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.row.operand, gram.type.row, type.interp.union
+//!
+//! wolf-lang#284 witness 3 (from wolf-interp is43, #81): a `!int` in
+//! `+`. `[type.row.operand]` — a `!T` is two values, never one, and
+//! no operator reads it: `?`, `else` and `match` are the whole of how
+//! a row is handled, and `[type.interp.union]`'s hole rendering is a
+//! reading, not a handling. An arithmetic operator applied to a row
+//! is E0409 ("`+` cannot be applied to `!int`"), the number
+//! `[type.str.concat.mix]` spends on "not defined on these operands".
+//! lupin 0.1.30 unwrapped the ok case at run time and printed `4`;
+//! at is43 it refuses at the `n` with the same code. 21 of wollf
+//! wl10's 56 gap programs were this shape.
+
+fn main() -> !int {
+    let n: !int = 3
+    print("{n + 1}")
+    0
+}

@@ -1,0 +1,22 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.row.operand, gram.type.row, type.interp.union
+//!
+//! wolf-lang#284 witness 4 (from wolf-interp is43, #81): a `!int` in
+//! `<=`. `[type.row.operand]`: a comparison is an operator like any
+//! other, and no operator has a `!T` in its family — E0409 ("`<=`
+//! cannot be applied to `!int`"), the same code as `+` in
+//! `row_operand_add.lu`. The issue filed this witness as E0401 quoting
+//! wolf 0.2.9; measured at the pin (4c60946) the compiler answers
+//! E0409 here, and E0401 naming the other side only when the row is
+//! the RIGHT operand (`5 <= n`) — the clause rules one code for both
+//! sides and the right-operand shape is a filed follow-up. lupin
+//! 0.1.31 answers E0401 for a comparison on either side: the parity
+//! ask is wolf-interp's half. 17 of wollf wl10's 56 gap programs were
+//! this shape.
+
+fn main() -> !int {
+    let n: !int = 3
+    if n <= 5 { print("small") }
+    0
+}

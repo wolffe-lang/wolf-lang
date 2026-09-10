@@ -1,0 +1,17 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.fn.ret, gram.expr.block, gram.expr.tagident
+//!
+//! wolf-lang#284 witness 2 (from wolf-interp is43, #73): a `()` tail
+//! under `-> !int`. `[type.fn.ret]` checks a fallible body's tail
+//! against the ok half of its declared row exactly as an infallible
+//! one — a `print` statement is `()`, not an `int`, and the missing
+//! status is a mismatch at the tail, never a status invented by the
+//! runtime (lupin 0.1.30 printed `hi` and exited 0 — wolf-interp#69's
+//! shape one level up). The compiler answers E0401 at `print(s)`,
+//! naming the declared return type as the origin.
+
+fn main() -> !int {
+    let s = "hi"
+    print(s)
+}
