@@ -372,6 +372,8 @@ rows/negative/nested_row_conflict.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/row_operand_add.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/row_operand_compare.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/tag_undeclared_arg.lu: not mem-clean (pre-wir rungs own it)
 rows/nested_row_merge_payload.lu: lowers
 rows/nested_row_param.lu: lowers
@@ -491,6 +493,9 @@ typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_modes.lu: lowers
 typecheck/refutable_let.lu: not mem-clean (pre-wir rungs own it)
+typecheck/str_slice_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tail_declared_str.lu: not mem-clean (pre-wir rungs own it)
+typecheck/tail_declared_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
 typecheck/unit_context_discard.lu: lowers
 typecheck/variant_value/main.lu: lowers
