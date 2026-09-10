@@ -1,5 +1,99 @@
 # Changelog
 
+## Unreleased
+
+### The pairing takes lupin 0.1.30, and this time the control has teeth
+
+wolf is now differentially tested against **lupin 0.1.30** (`08d787a`),
+which declares `2c03ed9` as its conformance pin. That pin advanced by
+exactly s144 — ten commits, `2523d87..2c03ed9` — and s144 is exactly
+the three rulings the two machines were parting over: the `else` that
+may start a line (#276), the lowercase `closed`/`cancelled` channel
+marks (#273), and `[mem.list.pop]`'s recoverable `none` row (#274).
+The remaining gap to trunk is fourteen commits and is exactly s145 plus
+r13's own release commits.
+
+**Four witnesses closed and one stayed, as predicted before the run.**
+Over the full 521-file corpus, both tiers, against `target/release/wolf`
+built by `cargo xtask dist` at `4c60946`:
+
+                    checked                     native
+    agreements      275 -> 279  (+4)            300 -> 304  (+4)
+    completeness    123 -> 123   (0)            123 -> 123   (0)
+    soundness         3 ->   2  (-1)              1 ->   0  (-1)
+    unsupported     112 -> 111  (-1)             90 ->  89  (-1)
+    hard             11 ->   8  (-3)              8 ->   5  (-3)
+    coverage A      286 -> 286   (0)            310 -> 310   (0)
+    coverage B      373 -> 376  (+3)            373 -> 376  (+3)
+    coverage BOTH   265 -> 268  (+3)            287 -> 290  (+3)
+
+Every Verdict-class divergence is gone. What is left parts on two
+long-standing classes and nothing else: `checked 8 = 6 Diag + 2
+SOUNDNESS`, `native 5 = 5 Diag`. The Diag rows are #167's
+warning-channel asymmetry, name for name r13's set less
+`safety_comment_missing` on the native tier; the two SOUNDNESS findings
+are #168's float-cast twins. The third soundness finding closed.
+
+**THE INTERPRETER BUMP MOVED FOUR COUNTS, and that is measured, not
+assumed** (#281). The same corpus, the same tree, the same `wolf`
+binary, run a second time against the **0.1.29 release archive**: the
+control reproduced r13's table cell for cell (275/123/3/112, 11 hard;
+native 300/123/1/90, 8 hard, coverage A 286/310, B 373, BOTH 265/287).
+So the compiler contributed nothing and the corpus contributed nothing
+— the whole delta above is the interpreter, and the ledger diff names
+it, identically on both tiers:
+
+    corpus/grammar/else_chain.lu            Verdict     -> agreement  (#276)
+    corpus/grammar/else_default_newline.lu  Verdict     -> agreement  (#276)
+    corpus/memory/list_pop_empty.lu         SOUNDNESS   -> agreement  (#274)
+    corpus/strings/byte_view_lend.lu        unsupported -> agreement
+
+The fourth was not predicted: `List.first` entered lupin's std subset,
+so a file that had sat in the conservatism ledger now runs and agrees
+byte for byte. That is the case for a control stated twice over — the
+prediction was right about the three divergences and silent about the
+fourth move, and only the control could tell the difference.
+
+A **fifth** file moved where no count can see it. `compare` reads
+`stdout_sha256` only when both records declare `seeded`, and no corpus
+file is seeded, so an interpreter that changes what it PRINTS moves
+nothing in the table:
+
+    corpus/conc/chan_closed_row.lu   `nothing left: Closed` -> `nothing
+                                     left: closed`, byte-equal with
+                                     wolfgang at sha 5413b635 (#273)
+
+That is r13's finding standing up again from the other side, and it is
+why the control now reports below-ledger moves as their own list.
+
+**One witness stays, exactly as predicted.**
+`corpus/strings/concat_mix_char.lu` still reads `exit(0) vs
+unsupported` — `` `+` is not defined on str and char`` — because 0.1.30's
+pin sits before s145. It is a conservatism-ledger entry and not a
+divergence ([proto.cmp.defined-divergence]); the mirror is
+wolf-interp#78. No class opened at this pin and none was deferred.
+
+The CI sibling step needed **zero edits** for this bump, the third
+re-stamp in a row: it reads the version off `crates/wolf_driver/PAIRING`
+and the digest off the release GitHub reports, and neither is written
+down in the workflow.
+
+### The control is a standing step, not a lane's good habit (#281)
+
+`cargo xtask differ` takes **`--control <prev>`**, where `<prev>` is
+either a lupin binary or the release `.tar.gz` itself — the same archive
+CI's sibling step fetches. It re-runs the identical corpus with the
+identical impl A against the previous interpreter, diffs the two
+ledgers, and prints `THE INTERPRETER BUMP MOVED N LEDGER COUNT(S)` with
+the files named, the moved cells listed, and — the part r13 had to find
+by hand — the moves that live **below** the ledger, where a changed
+stdout on an unseeded file reaches no count at all. Roughly ninety
+seconds. The ritual's own file, `crates/wolf_driver/PAIRING`, now
+carries the step and the command in its header, so the next re-stamp
+reads it before it starts guessing. The diff is pure and unit-tested,
+so its teeth are felt on every run of the xtask suite rather than once
+per release.
+
 ## 0.2.9 — 2026-09-09
 
 THREE THINGS A READER RAN INTO THIS WEEK, AND NONE OF THEM WAS
