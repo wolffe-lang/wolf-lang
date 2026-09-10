@@ -18,6 +18,11 @@
       "naive": 211,
       "ratio": 0.815
     },
+    "corpus/conc/chan_closed_row.lu": {
+      "midend": 290,
+      "naive": 301,
+      "ratio": 0.963
+    },
     "corpus/conc/chan_drain_after_inclusive_loop.lu": {
       "midend": 113,
       "naive": 113,
@@ -27,6 +32,11 @@
       "midend": 330,
       "naive": 304,
       "ratio": 1.086
+    },
+    "corpus/conc/chan_send_closed_row.lu": {
+      "midend": 391,
+      "naive": 377,
+      "ratio": 1.037
     },
     "corpus/conc/freeze_publish.lu": {
       "midend": 261,
@@ -97,6 +107,11 @@
       "midend": 221,
       "naive": 223,
       "ratio": 0.991
+    },
+    "corpus/conc/spawn_tail_send_raised_row.lu": {
+      "midend": 216,
+      "naive": 360,
+      "ratio": 0.6
     },
     "corpus/conc/when_multi.lu": {
       "midend": 157,
@@ -349,11 +364,16 @@
       "ratio": 0.848
     },
     "corpus/grammar/else_chain.lu": {
-      "midend": 4,
-      "naive": 4,
-      "ratio": 1.0
+      "midend": 283,
+      "naive": 301,
+      "ratio": 0.94
     },
     "corpus/grammar/else_default.lu": {
+      "midend": 182,
+      "naive": 182,
+      "ratio": 1.0
+    },
+    "corpus/grammar/else_default_newline.lu": {
       "midend": 182,
       "naive": 182,
       "ratio": 1.0
@@ -747,6 +767,11 @@
       "midend": 89,
       "naive": 95,
       "ratio": 0.937
+    },
+    "corpus/memory/list_pop_empty.lu": {
+      "midend": 396,
+      "naive": 407,
+      "ratio": 0.973
     },
     "corpus/memory/list_session_struct.lu": {
       "midend": 196,
@@ -1248,6 +1273,11 @@
       "naive": 400,
       "ratio": 0.955
     },
+    "corpus/strings/concat_mix_char.lu": {
+      "midend": 146,
+      "naive": 156,
+      "ratio": 0.936
+    },
     "corpus/strings/concat_plus.lu": {
       "midend": 85,
       "naive": 85,
@@ -1383,6 +1413,11 @@
       "naive": 4,
       "ratio": 1.0
     },
+    "corpus/typecheck/closure_return.lu": {
+      "midend": 274,
+      "naive": 285,
+      "ratio": 0.961
+    },
     "corpus/typecheck/float_nan_cmp.lu": {
       "midend": 50,
       "naive": 50,
@@ -1487,6 +1522,11 @@
       "midend": 13,
       "naive": 48,
       "ratio": 0.271
+    },
+    "corpus/typecheck/unit_context_discard.lu": {
+      "midend": 276,
+      "naive": 310,
+      "ratio": 0.89
     },
     "corpus/typecheck/variant_value/main.lu": {
       "midend": 14,
