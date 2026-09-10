@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="the join raised unknown\n7")
+//! phase: run
+//! conforms: type.unit.consume, conc.task.fail, conc.chan.close
+//!
+//! `[type.unit.consume]` meets a `?` in the same closure (wolf-lang#275,
+//! s146 — chapter 10's shape): the task's tail is `answer.send(…)`,
+//! typed `() ! {closed, cancelled}`, and its argument `?`s a
+//! `{unknown}`. The closure's result is the ONE flattened union
+//! `() ! {closed, cancelled, unknown}` (D51: a nested `(T ! a) ! b`
+//! is `T ! {a, b}`), the task types against it, and the scope
+//! re-raises `unknown` at its exit ([conc.task.fail]) into `totals`'s
+//! row. Before s146 the send was `()` and the union had one layer;
+//! the first cut of the row change nested it and the wir refused
+//! `row widening across differing ok types`. Both machines print the
+//! same two lines.
+
+fn words_of(title: str) -> int ! {unknown} {
+    if title == "regions" { return 900 }
+    unknown
+}
+
+fn totals() -> !int {
+    let answer = channel[int](2)
+    scope readers {
+        readers.spawn(fn() { answer.send(words_of("regions")?) })
+        readers.spawn(fn() { answer.send(words_of("sonata")?) })
+    }
+    0
+}
+
+fn main() -> !int {
+    let r = totals() else |err| { print("the join raised {err}"); 7 }
+    print("{r}")
+    0
+}
