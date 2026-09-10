@@ -185,27 +185,9 @@ impl Sock {
     /// does not).
     fn accept(&self) -> std::io::Result<(Sock, bool)> {
         match self {
-            Sock::Listener(l) => {
-                #[cfg(any(target_os = "linux", target_os = "android"))]
-                {
-                    use std::os::fd::AsRawFd as _;
-                    let fd = accept4(l.as_raw_fd())?;
-                    return Ok((Sock::Stream(TcpStream::from(fd)), true));
-                }
-                #[cfg(not(any(target_os = "linux", target_os = "android")))]
-                l.accept().map(|(s, _)| (Sock::Stream(s), false))
-            }
+            Sock::Listener(l) => accept_tcp(l),
             #[cfg(unix)]
-            Sock::UnixListener(l, _) => {
-                #[cfg(any(target_os = "linux", target_os = "android"))]
-                {
-                    use std::os::fd::AsRawFd as _;
-                    let fd = accept4(l.as_raw_fd())?;
-                    return Ok((Sock::UnixStream(UnixStream::from(fd)), true));
-                }
-                #[cfg(not(any(target_os = "linux", target_os = "android")))]
-                l.accept().map(|(s, _)| (Sock::UnixStream(s), false))
-            }
+            Sock::UnixListener(l, _) => accept_unix(l),
             _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
         }
     }
@@ -574,6 +556,39 @@ fn accept4(listener: std::os::fd::RawFd) -> std::io::Result<std::os::fd::OwnedFd
             return Err(e);
         }
     }
+}
+
+/// [`Sock::accept`]'s TCP half on a host WITH `accept4` (s149, #290):
+/// the connection and the runtime's posture in one call, so the
+/// `true` it reports spares [`NetTable::push_stream_under`] the flag
+/// write.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn accept_tcp(l: &TcpListener) -> std::io::Result<(Sock, bool)> {
+    use std::os::fd::AsRawFd as _;
+    Ok((Sock::Stream(TcpStream::from(accept4(l.as_raw_fd())?)), true))
+}
+
+/// [`Sock::accept`]'s TCP half on a host WITHOUT `accept4` (macOS,
+/// windows): std's accept, and the posture written after — the second
+/// syscall #290 removes on linux and names here rather than hides.
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn accept_tcp(l: &TcpListener) -> std::io::Result<(Sock, bool)> {
+    l.accept().map(|(s, _)| (Sock::Stream(s), false))
+}
+
+/// The same two halves for an `AF_UNIX` listener.
+#[cfg(all(unix, any(target_os = "linux", target_os = "android")))]
+fn accept_unix(l: &UnixListener) -> std::io::Result<(Sock, bool)> {
+    use std::os::fd::AsRawFd as _;
+    Ok((
+        Sock::UnixStream(UnixStream::from(accept4(l.as_raw_fd())?)),
+        true,
+    ))
+}
+
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+fn accept_unix(l: &UnixListener) -> std::io::Result<(Sock, bool)> {
+    l.accept().map(|(s, _)| (Sock::UnixStream(s), false))
 }
 
 /// `O_NONBLOCK` on a raw descriptor this table does not own yet (the
