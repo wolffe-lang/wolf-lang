@@ -403,6 +403,21 @@
       "naive": 195,
       "ratio": 0.333
     },
+    "corpus/grammar/match_range.lu": {
+      "midend": 257,
+      "naive": 239,
+      "ratio": 1.075
+    },
+    "corpus/grammar/match_range_char.lu": {
+      "midend": 149,
+      "naive": 132,
+      "ratio": 1.129
+    },
+    "corpus/grammar/match_switch.lu": {
+      "midend": 61,
+      "naive": 66,
+      "ratio": 0.924
+    },
     "corpus/grammar/newline_trailing.lu": {
       "midend": 42,
       "naive": 42,
