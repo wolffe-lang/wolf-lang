@@ -1360,13 +1360,19 @@ impl<'a> RangePat<'a> {
         let first = ends.next()?;
         // An open `..hi` form has its one literal AFTER the operator:
         // that literal is the high end, and the low end is missing.
-        let op = self.0.tokens().find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))?;
+        let op = self
+            .0
+            .tokens()
+            .find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))?;
         (first.span.lo < op.span.lo).then_some(first)
     }
 
     /// The high end — the `LiteralPat` after the operator.
     pub fn hi(self) -> Option<&'a GreenNode> {
-        let op = self.0.tokens().find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))?;
+        let op = self
+            .0
+            .tokens()
+            .find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))?;
         self.0
             .nodes()
             .filter(|n| n.kind == SyntaxKind::LiteralPat)

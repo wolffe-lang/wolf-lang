@@ -90,7 +90,10 @@ pub(crate) enum Ctor {
     /// empty range (E0815) before it reaches the engine, so
     /// `lo <= hi` always holds here. `char` ranges arrive as scalar
     /// ranges, like `char` literals arrive as scalar `Int`s.
-    IntRange { lo: i128, hi: i128 },
+    IntRange {
+        lo: i128,
+        hi: i128,
+    },
     /// Float literal, compared by its source text.
     Float(String),
     Str(String),

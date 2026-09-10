@@ -9813,7 +9813,10 @@ impl<'a> Checker<'a> {
         let (lit_ty, value) = match tok.map(|t| t.kind) {
             Some(SyntaxKind::Int) => {
                 let text = self.text(tok.expect("token").span);
-                (self.fresh(NumKind::Integer, lit.span), parse_int_text(&text))
+                (
+                    self.fresh(NumKind::Integer, lit.span),
+                    parse_int_text(&text),
+                )
             }
             Some(SyntaxKind::Char) => {
                 let text = self.text(tok.expect("token").span);

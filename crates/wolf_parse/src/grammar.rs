@@ -2009,7 +2009,10 @@ const RANGE_PAT_NOTE: &str = "a range pattern is `lo..hi` or `lo..=hi` with a li
 fn is_literal_pat_start(k: TokenKind) -> bool {
     matches!(
         k,
-        TokenKind::Int | TokenKind::Float | TokenKind::Char | TokenKind::Kw(Keyword::True | Keyword::False)
+        TokenKind::Int
+            | TokenKind::Float
+            | TokenKind::Char
+            | TokenKind::Kw(Keyword::True | Keyword::False)
     ) || is_str_begin(k)
 }
 
