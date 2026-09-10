@@ -16836,6 +16836,37 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let is_last = i + 1 == n;
             match shape {
                 PatShape::Irrefutable(bind) => {
+                    if arm.guard().is_some() {
+                        // #286 (s147): a guarded binder arm — `n if n
+                        // % 2 == 0 =>` — is an unconditional PATTERN
+                        // on a conditional ARM: a test-and-fall-through
+                        // like any other arm. Sema never counted it
+                        // toward coverage, so the arm that closes the
+                        // chain is a LATER one, and the guard's failure
+                        // re-enters the chain there. A guard that
+                        // decides at build time emits no edge and
+                        // closes the chain itself (#151's posture).
+                        match self.enter_match_arm(
+                            arm,
+                            sv,
+                            &[],
+                            bind,
+                            want_v,
+                            merge_eu,
+                            &mut merge,
+                            ArmNext::Fresh,
+                            e.span,
+                        )? {
+                            Some(nb) => {
+                                self.b.seal_block(nb);
+                                self.b.switch_to_block(nb);
+                                self.b.gvn_push_scope();
+                                chain_gvn += 1;
+                            }
+                            None => open = false,
+                        }
+                        continue;
+                    }
                     self.enter_match_arm(
                         arm,
                         sv,
@@ -17447,8 +17478,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let mut fresh: Option<Block> = None;
         if let Some(g) = arm.guard() {
             if matches!(next, ArmNext::None) {
+                // Every caller hands a guarded arm a re-entry (`To` or
+                // `Fresh`) since #286 — this is the invariant's voice,
+                // naming THIS arm and the reason, not the arm that
+                // closes the chain.
                 return Err(refuse(
-                    "a guard on the closing unconditional arm (coverage came from it)",
+                    "a guard on an arm with no later arm to fall through to (the chain was \
+                     closed before it — an invariant, not a program shape)",
                     span,
                 ));
             }
