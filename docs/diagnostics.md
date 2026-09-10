@@ -470,7 +470,13 @@ both are shown, because the fix may belong to either. For large types
 the message names only the differing parts (a structural diff) instead
 of making you eyeball two long renderings. Note that wolf never
 converts numbers implicitly — `int` and `i64` are simply different
-types, and the fix is an explicit `as` conversion.
+types, and the fix is an explicit `as` conversion. A function body is
+one of these positions: its tail — the trailing expression, or `()`
+when the block ends in a statement — is checked against the declared
+return type, the ok half of a fallible one (spec/10
+`[type.fn.ret]`), so a body under `-> str` or `-> !int` that ends in
+a `while` or a `print` is reported here, at the tail, with the
+declaration named as the origin.
 
 Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation_two_annotations.snap, crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0401_to_int_row.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0401_range_mixed_endpoints.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_closure_return_vs_tail.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
@@ -585,8 +591,11 @@ must be written as a comparison (`x != 0`); and `+` never mixes `str`
 with a number — an `int` has more than one rendering, so the
 conversion is spelled inside an interpolation hole (`t += "{count}"`),
 which formats any primitive and never surprises you with a numeric
-`+` overload. Operators on user types come from traits, and need the
-trait in scope.
+`+` overload. An error union is outside every family: a `!T` is two
+values, never one, and no operator reads it (spec/10
+`[type.row.operand]`) — handle the row first, with `?`, `else`, or a
+`match`, and operate on the `T`. Operators on user types come from
+traits, and need the trait in scope.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_int_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_int_plus_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_compound_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_int.snap
 

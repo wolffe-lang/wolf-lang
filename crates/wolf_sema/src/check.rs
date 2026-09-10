@@ -1149,6 +1149,11 @@ impl<'a> Checker<'a> {
             self.pop_scope();
             return Ok(()); // extern/bodyless: nothing to check
         };
+        // `[type.fn.ret]` (s148, #284): the body's value — its tail,
+        // `()` when it ends in a statement — is checked against the
+        // declared result, the ok half of a fallible one; a `()` tail
+        // under `-> str` or `-> !int` is E0401 at the tail naming the
+        // declaration, never a status the runtime invents.
         let exp = Expect {
             ty: sig.ret,
             reason: Reason::ReturnOfFn(body.name.clone()),
@@ -1731,7 +1736,11 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// E0409 — an operator applied to a type outside its family.
+    /// E0409 — an operator applied to a type outside its family. A
+    /// `!T` is outside every family (`[type.row.operand]`, s148/#284:
+    /// a row is two values and no operator reads it — `?`, `else` and
+    /// `match` are the whole of its handling), so `n + 1` on a `!int`
+    /// lands here with the row named as the found type.
     fn report_bad_operand(&mut self, span: Span, op: &str, needs: &str, found: TyId) {
         let f = self.show(found);
         let mut d = Diagnostic::error(
@@ -4442,6 +4451,11 @@ impl<'a> Checker<'a> {
                         self.lo.table.prim(Prim::Bool)
                     });
                 }
+                // A `!int` on the left is E0409 (`[type.row.operand]`:
+                // a row is in no operator's family). The clause rules
+                // the same code with the row on the right, where this
+                // path reports E0401 naming the other side today — the
+                // s148 follow-up, not moved here.
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "numbers", lt);
