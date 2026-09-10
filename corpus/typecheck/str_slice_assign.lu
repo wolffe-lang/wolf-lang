@@ -19,7 +19,7 @@ fn main() -> !int {
     var s = "00000000"
     let l = s.len
     let t = 1
-    s[l-1..l] = "{t}"
+    s[l - 1..l] = "{t}"
     print(s)
     0
 }
