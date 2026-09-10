@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### The row is ruled where it belongs (s148 — #284 closes)
+
+Two rules both machines enforced and no clause stated. A body's tail
+was checked against the declared return type by reading
+`[gram.expr.block]` together with `[gram.expr.tagident]` — a clause
+about tag resolution that mentions "a fallible function's tail" inside
+a list; a bare `!T` in operator position was refused by inverting
+`[type.interp.union]`'s carve-out for string holes. wolf-interp is43
+found the interpreter reading neither (it printed `()` under `-> str`
+and exited 0 under `-> !int` with no status written; it unwrapped `!int`
+at run time inside `+`), and wollf wl10 measured the gap at 56 of
+2,153 generated programs. spec/10 now carries both: `[type.fn.ret]`
+(§8 — the tail, `()` when the block ends in a statement, is checked
+against the declared result, the ok half of a fallible one; E0401 at
+the tail naming the declaration) and `[type.row.operand]` (§9 — a `!T`
+is two values, never one; `?`, `else` and `match` are the whole of its
+handling, and an operator on a `!T` operand is E0409 on either side).
+The E0401/E0409 sites and both catalog entries cite them. is43's four
+witnesses land in the shared corpus (`typecheck/tail_declared_str`,
+`typecheck/tail_declared_union`, `rows/negative/row_operand_add`,
+`rows/negative/row_operand_compare`) and the compiler answers all four
+as pinned. **No behaviour moves**, and one of the issue's readings was
+wrong: the compiler at the 0.2.9 pin answers `n <= 5` on a `!int` with
+E0409, not the E0401 the issue quoted, so witness 4 pins E0409 — the
+clause's code. Two gaps the clause names as follow-ups: the compiler
+reports E0401 naming the other side when the row is the *right*
+operand (`5 <= n`, `1 + n`), and lupin 0.1.31 reports E0401 for a
+comparison on either side.
+
 ### The switch a reader expects: range arms (s147 — #287 ruled, #286 closes)
 
 `match` in statement position is wolf's switch, and the one thing it
