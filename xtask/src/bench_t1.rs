@@ -1739,9 +1739,13 @@ pub fn bench_gates(args: &[String]) -> ExitCode {
         );
     }
     for (path, rec, got) in &verdict.improved {
+        // The counts ride along so a fold off the CI log can record the
+        // path without re-measuring it (the new-path line prints them).
+        let e = corpus[path];
         eprintln!(
-            "bench-gates: ir-volume {path} improved to {got:.3} from its recorded {rec:.3} — \
-             `--record` ratchets it down"
+            "bench-gates: ir-volume {path} improved to {got:.3} (midend {} / naive {}) from its \
+             recorded {rec:.3} — `--record` ratchets it down",
+            e.midend, e.naive
         );
     }
     eprintln!(
