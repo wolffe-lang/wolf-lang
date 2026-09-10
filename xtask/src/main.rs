@@ -3703,42 +3703,136 @@ fn static_code_to_trap(code: &str) -> Option<&'static str> {
     }
 }
 
-fn differ_cmd(args: &[String]) -> ExitCode {
-    // s23 triage: cross-implementation runs classify a wolfgang
-    // `fail(CODE)` against the oracle's dynamic outcome by the
-    // static-vs-dynamic contract, instead of calling every such pair
-    // a raw verdict divergence (which is what `--self` needs but a
-    // cross-impl run does not). Soundness-direction findings
-    // (wolfgang-accepts + oracle-faults) stay hard failures; everything
-    // static-stricter is a logged completeness note.
-    let triage = args.iter().any(|a| a == "--triage");
-    let checked = args.iter().any(|a| a == "--checked");
-    // `--native` (s28): impl A compiles each file to MACHINE CODE and
-    // reports the executed binary's verdict — the first
-    // compiled-vs-interpreted differential. Carried by environment for
-    // the same reason as `--checked`.
-    let native = args.iter().any(|a| a == "--native");
-    let corpus_root = args
-        .iter()
-        .find_map(|a| a.strip_prefix("--corpus="))
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("corpus"));
-    let (cmd_a, cmd_b): (String, String) = if args.iter().any(|a| a == "--self") {
-        if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
-            eprintln!("differ: failed to build wolf");
-            return ExitCode::FAILURE;
-        }
-        ("target/debug/wolf".into(), "target/debug/wolf".into())
-    } else {
-        let free: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
-        let [a, b] = free.as_slice() else {
-            eprintln!(
-                "differ: need <implA-cmd> <implB-cmd> (or --self) [--checked] [--native] [--corpus=DIR]"
-            );
-            return ExitCode::from(2);
-        };
-        ((*a).clone(), (*b).clone())
+/// One pass of the differential: impl A against ONE impl B over the
+/// whole corpus. The measured pass emits its ledger to stdout as it
+/// goes; a `--control` pass (#281) runs silent and hands the ledger
+/// back so the two can be diffed.
+struct DifferPass {
+    agreements: u32,
+    completeness: u32,
+    soundness: u32,
+    unsupported: u32,
+    forward_pins: u32,
+    divergences: u32,
+    entries: u32,
+    a_run: u32,
+    b_run: u32,
+    both_run: u32,
+    /// file -> the ledger class(es) this pass filed it under. A file
+    /// that never became an entry (a module member, a spawn failure) is
+    /// absent. `unsupported` is a class here because the conservatism
+    /// ledger is a ledger: a count that moves out of it moved.
+    ledger: BTreeMap<String, Vec<String>>,
+    /// file -> B's (verdict, stdout sha). The control diff reads this
+    /// to find the moves that live BELOW every count: `compare` looks
+    /// at stdout only when both records declare `seeded`, and no corpus
+    /// file is seeded, so an interpreter that changed what it PRINTS
+    /// moves nothing in the table. At r13 that is exactly where the
+    /// real interpreter delta lived, and no count could see it (#281).
+    b_side: BTreeMap<String, (String, String)>,
+}
+
+/// One control-diff row: the file, what the control filed it as, and
+/// what this run filed it as (or, below the ledger, the two stdout
+/// shas B printed).
+type ControlMove = (String, String, String);
+
+/// The control diff, pure (#281): which files changed ledger class
+/// between the control pass and the measured one, and which moved only
+/// below the ledger. Both directions of the first list matter — a bump
+/// that OPENS a class is the finding the ritual exists to catch.
+fn control_diff(
+    control: &DifferPass,
+    measured: &DifferPass,
+) -> (Vec<ControlMove>, Vec<ControlMove>) {
+    let render = |v: Option<&Vec<String>>| match v {
+        None => "(not an entry)".to_string(),
+        Some(v) if v.is_empty() => "agreement".to_string(),
+        Some(v) => v.join("+"),
     };
+    let mut files: BTreeSet<&String> = control.ledger.keys().collect();
+    files.extend(measured.ledger.keys());
+    let mut moved = Vec::new();
+    for f in &files {
+        let (c, m) = (control.ledger.get(*f), measured.ledger.get(*f));
+        if c != m {
+            moved.push(((*f).clone(), render(c), render(m)));
+        }
+    }
+    let mut below = Vec::new();
+    for (f, (cv, cs)) in &control.b_side {
+        let Some((mv, ms)) = measured.b_side.get(f) else {
+            continue;
+        };
+        // Only a file whose ledger class did NOT move: a class move is
+        // already reported above, and its bytes moving with it is not a
+        // second finding.
+        if control.ledger.get(f) != measured.ledger.get(f) {
+            continue;
+        }
+        if cv == mv && cs != ms {
+            below.push((f.clone(), cs.clone(), ms.clone()));
+        }
+    }
+    (moved, below)
+}
+
+/// A control may be named as a binary OR as the release ARCHIVE the
+/// previous stamp points at — CI's sibling step fetches an archive, so
+/// the ritual accepts what CI fetches. Returns the command to run and
+/// the temp dir to clean up afterwards.
+fn control_binary(spec: &str) -> Result<(String, Option<PathBuf>), String> {
+    let name = Path::new(spec)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if !(name.ends_with(".tar.gz") || name.ends_with(".tgz")) {
+        return Ok((spec.to_string(), None));
+    }
+    let dir = std::env::temp_dir().join(format!("differ-control-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
+    let unpacked = Command::new("tar")
+        .args(["-xzf", spec, "-C"])
+        .arg(&dir)
+        .arg("--strip-components=1")
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !unpacked {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(format!("could not unpack the control archive `{spec}`"));
+    }
+    let named = dir.join("lupin");
+    let bin = if named.is_file() {
+        named
+    } else {
+        std::fs::read_dir(&dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .find(|p| p.is_file() && p.extension().is_none())
+            .ok_or_else(|| {
+                format!(
+                    "the control archive `{spec}` unpacks no `lupin` and no extensionless binary"
+                )
+            })?
+    };
+    Ok((bin.display().to_string(), Some(dir)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn differ_pass(
+    cmd_a: &str,
+    cmd_b: &str,
+    files: &[PathBuf],
+    triage: bool,
+    checked: bool,
+    native: bool,
+    emit: bool,
+) -> DifferPass {
     // Impl A (wolfgang) reaches the run rung under `--checked`; the flag
     // is carried via the environment so wolf-interp — which ignores
     // WOLF_CHECKED — is untouched, keeping the two implementations
@@ -3763,25 +3857,22 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         }
         serde_json::from_slice(&out.stdout).map_err(|e| format!("{cmd}: bad record: {e}"))
     };
-    let mut files = Vec::new();
-    collect_wolf_files(&corpus_root, &mut files);
-    files.sort();
-    let mut divergences = 0u32;
-    let mut soundness = 0u32;
-    let mut completeness = 0u32;
-    let mut agreements = 0u32;
-    let mut unsupported = 0u32;
-    let mut forward_pins = 0u32;
-    // Coverage of THIS lane pairing ([proto.cmp.coverage], s82): how
-    // many entries each side executed at the run rung, and how many
-    // both did — the only files this invocation could compare
-    // dynamically. Published in the report because a divergence count
-    // is meaningless without the size of the set it was drawn from,
-    // and because wolf-lang#90 was a coverage collapse that no
-    // divergence count could have shown.
-    let mut entries = 0u32;
-    let (mut a_run, mut b_run, mut both_run) = (0u32, 0u32, 0u32);
-    for f in &files {
+    let mut p = DifferPass {
+        agreements: 0,
+        completeness: 0,
+        soundness: 0,
+        unsupported: 0,
+        forward_pins: 0,
+        divergences: 0,
+        entries: 0,
+        a_run: 0,
+        b_run: 0,
+        both_run: 0,
+        ledger: BTreeMap::new(),
+        b_side: BTreeMap::new(),
+    };
+    for f in files {
+        let key = f.display().to_string();
         let directives = std::fs::read_to_string(f)
             .ok()
             .and_then(|src| corpus::parse_directives(&src).ok());
@@ -3793,64 +3884,77 @@ fn differ_cmd(args: &[String]) -> ExitCode {
         // the same fact as a rule one side enforces and the other does
         // not, so the ledger publishes it as its own number.
         let forward = directives.is_some_and(|d| d.forward.is_some());
-        let (ra, rb) = match (conform_run(&cmd_a, f, true), conform_run(&cmd_b, f, false)) {
+        let (ra, rb) = match (conform_run(cmd_a, f, true), conform_run(cmd_b, f, false)) {
             (Ok(a), Ok(b)) => (a, b),
             (Err(e), _) | (_, Err(e)) => {
                 eprintln!("differ: {}: {e}", f.display());
-                divergences += 1;
+                p.divergences += 1;
                 continue;
             }
         };
+        let mut classes: Vec<String> = Vec::new();
         for (name, r) in [("A", &ra), ("B", &rb)] {
             if let Err(e) = xtask::protocol::validate_record(r) {
                 eprintln!("differ: {}: impl {name} record invalid: {e}", f.display());
-                divergences += 1;
+                p.divergences += 1;
+                classes.push(format!("invalid-{name}"));
             }
         }
-        entries += 1;
+        p.entries += 1;
+        p.b_side.insert(
+            key.clone(),
+            (
+                rb["verdict"].as_str().unwrap_or_default().to_string(),
+                rb["stdout_sha256"].as_str().unwrap_or_default().to_string(),
+            ),
+        );
         let (ca, cb) = (
             xtask::protocol::covered_at_run(&ra),
             xtask::protocol::covered_at_run(&rb),
         );
-        a_run += u32::from(ca);
-        b_run += u32::from(cb);
-        both_run += u32::from(ca && cb);
+        p.a_run += u32::from(ca);
+        p.b_run += u32::from(cb);
+        p.both_run += u32::from(ca && cb);
         let structural =
             !ra["seeded"].as_bool().unwrap_or(false) || !rb["seeded"].as_bool().unwrap_or(false);
         if ra["verdict"] == serde_json::json!("unsupported")
             || rb["verdict"] == serde_json::json!("unsupported")
         {
-            unsupported += 1;
-            forward_pins += u32::from(forward);
+            p.unsupported += 1;
+            p.forward_pins += u32::from(forward);
+            classes.push("unsupported".into());
         }
         let va = ra["verdict"].as_str().unwrap_or("");
         let vb = rb["verdict"].as_str().unwrap_or("");
         // s23 triage of the fail-vs-run pair: wolfgang (A) rejected
         // statically, the oracle (B) ran to a dynamic outcome.
         if triage && let Some(code) = va.strip_prefix("fail(").and_then(|s| s.strip_suffix(')')) {
-            let classify = |note: &str| {
-                println!(
-                    "{}",
-                    serde_json::json!({
-                        "file": f.display().to_string(),
-                        "class": note,
-                        "a": va,
-                        "b": vb,
-                    })
-                );
-            };
             // Agreement: the static code maps to the oracle's trap.
             if let Some(k) = static_code_to_trap(code)
                 && vb == format!("trap({k})")
             {
-                agreements += 1;
+                p.agreements += 1;
+                classes.push("agreement".into());
+                p.ledger.insert(key, classes);
                 continue;
             }
             // Completeness note: static stricter, oracle runs clean
             // or the code has no dynamic counterpart. Logged, not a
             // divergence (the backlog that feeds rule refinement).
-            classify("Completeness");
-            completeness += 1;
+            if emit {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "file": key,
+                        "class": "Completeness",
+                        "a": va,
+                        "b": vb,
+                    })
+                );
+            }
+            p.completeness += 1;
+            classes.push("Completeness".into());
+            p.ledger.insert(key, classes);
             continue;
         }
         // Soundness direction: A accepted (ran) but B faulted/UB'd.
@@ -3858,62 +3962,216 @@ fn differ_cmd(args: &[String]) -> ExitCode {
             && (va.starts_with("exit(") || va == "pass")
             && (vb.starts_with("trap(") || vb.starts_with("ub("))
         {
-            println!(
-                "{}",
-                serde_json::json!({
-                    "file": f.display().to_string(),
-                    "class": "SOUNDNESS",
-                    "a": va,
-                    "b": vb,
-                })
-            );
-            soundness += 1;
-            divergences += 1;
+            if emit {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "file": key,
+                        "class": "SOUNDNESS",
+                        "a": va,
+                        "b": vb,
+                    })
+                );
+            }
+            p.soundness += 1;
+            p.divergences += 1;
+            classes.push("SOUNDNESS".into());
+            p.ledger.insert(key, classes);
             continue;
         }
         if let Some((class, detail)) = xtask::protocol::compare(&ra, &rb, structural) {
-            println!(
-                "{}",
-                serde_json::json!({
-                    "file": f.display().to_string(),
-                    "class": format!("{class:?}"),
-                    "detail": detail,
-                })
-            );
-            divergences += 1;
+            if emit {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "file": key,
+                        "class": format!("{class:?}"),
+                        "detail": detail,
+                    })
+                );
+            }
+            p.divergences += 1;
+            classes.push(format!("{class:?}"));
         } else if va == vb
             && (va.starts_with("exit(") || va.starts_with("trap(") || va.starts_with("ub("))
         {
-            agreements += 1;
+            p.agreements += 1;
+            classes.push("agreement".into());
+        }
+        p.ledger.insert(key, classes);
+    }
+    p
+}
+
+fn differ_cmd(args: &[String]) -> ExitCode {
+    // s23 triage: cross-implementation runs classify a wolfgang
+    // `fail(CODE)` against the oracle's dynamic outcome by the
+    // static-vs-dynamic contract, instead of calling every such pair
+    // a raw verdict divergence (which is what `--self` needs but a
+    // cross-impl run does not). Soundness-direction findings
+    // (wolfgang-accepts + oracle-faults) stay hard failures; everything
+    // static-stricter is a logged completeness note.
+    //
+    // `--control <prev>` (#281) is the re-stamp ritual's control arm:
+    // the SAME corpus and the SAME impl A, run a second time against
+    // the interpreter the previous stamp named, so that "what the
+    // interpreter bump moved" is measured instead of assumed. r13 ran
+    // it by hand and found the answer was NONE of the seven counts
+    // that had moved; without the control all seven would have been
+    // credited to the interpreter.
+    let mut control_spec: Option<String> = None;
+    let mut rest: Vec<String> = Vec::new();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if let Some(v) = a.strip_prefix("--control=") {
+            control_spec = Some(v.to_string());
+        } else if a == "--control" {
+            let Some(v) = it.next() else {
+                eprintln!("differ: --control needs a path (a lupin binary or a .tar.gz archive)");
+                return ExitCode::from(2);
+            };
+            control_spec = Some(v.clone());
+        } else {
+            rest.push(a.clone());
         }
     }
+    let args = &rest[..];
+    let triage = args.iter().any(|a| a == "--triage");
+    let checked = args.iter().any(|a| a == "--checked");
+    // `--native` (s28): impl A compiles each file to MACHINE CODE and
+    // reports the executed binary's verdict — the first
+    // compiled-vs-interpreted differential. Carried by environment for
+    // the same reason as `--checked`.
+    let native = args.iter().any(|a| a == "--native");
+    let corpus_root = args
+        .iter()
+        .find_map(|a| a.strip_prefix("--corpus="))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("corpus"));
+    let (cmd_a, cmd_b): (String, String) = if args.iter().any(|a| a == "--self") {
+        if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+            eprintln!("differ: failed to build wolf");
+            return ExitCode::FAILURE;
+        }
+        ("target/debug/wolf".into(), "target/debug/wolf".into())
+    } else {
+        let free: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+        let [a, b] = free.as_slice() else {
+            eprintln!(
+                "differ: need <implA-cmd> <implB-cmd> (or --self) [--checked] [--native] [--corpus=DIR] [--control PREV]"
+            );
+            return ExitCode::from(2);
+        };
+        ((*a).clone(), (*b).clone())
+    };
+    let mut files = Vec::new();
+    collect_wolf_files(&corpus_root, &mut files);
+    files.sort();
+    let p = differ_pass(&cmd_a, &cmd_b, &files, triage, checked, native, true);
     if triage {
         eprintln!(
             "differ: {} file(s) — {} agreement(s), {} completeness note(s), {} SOUNDNESS finding(s), {} unsupported ({} forward pin(s)); {} hard divergence(s)",
             files.len(),
-            agreements,
-            completeness,
-            soundness,
-            unsupported,
-            forward_pins,
-            divergences,
+            p.agreements,
+            p.completeness,
+            p.soundness,
+            p.unsupported,
+            p.forward_pins,
+            p.divergences,
         );
     } else {
         eprintln!(
             "differ: {} file(s), {} divergence(s), {} in conservatism ledger \
              (unsupported), {} of them forward pin(s)",
             files.len(),
-            divergences,
-            unsupported,
-            forward_pins,
+            p.divergences,
+            p.unsupported,
+            p.forward_pins,
         );
     }
     eprintln!(
-        "differ: run-rung coverage — A executed {a_run}, B executed {b_run}, \
-         BOTH executed {both_run} of {entries} entries ([proto.cmp.coverage]; \
-         `cargo xtask lane-coverage` is the gated union across A's lanes)"
+        "differ: run-rung coverage — A executed {}, B executed {}, \
+         BOTH executed {} of {} entries ([proto.cmp.coverage]; \
+         `cargo xtask lane-coverage` is the gated union across A's lanes)",
+        p.a_run, p.b_run, p.both_run, p.entries
     );
-    if divergences > 0 {
+    // ------------------------------------------------- the control --
+    if let Some(spec) = control_spec {
+        let (cmd_c, tmp) = match control_binary(&spec) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("differ: control REFUSED — {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        let ident = Command::new(&cmd_c)
+            .arg("--version")
+            .output()
+            .ok()
+            .and_then(|o| {
+                String::from_utf8_lossy(&o.stdout)
+                    .lines()
+                    .next()
+                    .map(str::to_string)
+            })
+            .unwrap_or_else(|| "(no --version line)".into());
+        eprintln!(
+            "differ: control — the same {} file(s), the same impl A, against the PREVIOUS interpreter: {ident}",
+            files.len()
+        );
+        let c = differ_pass(&cmd_a, &cmd_c, &files, triage, checked, native, false);
+        if let Some(dir) = tmp {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+        eprintln!(
+            "differ: control ledger — {} agreement(s), {} completeness note(s), {} SOUNDNESS finding(s), {} unsupported ({} forward pin(s)); {} hard divergence(s)",
+            c.agreements, c.completeness, c.soundness, c.unsupported, c.forward_pins, c.divergences,
+        );
+        eprintln!(
+            "differ: control coverage — A executed {}, B executed {}, BOTH executed {} of {} entries",
+            c.a_run, c.b_run, c.both_run, c.entries
+        );
+        let cells: [(&str, i64, i64); 8] = [
+            ("agreements", c.agreements.into(), p.agreements.into()),
+            ("completeness", c.completeness.into(), p.completeness.into()),
+            ("soundness", c.soundness.into(), p.soundness.into()),
+            ("unsupported", c.unsupported.into(), p.unsupported.into()),
+            ("hard", c.divergences.into(), p.divergences.into()),
+            ("coverage A", c.a_run.into(), p.a_run.into()),
+            ("coverage B", c.b_run.into(), p.b_run.into()),
+            ("coverage BOTH", c.both_run.into(), p.both_run.into()),
+        ];
+        for (name, was, now) in cells {
+            if was != now {
+                eprintln!(
+                    "differ: control  {name:<14} {was} -> {now} ({:+})",
+                    now - was
+                );
+            }
+        }
+        let (moved, below) = control_diff(&c, &p);
+        eprintln!(
+            "differ: THE INTERPRETER BUMP MOVED {} LEDGER COUNT(S).",
+            moved.len()
+        );
+        for (f, was, now) in &moved {
+            eprintln!("differ: control  {f}  {was} -> {now}");
+        }
+        eprintln!(
+            "differ: control — {} file(s) moved BELOW the ledger (B's printed bytes changed \
+             while its class did not; `compare` reads stdout only on a seeded pair, so these \
+             reach NO count and are invisible to the table above)",
+            below.len()
+        );
+        for (f, was, now) in &below {
+            eprintln!(
+                "differ: control  {f}  B stdout sha {}.. -> {}..",
+                &was[..8.min(was.len())],
+                &now[..8.min(now.len())]
+            );
+        }
+    }
+    if p.divergences > 0 {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
@@ -4845,5 +5103,117 @@ mod version_stamp_tests {
         assert_eq!(release_stamp(&tags(&["v0.1.0"]), "0.2.0"), None);
         // No tags at HEAD: a trunk build, dev by definition.
         assert_eq!(release_stamp(&[], "0.2.0"), None);
+    }
+}
+
+/// The #281 control arm, exercised on every run of the xtask suite: the
+/// diff itself is pure, so its teeth are felt without a corpus, two
+/// interpreters and ninety seconds.
+#[cfg(test)]
+mod control_tests {
+    use super::*;
+
+    fn pass(ledger: &[(&str, &[&str])], b_side: &[(&str, &str, &str)]) -> DifferPass {
+        DifferPass {
+            agreements: 0,
+            completeness: 0,
+            soundness: 0,
+            unsupported: 0,
+            forward_pins: 0,
+            divergences: 0,
+            entries: 0,
+            a_run: 0,
+            b_run: 0,
+            both_run: 0,
+            ledger: ledger
+                .iter()
+                .map(|(f, cs)| {
+                    (
+                        (*f).to_string(),
+                        cs.iter().map(|c| (*c).to_string()).collect(),
+                    )
+                })
+                .collect(),
+            b_side: b_side
+                .iter()
+                .map(|(f, v, s)| ((*f).to_string(), ((*v).to_string(), (*s).to_string())))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn an_interpreter_that_changed_nothing_moves_no_count() {
+        let l: &[(&str, &[&str])] = &[("a.lu", &["agreement"]), ("b.lu", &["Verdict"])];
+        let b = &[("a.lu", "exit(0)", "aa"), ("b.lu", "fail(E0005)", "")];
+        let (moved, below) = control_diff(&pass(l, b), &pass(l, b));
+        assert!(moved.is_empty(), "{moved:?}");
+        assert!(below.is_empty(), "{below:?}");
+    }
+
+    /// r14's own shape: a divergence closes, and a conservatism-ledger
+    /// entry becomes an agreement. Both are counts that moved.
+    #[test]
+    fn a_closed_divergence_and_a_widened_subset_are_both_moves() {
+        let control: &[(&str, &[&str])] = &[
+            ("else_chain.lu", &["Verdict"]),
+            ("byte_view_lend.lu", &["unsupported"]),
+            ("cast_float_nan_trap.lu", &["SOUNDNESS"]),
+        ];
+        let measured: &[(&str, &[&str])] = &[
+            ("else_chain.lu", &["agreement"]),
+            ("byte_view_lend.lu", &["agreement"]),
+            ("cast_float_nan_trap.lu", &["SOUNDNESS"]),
+        ];
+        let (moved, _) = control_diff(&pass(control, &[]), &pass(measured, &[]));
+        assert_eq!(moved.len(), 2, "{moved:?}");
+        let names: Vec<&str> = moved.iter().map(|(f, _, _)| f.as_str()).collect();
+        assert!(names.contains(&"else_chain.lu") && names.contains(&"byte_view_lend.lu"));
+        assert_eq!(moved[1].1, "Verdict");
+        assert_eq!(moved[1].2, "agreement");
+    }
+
+    /// The r13 finding the whole issue is named for: an interpreter can
+    /// change what it PRINTS on an unseeded file and move no count at
+    /// all. A control that only diffed counts would report "nothing
+    /// happened" and be wrong.
+    #[test]
+    fn a_move_below_the_ledger_reaches_no_count_and_is_still_reported() {
+        let l: &[(&str, &[&str])] = &[("chan_closed_row.lu", &["agreement"])];
+        let c = pass(l, &[("chan_closed_row.lu", "exit(0)", "15802816aa")]);
+        let m = pass(l, &[("chan_closed_row.lu", "exit(0)", "5413b635bb")]);
+        let (moved, below) = control_diff(&c, &m);
+        assert!(moved.is_empty(), "no count moved: {moved:?}");
+        assert_eq!(below.len(), 1, "{below:?}");
+        assert_eq!(below[0].0, "chan_closed_row.lu");
+    }
+
+    /// A file whose class moved has its bytes reported once, with the
+    /// class move — not a second time as a phantom below-ledger finding.
+    #[test]
+    fn a_class_move_is_not_double_counted_below_the_ledger() {
+        let c = pass(
+            &[("list_pop_empty.lu", &["SOUNDNESS"])],
+            &[("list_pop_empty.lu", "trap(bounds)", "337b794c")],
+        );
+        let m = pass(
+            &[("list_pop_empty.lu", &["agreement"])],
+            &[("list_pop_empty.lu", "exit(0)", "5b118371")],
+        );
+        let (moved, below) = control_diff(&c, &m);
+        assert_eq!(moved.len(), 1);
+        assert!(below.is_empty(), "{below:?}");
+    }
+
+    /// A plain binary is passed straight through; only an archive is
+    /// unpacked, and a control that cannot be unpacked REFUSES rather
+    /// than quietly measuring nothing.
+    #[test]
+    fn a_control_may_be_a_binary_or_an_archive() {
+        let (cmd, tmp) = control_binary("/usr/local/bin/lupin").expect("a bare path is a command");
+        assert_eq!(cmd, "/usr/local/bin/lupin");
+        assert!(tmp.is_none(), "a binary needs no temp dir");
+        let err = control_binary("/nope/lupin-0.1.29-x86_64-unknown-linux-gnu.tar.gz")
+            .expect_err("a missing archive is a refusal, not an empty measurement");
+        assert!(err.contains("could not unpack"), "{err}");
     }
 }
