@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0808]: a range pattern takes integer or `char` endpoints
+ --> mem:///main.lu:4:9
+  |
+4 |         "a".."n" => 1,
+  |         ^^^ this pattern
+  |
+  = note: `str` has no order and floats compare by equality only — test those in a guard (`s if s
+    < "m"`), and write the range over an integer or `char` scrutinee ([gram.pat.range]).

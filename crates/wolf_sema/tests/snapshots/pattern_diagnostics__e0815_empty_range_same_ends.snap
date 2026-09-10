@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0815]: this range pattern is empty — `5..5` matches no value
+ --> mem:///main.lu:4:9
+  |
+4 |         5..5 => 1,
+  |         ^^^^ empty range
+  |
+  = note: `lo..hi` stops before `hi`, so `lo..lo` is empty; spell the one-value case as the
+    literal, or as `lo..=lo` ([gram.pat.range]).

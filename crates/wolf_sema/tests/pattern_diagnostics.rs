@@ -188,3 +188,77 @@ fn e0602_pattern_unknown_tag() {
          match err {\n            Io(_) => 1,\n            Timeout => 2,\n        }\n    }\n    v\n}\n",
     );
 }
+
+// ------------------------------------------- range patterns (s147) ---
+
+/// `[gram.pat.range]` (#287): `5..5` stops before its own low end —
+/// E0815 with the one-value spelling offered.
+#[test]
+fn e0815_empty_range_same_ends() {
+    snap_one(
+        "e0815_empty_range_same_ends",
+        "fn main() -> !int {\n    let n = 5\n    \
+         let v = match n {\n        5..5 => 1,\n        _ => 0,\n    }\n    v\n}\n",
+    );
+}
+
+/// `9..=3` runs backwards — E0815 with the swap offered.
+#[test]
+fn e0815_empty_range_backwards() {
+    snap_one(
+        "e0815_empty_range_backwards",
+        "fn main() -> !int {\n    let n = 5\n    \
+         let v = match n {\n        9..=3 => 1,\n        _ => 0,\n    }\n    v\n}\n",
+    );
+}
+
+/// A literal inside an earlier range is dead: E0802 cites the range
+/// arm (subsumption is exact against one covering arm).
+#[test]
+fn e0802_literal_inside_earlier_range() {
+    snap_one(
+        "e0802_literal_inside_earlier_range",
+        "fn main() -> !int {\n    let n = 5\n    \
+         let v = match n {\n        0..10 => 1,\n        5 => 2,\n        _ => 0,\n    }\n    v\n}\n",
+    );
+}
+
+/// Ranges keep the column infinite: the witness is the first value
+/// past every covering range and literal (`0..10` witnesses `10`).
+#[test]
+fn e0801_witness_past_range() {
+    snap_one(
+        "e0801_witness_past_range",
+        "fn main() -> !int {\n    let n = 5\n    \
+         let v = match n {\n        0..10 => 1,\n    }\n    v\n}\n",
+    );
+}
+
+/// A `str` endpoint: E0808 — `str` has no order clause.
+#[test]
+fn e0808_range_str_endpoints() {
+    snap_one(
+        "e0808_range_str_endpoints",
+        "fn main() -> !int {\n    let s = \"m\"\n    \
+         let v = match s {\n        \"a\"..\"n\" => 1,\n        _ => 0,\n    }\n    v\n}\n",
+    );
+}
+
+/// Mixed endpoint types: E0401 at the second endpoint.
+#[test]
+fn e0401_range_mixed_endpoints() {
+    snap_one(
+        "e0401_range_mixed_endpoints",
+        "fn main() -> !int {\n    let n = 5\n    \
+         let v = match n {\n        0..'z' => 1,\n        _ => 0,\n    }\n    v\n}\n",
+    );
+}
+
+/// A range is refutable: a binder position refuses it (E0806).
+#[test]
+fn e0806_range_in_let() {
+    snap_one(
+        "e0806_range_in_let",
+        "fn main() -> !int {\n    let 0..10 = 5\n    0\n}\n",
+    );
+}

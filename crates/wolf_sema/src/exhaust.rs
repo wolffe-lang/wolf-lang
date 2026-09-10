@@ -28,6 +28,18 @@
 //! the engine cannot split ([`ColTy::Opaque`]) are covered only by a
 //! binding or `_`.
 //!
+//! Range patterns (`[gram.pat.range]`, s147 #287) are one more
+//! integer constructor, [`Ctor::IntRange`], and keep the column
+//! infinite: no union of ranges and literals is computed for any
+//! domain, so a wildcard is still the only cover, and the witness is
+//! the smallest non-negative value no literal OR range covers.
+//! Specialization is by *subsumption* ([`Ctor::covers`]): a row
+//! headed by `0..=9` survives specialization by `5` and by `2..=4`,
+//! a row headed by `5` survives only by `5` (or `5..=5`). That makes
+//! reachability exact against one covering arm and conservative
+//! against a union of several — an arm covered only by two earlier
+//! ranges together is reported reachable, never falsely dead.
+//!
 //! The engine is pure data — no spans, no diagnostics; the checker
 //! owns rendering and the catalog codes.
 
@@ -73,6 +85,12 @@ pub(crate) enum Pat {
 pub(crate) enum Ctor {
     Bool(bool),
     Int(i128),
+    /// An inclusive integer range `lo..=hi` (`[gram.pat.range]`): the
+    /// checker normalizes `lo..hi` to `lo..=hi-1` and refuses the
+    /// empty range (E0815) before it reaches the engine, so
+    /// `lo <= hi` always holds here. `char` ranges arrive as scalar
+    /// ranges, like `char` literals arrive as scalar `Int`s.
+    IntRange { lo: i128, hi: i128 },
     /// Float literal, compared by its source text.
     Float(String),
     Str(String),
@@ -82,6 +100,21 @@ pub(crate) enum Ctor {
 }
 
 impl Ctor {
+    /// Does every value this constructor matches also match `other`'s
+    /// head — i.e. may a row headed by `self` survive specialization
+    /// by `other`? Equality for every constructor but the integer
+    /// ranges, where containment answers: a range covers a literal
+    /// inside it and a range inside it; a literal covers only the
+    /// one-value range spelling itself.
+    fn covers(&self, other: &Ctor) -> bool {
+        match (self, other) {
+            (Ctor::IntRange { lo, hi }, Ctor::Int(n)) => lo <= n && n <= hi,
+            (Ctor::IntRange { lo, hi }, Ctor::IntRange { lo: l2, hi: h2 }) => lo <= l2 && h2 <= hi,
+            (Ctor::Int(n), Ctor::IntRange { lo, hi }) => lo == hi && n == lo,
+            _ => self == other,
+        }
+    }
+
     /// Payload column types of this constructor under `col`.
     fn fields(&self, col: &ColTy) -> Vec<ColTy> {
         match (self, col) {
@@ -162,7 +195,7 @@ fn specialize(matrix: &[Vec<Pat>], ctor: &Ctor, arity: usize) -> Vec<Vec<Pat>> {
                     r.extend_from_slice(&row[1..]);
                     out.push(r);
                 }
-                Pat::Ctor { ctor: c, args } if c == ctor => {
+                Pat::Ctor { ctor: c, args } if c.covers(ctor) => {
                     let mut r = args.clone();
                     r.resize(arity, Pat::Wild);
                     r.extend_from_slice(&row[1..]);
@@ -204,15 +237,27 @@ fn head_ctors(matrix: &[Vec<Pat>]) -> Vec<Ctor> {
 }
 
 /// A witness head for a column no listed constructor completes: for
-/// integers, the smallest non-negative value not used as a literal
-/// ("not covered: `2`"); everything else is `_`.
+/// integers, the smallest non-negative value no literal or range
+/// covers ("not covered: `2`"; `0..10` alone witnesses `10` — a
+/// covering range is skipped whole, never walked); everything else
+/// is `_`.
 fn synthetic_missing(col: &ColTy, used: &[Ctor]) -> Ctor {
     if matches!(col, ColTy::Int) {
         let mut n: i128 = 0;
-        while used.contains(&Ctor::Int(n)) {
-            n += 1;
+        loop {
+            let past = used
+                .iter()
+                .filter_map(|u| match u {
+                    Ctor::Int(m) if *m == n => Some(n),
+                    Ctor::IntRange { lo, hi } if *lo <= n && n <= *hi => Some(*hi),
+                    _ => None,
+                })
+                .max();
+            match past {
+                Some(hi) => n = hi + 1,
+                None => return Ctor::Int(n),
+            }
         }
-        return Ctor::Int(n);
     }
     // Rendered as `_` by the checker.
     Ctor::Named("_".to_string())
@@ -372,6 +417,7 @@ pub(crate) fn render_pat(p: &Pat) -> String {
         Pat::Ctor { ctor, args } => match ctor {
             Ctor::Bool(b) => b.to_string(),
             Ctor::Int(n) => n.to_string(),
+            Ctor::IntRange { lo, hi } => format!("{lo}..={hi}"),
             Ctor::Float(s) => s.clone(),
             Ctor::Str(s) => format!("\"{s}\""),
             Ctor::Tuple => {
@@ -413,6 +459,35 @@ mod tests {
         let ws = witnesses(&matrix, &[ColTy::Bool], 3);
         assert_eq!(ws.len(), 1);
         assert_eq!(render_pat(&ws[0]), "false");
+    }
+
+    /// `[gram.pat.range]`: a range subsumes the literals and ranges
+    /// inside it (dead arms found), a literal subsumes only its own
+    /// one-value spelling, and the witness skips every covered value.
+    #[test]
+    fn int_ranges_subsume_and_witness_past_them() {
+        let range = |lo, hi| ctor(Ctor::IntRange { lo, hi }, vec![]);
+        let lit = |n| ctor(Ctor::Int(n), vec![]);
+        let tys = [ColTy::Int];
+        // `5` after `0..=9`: dead. `2..=4` after `0..=9`: dead.
+        let m = vec![vec![range(0, 9)]];
+        assert!(!is_useful(&m, &[lit(5)], &tys));
+        assert!(!is_useful(&m, &[range(2, 4)], &tys));
+        // `0..=9` after `5`: reachable; after `5..=5`: reachable.
+        assert!(is_useful(&[vec![lit(5)]], &[range(0, 9)], &tys));
+        assert!(is_useful(&[vec![range(5, 5)]], &[range(0, 9)], &tys));
+        // `5..=5` after `5`: dead (the one-value spelling).
+        assert!(!is_useful(&[vec![lit(5)]], &[range(5, 5)], &tys));
+        // A union of two ranges covering a third: conservative —
+        // reported reachable, never falsely dead.
+        let m2 = vec![vec![range(0, 9)], vec![range(10, 19)]];
+        assert!(is_useful(&m2, &[range(5, 15)], &tys));
+        // Never complete: the witness is the first value past every
+        // covering range and literal.
+        let m3 = vec![vec![range(0, 9)], vec![lit(10)], vec![range(11, 20)]];
+        let ws = witnesses(&m3, &tys, 3);
+        assert_eq!(ws.len(), 1);
+        assert_eq!(render_pat(&ws[0]), "21");
     }
 
     #[test]

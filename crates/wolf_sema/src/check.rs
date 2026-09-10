@@ -9623,6 +9623,7 @@ impl<'a> Checker<'a> {
                 })
             }
             SyntaxKind::LiteralPat => self.literal_pattern(pat, scrut),
+            SyntaxKind::RangePat => self.range_pattern(pat, scrut),
             SyntaxKind::PathPat => self.path_pattern(pat, scrut),
             // `[gram.pat.struct]` (s129, #179): a struct is a
             // single-constructor product — the pattern lowers to the
@@ -9736,6 +9737,110 @@ impl<'a> Checker<'a> {
             },
             None => Pat::Wild,
         })
+    }
+
+    /// A range pattern `lo..hi` / `lo..=hi` (`[gram.pat.range]`, s147
+    /// #287): both endpoints type against the scrutinee — integer
+    /// literals as `{integer}` (so `int`, the sized primitives and
+    /// `wrapping[T]` take them; `byte` refuses as it refuses a literal),
+    /// `char` literals as `char` — and the pattern lowers to one
+    /// inclusive [`exhaust::Ctor::IntRange`] over scalars, the
+    /// exclusive high end normalized to `hi - 1`. An empty range is
+    /// E0815 at the pattern and lowers to a never-matching textual
+    /// constructor (it claims no coverage). A range with a missing end
+    /// is a parse-reported tree: silence (D22).
+    fn range_pattern(&mut self, pat: &GreenNode, scrut: TyId) -> R<exhaust::Pat> {
+        use exhaust::{Ctor, Pat};
+        let d = wolf_ast::RangePat::cast(pat).expect("kind");
+        let (Some(lo), Some(hi)) = (d.lo(), d.hi()) else {
+            return Ok(Pat::Wild);
+        };
+        let lo_v = self.range_endpoint(lo, scrut)?;
+        // A reported low end (E0808) has said what the range needs;
+        // the high end of the same spelling is not a second lesson.
+        let hi_v = if lo_v.is_some() {
+            self.range_endpoint(hi, scrut)?
+        } else {
+            None
+        };
+        let never = Pat::Ctor {
+            ctor: Ctor::Named(self.text(pat.span)),
+            args: Vec::new(),
+        };
+        let (Some(lo_v), Some(hi_v)) = (lo_v, hi_v) else {
+            // A shape or type error already reported on an endpoint.
+            return Ok(never);
+        };
+        let inclusive = d.inclusive();
+        let hi_incl = if inclusive { hi_v } else { hi_v - 1 };
+        if lo_v > hi_incl {
+            let spelled = self.text(pat.span);
+            let mut diag = Diagnostic::error(
+                codes::E0815,
+                pat.span,
+                format!("this range pattern is empty — `{spelled}` matches no value"),
+            )
+            .with_label("empty range");
+            diag = if !inclusive && lo_v == hi_v {
+                diag.with_note(
+                    "`lo..hi` stops before `hi`, so `lo..lo` is empty; spell the \
+                     one-value case as the literal, or as `lo..=lo` ([gram.pat.range]).",
+                )
+            } else {
+                diag.with_note(
+                    "the low end must not be above the high end — swap the ends \
+                     ([gram.pat.range]).",
+                )
+            };
+            self.diags.push(diag);
+            return Ok(never);
+        }
+        Ok(Pat::Ctor {
+            ctor: Ctor::IntRange {
+                lo: lo_v,
+                hi: hi_incl,
+            },
+            args: Vec::new(),
+        })
+    }
+
+    /// One range endpoint (`[gram.pat.range]`): an integer or `char`
+    /// literal typed against the scrutinee, answered as its scalar.
+    /// `None` when the endpoint was reported (a `str`, float or `bool`
+    /// literal — E0808 — or an unparseable spelling).
+    fn range_endpoint(&mut self, lit: &GreenNode, scrut: TyId) -> R<Option<i128>> {
+        let tok = lit.tokens().next();
+        let (lit_ty, value) = match tok.map(|t| t.kind) {
+            Some(SyntaxKind::Int) => {
+                let text = self.text(tok.expect("token").span);
+                (self.fresh(NumKind::Integer, lit.span), parse_int_text(&text))
+            }
+            Some(SyntaxKind::Char) => {
+                let text = self.text(tok.expect("token").span);
+                (
+                    self.lo.table.prim(Prim::Char),
+                    cook_char_literal(&text).map(|c| i128::from(u32::from(c))),
+                )
+            }
+            _ => {
+                self.pattern_shape_err(
+                    lit.span,
+                    "a range pattern takes integer or `char` endpoints".to_string(),
+                    "`str` has no order and floats compare by equality only — test \
+                     those in a guard (`s if s < \"m\"`), and write the range over an \
+                     integer or `char` scrutinee ([gram.pat.range])"
+                        .to_string(),
+                );
+                return Ok(None);
+            }
+        };
+        let exp = Expect {
+            ty: scrut,
+            reason: Reason::Pattern,
+            because: Some(lit.span),
+        };
+        self.expect_unify(lit.span, lit_ty, &exp);
+        Ok(value)
     }
 
     /// A path pattern `Tag(p, …)` / `io.Error(e)` / `Color.Rgb(…)`:
