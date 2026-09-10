@@ -433,6 +433,72 @@ expected. This section is that clause; `send`'s row follows it in
   send, and `ch.send(i)?` is the spelling that hands the loop's
   failure to the scope.
 
+## §8 Functions `[type.fn]`
+
+(Appended 2026-09-10, s148 — wolf-lang#284. Both machines check a
+body's tail against the declared return type and refuse a `()` tail
+under `-> str` or `-> !int`, and no clause said so directly: the rule
+was read out of `[gram.expr.block]` — a block's value is its trailing
+expression — together with `[gram.expr.tagident]`, a clause about tag
+resolution that names "a fallible function's tail" only inside its
+list of checked positions. wolf-interp#73 found the interpreter
+reading neither: it ran the body and exited with a status the program
+never wrote, and wollf wl10 measured the gap at 56 of 2,153 generated
+programs. The rule is written here so a witness can cite a clause that
+is about it.)
+
+- `[type.fn.ret]` **A body is checked against its declared result.**
+  The body block's value (`[gram.expr.block]`: its trailing expression,
+  `()` when the block ends in a statement) is checked against the
+  function's declared return type, and so is the operand of every
+  `return`. For a fallible function — `-> T ! row` or `-> !T` — the
+  tail is checked against the ok half `T`: a bare tag resolves to the
+  declared row first (`[gram.expr.tagident]`), a nested row flattens
+  into it (`[gram.type.row.flatten]`), and a plain `T` coerces to the
+  union. `()` is not `T`: a body under `-> str` or `-> !int` that ends
+  in a `while`, a `print`, or any other statement is **E0401 at the
+  tail**, naming the declaration as the origin — never a `()` printed
+  and never an exit status a runtime invents (wolf-interp#69's shape
+  one level up). The omitted return type is `()`, and the one place a
+  fallible tail is not a mismatch is the unit context: a `!()` tail
+  where `()` is expected is a warned discard, `[type.unit.discard]`.
+  Witnesses: `typecheck/tail_declared_str.lu`,
+  `typecheck/tail_declared_union.lu`.
+
+## §9 The error row as a value `[type.row]`
+
+(Appended 2026-09-10, s148 — wolf-lang#284, wolf-interp#81. A bare
+`!T` in operator position was refused by both machines, and the rule
+was stated nowhere: it was inferred by inverting `[type.interp.union]`'s
+carve-out — an interpolation hole may *read* a `!T` without handling
+it, so a hole is the one place that happens, so an operator has no
+reading at all. That works, and it is a clause about string holes
+carrying a rule about operators. The rule is written here, beside
+`[type.str.concat.mix]`, which fixes its code.)
+
+- `[type.row.operand]` **A `!T` is two values, never one, and no
+  operator reads it.** `?`, `else` and a `match` are the whole of how
+  a row is handled; `[type.interp.union]`'s rendering is a reading,
+  not a handling; no cast and no coercion narrows a `!T` to its `T`.
+  An operator — arithmetic, comparison, logic, bitwise, shift — applied
+  to a `!T` operand is **E0409**, the code `[type.str.concat.mix]`
+  spends on "this operator is not defined on these operands", and it
+  is E0409 **on either side of the operator**: `n + 1` and `1 + n`,
+  `n <= 5` and `5 <= n` are one refusal, because the fact refused is
+  the same one — no operator has a `!T` in its family. The fix is to
+  handle the row first (`n? + 1`, `(n else 0) + 1`). Weighed and
+  rejected: reporting the row as a mismatch (E0401) against the
+  operand that fixed the operator's type. That sentence says the row
+  *could* have been in the family had it been the other type, which it
+  could not; and a code that depends on which side the row sits on is
+  a rule about position, of which the language has no other instance
+  (`[type.unit.discard]` retired one at #276). Status at s148: the
+  compiler answers E0409 with the row on the left and E0401 with it on
+  the right; lupin 0.1.31 answers E0409 for arithmetic and E0401 for a
+  comparison, on either side — the two follow-ups are filed against
+  this clause. Witnesses: `rows/negative/row_operand_add.lu`,
+  `rows/negative/row_operand_compare.lu`.
+
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
 beyond what literal adoption needs) nor the general narrowing integer
