@@ -3733,8 +3733,8 @@ struct DifferPass {
 }
 
 /// One control-diff row: the file, what the control filed it as, and
-/// what this run filed it as (or, below the ledger, the two stdout
-/// shas B printed).
+/// what this run filed it as (or, below the ledger, B's two verdicts,
+/// or the two stdout shas it printed under one verdict).
 type ControlMove = (String, String, String);
 
 /// The control diff, pure (#281): which files changed ledger class
@@ -3770,8 +3770,17 @@ fn control_diff(
         if control.ledger.get(f) != measured.ledger.get(f) {
             continue;
         }
-        if cv == mv && cs != ms {
-            below.push((f.clone(), cs.clone(), ms.clone()));
+        // Two ways B can answer differently inside one class. Its VERDICT
+        // moved (r15: a `fail`-pinned file sits in the completeness class
+        // whatever B answers, so lupin going from running it to refusing
+        // it by the pinned code reached no count and, until this arm, no
+        // line either); or its verdict held and its printed bytes moved
+        // (r13's `Closed` -> `closed`).
+        if cv != mv {
+            below.push((f.clone(), cv.clone(), mv.clone()));
+        } else if cs != ms {
+            let short = |h: &str| format!("stdout sha {}..", &h[..8.min(h.len())]);
+            below.push((f.clone(), short(cs), short(ms)));
         }
     }
     (moved, below)
@@ -4158,17 +4167,14 @@ fn differ_cmd(args: &[String]) -> ExitCode {
             eprintln!("differ: control  {f}  {was} -> {now}");
         }
         eprintln!(
-            "differ: control — {} file(s) moved BELOW the ledger (B's printed bytes changed \
-             while its class did not; `compare` reads stdout only on a seeded pair, so these \
-             reach NO count and are invisible to the table above)",
+            "differ: control — {} file(s) moved BELOW the ledger (B's verdict or printed \
+             bytes changed while its class did not: a `fail`-pinned file is a completeness \
+             note whatever B answers, and `compare` reads stdout only on a seeded pair, so \
+             these reach NO count and are invisible to the table above)",
             below.len()
         );
         for (f, was, now) in &below {
-            eprintln!(
-                "differ: control  {f}  B stdout sha {}.. -> {}..",
-                &was[..8.min(was.len())],
-                &now[..8.min(now.len())]
-            );
+            eprintln!("differ: control  {f}  B {was} -> {now}");
         }
     }
     if p.divergences > 0 {
@@ -5217,6 +5223,30 @@ mod control_tests {
         assert!(moved.is_empty(), "no count moved: {moved:?}");
         assert_eq!(below.len(), 1, "{below:?}");
         assert_eq!(below[0].0, "chan_closed_row.lu");
+        assert!(below[0].1.starts_with("stdout sha 15802816"), "{below:?}");
+    }
+
+    /// r15's finding: a `fail`-pinned file is a completeness note whatever
+    /// the interpreter answers, so an interpreter that stops RUNNING the
+    /// program and starts refusing it by the pinned code (lupin 0.1.30 ->
+    /// 0.1.31 on is43's `tail_declared_str.lu`) moves no count. The
+    /// verdict move is reported below the ledger, by name, `was -> now`.
+    #[test]
+    fn a_b_verdict_move_inside_an_unchanged_class_is_reported() {
+        let l: &[(&str, &[&str])] = &[("tail_declared_str.lu", &["Completeness"])];
+        let c = pass(l, &[("tail_declared_str.lu", "exit(0)", "e3b0c442")]);
+        let m = pass(l, &[("tail_declared_str.lu", "fail(E0401)", "")]);
+        let (moved, below) = control_diff(&c, &m);
+        assert!(moved.is_empty(), "no count moved: {moved:?}");
+        assert_eq!(below.len(), 1, "{below:?}");
+        assert_eq!(
+            below[0],
+            (
+                "tail_declared_str.lu".into(),
+                "exit(0)".into(),
+                "fail(E0401)".into()
+            )
+        );
     }
 
     /// A file whose class moved has its bytes reported once, with the
