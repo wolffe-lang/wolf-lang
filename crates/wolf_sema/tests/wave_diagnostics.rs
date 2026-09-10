@@ -206,6 +206,22 @@ fn w0601_discarded_fallible_result() {
     );
 }
 
+/// `[type.unit.discard]` (s146, wolf-lang#275): a `!()` tail where
+/// `()` is expected — a loop body's, an else-less `if`'s, a unit
+/// function's — is the same discard W0601 warns on one line earlier,
+/// never a mismatch; the label says the block's value is `()`.
+#[test]
+fn w0601_unit_context_tail() {
+    snap_typed(
+        "w0601_unit_context_tail",
+        "fn drain(ch: channel[int]) {\n    ch.send(0)\n}\n\
+         fn main() -> !int {\n    let ch = channel[int](4)\n    \
+             for i in 1..=2 { ch.send(i) }\n    \
+             if true { ch.send(3) }\n    \
+             drain(ch)\n    ch.close()\n    0\n}\n",
+    );
+}
+
 #[test]
 fn w0401_literal_does_not_fit_cast() {
     snap_typed(

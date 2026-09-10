@@ -244,6 +244,10 @@ pub struct TypedBody {
     /// for wolf_wir. Bindings are named — lowering resolves each name
     /// in its own scope at the spawn site.
     pub task_captures: Vec<(Span, Vec<TaskCapture>)>,
+    /// `[type.unit.discard]`: the `!()` tails this body discards in a
+    /// unit context, in visit order — W0601 sites for the typed wave,
+    /// beside the non-trailing statements it finds on its own.
+    pub unit_discards: Vec<Span>,
 }
 
 /// One captured binding of a task closure (the s73 handoff record).
@@ -561,6 +565,11 @@ struct Checker<'a> {
     /// its `?`s absorbed, empty when it cannot fail. The spawn typing
     /// consumes this to type the scope re-raise ([conc.task.fail]).
     last_closure_row: Vec<(String, Vec<TyId>)>,
+    /// `[type.unit.discard]` (s146, wolf-lang#275): every `!()` tail
+    /// accepted where `()` was expected — a loop body's, an else-less
+    /// `if`'s, a unit function's. The block's value is `()`, nothing
+    /// consumes the tail, and the typed wave warns W0601 at each.
+    unit_discards: Vec<Span>,
 }
 
 /// One in-flight capture-collection frame (s73).
@@ -712,6 +721,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         capture_frames: Vec::new(),
         task_captures: Vec::new(),
         last_closure_row: Vec::new(),
+        unit_discards: Vec::new(),
     };
     let outcome = match body.member {
         None => c.run(node, body),
@@ -798,6 +808,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     calls: c.calls,
                     member_refs: c.member_refs,
                     task_captures,
+                    unit_discards: c.unit_discards,
                 })
             } else {
                 BodyResult::Errors(diags)
@@ -867,6 +878,7 @@ pub(crate) fn collect_body_rows(
         capture_frames: Vec::new(),
         task_captures: Vec::new(),
         last_closure_row: Vec::new(),
+        unit_discards: Vec::new(),
     };
     let _ = c.run(node, body);
     // Solve what the body pinned, then default the rest so payload
@@ -1525,6 +1537,31 @@ impl<'a> Checker<'a> {
         if let Err(e) = unify(&mut self.lo.table, &mut self.vars, actual, exp.ty) {
             self.report_unify_err(span, actual, exp, e);
         }
+    }
+
+    /// `[type.unit.discard]` (s146, wolf-lang#275): a `!()` value where
+    /// `()` is expected is a warned discard, never a mismatch — the
+    /// block's value is `()`, nothing consumes the tail, and W0601 (the
+    /// typed wave, from [`TypedBody::unit_discards`]) says the row is
+    /// lost. Only `!()` qualifies: a `!int` tail where `()` is expected
+    /// is a mismatch on the `int`, exactly as a plain `int` tail is.
+    /// Answers whether the rule applied (the caller then skips the
+    /// unification that would have refused it).
+    fn unit_discard(&mut self, span: Span, actual: TyId, exp: &Expect) -> bool {
+        let expected = self.shallow(exp.ty);
+        if !matches!(self.lo.table.kind(expected), TyKind::Unit) {
+            return false;
+        }
+        let act = self.shallow(actual);
+        let TyKind::ErrUnion(ok, _) = self.lo.table.kind(act).clone() else {
+            return false;
+        };
+        let ok = self.shallow(ok);
+        if !matches!(self.lo.table.kind(ok), TyKind::Unit) {
+            return false;
+        }
+        self.unit_discards.push(span);
+        true
     }
 
     fn report_unify_err(&mut self, span: Span, actual: TyId, exp: &Expect, err: UnifyErr) {
@@ -3771,6 +3808,9 @@ impl<'a> Checker<'a> {
                     self.warn_shadowed_tag(e, row);
                 }
                 let t = self.synth_expr(e)?;
+                if self.unit_discard(e.span, t, exp) {
+                    return Ok(());
+                }
                 self.expect_unify(e.span, t, exp);
                 Ok(())
             }
@@ -5656,11 +5696,12 @@ impl<'a> Checker<'a> {
 
     /// Methods on the conc builtins (spec 03): the channel operations
     /// and the scope handle's `spawn`. Typed stubs exactly like the
-    /// Tier-2 containers'. `send` types as unit at v0 — the
-    /// closed-channel error value ([conc.chan.close]) becomes a row
-    /// with the std sync surface; `recv` is row-shaped already
-    /// (`T ! {closed}`). `Mutex` deliberately carries no methods:
-    /// acquisition is the `when` construct ([conc.when.order]).
+    /// Tier-2 containers'. `send` and `recv` are both row-shaped over
+    /// `{closed, cancelled}` ([conc.chan.close]; `send` since s146,
+    /// wolf-lang#275 — it was `()` while the clause said otherwise,
+    /// and the fix waited on `[type.unit]`). `Mutex` deliberately
+    /// carries no methods: acquisition is the `when` construct
+    /// ([conc.when.order]).
     #[allow(clippy::too_many_arguments)]
     fn conc_method_call(
         &mut self,
@@ -5682,9 +5723,24 @@ impl<'a> Checker<'a> {
         let (params, ret) = match (self.kind_of(recv_ty), mname) {
             // `[conc.mm.hb.chan]` — the k-th send pairs the k-th
             // receive; sends block on a full buffer ([conc.chan.buf]).
+            // `[conc.chan.close]` — a send after close returns the
+            // `closed` error value, and a send blocked on a full
+            // buffer is a blocking point, so cancellation surfaces
+            // there too ([conc.cancel.points]): `() ! {closed,
+            // cancelled}`, the receive row over a unit payload. In a
+            // unit context the value is `[type.unit.discard]`'s warned
+            // discard (W0601), never a mismatch.
             (TyKind::Chan(t), "send") => {
                 let u = self.lo.table.unit();
-                (vec![p("self", recv_ty), p("value", t)], u)
+                let row = self.lo.table.row(
+                    vec![
+                        ("closed".to_string(), Vec::new()),
+                        ("cancelled".to_string(), Vec::new()),
+                    ],
+                    None,
+                );
+                let r = self.lo.table.intern(TyKind::ErrUnion(u, row));
+                (vec![p("self", recv_ty), p("value", t)], r)
             }
             // `[conc.chan.close]` — receives on a drained-closed
             // channel return the closed error value, so `recv` is
@@ -9253,13 +9309,18 @@ impl<'a> Checker<'a> {
         };
         match d.else_branch() {
             None => {
+                // `[type.unit.context]`: an `if` with no `else` is a
+                // unit context for its block — a `!()` tail is the
+                // warned discard, not a mismatch.
                 let unit = self.lo.table.unit();
-                if join(&mut self.lo.table, &mut self.vars, then_ty.0, unit).is_err() {
-                    let exp = Expect {
-                        ty: unit,
-                        reason: Reason::BareIf,
-                        because: Some(e.span),
-                    };
+                let exp = Expect {
+                    ty: unit,
+                    reason: Reason::BareIf,
+                    because: Some(e.span),
+                };
+                if !self.unit_discard(then_ty.1, then_ty.0, &exp)
+                    && join(&mut self.lo.table, &mut self.vars, then_ty.0, unit).is_err()
+                {
                     self.report_mismatch(then_ty.1, then_ty.0, &exp);
                 }
                 Ok(unit)
@@ -9273,7 +9334,24 @@ impl<'a> Checker<'a> {
                 } else {
                     (self.error_ty(), n.span)
                 };
-                match join(&mut self.lo.table, &mut self.vars, then_ty.0, else_ty) {
+                // An `if … else if …` chain that ends without an
+                // `else` is a unit context for EVERY block in it
+                // (`[type.unit.context]`): the nested `if` already
+                // answered `()` for its own, and this block's `!()`
+                // tail is the same discard.
+                let mut then_t = then_ty.0;
+                if n.kind == SyntaxKind::IfExpr && chain_is_bare(n) {
+                    let unit = self.lo.table.unit();
+                    let exp = Expect {
+                        ty: unit,
+                        reason: Reason::BareIf,
+                        because: Some(e.span),
+                    };
+                    if self.unit_discard(then_ty.1, then_t, &exp) {
+                        then_t = unit;
+                    }
+                }
+                match join(&mut self.lo.table, &mut self.vars, then_t, else_ty) {
                     Ok(t) => Ok(t),
                     Err(err) => {
                         self.branch_disagreement(
@@ -10283,6 +10361,13 @@ impl<'a> Checker<'a> {
                 // (s73 closure rows). A `return` in the body meets
                 // the same var (#268).
                 let body_t = self.fresh(NumKind::Any, e.span);
+                // `[type.unit.context]`: a closure checked against a
+                // `fn(…) -> ()` type has a unit body — fix the result
+                // first, so a `!()` tail is the warned discard rather
+                // than a mismatch reported at the closure.
+                if matches!(self.lo.table.kind(self.shallow(ret)), TyKind::Unit) {
+                    let _ = unify(&mut self.lo.table, &mut self.vars, body_t, ret);
+                }
                 self.closure_rets.push((body_t, e.span));
                 let r = if let Some(body) = d.body() {
                     let exp2 = Expect {
@@ -10801,5 +10886,19 @@ mod char_literal_tests {
         ] {
             assert_eq!(cook_char_literal(text), None, "{text}");
         }
+    }
+}
+
+/// Does this `if … else if …` chain end without a final `else`? Such
+/// a chain is a unit context for every block in it
+/// (`[type.unit.context]`).
+fn chain_is_bare(n: &GreenNode) -> bool {
+    let Some(d) = IfExpr::cast(n) else {
+        return false;
+    };
+    match d.else_branch() {
+        None => true,
+        Some(m) if m.kind == SyntaxKind::IfExpr => chain_is_bare(m),
+        Some(_) => false,
     }
 }

@@ -1596,6 +1596,30 @@ pub(crate) fn check_typed_body(pkg: &Package, body: &BodyRef, tb: &TypedBody) ->
         }
     }
 
+    // W0601 — `[type.unit.discard]`: a `!()` tail where `()` was
+    // expected (a loop body's, an else-less `if`'s, a unit function's).
+    // The checker recorded the site; the block's value is `()`, so the
+    // tail is discarded exactly as a non-trailing statement is.
+    for &span in &tb.unit_discards {
+        let Some(t) = ty_at(span) else { continue };
+        diags.push(
+            Diagnostic::warning(
+                codes::W0601,
+                span,
+                format!(
+                    "this `{}` result is discarded, error row and all",
+                    rendered(t)
+                ),
+            )
+            .with_label("the block's value is `()`, so a failure here vanishes silently")
+            .with_note(
+                "propagate it with `?`, handle it with `else`, or bind it away \
+                 explicitly so the discard is visible."
+                    .to_string(),
+            ),
+        );
+    }
+
     // W0401 — `<literal> as <narrow int>` that cannot fit.
     for &(span, _from, to, _kind) in &tb.casts {
         let Some(cast) = descendants(node)

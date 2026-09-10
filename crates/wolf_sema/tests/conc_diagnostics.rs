@@ -175,7 +175,7 @@ fn e1102_clean_sendable_payloads() {
     snap_one(
         "e1102_clean_sendable_payloads",
         "fn main() -> !int {\n    let a = channel[int](1)\n    let b = channel[str](2)\n    \
-         let c = channel[region](1)\n    let d = channel[int]()\n    a.send(1)\n    \
+         let c = channel[region](1)\n    let d = channel[int]()\n    a.send(1)?\n    \
          let v = a.recv() else |_| { return 1 }\n    v\n}\n",
     );
 }
@@ -190,7 +190,7 @@ fn e1102_clean_sendable_payloads() {
 fn channel_in_signature_position_is_chan() {
     snap_one(
         "channel_in_signature_position_is_chan",
-        "struct Desk { inbox: channel[int] }\n\n         fn total(queue: channel[int]) -> int {\n    var words = 0\n             for w in queue { words += w }\n    words\n}\n\n         fn drain(desk: Desk) -> int {\n    var n = 0\n             for _ in desk.inbox { n += 1 }\n    n\n}\n\n         fn main() -> !int {\n    let q = channel[int](2)\n    q.send(1)\n    q.close()\n             let d = Desk { inbox: channel[int](1) }\n    d.inbox.close()\n             total(q) + drain(d)\n}\n",
+        "struct Desk { inbox: channel[int] }\n\n         fn total(queue: channel[int]) -> int {\n    var words = 0\n             for w in queue { words += w }\n    words\n}\n\n         fn drain(desk: Desk) -> int {\n    var n = 0\n             for _ in desk.inbox { n += 1 }\n    n\n}\n\n         fn main() -> !int {\n    let q = channel[int](2)\n    q.send(1)?\n    q.close()\n             let d = Desk { inbox: channel[int](1) }\n    d.inbox.close()\n             total(q) + drain(d)\n}\n",
     );
 }
 
