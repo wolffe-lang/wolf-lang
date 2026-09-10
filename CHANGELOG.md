@@ -2,6 +2,77 @@
 
 ## Unreleased
 
+### The switch a reader expects: range arms (s147 — #287 ruled, #286 closes)
+
+`match` in statement position is wolf's switch, and the one thing it
+lacked against a reader's expectation was a range arm. The maintainer
+ruled it (#287) and refused the alternatives — a second keyword would
+carry a second grammar, a second exhaustiveness story, and reopen
+fallthrough. `[gram.pat.range]` is the clause: `lo..hi` and `lo..=hi`
+in any pattern position, both ends **literals of one type** — integer
+literals on every integer primitive a literal arm already takes
+(`byte` takes none, so no range either), `char` literals ordered by
+scalar (`[type.char.order]`). No identifiers, no expressions, and no
+open ends: `..hi` and `lo..` are slice spellings, and the parser
+refuses them in pattern position with a note that says the word the
+book's ch03 papercut row was waiting for — "range". An empty range
+(`5..5`, `9..=3`) is **E0815**, decided at compile time because the
+ends are literals. Ranges compose with or-patterns, guards, and
+`@`-bindings; overlap is legal and the first arm wins.
+
+**Exhaustiveness computes no union.** Integer and `char` columns stay
+"infinite" — for every domain, `u8` and `char` included — so a `_` or
+binder arm is still required after range arms, and this is said in
+the clause rather than left to be discovered. What changed inside the
+engine is the witness and the subsumption: E0801 now names the first
+value past every covering range and literal (`0..10` alone witnesses
+`10`, not `0`), and specialization is by containment — a row headed
+by `0..10` survives specialization by `5` and by `2..=4`, so a literal
+inside an earlier range is E0802 citing the range arm. An arm covered
+only by the union of several earlier ranges is reported reachable:
+conservative, never falsely dead.
+
+**Both tiers lower a range arm to two comparisons** at the
+discriminant's own width — the `u*` conditions for an unsigned
+scrutinee, as `<` already does — joined by `band`, folded when the
+discriminant is a build-time constant; the checked machine compares
+scalars through the one shared `char` decoder. Inside a product
+(`d @ 1..=9`, `(0..10, _)`) the same test lands on the projection.
+
+**#286 beside it.** The maintainer's switch-shaped program — `0 =>`,
+`1 | 2 =>`, `n if n % 2 == 0 =>`, `_ =>` — was refused by native
+lowering as conservatism while the checked machine and lupin ran it,
+and the refusal named the wrong arm ("a guard on the closing
+unconditional arm" — the closing arm was the `_`). A guarded binder
+arm is an unconditional pattern on a conditional arm, a
+test-and-fall-through like any other: it lowers now, the guard's
+failure re-entering the chain at the next arm, and the old refusal is
+an invariant no caller reaches, with a message that names *this* arm
+and the reason. `grammar/match_switch.lu` is the witness, byte-identical
+on both machines.
+
+**Predicted before the first edit, then measured.** Parser one
+alternative, sema one constructor threaded through `specialize`,
+lowering one arm per tier, four witnesses, one code. Measured over the
+compiler's source (tests and snapshots aside): spec +43, ast +40,
+parser +88, registry +12, checker +105, engine +45, ubcheck +29, wir
++215 — ten files, +603/−37. The parser and the native lowering ran
+about twice the prediction: the literal atom became a function so the
+range tail could reuse it, the open-end refusal is two sites (before
+and after the operator), and the lowering's range test wanted its
+product-domain twin and a signedness-aware fold the prediction had not
+priced. Everything else landed within a dozen lines of its estimate.
+
+**The pair's named divergence.** Four files —
+`grammar/match_range.lu`, `grammar/match_range_char.lu`,
+`rows/match_range_empty.lu`, `grammar/match_range_open.lu` — parse and
+run (or refuse by the new code) here and stop at lupin 0.1.30's
+`expected `=>`, found `..``. wolf-interp#83 carries the clause text
+and the two parser sites; the four are byte-identical the day it
+lands. Not in this sprint: `str` ranges (no order clause), float
+ranges (equality only), negative endpoints (a literal arm takes no
+`-` today either).
+
 ### The pairing takes lupin 0.1.30, and this time the control has teeth
 
 wolf is now differentially tested against **lupin 0.1.30** (`08d787a`),
