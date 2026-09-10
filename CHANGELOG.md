@@ -156,6 +156,93 @@ a test holds the width. Anything that reproduces the stamp by hand
 must spell the same seven: wolf-book's `book.yml` computes
 `WOLF_COMMIT` itself and wants `--short=7` in the same breath.
 
+### Two syscalls a request, gone (s149 — #289 closes, #290 closes)
+
+lobo's ws27 counted, with `strace -c -f` over a whole `ab` drive on
+the linux runner, what a request costs the kernel on lobo and on the
+pinned nginx serving the same config: keepalive **7.41 against 6.14**,
+close **13.36 against 10.13**. Three of that gap were not lobo's code
+and not lobo's fault — they were what the wolf runtime and the wolf fs
+surface made a server do.
+
+**The path stat (#289).** `fs_open` in read mode is `open(O_RDONLY)`,
+and on unix that call PARKS on a fifo with no writer — the whole hand,
+until a writer appears. A web root is operator-controlled, so lobo's
+router asked `fs_is_file(path)` before every `fs_open(path)`, which on
+the regular files that are every request that matters is a walk of the
+name the open is about to walk again: `statx` 2.00 where nginx pays
+`fstat` 1.00. spec/11 now carries **`[os.fs.open]`** — the open family
+as one call under three spellings, its mode set stated (0 read, 1
+write, 2 append, 3 read-write, 4 create-new) and widened by one:
+**mode 5, read non-blocking**. On unix it carries `O_NONBLOCK`; a
+regular file is unaffected in every respect, and a fifo or device
+answers a HANDLE at once, which `[os.fs.fstat]` classifies as `kind` 2
+and whose read is `eof` (no writer) or `io` (a writer with nothing to
+say). So a static-file server's shape is `fs_open_mode(p, 5)` then
+`fs_fstat(fd)` — two calls, no path stat, and no name a program was
+handed can park it. windows has no equivalent on this path and serves
+mode 5 as mode 0, by name. The clause also says what the mode is NOT:
+a regular file's READ still blocks on the disk, on every unix, flag or
+no flag.
+
+**The accept posture (#290).** Two more calls per accepted connection
+that nginx does not make: `ioctl(FIONBIO)`, because std's accept asks
+the kernel for `SOCK_CLOEXEC` only and the runtime then wrote the
+non-blocking flag itself; and `setsockopt(TCP_NODELAY)`, #254's
+default, set on every stream at acceptance. Both are now paid
+differently and neither is paid twice:
+
+- Where the host has **`accept4`**, the runtime asks for the whole
+  posture in the accept — `SOCK_NONBLOCK | SOCK_CLOEXEC`, one call
+  where there were two. linux has it. **macOS has no `accept4` at
+  all**, and the clause says so rather than pretending: there the take
+  is `accept` + `ioctl(FIOCLEX)` + `ioctl(FIONBIO)`, three calls,
+  measured on this box by interposing libSystem (dtruss wants SIP
+  down) — and no kqueue arrangement changes it, because the cost is in
+  the acquisition, not in the wait.
+- **`TCP_NODELAY` is paid at the first write Nagle could hold back.**
+  Nagle only delays a write that follows bytes of the same stream
+  still in flight, so the FIRST write on a connection leaves at once
+  whatever the option says; the runtime sets it before the next write
+  that finds bytes in flight — including the continuation of a large
+  drain, whose final short chunk is exactly the segment Nagle would
+  sit on — and a connection whose one response is followed by a close
+  pays it **never**. `net_nodelay` called by the program is still
+  answered at once, either way, and `false` ends the deferral rather
+  than postponing it.
+
+**What a program can observe: nothing.** Both clauses move a COST, and
+`corpus/net/accept_posture.lu` is that sentence's other half — one
+write then a close arrives whole, head-then-body arrives whole and in
+order, the option toggles, a forged handle is `io` — every relation
+true before the change and after it. The clauses' own instruments are
+beside them: `wolf_rt::net`'s crate tests read the posture and the
+option BACK from the kernel at each step (so "unset after one write,
+set before the second" is measured on every unix host), and
+`crates/wolf_rt/tests/syscall_shape.rs` is the linux COUNT, read with
+`strace` — the same instrument ws27 counted with — asserting `accept4`
+exactly once with both flags, no `ioctl(FIONBIO)` on the accepted fd
+ever, no `setsockopt` before the first write and exactly one before
+the second, one `openat` carrying `O_NONBLOCK`, and no path stat in
+front of it. The linux CI job installs `strace` and sets
+`WOLF_SYSCALL_REQUIRE_STRACE`, so a runner without a tracer is a
+broken job and never a quiet skip.
+
+**PREDICTED, before any of it was measured** (ws27's cell, calls per
+request on the runner): keepalive 7.41 → **6.41** against nginx's
+6.14; close 13.36 → **10.34** against 10.13; per accepted connection
+on the close shape, the accept side 3.10 → **1.08**. The prediction
+this repo can settle by itself — the shape, not lobo's rate — is the
+one `syscall_shape.rs` asserts, and macOS's 4 → 3 was predicted and
+then measured exactly. lobo's own number is ws29's to report.
+
+Witnesses: `corpus/fs/open_nonblock.lu` and
+`corpus/net/accept_posture.lu`, three lanes each; the fifo itself is a
+crate test (`#[cfg(unix)]` — the language has no `mkfifo`, so a corpus
+witness could not build one). lupin 0.1.31 answers the net witness
+byte-identically and declines the fs tier by name, which is where its
+mirror is filed (wolf-interp#86): mode 5 lands there with the tier.
+
 ### The row is ruled where it belongs (s148 — #284 closes)
 
 Two rules both machines enforced and no clause stated. A body's tail
