@@ -711,6 +711,25 @@ owed.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
 
+## E0416 — a `str` cannot be assigned through an index or slice
+
+A `str` never changes after it is built (spec/02 `[mem.str.imm]`):
+every operation reads its bytes, and the ones that hand back a `str`
+hand back a view of the same storage (`[mem.str.view]`) or a fresh
+string. So `s[a..b]` on the left of an `=` names nothing that can be
+written — a slice is a view, not a place — and neither does `s[i]`,
+which is not even a read (E0411). This is a rule of the language, not
+a gap in the compiler: it will not compile later, in another profile,
+or on another lane. Build the new text and assign it to the binding
+instead: slice the pieces out and interpolate them
+(`s = "{head}{bit}{tail}"`), join them with `+`
+(`s = head + bit + tail` — `+` on two `str`s is exactly that
+interpolation, D62), or reach for `std.strbuf` when the loop is hot,
+since each `+` builds a fresh `str` (`[type.str.concat.cost]`). The
+binding must be a `var` for any of those to land (E0410 otherwise).
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0416_str_index_and_compound.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0416_str_slice_assign.snap
+
 ## E0501 — the generic body uses something its bounds do not provide
 
 The golden rule of wolf generics: a generic body is checked once,
