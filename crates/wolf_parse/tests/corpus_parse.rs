@@ -194,8 +194,11 @@ fn corpus_parse_expectations() {
     // witnesses (grammar/multiline_open_shares_line and
     // multiline_close_shares_line — E0103, multiline_short_margin —
     // E0104, multiline_mixed_margin — E0105, str_bare_brace — E0102;
-    // wolf-lang#230); everything else must pass.
-    assert_eq!(fail, 22, "syntax-tier fail-file count drifted");
+    // wolf-lang#230); plus s147's E0201 open range in pattern position
+    // (grammar/match_range_open — `10..` refused at its missing high
+    // end with the note that names the range form, `[gram.pat.range]`,
+    // wolf-lang#287); everything else must pass.
+    assert_eq!(fail, 23, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

@@ -1,0 +1,18 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.pat.range
+//!
+//! s147 (#287) — a range pattern has a literal at both ends; the open
+//! forms `lo..` and `..hi` are slice spellings, not patterns. `10..`
+//! is refused at its missing high end with a note that names the
+//! range form — the book's ch03 papercut was a diagnostic that never
+//! said the word.
+
+fn main() -> !int {
+    let n = 5
+    match n {
+        10.. => print("ten and up"),
+        _ => print("under ten"),
+    }
+    0
+}

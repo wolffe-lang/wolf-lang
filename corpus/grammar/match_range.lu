@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="low\nlow\nteens\nteens\nround\nbig even\nbig odd\n30\n0\n")
+//! phase: run
+//! conforms: gram.pat.range
+//!
+//! s147 (#287) — range arms in the switch-shaped match: `lo..hi`
+//! stops before its high end, `lo..=hi` includes it, ranges compose
+//! with or-patterns and sit beside a guard, and an `@`-binding may
+//! name the matched value. Overlap is legal and the first arm wins
+//! (`10` is `10..=19` before it is `10 | 20 | 30`); the `_` arm is
+//! still required — integer columns stay infinite ([gram.pat.range]).
+
+fn bucket(n: int) -> str {
+    match n {
+        0..10 => "low",
+        10..=19 | 90..=99 => "teens",
+        10 | 20 | 30 => "round",
+        b if b % 2 == 0 => "big even",
+        _ => "big odd",
+    }
+}
+
+fn tenfold(n: int) -> int {
+    match n {
+        d @ 1..=9 => d * 10,
+        _ => 0,
+    }
+}
+
+fn main() -> !int {
+    print(bucket(0))
+    print(bucket(9))
+    print(bucket(10))
+    print(bucket(95))
+    print(bucket(30))
+    print(bucket(42))
+    print(bucket(43))
+    print("{tenfold(3)}")
+    print("{tenfold(12)}")
+    0
+}

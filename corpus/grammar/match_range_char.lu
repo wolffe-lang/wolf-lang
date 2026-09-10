@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="lower\nupper\ndigit\nother\n")
+//! phase: run
+//! conforms: gram.pat.range, type.char.order
+//!
+//! s147 (#287) — `char` ranges order by scalar value
+//! ([type.char.order]): `'a'..='z'` is the 26 ASCII lowercase letters
+//! and nothing else, and both machines compare the same scalars. The
+//! `_` arm stays required: no union is computed over `char`'s domain.
+
+fn kind(c: char) -> str {
+    match c {
+        'a'..='z' => "lower",
+        'A'..='Z' => "upper",
+        '0'..='9' => "digit",
+        _ => "other",
+    }
+}
+
+fn main() -> !int {
+    print(kind('q'))
+    print(kind('Q'))
+    print(kind('7'))
+    print(kind('_'))
+    0
+}

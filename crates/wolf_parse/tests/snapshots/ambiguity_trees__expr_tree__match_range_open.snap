@@ -1,0 +1,82 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 372..504
+  FnDecl 372..503
+    FnKw 372..374 "fn"
+    Ident 375..379 "main"
+    ParamList 379..381
+      LParen 379..380 "("
+      RParen 380..381 ")"
+    RetType 382..389
+      Arrow 382..384 "->"
+      ErrorUnionType 385..389
+        Not 385..386 "!"
+        PathType 386..389
+          Path 386..389
+            Ident 386..389 "int"
+    Block 390..503
+      LBrace 390..391 "{"
+      LetDecl 396..406
+        LetKw 396..399 "let"
+        IdentPat 400..401
+          Ident 400..401 "n"
+        Eq 402..403 "="
+        LiteralExpr 404..405
+          Int 404..405 "5"
+        Term 405..406 "\n"
+      ExprStmt 410..496
+        MatchExpr 410..495
+          MatchKw 410..415 "match"
+          PathExpr 416..417
+            Ident 416..417 "n"
+          LBrace 418..419 "{"
+          MatchArm 428..456
+            RangePat 428..432
+              LiteralPat 428..430
+                Int 428..430 "10"
+              DotDot 430..432 ".."
+              Missing 432..432 ""
+            FatArrow 433..435 "=>"
+            CallExpr 436..455
+              PathExpr 436..441
+                Ident 436..441 "print"
+              ArgList 441..455
+                LParen 441..442 "("
+                Arg 442..454
+                  StringExpr 442..454
+                    StrBegin 442..443 "\""
+                    StrFragment 443..453 "ten and up"
+                    StrEnd 453..454 "\""
+                RParen 454..455 ")"
+            Comma 455..456 ","
+          MatchArm 465..489
+            WildcardPat 465..466
+              Underscore 465..466 "_"
+            FatArrow 467..469 "=>"
+            CallExpr 470..488
+              PathExpr 470..475
+                Ident 470..475 "print"
+              ArgList 475..488
+                LParen 475..476 "("
+                Arg 476..487
+                  StringExpr 476..487
+                    StrBegin 476..477 "\""
+                    StrFragment 477..486 "under ten"
+                    StrEnd 486..487 "\""
+                RParen 487..488 ")"
+            Comma 488..489 ","
+          RBrace 494..495 "}"
+        Term 495..496 "\n"
+      ExprStmt 500..502
+        LiteralExpr 500..501
+          Int 500..501 "0"
+        Term 501..502 "\n"
+      RBrace 502..503 "}"
+  Term 503..504 "\n"
+  Eof 504..504 ""
+== diagnostics ==
+E0201 [Error] 433..435 expected a literal to close the range pattern
+    note a range pattern is `lo..hi` or `lo..=hi` with a literal at both ends (integer or `char`); the open ranges `..hi` and `lo..` are slice spellings, not patterns ([gram.pat.range])

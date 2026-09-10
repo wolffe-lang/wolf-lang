@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="zero\none or two\none or two\nodd\neven 4\n")
+//! phase: run
+//! conforms: gram.expr.flow, gram.pat
+//!
+//! #286 (s147) — the maintainer's switch-shaped program: `match` in
+//! statement position IS wolf's switch, and a guarded binder arm
+//! before the `_` arm is a test-and-fall-through like any other arm —
+//! sema never counted it toward coverage, so the `_` closes the chain
+//! and the guard's failure falls through to it. Native lowering
+//! refused this as conservatism ("a guard on the closing unconditional
+//! arm" — naming the wrong arm) while the checked machine and lupin
+//! ran it; the three agree now.
+
+fn main() -> !int {
+    var i = 0
+    while i < 5 {
+        match i {
+            0 => print("zero"),
+            1 | 2 => print("one or two"),
+            n if n % 2 == 0 => print("even {n}"),
+            _ => print("odd"),
+        }
+        i += 1
+    }
+    0
+}

@@ -1,0 +1,366 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 554..1091
+  FnDecl 554..760
+    FnKw 554..556 "fn"
+    Ident 557..563 "bucket"
+    ParamList 563..571
+      LParen 563..564 "("
+      Param 564..570
+        Ident 564..565 "n"
+        Colon 565..566 ":"
+        PathType 567..570
+          Path 567..570
+            Ident 567..570 "int"
+      RParen 570..571 ")"
+    RetType 572..578
+      Arrow 572..574 "->"
+      PathType 575..578
+        Path 575..578
+          Ident 575..578 "str"
+    Block 579..760
+      LBrace 579..580 "{"
+      ExprStmt 585..759
+        MatchExpr 585..758
+          MatchKw 585..590 "match"
+          PathExpr 591..592
+            Ident 591..592 "n"
+          LBrace 593..594 "{"
+          MatchArm 603..618
+            RangePat 603..608
+              LiteralPat 603..604
+                Int 603..604 "0"
+              DotDot 604..606 ".."
+              LiteralPat 606..608
+                Int 606..608 "10"
+            FatArrow 609..611 "=>"
+            StringExpr 612..617
+              StrBegin 612..613 "\""
+              StrFragment 613..616 "low"
+              StrEnd 616..617 "\""
+            Comma 617..618 ","
+          MatchArm 627..656
+            OrPat 627..644
+              RangePat 627..634
+                LiteralPat 627..629
+                  Int 627..629 "10"
+                DotDotEq 629..632 "..="
+                LiteralPat 632..634
+                  Int 632..634 "19"
+              Pipe 635..636 "|"
+              RangePat 637..644
+                LiteralPat 637..639
+                  Int 637..639 "90"
+                DotDotEq 639..642 "..="
+                LiteralPat 642..644
+                  Int 642..644 "99"
+            FatArrow 645..647 "=>"
+            StringExpr 648..655
+              StrBegin 648..649 "\""
+              StrFragment 649..654 "teens"
+              StrEnd 654..655 "\""
+            Comma 655..656 ","
+          MatchArm 665..689
+            OrPat 665..677
+              LiteralPat 665..667
+                Int 665..667 "10"
+              Pipe 668..669 "|"
+              LiteralPat 670..672
+                Int 670..672 "20"
+              Pipe 673..674 "|"
+              LiteralPat 675..677
+                Int 675..677 "30"
+            FatArrow 678..680 "=>"
+            StringExpr 681..688
+              StrBegin 681..682 "\""
+              StrFragment 682..687 "round"
+              StrEnd 687..688 "\""
+            Comma 688..689 ","
+          MatchArm 698..728
+            IdentPat 698..699
+              Ident 698..699 "b"
+            MatchGuard 700..713
+              IfKw 700..702 "if"
+              BinExpr 703..713
+                BinExpr 703..708
+                  PathExpr 703..704
+                    Ident 703..704 "b"
+                  Percent 705..706 "%"
+                  LiteralExpr 707..708
+                    Int 707..708 "2"
+                EqEq 709..711 "=="
+                LiteralExpr 712..713
+                  Int 712..713 "0"
+            FatArrow 714..716 "=>"
+            StringExpr 717..727
+              StrBegin 717..718 "\""
+              StrFragment 718..726 "big even"
+              StrEnd 726..727 "\""
+            Comma 727..728 ","
+          MatchArm 737..752
+            WildcardPat 737..738
+              Underscore 737..738 "_"
+            FatArrow 739..741 "=>"
+            StringExpr 742..751
+              StrBegin 742..743 "\""
+              StrFragment 743..750 "big odd"
+              StrEnd 750..751 "\""
+            Comma 751..752 ","
+          RBrace 757..758 "}"
+        Term 758..759 "\n"
+      RBrace 759..760 "}"
+  Term 760..761 "\n"
+  FnDecl 762..856
+    FnKw 762..764 "fn"
+    Ident 765..772 "tenfold"
+    ParamList 772..780
+      LParen 772..773 "("
+      Param 773..779
+        Ident 773..774 "n"
+        Colon 774..775 ":"
+        PathType 776..779
+          Path 776..779
+            Ident 776..779 "int"
+      RParen 779..780 ")"
+    RetType 781..787
+      Arrow 781..783 "->"
+      PathType 784..787
+        Path 784..787
+          Ident 784..787 "int"
+    Block 788..856
+      LBrace 788..789 "{"
+      ExprStmt 794..855
+        MatchExpr 794..854
+          MatchKw 794..799 "match"
+          PathExpr 800..801
+            Ident 800..801 "n"
+          LBrace 802..803 "{"
+          MatchArm 812..832
+            BindingPat 812..821
+              Ident 812..813 "d"
+              At 814..815 "@"
+              RangePat 816..821
+                LiteralPat 816..817
+                  Int 816..817 "1"
+                DotDotEq 817..820 "..="
+                LiteralPat 820..821
+                  Int 820..821 "9"
+            FatArrow 822..824 "=>"
+            BinExpr 825..831
+              PathExpr 825..826
+                Ident 825..826 "d"
+              Star 827..828 "*"
+              LiteralExpr 829..831
+                Int 829..831 "10"
+            Comma 831..832 ","
+          MatchArm 841..848
+            WildcardPat 841..842
+              Underscore 841..842 "_"
+            FatArrow 843..845 "=>"
+            LiteralExpr 846..847
+              Int 846..847 "0"
+            Comma 847..848 ","
+          RBrace 853..854 "}"
+        Term 854..855 "\n"
+      RBrace 855..856 "}"
+  Term 856..857 "\n"
+  FnDecl 858..1090
+    FnKw 858..860 "fn"
+    Ident 861..865 "main"
+    ParamList 865..867
+      LParen 865..866 "("
+      RParen 866..867 ")"
+    RetType 868..875
+      Arrow 868..870 "->"
+      ErrorUnionType 871..875
+        Not 871..872 "!"
+        PathType 872..875
+          Path 872..875
+            Ident 872..875 "int"
+    Block 876..1090
+      LBrace 876..877 "{"
+      ExprStmt 882..899
+        CallExpr 882..898
+          PathExpr 882..887
+            Ident 882..887 "print"
+          ArgList 887..898
+            LParen 887..888 "("
+            Arg 888..897
+              CallExpr 888..897
+                PathExpr 888..894
+                  Ident 888..894 "bucket"
+                ArgList 894..897
+                  LParen 894..895 "("
+                  Arg 895..896
+                    LiteralExpr 895..896
+                      Int 895..896 "0"
+                  RParen 896..897 ")"
+            RParen 897..898 ")"
+        Term 898..899 "\n"
+      ExprStmt 903..920
+        CallExpr 903..919
+          PathExpr 903..908
+            Ident 903..908 "print"
+          ArgList 908..919
+            LParen 908..909 "("
+            Arg 909..918
+              CallExpr 909..918
+                PathExpr 909..915
+                  Ident 909..915 "bucket"
+                ArgList 915..918
+                  LParen 915..916 "("
+                  Arg 916..917
+                    LiteralExpr 916..917
+                      Int 916..917 "9"
+                  RParen 917..918 ")"
+            RParen 918..919 ")"
+        Term 919..920 "\n"
+      ExprStmt 924..942
+        CallExpr 924..941
+          PathExpr 924..929
+            Ident 924..929 "print"
+          ArgList 929..941
+            LParen 929..930 "("
+            Arg 930..940
+              CallExpr 930..940
+                PathExpr 930..936
+                  Ident 930..936 "bucket"
+                ArgList 936..940
+                  LParen 936..937 "("
+                  Arg 937..939
+                    LiteralExpr 937..939
+                      Int 937..939 "10"
+                  RParen 939..940 ")"
+            RParen 940..941 ")"
+        Term 941..942 "\n"
+      ExprStmt 946..964
+        CallExpr 946..963
+          PathExpr 946..951
+            Ident 946..951 "print"
+          ArgList 951..963
+            LParen 951..952 "("
+            Arg 952..962
+              CallExpr 952..962
+                PathExpr 952..958
+                  Ident 952..958 "bucket"
+                ArgList 958..962
+                  LParen 958..959 "("
+                  Arg 959..961
+                    LiteralExpr 959..961
+                      Int 959..961 "95"
+                  RParen 961..962 ")"
+            RParen 962..963 ")"
+        Term 963..964 "\n"
+      ExprStmt 968..986
+        CallExpr 968..985
+          PathExpr 968..973
+            Ident 968..973 "print"
+          ArgList 973..985
+            LParen 973..974 "("
+            Arg 974..984
+              CallExpr 974..984
+                PathExpr 974..980
+                  Ident 974..980 "bucket"
+                ArgList 980..984
+                  LParen 980..981 "("
+                  Arg 981..983
+                    LiteralExpr 981..983
+                      Int 981..983 "30"
+                  RParen 983..984 ")"
+            RParen 984..985 ")"
+        Term 985..986 "\n"
+      ExprStmt 990..1008
+        CallExpr 990..1007
+          PathExpr 990..995
+            Ident 990..995 "print"
+          ArgList 995..1007
+            LParen 995..996 "("
+            Arg 996..1006
+              CallExpr 996..1006
+                PathExpr 996..1002
+                  Ident 996..1002 "bucket"
+                ArgList 1002..1006
+                  LParen 1002..1003 "("
+                  Arg 1003..1005
+                    LiteralExpr 1003..1005
+                      Int 1003..1005 "42"
+                  RParen 1005..1006 ")"
+            RParen 1006..1007 ")"
+        Term 1007..1008 "\n"
+      ExprStmt 1012..1030
+        CallExpr 1012..1029
+          PathExpr 1012..1017
+            Ident 1012..1017 "print"
+          ArgList 1017..1029
+            LParen 1017..1018 "("
+            Arg 1018..1028
+              CallExpr 1018..1028
+                PathExpr 1018..1024
+                  Ident 1018..1024 "bucket"
+                ArgList 1024..1028
+                  LParen 1024..1025 "("
+                  Arg 1025..1027
+                    LiteralExpr 1025..1027
+                      Int 1025..1027 "43"
+                  RParen 1027..1028 ")"
+            RParen 1028..1029 ")"
+        Term 1029..1030 "\n"
+      ExprStmt 1034..1056
+        CallExpr 1034..1055
+          PathExpr 1034..1039
+            Ident 1034..1039 "print"
+          ArgList 1039..1055
+            LParen 1039..1040 "("
+            Arg 1040..1054
+              StringExpr 1040..1054
+                StrBegin 1040..1041 "\""
+                Interp 1041..1053
+                  InterpOpen 1041..1042 "{"
+                  CallExpr 1042..1052
+                    PathExpr 1042..1049
+                      Ident 1042..1049 "tenfold"
+                    ArgList 1049..1052
+                      LParen 1049..1050 "("
+                      Arg 1050..1051
+                        LiteralExpr 1050..1051
+                          Int 1050..1051 "3"
+                      RParen 1051..1052 ")"
+                  InterpClose 1052..1053 "}"
+                StrEnd 1053..1054 "\""
+            RParen 1054..1055 ")"
+        Term 1055..1056 "\n"
+      ExprStmt 1060..1083
+        CallExpr 1060..1082
+          PathExpr 1060..1065
+            Ident 1060..1065 "print"
+          ArgList 1065..1082
+            LParen 1065..1066 "("
+            Arg 1066..1081
+              StringExpr 1066..1081
+                StrBegin 1066..1067 "\""
+                Interp 1067..1080
+                  InterpOpen 1067..1068 "{"
+                  CallExpr 1068..1079
+                    PathExpr 1068..1075
+                      Ident 1068..1075 "tenfold"
+                    ArgList 1075..1079
+                      LParen 1075..1076 "("
+                      Arg 1076..1078
+                        LiteralExpr 1076..1078
+                          Int 1076..1078 "12"
+                      RParen 1078..1079 ")"
+                  InterpClose 1079..1080 "}"
+                StrEnd 1080..1081 "\""
+            RParen 1081..1082 ")"
+        Term 1082..1083 "\n"
+      ExprStmt 1087..1089
+        LiteralExpr 1087..1088
+          Int 1087..1088 "0"
+        Term 1088..1089 "\n"
+      RBrace 1089..1090 "}"
+  Term 1090..1091 "\n"
+  Eof 1091..1091 ""
+== diagnostics ==

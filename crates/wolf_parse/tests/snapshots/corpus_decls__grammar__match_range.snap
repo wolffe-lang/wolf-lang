@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 554..760 name=bucket body=Block
+FnDecl 762..856 name=tenfold body=Block
+FnDecl 858..1090 name=main body=Block

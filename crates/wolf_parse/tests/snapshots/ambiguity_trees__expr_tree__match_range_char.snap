@@ -1,0 +1,178 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 396..669
+  FnDecl 396..555
+    FnKw 396..398 "fn"
+    Ident 399..403 "kind"
+    ParamList 403..412
+      LParen 403..404 "("
+      Param 404..411
+        Ident 404..405 "c"
+        Colon 405..406 ":"
+        PathType 407..411
+          Path 407..411
+            Ident 407..411 "char"
+      RParen 411..412 ")"
+    RetType 413..419
+      Arrow 413..415 "->"
+      PathType 416..419
+        Path 416..419
+          Ident 416..419 "str"
+    Block 420..555
+      LBrace 420..421 "{"
+      ExprStmt 426..554
+        MatchExpr 426..553
+          MatchKw 426..431 "match"
+          PathExpr 432..433
+            Ident 432..433 "c"
+          LBrace 434..435 "{"
+          MatchArm 444..465
+            RangePat 444..453
+              LiteralPat 444..447
+                Char 444..447 "\'a\'"
+              DotDotEq 447..450 "..="
+              LiteralPat 450..453
+                Char 450..453 "\'z\'"
+            FatArrow 454..456 "=>"
+            StringExpr 457..464
+              StrBegin 457..458 "\""
+              StrFragment 458..463 "lower"
+              StrEnd 463..464 "\""
+            Comma 464..465 ","
+          MatchArm 474..495
+            RangePat 474..483
+              LiteralPat 474..477
+                Char 474..477 "\'A\'"
+              DotDotEq 477..480 "..="
+              LiteralPat 480..483
+                Char 480..483 "\'Z\'"
+            FatArrow 484..486 "=>"
+            StringExpr 487..494
+              StrBegin 487..488 "\""
+              StrFragment 488..493 "upper"
+              StrEnd 493..494 "\""
+            Comma 494..495 ","
+          MatchArm 504..525
+            RangePat 504..513
+              LiteralPat 504..507
+                Char 504..507 "\'0\'"
+              DotDotEq 507..510 "..="
+              LiteralPat 510..513
+                Char 510..513 "\'9\'"
+            FatArrow 514..516 "=>"
+            StringExpr 517..524
+              StrBegin 517..518 "\""
+              StrFragment 518..523 "digit"
+              StrEnd 523..524 "\""
+            Comma 524..525 ","
+          MatchArm 534..547
+            WildcardPat 534..535
+              Underscore 534..535 "_"
+            FatArrow 536..538 "=>"
+            StringExpr 539..546
+              StrBegin 539..540 "\""
+              StrFragment 540..545 "other"
+              StrEnd 545..546 "\""
+            Comma 546..547 ","
+          RBrace 552..553 "}"
+        Term 553..554 "\n"
+      RBrace 554..555 "}"
+  Term 555..556 "\n"
+  FnDecl 557..668
+    FnKw 557..559 "fn"
+    Ident 560..564 "main"
+    ParamList 564..566
+      LParen 564..565 "("
+      RParen 565..566 ")"
+    RetType 567..574
+      Arrow 567..569 "->"
+      ErrorUnionType 570..574
+        Not 570..571 "!"
+        PathType 571..574
+          Path 571..574
+            Ident 571..574 "int"
+    Block 575..668
+      LBrace 575..576 "{"
+      ExprStmt 581..598
+        CallExpr 581..597
+          PathExpr 581..586
+            Ident 581..586 "print"
+          ArgList 586..597
+            LParen 586..587 "("
+            Arg 587..596
+              CallExpr 587..596
+                PathExpr 587..591
+                  Ident 587..591 "kind"
+                ArgList 591..596
+                  LParen 591..592 "("
+                  Arg 592..595
+                    LiteralExpr 592..595
+                      Char 592..595 "\'q\'"
+                  RParen 595..596 ")"
+            RParen 596..597 ")"
+        Term 597..598 "\n"
+      ExprStmt 602..619
+        CallExpr 602..618
+          PathExpr 602..607
+            Ident 602..607 "print"
+          ArgList 607..618
+            LParen 607..608 "("
+            Arg 608..617
+              CallExpr 608..617
+                PathExpr 608..612
+                  Ident 608..612 "kind"
+                ArgList 612..617
+                  LParen 612..613 "("
+                  Arg 613..616
+                    LiteralExpr 613..616
+                      Char 613..616 "\'Q\'"
+                  RParen 616..617 ")"
+            RParen 617..618 ")"
+        Term 618..619 "\n"
+      ExprStmt 623..640
+        CallExpr 623..639
+          PathExpr 623..628
+            Ident 623..628 "print"
+          ArgList 628..639
+            LParen 628..629 "("
+            Arg 629..638
+              CallExpr 629..638
+                PathExpr 629..633
+                  Ident 629..633 "kind"
+                ArgList 633..638
+                  LParen 633..634 "("
+                  Arg 634..637
+                    LiteralExpr 634..637
+                      Char 634..637 "\'7\'"
+                  RParen 637..638 ")"
+            RParen 638..639 ")"
+        Term 639..640 "\n"
+      ExprStmt 644..661
+        CallExpr 644..660
+          PathExpr 644..649
+            Ident 644..649 "print"
+          ArgList 649..660
+            LParen 649..650 "("
+            Arg 650..659
+              CallExpr 650..659
+                PathExpr 650..654
+                  Ident 650..654 "kind"
+                ArgList 654..659
+                  LParen 654..655 "("
+                  Arg 655..658
+                    LiteralExpr 655..658
+                      Char 655..658 "\'_\'"
+                  RParen 658..659 ")"
+            RParen 659..660 ")"
+        Term 660..661 "\n"
+      ExprStmt 665..667
+        LiteralExpr 665..666
+          Int 665..666 "0"
+        Term 666..667 "\n"
+      RBrace 667..668 "}"
+  Term 668..669 "\n"
+  Eof 669..669 ""
+== diagnostics ==

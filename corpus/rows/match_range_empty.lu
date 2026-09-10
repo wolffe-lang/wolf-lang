@@ -1,0 +1,18 @@
+//! check: fail(E0815)
+//! phase: resolve
+//! conforms: gram.pat.range
+//!
+//! s147 (#287) — an empty range arm matches nothing: `5..5` stops
+//! before its own low end and `9..=3` runs backwards. Both are E0815
+//! at the pattern — the ends are literals, so the checker decides at
+//! compile time — and a one-value range is spelled `5` or `5..=5`.
+
+fn main() -> !int {
+    let n = 5
+    match n {
+        5..5 => print("never"),
+        9..=3 => print("never either"),
+        _ => print("five"),
+    }
+    0
+}

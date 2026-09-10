@@ -141,6 +141,10 @@ grammar/match_arm_or_inside_product.lu: refused — or-patterns inside product p
 grammar/match_arm_or_over_product.lu: refused — or-patterns over product patterns (join params, c06)
 grammar/match_arm_product_nested.lu: lowers
 grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern (c06)
+grammar/match_range.lu: lowers
+grammar/match_range_char.lu: lowers
+grammar/match_range_open.lu: not mem-clean (pre-wir rungs own it)
+grammar/match_switch.lu: lowers
 grammar/multiline_bad_escape.lu: not mem-clean (pre-wir rungs own it)
 grammar/multiline_close_shares_line.lu: not mem-clean (pre-wir rungs own it)
 grammar/multiline_mixed_margin.lu: not mem-clean (pre-wir rungs own it)
@@ -359,6 +363,7 @@ rows/handler_match_tags.lu: lowers
 rows/hof_tail.lu: lowers
 rows/inferred_private.lu: lowers
 rows/iter_diverging_else_bound.lu: lowers
+rows/match_range_empty.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
