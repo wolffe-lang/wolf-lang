@@ -2572,14 +2572,25 @@ enum MatchDomain {
     Product,
 }
 
+/// One scalar arm test (`[gram.pat.range]`, s147 #287): the
+/// discriminant equals a constant, or lies in an inclusive range —
+/// both at the discriminant's own width once the caller wraps them.
+#[derive(Clone, Copy)]
+enum ScalarTest {
+    Eq(i64),
+    /// `lo..=hi`, inclusive both ends (the checker normalized `lo..hi`
+    /// and refused the empty range, E0815).
+    Range(i64, i64),
+}
+
 /// One lowered pattern's shape.
 enum PatShape {
     /// Matches anything; `Some(name)` binds the whole scrutinee.
     Irrefutable(Option<String>),
-    /// Discriminant equals one of these constants (or-alternatives);
+    /// Discriminant satisfies one of these tests (or-alternatives);
     /// payload bindings — (slot index, name) — only for the
     /// single-alternative form.
-    Tests(Vec<i64>, Vec<(usize, String)>),
+    Tests(Vec<ScalarTest>, Vec<(usize, String)>),
     /// Bool literal (the discriminant IS the condition).
     BoolTest(bool),
     /// Str literal arm: the scrutinee equals one of these cooked byte
@@ -15987,7 +15998,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::IdentPat => {
                 let name = self.text(pat.span);
                 match self.domain_test(domain, &name) {
-                    Some((c, _)) => Ok(PatShape::Tests(vec![c], vec![])),
+                    Some((c, _)) => Ok(PatShape::Tests(vec![ScalarTest::Eq(c)], vec![])),
                     None => Ok(PatShape::Irrefutable(Some(name))),
                 }
             }
@@ -16013,14 +16024,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // exactly the integer discipline.
                 if text.starts_with('\'') {
                     return match wolf_sema::check::cook_char_literal(&text) {
-                        Some(c) => Ok(PatShape::Tests(vec![i64::from(u32::from(c))], vec![])),
+                        Some(c) => Ok(PatShape::Tests(
+                            vec![ScalarTest::Eq(i64::from(u32::from(c)))],
+                            vec![],
+                        )),
                         None => Err(refuse("this char literal pattern shape", pat.span)),
                     };
                 }
                 match parse_int_literal(&text) {
-                    Some(n) => Ok(PatShape::Tests(vec![n], vec![])),
+                    Some(n) => Ok(PatShape::Tests(vec![ScalarTest::Eq(n)], vec![])),
                     None => Err(refuse("this literal pattern shape", pat.span)),
                 }
+            }
+            // `[gram.pat.range]` (s147, #287): one inclusive membership
+            // test on the scalar discriminant — `char` by scalar.
+            SyntaxKind::RangePat => {
+                let (lo, hi) = self.range_bounds(pat)?;
+                Ok(PatShape::Tests(vec![ScalarTest::Range(lo, hi)], vec![]))
             }
             SyntaxKind::PathPat => {
                 // `Tag(subpats…)` / `Type.Variant(subpats…)`: the path
@@ -16062,7 +16082,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         _ => return Ok(PatShape::Product),
                     }
                 }
-                Ok(PatShape::Tests(vec![c], binds))
+                Ok(PatShape::Tests(vec![ScalarTest::Eq(c)], binds))
             }
             SyntaxKind::OrPat => {
                 let mut consts = Vec::new();
@@ -16285,6 +16305,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             SyntaxKind::LiteralPat => self.product_literal_test(sub, v, conds, dead),
+            SyntaxKind::RangePat => {
+                let unsigned = sema_unsigned(tbl, strip_sema_in(tbl, sema_ty));
+                self.product_range_test(sub, v, unsigned, conds, dead)
+            }
             SyntaxKind::TuplePat => {
                 let stripped = strip_sema_in(tbl, sema_ty);
                 let TyKind::Tuple(elem_tys) = tbl.kind(stripped).clone() else {
@@ -16523,6 +16547,97 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         Ok(())
+    }
+
+    /// `[gram.pat.range]` inside a product (s147): `lo <= v && v <= hi`
+    /// at the field's own width and signedness, folded when the field
+    /// is a build-time constant — the literal test's twin.
+    fn product_range_test(
+        &mut self,
+        sub: &'t GreenNode,
+        v: Value,
+        unsigned: bool,
+        conds: &mut Vec<Value>,
+        dead: &mut bool,
+    ) -> R<()> {
+        let (lo, hi) = self.range_bounds(sub)?;
+        let vty = self.b.func.value_ty(v);
+        let bits = self.b.module.types.int_bits(vty);
+        let ScalarTest::Range(lo, hi) = (match bits {
+            Some(b) => wrap_test(ScalarTest::Range(lo, hi), b),
+            None => ScalarTest::Range(lo, hi),
+        }) else {
+            unreachable!("wrap_test keeps the variant");
+        };
+        match self.b.as_int_const(v) {
+            Some(c) => {
+                self.b.stats.identity += 1;
+                if !scalar_test_holds(ScalarTest::Range(lo, hi), c, unsigned, bits) {
+                    *dead = true;
+                }
+            }
+            None => {
+                let t = self.range_test(v, lo, hi, unsigned);
+                conds.push(t);
+            }
+        }
+        Ok(())
+    }
+
+    /// A range pattern's inclusive scalar bounds (`[gram.pat.range]`):
+    /// the checker validated both endpoints (integer or `char`
+    /// literals of the scrutinee's type, non-empty), so `lo..hi`
+    /// normalizes to `hi - 1` here without a second look.
+    fn range_bounds(&self, pat: &'t GreenNode) -> R<(i64, i64)> {
+        let d = wolf_ast::RangePat::cast(pat).expect("kind");
+        let (Some(lo), Some(hi)) = (d.lo(), d.hi()) else {
+            return Err(refuse("a range pattern with a missing end", pat.span));
+        };
+        let end = |this: &Self, n: &'t GreenNode| -> R<i64> {
+            let text = this.text(n.span);
+            if text.starts_with('\'') {
+                wolf_sema::check::cook_char_literal(&text)
+                    .map(|c| i64::from(u32::from(c)))
+                    .ok_or_else(|| refuse("this char literal range end", n.span))
+            } else {
+                parse_int_literal(&text).ok_or_else(|| refuse("this literal range end", n.span))
+            }
+        };
+        let lo_v = end(self, lo)?;
+        let hi_v = end(self, hi)?;
+        let hi_v = if d.inclusive() {
+            hi_v
+        } else {
+            hi_v.checked_sub(1)
+                .ok_or_else(|| refuse("a range pattern below the scalar floor", pat.span))?
+        };
+        Ok((lo_v, hi_v))
+    }
+
+    /// `lo <= v && v <= hi` (`[gram.pat.range]`): two compares at
+    /// `v`'s own width — the `u*` conditions for an unsigned
+    /// scrutinee, `s*` otherwise (`char` scalars are non-negative
+    /// either way) — joined by `band`.
+    fn range_test(&mut self, v: Value, lo: i64, hi: i64, unsigned: bool) -> Value {
+        let vty = self.b.func.value_ty(v);
+        let (ge, le) = if unsigned {
+            (IntCc::Uge, IntCc::Ule)
+        } else {
+            (IntCc::Sge, IntCc::Sle)
+        };
+        let lov = self.b.iconst(vty, lo);
+        let hiv = self.b.iconst(vty, hi);
+        let above = self
+            .b
+            .ins(Opcode::Icmp, &[v, lov], &[types::BOOL], Aux::IntCc(ge))
+            .one();
+        let below = self
+            .b
+            .ins(Opcode::Icmp, &[v, hiv], &[types::BOOL], Aux::IntCc(le))
+            .one();
+        self.b
+            .ins(Opcode::Band, &[above, below], &[types::BOOL], Aux::None)
+            .one()
     }
 
     /// The tag half of a product arm's conjunction: discriminant
@@ -16838,13 +16953,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // compares against the same payload, which it did
                     // not before (it answered the wrong arm silently).
                     let dty = self.b.func.value_ty(disc);
-                    let consts: Vec<i64> = match self.b.module.types.int_bits(dty) {
-                        Some(bits) => consts.iter().map(|&c| wrap_bits(c as u64, bits)).collect(),
+                    let bits = self.b.module.types.int_bits(dty);
+                    let consts: Vec<ScalarTest> = match bits {
+                        Some(bits) => consts.iter().map(|&t| wrap_test(t, bits)).collect(),
                         None => consts,
                     };
+                    // A range test orders in the scrutinee's own
+                    // signedness (`[gram.pat.range]`) — the `u*`
+                    // conditions for unsigned scrutinees, as `<` does.
+                    let unsigned = sema_unsigned(self.table, scrut_sema);
                     if let Some(n) = self.b.as_int_const(disc) {
                         self.b.stats.identity += 1;
-                        if !consts.contains(&n) {
+                        if !consts
+                            .iter()
+                            .any(|&t| scalar_test_holds(t, n, unsigned, bits))
+                        {
                             continue;
                         }
                         if arm.guard().is_some() {
@@ -16911,16 +17034,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         // them out of the enclosing GVN scope.
                         let mut chain_scopes = 0usize;
                         for (k, &c) in consts.iter().enumerate() {
-                            let cv = self.b.iconst(dty, c);
-                            let t = self
-                                .b
-                                .ins(
-                                    Opcode::Icmp,
-                                    &[disc, cv],
-                                    &[types::BOOL],
-                                    Aux::IntCc(IntCc::Eq),
-                                )
-                                .one();
+                            let t = match c {
+                                ScalarTest::Eq(c) => {
+                                    let cv = self.b.iconst(dty, c);
+                                    self.b
+                                        .ins(
+                                            Opcode::Icmp,
+                                            &[disc, cv],
+                                            &[types::BOOL],
+                                            Aux::IntCc(IntCc::Eq),
+                                        )
+                                        .one()
+                                }
+                                ScalarTest::Range(lo, hi) => {
+                                    self.range_test(disc, lo, hi, unsigned)
+                                }
+                            };
                             if k + 1 == consts.len() {
                                 self.b.ins_br(t, arm_bb, &[], next_bb, &[]);
                             } else {
@@ -18179,6 +18308,36 @@ fn decode_codepoint_escape(bytes: &[u8]) -> Option<(char, usize)> {
 }
 
 /// Sign-wrap a bit pattern into a `bits`-wide iconst payload.
+/// A scalar test at `bits` width: every constant sign-wrapped like a
+/// literal expression is (`wrap_bits`), the range's ends included.
+fn wrap_test(t: ScalarTest, bits: u32) -> ScalarTest {
+    match t {
+        ScalarTest::Eq(c) => ScalarTest::Eq(wrap_bits(c as u64, bits)),
+        ScalarTest::Range(lo, hi) => {
+            ScalarTest::Range(wrap_bits(lo as u64, bits), wrap_bits(hi as u64, bits))
+        }
+    }
+}
+
+/// Does the build-time constant `n` (already at the column's width)
+/// satisfy `t`? Range membership orders in the scrutinee's own
+/// signedness: unsigned columns compare the `bits`-masked values, so
+/// a wrapped `250..=255` on `u8` still admits a wrapped `251`.
+fn scalar_test_holds(t: ScalarTest, n: i64, unsigned: bool, bits: Option<u32>) -> bool {
+    match t {
+        ScalarTest::Eq(c) => c == n,
+        ScalarTest::Range(lo, hi) if unsigned => {
+            let mask = match bits {
+                Some(b) if b < 64 => (1u64 << b) - 1,
+                _ => u64::MAX,
+            };
+            let (n, lo, hi) = ((n as u64) & mask, (lo as u64) & mask, (hi as u64) & mask);
+            lo <= n && n <= hi
+        }
+        ScalarTest::Range(lo, hi) => lo <= n && n <= hi,
+    }
+}
+
 fn wrap_bits(v: u64, bits: u32) -> i64 {
     if bits >= 64 {
         return v as i64;
