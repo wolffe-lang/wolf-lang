@@ -4666,9 +4666,22 @@ fn style_version() -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
+/// HEAD's abbreviated sha at a FIXED width (#301). A bare `--short`
+/// lets git pick the length from the clone's object count, so the same
+/// revision stamped `+dev.e0ce018` on a long-lived checkout and
+/// `+dev.e0ce0189` from a fresh clone, and wolf-book's byte-compared
+/// `--version` transcripts went red in CI alone. The stamp is D57's pin
+/// clause; a pin whose text depends on who cloned is not a pin. Seven
+/// is what every published stamp has printed and what lupin's own
+/// build.rs pins (`--short=7`); git still lengthens past it only to
+/// disambiguate, which no consumer has yet seen. Anything that
+/// reproduces this stamp by hand (wolf-book's `book.yml`) must spell
+/// the same `--short=7`.
+const STAMP_SHA_WIDTH: usize = 7;
+
 fn git_short_sha() -> String {
     Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
+        .args(["rev-parse", &format!("--short={STAMP_SHA_WIDTH}"), "HEAD"])
         .output()
         .ok()
         .filter(|o| o.status.success())
@@ -5083,7 +5096,7 @@ mod dist_prune_tests {
 
 #[cfg(test)]
 mod version_stamp_tests {
-    use super::release_stamp;
+    use super::{STAMP_SHA_WIDTH, git_short_sha, release_stamp};
 
     /// D57's grant and refusals: only this workspace's own `v{version}`
     /// tag at HEAD earns the release stamp.
@@ -5103,6 +5116,25 @@ mod version_stamp_tests {
         assert_eq!(release_stamp(&tags(&["v0.1.0"]), "0.2.0"), None);
         // No tags at HEAD: a trunk build, dev by definition.
         assert_eq!(release_stamp(&[], "0.2.0"), None);
+    }
+
+    /// #301: the stamp's commit clause is exactly `STAMP_SHA_WIDTH` hex
+    /// characters, whatever the clone's object count — the same revision
+    /// stamps the same string from every checkout. `unknown` (no git, or
+    /// not a repository) is the one other answer and is not a sha.
+    #[test]
+    fn the_stamp_sha_has_a_fixed_width() {
+        let sha = git_short_sha();
+        if sha == "unknown" {
+            return; // not a git checkout (a tarball): unstamped by design
+        }
+        assert_eq!(
+            sha.len(),
+            STAMP_SHA_WIDTH,
+            "git abbreviated HEAD to {} characters, not {STAMP_SHA_WIDTH}: {sha}",
+            sha.len()
+        );
+        assert!(sha.chars().all(|c| c.is_ascii_hexdigit()), "{sha}");
     }
 }
 
