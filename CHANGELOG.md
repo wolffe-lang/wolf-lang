@@ -31,6 +31,31 @@ reports E0401 naming the other side when the row is the *right*
 operand (`5 <= n`, `1 + n`), and lupin 0.1.31 reports E0401 for a
 comparison on either side.
 
+### A `str` slice is not a place, and the compiler now says so (s148 — #293 closes)
+
+`s[l-1..l] = "{t}"` — the maintainer's chapter-3 binary-spelling
+table — was answered "cannot compile this yet — assignment through
+this place (… the conservatism ledger, not a bug in your program)",
+which is the opposite of the truth: a `str` is immutable at every tier
+and a slice is a view, so there is no place on the left of that `=`,
+today or ever. spec/02 now says it directly — `[mem.str.imm]`, a
+`str` never changes after it is built; an index or slice of one is not
+a place — where before it was a parenthesis inside
+`[mem.str.view.lend]`. **E0416** is the new sema diagnostic
+(`cannot assign through a str slice: s is immutable`), for `s[a..b]`,
+`s[i]` and their compound forms, with the clause in the note and the
+fix the book teaches spelled out (`s = "{head}{bit}{tail}"`,
+`s = head + bit + tail`, `std.strbuf` for a hot loop); lupin refuses
+the same program as `unsupported: a slice expression denotes a value,
+not a place`, and parity on the code is wolf-interp's half. The
+conservatism arm `assignment through this place` keeps only what
+sema does not type as a place yet — a tuple on the left
+(destructuring assignment, unruled), a deref, a call result, a
+literal, and a bracket receiver whose *read* is not served yet
+(generic application, std containers beyond `List`, a `Pool` cell,
+a tuple index). Witness: `corpus/typecheck/str_slice_assign.lu`,
+`fail(E0416)`; two catalog snapshots.
+
 ### The switch a reader expects: range arms (s147 — #287 ruled, #286 closes)
 
 `match` in statement position is wolf's switch, and the one thing it
