@@ -1,6 +1,160 @@
 # Changelog
 
-## Unreleased
+## 0.2.10 — 2026-09-10
+
+THE SWITCH A READER EXPECTS, AND THE MESSAGE THAT STOPPED BLAMING THE
+COMPILER. 0.2.10 is the release where `match` in statement position
+became the switch a reader from any C-family language reaches for, and
+where the things a reader ran into this week were answered by the
+language rather than by an apology from the compiler.
+
+    match n {
+        0 => ...,
+        1 | 2 => ...,
+        3..=9 => ...,
+        n if n % 2 == 0 => ...,
+        _ => ...,
+    }
+
+**Range arms** are the clause `[gram.pat.range]`: `lo..hi` and
+`lo..=hi` over integer and `char` literals, in any pattern position,
+composed with `|`, guards and `@`. Both ends are literals — no
+identifiers, no expressions, and no open ends (`..hi` and `lo..` are
+slice spellings, and the parser now says the word "range" when it
+refuses one). An empty range is E0815 at compile time. Exhaustiveness
+computes no union: a `_` or binder arm is still required after range
+arms, and E0801's witness names the first value past everything
+covered. **The guarded arm lowers.** `n if n % 2 == 0 =>` before `_`
+was refused by native lowering as conservatism — while the checked
+machine and lupin ran it — and the refusal named the wrong arm. It
+lowers now on both tiers; the maintainer's switch is
+`grammar/match_switch.lu`, byte-identical on both machines.
+
+**The message that stopped blaming the compiler.** `s[l-1..l] = "{t}"`
+was answered "cannot compile this yet — assignment through this place
+(… the conservatism ledger, not a bug in your program)". That was
+backwards: a `str` never changes after it is built, and a slice of one
+is a view, so there is no place on the left of that `=`, today or
+ever. `[mem.str.imm]` says so, and **E0416** says it to the reader —
+`cannot assign through a str slice: s is immutable` — with the three
+spellings the book teaches in the note.
+
+**A send in a loop body is a warning, not a mismatch.** `chan.send` is
+typed `() ! {closed, cancelled}` now, the row `[conc.chan.close]`
+always described, and the question that raised — what does a fallible
+`()` mean where `()` is expected? — is answered by `[type.unit]`: the
+body of a loop, an else-less `if`, a unit function are unit contexts,
+and a `!()` tail there is a warned discard (W0601), never an error.
+`ch.send(v)?` hands the failure to the scope and `else` handles it; the
+corpus spells the first. A task closure's tail is different and the
+clause says why: the scope consumes it and re-raises the row at its
+exit.
+
+**The declared type is read.** A body's tail is checked against the
+declared result (`[type.fn.ret]`, E0401 at the tail), and a `!T` is
+two values that no operator reads (`[type.row.operand]`, E0409 on
+either side). Nothing moved in the compiler; both rules were enforced
+and neither was written, and lupin 0.1.31 enforces both.
+
+Two things about hashes and stamps, for anyone who records them. **The
+interface hash is over the interface** (#292): a toolchain bump no
+longer moves every module's `export_hash` — this release's own
+`.wolfi` snapshot re-record moved the two `toolchain` lines and not
+one hash, where 0.2.9's moved every hash in the file. And **the D57
+stamp's commit is seven characters by decision** (#301): `wolf
+0.2.10+dev.<seven hex>` from every clone, not whatever `git rev-parse
+--short` guesses from the object count.
+
+The pairing is stamped at **lupin 0.1.31** (pin `4c60946`, v0.2.9
+itself). `strings/concat_mix_char.lu` closes — the last of 0.2.9's five
+partings — and is43's witnesses moved from run to refused on the
+interpreter's side. What stands parts on s147: `grammar/match_range.lu`
+and `grammar/match_range_char.lu` (lupin stops at `..` in a pattern,
+wolf-interp#83), with `rows/match_range_empty.lu` and
+`grammar/match_range_open.lu` refused at a different site;
+`rows/negative/row_operand_compare.lu` (E0409 here, E0401 there) and
+`typecheck/str_slice_assign.lu` (E0416 here, `unsupported` there) are
+wolf-interp#85. The four range files are byte-identical the day is44
+tags.
+
+### The pairing takes lupin 0.1.31, and the control finds its own blind spot (#304)
+
+wolf is now differentially tested against **lupin 0.1.31** (`e9c55b4`),
+which declares `4c60946` — v0.2.9 itself — as its conformance pin. That
+pin advanced by exactly s145 plus r13's release commits; the gap to
+trunk is s146, s147 and s148. 0.1.30..0.1.31 is is43: the declared type
+gets read (a body's tail, wolf-interp#73; a bare row operand, #81), a
+`char` joins a `str` (#78), a type annotation's name resolves (#79).
+
+**Predicted before the run: four counts per tier** — `concat_mix_char`
+unsupported → agreement, and is43's three witnesses each closing a
+divergence. **Measured: one count per tier**, and the reason is the
+finding. Over the full 534-file corpus, both tiers, against
+`target/release/wolf` built by `cargo xtask dist` at `a6007fb`, with
+the control against the 0.1.30 release archive on the same tree:
+
+                    checked                     native
+    agreements      280 -> 281  (+1)            307 -> 308  (+1)
+    completeness    130 -> 130   (0)            130 -> 130   (0)
+    soundness         2 ->   2   (0)              0 ->   0   (0)
+    unsupported     115 -> 114  (-1)             90 ->  89  (-1)
+    hard             10 ->  10   (0)              8 ->   8   (0)
+    coverage A      289 -> 289   (0)            316 -> 316   (0)
+    coverage B      384 -> 381  (-3)            384 -> 381  (-3)
+    coverage BOTH   269 -> 270  (+1)            294 -> 295  (+1)
+
+    corpus/strings/concat_mix_char.lu   unsupported -> agreement   (#278 / wolf-interp#78)
+
+The is43 witnesses did move — 0.1.30 ran each of them (`()`, `hi`,
+`4`, `small`; exit 0) and 0.1.31 refuses each by a code — and moved no
+count, because a `fail`-pinned file is a completeness note whatever
+the interpreter answers. Only `coverage B 384 -> 381` saw them, and
+not by name: the control r14 built to catch exactly this kind of
+silent delta had one class it could not see into. **Fixed in the same
+release** (#304): the below-ledger list carries a verdict move beside
+the stdout move it already carried, and the re-run names them,
+identically on both tiers:
+
+    corpus/typecheck/tail_declared_str.lu          B exit(0) -> fail(E0401)
+    corpus/typecheck/tail_declared_union.lu        B exit(0) -> fail(E0401)
+    corpus/rows/negative/row_operand_add.lu        B exit(0) -> fail(E0409)
+    corpus/rows/negative/row_operand_compare.lu    B exit(0) -> fail(E0401)
+
+The fourth was not predicted as a move at all: wolf says E0409 there
+and lupin E0401 (wolf-interp#85), and a file that was never "hard"
+cannot close.
+
+**What stands at 0.1.31.** `checked 10 = 6 Diag + 2 SOUNDNESS + 2
+Verdict`, `native 8 = 6 Diag + 2 Verdict`. The Diag rows are #167's
+warning asymmetry (`binder_capitalized`, `discarded_result`,
+`float_zero_minus`, `region_never_allocates`, `byte_view_escape`, plus
+`safety_comment_missing` on checked and s146's `unit_context_discard`
+— five W0601 lupin does not warn — on native); SOUNDNESS is #168's
+float-cast twins. The two Verdict rows are s147's
+`grammar/match_range.lu` and `grammar/match_range_char.lu`: `exit(0)`
+here, `fail(E0201)` there, lupin stopping at the `..` in a pattern.
+`rows/match_range_empty.lu` (E0815 vs E0201) and
+`grammar/match_range_open.lu` (E0201 at the missing end vs E0201 at
+the operator) sit in the completeness class beside them. All four are
+wolf-interp#83, is44's, and byte-identical the day it tags.
+`rows/negative/row_operand_compare.lu` and `typecheck/str_slice_assign.lu`
+(E0416 here, `unsupported` there) are wolf-interp#85. No class opened
+at this pin and none was deferred; the CI sibling step needed zero
+edits, the fourth re-stamp in a row.
+
+### The stamp's commit is seven characters by decision (#301)
+
+`git rev-parse --short` picks its width from the clone's object count,
+so the same revision stamped `wolf 0.2.9+dev.e0ce018` on a long-lived
+checkout and `+dev.e0ce0189` from a fresh clone, and wolf-book's
+byte-compared `--version` transcripts (bs36) were green everywhere a
+human looked and red in the one place that clones fresh. The stamp is
+D57's pin clause, and a pin whose text depends on who cloned is not a
+pin. `cargo xtask dist` now asks for `--short=7` — seven is what every
+published stamp has printed and what lupin's own `build.rs` pins — and
+a test holds the width. Anything that reproduces the stamp by hand
+must spell the same seven: wolf-book's `book.yml` computes
+`WOLF_COMMIT` itself and wants `--short=7` in the same breath.
 
 ### The row is ruled where it belongs (s148 — #284 closes)
 
@@ -153,6 +307,47 @@ and the two parser sites; the four are byte-identical the day it
 lands. Not in this sprint: `str` ranges (no order clause), float
 ranges (equality only), negative endpoints (a literal arm takes no
 `-` today either).
+
+### The tail in a unit context (s146 — #275 closes, #283 closes)
+
+`chan.send` was typed `()` on the compiler while `[conc.chan.close]`
+said a send after close returns an error value. Typing it
+`() ! {closed, cancelled}` — the row it always was — would have turned
+every `for i in 1..=n { ch.send(i) }` and every else-less
+`if ready { ch.send(1) }` into a type mismatch: 13 corpus witnesses,
+26 sites, chapter 12 on every page. No clause said what a fallible
+unit value *means* where `()` is expected, and s146 wrote it.
+**`[type.unit.context]`** lists the unit contexts — the body of a
+`for`, `while` or `loop`, the then-block of an else-less `if`, a unit
+function's body and its `return` operand, a closure checked against
+`fn(…) -> ()`, and any block or arm checked against one.
+**`[type.unit.discard]`**: a `!()` tail in one is a discard, warned
+(W0601), never a mismatch — costed against the handled reading, which
+would have made *position* decide between a warning and an error, a
+rule the language has no other instance of and had just retired
+(#276). Only `!()` qualifies: a `!int` tail where `()` is expected is
+a mismatch on the `int`. **`[type.unit.consume]`**: a closure with no
+fixed result is not a unit context — `s.spawn(fn() { ch.send(v) })`
+infers `fn() -> !()` and the scope consumes the value, re-raising a
+failed task's row at its exit (`[conc.task.fail]`); no warning,
+because that is the row reaching the one reader who can act on it.
+`send`'s row joins `[conc.chan.close]`. Sema records the discard in
+every unit context and the typed wave warns W0601 at each — W0601's
+text now names the tail; a closure's `?`-raised row flattens into its
+fallible tail (D51: chapter 10's `answer.send(words_of(t)?)` is one
+`() ! {closed, cancelled, unknown}`, not a nested union); the native
+lowering joins `send`'s status through `chan_status_join`. The 26
+corpus sends spell `?` (one unit fn spells `else {}`); three witnesses
+— `conc/chan_send_closed_row.lu` (the send side of the clause:
+`late: closed`, `relayed: closed`), `typecheck/unit_context_discard.lu`
+(four unit contexts, five W0601) and
+`conc/spawn_tail_send_raised_row.lu` (the flattened union, re-raised
+at the scope exit) — and all sixteen touched witnesses byte-identical
+under lupin 0.1.30. Beside it, **#283**: the nightly's blast-radius
+property admits the one designed reach-back — a line-leading `else`
+withdraws the terminator above it, and the one statement it closed may
+take the `else` in — asserted exactly, with the nightly's case pinned
+in the ordinary gauntlet.
 
 ### The pairing takes lupin 0.1.30, and this time the control has teeth
 
