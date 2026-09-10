@@ -1,0 +1,24 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "an open range is not a pattern — a range pattern has a literal at both ends",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 44,
+            hi: 46,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [
+        "a range pattern is `lo..hi` or `lo..=hi` with a literal at both ends (integer or `char`); the open ranges `..hi` and `lo..` are slice spellings, not patterns ([gram.pat.range])",
+    ],
+    suggestions: [],
+}

@@ -1889,18 +1889,30 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
             p.bump();
             Some(m.complete(p, SyntaxKind::WildcardPat))
         }
-        TokenKind::Int
-        | TokenKind::Float
-        | TokenKind::Char
-        | TokenKind::Kw(Keyword::True | Keyword::False) => {
-            let m = p.start();
-            p.bump();
-            Some(m.complete(p, SyntaxKind::LiteralPat))
+        k if is_literal_pat_start(k) => {
+            let lit = literal_pat(p);
+            Some(range_tail(p, lit))
         }
-        k if is_str_begin(k) => {
+        TokenKind::Punct(Punct::DotDot | Punct::DotDotEq) => {
+            // `[gram.pat.range]` (s147, #287): an open range in pattern
+            // position — `..hi` is the slice spelling, never a pattern.
+            // Refused by NAME (the book's papercut was a diagnostic
+            // that never said the word), and the high end is consumed
+            // so the arm's `=>` is still found.
             let m = p.start();
-            string_lit(p);
-            Some(m.complete(p, SyntaxKind::LiteralPat))
+            p.push_diag(
+                wolf_diag::Diagnostic::error(
+                    codes::EXPECTED_TOKEN,
+                    p.current_span(),
+                    "an open range is not a pattern — a range pattern has a literal at both ends",
+                )
+                .with_note(RANGE_PAT_NOTE),
+            );
+            p.bump();
+            if is_literal_pat_start(p.current()) {
+                literal_pat(p);
+            }
+            Some(m.complete(p, SyntaxKind::RangePat))
         }
         TokenKind::Punct(Punct::LParen) => {
             let m = p.start();
@@ -1986,6 +1998,62 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
         }
         _ => None,
     }
+}
+
+/// The teach-note every open-range refusal carries (`[gram.pat.range]`).
+const RANGE_PAT_NOTE: &str = "a range pattern is `lo..hi` or `lo..=hi` with a literal at both ends \
+                              (integer or `char`); the open ranges `..hi` and `lo..` are slice \
+                              spellings, not patterns ([gram.pat.range])";
+
+/// Does `k` begin a literal pattern (`[gram.pat]`'s `literal`)?
+fn is_literal_pat_start(k: TokenKind) -> bool {
+    matches!(
+        k,
+        TokenKind::Int | TokenKind::Float | TokenKind::Char | TokenKind::Kw(Keyword::True | Keyword::False)
+    ) || is_str_begin(k)
+}
+
+/// One `LiteralPat`: a scalar literal token, or a string literal
+/// episode. The caller has checked [`is_literal_pat_start`].
+fn literal_pat(p: &mut Parser<'_>) -> crate::parser::CompletedMarker {
+    let m = p.start();
+    if is_str_begin(p.current()) {
+        string_lit(p);
+    } else {
+        p.bump();
+    }
+    m.complete(p, SyntaxKind::LiteralPat)
+}
+
+/// `[gram.pat.range]` (s147, #287): a literal followed by `..` or
+/// `..=` is the low end of a range pattern, and the high end must be
+/// a literal too — `lo..` with anything else after the operator is
+/// E0201 with the note that names the form. The high end is parsed
+/// by [`literal_pat`], never recursively: `0..5..9` leaves the second
+/// operator for the arm parser to refuse.
+fn range_tail(
+    p: &mut Parser<'_>,
+    lit: crate::parser::CompletedMarker,
+) -> crate::parser::CompletedMarker {
+    if !(p.at_punct(Punct::DotDot) || p.at_punct(Punct::DotDotEq)) {
+        return lit;
+    }
+    let m = lit.precede(p);
+    p.bump(); // `..` | `..=`
+    if is_literal_pat_start(p.current()) {
+        literal_pat(p);
+    } else {
+        p.push_diag(
+            wolf_diag::Diagnostic::error(
+                codes::EXPECTED_TOKEN,
+                p.here(),
+                "expected a literal to close the range pattern",
+            )
+            .with_note(RANGE_PAT_NOTE),
+        );
+        p.missing();
+    }
+    m.complete(p, SyntaxKind::RangePat)
 }
 
 /// Bounded lookahead: `x @ pat` and bare `x` both start with an

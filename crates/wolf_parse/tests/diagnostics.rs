@@ -175,6 +175,24 @@ fn e0201_expected_token() {
     );
 }
 
+/// `[gram.pat.range]` (s147, #287): the open ranges are refused BY
+/// NAME in pattern position — `lo..` at its missing high end, `..hi`
+/// at the operator — each with the note that spells the closed form.
+/// (The book's ch03 papercut was a diagnostic that never said "range".)
+#[test]
+fn e0201_open_range_patterns() {
+    snap(
+        "e0201_range_pat_open_high",
+        "fn f(n: int) -> int {\n    match n {\n        10.. => 1,\n        _ => 0,\n    }\n}\n",
+        codes::EXPECTED_TOKEN,
+    );
+    snap(
+        "e0201_range_pat_open_low",
+        "fn f(n: int) -> int {\n    match n {\n        ..10 => 1,\n        _ => 0,\n    }\n}\n",
+        codes::EXPECTED_TOKEN,
+    );
+}
+
 /// D63's two refusal teach-notes: one initializer for several names
 /// offers both spellings; the Python bare tuple is refused by name.
 #[test]
