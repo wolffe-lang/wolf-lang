@@ -10839,6 +10839,20 @@ fn place_shaped(e: &GreenNode) -> bool {
     }
 }
 
+/// Does this `if … else if …` chain end without a final `else`? Such
+/// a chain is a unit context for every block in it
+/// (`[type.unit.context]`).
+fn chain_is_bare(n: &GreenNode) -> bool {
+    let Some(d) = IfExpr::cast(n) else {
+        return false;
+    };
+    match d.else_branch() {
+        None => true,
+        Some(m) if m.kind == SyntaxKind::IfExpr => chain_is_bare(m),
+        Some(_) => false,
+    }
+}
+
 #[cfg(test)]
 mod char_literal_tests {
     use super::cook_char_literal;
@@ -10886,19 +10900,5 @@ mod char_literal_tests {
         ] {
             assert_eq!(cook_char_literal(text), None, "{text}");
         }
-    }
-}
-
-/// Does this `if … else if …` chain end without a final `else`? Such
-/// a chain is a unit context for every block in it
-/// (`[type.unit.context]`).
-fn chain_is_bare(n: &GreenNode) -> bool {
-    let Some(d) = IfExpr::cast(n) else {
-        return false;
-    };
-    match d.else_branch() {
-        None => true,
-        Some(m) if m.kind == SyntaxKind::IfExpr => chain_is_bare(m),
-        Some(_) => false,
     }
 }
