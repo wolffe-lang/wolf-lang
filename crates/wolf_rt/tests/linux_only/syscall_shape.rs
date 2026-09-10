@@ -48,8 +48,21 @@ const FIXTURE: &str = "s149-syscall-shape.txt";
 /// The syscalls the assertions read. Everything else is noise this
 /// filter keeps out of the trace, which is what makes the counts
 /// readable rather than approximate.
-const TRACED: &str =
-    "accept,accept4,ioctl,fcntl,setsockopt,openat,statx,newfstatat,fstat,write,close";
+const TRACED: &str = "accept,accept4,ioctl,fcntl,setsockopt,openat,statx,newfstatat,\
+                      fstat,write,writev,send,sendto,close";
+
+/// The calls a WRITE on a TCP stream can appear as. std writes a
+/// socket with `send(…, MSG_NOSIGNAL)` on linux — which strace renders
+/// as `sendto(fd, …, NULL, 0)` — and `writev` for a gather, so a
+/// witness that looked only for `write(` found neither. Measured, not
+/// assumed: the first cut of this test asserted `write(` and the linux
+/// job answered with one `setsockopt` and no writes at all.
+const WRITES: [&str; 4] = ["sendto(", "send(", "write(", "writev("];
+
+/// Is this traced line a write on a stream?
+fn is_write(l: &str) -> bool {
+    WRITES.iter().any(|w| l.starts_with(w))
+}
 
 pub fn main() {
     if std::env::args().any(|a| a == "--child") {
@@ -102,6 +115,7 @@ pub fn main() {
             || l.starts_with("setsockopt(")
             || (l.starts_with("openat(") && l.contains(FIXTURE))
             || l.contains("FIONBIO")
+            || (first_arg(l).is_some() && is_write(l))
     }) {
         eprintln!("  {l}");
     }
@@ -197,17 +211,17 @@ fn check(lines: &[String]) {
         .iter()
         .filter(|l| {
             on_conn(l)
-                && (l.starts_with("write(")
-                    || (l.starts_with("setsockopt(") && l.contains("TCP_NODELAY")))
+                && (is_write(l) || (l.starts_with("setsockopt(") && l.contains("TCP_NODELAY")))
         })
         .collect();
     assert_eq!(
         steps.len(),
         3,
-        "two writes and exactly one TCP_NODELAY between them: {steps:?}"
+        "two writes and exactly one TCP_NODELAY between them: {steps:?}\n{}",
+        lines.join("\n")
     );
     assert!(
-        steps[0].starts_with("write("),
+        is_write(steps[0]),
         "the FIRST write is paid for by nothing — no unacknowledged data exists, so \
          Nagle cannot hold it, so a connection-per-request server sets no option at \
          all (#290): {steps:?}"
@@ -217,10 +231,7 @@ fn check(lines: &[String]) {
         "the option is set BEFORE the second write, which is the one Nagle could sit \
          on: {steps:?}"
     );
-    assert!(
-        steps[2].starts_with("write("),
-        "then the second write: {steps:?}"
-    );
+    assert!(is_write(steps[2]), "then the second write: {steps:?}");
 
     // --- the open ------------------------------------------------------
     let opens: Vec<&String> = lines
