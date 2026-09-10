@@ -183,11 +183,29 @@ impl Sock {
     /// — one place, whatever the listener's mode and whichever kernel
     /// hands flags down (BSD-derived kernels and winsock do, linux
     /// does not).
-    fn accept(&self) -> std::io::Result<Sock> {
+    fn accept(&self) -> std::io::Result<(Sock, bool)> {
         match self {
-            Sock::Listener(l) => l.accept().map(|(s, _)| Sock::Stream(s)),
+            Sock::Listener(l) => {
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let fd = accept4(l.as_raw_fd())?;
+                    return Ok((Sock::Stream(TcpStream::from(fd)), true));
+                }
+                #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                l.accept().map(|(s, _)| (Sock::Stream(s), false))
+            }
             #[cfg(unix)]
-            Sock::UnixListener(l, _) => l.accept().map(|(s, _)| Sock::UnixStream(s)),
+            Sock::UnixListener(l, _) => {
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let fd = accept4(l.as_raw_fd())?;
+                    return Ok((Sock::UnixStream(UnixStream::from(fd)), true));
+                }
+                #[cfg(not(any(target_os = "linux", target_os = "android")))]
+                l.accept().map(|(s, _)| (Sock::UnixStream(s), false))
+            }
             _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
         }
     }
@@ -235,6 +253,44 @@ impl Sock {
     }
 }
 
+/// Where `TCP_NODELAY` stands on one stream (s149, wolf-lang#290,
+/// `[os.net.nodelay]`). The DEFAULT is unchanged — Nagle is off from
+/// the program's point of view on every TCP stream the runtime hands
+/// out — but the `setsockopt` is paid at the last moment it can
+/// matter instead of at acquisition, because Nagle can only hold back
+/// a write that follows bytes of this stream's still in flight. A
+/// connection whose one response is followed by a close therefore
+/// never pays it at all, which is the whole of wolf-lang#290's second
+/// syscall.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Nodelay {
+    /// A TCP stream that has sent nothing yet: no unacknowledged data
+    /// exists, so no write can be delayed and the option can wait.
+    Fresh,
+    /// A TCP stream with bytes in flight and the option still unset:
+    /// the NEXT write syscall pays it first.
+    InFlight,
+    /// The option is set — by a write that needed it, or by the
+    /// program asking for it.
+    Set,
+    /// The program asked for Nagle BACK (`net_nodelay(fd, false)`), or
+    /// this socket has no such option (a listener, a unix-domain
+    /// stream): the runtime never sets it behind the program's back.
+    Never,
+}
+
+impl Nodelay {
+    /// The state a socket enters the table in: a TCP stream owes the
+    /// option, nothing else does.
+    fn of(s: &Sock) -> Nodelay {
+        if matches!(s, Sock::Stream(_)) {
+            Nodelay::Fresh
+        } else {
+            Nodelay::Never
+        }
+    }
+}
+
 /// One socket table slot: the socket plus its armed deadline budget.
 #[derive(Debug)]
 struct Entry {
@@ -246,6 +302,38 @@ struct Entry {
         allow(dead_code)
     )]
     deadline: Option<std::time::Duration>,
+    /// `[os.net.nodelay]`'s default, and when it was paid to the
+    /// kernel (s149, #290).
+    nodelay: Nodelay,
+}
+
+impl Entry {
+    /// Pay `TCP_NODELAY` if this write could otherwise be the one
+    /// Nagle holds back — that is, if bytes of this stream are already
+    /// in flight and the option is still unset. Called before EVERY
+    /// write syscall, including the continuations of one drain: the
+    /// last chunk of a large body is exactly the small segment Nagle
+    /// would sit on. A kernel that refuses the option is `io` here
+    /// rather than at acquisition, which is the one place the
+    /// deferral moves a row.
+    fn arm_nodelay(&mut self) -> Result<(), NetErr> {
+        if self.nodelay == Nodelay::InFlight {
+            let Sock::Stream(s) = &self.sock else {
+                return Ok(());
+            };
+            s.set_nodelay(true).map_err(|_| "io")?;
+            self.nodelay = Nodelay::Set;
+        }
+        Ok(())
+    }
+
+    /// Record that a write left bytes with the kernel: from here on
+    /// this stream owes the option before its next write.
+    fn wrote(&mut self, n: usize) {
+        if n > 0 && self.nodelay == Nodelay::Fresh {
+            self.nodelay = Nodelay::InFlight;
+        }
+    }
 }
 
 /// The process-local socket table: index = the `int` fd wolf code
@@ -449,6 +537,45 @@ fn inherited_listener_family(raw: std::os::fd::RawFd) -> Option<libc::c_int> {
     Some(libc::c_int::from(storage.ss_family))
 }
 
+/// `accept4(2)` — one call for the connection AND the posture the
+/// runtime puts every stream under (s149, wolf-lang#290,
+/// `[os.net.accept]`). std's accept asks the kernel for
+/// `SOCK_CLOEXEC` only and the runtime then spent a second syscall
+/// making the new stream non-blocking; on a host that has `accept4`
+/// the two are one call, so a connection-per-request server stops
+/// paying an `ioctl(FIONBIO)` it never asked for. `EINTR` is retried
+/// here the way std retries it; every other errno is the caller's
+/// (`WouldBlock` and `ECONNABORTED` are `accept_ready`'s "nothing to
+/// take"). Hosts WITHOUT the call (macOS, windows) keep std's accept
+/// and the separate flag write — the clause states the per-host
+/// shape rather than pretending it is uniform.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn accept4(listener: std::os::fd::RawFd) -> std::io::Result<std::os::fd::OwnedFd> {
+    use std::os::fd::FromRawFd as _;
+    loop {
+        // SAFETY: a listening descriptor this table owns; NULL/NULL
+        // is the documented "do not report the peer address" form,
+        // and the flags are the two the runtime wants on every stream.
+        let fd = unsafe {
+            libc::accept4(
+                listener,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC,
+            )
+        };
+        if fd >= 0 {
+            // SAFETY: a fresh descriptor the kernel just handed us,
+            // owned by nobody else.
+            return Ok(unsafe { std::os::fd::OwnedFd::from_raw_fd(fd) });
+        }
+        let e = std::io::Error::last_os_error();
+        if e.kind() != std::io::ErrorKind::Interrupted {
+            return Err(e);
+        }
+    }
+}
+
 /// `O_NONBLOCK` on a raw descriptor this table does not own yet (the
 /// adopt path, s138): `true` when the flag is set afterwards. A
 /// `fcntl` refusal answers `false` and the descriptor is left as it
@@ -626,6 +753,7 @@ impl NetTable {
     fn push(&mut self, s: Sock) -> i64 {
         let fd = self.socks.len() as i64;
         self.socks.push(Some(Entry {
+            nodelay: Nodelay::of(&s),
             sock: s,
             deadline: None,
         }));
@@ -665,13 +793,27 @@ impl NetTable {
     /// its posture is `io`. Off the reactor hosts the stream stays
     /// blocking (the syscall itself parks there), Nagle off all the
     /// same.
+    ///
+    /// s149 (#290) moved WHEN each half is paid, not what it means.
+    /// The non-blocking flag rides the accept itself where the host
+    /// has `accept4`, so this function writes it only for a dialed
+    /// stream or a host without the call; `TCP_NODELAY` is deferred
+    /// to the first write that Nagle could hold back ([`Entry`]'s
+    /// [`Nodelay`]), so a connection that answers once and closes
+    /// pays neither call. Both are costs, not rows: every stream this
+    /// hands back behaves exactly as it did before.
     fn push_stream(&mut self, s: Sock) -> Result<i64, NetErr> {
-        if REACTOR_HOST && s.set_nonblocking(true).is_err() {
-            return Err("io");
-        }
-        if let Sock::Stream(t) = &s
-            && t.set_nodelay(true).is_err()
-        {
+        self.push_stream_under(s, false)
+    }
+
+    /// [`NetTable::push_stream`] for a stream the KERNEL already
+    /// handed over non-blocking (s149, #290: `accept4(SOCK_NONBLOCK)`
+    /// on the hosts that have it). `already` is what the acquisition
+    /// call knows and nothing else can: on linux the posture arrives
+    /// with the connection, on macOS and windows it costs the flag
+    /// write it always did.
+    fn push_stream_under(&mut self, s: Sock, already: bool) -> Result<i64, NetErr> {
+        if REACTOR_HOST && !already && s.set_nonblocking(true).is_err() {
             return Err("io");
         }
         Ok(self.push(s))
@@ -1027,7 +1169,7 @@ impl NetTable {
             _ => return Err("io"),
         };
         match accepted {
-            Ok(s) => self.push_stream(s).map(Some),
+            Ok((s, already)) => self.push_stream_under(s, already).map(Some),
             Err(e)
                 if matches!(
                     e.kind(),
@@ -1117,15 +1259,21 @@ impl NetTable {
     /// progress there. `Ok(false)` is `WouldBlock` with the buffer not
     /// yet drained — the caller parks and calls again from `at`.
     fn write_ready(&mut self, fd: i64, bytes: &[u8], at: &mut usize) -> Result<bool, NetErr> {
-        let Some(s) = self.get(fd).filter(|s| s.is_stream()) else {
+        let Some(e) = self.entry(fd).filter(|e| e.sock.is_stream()) else {
             return Err("io");
         };
         while *at < bytes.len() {
-            match s.write(&bytes[*at..]) {
+            // s149 (#290): the option before the write it could
+            // delay, never before the write it could not.
+            e.arm_nodelay()?;
+            match e.sock.write(&bytes[*at..]) {
                 // std's `write_all` verdict on a zero-length write of a
                 // non-empty buffer (`WriteZero`): `io`.
                 Ok(0) => return Err("io"),
-                Ok(n) => *at += n,
+                Ok(n) => {
+                    *at += n;
+                    e.wrote(n);
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
                 Err(e) => return Err(err_tag(e.kind())),
@@ -1155,13 +1303,20 @@ impl NetTable {
         fd: i64,
         bufs: &mut &mut [std::io::IoSlice<'_>],
     ) -> Result<bool, NetErr> {
-        let Some(s) = self.get(fd).filter(|s| s.is_stream()) else {
+        let Some(e) = self.entry(fd).filter(|e| e.sock.is_stream()) else {
             return Err("io");
         };
         while !bufs.is_empty() {
-            match s.write_vectored(bufs) {
+            // s149 (#290), as in `write_ready`: a gathered write is
+            // one write, and a continuation of one is the segment
+            // Nagle would sit on.
+            e.arm_nodelay()?;
+            match e.sock.write_vectored(bufs) {
                 Ok(0) => return Err("io"),
-                Ok(n) => std::io::IoSlice::advance_slices(bufs, n),
+                Ok(n) => {
+                    std::io::IoSlice::advance_slices(bufs, n);
+                    e.wrote(n);
+                }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
                 Err(e) => return Err(err_tag(e.kind())),
@@ -1176,10 +1331,20 @@ impl NetTable {
     /// unix-domain stream (the option is TCP's), a forged or closed
     /// handle: `io`.
     pub fn set_nodelay(&mut self, fd: i64, on: bool) -> Result<(), NetErr> {
-        match self.get(fd) {
-            Some(Sock::Stream(s)) => s.set_nodelay(on).map_err(|_| "io"),
-            _ => Err("io"),
-        }
+        let Some(e) = self.entry(fd) else {
+            return Err("io");
+        };
+        let Sock::Stream(s) = &e.sock else {
+            return Err("io");
+        };
+        // s149 (#290): a program that ASKS is answered at once — the
+        // deferral is the runtime's own default finding a cheaper
+        // moment, never a program's call being put off. `false` also
+        // ends the deferral: the runtime does not set an option the
+        // program has told it not to want.
+        s.set_nodelay(on).map_err(|_| "io")?;
+        e.nodelay = if on { Nodelay::Set } else { Nodelay::Never };
+        Ok(())
     }
     /// Close a socket; drop closes. Double close (or a forged fd) is
     /// the `io` row. A unix-domain LISTENER's path is unlinked here
@@ -2139,12 +2304,64 @@ mod tests {
         t.close(l).expect("close");
     }
 
-    /// s141 (#254, `[os.net.nodelay]`): every TCP stream the table hands
-    /// out has Nagle OFF — accepted or dialed — and `set_nodelay`
-    /// toggles it; a listener, a unix stream and a forged handle are
-    /// `io`. Read back from the kernel, not from what was asked.
+    /// s149 (#290, `[os.net.accept]`): whichever call the host has,
+    /// the stream a program is handed arrives under the SAME posture
+    /// — non-blocking (the reactor's requirement since s141) and
+    /// close-on-exec (nobody's child inherits a connection by
+    /// accident). On linux that posture rides `accept4` and costs no
+    /// second syscall; on macOS it is std's accept plus the flag
+    /// write it always was. The assertion is the kernel's own answer
+    /// about the descriptor, so it holds either way and would fail
+    /// loudly if the `accept4` arm ever forgot a flag.
+    #[cfg(unix)]
     #[test]
-    fn nodelay_is_on_by_default_and_toggles() {
+    fn an_accepted_stream_arrives_non_blocking_and_close_on_exec() {
+        use std::os::fd::AsRawFd as _;
+        let mut t = NetTable::new();
+        let l = t.listen("127.0.0.1:0").expect("listen");
+        let port = t.port(l).expect("port");
+        let cli = t.connect(&format!("127.0.0.1:{port}")).expect("dial");
+        let conn = t.accept(l).expect("accept");
+        let raw = match t.get(conn) {
+            Some(Sock::Stream(s)) => s.as_raw_fd(),
+            _ => panic!("not a tcp stream"),
+        };
+        // SAFETY: flag reads on a descriptor this table owns.
+        let (fl, fd_flags) = unsafe {
+            (
+                libc::fcntl(raw, libc::F_GETFL),
+                libc::fcntl(raw, libc::F_GETFD),
+            )
+        };
+        assert!(fl >= 0 && fd_flags >= 0, "the kernel answers about the fd");
+        assert!(
+            fl & libc::O_NONBLOCK != 0,
+            "an accepted stream is non-blocking whatever call took it"
+        );
+        assert!(
+            fd_flags & libc::FD_CLOEXEC != 0,
+            "and close-on-exec: `accept4`'s SOCK_CLOEXEC, or std's"
+        );
+        for fd in [conn, cli, l] {
+            t.close(fd).expect("close");
+        }
+    }
+
+    /// s141 (#254, `[os.net.nodelay]`) as s149 (#290) re-timed it:
+    /// every TCP stream the table hands out is Nagle-off from the
+    /// program's point of view, and the `setsockopt` that says so is
+    /// paid at the first write Nagle could hold back — a write with
+    /// bytes of this stream already in flight. So the option is NOT
+    /// set at acceptance, NOT set after the one write a
+    /// connection-per-request server makes, and IS set before the
+    /// second. `set_nodelay` toggles it either way at once. A
+    /// listener, a unix stream and a forged handle are `io`. Every
+    /// assertion reads the option back FROM THE KERNEL
+    /// (`getsockopt`), never from what was asked — this is the
+    /// deferral's witness on a host with no `accept4` and no strace
+    /// (the linux count is `tests/syscall_shape.rs`).
+    #[test]
+    fn nodelay_is_paid_at_the_write_that_could_be_delayed() {
         let mut t = NetTable::new();
         let l = t.listen("127.0.0.1:0").expect("listen");
         let port = t.port(l).expect("port");
@@ -2155,12 +2372,43 @@ mod tests {
             Some(Sock::Stream(s)) => s.nodelay().expect("TCP_NODELAY read"),
             _ => panic!("not a tcp stream"),
         };
-        assert!(nodelay(&mut t, conn), "an accepted stream has Nagle off");
-        assert!(nodelay(&mut t, cli), "a dialed stream has Nagle off");
+        assert!(
+            !nodelay(&mut t, conn),
+            "at acceptance the option is not paid yet — nothing is in flight"
+        );
+        assert!(
+            !nodelay(&mut t, cli),
+            "nor on a dialed stream that has sent nothing"
+        );
+        t.write(conn, b"one").expect("first write");
+        assert!(
+            !nodelay(&mut t, conn),
+            "the FIRST write cannot be delayed by Nagle: no unacknowledged data \
+             exists yet, so the option is still unpaid — this is the syscall a \
+             connection-per-request server stops making (#290)"
+        );
+        t.write(conn, b"two").expect("second write");
+        assert!(
+            nodelay(&mut t, conn),
+            "the second write is the one Nagle could sit on: the option is paid \
+             BEFORE it goes"
+        );
+        let mut got = Vec::new();
+        while got.len() < 6 {
+            got.extend(t.read(cli, 16).expect("read"));
+        }
+        assert_eq!(got, b"onetwo", "both writes arrive, in order");
         t.set_nodelay(conn, false).expect("nagle back on");
         assert!(!nodelay(&mut t, conn));
         t.set_nodelay(conn, true).expect("and off again");
         assert!(nodelay(&mut t, conn));
+        t.set_nodelay(cli, true)
+            .expect("a program that ASKS is answered now");
+        assert!(
+            nodelay(&mut t, cli),
+            "the deferral is the runtime's default finding a cheaper moment, \
+             never a program's own call being put off"
+        );
         assert_eq!(t.set_nodelay(l, true), Err("io"), "a listener is io");
         assert_eq!(
             t.set_nodelay(99_999, true),
