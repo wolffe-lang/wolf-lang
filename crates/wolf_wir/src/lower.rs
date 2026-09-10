@@ -5858,32 +5858,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     self.rt_call("__wolf_rt_chan_send", &[ch, w], Some(types::I32))
                 }
                 .expect("send status");
-                // Status 2 (cancelled): the kill teardown branch; a
-                // polite cancel (and 1, closed-send) falls through —
-                // send types as unit at v0, so the error value has no
-                // carrier yet (the s39 row work; ledgered).
-                let two = self.b.iconst(types::I32, 2);
-                let cancelled = self
-                    .b
-                    .ins(
-                        Opcode::Icmp,
-                        &[status, two],
-                        &[types::BOOL],
-                        Aux::IntCc(IntCc::Eq),
-                    )
-                    .one();
-                let cbb = self.b.create_block();
-                let cont = self.b.create_block();
-                self.b.ins_br(cancelled, cbb, &[], cont, &[]);
-                self.b.seal_block(cbb);
-                self.b.switch_to_block(cbb);
-                self.b.gvn_push_scope();
-                self.kill_teardown_branch(e.span)?;
-                self.b.ins_jmp(cont, &[]);
-                self.b.gvn_pop_scope();
-                self.b.seal_block(cont);
-                self.b.switch_to_block(cont);
-                Ok(Flow::Val(None))
+                // The `() ! {closed, cancelled}` union ([conc.chan.close],
+                // s146 / wolf-lang#275): status 0 is the unit ok, 1 the
+                // `closed` value, 2 the kill-teardown check and then
+                // `cancelled` as a value — the receive path's join over
+                // a payload-free ok. A send whose value nobody reads
+                // (a loop body's tail) is lowered unwanted and the
+                // union is simply dropped ([type.unit.discard]).
+                let eu = self.eu_ty_of(e.span)?;
+                let v = self.chan_status_join(status, eu, e.span, |_| Ok(None))?;
+                Ok(Flow::Val(Some(v)))
             }
             "recv" => {
                 let (region, slot) = self.rt_slot(8);

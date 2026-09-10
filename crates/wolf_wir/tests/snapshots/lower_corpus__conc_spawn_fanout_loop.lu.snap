@@ -13,7 +13,7 @@ decl @__wolf_rt_scope_join_free(ptr) -> i64
 decl @__wolf_rt_scope_new(ptr, i64) -> ptr
 decl @__wolf_rt_scope_spawn(ptr, ptr, ptr, ptr, i64, mem.r0)
 decl @__wolf_rt_task_killed() -> i8
-decl @main.task0(ptr, i64)
+decl @main.task0(ptr, i64) -> eu{unit}
 decl @main.task0.entry(mut ptr, mem.r0) -> i64
 data @str.0 = "s"
 data @str.1 = "main.task0.entry"
@@ -126,24 +126,39 @@ b22:
   jmp b1(%57, %18)
 }
 
-fn @main.task0(ptr, i64) {
+fn @main.task0(ptr, i64) -> eu{unit} {
 b0(%0: ptr, %1: i64):
   %2 = imul.chk %1, %1
   %3 = call @__wolf_rt_chan_send(%0, %2)
-  %4 = iconst.i32 2
+  %4 = iconst.i32 0
   %5 = icmp.eq %3, %4
-  br %5, b1, b4
+  br %5, b1, b2
 b1:
-  %6 = call @__wolf_rt_task_killed()
-  %7 = iconst.i8 0
-  %8 = icmp.ne %6, %7
-  br %8, b2, b3
+  %6: eu{unit} = eu.make.ok
+  jmp b7(%6)
 b2:
-  ret
+  %7 = iconst.i32 1
+  %8 = icmp.eq %3, %7
+  br %8, b3, b4
 b3:
-  jmp b4
+  %9 = iconst.i64 1
+  %10: eu{unit} = eu.make.err %9
+  jmp b7(%10)
 b4:
-  ret
+  %11 = call @__wolf_rt_task_killed()
+  %12 = iconst.i8 0
+  %13 = icmp.ne %11, %12
+  br %13, b5, b6
+b5:
+  %14 = iconst.i64 2
+  %15: eu{unit} = eu.make.err %14
+  ret %15
+b6:
+  %16 = iconst.i64 2
+  %17: eu{unit} = eu.make.err %16
+  jmp b7(%17)
+b7(%18: eu{unit}):
+  ret %18
 }
 
 fn @main.task0.entry(mut ptr, mem.r0) -> i64 {
@@ -152,19 +167,27 @@ b0(%0: ptr, %1: mem.r0):
   %3 = iconst.i64 8
   %4 = ptr.off %0, %3, 1
   %5 = load.i64 %4, %1
-  call @main.task0(%2, %5)
-  %6 = iconst.i64 0
-  %7 = call @__wolf_rt_task_killed()
-  %8 = iconst.i8 0
-  %9 = icmp.ne %7, %8
-  br %9, b1, b2
+  %6 = call @main.task0(%2, %5)
+  %7: bool = eu.is_err %6
+  br %7, b1, b2
 b1:
-  %10 = iconst.i64 -2
-  ret %10
+  %8: i64 = eu.err %6
+  jmp b3(%8)
 b2:
-  %11 = iconst.i64 2
-  %12 = bconst false
-  jmp b3
-b3:
-  ret %6
+  %9 = iconst.i64 0
+  jmp b3(%9)
+b3(%10: i64):
+  %11 = call @__wolf_rt_task_killed()
+  %12 = iconst.i8 0
+  %13 = icmp.ne %11, %12
+  br %13, b5, b4
+b4:
+  %14 = iconst.i64 2
+  %15 = icmp.eq %10, %14
+  br %15, b5, b6
+b5:
+  %16 = iconst.i64 -2
+  ret %16
+b6:
+  ret %10
 }
