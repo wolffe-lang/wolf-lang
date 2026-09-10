@@ -7,7 +7,11 @@
 //! declaration whose token range is untouched by the mutation still
 //! parses without error nodes or missing markers (possibly re-parented
 //! — deleting a `}` may nest a following declaration, but it must nest
-//! *cleanly*).
+//! *cleanly*), with one designed exception (wolf-lang#283): a mutation
+//! that starts a line with `else` withdraws the terminator above it
+//! (`[gram.lex.newline]`, #276), and the one statement that terminator
+//! closed may take the `else` in — it stays a node of its own kind at
+//! its own start, and nothing else moves.
 //!
 //! Mutations are token-level: delete / duplicate / swap-adjacent /
 //! replace-from-pool, applied to the token core spans of the original
@@ -124,6 +128,49 @@ fn find_span(node: &GreenNode, kind: wolf_ast::SyntaxKind, lo: u32, hi: u32) -> 
         }
     }
     None
+}
+
+/// Find a node of `kind` that STARTS at `lo`, whatever its extent.
+fn find_start(node: &GreenNode, kind: wolf_ast::SyntaxKind, lo: u32) -> Option<&GreenNode> {
+    if node.kind == kind && node.span.lo == lo {
+        return Some(node);
+    }
+    node.nodes().find_map(|n| find_start(n, kind, lo))
+}
+
+/// The one designed reach-back (wolf-lang#283): `[gram.lex.newline]`
+/// inserts no terminator at a newline whose next token is `else`, so
+/// a mutation that puts `else` at the start of a line WITHDRAWS the
+/// terminator that closed the statement above it, and that statement
+/// — only that one; the lexer withholds exactly one terminator — may
+/// re-parse with the `else` inside it. Returns the withheld
+/// terminator's original span: the last original token before the
+/// mutation site was a newline-spanning `Term`, and the mutated
+/// stream has no `Term` there any more. Nothing else in the lexer
+/// withholds a terminator on what FOLLOWS (the delimiter rule reads
+/// the enclosing opener, the attribute rule the previous token), so a
+/// withheld terminator is always the `else` lookahead — asserted at
+/// the use site.
+fn withheld_terminator(
+    orig: &[wolf_lex::Token],
+    mutated: &[wolf_lex::Token],
+    src: &[u8],
+    lo: u32,
+) -> Option<wolf_span::Span> {
+    let before = orig
+        .iter()
+        .rev()
+        .find(|t| t.span.hi <= lo && !t.span.is_empty())?;
+    if before.kind != TokenKind::Term
+        || !src[before.span.lo as usize..before.span.hi as usize].contains(&b'\n')
+    {
+        return None;
+    }
+    // It precedes the splice, so its position is unshifted.
+    let still = mutated
+        .iter()
+        .any(|t| t.kind == TokenKind::Term && t.span.lo == before.span.lo);
+    (!still).then_some(before.span)
 }
 
 /// One mutation: replace byte range `lo..hi` with `text`.
@@ -557,8 +604,40 @@ fn single_token_mutations_have_bounded_blast_radius() {
             );
 
             // Invariant 2: untouched declarations parse without error
-            // nodes or missing markers (wherever they re-parented).
-            for &(kind, lo, hi) in &items {
+            // nodes or missing markers (wherever they re-parented) —
+            // with the one designed exception, wolf-lang#283: a
+            // mutation that puts `else` at the start of a line withdraws
+            // the terminator above it (`[gram.lex.newline]`'s lookahead,
+            // #276), and the statement that terminator closed may take
+            // the `else` in. The reach is one statement by construction
+            // (one terminator withheld), and the property asserts
+            // exactly that: the token after the withheld terminator IS
+            // `else`; at most the ONE item ending at that terminator is
+            // exempt; and even that item is still a node of its own
+            // kind starting where it started — it grew, it did not
+            // vanish. Every other untouched declaration holds as before.
+            let withheld = withheld_terminator(&lexed.tokens, &mlexed.tokens, &src, m.lo);
+            if let Some(term) = withheld {
+                let next = mlexed
+                    .tokens
+                    .iter()
+                    .find(|t| t.span.lo >= term.hi && !t.span.is_empty())
+                    .map(|t| t.kind);
+                assert_eq!(
+                    next,
+                    Some(TokenKind::Kw(wolf_lex::Keyword::Else)),
+                    "{}: a terminator was withheld at {}..{} and the next token is not `else`",
+                    ctx(),
+                    term.lo,
+                    term.hi
+                );
+            }
+            let exempt = withheld.and_then(|t| {
+                items
+                    .iter()
+                    .position(|&(_, _, hi)| hi == t.hi || hi == t.lo)
+            });
+            for (idx, &(kind, lo, hi)) in items.iter().enumerate() {
                 let (mlo, mhi) = if hi <= m.lo {
                     (lo, hi)
                 } else if lo >= m.hi {
@@ -566,18 +645,122 @@ fn single_token_mutations_have_bounded_blast_radius() {
                 } else {
                     continue; // touched by the mutation
                 };
-                let node = find_span(&parse.root, kind, mlo, mhi).unwrap_or_else(|| {
-                    panic!(
+                match find_span(&parse.root, kind, mlo, mhi) {
+                    Some(node) if !has_damage(node) => {}
+                    _ if Some(idx) == exempt => {
+                        assert!(
+                            find_start(&parse.root, kind, mlo).is_some(),
+                            "{}: the statement before a line-leading `else` is no longer a \
+                             {kind:?} starting at {mlo}",
+                            ctx()
+                        );
+                    }
+                    Some(_) => panic!(
+                        "{}: untouched {kind:?} at {mlo}..{mhi} contains error nodes",
+                        ctx()
+                    ),
+                    None => panic!(
                         "{}: untouched {kind:?} {lo}..{hi} not found at {mlo}..{mhi}",
                         ctx()
-                    )
-                });
-                assert!(
-                    !has_damage(node),
-                    "{}: untouched {kind:?} at {mlo}..{mhi} contains error nodes",
-                    ctx()
-                );
+                    ),
+                }
             }
         }
     }
+}
+
+/// The exact #283 counter-example, pinned deterministically (no
+/// seed) so it runs in the ordinary gauntlet, not only the nightly:
+/// replacing the `fn` of `fn main` in
+/// `corpus/lints/ancestor_import/main.lu` with `else` — the nightly's
+/// `[replace token 8 at 311..313 with \`else\`]`. Before #276 the
+/// `else` was an orphan reported where it stood; with
+/// `[gram.lex.newline]`'s lookahead, the newline after `use
+/// outer.inner` inserts no terminator, so that declaration continues
+/// into the `else` and takes the wreck in as its own error node.
+/// Disposition (a) of #283: the property admits exactly this — the
+/// terminator withheld is the one before the `else`, the ONE
+/// declaration it closed is the only one that moves, and it is still
+/// a `UseDecl` beginning at the same byte. The declaration above it
+/// (`use outer`) parses clean at its original span, and the wreck is
+/// one diagnostic. (b) — narrowing the lookahead to `else` followed by
+/// `{` or `if` — was declined: it would buy the property nothing a
+/// reader wants (a bare `else` on its own line is an error either way,
+/// reported once either way) at the price of one more layout rule in
+/// the clause and a divergence from wolf-interp's mirror (#75), which
+/// copied the wide form.
+#[test]
+fn line_leading_else_reaches_exactly_one_statement_back() {
+    let f =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/lints/ancestor_import/main.lu");
+    let src = std::fs::read(&f).expect("read ancestor_import/main.lu");
+    let probe = b"\n\nfn main()";
+    let start = src
+        .windows(probe.len())
+        .position(|w| w == probe)
+        .expect("ancestor_import/main.lu still spells `fn main()` after a blank line")
+        + 2;
+    assert_eq!(&src[start..start + 2], b"fn");
+    let mut mutated = src.clone();
+    mutated.splice(start..start + 2, b" else ".iter().copied());
+
+    let mut sm = wolf_span::SourceMap::new();
+    let lexed = wolf_lex::lex(sm.intern(&f), &src);
+    let baseline = wolf_parse::parse_tokens(&lexed, &src);
+    let items: Vec<(wolf_ast::SyntaxKind, u32, u32)> = baseline
+        .root
+        .nodes()
+        .filter(|n| n.kind.is_item() && !has_damage(n))
+        .map(|n| (n.kind, n.span.lo, n.span.hi))
+        .collect();
+    let uses: Vec<_> = items
+        .iter()
+        .filter(|(k, _, _)| *k == wolf_ast::SyntaxKind::UseDecl)
+        .collect();
+    assert_eq!(uses.len(), 2, "the file declares its two `use` items");
+
+    let mfile = sm.intern(&f.with_extension("mut_else"));
+    let mlexed = wolf_lex::lex(mfile, &mutated);
+    let parse = wolf_parse::parse_tokens(&mlexed, &mutated);
+    wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
+    let added = parse
+        .diagnostics
+        .len()
+        .saturating_sub(baseline.diagnostics.len());
+    assert!(
+        added <= 5,
+        "#283 regression: {added} added parser diagnostics (max 5, structural): {:?}",
+        parse.diagnostics
+    );
+
+    // The terminator withheld is the one right before the `else`, and
+    // it closed the second `use`.
+    let term = withheld_terminator(&lexed.tokens, &mlexed.tokens, &src, start as u32)
+        .expect("the newline before the mutated `else` no longer inserts a terminator");
+    let &(kind2, lo2, hi2) = uses[1];
+    assert!(
+        term.hi == hi2 || term.lo == hi2,
+        "the withheld terminator ends `use outer.inner`"
+    );
+    // The first `use` is untouched and clean at its own span.
+    let &(kind1, lo1, hi1) = uses[0];
+    let first = find_span(&parse.root, kind1, lo1, hi1).expect("`use outer` still at its span");
+    assert!(!has_damage(first), "`use outer` parses clean");
+    // The second took the `else` in: no longer clean at its old
+    // extent, still a `UseDecl` starting at the same byte.
+    let old = find_span(&parse.root, kind2, lo2, hi2);
+    assert!(
+        old.is_none_or(has_damage),
+        "the reach-back is real: `use outer.inner` is not clean at its old extent"
+    );
+    let grown = find_start(&parse.root, kind2, lo2)
+        .expect("`use outer.inner` is still a UseDecl starting where it started");
+    assert!(
+        has_damage(grown),
+        "the wreck is inside the declaration that took the `else`"
+    );
+    assert!(
+        grown.span.hi > start as u32,
+        "the declaration grew to absorb the `else`, not the other way round"
+    );
 }
