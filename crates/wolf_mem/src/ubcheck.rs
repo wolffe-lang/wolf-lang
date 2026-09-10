@@ -3333,6 +3333,35 @@ impl<'t> Machine<'t> {
                 };
                 Ok(if matched { Some(Vec::new()) } else { None })
             }
+            // `[gram.pat.range]` (s147, #287): `lo..hi` / `lo..=hi` over
+            // an integer or `char` scrutinee — membership by scalar,
+            // THE shared char decoder, the exclusive high end excluded.
+            // The checker validated the endpoints and refused the
+            // empty range (E0815), so a bad end here is a refusal.
+            SyntaxKind::RangePat => {
+                let d = wolf_ast::RangePat::cast(pat).expect("kind");
+                let (Some(lo), Some(hi)) = (d.lo(), d.hi()) else {
+                    return self.refuse("a range pattern with a missing end", pat.span);
+                };
+                let end = |this: &Self, n: &'t GreenNode| -> Option<i64> {
+                    let text = this.text(n.span);
+                    if text.starts_with('\'') {
+                        wolf_sema::check::cook_char_literal(&text).map(|c| i64::from(u32::from(c)))
+                    } else {
+                        parse_int_literal(&text)
+                    }
+                };
+                let (Some(lo_v), Some(hi_v)) = (end(self, lo), end(self, hi)) else {
+                    return self.refuse("this range pattern's end", pat.span);
+                };
+                let v = match scrut {
+                    Value::Int(n) => *n,
+                    Value::Char(c) => i64::from(u32::from(*c)),
+                    _ => return Ok(None),
+                };
+                let hit = lo_v <= v && if d.inclusive() { v <= hi_v } else { v < hi_v };
+                Ok(if hit { Some(Vec::new()) } else { None })
+            }
             SyntaxKind::IdentPat => {
                 let name = self.text(pat.span);
                 let last = name.rsplit('.').next().unwrap_or(name.as_str());
