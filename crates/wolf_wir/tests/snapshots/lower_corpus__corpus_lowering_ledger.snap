@@ -49,6 +49,7 @@ conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
 conc/spawn_cluster_split.lu: lowers
 conc/spawn_fanout_loop.lu: lowers
+conc/spawn_tail_send_raised_row.lu: lowers
 conc/store_buffer.lu: not mem-clean (pre-wir rungs own it)
 conc/when_multi.lu: lowers
 conc/when_nested.lu: not mem-clean (pre-wir rungs own it)

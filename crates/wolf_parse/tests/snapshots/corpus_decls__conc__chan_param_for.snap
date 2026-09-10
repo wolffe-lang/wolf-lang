@@ -4,6 +4,6 @@ expression: dump
 ---
 StructDecl 865..900 name=Desk fields=1
 FnDecl 902..1004 name=total body=Block
-FnDecl 1006..1118 name=shelver body=Block
-FnDecl 1120..1206 name=drain body=Block
-FnDecl 1208..1925 name=main body=Block
+FnDecl 1006..1126 name=shelver body=Block
+FnDecl 1128..1214 name=drain body=Block
+FnDecl 1216..1940 name=main body=Block

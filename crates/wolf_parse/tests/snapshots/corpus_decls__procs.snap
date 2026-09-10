@@ -4,4 +4,4 @@ expression: dump
 ---
 FnDecl 648..756 name=build_batch body=Block
 FnDecl 758..859 name=worker body=Block
-FnDecl 861..2230 name=main body=Block
+FnDecl 861..2231 name=main body=Block

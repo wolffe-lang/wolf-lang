@@ -9,8 +9,8 @@ decl @__wolf_rt_chan_send(ptr, i64) -> i32
 decl @__wolf_rt_task_killed() -> i8
 
 fn @main() -> i64 {
-  fact deref %14 8 : op
-  fact region %14 r0 : op
+  fact deref %21 8 : op
+  fact region %21 r0 : op
 b0:
   %0 = iconst.i64 8
   %1 = call @__wolf_rt_chan_new(%0)
@@ -19,56 +19,68 @@ b0:
   jmp b1(%2)
 b1(%4: i64):
   %5 = call @__wolf_rt_chan_send(%1, %4)
-  %6 = iconst.i32 2
+  %6 = iconst.i32 0
   %7 = icmp.eq %5, %6
-  br %7, b2, b5
+  br %7, b2, b3
 b2:
-  %8 = call @__wolf_rt_task_killed()
-  %9 = iconst.i8 0
-  %10 = icmp.ne %8, %9
-  br %10, b3, b4
+  %8: eu{unit} = eu.make.ok
+  jmp b8(%8)
 b3:
-  %11 = iconst.i64 0
-  ret %11
+  %9 = iconst.i32 1
+  %10 = icmp.eq %5, %9
+  br %10, b4, b5
 b4:
-  jmp b5
+  %11: eu{unit} = eu.make.err %2
+  jmp b8(%11)
 b5:
-  jmp b6
+  %12 = call @__wolf_rt_task_killed()
+  %13 = iconst.i8 0
+  %14 = icmp.ne %12, %13
+  br %14, b6, b7
 b6:
-  %12 = icmp.eq %4, %3
-  br %12, b7, b15
+  %15 = iconst.i64 0
+  ret %15
 b7:
-  call @__wolf_rt_chan_close(%1)
-  %13 = iconst.i64 0
-  %14: ptr, %15: mem.r0 = stack.alloc %0
-  jmp b8(%15, %13)
-b8(%16: mem.r0, %17: i64):
-  %18, %19 = call @__wolf_rt_chan_recv(%1, %14, %16)
-  %20 = iconst.i32 0
-  %21 = icmp.eq %18, %20
-  br %21, b9, b10
+  %16 = iconst.i64 2
+  %17: eu{unit} = eu.make.err %16
+  jmp b8(%17)
+b8(%18: eu{unit}):
+  jmp b9
 b9:
-  %22 = load.i64 %14, %19
-  %23 = iadd.chk %17, %22
-  jmp b8(%19, %23)
+  %19 = icmp.eq %4, %3
+  br %19, b10, b18
 b10:
-  %24 = iconst.i32 2
-  %25 = icmp.eq %18, %24
-  br %25, b11, b14
-b11:
-  %26 = call @__wolf_rt_task_killed()
-  %27 = iconst.i8 0
-  %28 = icmp.ne %26, %27
+  call @__wolf_rt_chan_close(%1)
+  %20 = iconst.i64 0
+  %21: ptr, %22: mem.r0 = stack.alloc %0
+  jmp b11(%22, %20)
+b11(%23: mem.r0, %24: i64):
+  %25, %26 = call @__wolf_rt_chan_recv(%1, %21, %23)
+  %27 = iconst.i32 0
+  %28 = icmp.eq %25, %27
   br %28, b12, b13
 b12:
-  ret %13
+  %29 = load.i64 %21, %26
+  %30 = iadd.chk %24, %29
+  jmp b11(%26, %30)
 b13:
-  jmp b14
+  %31 = iconst.i32 2
+  %32 = icmp.eq %25, %31
+  br %32, b14, b17
 b14:
-  %29 = iconst.i64 6
-  %30 = isub.chk %17, %29
-  ret %30
+  %33 = call @__wolf_rt_task_killed()
+  %34 = iconst.i8 0
+  %35 = icmp.ne %33, %34
+  br %35, b15, b16
 b15:
-  %31 = iadd.chk %4, %2
-  jmp b1(%31)
+  ret %20
+b16:
+  jmp b17
+b17:
+  %36 = iconst.i64 6
+  %37 = isub.chk %24, %36
+  ret %37
+b18:
+  %38 = iadd.chk %4, %2
+  jmp b1(%38)
 }
