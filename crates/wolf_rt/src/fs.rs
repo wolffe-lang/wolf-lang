@@ -94,6 +94,20 @@ pub mod fs_mode {
     /// promisable on every tier-1 target (`O_CREAT|O_EXCL`,
     /// `CREATE_NEW`) — lock files and unique temp names build on it.
     pub const CREATE_NEW: i64 = 4;
+    /// Read-only, and the OPEN ITSELF may not park (s149,
+    /// wolf-lang#289, `[os.fs.open]`): `O_NONBLOCK` rides the unix
+    /// open, so a name that turns out to be a fifo with no writer
+    /// answers a HANDLE at once instead of parking the calling hand
+    /// until some writer appears. A regular file — every request that
+    /// matters to a file server — is bit for bit mode [`READ`]: the
+    /// flag has no effect on a regular file's open, read or write.
+    /// What it buys is that a server stops paying a PATH stat to learn
+    /// whether the name is safe to open and classifies from
+    /// `fs_fstat` on the handle it already has (nginx's
+    /// `ngx_open_file_wrapper` shape). windows has no such flag on
+    /// this path and serves the mode as [`READ`], by name in the
+    /// clause.
+    pub const READ_NONBLOCK: i64 = 5;
 }
 
 static FILES: Mutex<Vec<Option<File>>> = Mutex::new(Vec::new());
@@ -224,6 +238,21 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
         fs_mode::APPEND => o.append(true).create(true),
         fs_mode::READ_WRITE => o.read(true).write(true).create(true),
         fs_mode::CREATE_NEW => o.read(true).write(true).create_new(true),
+        // s149 (#289): the same read open, carrying `O_NONBLOCK` on
+        // the hosts that have it — one flag on the open the program
+        // was going to make anyway, never a second call. windows has
+        // no equivalent here and serves the mode as READ.
+        fs_mode::READ_NONBLOCK => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                o.read(true).custom_flags(libc::O_NONBLOCK)
+            }
+            #[cfg(not(unix))]
+            {
+                o.read(true)
+            }
+        }
         _ => return -fs_code::INVALID,
     };
     match opts.open(path) {
@@ -1041,6 +1070,82 @@ mod tests {
                     .to_vec();
                 assert_eq!(st[0], 1, "kind: a directory");
                 assert_eq!(__wolf_rt_fs_close(dfd), fs_code::OK);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s149 (#289, `[os.fs.open]`): mode 5 is mode 0 that cannot
+    /// park. On a REGULAR file the two are indistinguishable — same
+    /// handle, same bytes, same `fs_fstat` — and on a FIFO nobody
+    /// writes, mode 5 answers a handle at once where mode 0 would
+    /// park this test until the harness timed out. The fifo arm is
+    /// the whole reason the mode exists (a file server handed a name
+    /// under an operator-controlled root), and it is a crate test
+    /// rather than a corpus witness because the language has no
+    /// `mkfifo`: the witness that DOES run on every tier is
+    /// `corpus/fs/open_nonblock.lu`.
+    ///
+    /// There is no assertion that mode 5 "did not block" — the
+    /// assertion is the test finishing. That is the honest shape: a
+    /// regression here hangs, which the gauntlet reports.
+    #[test]
+    fn read_nonblock_matches_read_on_a_file_and_never_parks_on_a_fifo() {
+        let dir = scratch("nonblock");
+        let f = dir.join("f.txt");
+        std::fs::write(&f, b"12345").unwrap();
+        let fs_ = f.display().to_string();
+        let (fp, fl) = pair_of(&fs_);
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            let fd = __wolf_rt_fs_open(fp, fl, fs_mode::READ_NONBLOCK);
+            assert!(fd >= 0, "a regular file opens as it always did");
+            assert_eq!(__wolf_rt_fs_read(fd, 16, o), fs_code::OK);
+            assert_eq!(view(out[0], out[1]), "12345", "and reads the same bytes");
+            assert_eq!(__wolf_rt_fs_fstat(fd, o), fs_code::OK);
+            let st = crate::list::i64_elems(out[0])
+                .expect("a List[int]")
+                .to_vec();
+            assert_eq!(st[0], 0, "kind: a regular file, classified off the handle");
+            assert_eq!(st[1], 5, "size");
+            assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            // A missing path is `not_found`, mode 0's row.
+            let miss = dir.join("nope").display().to_string();
+            let (mp, ml) = pair_of(&miss);
+            assert_eq!(
+                __wolf_rt_fs_open(mp, ml, fs_mode::READ_NONBLOCK),
+                -fs_code::NOT_FOUND
+            );
+        }
+        #[cfg(unix)]
+        {
+            let fifo = dir.join("pipe");
+            let c = std::ffi::CString::new(fifo.display().to_string()).unwrap();
+            // SAFETY: a NUL-terminated path in a scratch directory.
+            let rc = unsafe { libc::mkfifo(c.as_ptr(), 0o600) };
+            assert_eq!(rc, 0, "mkfifo");
+            let fs2 = fifo.display().to_string();
+            let (pp, pl) = pair_of(&fs2);
+            unsafe {
+                let fd = __wolf_rt_fs_open(pp, pl, fs_mode::READ_NONBLOCK);
+                assert!(fd >= 0, "a writerless fifo answers a handle, at once");
+                assert_eq!(__wolf_rt_fs_fstat(fd, o), fs_code::OK);
+                let st = crate::list::i64_elems(out[0])
+                    .expect("a List[int]")
+                    .to_vec();
+                assert_eq!(
+                    st[0], 2,
+                    "kind 2: NOT a regular file — what a server refuses on"
+                );
+                // The read a server would not make: with NO writer
+                // POSIX answers end-of-file (`eof`, measured on both
+                // unix hosts), and with a writer that has said
+                // nothing the non-blocking read is `EAGAIN` (`io`).
+                // Either way the hand comes back — which is the whole
+                // claim.
+                assert_eq!(__wolf_rt_fs_read(fd, 16, o), fs_code::EOF);
+                assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
             }
         }
         let _ = std::fs::remove_dir_all(&dir);

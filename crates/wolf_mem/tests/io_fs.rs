@@ -351,9 +351,12 @@ fn fs_append_mode_does_not_read_the_file() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// The five modes, including the two rows only the moded open can
+/// The six modes, including the two rows only the moded open can
 /// raise: `invalid` (a mode outside the set) and `exists` (mode 4
-/// losing the exclusive-create race).
+/// losing the exclusive-create race). Mode 5 (s149, #289,
+/// `[os.fs.open]`) is mode 0 that cannot park: on a regular file the
+/// checked machine hands back the same handle and the same bytes as
+/// mode 0, which is exactly the parity claim the clause makes.
 #[test]
 fn fs_open_mode_covers_the_set_and_its_rows() {
     let dir = scratch("modes");
@@ -371,7 +374,10 @@ fn fs_open_mode_covers_the_set_and_its_rows() {
          let rw = fs_open_mode(p, 3)?\n\
          fs_close(rw)?\n\
          let bad = fs_open_mode(p, 99) else |_| 0 - 3\n\
-         print(\"{{missing}} {{raced}} {{bad}} kept={{fs_read_text(p)?}}\")\n\
+         let nb = fs_open_mode(p, 5)?\n\
+         let seen = fs_read(nb, 16)?\n\
+         fs_close(nb)?\n\
+         print(\"{{missing}} {{raced}} {{bad}} nb={{seen}} kept={{fs_read_text(p)?}}\")\n\
          0\n\
          }}\n",
         p = lit(&path)
@@ -379,7 +385,7 @@ fn fs_open_mode_covers_the_set_and_its_rows() {
     let out = run(&src);
     assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
     // Mode 3 does NOT truncate: "abcd" survives it.
-    assert_eq!(out.stdout, "-1 -2 -3 kept=abcd\n");
+    assert_eq!(out.stdout, "-1 -2 -3 nb=abcd kept=abcd\n");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

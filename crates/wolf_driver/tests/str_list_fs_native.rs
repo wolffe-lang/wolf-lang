@@ -356,6 +356,12 @@ fn main() -> !int {{
     let raced = fs_open_mode(log, 4) else |_| 0 - 2
     print("bad={{bad}} raced={{raced}}")
 
+    let nb = fs_open_mode(moved, 5)?
+    let nbst = fs_fstat(nb)?
+    let nbhead = fs_read_chunk(nb, 2)?
+    fs_close(nb)?
+    print("nb kind={{nbst[0]}} size={{nbst[1]}} head={{nbhead[0]}}")
+
     fs_remove_dir_all("{p}/tree")?
     print("unmade={{!fs_exists(nest)}}")
     0
@@ -378,6 +384,7 @@ fn main() -> !int {{
          entry zebra.txt\n\
          dirs=true files=true count=5\n\
          bad=-1 raced=-2\n\
+         nb kind=0 size=4 head=128\n\
          unmade=true\n",
     );
 }

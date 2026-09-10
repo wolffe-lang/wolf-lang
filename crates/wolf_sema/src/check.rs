@@ -6786,9 +6786,14 @@ impl<'a> Checker<'a> {
             // MODES. `fs_open_mode(path, mode)` is the moded open the
             // family never had — 0 read, 1 write (create+truncate),
             // 2 append (create), 3 read-write (create, no truncate),
-            // 4 create-new (exclusive). A mode outside that set is
-            // `invalid`, decided before the filesystem is touched;
-            // mode 4 losing the race is `exists`. `fs_open`/
+            // 4 create-new (exclusive), and since s149 (#289,
+            // `[os.fs.open]`) 5 read-non-blocking — mode 0 with
+            // `O_NONBLOCK` on the hosts that have it, so an open
+            // cannot park on a fifo nobody writes and a server can
+            // drop the path stat it was paying to find that out. A
+            // mode outside that set is `invalid`, decided before the
+            // filesystem is touched; mode 4 losing the race is
+            // `exists`. `fs_open`/
             // `fs_create` remain the 1-argument spellings of modes 0
             // and 1, so every #40 call site is untouched — and
             // `std.fs.append_text` stops reading the file it appends

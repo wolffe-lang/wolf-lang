@@ -4479,6 +4479,24 @@ impl<'t> Machine<'t> {
                     2 => o.append(true).create(true),
                     3 => o.read(true).write(true).create(true),
                     4 => o.read(true).write(true).create_new(true),
+                    // s149 (#289, `[os.fs.open]`): mode 5 is mode 0
+                    // carrying `O_NONBLOCK` where the host has it, so
+                    // an open cannot park on a fifo nobody writes.
+                    // The checked machine opens the same file the
+                    // same way — parity by construction, and the
+                    // handle it hands back behaves as mode 0's on
+                    // every regular file.
+                    5 => {
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::OpenOptionsExt as _;
+                            o.read(true).custom_flags(libc::O_NONBLOCK)
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            o.read(true)
+                        }
+                    }
                     // Decided before the filesystem is touched, and
                     // `invalid` is only in `fs_open_mode`'s row: the
                     // 1-argument spellings cannot reach it.
