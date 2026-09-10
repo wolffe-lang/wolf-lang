@@ -343,6 +343,7 @@
     "os.cpus": "11-os.md",
     "os.fs": "11-os.md",
     "os.fs.fstat": "11-os.md",
+    "os.fs.open": "11-os.md",
     "os.net": "11-os.md",
     "os.net.accept": "11-os.md",
     "os.net.io": "11-os.md",

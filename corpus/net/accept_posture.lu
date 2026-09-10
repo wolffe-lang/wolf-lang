@@ -1,0 +1,90 @@
+//! check: run(exit=0, stdout="accept_posture | one_response_arrives true | two_writes_arrive true | toggles true | forged_is_io true")
+//! phase: run
+//! conforms: os.net.accept, os.net.nodelay, os.net.io, err.union, err.propagate
+//!
+//! s149 (wolf-lang#290, `[os.net.accept]` and `[os.net.nodelay]`) —
+//! the runtime stopped paying two syscalls per accepted connection:
+//! the non-blocking flag rides `accept4` where the host has it, and
+//! `TCP_NODELAY` is paid at the first write Nagle could hold back
+//! rather than at the accept. Both clauses move a COST, and this
+//! witness is the other half of that sentence — **what a program can
+//! observe is nothing** — so every relation here was true before the
+//! change and stays true after it. Counting is not a witness's job:
+//! the linux count is `crates/wolf_rt/tests/syscall_shape.rs`
+//! (`strace`), and the option read back from the kernel on every unix
+//! host is `wolf_rt::net`'s crate test.
+//!
+//!   one_response_arrives  the shape that now pays NOTHING: one write,
+//!                         then the close, and the peer still reads
+//!                         the whole response. If the deferral ever
+//!                         cost a byte it would cost it here.
+//!   two_writes_arrive     the shape the default EXISTS for — a head,
+//!                         then a small body — arrives whole and in
+//!                         order. The second write is the one the
+//!                         option is paid for, and it is paid before
+//!                         it goes.
+//!   toggles               `net_nodelay` either way on an accepted and
+//!                         on a dialed stream: four calls, no row.
+//!   forged_is_io          a handle nobody minted is still `io`.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+
+    // One write, then the close: the connection-per-request shape.
+    let first = net_connect("127.0.0.1:{port}")?
+    let one = net_accept(srv)?
+    net_write(one, "HTTP/1.1 200 OK\r\n\r\nhi")?
+    net_close(one)?
+    net_deadline(first, 5000)?
+    var said = ""
+    while said.len < 21 {
+        let piece = net_read(first, 64)?
+        said = "{said}{piece}"
+    }
+    let one_response_arrives = said == "HTTP/1.1 200 OK\r\n\r\nhi"
+    net_close(first)?
+
+    // Head, then a small body: two writes, and the option before the
+    // second one.
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+    net_write(conn, "head\r\n")?
+    net_write(conn, "body!")?
+    net_deadline(cli, 5000)?
+    var got = ""
+    while got.len < 11 {
+        let piece = net_read(cli, 64)?
+        got = "{got}{piece}"
+    }
+    let two_writes_arrive = got == "head\r\nbody!"
+
+    var toggles = true
+    net_nodelay(conn, false) else |_| {
+        toggles = false
+    }
+    net_nodelay(conn, true) else |_| {
+        toggles = false
+    }
+    net_nodelay(cli, false) else |_| {
+        toggles = false
+    }
+    net_nodelay(cli, true) else |_| {
+        toggles = false
+    }
+
+    var forged_is_io = false
+    net_nodelay(99999, true) else |e| match e {
+        io => {
+            forged_is_io = true
+        },
+    }
+
+    print(
+        "accept_posture | one_response_arrives {one_response_arrives} | two_writes_arrive {two_writes_arrive} | toggles {toggles} | forged_is_io {forged_is_io}",
+    )
+    net_close(conn)?
+    net_close(cli)?
+    net_close(srv)?
+    0
+}

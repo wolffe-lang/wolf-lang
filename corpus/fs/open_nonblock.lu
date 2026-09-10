@@ -1,0 +1,69 @@
+//! check: run(exit=0, stdout="open_nonblock | same_bytes true | kind 0 | same_size true | missing_is_not_found true | bad_mode_is_invalid true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.open, os.fs.fstat, err.union, err.propagate
+//!
+//! s149 (wolf-lang#289, `[os.fs.open]`) — mode 5 is a read open that
+//! cannot park. On a REGULAR file it is mode 0 in every respect, and
+//! that is what this file pins: the difference the mode exists for is
+//! a fifo with no writer, which a wolf program cannot create (the
+//! language has no `mkfifo`), so the fifo arm is `wolf_rt::fs`'s
+//! crate test and the CALL COUNT is
+//! `crates/wolf_rt/tests/syscall_shape.rs`. What runs on every tier
+//! and every host is the parity, because the parity is the claim a
+//! program depends on:
+//!
+//!   same_bytes             mode 5 reads what mode 0 reads.
+//!   kind                   0 — `fs_fstat` off the mode-5 handle says
+//!                          regular file, which is how a server
+//!                          classifies now instead of stating the
+//!                          path first.
+//!   same_size              the handle's size is the path's.
+//!   missing_is_not_found   mode 5 keeps mode 0's rows.
+//!   bad_mode_is_invalid    the set is still a SET: 99 is `invalid`,
+//!                          decided before the filesystem is touched.
+//!
+//! windows serves mode 5 as mode 0 (it has no `O_NONBLOCK` on this
+//! path — `[os.fs.open]` says so by name), so every relation above is
+//! true there too and this file prints one stdout on every host.
+
+fn main() -> !int {
+    let path = "target/s149-open-nonblock.tmp"
+    fs_write_text(path, "12345")?
+
+    let plain = fs_open(path)?
+    let a = fs_read(plain, 16)?
+    fs_close(plain)?
+
+    let nb = fs_open_mode(path, 5)?
+    let b = fs_read(nb, 16)?
+    let st = fs_fstat(nb)?
+    fs_close(nb)?
+
+    let same_bytes = a == b
+    let same_size = st[1] == fs_size(path)?
+
+    var missing_is_not_found = false
+    fs_open_mode("target/s149-open-nonblock-missing.tmp", 5) else |e| match e {
+        not_found => {
+            missing_is_not_found = true
+            0 - 1
+        },
+        _ => 0 - 2,
+    }
+
+    var bad_mode_is_invalid = false
+    fs_open_mode(path, 99) else |e| match e {
+        invalid => {
+            bad_mode_is_invalid = true
+            0 - 1
+        },
+        _ => 0 - 2,
+    }
+
+    print(
+        "open_nonblock | same_bytes {same_bytes} | kind {st[0]} | same_size {same_size} | missing_is_not_found {missing_is_not_found} | bad_mode_is_invalid {bad_mode_is_invalid}",
+    )
+    fs_remove(path)?
+    print("cleaned={!fs_exists(path)}")
+    0
+}
