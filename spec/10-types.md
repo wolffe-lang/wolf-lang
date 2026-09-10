@@ -374,6 +374,65 @@ means; only the compiler's typing withheld it.)
   reader assumed and every machine already ran; it is written down so
   the typing can admit it.
 
+## §7 The unit context `[type.unit]`
+
+(Appended 2026-09-10, s146 — wolf-lang#275: `chan.send` was typed `()`
+on the compiler while `[conc.chan.close]` says a send after close
+returns an error value. Typing it `() ! {closed, cancelled}` turned
+every `for i in … { ch.send(i) }` and every else-less
+`if ready { ch.send(1) }` into a type mismatch — s144 counted 13
+corpus witnesses, 26 sites, and chapter 12 on every page — because no
+clause said what a fallible unit-typed value *means* where `()` is
+expected. This section is that clause; `send`'s row follows it in
+`[conc.chan.close]`.)
+
+- `[type.unit.context]` **A unit context is a position whose expected
+  type is `()`.** The closed list: the body of a `for`, `while`, or
+  `loop`; the then-block of an `if` with no `else`, and every block of
+  an `if … else if …` chain that ends without one; the body of a
+  function or method whose result is `()`, declared or omitted, and
+  the operand of a `return` in one; the body of a closure checked
+  against a `fn(…) -> ()` type; and any block, `match` arm, or `else`
+  branch checked against one of those. The tail of a block in a unit
+  context is consumed by no one: the block's value is `()` whatever the
+  tail's type.
+
+- `[type.unit.discard]` **A `!()` tail in a unit context is a discard,
+  warned (W0601), never a mismatch.** The value's row is lost, and the
+  compiler says so at the tail with the diagnostic a non-trailing `!T`
+  statement has drawn since s67. Only `!()` qualifies: a `!int` tail
+  where `()` is expected is a mismatch on the `int`, exactly as a plain
+  `int` tail is. The two readings, costed before choosing:
+
+  | | (i) handled — a `!()` tail is a mismatch | (ii) discarded — W0601 |
+  |---|---|---|
+  | what the reader learns | a `!()` statement is warned and the same statement one line lower, at the block's tail, is refused: *position* decides | one rule — a `!T` nobody consumes is a warned discard, wherever it sits |
+  | the shortest fire-and-forget send | `ch.send(v) else {}` — the same silent discard, spelled longer and warned nowhere | `ch.send(v)`, with the warning naming what it drops |
+  | a `closed` send the program never looks at | refused at a tail; compiles, warned, one line earlier | compiles, warned, at every site; refused under `--deny-warnings` |
+  | programs written before the clause | every statement-tail send is an error: the 13 witnesses, chapter 12 | none changes meaning (`[diag.sev.warn]`); a warning-clean corpus or book spells the handling or declares the warning |
+  | `send`'s type fix (#275) | breaking | non-breaking |
+
+  (ii) is the rule. Its cost is real — the row *can* be lost — and it
+  is the cost W0601 already carries for every other fallible call in
+  the language; (i)'s price is a rule about position, which the
+  language has no other instance of and just retired one of (#276).
+  The warning cites its hazard by name (`[diag.sev.warn]`): the send
+  after close that `[conc.chan.close]` was written so a sender could
+  see, unseen. The three spellings that see it are the ones the
+  warning already names — propagate with `?`, handle with `else`, or
+  bind it away — and the corpus witnesses spell the first.
+
+- `[type.unit.consume]` **A closure body with no fixed result is not a
+  unit context.** `s.spawn(fn() { ch.send(v) })` infers `fn() -> !()`
+  from its tail as `[type.closure.return]` says, and the scope consumes
+  the value: a task completing with an error value re-raises at the
+  scope exit (`[conc.task.fail]`). That is the row reaching the one
+  reader who can act on it, not a discard, and it draws no warning.
+  Inside such a closure a loop body is a unit context as everywhere
+  else: `s.spawn(fn() { for i in 1..=n { ch.send(i) } })` warns at the
+  send, and `ch.send(i)?` is the spelling that hands the loop's
+  failure to the scope.
+
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
 beyond what literal adoption needs) nor the general narrowing integer

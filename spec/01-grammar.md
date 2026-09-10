@@ -1035,7 +1035,8 @@ rows, E07xx comptime, E08xx sema completion, E1xxx memory tiers
   (literal outside the cast target's range), W0402 (`0.0 - x` as
   negation — loses `-0.0`).
 - **W06xx** — error-row-adjacent warnings, mirroring E06xx. W0601
-  (fallible result discarded by an expression statement), W0602
+  (fallible result discarded by an expression statement, or by a `!()`
+  tail in a unit context — `[type.unit.discard]`), W0602
   (anonymous row spelled inline on a `pub` signature — the s15 lean,
   recorded there as allowed-but-linted).
 - **W08xx** — pattern/completion-adjacent warnings, mirroring E08xx.

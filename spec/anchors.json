@@ -447,7 +447,11 @@
     "type.str": "10-types.md",
     "type.str.concat": "10-types.md",
     "type.str.concat.cost": "10-types.md",
-    "type.str.concat.mix": "10-types.md"
+    "type.str.concat.mix": "10-types.md",
+    "type.unit": "10-types.md",
+    "type.unit.consume": "10-types.md",
+    "type.unit.context": "10-types.md",
+    "type.unit.discard": "10-types.md"
   },
   "version": 1
 }

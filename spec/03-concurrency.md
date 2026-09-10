@@ -202,7 +202,17 @@ premise by construction.
   (`[conc.cancel.points]`) is **`cancelled`**: lowercase, the house
   pact `[mem.str.parse]` restated — a payload-free mark is a lowercase
   word, CapCase names a payload's type (W0603). `recv`'s row is
-  `T ! {closed, cancelled}`. (Spelled 2026-09-09, wolf-lang#273: the
+  `T ! {closed, cancelled}`, and `send`'s is `() ! {closed, cancelled}`
+  — the same two tags, since a send blocked on a full buffer is a
+  blocking point too (`[conc.chan.buf]`, `[conc.cancel.points]`). A
+  send whose value nobody reads — a loop body, an else-less `if` — is
+  `[type.unit.discard]`'s warned discard, never a mismatch; `?` hands
+  the failure to the enclosing row, a task's to its scope
+  (`[type.unit.consume]`). (Typed 2026-09-10, wolf-lang#275, s146: the
+  compiler had `send` as `()` for two releases after this clause said
+  otherwise, and the fix waited on `[type.unit]` being written;
+  `corpus/conc/chan_send_closed_row.lu` witnesses the send side, the
+  file below the receive side.) (Spelled 2026-09-09, wolf-lang#273: the
   clause named the value and not its tag, the compiler's row said
   `closed` and the interpreter minted `Closed`; since `{err}` renders a
   caught row by its tag's name (`[type.interp.row]`) the spelling is
