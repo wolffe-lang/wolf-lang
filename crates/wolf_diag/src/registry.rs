@@ -1292,6 +1292,18 @@ literals use — with the struct's definition site and a typo
 suggestion when one is close.
 "#);
 
+code!(E0815, "a range pattern that no value can match", r#"
+`lo..hi` matches the values from `lo` up to but not including `hi`,
+and `lo..=hi` includes `hi` ([gram.pat.range]). This range is empty —
+its low end is not below its high end (`5..5`, `9..=3`) — so the arm
+can never match, which is never what a switch-shaped `match` means:
+the ends are swapped, or the exclusive form was written where the
+inclusive one was meant. Swap the ends, or spell the one-value case as
+the literal (`5`) or the inclusive range (`5..=5`). Both ends are
+literals, so the checker decides this at compile time; over `char`
+the order is scalar order ([type.char.order]).
+"#);
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004
