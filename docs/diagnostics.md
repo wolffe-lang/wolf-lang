@@ -2216,6 +2216,15 @@ handle it with `else`, or match on it; if the failure genuinely does
 not matter here, bind it away explicitly so the discard is visible
 to the reader.
 
+The tail of a block in a unit context is the same discard
+(`[type.unit.discard]`): the last expression of a `for`, `while`, or
+`loop` body, of an `if` with no `else`, or of a function whose result
+is `()` produces a value nobody consumes, because the block's value
+is `()` whatever the tail's type. A `!()` there — a `ch.send(v)`
+closing a loop body is the common shape — is warned exactly like a
+non-trailing statement, never refused; `ch.send(v)?` hands the
+failure to the enclosing row (a spawned task's to its scope).
+
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__discarded_result.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_discarded_result.snap
 
 ## W0602 — a `pub` signature spells its error row anonymously

@@ -2123,6 +2123,15 @@ error channel can be ignored by accident. Propagate it with `?`,
 handle it with `else`, or match on it; if the failure genuinely does
 not matter here, bind it away explicitly so the discard is visible
 to the reader.
+
+The tail of a block in a unit context is the same discard
+(`[type.unit.discard]`): the last expression of a `for`, `while`, or
+`loop` body, of an `if` with no `else`, or of a function whose result
+is `()` produces a value nobody consumes, because the block's value
+is `()` whatever the tail's type. A `!()` there — a `ch.send(v)`
+closing a loop body is the common shape — is warned exactly like a
+non-trailing statement, never refused; `ch.send(v)?` hands the
+failure to the enclosing row (a spawned task's to its scope).
 "#);
 
 code!(W0602, "a `pub` signature spells its error row anonymously", r#"
