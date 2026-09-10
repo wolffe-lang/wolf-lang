@@ -8,7 +8,7 @@ fn main() -> !int {
     let ch = channel[region](1)
     region p {
         let xs = List[int]()       // p is open here
-        ch.send(move p)            // ERROR E1005: p is open (we are inside it)
+        ch.send(move p)?           // ERROR E1005: p is open (we are inside it)
     }
     0
 }

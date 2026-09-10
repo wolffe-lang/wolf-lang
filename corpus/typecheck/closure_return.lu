@@ -34,7 +34,7 @@ fn main() -> !int {
             let v = ch.recv() else |_| { return }
             print("task got {v}")
         })
-        ch.send(4)
+        ch.send(4)?
     }
     print("joined")
     fn clamp(n: int) -> int {

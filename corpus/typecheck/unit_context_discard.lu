@@ -1,0 +1,43 @@
+//! check: run(exit=0, stdout="7 45")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, type.unit.consume, diag.sev.warn
+//! warns: W0601
+//!
+//! `[type.unit.discard]` (wolf-lang#275, s146): a `!()` tail where `()`
+//! is expected is a warned discard, never a mismatch. Four unit
+//! contexts each close on a `ch.send(…)` and each draws W0601 at the
+//! tail — a `for` body, a `while` body, an else-less `if`, a unit
+//! function's body (whose first send is the non-trailing statement
+//! W0601 has always warned on). The spawned closure is
+//! `[type.unit.consume]`'s counter-case: its tail types the task, the
+//! scope consumes the row, and it warns nowhere. Every send lands: the
+//! program runs to the same numbers on both machines.
+
+fn push_twice(ch: channel[int]) {
+    ch.send(10)
+    ch.send(20)
+}
+
+fn main() -> !int {
+    let ch = channel[int](8)
+    for i in 1..=2 { ch.send(i) }
+    var n = 0
+    while n < 1 {
+        n += 1
+        ch.send(3)
+    }
+    if n == 1 { ch.send(4) }
+    push_twice(ch)
+    scope s {
+        s.spawn(fn() { ch.send(5) })
+    }
+    ch.close()
+    var count = 0
+    var sum = 0
+    for v in ch {
+        count += 1
+        sum += v
+    }
+    print("{count} {sum}")
+    0
+}

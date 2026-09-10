@@ -24,7 +24,7 @@ fn total(queue: channel[int]) -> int {
 
 fn shelver(queue: channel[int], reply: channel[int]) -> int {
     let n = total(queue)
-    reply.send(n)
+    reply.send(n) else {}
     n
 }
 
@@ -36,13 +36,13 @@ fn drain(desk: Desk) -> int {
 
 fn main() -> !int {
     let q = channel[int](4)
-    q.send(900)
-    q.send(640)
+    q.send(900)?
+    q.send(640)?
     q.close()
     print("plain {total(q)}")
     let p = channel[int](4)
-    p.send(900)
-    p.send(640)
+    p.send(900)?
+    p.send(640)?
     p.close()
     let reply = channel[int](1)
     let worker = spawn proc shelver(p, reply)
@@ -55,9 +55,9 @@ fn main() -> !int {
         timeout(1.s) => { print("proc stuck") },
     }
     let d = Desk { inbox: channel[int](4) }
-    d.inbox.send(1)
-    d.inbox.send(2)
-    d.inbox.send(3)
+    d.inbox.send(1)?
+    d.inbox.send(2)?
+    d.inbox.send(3)?
     d.inbox.close()
     print("field {drain(d)}")
     0

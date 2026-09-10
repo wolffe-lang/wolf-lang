@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="drained 6\nlate: closed\nrelayed: closed")
+//! phase: run
+//! conforms: conc.chan.close, type.unit.consume, type.interp.row
+//!
+//! `[conc.chan.close]`'s send side (wolf-lang#275, s146): a send after
+//! close answers the payload-free row `closed` — `send` is
+//! `() ! {closed, cancelled}`, the receive row over a unit payload —
+//! handled with `else`, propagated with `?` into the caller's row, and
+//! `{err}` renders the tag by its name (`[type.interp.row]`). The
+//! receive side is `chan_closed_row.lu`. The checked lane declines
+//! channel methods (no resolvable bodies); this is a native witness.
+
+fn relay(ch: channel[int], v: int) -> !int {
+    ch.send(v)?
+    v
+}
+
+fn main() -> !int {
+    let ch = channel[int](4)
+    for i in 1..=3 { ch.send(i)? }
+    ch.close()
+    var sum = 0
+    for v in ch { sum += v }
+    print("drained {sum}")
+    ch.send(4) else |err| { print("late: {err}") }
+    let r = relay(ch, 5) else |err| { print("relayed: {err}"); 0 }
+    if r == 0 { 0 } else { 1 }
+}

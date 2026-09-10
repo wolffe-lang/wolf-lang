@@ -13,14 +13,14 @@
 fn main() -> !int {
     let a = channel[int](1)
     let b = channel[int](1)
-    a.send(7)
+    a.send(7)?
     var got = 0
     select {
         v from a => { got = v },
         timeout(1.s) => { got = -1 },
     }
     if got != 7 { return 1 }
-    b.send(9)
+    b.send(9)?
     select {
         v from b => { got = v },
         timeout(1.s) => { got = -1 },

@@ -8,8 +8,8 @@
 fn main() -> !int {
     let a = channel[int](1)
     let b = channel[int](1)
-    a.send(1)
-    b.send(2)
+    a.send(1)?
+    b.send(2)?
     var got = 0
     select {
         v from a => { got = v },

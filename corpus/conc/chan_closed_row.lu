@@ -10,7 +10,7 @@
 
 fn main() -> !int {
     let ch = channel[int](4)
-    for i in 1..=3 { ch.send(i) }
+    for i in 1..=3 { ch.send(i)? }
     ch.close()
     var sum = 0
     for v in ch { sum += v }
