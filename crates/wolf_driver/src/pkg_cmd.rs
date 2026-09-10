@@ -922,8 +922,12 @@ pub fn publish(args: &[String]) {
             std::process::exit(1);
         }
     };
+    // The address is over the interface's CONTENT — the toolchain
+    // stamp stays out of it (#292), so a compiler release that touches
+    // no `pub` surface leaves `interface=` where `tree=` and
+    // `manifest=` already were.
     let ifaces = wolf_sema::build_interfaces(&res.package);
-    let iface_text: String = ifaces.iter().map(wolf_sema::pretty).collect();
+    let iface_text: String = ifaces.iter().map(wolf_sema::digest_text).collect();
     let record = wolf_pkg::log::LogRecord {
         key: format!("{}@{}", root_pkg.name, root_pkg.version),
         tree,
