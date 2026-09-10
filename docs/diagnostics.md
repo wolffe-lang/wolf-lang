@@ -2225,7 +2225,7 @@ closing a loop body is the common shape — is warned exactly like a
 non-trailing statement, never refused; `ch.send(v)?` hands the
 failure to the enclosing row (a spawned task's to its scope).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__discarded_result.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_discarded_result.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__discarded_result.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__unit_context_discard.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_discarded_result.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_unit_context_tail.snap
 
 ## W0602 — a `pub` signature spells its error row anonymously
 
