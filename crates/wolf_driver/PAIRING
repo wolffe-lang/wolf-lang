@@ -9,5 +9,20 @@
 # present (and, when that sibling is a release build, the pin too:
 # D57, a release's pin is part of its identity), so a stale stamp
 # fails the local gauntlet instead of shipping.
+#
+# The ritual has a CONTROL step (#281), and it is not optional: after
+# measuring the corpus against the NEW interpreter, measure the same
+# corpus, same tree, same `wolf`, against the PREVIOUS stamp's release
+# archive and diff the two ledgers. Without it every count that moved
+# gets attributed to the interpreter by default, which at r13 would
+# have been wrong seven times over. One command:
+#
+#   cargo xtask differ target/release/wolf <new-lupin> --triage --checked \
+#       --control <previous-lupin-or-.tar.gz>
+#
+# (and again with --native). It prints "the interpreter bump moved N
+# counts" with N measured, names the files, and reports the moves that
+# live BELOW the ledger — a differing stdout on an unseeded file never
+# reaches a count, and that is where r13's real interpreter delta was.
 lupin-version = 0.1.29
 lupin-pin = e9a17cb
