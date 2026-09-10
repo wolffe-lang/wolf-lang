@@ -852,6 +852,30 @@ change: the row's spelling.)
   things a PROGRAM spells, and a value read from the world gets no
   such courtesy.
 
+(Appended 2026-09-10, s148 — wolf-lang#293. A `str` is immutable at
+every tier; the chapter said so only in passing, inside
+`[mem.str.view.lend]`'s parenthesis, and the compiler answered
+`s[a..b] = …` with conservatism's voice — "cannot compile this yet …
+not a bug in your program" — which told a reader the language would
+one day allow it. It will not, and the rule is written down so the
+refusal can cite it.)
+
+- `[mem.str.imm]` **A `str` never changes after it is built.** Every
+  operation on a `str` reads its bytes; the ones that yield a `str`
+  yield a view of the receiver's own storage (`[mem.str.view]`) or a
+  fresh string (`[type.str.concat]`, interpolation), never a write into
+  it. Consequently an index or a slice of a `str` is **not a place**:
+  `s[a..b] = v`, `s[i] = v`, and their compound forms are refused —
+  E0416, naming the fix — in every profile, on every lane, and they
+  are a type error, not a not-yet. The new text is built and assigned
+  to the binding: `s = "{head}{bit}{tail}"` with the pieces sliced
+  out, `s = head + bit + tail`, or `std.strbuf` when the loop is hot
+  (`[type.str.concat.cost]`). This is what makes `[mem.str.view]`'s
+  zero-copy views sound with no borrow bookkeeping — nothing can
+  change under a view — and what `[mem.str.view.lend]` relies on when
+  it lends a caller's bytes across a call. Witness:
+  `typecheck/str_slice_assign.lu`.
+
 ---
 
 - `[mem.dyn.unsize]` A trait object is constructed by an **explicit
