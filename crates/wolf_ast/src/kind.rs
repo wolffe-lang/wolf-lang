@@ -101,6 +101,9 @@ pub enum SyntaxKind {
     WildcardPat, LiteralPat, IdentPat, PathPat, TuplePat, OrPat, BindingPat,
     /// `path '{' field_pat … '}'` (`[gram.pat.struct]`, s129 #179).
     StructPat,
+    /// `literal ('..' | '..=') literal` (`[gram.pat.range]`, s147 #287):
+    /// two `LiteralPat` children around the operator token.
+    RangePat,
     /// One `IDENT (':' pattern)?` of a struct pattern. The shorthand
     /// holds a single [`SyntaxKind::IdentPat`] child (the binding IS
     /// the field name); the explicit form holds the field-name token,

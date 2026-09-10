@@ -44,6 +44,7 @@ pub fn is_pattern_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::BindingPat
             | SyntaxKind::StructPat
             | SyntaxKind::FieldPat
+            | SyntaxKind::RangePat
     )
 }
 
@@ -1340,6 +1341,41 @@ impl<'a> FieldPat<'a> {
         self.pattern()
             .filter(|n| n.kind == SyntaxKind::IdentPat)
             .map(|n| n.span)
+    }
+}
+
+ast_node!(
+    /// `literal ('..' | '..=') literal` — a range pattern
+    /// (`[gram.pat.range]`, s147 #287). Both endpoints are `LiteralPat`
+    /// children; `..=` includes the high end. A parse-reported open
+    /// form (`..hi`) carries one child, which `lo`/`hi` answer as a
+    /// missing end.
+    RangePat
+);
+
+impl<'a> RangePat<'a> {
+    /// The low end — the `LiteralPat` before the operator.
+    pub fn lo(self) -> Option<&'a GreenNode> {
+        let mut ends = self.0.nodes().filter(|n| n.kind == SyntaxKind::LiteralPat);
+        let first = ends.next()?;
+        // An open `..hi` form has its one literal AFTER the operator:
+        // that literal is the high end, and the low end is missing.
+        let op = self.0.tokens().find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))?;
+        (first.span.lo < op.span.lo).then_some(first)
+    }
+
+    /// The high end — the `LiteralPat` after the operator.
+    pub fn hi(self) -> Option<&'a GreenNode> {
+        let op = self.0.tokens().find(|t| matches!(t.kind, SyntaxKind::DotDot | SyntaxKind::DotDotEq))?;
+        self.0
+            .nodes()
+            .filter(|n| n.kind == SyntaxKind::LiteralPat)
+            .find(|n| n.span.lo > op.span.lo)
+    }
+
+    /// `true` for `lo..=hi` (the high end included).
+    pub fn inclusive(self) -> bool {
+        self.0.tokens().any(|t| t.kind == SyntaxKind::DotDotEq)
     }
 }
 
