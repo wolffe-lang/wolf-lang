@@ -494,6 +494,32 @@ fn e1607_well_formed_stays_clean() {
     );
 }
 
+// ---------------------------------------------------------- E0416 -----
+
+/// #293: the maintainer's chapter-3 table wrote `s[l-1..l] = "{t}"`
+/// and the compiler answered with conservatism's voice ("cannot
+/// compile this yet … not a bug in your program"). A `str` never
+/// changes (`[mem.str.imm]`) and a slice is a view, so this is a type
+/// error with the fix in the note, in every profile.
+#[test]
+fn e0416_str_slice_assign() {
+    snap_one(
+        "e0416_str_slice_assign",
+        "fn main() -> !int {\n    var s = \"00000000\"\n    let l = s.len\n    let t = 1\n    s[l-1..l] = \"{t}\"\n    0\n}\n",
+    );
+}
+
+/// The single-index spelling refuses the same way (the read of `s[i]`
+/// is E0411; the write is this code), and the compound form `+=`
+/// reaches the place check before its operator.
+#[test]
+fn e0416_str_index_and_compound() {
+    snap_one(
+        "e0416_str_index_and_compound",
+        "fn main() -> !int {\n    var s = \"wolf\"\n    s[1] = \"o\"\n    s[1..2] += \"o\"\n    0\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0415 -----
 
 /// #151's second crash, at the cause: a bare binding defaults to `i32`

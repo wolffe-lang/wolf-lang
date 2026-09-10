@@ -3696,9 +3696,16 @@ impl<'a> Checker<'a> {
             // s70/#55) and the s22 raw-pointer write `p[i] = v`
             // (wolf_mem gates the latter to `unsafe` blocks, E1301).
             // The receiver synthesizes like the read; what the bracket
-            // read refuses stays NotYetCheckable, and a `str` slice is
-            // never a place.
+            // read refuses stays NotYetCheckable, and a `str` index or
+            // slice is never a place — E0416 (s148, #293), not
+            // conservatism.
             SyntaxKind::BracketApply => self.bracket_place_type(place),
+            // The conservatism ledger's `assignment through this
+            // place`, narrowed at s148 (#293) to what sema does not
+            // type as a place yet: a tuple on the left (`(a, b) = …`,
+            // destructuring assignment — unruled), a deref, a call
+            // result, a literal. None of these is a `str` write; the
+            // `str` case is a type error and reports above.
             _ => Err(NotYet {
                 construct: "assignment through this place",
                 span: place.span,
@@ -3707,9 +3714,13 @@ impl<'a> Checker<'a> {
     }
 
     /// The type of a `recv[idx]` PLACE (#55): `List[T]` elements and
-    /// raw-pointer cells type exactly as their reads do; `Pool`, `str`
-    /// slices and everything else the bracket read admits stay
-    /// non-places (a `str` slice is a view, a pool write is c06's).
+    /// raw-pointer cells type exactly as their reads do. A `str` index
+    /// or slice is refused as a type error (E0416, `[mem.str.imm]`: a
+    /// `str` never changes and a slice is a view, not a place — s148,
+    /// #293). What stays conservatism is the receiver whose bracket
+    /// READ is itself not served yet — generic application, the std
+    /// containers beyond `List`, a `Pool` cell (c06's write) — and a
+    /// tuple index.
     fn bracket_place_type(&mut self, place: &GreenNode) -> R<TyId> {
         let Some(d) = BracketApply::cast(place) else {
             return Ok(self.error_ty());
@@ -3729,12 +3740,57 @@ impl<'a> Checker<'a> {
                 self.check_index_arg(d.args(), int_, "raw pointer index")?;
                 Ok(elem)
             }
+            TyKind::Prim(Prim::Str) => {
+                let is_slice = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|a| a.args())
+                    .filter_map(Arg::value)
+                    .next()
+                    .is_some_and(|n| n.kind == SyntaxKind::RangeExpr);
+                let recv_text = self.text(recv.span);
+                self.report_str_place(place.span, recv.span, &recv_text, is_slice);
+                Ok(self.error_ty())
+            }
             TyKind::Error | TyKind::Never => Ok(self.error_ty()),
             _ => Err(NotYet {
                 construct: "assignment through this place",
                 span: place.span,
             }),
         }
+    }
+
+    /// E0416 — `s[a..b] = v` / `s[i] = v` on a `str` (#293). The
+    /// language rules it (`[mem.str.imm]`: a `str` never changes;
+    /// `[mem.str.view]`: a slice is a view), so the refusal is a type
+    /// error in sema's voice, not the driver's "cannot compile this
+    /// yet"; the note spells the fix the book teaches.
+    fn report_str_place(&mut self, place: Span, recv: Span, recv_text: &str, is_slice: bool) {
+        let (what, a_what) = if is_slice {
+            ("slice", "a slice")
+        } else {
+            ("index", "an index")
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0416,
+                place,
+                format!("cannot assign through a `str` {what}: `{recv_text}` is immutable"),
+            )
+            .with_label(format!("{a_what} of a `str` is a view, not a place"))
+            .with_secondary(recv, "this is a `str`".to_string())
+            .with_note(
+                "a `str` never changes after it is built ([mem.str.imm]); an index or \
+                 slice reads its bytes and cannot be written through, on any lane."
+                    .to_string(),
+            )
+            .with_note(format!(
+                "build the new text and assign it to `{recv_text}`: slice the pieces out \
+                 and write `{recv_text} = \"{{head}}{{bit}}{{tail}}\"`, or \
+                 `{recv_text} = head + bit + tail`; `std.strbuf` is the builder for \
+                 a hot loop."
+            )),
+        );
     }
 
     // -------------------------------------------------- expressions ----

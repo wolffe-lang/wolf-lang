@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0416]: cannot assign through a `str` slice: `s` is immutable
+ --> mem:///main.lu:5:5
+  |
+5 |     s[l-1..l] = "{t}"
+  |     - this is a `str`
+  |     ^^^^^^^^^ a slice of a `str` is a view, not a place
+  |
+  = note: a `str` never changes after it is built ([mem.str.imm]); an index or slice reads its
+    bytes and cannot be written through, on any lane.
+  = note: build the new text and assign it to `s`: slice the pieces out and write `s =
+    "{head}{bit}{tail}"`, or `s = head + bit + tail`; `std.strbuf` is the builder for a hot
+    loop.

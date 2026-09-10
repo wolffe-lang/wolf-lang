@@ -1,0 +1,25 @@
+//! check: fail(E0416)
+//! phase: resolve
+//! conforms: mem.str.imm, mem.str.view
+//!
+//! wolf-lang#293: the maintainer's chapter-3 binary-spelling table
+//! wrote `s[l-1..l] = "{t}"` and the compiler answered "cannot
+//! compile this yet … not a bug in your program" — conservatism's
+//! voice for what is a type error the language rules. A `str` is
+//! immutable at every tier and `s[a..b]` is a view of its bytes
+//! ([mem.str.imm], [mem.str.view]): there is no place on the left of
+//! that `=`, today or ever. E0416 says so and spells the fix the book
+//! teaches — build the new string (`"{head}{bit}{tail}"`, `+`, or
+//! `std.strbuf`) and assign it to `s`. lupin refuses the same program
+//! as `unsupported: a slice expression denotes a value, not a place`
+//! (its conservatism ledger); parity on the code is wolf-interp's
+//! half.
+
+fn main() -> !int {
+    var s = "00000000"
+    let l = s.len
+    let t = 1
+    s[l-1..l] = "{t}"
+    print(s)
+    0
+}
