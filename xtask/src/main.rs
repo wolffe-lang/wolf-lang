@@ -1487,12 +1487,29 @@ const ALL_THREE_FLOOR: usize = 0;
 // `grammar/else_default.lu` already used `to_int` at resolve and stay
 // where their other constructs hold them. Counts measured by this
 // gate, not predicted.
+// s149 ratchet, macOS/aarch64, RE-MEASURED over 502 entries — and the
+// re-measurement is the point of this entry. The floors had not moved
+// since s142 (281/301/301, union 318, all-three 264) while six
+// sprints of witnesses landed on top of them, so the gate had eight
+// entries of slack: a lane could have LOST coverage and stayed green.
+// The measurement on this branch is checked 291, native 318, release
+// 318, union 335, all-three 274, and the floors are set to it. Two of
+// those entries are s149's own — `fs/open_nonblock` (`[os.fs.open]`'s
+// mode 5) and `net/accept_posture` (what a program observes of the
+// accept posture and the nodelay deferral: nothing) — and both
+// execute on all three lanes, because neither clause names a host and
+// the checked machine opens the same file and serves the same option
+// through the same std calls the runtime uses. No pre-existing file
+// moved lanes: both clauses move a COST, and every row the corpus
+// reads off a socket or a handle is the row it read before. Counts
+// measured by this gate on this host, not predicted and not
+// inherited.
 #[cfg(target_os = "macos")]
-const LANE_FLOORS: &[(&str, usize)] = &[("checked", 281), ("native", 301), ("release", 301)];
+const LANE_FLOORS: &[(&str, usize)] = &[("checked", 291), ("native", 318), ("release", 318)];
 #[cfg(target_os = "macos")]
-const UNION_FLOOR: usize = 318;
+const UNION_FLOOR: usize = 335;
 #[cfg(target_os = "macos")]
-const ALL_THREE_FLOOR: usize = 264;
+const ALL_THREE_FLOOR: usize = 274;
 
 /// One lane's observation of one corpus entry.
 struct LaneObs {
