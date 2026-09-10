@@ -97,6 +97,7 @@ ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
+fs/open_nonblock.lu: lowers
 fs/roundtrip.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
@@ -305,6 +306,7 @@ memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer wri
 memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes c10; Pool/Map c06/std)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
+net/accept_posture.lu: lowers
 net/accept_race.lu: lowers
 net/byte_roundtrip.lu: lowers
 net/echo_bytes.lu: lowers
