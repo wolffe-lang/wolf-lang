@@ -10395,8 +10395,7 @@ impl<'a> Checker<'a> {
                 let final_t = if raised.is_empty() {
                     body_t
                 } else {
-                    let row = self.lo.table.row(raised.clone(), None);
-                    self.lo.table.intern(TyKind::ErrUnion(body_t, row))
+                    self.wrap_raised(body_t, &raised)
                 };
                 self.last_closure_row = raised;
                 let exp2 = Expect {
@@ -10423,6 +10422,31 @@ impl<'a> Checker<'a> {
                 Ok(())
             }
         }
+    }
+
+    /// Wrap a closure's result in the row its `?`s raised (s73) —
+    /// flattened when the result is itself fallible (D51, #34: a
+    /// nested `(T ! a) ! b` is the one union `T ! {a, b}`). The case
+    /// is a task whose tail is `ch.send(v)` and whose body also `?`s
+    /// (s146, wolf-lang#275; chapter 10's `answer.send(words_of(t)?)`):
+    /// `() ! {closed, cancelled, unknown}`, never
+    /// `(() ! {closed, cancelled}) ! {unknown}`, which no tier lowers.
+    /// The spawn's re-raise width check keeps reading the `?`-raised
+    /// tags only (`last_closure_row`), as it always has — a fallible
+    /// TAIL's own row was never width-checked at the spawn, and this
+    /// sprint does not widen that.
+    fn wrap_raised(&mut self, ty: TyId, raised: &[(String, Vec<TyId>)]) -> TyId {
+        let t = self.shallow(ty);
+        if let TyKind::ErrUnion(ok, row) = self.lo.table.kind(t).clone()
+            && let TyKind::Row { tags, tail } = self.lo.table.kind(row).clone()
+        {
+            let mut all = tags;
+            all.extend(raised.iter().cloned());
+            let row = self.lo.table.row(all, tail);
+            return self.lo.table.intern(TyKind::ErrUnion(ok, row));
+        }
+        let row = self.lo.table.row(raised.to_vec(), None);
+        self.lo.table.intern(TyKind::ErrUnion(ty, row))
     }
 
     fn synth_closure(&mut self, e: &GreenNode) -> R<TyId> {
@@ -10488,8 +10512,7 @@ impl<'a> Checker<'a> {
         let ret = if raised.is_empty() {
             ret
         } else {
-            let row = self.lo.table.row(raised.clone(), None);
-            self.lo.table.intern(TyKind::ErrUnion(ret, row))
+            self.wrap_raised(ret, &raised)
         };
         self.last_closure_row = raised;
         Ok(self.lo.table.intern(TyKind::Fn(ptys, ret)))
