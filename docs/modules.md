@@ -109,3 +109,27 @@ D59 a bare-file build ignored it and exited 0.
 (D31): module resolution produces them and does not read them. A
 directory does not need one to be importable; that folklore came from
 #149's first (corrected) analysis.
+
+### What the two hashes mean
+
+`wolf interface` prints an `export_hash` and a `pkg_hash` per module.
+Both are over the interface's **content** and nothing else: the
+edition, the package and module path, the direct deps' export hashes,
+and the `pub` items (`export_hash`) or the `pub` and `pub(pkg)` items
+(`pkg_hash`), with the module's impls, dyn records and trusted roster
+in both. The toolchain that wrote the file is stamped into the header
+(`wolfi v0 · toolchain 0.2.9 · edition v1`) and printed, and it is
+**not hashed** (wolf-lang#292 — until then the release string sat in
+both hashes, so every patch release moved every module's hashes on
+packages nobody had edited). So a hash comparison means the same thing
+within one toolchain and across two: an `export_hash` that moved means
+something an importer can call changed; one that held means they
+cannot tell. Splitting a file, renaming a private helper, editing a
+body, or upgrading the compiler moves nothing. The transparency-log
+`interface=` address `wolf publish` records is taken over the same
+stamp-free content. Whether a cached *object* must be rebuilt after a
+toolchain upgrade is a different question with a different key —
+`.lu-cache` keys on the toolchain separately — and the answer there
+is always yes. If the language surface itself ever changes in a way
+every interface must reflect, the `edition` is the revision that
+moves, never the release number.
