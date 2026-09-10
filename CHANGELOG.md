@@ -56,6 +56,33 @@ literal, and a bracket receiver whose *read* is not served yet
 a tuple index). Witness: `corpus/typecheck/str_slice_assign.lu`,
 `fail(E0416)`; two catalog snapshots.
 
+### The interface hash is over the interface (s148 — #292 closes)
+
+`crates/wolf_sema/src/interface.rs` hashed the compiler's own release
+string (`CARGO_PKG_VERSION`) into the head of both partitions, so
+every toolchain bump moved every module's `export_hash` and `pkg_hash`
+on packages nobody edited — the book measured it at 0.2.8 → 0.2.9:
+`tree=` and `manifest=` held, `interface=` alone moved (§25.2), and
+§22.2's "if it does not move, your importers cannot tell" was true
+only within one toolchain. **Ruled: the hashes are over the
+interface's content** — edition, package and module path, dep export
+hashes, items, impls, dyn records, trusted roster — and not over the
+release string, the magic or the encoding version, which are the
+file's container. The toolchain stays stamped in the `.wolfi` header
+and printed by `wolf interface`, informational. A hash that moved now
+means one thing on every toolchain: something you can call changed.
+Correctness never rode on the old head — the `.lu-cache` rebuild key
+carries the toolchain on its own (`KeyComps::env`), so a compiler
+upgrade still rebuilds every object; and should the language surface
+ever need to move every hash, `EDITION` (a surface revision, `v1`) is
+what bumps, never a version. `wolf publish`'s `interface=` address is
+taken over the same stamp-free rendering (`digest_text`). The one
+`.wolfi` snapshot re-recorded once (`interface_pretty`); a new test
+builds the same package under two stamps and asserts every hash and
+dep hash holds while the header and `wolf interface` still show the
+stamp (`version_only_bump_moves_no_hash`). `docs/modules.md` says
+what a reader should take from a hash.
+
 ### The switch a reader expects: range arms (s147 — #287 ruled, #286 closes)
 
 `match` in statement position is wolf's switch, and the one thing it
