@@ -32,6 +32,11 @@ jobs:
       LUPIN: ${{ github.workspace }}/.lupin/lupin
       # ...and may not answer a broken download with a green skip.
       WOLF_PAIRING_REQUIRE_SIBLING: "1"
+      # s149 (#289, #290): the syscall COUNT is a linux measurement and
+      # this is the job that makes it. `strace` is installed below, so a
+      # tracer that is missing here is a broken job, never a quiet skip
+      # — the same asymmetry the pairing gate above uses.
+      WOLF_SYSCALL_REQUIRE_STRACE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -40,8 +45,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
-          toolchain requirement per D33, never a build script)
-        run: sudo apt-get update && sudo apt-get install -y gdb lld clang
+          toolchain requirement per D33, never a build script; strace is the
+          s149 syscall counter's instrument, the one lobo's ws27 counted with)
+        run: sudo apt-get update && sudo apt-get install -y gdb lld clang strace
       - name: the sibling lupin that PAIRING names, from its own release page
         env:
           GH_TOKEN: ${{ github.token }}
