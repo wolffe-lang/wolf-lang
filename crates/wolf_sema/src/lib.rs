@@ -234,7 +234,10 @@ pub use graph::{
     ModuleData, ModuleLoader, Package, RawFile, SourceUnit, StandaloneMark, Vis, anchor_entry,
     is_standalone_entry, load_package, standalone_mark,
 };
-pub use interface::{Interface, build_interfaces, decode, encode, item_signature, pretty};
+pub use interface::{
+    Interface, build_interfaces, build_interfaces_with_toolchain, decode, digest_text, encode,
+    item_signature, pretty,
+};
 pub use lints::{AllowScan, scan_allows};
 pub use origin::{OriginMap, OriginScan, scan_origins};
 pub use resolve::{

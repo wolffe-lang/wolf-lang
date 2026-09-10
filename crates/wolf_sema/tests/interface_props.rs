@@ -311,3 +311,41 @@ fn dep_signature_change_propagates_through_dep_hashes() {
         "the dep's export hash rides in the dependent's header"
     );
 }
+
+/// wolf-lang#292: the compiler's release string used to be hashed into
+/// the head of both partitions, so every patch release moved every
+/// module's hashes on packages nobody edited (the book measured it at
+/// 0.2.8 → 0.2.9). The hashes are over the interface's content; the
+/// toolchain is a stamp in the header and nothing more. A version-only
+/// bump leaves every hash alone — and still shows in the stamp.
+#[test]
+fn version_only_bump_moves_no_hash() {
+    use wolf_sema::{build_interfaces_with_toolchain, digest_text, pretty};
+    let mut ml = MemoryLoader::new("prop");
+    for (m, n, s) in [BASE_MAIN, BASE_GEO] {
+        ml.add_file(m, n, s);
+    }
+    let pkg = load_package(&mut ml, &AliasTable::default()).expect("root loads");
+    let old = build_interfaces_with_toolchain(&pkg, "0.2.8");
+    let new = build_interfaces_with_toolchain(&pkg, "0.2.9");
+    assert_eq!(old.len(), new.len());
+    for (a, b) in old.iter().zip(&new) {
+        assert_eq!(a.toolchain, "0.2.8");
+        assert_eq!(b.toolchain, "0.2.9");
+        assert_eq!(
+            a.export_hash, b.export_hash,
+            "a toolchain bump is not an interface change"
+        );
+        assert_eq!(a.pkg_hash, b.pkg_hash, "nor a package-interface change");
+        assert_eq!(a.deps, b.deps, "dep hashes hold too");
+        // The `.wolfi` bytes differ only by the stamp: the publish
+        // address is taken over the stamp-free rendering and holds.
+        assert_ne!(encode(a), encode(b), "the header carries the stamp");
+        assert_ne!(pretty(a), pretty(b), "`wolf interface` prints the stamp");
+        assert_eq!(digest_text(a), digest_text(b), "the log address does not");
+    }
+    // And the default entry is the stamp-carrying one, not a third path.
+    let dflt = build_interfaces(&pkg);
+    assert_eq!(dflt[0].toolchain, env!("CARGO_PKG_VERSION"));
+    assert_eq!(dflt[0].export_hash, new[0].export_hash);
+}

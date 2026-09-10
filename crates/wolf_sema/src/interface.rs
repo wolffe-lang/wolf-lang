@@ -13,6 +13,24 @@
 //! anywhere in the format — two builds of the same source on any host
 //! are byte-identical (D33 synergy, CI-checked).
 //!
+//! **What the two hashes are over** (ruled at s148, wolf-lang#292):
+//! the interface's own CONTENT — the edition (the language-surface
+//! revision), the package and module path, the direct deps' export
+//! hashes, and the items, impls, dyn records and trusted roster —
+//! and NOT the compiler's release string. The toolchain that wrote
+//! the file is stamped into the `.wolfi` header and printed by
+//! `wolf interface`, and it is informational: a hash that moved means
+//! "something you can call changed"; a hash that held across a
+//! toolchain bump means your importers cannot tell. Before s148 the
+//! release string was hashed into the head of both partitions, so
+//! every patch release moved every module's hashes on packages nobody
+//! edited (the book measured it at 0.2.8 → 0.2.9, §22.2/§25.2). The
+//! rebuild key that decides whether a *cached object* is stale keys
+//! on the toolchain separately (`wolf_driver`'s `KeyComps::env`), so
+//! correctness never rode on this hash carrying the version. Should a
+//! future surface change need to move every hash, `EDITION` is the
+//! revision to bump — a surface revision, never a release number.
+//!
 //! Interfaces are *outputs* this sprint: [`encode`] produces the
 //! artifact bytes, [`decode`] is the loader API that s31's separate
 //! compilation will consume (exercised by round-trip tests today), and
@@ -113,17 +131,30 @@ pub struct Interface {
 /// Build the interface of every module in `pkg`, dependency-first
 /// (topological order — dep hashes feed dependents).
 pub fn build_interfaces(pkg: &Package) -> Vec<Interface> {
+    build_interfaces_with_toolchain(pkg, env!("CARGO_PKG_VERSION"))
+}
+
+/// [`build_interfaces`] with the toolchain stamp supplied — the stamp
+/// is written into the header and printed, and takes no part in
+/// either hash (wolf-lang#292); the test that a version-only bump
+/// leaves a module's hashes alone drives this entry with two stamps.
+pub fn build_interfaces_with_toolchain(pkg: &Package, toolchain: &str) -> Vec<Interface> {
     let mut export_hashes: BTreeMap<usize, [u8; 32]> = BTreeMap::new();
     let mut out = Vec::new();
     for &m in &pkg.topo {
-        let iface = build_one(pkg, m, &export_hashes);
+        let iface = build_one(pkg, m, toolchain, &export_hashes);
         export_hashes.insert(m, iface.export_hash);
         out.push(iface);
     }
     out
 }
 
-fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>) -> Interface {
+fn build_one(
+    pkg: &Package,
+    m: usize,
+    toolchain: &str,
+    export_hashes: &BTreeMap<usize, [u8; 32]>,
+) -> Interface {
     let module = &pkg.modules[m];
     let mut deps: Vec<(String, [u8; 32])> = module
         .deps
@@ -181,7 +212,7 @@ fn build_one(pkg: &Package, m: usize, export_hashes: &BTreeMap<usize, [u8; 32]>)
     Interface {
         package: pkg.name.clone(),
         module_path: module.path.clone(),
-        toolchain: env!("CARGO_PKG_VERSION").to_string(),
+        toolchain: toolchain.to_string(),
         edition: EDITION.to_string(),
         deps,
         items,
@@ -310,15 +341,18 @@ fn w_str(out: &mut Vec<u8>, s: &str) {
     out.extend_from_slice(s.as_bytes());
 }
 
+/// The hashed head of both partitions: content only (#292). The
+/// edition is the language-surface revision and belongs; the magic,
+/// the encoding version and the compiler's release string are the
+/// file's container and do not — they are written by [`encode`] into
+/// the on-disk header, where a reader wants them, and hashed by
+/// nothing.
 fn write_header(
     out: &mut Vec<u8>,
     pkg: &Package,
     module: &crate::graph::ModuleData,
     deps: &[(String, [u8; 32])],
 ) {
-    out.extend_from_slice(MAGIC);
-    w_u32(out, FORMAT_VERSION);
-    w_str(out, env!("CARGO_PKG_VERSION"));
     w_str(out, EDITION);
     w_str(out, &pkg.name);
     w_u32(out, module.path.len() as u32);
@@ -535,6 +569,20 @@ fn hex(h: &[u8; 32]) -> String {
 
 /// The human rendering behind `wolf interface` — snapshot-stable.
 pub fn pretty(iface: &Interface) -> String {
+    render(iface, true)
+}
+
+/// The rendering a transparency-log `interface=` address is taken
+/// over (`wolf publish`, `[pkg.log.record]`): [`pretty`] without the
+/// toolchain stamp, so the address is over the interface's content
+/// and a compiler release that touches no `pub` surface leaves it
+/// where it was (#292 — the book's §25.2 measured `tree=` and
+/// `manifest=` holding while `interface=` alone moved).
+pub fn digest_text(iface: &Interface) -> String {
+    render(iface, false)
+}
+
+fn render(iface: &Interface, with_toolchain: bool) -> String {
     use std::fmt::Write;
     let mut out = String::new();
     let module = if iface.module_path.is_empty() {
@@ -543,11 +591,15 @@ pub fn pretty(iface: &Interface) -> String {
         iface.module_path.join(".")
     };
     let _ = writeln!(out, "module {} :: {}", iface.package, module);
-    let _ = writeln!(
-        out,
-        "  wolfi v{FORMAT_VERSION} \u{b7} toolchain {} \u{b7} edition {}",
-        iface.toolchain, iface.edition
-    );
+    if with_toolchain {
+        let _ = writeln!(
+            out,
+            "  wolfi v{FORMAT_VERSION} \u{b7} toolchain {} \u{b7} edition {}",
+            iface.toolchain, iface.edition
+        );
+    } else {
+        let _ = writeln!(out, "  edition {}", iface.edition);
+    }
     let _ = writeln!(out, "  export_hash {}", hex(&iface.export_hash));
     let _ = writeln!(out, "  pkg_hash    {}", hex(&iface.pkg_hash));
     if iface.deps.is_empty() {
