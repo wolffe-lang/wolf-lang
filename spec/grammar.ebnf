@@ -200,6 +200,7 @@ closed_pattern ::= '_' | literal | IDENT
           | path '{' field_pat (',' field_pat)* (',' '..'?)? '}'
           | '(' pattern (',' pattern)* ','? ')'
           | IDENT '@' closed_pattern
+          | literal ('..' | '..=') literal    /* [gram.pat.range] */
 field_pat ::= IDENT (':' pattern)?
 
 reserved_kw ::= 'as' | 'asm' | 'assume' | 'borrow' | 'break' | 'comptime'

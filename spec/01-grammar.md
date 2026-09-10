@@ -827,6 +827,7 @@ closed_pattern ::= '_' | literal | IDENT
           | path '{' field_pat (',' field_pat)* (',' '..'?)? '}'
           | '(' pattern (',' pattern)* ','? ')'
           | IDENT '@' closed_pattern
+          | literal ('..' | '..=') literal    /* [gram.pat.range] */
 field_pat ::= IDENT (':' pattern)?
 ```
 
@@ -870,6 +871,48 @@ struct pattern is irrefutable exactly when its sub-patterns are, so
 it is admitted wherever a binder pattern is (`let`/`var`, D63 comma
 groups, `for` headers) and in `match` arms, where it participates in
 exhaustiveness as the single-constructor product of its fields.
+
+Range patterns `[gram.pat.range]` (s147, #287): `match` in statement
+position is wolf's switch, and a range arm is the one thing a reader
+expects of a switch that the pattern grammar lacked. `lo..hi` matches
+every value from `lo` up to but not including `hi`; `lo..=hi` includes
+`hi`. Both endpoints are **literals of one type** — an integer
+literal, on every integer primitive a literal pattern may already be
+written against (`int`, the sized and unsigned primitives,
+`wrapping[T]`; `byte` adopts no literal, `[type.byte]`, so it has no
+range arm either — match over `b as int`), or a `char` literal, ordered
+by scalar value (`[type.char.order]`). No identifiers, no expressions,
+and **no open ends**: `..hi` and `lo..` are the slice spellings of
+`[gram.expr.primary]`, not patterns, and the parser refuses them in
+pattern position (E0201) with a note that names the range form — the
+diagnostic must say the word "range", which is the papercut the book
+carried. Mixed endpoint types (`0..'z'`) are E0401 at the second
+endpoint; `str`, float, and `bool` endpoints are E0808 (`str` has no
+order clause, floats compare by equality only). An **empty range** —
+`5..5`, `9..=3` — matches nothing and is a compile error, **E0815**,
+at the pattern; a one-value range (`5..=5`, `5..6`) is legal and reads
+as the literal. Ranges compose with or-patterns (`0..10 | 20..30`),
+guards, and `@`-bindings (`n @ 1..=9`). A range is a test, never a
+binding: it is refutable, so binder positions refuse it (E0806) as
+they refuse a literal. `[gram.expr.flow]`'s arm grammar is unchanged.
+
+Exhaustiveness over ranges: integer and `char` columns stay
+"infinite" — the checker computes **no** union of ranges and literals
+for any domain this sprint, bounded (`u8`, `char`) or not, so a `_` or
+binder arm is still required after range arms, and E0801's witness is
+the smallest non-negative value no literal or range covers (`0..10`
+alone witnesses `10`). Computing the union over `u8`/`char` is a
+later sprint's if a program ever needs it; until then "infinite" is
+the honest answer for every integer column, `int` included.
+Overlapping ranges are legal — the first arm wins, as with literals —
+and an arm whose every value an earlier literal or range already
+covers is E0802 (a range subsumed by one earlier range or literal is
+reported; a range covered only by the union of several is not — the
+engine answers by single-constructor subsumption, conservative and
+silent). A range arm lowers to two comparisons on the scrutinee on
+both tiers, signed or unsigned by the scrutinee's type, `char` by
+scalar. Files: `grammar/match_range.lu`, `grammar/match_range_char.lu`,
+`rows/match_range_empty.lu`, `grammar/match_range_open.lu`.
 
 ---
 
