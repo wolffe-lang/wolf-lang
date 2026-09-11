@@ -1560,9 +1560,12 @@ not help — a copy is a fresh allocation in the *current* ambient
 region, which is still the dying one. `freeze` (making the whole
 region immortal and immutable) and `shared` (counted escape) are
 coming in later tiers for the cases that genuinely need to outlive
-the region.
+the region. A `str` built inside the block — by `+`, `+=`, or an
+interpolation with a hole — is such a value too: the two-word view
+copies out freely, but the bytes it points at were allocated in the
+region ([mem.region.escape]).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_payload_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_container.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_payload_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_container.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_str_concat_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_str_concat_send.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_str_append_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_str_concat_block_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_str_interp_escape_via_binding.snap
 
 ## E1011 — this would open a region while a region that contains it is open
 
