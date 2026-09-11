@@ -388,6 +388,51 @@
       "naive": 182,
       "ratio": 1.0
     },
+    "corpus/grammar/if_then_arm.lu": {
+      "midend": 45,
+      "naive": 54,
+      "ratio": 0.833
+    },
+    "corpus/grammar/if_then_block.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_chain.lu": {
+      "midend": 50,
+      "naive": 186,
+      "ratio": 0.269
+    },
+    "corpus/grammar/if_then_ident.lu": {
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_let.lu": {
+      "midend": 20,
+      "naive": 20,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_member.lu": {
+      "midend": 24,
+      "naive": 66,
+      "ratio": 0.364
+    },
+    "corpus/grammar/if_then_paren_default.lu": {
+      "midend": 148,
+      "naive": 140,
+      "ratio": 1.057
+    },
+    "corpus/grammar/if_then_stmt.lu": {
+      "midend": 51,
+      "naive": 56,
+      "ratio": 0.911
+    },
+    "corpus/grammar/if_then_width.lu": {
+      "midend": 8,
+      "naive": 8,
+      "ratio": 1.0
+    },
     "corpus/grammar/index_origin_closure.lu": {
       "midend": 68,
       "naive": 68,
