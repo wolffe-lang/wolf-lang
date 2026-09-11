@@ -2801,18 +2801,65 @@ impl<'a> Checker<'a> {
     /// wreck. `imm` is a region-state fact, not a type, so frozen
     /// aggregates are conservatively unsendable here — send the
     /// region, or share the frozen value by capture instead.
-    fn sendable(&self, t: TyId) -> bool {
+    ///
+    /// s150 (`[conc.chan.payload]`, wolf-lang#268): a payload is any
+    /// value the type system can move — so a struct, an enum or a
+    /// tuple whose every field is itself a payload is one (the
+    /// channel owns it in flight; the receiver takes it on `recv`).
+    /// A field that is a region-interior container (`List`) still
+    /// makes the whole unsendable: send the region.
+    fn sendable(&mut self, t: TyId) -> bool {
+        self.sendable_at(t, 0)
+    }
+
+    fn sendable_at(&mut self, t: TyId, depth: usize) -> bool {
+        // A nominal cannot contain itself by value, but generics can
+        // spell a long chain; bound the walk rather than trust it.
+        if depth > 32 {
+            return false;
+        }
         match self.kind_of(t) {
             TyKind::Error | TyKind::Never | TyKind::Var(_) | TyKind::Rigid(_) => true,
             TyKind::Unit | TyKind::Prim(_) | TyKind::Fn(..) => true,
-            TyKind::Wrapping(x) | TyKind::Range(x) | TyKind::Distinct(x) => self.sendable(x),
-            TyKind::Tuple(xs) => xs.iter().all(|x| self.sendable(*x)),
-            TyKind::RegionTy => true,
+            TyKind::Wrapping(x) | TyKind::Range(x) | TyKind::Distinct(x) => {
+                self.sendable_at(x, depth + 1)
+            }
+            TyKind::Tuple(xs) => xs.iter().all(|x| self.sendable_at(*x, depth + 1)),
+            // A region crosses on its own (`[conc.chan.move]`: the
+            // send is its affine move), never inside another value —
+            // an aggregate copies its fields at the send, and a copied
+            // region handle would be two owners.
+            TyKind::RegionTy => depth == 0,
             TyKind::Chan(_) | TyKind::Mutex(_) => true,
             // s73: exit reasons are values delivered over monitor
             // channels ([conc.proc.exit]); proc handles are opaque
             // ids ([conc.proc.1]) — both cross freely.
             TyKind::ExitReason | TyKind::Proc => true,
+            TyKind::Nominal { module, name, args } => {
+                let (generics, fields): (Vec<String>, Vec<TyId>) =
+                    match self.sigs.get(module as usize, &name).cloned() {
+                        Some(ItemSig::Struct(sig)) => {
+                            (sig.generics, sig.fields.iter().map(|f| f.ty).collect())
+                        }
+                        Some(ItemSig::Enum {
+                            generics, variants, ..
+                        }) => (
+                            generics,
+                            variants.iter().flat_map(|v| v.payload.iter().copied()).collect(),
+                        ),
+                        _ => return false,
+                    };
+                let inst_map: std::collections::BTreeMap<String, TyId> =
+                    generics.into_iter().zip(args.iter().copied()).collect();
+                fields.into_iter().all(|f| {
+                    let f = if inst_map.is_empty() {
+                        f
+                    } else {
+                        crate::types::subst(&mut self.lo.table, f, &inst_map)
+                    };
+                    self.sendable_at(f, depth + 1)
+                })
+            }
             _ => false,
         }
     }
@@ -2862,11 +2909,13 @@ impl<'a> Checker<'a> {
                 .with_label("not a sendable payload type")
                 .with_note(
                     "channel payloads must be `Copy` data, `imm` data, a region \
-                     value (the send is its affine move), or a `sync` type \
-                     ([conc.chan.type]) — sending anything else would give two \
-                     tasks one mutable value. D14's verbs are the ways out: \
-                     `move` the data into a region and send the region, `freeze` \
-                     it into shareable `imm` data, or guard it with a `Mutex`.",
+                     value (the send is its affine move), a `sync` type, or a \
+                     struct, enum or tuple whose every field is one of those \
+                     ([conc.chan.type], [conc.chan.payload]) — sending anything \
+                     else would give two tasks one mutable value. D14's verbs are \
+                     the ways out: `move` the data into a region and send the \
+                     region, `freeze` it into shareable `imm` data, or guard it \
+                     with a `Mutex`.",
                 ),
             );
         }

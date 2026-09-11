@@ -1585,10 +1585,14 @@ spellings are this diagnostic.
 code!(E1102, "this channel's payload type is not sendable", r#"
 `channel[T](n)` carries values between tasks, so `T` must be safe to
 hand across a task boundary: `Copy` data, `imm` data, a region value
-(the send is its affine `move`), or a `sync` type ([conc.chan.type]).
-The payload type here is none of those — sending it would either
-alias one mutable value from two tasks or silently copy something
-whose identity matters. D14's three verbs are the ways out: `move`
+(the send is its affine `move`), a `sync` type ([conc.chan.type]), or
+a struct, enum or tuple whose every field is one of those — a payload
+is any value the type system can move, the channel owns it in flight
+and the receiver takes it on `recv` ([conc.chan.payload]). The payload
+type here is none of those — sending it would either alias one
+mutable value from two tasks or silently copy something whose
+identity matters; a `List` field is the usual reason, since a list is
+region-interior storage. D14's three verbs are the ways out: `move`
 the data into a region and send the region, `freeze` it into `imm`
 data that shares by reference, or wrap it in a `sync` type such as a
 `Mutex` and share that.
