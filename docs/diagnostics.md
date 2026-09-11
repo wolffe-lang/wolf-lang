@@ -728,7 +728,40 @@ interpolation, D62), or reach for `std.strbuf` when the loop is hot,
 since each `+` builds a fresh `str` (`[type.str.concat.cost]`). The
 binding must be a `var` for any of those to land (E0410 otherwise).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__str_slice_assign.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0416_str_index_and_compound.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0416_str_slice_assign.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__map_compound_absent.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__str_slice_assign.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0416_str_index_and_compound.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0416_str_slice_assign.snap
+
+## E0417 — a `Map` entry cannot be updated in place through its index
+
+Reading `m[k]` asks a `Map` whether `k` is bound, and the answer is a
+row: `m[k]` is `V ! {none}` (spec/02 `[mem.map.absent]`), never a
+place holding a `V`. So `m[k] += v` (and every other `op=` spelling)
+has nothing to read-modify-write: the key may be absent, and an absent
+key has no value to add to. This is the rule of the language, not a
+gap in the compiler — E0416's sibling: the `str` index is not a place
+because a `str` never changes, the `Map` index is not a place because
+the entry may not exist. Spell the two halves: read with the default
+and write the sum, `m[k] = (m[k] else 0) + v`; or count with std's
+named operation, `map.tally(mut m, k)`, which is exactly that
+statement for the `int`-valued map the wordcount idiom needs
+(`use std.map`). A plain `m[k] = v` stays legal on any key: it inserts
+when `k` is absent and replaces when it is bound.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__map_compound_absent.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0417_map_compound_assign.snap
+
+## E0418 — this type cannot be a `Map` key
+
+A `Map[K, V]` admits exactly four key types this edition — `str`,
+`int`, `char` and `bool` (spec/10 `[type.map.key]`): the types whose
+equality the language itself defines, so that `m[k]` can ask "is this
+key bound?" without any user code deciding what "the same key" means.
+A struct, an enum or a tuple has no equality of its own until derived
+equality lands (`[K: Eq]` on a user type waits on that ruling), and a
+`List`, a `Map` or a float has none the language will ever spell for
+a key (a float's `nan != nan` would make a key that can never be
+found again). Key the map by one of the four — an `id: int` field, a
+`name: str` — or by a `str` built from the struct's fields.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__map_struct_key.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0418_map_key_outside_the_four.snap
 
 ## E0501 — the generic body uses something its bounds do not provide
 
