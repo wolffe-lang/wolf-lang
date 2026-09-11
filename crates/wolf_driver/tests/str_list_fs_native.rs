@@ -658,6 +658,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_fstat",
         // s143 (#268): a proc's `int` result rides its exit reason.
         "__wolf_rt_task_value",
+        // s150 (#300, [conc.chan.payload]): a closure's callable
+        // record in the ambient region; a channel of payload boxes and
+        // the boxes themselves (fill from a slot, empty into one).
+        "__wolf_rt_closure_alloc",
+        "__wolf_rt_chan_new_boxed",
+        "__wolf_rt_box_new",
+        "__wolf_rt_box_take",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -668,7 +675,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        134,
+        138,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
