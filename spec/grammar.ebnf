@@ -69,7 +69,7 @@ variant     ::= IDENT ('(' type (',' type)* ')')?
 struct_item ::= 'struct' IDENT generics? '{' field* '}'
 enum_item   ::= 'enum' IDENT generics? '{' variant (',' variant)* ','? '}'
 
-trait_item ::= 'trait' IDENT generics? '{' trait_member* '}'
+trait_item ::= 'trait' IDENT generics? ('{' trait_member* '}' | '=' bound TERM?)
 trait_member ::= fn_item | type_item | const_item
 impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item

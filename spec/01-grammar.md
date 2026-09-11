@@ -387,11 +387,17 @@ enum_item   ::= 'enum' IDENT generics? '{' variant (',' variant)* ','? '}'
 ### 2.6 Traits & impls `[gram.item.trait]`
 
 ```ebnf
-trait_item ::= 'trait' IDENT generics? '{' trait_member* '}'
+trait_item ::= 'trait' IDENT generics? ('{' trait_member* '}' | '=' bound TERM?)
 trait_member ::= fn_item | type_item | const_item
 impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item
 ```
+
+The `=` form is an **alias bound** (s155, `[type.trait.op.alias]`):
+`trait Num = Add + Sub + Mul + Div + Rem + Eq + Ord` declares no
+members; a bound naming it means every trait in its list, and it is
+never itself implemented (`impl Num for T` is E0507) or satisfied on
+its own.
 
 Nominal traits, checked generics (D28). Adapter types are `distinct`
 types (`type Cover = distinct Song`): same layout as the base, free
@@ -503,16 +509,20 @@ function boundaries; 02-memory-model). Prefix `*` is raw-pointer deref
 non-`Copy` value; `shared` creates a Tier-2 RC cell from a value
 (`let a = shared (Cfg { limit: 7 })`).
 
-**Operator↔trait bridge** (posture recorded 2026-08-10; wolf-std F-0004
-/ issue #5, contract F3). For user types the comparison operators
-desugar to in-scope trait impls by name — `==`/`!=` to `Eq.eq` (negated
-for `!=`), the `< <= > >= <=>` family to `Ord.cmp` — with `Ord requires
-Eq` as a supertrait clause once the trait engine grows supertraits;
-`<=>` yields `std.cmp.Ordering` when std lands (`int` is the v0 stopgap
-read). Enum structural `==` is language-side. The bare-literal `i32`
-defaulting vs `impl … for int` mismatch (F-0004 gap 3) is acknowledged
-and must be resolved by the bridge's clause set when the typing document
-lands; this paragraph records the decision, not the mechanism.
+**Operator↔trait bridge** (posture recorded 2026-08-10, wolf-std
+F-0004 / issue #5, contract F3; the mechanism landed 2026-09-11 as
+`[type.trait.op]` in 10-types, s155). When an operand is a type
+parameter or a user type the operators dispatch through traits by
+name — `+ - * / %` to `Add.add` `Sub.sub` `Mul.mul` `Div.div`
+`Rem.rem`, prefix `-` to `Neg.neg`, `==`/`!=` to `Eq.eq` (negated for
+`!=`), the `< <= > >= <=>` family to `Ord.cmp` — homogeneous this
+edition; `<=>` on a user type yields the `cmp`'s `Ordering` (`int`
+stays the reading on primitives, where the operators are builtin).
+Nothing is synthesized: an enum without `impl Eq` is refused by name
+like a struct. `Ord requires Eq` stays documentary until supertraits;
+the alias bound (`trait Num = …`, §2.6) is the composition this
+edition ships. The bare-literal `i32` defaulting vs `impl … for int`
+mismatch (F-0004 gap 3) is closed by `[type.numlit]`'s adoption.
 
 ### 3.3 Primary expressions `[gram.expr.primary]`
 
