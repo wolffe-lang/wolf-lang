@@ -1,5 +1,86 @@
 # Changelog
 
+## Unreleased
+
+THE PAPERCUTS. Nine filed defects, each small, each one a place where
+the compiler was right about the program and wrong about the reader.
+Five came out of one week's reading of chapter 5.
+
+**A row is E0409 on either side of an operator** — `[type.row.operand]`
+already said so; the numeric and comparison paths fixed the operator
+family from the LEFT operand and then reported a right-hand `!T` as a
+mismatch against it, so `n + 1` and `1 + n` answered different codes
+for one defect — a rule about position, which is the thing the clause
+exists to refuse. All four families — arithmetic, comparison,
+bitwise, `==`/`!=` — now report at the row, whichever side carries it,
+with the clause's own reason as the second note. `==` on a row was a
+conservatism refusal before this; it is a diagnostic now (#297).
+
+**A `!T` tail in a unit context is a discard, warned** —
+`[type.unit.discard]` widened (#326). `fn drop_last(mut xs: List[int])
+{ (mut xs).pop() }` answered E0401 "this is `int ! {none}`, but
+`drop_last` must return `()`" — a return-type diagnosis of a discard,
+one line below a STATEMENT of the identical shape that has only ever
+warned, and its wording sent the reader to manufacture a value nobody
+wanted. s146 admitted `!()` only; the half that moves is the row,
+which is the thing being discarded. The plain `int` tail keeps E0401.
+W0601 names `let _ = …` at a value-carrying tail.
+
+**W1002 stands down where a mode error contradicts it** (#325). The
+lint's write scan is flat and syntactic; E0804 and E1014 are typed
+refusals, and when both fired on one `mut` parameter they disagreed
+about whether a line writes it — with the lint's machine-applicable
+fix-it ("drop the `mut`") pointing away from the fix E0804 names, onto
+E1014. The unspelled write is a write: a mode error on a use of a
+parameter retires W1002 for that parameter, in the build, in the
+conformance ladder, and in `wolf fix`.
+
+**W0318 — a defaulting `else` that swallows the next term** (#329).
+`x else 0 + y` is `x else (0 + y)` by `[gram.amb.else]`, both readings
+type-check, and nothing said so; the maintainer's RPN first pass
+defaulted every tail it wrote. The warning fires when the fallback's
+leftmost term is a literal or a bare name and the term after the
+operator is not a literal — `e else 0 - 1` folds to a constant and is
+the `-1` sentinel this ecosystem already spells 177 times in wolf-std,
+so it is left alone. W0307 is the same scar on a comparison.
+
+**A `let` binding's fields are as immutable as the binding** (#331).
+`let r = Row{…}` then `r.cents = 5` ran to exit 0 and printed on BOTH
+machines — they agreed, so the differential could not see it — while
+`n += 1` on a `let` was E0410 on both. That made `let` a rule about
+rebinding while E0410's own note said "`let` names a value once".
+`[gram.item.let]` rules the value: E0410 at the field write, with its
+own message. Elements reached through an index are a different
+question and stay where they were.
+
+**A one-line body-less trait member parses** (#332). `trait Add { fn
+add(self, other: Self) -> Self }` was E0201 "expected a function body"
+with the caret on the trait's closing brace — a message naming a body
+inside a trait whose whole point is the missing body, when what the
+grammar wanted was a terminator. The multi-line form has always parsed
+(the newline IS the TERM), so the refusal was a rule about layout. The
+enclosing `}` closes a body-less signature now; nothing else may omit
+the terminator.
+
+**Two formatter papercuts.** A closure's expression body is separated
+from its parameter list by one space whatever token it starts with:
+`fn(c) (c + to / 2)`, never `fn(c)(c + to / 2)`, which parses as the
+closure it is and reads as a call of `fn(c)` (#314). And **a braced
+`if` chain breaks as one** (`[gram.fmt.if]`, #303): the inline
+decision belongs to the chain, not to each arm. Per-arm it was taken
+against the remaining width with no knowledge of the chain tail that
+follows on the line, which laid one chain in two shapes and produced a
+101-column line that `wolf fmt --check` accepted as a fixed point,
+because a second pass reproduced it. Measured motion over wolf-std
+`046bd4f`, lobo `d792290` and wolf-book `d636228`: 4 files of 1650,
+all of them #303's mixed-shape chain, none of them #314's.
+
+**`then` is in the contextual-keyword list** — `[gram.inv.ctx]` (§6.2)
+enumerates them, `[gram.expr.if]` calls `then` contextual, and the two
+clauses disagreed about what the list is; wolf-interp holds its table
+to §6.2 in both directions by a test, so `then` could not join it
+(#318).
+
 ## 0.2.11 — 2026-09-11
 
 THE CHAPTER THE MAINTAINER READ. 0.2.11 is the release where the two
