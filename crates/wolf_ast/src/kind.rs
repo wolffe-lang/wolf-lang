@@ -36,6 +36,13 @@ pub enum SyntaxKind {
     /// reclassifies the kind in receiver position (text is unchanged —
     /// the tree stays lossless).
     SelfKw,
+    /// Contextual `then` (`[gram.expr.if]`, s151 wolf-lang#307): lexes
+    /// as `Ident`; the parser reclassifies it only in the one position
+    /// after a complete `if` condition (text unchanged — lossless).
+    /// After a `.` it is a member name, as a binding it is an
+    /// identifier, and `if then { … }` reads the identifier as the
+    /// condition.
+    ThenKw,
 
     // Punctuation, mirroring `wolf_lex::Punct`.
     LParen, RParen, LBracket, RBracket, LBrace, RBrace,

@@ -913,6 +913,13 @@ impl<'a> Block<'a> {
     pub fn trailing_expr(self) -> Option<&'a GreenNode> {
         ExprStmt::cast(self.statements().last()?)?.expr()
     }
+
+    /// A brace-less block: the bare branch of an `if … then …`
+    /// (`[gram.expr.if]`). It holds one trailing expression and no
+    /// `{`; the parser builds no other block without its brace.
+    pub fn is_bare(self) -> bool {
+        self.0.child_token(SyntaxKind::LBrace).is_none()
+    }
 }
 
 ast_node!(
@@ -1386,7 +1393,14 @@ impl<'a> RangePat<'a> {
 }
 
 ast_node!(
-    /// `if expr block (else (if_expr | block))?`.
+    /// `if expr 'then'? block (else (if_expr | block))?` — the braced
+    /// form — or `if expr then expr (else (if_expr | expr))?`, the bare
+    /// form (`[gram.expr.if]`, s151 wolf-lang#307). Both forms carry
+    /// their branches as [`Block`] nodes: a bare branch is a block with
+    /// no brace tokens holding exactly one trailing [`ExprStmt`], so
+    /// every tier past the parser reads the two spellings alike
+    /// (`Block::is_bare` tells them apart where the spelling matters —
+    /// the formatter).
     IfExpr
 );
 
@@ -1395,8 +1409,21 @@ impl<'a> IfExpr<'a> {
         first_expr(self.0)
     }
 
+    /// The contextual `then` token: present in the bare form, optional
+    /// before a braced block.
+    pub fn then_kw(self) -> Option<&'a GreenToken> {
+        self.0.child_token(SyntaxKind::ThenKw)
+    }
+
     pub fn then_block(self) -> Option<Block<'a>> {
         self.0.nodes().find_map(Block::cast)
+    }
+
+    /// Is this `if` written in the bare form (`if c then a else b`)?
+    /// The two branches of one `if` share a form, so the then-branch
+    /// decides.
+    pub fn is_bare(self) -> bool {
+        self.then_block().is_some_and(Block::is_bare)
     }
 
     /// The else continuation: a nested [`IfExpr`] or the else [`Block`].
