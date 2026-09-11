@@ -1,13 +1,19 @@
 //! check: pass
 //! phase: mem
-//! conforms: gram.amb.fmtcolon
+//! conforms: gram.amb.fmtcolon, type.interp.union
 //! First TOP-LEVEL `:` in an interpolation starts the format spec.
+//!
+//! s156 (#323): the holes read `m["k"] else 0` now. `m[k]` is
+//! `int ! {none}` since s152, and a format spec on a `!T` hole is
+//! E0413 (`[type.interp.union]`) — the value is two values and a spec
+//! describes one. The `:`-after-`]` question this file exists for is
+//! unchanged, and the `else` is the spelling the diagnostic names.
 
 fn main() -> !int {
     var m = Map[str, int]()
     m["k"] = 42
-    print("{m["k"]:>8}")           // : after ] is top-level -> spec
+    print("{m["k"] else 0:>8}")    // : after the handled hole -> spec
     let w = 8
-    print("{m["k"]:>{w}}")         // width itself interpolated
+    print("{m["k"] else 8:>{w}}")  // width itself interpolated
     0
 }

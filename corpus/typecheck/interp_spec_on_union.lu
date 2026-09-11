@@ -1,0 +1,20 @@
+//! check: fail(E0413)
+//! phase: resolve
+//! conforms: type.interp.union
+//!
+//! s156 (#323): a format spec on a `!T` hole. The bare hole prints
+//! whichever half is there (`[type.interp.union]`), but a spec
+//! describes ONE value — fill and width would be padding a number on
+//! the hit and a tag's name on the miss, and `x`/`.3`/`+` have no
+//! payload to be checked against until the row is handled. Both
+//! machines refused this already (the checked tier at `fmt_hole`, the
+//! WIR emitter at `emit_value`) while sema let it through, so a typing
+//! question arrived as `unsupported — a format spec on a non-primitive
+//! value` at run time on both tiers and read as a missing feature.
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 7
+    print("[{m["a"]:>5}][{m["z"]:>5}]")
+    0
+}

@@ -4464,6 +4464,40 @@ impl<'a> Checker<'a> {
                 return;
             }
         };
+        // `[type.interp.union]` (s156, wolf-lang#323): a `!T` hole is
+        // two values and a spec describes one. `{m[k]}` prints the ok
+        // payload or the row, which is this clause's own rule; a spec
+        // on it would be padding a number on one path and a tag's name
+        // on the other, and the type-directed fields (`x`, `.3`, `+`)
+        // have no payload to be checked against until the row is
+        // handled. Both machines already refused it — the checked
+        // tier at `fmt_hole`, the WIR emitter at `emit_value` — but
+        // sema let it through, so a program that said `{m[k]:>5}` got
+        // `unsupported — a format spec on a non-primitive value` at
+        // run time on both tiers, which reads as a missing feature and
+        // is a typing question. E0413 at the spec, naming the spelling
+        // that works: handle the row, then format the value.
+        if let Some(t) = hole_ty
+            && matches!(self.kind_of(self.shallow(t)), TyKind::ErrUnion(..))
+        {
+            let shown = self.show(t);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0413,
+                    spec.span,
+                    format!("a format spec does not fit `{shown}` — it is two values, and a spec describes one"),
+                )
+                .with_label("in this format spec")
+                .with_note(
+                    "a `!T` hole prints its ok payload when it holds one and its row when it \
+                     does not ([type.interp.union]), so fill, width and the type-directed \
+                     fields have no one value to describe. Handle the row first and format \
+                     what is left: `{x else 0:>5}`, `{x?:>5}`, or a `match` over it \
+                     ([type.row.operand]'s posture, applied to specs).",
+                ),
+            );
+            return;
+        }
         let Some(class) = hole_ty.and_then(|t| self.hole_class(t)) else {
             // The hole's numeric class is genuinely open (a generic
             // parameter, an error type) — the lanes stay honest about

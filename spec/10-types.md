@@ -321,7 +321,21 @@ values that have none.)
   not** — the value's two halves are two values, and the hole prints
   whichever is there. `{popped}` after `let popped = xs.pop()` reads
   `3` or `none`. This is a reading rule, not a handling rule: `?` and
-  `else` still decide what the program does with the row.
+  `else` still decide what the program does with the row. **A format
+  spec does not apply to a `!T` hole**: `{m[k]:>5}` is **E0413** at the
+  spec (s156, wolf-lang#323), because the value is two values and a
+  spec describes one — fill and width would be padding a number on one
+  path and a tag's name on the other, and the type-directed fields
+  (`x`, `.3`, `+`) have no payload to be checked against until the row
+  is handled. `[type.row.operand]`'s posture, applied to specs: handle
+  the row, then format what is left (`{m[k] else 0:>5}`, `{x?:>5}`, a
+  `match`). Both machines refused this shape already — the checked
+  tier at its `fmt_hole`, the WIR emitter at its `emit_value` — while
+  sema let it through, so what is a typing question arrived as
+  `unsupported — a format spec on a non-primitive value` at run time on
+  both tiers, reading as a missing feature. The bare hole is
+  unaffected; it is this clause's own rule. Witness:
+  `corpus/grammar/interp_fmtcolon.lu`.
 - `[type.interp.reason]` An exit reason (`[conc.proc.exit]`) renders
   as its class name with its payload in parentheses: **`normal(v)`**
   with the proc's `int` result (the value the body returned — a body

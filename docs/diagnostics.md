@@ -666,7 +666,7 @@ formattable type. Reach for the conversion first when the intent is
 "this number as hex, padded": `{n:>8x}` works because both fields fit
 an integer.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__format_spec_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_hex_on_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_precision_on_int.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__interp_fmtcolon.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__format_spec_mismatch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__interp_spec_on_union.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_hex_on_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0413_precision_on_int.snap
 
 ## E0414 — this is not a signature `main` can have
 
