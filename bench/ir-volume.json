@@ -508,6 +508,11 @@
       "naive": 11,
       "ratio": 0.545
     },
+    "corpus/grammar/structlit_paren.lu": {
+      "midend": 4,
+      "naive": 4,
+      "ratio": 1.0
+    },
     "corpus/grammar/tuple_pattern_match_arm.lu": {
       "midend": 59,
       "naive": 94,
@@ -877,6 +882,11 @@
       "midend": 140,
       "naive": 154,
       "ratio": 0.909
+    },
+    "corpus/memory/map_set_generic.lu": {
+      "midend": 98,
+      "naive": 115,
+      "ratio": 0.852
     },
     "corpus/memory/map_std_keys.lu": {
       "midend": 413,
@@ -1478,6 +1488,11 @@
       "naive": 136,
       "ratio": 0.507
     },
+    "corpus/traits/op_eq_imported/main.lu": {
+      "midend": 113,
+      "naive": 66,
+      "ratio": 1.712
+    },
     "corpus/traits/op_eq_inverting.lu": {
       "midend": 22,
       "naive": 40,
@@ -1537,6 +1552,11 @@
       "midend": 50,
       "naive": 50,
       "ratio": 1.0
+    },
+    "corpus/typecheck/float_rem.lu": {
+      "midend": 21,
+      "naive": 23,
+      "ratio": 0.913
     },
     "corpus/typecheck/fn_value_captured_int.lu": {
       "midend": 94,
@@ -1674,5 +1694,5 @@
       "ratio": 1.0
     }
   },
-  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759 || folded from run 34363520386 (s143 at 3103577, the lowering changes gated by name: 0 regressed, 0 improved): +5 new paths, -1 renamed path; 297 paths, corpus geomean 0.763 || folded from linux/x86-64 CI run 34543915446 (s149 at 2e5f45a, rebased on v0.2.10; the gate reported 308 recorded / 310 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s149 witnesses — `fs/open_nonblock` 1.000 (the mid-end hands LLVM exactly what the naive lowering does for a straight-line fs witness) and `net/accept_posture` 0.989. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned), so the linux lane is the only place these numbers exist. || folded from linux/x86-64 CI run 34553568310 (s150 at 4ae5e73, PR #315; the gate reported 310 recorded / 313 measured / 3 new / 1 improved / 1 regressed): +3 new paths, the s150 run witnesses — `conc/chan_struct_payload` 0.977, `typecheck/fn_value_captured_int` 1.093, `typecheck/fn_value_capturing` 1.090 (a fn value is now a load and an indirect call, and the mid-end has nothing to fold through a table). Transcribed from that job's own `ir-volume new path` lines; the regressed path (`rows/inferred_private` 1.371 -> 2.051, the inliner unrolling a recursive target into its new `.fv` forwarder) was fixed in the inliner and `typecheck/fn_value_import/main` ratcheted down 0.652 -> 0.616 (the same run's `improved to` line: the named function's forwarder dissolves its small target); `rows/inferred_private` keeps its 1.371 record until the lane measures the fixed inliner. || folded from linux/x86-64 CI run 34575761858 (s155 at eb2a31f, PR #328; the gate reported 327 recorded / 331 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the s155 run witnesses — `traits/op_eq_inverting` 0.550, `traits/op_money` 0.268, `traits/op_ord_struct` 0.239 (an operator on a struct is a call into a two-line impl the inliner dissolves), `traits/op_total_num` 0.705. Transcribed from that job's own `ir-volume new path` lines. || folded from linux/x86-64 CI run 34604049101 (s154 at 27ce8c6, PR #338; the gate reported 332 recorded / 334 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s154 witnesses that reach the run phase — `lints/else_arithmetic` 1.112 (three `else` defaults over two calls; the mid-end has nothing to fold through a row join) and `typecheck/unit_tail_value_discard` 0.752. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's other three witnesses are `fail(...)` files that never lower, so they contribute no path."
+  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759 || folded from run 34363520386 (s143 at 3103577, the lowering changes gated by name: 0 regressed, 0 improved): +5 new paths, -1 renamed path; 297 paths, corpus geomean 0.763 || folded from linux/x86-64 CI run 34543915446 (s149 at 2e5f45a, rebased on v0.2.10; the gate reported 308 recorded / 310 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s149 witnesses \u2014 `fs/open_nonblock` 1.000 (the mid-end hands LLVM exactly what the naive lowering does for a straight-line fs witness) and `net/accept_posture` 0.989. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned), so the linux lane is the only place these numbers exist. || folded from linux/x86-64 CI run 34553568310 (s150 at 4ae5e73, PR #315; the gate reported 310 recorded / 313 measured / 3 new / 1 improved / 1 regressed): +3 new paths, the s150 run witnesses \u2014 `conc/chan_struct_payload` 0.977, `typecheck/fn_value_captured_int` 1.093, `typecheck/fn_value_capturing` 1.090 (a fn value is now a load and an indirect call, and the mid-end has nothing to fold through a table). Transcribed from that job's own `ir-volume new path` lines; the regressed path (`rows/inferred_private` 1.371 -> 2.051, the inliner unrolling a recursive target into its new `.fv` forwarder) was fixed in the inliner and `typecheck/fn_value_import/main` ratcheted down 0.652 -> 0.616 (the same run's `improved to` line: the named function's forwarder dissolves its small target); `rows/inferred_private` keeps its 1.371 record until the lane measures the fixed inliner. || folded from linux/x86-64 CI run 34575761858 (s155 at eb2a31f, PR #328; the gate reported 327 recorded / 331 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the s155 run witnesses \u2014 `traits/op_eq_inverting` 0.550, `traits/op_money` 0.268, `traits/op_ord_struct` 0.239 (an operator on a struct is a call into a two-line impl the inliner dissolves), `traits/op_total_num` 0.705. Transcribed from that job's own `ir-volume new path` lines. || folded from linux/x86-64 CI run 34604049101 (s154 at 27ce8c6, PR #338; the gate reported 332 recorded / 334 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s154 witnesses that reach the run phase \u2014 `lints/else_arithmetic` 1.112 (three `else` defaults over two calls; the mid-end has nothing to fold through a row join) and `typecheck/unit_tail_value_discard` 0.752. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's other three witnesses are `fail(...)` files that never lower, so they contribute no path. || folded from linux/x86-64 CI run 34655409877 (s156 at 8aa7398, PR #350; the gate reported 334 recorded / 338 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the four s156 witnesses that reach the run phase \u2014 `grammar/structlit_paren` 1.000 (it lowers for the first time: #341 took the equality out of it, so the file reaches the run rung its header now names), `memory/map_set_generic` 0.852, `traits/op_eq_imported/main` 1.712 (an operator dispatching into an imported module's impl, where the inliner has a cross-module target and the naive lowering has four instructions to beat) and `typecheck/float_rem` 0.913. Corpus geomean 0.763 -> 0.772 over n=338. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's fifth witness, `typecheck/interp_spec_on_union`, is a `fail(E0413)` file that never lowers, so it contributes no path; `traits/op_total_num`'s `impl Rem for f64` changed body (#327, the hand-spelled remainder became `self % other`) and did NOT move its 0.705 record \u2014 the gate reported 0 regressed."
 }
