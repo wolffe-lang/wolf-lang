@@ -675,3 +675,159 @@ fn every_expression_kind_is_classified() {
         assert!(expr.is_some_and(|e| is_expr_kind(e.kind)));
     }
 }
+
+// --------------------------------------------- [gram.expr.if] (s151) --
+
+/// The bare `if` (wolf-lang#307): `then` closes the condition, each
+/// branch is a brace-less `Block` holding one trailing `ExprStmt`, and
+/// the tiers past the parser read both spellings alike.
+#[test]
+fn bare_if_in_value_position() {
+    let root = clean_body("let d = if leap then 29 else 28\n    d");
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    assert_eq!(e.then_kw().expect("then").kind, SyntaxKind::ThenKw);
+    let then = e.then_block().expect("then branch");
+    assert!(then.is_bare());
+    assert_eq!(
+        then.trailing_expr().expect("value").kind,
+        SyntaxKind::LiteralExpr
+    );
+    let els = Block::cast(e.else_branch().expect("else")).expect("else branch");
+    assert!(els.is_bare());
+    assert_eq!(
+        els.trailing_expr().expect("value").kind,
+        SyntaxKind::LiteralExpr
+    );
+}
+
+#[test]
+fn bare_if_in_a_match_arm_and_as_a_statement() {
+    let root = clean_body("match m {\n        2 => if leap then 29 else 28,\n        _ => 30,\n    }");
+    assert!(IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if").is_bare());
+    let root = clean_body("if c then print(\"a\") else print(\"b\")\n    0");
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    assert!(e.else_branch().is_some());
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    assert_eq!(count(&root, SyntaxKind::CallExpr), 2);
+    // One-armed, as a statement.
+    let root = clean_body("if c then print(\"a\")\n    0");
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    assert!(e.else_branch().is_none());
+}
+
+#[test]
+fn bare_if_own_else_binds_before_the_defaulting_else() {
+    // `[gram.amb.else]`: inside a bare branch the `if`'s own `else`
+    // binds first — this is the two-way `if`, not `f() else 0`.
+    let root = clean_body("let v = if c then f() else 0\n    v");
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    assert_eq!(count(&root, SyntaxKind::IfExpr), 1);
+    // Parenthesized, the defaulting `else` is back — in either branch.
+    let root = clean_body("let v = if c then (f() else 0) else (g() else 1)\n    v");
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 2);
+    assert_eq!(count(&root, SyntaxKind::IfExpr), 1);
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    let els = Block::cast(e.else_branch().expect("else")).expect("else branch");
+    assert_eq!(els.trailing_expr().expect("value").kind, SyntaxKind::ParenExpr);
+}
+
+#[test]
+fn bare_if_with_else_leading_its_line() {
+    // `[gram.lex.newline]` holds for the bare form: no terminator before
+    // a leading `else`, so this is the two-way `if` across two lines.
+    let root = clean_body("let v = if c then f()\n        else 0\n    v");
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    assert!(e.else_branch().is_some());
+}
+
+#[test]
+fn if_chain_links_pick_their_own_form() {
+    // Bare head, braced tail.
+    let root = clean_body("let s = if n < 0 then \"neg\" else if n == 0 { \"zero\" } else { \"pos\" }\n    s");
+    assert_eq!(count(&root, SyntaxKind::IfExpr), 2);
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    let outer = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(outer.is_bare());
+    let inner = IfExpr::cast(outer.else_branch().expect("else if")).expect("inner");
+    assert!(!inner.is_bare());
+    // Braced head, bare tail.
+    let root = clean_body("let s = if n < 0 { \"neg\" } else if n == 0 then \"zero\" else \"pos\"\n    s");
+    assert_eq!(count(&root, SyntaxKind::IfExpr), 2);
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
+    let outer = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(!outer.is_bare());
+    let inner = IfExpr::cast(outer.else_branch().expect("else if")).expect("inner");
+    assert!(inner.is_bare());
+    assert!(inner.else_branch().is_some());
+}
+
+#[test]
+fn then_before_a_block_is_the_braced_form() {
+    let root = clean_body("let d = if leap then { 29 } else { 28 }\n    d");
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(!e.is_bare());
+    assert!(e.then_kw().is_some());
+    assert!(!e.then_block().expect("then branch").is_bare());
+    assert!(Block::cast(e.else_branch().expect("else")).is_some());
+}
+
+#[test]
+fn then_is_contextual_not_reserved() {
+    // A bool named `then` is the condition …
+    let root = clean_body("let then = true\n    if then { 1 } else { 2 }");
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.then_kw().is_none());
+    assert_eq!(e.condition().expect("cond").kind, SyntaxKind::PathExpr);
+    assert_eq!(count(&root, SyntaxKind::ThenKw), 0);
+    // … and may be followed by the keyword.
+    let root = clean_body("let then = true\n    if then then 1 else 2");
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    assert_eq!(e.condition().expect("cond").kind, SyntaxKind::PathExpr);
+    // After a `.` it is a member name (std's `Ordering.then`).
+    let root = clean_body("if less.then(greater) == less then 1 else 2");
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(e.is_bare());
+    assert_eq!(e.condition().expect("cond").kind, SyntaxKind::BinExpr);
+    assert_eq!(count(&root, SyntaxKind::CallExpr), 1);
+    // As a binding name, an identifier everywhere else.
+    let root = clean_body("let then = 1\n    let x = then + then\n    x");
+    assert_eq!(count(&root, SyntaxKind::IfExpr), 0);
+}
+
+#[test]
+fn braced_if_followed_by_bare_else_is_still_the_defaulting_operator() {
+    // Rule 1 of the ruling: `if c { 1 } else b` parsed as
+    // `(if c { 1 }) else b` before the bare form existed and still does.
+    let root = clean_body("let r = if c { 1 } else b\n    r");
+    assert_eq!(count(&root, SyntaxKind::ElseExpr), 1);
+    let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
+    assert!(!e.is_bare());
+    assert!(e.else_branch().is_none());
+}
+
+#[test]
+fn bare_if_refusals_are_one_e0201_each() {
+    // Missing `then` (neither `{` nor `then` after the condition).
+    assert_eq!(
+        util::codes("fn f() { let d = if c 29 else 28\n    d\n}\n"),
+        ["E0201"]
+    );
+    // Mixed forms in one `if`.
+    assert_eq!(
+        util::codes("fn f() { let d = if c then 29 else { 28 }\n    d\n}\n"),
+        ["E0201"]
+    );
+    // A `let` in a bare branch.
+    assert_eq!(
+        util::codes("fn f() {\n    if c then let x = 1 else 0\n    0\n}\n"),
+        ["E0201"]
+    );
+}

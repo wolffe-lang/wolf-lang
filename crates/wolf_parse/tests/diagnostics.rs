@@ -459,3 +459,26 @@ fn e0203_keyword_typo_suggests_fn() {
     assert_eq!(d.suggestions[0].edits[0].1, "fn");
     snap("e0203_keyword_typo", src, codes::UNEXPECTED_TOPLEVEL);
 }
+
+/// `[gram.expr.if]` (s151, wolf-lang#307): a condition followed by
+/// neither `{` nor `then` is one E0201 whose note names both spellings;
+/// mixed forms in one `if` and a `let` in a bare branch are refused by
+/// name, with the same note.
+#[test]
+fn e0201_if_forms() {
+    snap(
+        "e0201_if_missing_then",
+        "fn f(c: bool) -> int { if c 29 else 28 }\n",
+        codes::EXPECTED_TOKEN,
+    );
+    snap(
+        "e0201_if_mixed_forms",
+        "fn f(c: bool) -> int { if c then 29 else { 28 } }\n",
+        codes::EXPECTED_TOKEN,
+    );
+    snap(
+        "e0201_if_let_in_bare_branch",
+        "fn f(c: bool) -> int {\n    if c then let x = 1 else 0\n    0\n}\n",
+        codes::EXPECTED_TOKEN,
+    );
+}

@@ -1,0 +1,24 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "expected `{` or `then` after the `if` condition",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 28,
+            hi: 30,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [
+        "an `if` is written `if c { a } else { b }`, or on one line `if c then a else b` — braces or `then`, never neither, and both branches the same way ([gram.expr.if])",
+    ],
+    suggestions: [],
+}
