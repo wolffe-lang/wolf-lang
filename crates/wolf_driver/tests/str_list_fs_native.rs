@@ -665,6 +665,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_chan_new_boxed",
         "__wolf_rt_box_new",
         "__wolf_rt_box_take",
+        // s152 (#11/#154, [type.map]): the keyed store's five seams —
+        // the header, the slot-shaped get/set, the pairs copy, clear.
+        "__wolf_rt_map_new",
+        "__wolf_rt_map_get",
+        "__wolf_rt_map_set",
+        "__wolf_rt_map_pairs",
+        "__wolf_rt_map_clear",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -675,7 +682,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        138,
+        143,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

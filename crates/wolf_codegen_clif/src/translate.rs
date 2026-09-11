@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 138] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 143] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -146,6 +146,16 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 138] = [
     ("__wolf_rt_list_write", 3, true),
     ("__wolf_rt_list_len", 1, true),
     ("__wolf_rt_list_clear", 1, false),
+    // s152 (`[type.map]`, wolf_rt::map): the keyed store — `new` takes
+    // the entry layout (key kind, key size, value offset and size,
+    // stride); `get`/`set` take the header and one entry-shaped slot
+    // (the key read from it; the value written into it on a hit, or
+    // read from it on a set); `pairs` mints a `List[(K, V)]`.
+    ("__wolf_rt_map_new", 5, true),
+    ("__wolf_rt_map_get", 2, true),
+    ("__wolf_rt_map_set", 2, false),
+    ("__wolf_rt_map_pairs", 1, true),
+    ("__wolf_rt_map_clear", 1, false),
     ("__wolf_rt_fs_read_text", 3, true),
     ("__wolf_rt_fs_write_text", 4, true),
     ("__wolf_rt_fs_open", 3, true),
