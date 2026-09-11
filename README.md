@@ -33,7 +33,7 @@ installs the same two ways (`lupin`, `lupin-bin`).
 
 ## What runs today
 
-v0.2.10 is tagged, under the codename wolfgang.
+v0.2.11 is tagged, under the codename wolfgang.
 
 There are two compilation tiers. `wolf build` and `wolf run` compile
 `.lu` source to native machine code through the compiler's own backend,
@@ -65,7 +65,7 @@ mistaken for the release. `cargo xtask dist` stamps the commit; a plain
 `cargo build` cannot verify one and prints `+dev.unknown`.
 
 [`CHANGELOG.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/CHANGELOG.md)
-tells the history of v0.2.10 by campaign, and
+tells the history of v0.2.11 by campaign, and
 [`docs/release/NOTES-v0.1.0.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/release/NOTES-v0.1.0.md)
 describes the first release feature by feature.
 

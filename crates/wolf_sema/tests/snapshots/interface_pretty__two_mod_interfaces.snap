@@ -3,7 +3,7 @@ source: crates/wolf_sema/tests/interface_pretty.rs
 expression: out
 ---
 module pkg :: geometry
-  wolfi v0 · toolchain 0.2.10 · edition v1
+  wolfi v0 · toolchain 0.2.11 · edition v1
   export_hash 0ae111ca8e410e8e7405208023d73aaf13539178aebd5b2191eb3aeda6dc1fb9
   pkg_hash    0ae111ca8e410e8e7405208023d73aaf13539178aebd5b2191eb3aeda6dc1fb9
   deps: (none)
@@ -11,7 +11,7 @@ module pkg :: geometry
     [0] pub area — fn area(side: int) -> int
 
 module pkg :: (root)
-  wolfi v0 · toolchain 0.2.10 · edition v1
+  wolfi v0 · toolchain 0.2.11 · edition v1
   export_hash faadb1df1d537a7ddba3c0e013f71391961f3d0c9adea8af113ba33a6d365c0f
   pkg_hash    faadb1df1d537a7ddba3c0e013f71391961f3d0c9adea8af113ba33a6d365c0f
   deps:
