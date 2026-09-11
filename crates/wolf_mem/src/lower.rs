@@ -2669,6 +2669,12 @@ impl<'t> Lowerer<'t> {
             return Ok(Val::none());
         };
         match d.op().map(|t| t.kind) {
+            // s155 (`[type.trait.op]`): `-x` on a user type or a type
+            // parameter is `Neg.neg(x)` — a read argument, a call
+            // result.
+            Some(SyntaxKind::Minus) if self.op_dispatches(e.span) => {
+                self.eval_op_dispatch(e, [Some(operand), None])
+            }
             Some(SyntaxKind::CopyKw) => {
                 // `copy x`: an independent value from any type —
                 // never a move ([mem.tier0.move.3]). The duplicate is
@@ -2991,6 +2997,13 @@ impl<'t> Lowerer<'t> {
                 Ok(Val::none())
             }
             _ => {
+                // s155 (`[type.trait.op]`): an operator carrying a
+                // dispatch record is a trait call — its operands are
+                // read arguments (lent for the call, never moved), and
+                // a non-`Copy` answer is a call result of its own.
+                if self.op_dispatches(e.span) {
+                    return self.eval_op_dispatch(e, [lhs, rhs]);
+                }
                 if let Some(l) = lhs {
                     self.eval_value(l)?;
                 }
@@ -3034,6 +3047,35 @@ impl<'t> Lowerer<'t> {
     fn is_str_expr(&self, span: Span) -> bool {
         self.expr_ty(span)
             .is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str)))
+    }
+
+    /// Does the checker's dispatch table name this operator span
+    /// (`[type.trait.op]`: `a + b` on a user type is `Add.add(a, b)`)?
+    fn op_dispatches(&self, span: Span) -> bool {
+        self.tb.dispatch.iter().any(|(s, _)| *s == span)
+    }
+
+    /// An operator that dispatches through a trait, at the mem tier:
+    /// each operand is a `read` argument — a place is read and lent
+    /// for the call, a temporary is evaluated — and the answer is a
+    /// call result: nothing for a `Copy` answer, a fresh site for a
+    /// non-`Copy` one (a user `Money` from `Money + Money`).
+    fn eval_op_dispatch(&mut self, e: &'t GreenNode, operands: [Option<&'t GreenNode>; 2]) -> R<Val> {
+        for side in operands.into_iter().flatten() {
+            if let Some((place, _)) = self.as_place(side) {
+                self.emit_read(place, side.span);
+                self.mark_region_lent(place);
+            } else {
+                self.eval_value(side)?;
+            }
+        }
+        let ret_heap = self.expr_ty(e.span).map(|t| !result_is_copy(t)).unwrap_or(false);
+        if !ret_heap {
+            return Ok(Val::none());
+        }
+        let ty = self.rendered_expr_ty(e.span);
+        let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+        Ok(Val::site(site, e.span))
     }
 
     /// X3: `+ - * / %` on integer operands trap (overflow/div-zero);
