@@ -1,0 +1,19 @@
+//! check: fail(E0417)
+//! phase: resolve
+//! conforms: mem.map.absent
+//! `m[k] += v` (s152, wolf-lang#11/#154): the wordcount idiom's
+//! absent-key-defaulting increment. `m[k]` is `V ! {none}`
+//! (`[mem.map.absent]`), so there is no place to read-modify-write —
+//! the key may be absent, and an absent key has no value to add to.
+//! E0416's sibling: the `str` index is not a place because a `str`
+//! never changes, the `Map` index is not a place because the entry
+//! may not exist. The note names the two spellings that do the work:
+//! `m[k] = (m[k] else 0) + v`, and std's `map.tally(mut m, k)`. lupin
+//! 0.1.32 refuses the same line at run time ("does not denote a
+//! place"); the static refusal is the clause's.
+
+fn main() -> !int {
+    var totals = Map[str, int]()
+    totals["drink"] += 340
+    0
+}

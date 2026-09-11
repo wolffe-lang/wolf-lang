@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="7 0 1 true\n[none]\n")
+//! phase: run
+//! conforms: mem.map.absent, type.interp.union
+//! `[mem.map.absent]` (s152): an absent-key read is the `none` row —
+//! `m[k]` is `V ! {none}`, never `()` and never a trap — so `else`
+//! reads the default, a hit reads the value, and a hole renders the
+//! miss as its row (`[type.interp.union]`). `len` counts entries and
+//! `is_empty` probes them. lupin 0.1.32 answers `()` for the miss
+//! (`7 () 1 true` / `[()]`); the mirror is filed with the clause.
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["seven"] = 7
+    let hit = m["seven"] else 0
+    let miss = m["eight"] else 0
+    print("{hit} {miss} {m.len} {m.is_empty() == false}")
+    print("[{m["eight"]}]")
+    0
+}

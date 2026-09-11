@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="1 2 yes\n")
+//! phase: run
+//! conforms: type.map.key
+//! The other two admitted keys (s152, `[type.map.key]`): a `char` and
+//! a `bool` key each compare by their own bytes — four and one — on
+//! the native tier, and by value on the checked machine. lupin
+//! 0.1.32 answers `()` for every read here; the mirror is filed.
+
+fn main() -> !int {
+    var by_char = Map[char, int]()
+    by_char['a'] = 1
+    by_char['b'] = 2
+    var by_bool = Map[bool, str]()
+    by_bool[true] = "yes"
+    by_bool[false] = "no"
+    let a = by_char['a'] else 0
+    let b = by_char['b'] else 0
+    let y = by_bool[true] else "?"
+    print("{a} {b} {y}")
+    0
+}

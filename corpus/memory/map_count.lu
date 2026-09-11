@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="drink       340\nfood        270\ngratuity    100\n")
+//! phase: run
+//! conforms: type.map, mem.map.absent
+//! The count exercise of the book's chapter 5 on a `Map` alone (s152,
+//! wolf-lang#11/#154 — the maintainer's question: "my gut instinct is I
+//! can pull the count exercise off with a map alone"). The parallel
+//! `List` the chapter carried existed only because no program could
+//! ask a `Map` whether a key was bound: `m[k]` answers `V ! {none}` now
+//! (`[mem.map.absent]`), so `totals[k] = (totals[k] else 0) + cents` is
+//! the whole loop body, and `pairs()` walks the entries in insertion
+//! order. lupin 0.1.32 reads the absent key as `()` and refuses the
+//! `+`; the mirror is filed with the clause (wolf-interp).
+
+fn main() -> !int {
+    let rows = """
+        espresso,340
+        pastry,270
+        tip,100
+        """
+    var totals = Map[str, int]()
+
+    for row in rows.lines() {
+        var i = 0
+        while row[i..i + 1] != "," { i += 1 }
+
+        let k = kind(row[..i])
+        let cents = row[i + 1..].to_int() else 0
+        totals[k] = (totals[k] else 0) + cents
+    }
+
+    for (k, n) in totals.pairs() {
+        print("{k:<10}{n:>5}")
+    }
+
+    0
+}
+
+fn kind(name: str) -> str {
+    match name {
+        "tip" => "gratuity",
+        "espresso" => "drink",
+        _ => "food",
+    }
+}

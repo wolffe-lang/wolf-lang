@@ -1,0 +1,26 @@
+//! check: fail(E0418)
+//! phase: resolve
+//! conforms: type.map.key
+//! A struct as a `Map` key (s152, `[type.map.key]`): the four admitted
+//! keys are the types whose equality the language itself defines —
+//! `str`, `int`, `char`, `bool`. A struct has no equality of its own
+//! until derived equality is ruled, so `Map[Point, bool]` is refused
+//! where the key is spelled, in the constructor and in a signature
+//! alike, with the note naming what to key by instead. lupin 0.1.32
+//! runs the program (it never reads the type argument); the mirror is
+//! filed with the clause.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+fn count(seen: Map[Point, bool]) -> int {
+    seen.len
+}
+
+fn main() -> !int {
+    var seen = Map[Point, bool]()
+    seen[Point { x: 1, y: 2 }] = true
+    count(seen)
+}

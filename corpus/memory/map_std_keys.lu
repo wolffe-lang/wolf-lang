@@ -1,0 +1,57 @@
+//! check: run(exit=0, stdout="true false 3 0 2\n")
+//! phase: run
+//! conforms: type.map.key, mem.map.absent
+//! std.map's key functions, executing (s152, wolf-lang#11 — the
+//! `[K: Eq]` five). `has`, `get` and `tally` are wolf-std's bodies
+//! word for word over a local `Eq` (std.cmp's shape: `impl Eq for
+//! str` is the language's `==`): a generic `Map[K, V]` parameter, a
+//! walk over `pairs()`, the bound's `Eq.eq` dispatching on the
+//! instantiated key. `[type.map.key]`: `str`, `int`, `char` and `bool`
+//! satisfy `[K: Eq]` through std.cmp's impls, so every one of the
+//! five executes on a `Map` keyed by any of the four. Byte-identical
+//! under lupin 0.1.32.
+
+trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+impl Eq for str {
+    fn eq(self, other: str) -> bool { self == other }
+}
+
+fn has[K: Eq, V](m: Map[K, V], k: K) -> bool {
+    for pair in m.pairs() {
+        if Eq.eq(pair.0, k) {
+            return true
+        }
+    }
+    false
+}
+
+fn get[K: Eq, V](m: Map[K, V], k: K) -> V ! {none} {
+    for pair in m.pairs() {
+        if Eq.eq(pair.0, k) {
+            return pair.1
+        }
+    }
+    none
+}
+
+fn tally[K: Eq](mut m: Map[K, int], k: K) -> int {
+    let n = get(m, k) else 0
+    m[k] = n + 1
+    n + 1
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 3
+    let a = has(m, "a")
+    let z = has(m, "z")
+    let ga = get(m, "a") else -1
+    let gz = get(m, "z") else 0
+    tally(mut m, "b")
+    let t = tally(mut m, "b")
+    print("{a} {z} {ga} {gz} {t}")
+    0
+}

@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="3 2 12 -1\n")
+//! phase: run
+//! conforms: type.map.key, mem.map.absent
+//! `Map[int, int]` on the native tier (s152): an `int` key is compared
+//! by its bytes, `m[k] = v` on a bound key replaces, `pairs()` walks
+//! the entries and `else` reads the miss. lupin 0.1.32 refuses
+//! `squares[i] = i * i` ("does not denote a place at run time" — the
+//! index write through a computed key); the mirror is filed.
+
+fn main() -> !int {
+    var squares = Map[int, int]()
+    var i = 1
+    while i <= 3 {
+        squares[i] = i * i
+        i += 1
+    }
+    squares[2] = 2
+    var sum = 0
+    for pair in squares.pairs() {
+        sum += pair.1
+    }
+    let two = squares[2] else 0
+    let nine = squares[9] else -1
+    print("{squares.len} {two} {sum} {nine}")
+    0
+}
