@@ -573,6 +573,42 @@ adopt that design and give `for` its desugar.)
   interpreter's `pop` arm and one of its REPL tests, and the book's
   chapter 5 (one fence, one sentence — `pop` is not bounds-checked).
   Witness: `corpus/memory/list_pop_empty.lu`, both tiers.
+- `[mem.map.absent]` **An absent-key `Map` read is the `none` row**
+  (ruled 2026-09-11, s152 — wolf-lang#11, #154; the key protocol is
+  `[type.map.key]`). `m[k]` is **`V ! {none}`**: a bound key answers
+  its value, an absent key answers the payload-free tag `none` —
+  never `()` (the reference interpreter's answer through lupin 0.1.32,
+  the one unchecked, untyped read the language had), never a zero
+  value, never a trap. The row is handled as every row is (`else`,
+  `?`, a `match`), and a hole renders the miss as its row
+  (`[type.interp.union]`: `{m[k]}` prints `none`). The relation to
+  the list subscript is the one chapter 5 already teaches: `xs[i]`
+  traps `bounds` because an index the program computed and got wrong
+  is a different event from a lookup that came up empty; `m[k]` IS
+  that lookup, so it answers the way `xs.get(i)` does
+  (`[mem.list.pop]`). **`m[k] = v` on an absent key inserts** and on
+  a bound key replaces — the assignment is the one place an absent
+  key is a place, and it never traps. **`m[k] op= v` is E0417**,
+  E0416's sibling: the `str` index is not a place because a `str`
+  never changes, the `Map` index is not a place because the entry may
+  not exist, and a compound assignment has nothing to read-modify-
+  write. The refusal is a type error in every profile, and its note
+  names the two spellings that do the work — `m[k] = (m[k] else 0) +
+  v`, and std.map's named operation `tally(mut m, k)`, which is that
+  statement for an `int`-valued map. This closes F-0011's filed
+  question (is absent-key-defaulting a language rule or a std
+  function?): the language rules the ABSENCE — a row the program must
+  read — and std owns the DEFAULTING, as the filing recommended,
+  because a defaulting read hides a lookup miss the row makes
+  visible. A `Map` index READ copies exactly when `V` copies (an
+  `int`-valued map is read twice without a move; the union is the
+  row, not storage). Cost stated: the interpreter's absent read and
+  its index write through a computed key (wolf-interp, filed with the
+  clause); the book's §5.2 (`+=`), its "one index is not checked"
+  prose and the three tally samples (wolf-book bs40); std.map's
+  header (wolf-std sc44). Witnesses: `corpus/memory/map_absent_else.lu`
+  and `map_count.lu` (both tiers), `corpus/typecheck/map_compound_absent.lu`
+  (E0417).
 
 ### `str` ordering `[mem.str]`
 

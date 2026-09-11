@@ -541,3 +541,62 @@ primitive (D58), not this chapter's; so is `byte`'s (the `bytes`
 library over `List[byte]` — D72, wolf-std sc35; the language's own
 byte producers and consumers — `str.bytes()`, `str_from_utf8`, the
 `fs_*`/`net_*` byte calls — speak `List[byte]` since s136, #231).
+
+## §10 The `Map` `[type.map]`
+
+(Appended 2026-09-11, s152 — wolf-lang#11, #154, ruled by the
+maintainer. The count exercise in the book's chapter 5 carried a
+parallel `List` for one reason: no program could ask a `Map` whether
+a key was bound. std's `has`/`get`/`get_or`/`remove`/`tally` existed
+and executed on neither machine — their `[K: Eq]` bound dispatched
+nowhere — and an absent-key read answered `()`, the one unchecked,
+untyped read in the language. The maintainer's question, verbatim:
+"is the sole purpose of the list to check and see if we've seen it
+already, because we have no apparent way of checking the existence of
+a key since `map[key] = blah` will create it? My gut instinct is I
+can pull the count exercise off with a map alone." They were right;
+this section and `[mem.map.absent]` are the answer. `Map` stays
+prelude-ambient and builtin-typed like `List` (D50: std-DEFINED once
+generic data can carry it; this clause rules the KEY PROTOCOL that
+filing left open, not the home).)
+
+- `[type.map.key]` **`Map[K, V]` admits `str`, `int`, `char` and
+  `bool` keys this edition.** These are the four whose equality the
+  language itself defines, so `m[k]` can ask "is this key bound?"
+  without any user code deciding what "the same key" means: two `str`
+  keys are one key when their bytes are (`[mem.str.order]`'s `==`),
+  two `int`/`char`/`bool` keys when their values are. Every other
+  type is **E0418 where the key is spelled** — in `Map[K, V]()` and
+  in a signature position (`fn f(m: Map[Point, int])`) alike, with
+  the same words. A **struct key waits on derived equality**, by
+  name: `[K: Eq]` on a user type is the ruling this clause does not
+  make, and until it is made a struct is keyed by one of the four
+  (an `id: int`, a `name: str`, a `str` built from its fields). A
+  float has no key equality at all (`nan != nan` would make a key
+  that can never be found again); a container has none the language
+  will spell. Inside a generic body `Map[K, V]` with a rigid `K`
+  elaborates unchecked — the golden rule — and each instantiation is
+  checked where it spells its key. **`[K: Eq]` is satisfied by the
+  four**: std.cmp's `impl Eq for int`, `bool` and `str` are ordinary
+  impls of an ordinary trait (`char`'s is wolf-std sc44's, filed with
+  this clause), the bound dispatches through them, and so std.map's
+  five key functions — `has`, `get`, `get_or`, `remove`, `tally` —
+  execute on a `Map` keyed by any of the four, on both tiers
+  (`corpus/memory/map_std_keys.lu` is their bodies word for word over
+  a local `Eq`). **The surface** the language types, beside the index
+  of `[mem.map.absent]`: `Map[K, V]()` constructs; `m.len` counts
+  entries (`count()` is the same number); `m.is_empty()` probes;
+  `m.clear()` drains (a `mut` receiver); `m.pairs()` answers a fresh
+  `List[(K, V)]` of every entry, which `for (k, v) in m.pairs()`
+  destructures. **Iteration order is unspecified and consistent**:
+  `pairs()` reports one order for an unmodified map and promises
+  nothing else — both machines answer insertion order at this pin,
+  and a program that depends on it depends on an implementation.
+  Iterating the map value itself (`for x in m`) is not ruled and
+  refuses by name. Witnesses: `corpus/memory/map_count.lu` (the count
+  exercise on a map alone), `map_std_keys.lu`, `map_int_keys.lu`,
+  `map_char_bool_keys.lu` (both tiers); `corpus/typecheck/map_struct_key.lu`
+  (E0418). Cost stated: the interpreter's key set and its `Map` read
+  (wolf-interp, filed with the clause); std.map's header and F-0011's
+  filed question (wolf-std sc44); the book's §5.2 and its tally
+  samples (wolf-book bs40).
