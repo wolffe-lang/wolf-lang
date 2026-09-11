@@ -597,7 +597,7 @@ values, never one, and no operator reads it (spec/10
 `match`, and operate on the `T`. Operators on user types come from
 traits, and need the trait in scope.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_add.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_compare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_int_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_int_plus_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_compound_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_int.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_add.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_compare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_rhs.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_int_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__concat_mix_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_int_plus_str.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_logic_on_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_row_rhs_add.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_row_rhs_bitand.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_row_rhs_compare.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_row_rhs_eq.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_compound_int.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0409_str_plus_int.snap
 
 ## E0410 — a `let` binding cannot be assigned again
 
@@ -612,7 +612,7 @@ same name without mutating the first. Function parameters and `match`
 bindings are not `let` bindings; their mutability is governed by modes
 (`mut`, `take`), not by this rule.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_compound_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_field_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_reassign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__let_shadow_var_ok.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_compound.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_global.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_field.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0410_let_reassign.snap
 
 ## E0411 — `str` has no character indexing
 
@@ -1281,7 +1281,7 @@ Wrap the receiver in the declared mode — the suggested edit inserts
 ask for. Whether the access is actually exclusive is checked by the
 memory tiers; this rule is the syntax law only.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_bare_mut_receiver.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_list_push_bare.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_superfluous_mode.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_wrong_mode.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_bare_mut_receiver.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_list_push_bare.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_superfluous_mode.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0804_wrong_mode.snap
 
 ## E0805 — this `as` cast is outside the cast set
 
@@ -1648,7 +1648,7 @@ consumes the value and the caller is done with it. Or keep it `read`
 and work on this function's own duplicate: `var local = copy p` gives
 a value it owns outright.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
 ## E1015 — RETIRED — an escaping byte-view lend now copies and warns W1004
 
@@ -2299,7 +2299,7 @@ swallows a term of the expression AROUND it. Group the value —
 function the clean spelling drops the `else` altogether: `n? + step`
 propagates the failure and the arithmetic reads as written.
 
-Fixtures: crates/wolf_sema/tests/snapshots/wave_diagnostics__w0318_else_arithmetic.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__else_arithmetic.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0318_else_arithmetic.snap
 
 ## W0401 — this literal does not fit the type it is cast to
 
@@ -2350,7 +2350,7 @@ task's to its scope), and `let _ = (mut xs).pop()` spells a discard
 that is meant. A tail whose ok side carries a value loses the value
 too, and the warning says so.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__discarded_result.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__unit_context_discard.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_discarded_result.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_unit_context_tail.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__discarded_result.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__unit_context_discard.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__unit_tail_value_discard.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_discarded_result.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0601_unit_context_tail.snap
 
 ## W0602 — a `pub` signature spells its error row anonymously
 
@@ -2429,7 +2429,7 @@ mutation that is not there. Drop the `mut` from the parameter and
 from the call sites that pass it; the read default is the honest
 mode. (X1: the absence of a keyword is the mode.)
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__faults__exclusivity_nested_path.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__mut_param_unwritten.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1002_mut_unwritten.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__faults__exclusivity_nested_path.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__mut_param_unwritten.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1002_mut_unwritten.snap
 
 ## W1003 — this `take` parameter is returned unchanged
 
