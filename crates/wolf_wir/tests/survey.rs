@@ -123,13 +123,15 @@ fn survey_is_a_superset_and_changes_nothing_on_refusing_corpus_files() {
     // `lowers` (the indirect call landed), s96 moved
     // `traits/dyn_ok.lu` (dyn dispatch landed), s105 moved
     // `memory/prov_holy_grail.lu` (the capture-free closure
-    // lambda-lifts to a fn value), and s107 moved `json/rows.lu` (the
-    // json family crossed — c26's last arm) — each replaced by a file
-    // still refusing for other reasons, per this assertion's own note.
+    // lambda-lifts to a fn value), s107 moved `json/rows.lu` (the
+    // json family crossed — c26's last arm), and s150 moved
+    // `memory/closure_escape_refused.lu` (a capturing closure is a fn
+    // value, #300) — each replaced by a file still refusing for other
+    // reasons, per this assertion's own note.
     for name in [
         "memory/shared_ok.lu",
         "memory/region_value_container.lu",
-        "memory/closure_escape_refused.lu",
+        "memory/closure_region_capture.lu",
         "memory/handle_stale.lu",
         "comptime/norm_linear.lu",
     ] {
