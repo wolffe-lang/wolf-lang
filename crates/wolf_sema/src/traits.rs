@@ -130,6 +130,11 @@ pub struct TraitDef {
     pub assoc_types: Vec<AssocTypeDecl>,
     pub assoc_consts: Vec<AssocConstDecl>,
     pub dyn_report: DynReport,
+    /// The alias form (`trait Num = Add + Sub`, s155): a bound list
+    /// with no members. Bounds naming it elaborate as its list
+    /// (`Lower::resolve_bounds`), so it is never a trait a type
+    /// implements or a bound a type satisfies on its own.
+    pub alias: bool,
 }
 
 impl TraitDef {
@@ -309,6 +314,7 @@ fn build_trait(
         assoc_types,
         assoc_consts,
         dyn_report,
+        alias: d.alias_bound().is_some(),
     }
 }
 
@@ -371,12 +377,33 @@ fn build_impl(
             // `impl Trait[…] for Type` — the first path names a trait.
             let tr = match lower.resolve_type_head(module, file, &segs) {
                 TypeHead::Item { module: tm, name } => {
-                    let is_trait = traits.contains_key(&TraitRef {
+                    let tr = TraitRef {
                         module: tm,
                         name: name.clone(),
-                    });
-                    if is_trait {
-                        Some(TraitRef { module: tm, name })
+                    };
+                    let is_alias = traits.get(&tr).is_some_and(|t| t.alias);
+                    if is_alias {
+                        // An alias bound has no members to implement:
+                        // `[T: Num]` is satisfied by implementing the
+                        // traits it lists ([type.trait.op]).
+                        lower.diags.push(
+                            Diagnostic::error(
+                                codes::E0507,
+                                path_span,
+                                format!(
+                                    "`{name}` is an alias bound, and an alias is not implemented"
+                                ),
+                            )
+                            .with_label("an alias bound, not a trait")
+                            .with_note(
+                                "`trait Num = Add + Sub` lists traits; a type satisfies \
+                                 `[T: Num]` by implementing each of them — write those \
+                                 impls instead.",
+                            ),
+                        );
+                        None
+                    } else if traits.contains_key(&tr) {
+                        Some(tr)
                     } else {
                         let kind = lower.pkg.tables[tm]
                             .get(&name)

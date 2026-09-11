@@ -1120,7 +1120,10 @@ impl<'a> Lower<'a> {
     /// Elaborate an item's generic parameter list into [`GenericSig`]s
     /// with resolved trait bounds. A bound naming anything but a
     /// trait — or a trait with its own input parameters, which the
-    /// bound surface cannot apply yet — is E0503.
+    /// bound surface cannot apply yet — is E0503. A bound naming an
+    /// alias bound (`trait Num = Add + Sub`, s155) elaborates as the
+    /// alias's own list, so every consumer of the bounds sees traits
+    /// only.
     pub(crate) fn generic_defs(
         &mut self,
         module: usize,
@@ -1136,67 +1139,8 @@ impl<'a> Lower<'a> {
             let name = self.text(file, name_tok.span);
             let mut bounds = Vec::new();
             if let Some(bound) = p.bound() {
-                for path in bound.paths() {
-                    let segs: Vec<(String, Span)> = path
-                        .segments()
-                        .map(|t| (self.text(file, t.span), t.span))
-                        .collect();
-                    let span = segs
-                        .first()
-                        .map(|(_, s)| segs.iter().fold(*s, |a, (_, b)| a.join(*b)))
-                        .unwrap_or(name_tok.span);
-                    match self.resolve_type_head(module, file, &segs) {
-                        TypeHead::Item {
-                            module: tm,
-                            name: tn,
-                        } => match self.trait_bound_check(tm, &tn) {
-                            BoundCheck::Ok => bounds.push(BoundRef {
-                                module: tm,
-                                name: tn,
-                                span,
-                            }),
-                            BoundCheck::NotATrait(kind) => {
-                                self.diags.push(
-                                    Diagnostic::error(
-                                        codes::E0503,
-                                        span,
-                                        format!(
-                                            "`{tn}` is a {kind}, and only traits can be bounds"
-                                        ),
-                                    )
-                                    .with_label("not a trait")
-                                    .with_note(
-                                        "a bound promises capabilities, and only a `trait` \
-                                             declares a capability set — check the name, or \
-                                             write the trait you meant.",
-                                    ),
-                                );
-                            }
-                            BoundCheck::Parameterized => {
-                                self.diags.push(
-                                    Diagnostic::error(
-                                        codes::E0503,
-                                        span,
-                                        format!(
-                                            "the trait `{tn}` takes input parameters, which \
-                                                 a bound cannot apply"
-                                        ),
-                                    )
-                                    .with_label("this trait is parameterized")
-                                    .with_note(
-                                        "bounds are written `T: Trait` with no arguments; \
-                                             applying trait inputs inside a bound has no surface \
-                                             syntax yet — use a trait without input parameters.",
-                                    ),
-                                );
-                            }
-                        },
-                        // Unresolved bound paths were already reported
-                        // by name resolution (E0301); poisoned imports
-                        // stay silent.
-                        TypeHead::Unknown | TypeHead::Poisoned => {}
-                    }
-                }
+                let mut stack = Vec::new();
+                self.resolve_bounds(module, file, bound, name_tok.span, &mut stack, &mut bounds);
             }
             out.push(GenericSig {
                 name,
@@ -1205,6 +1149,132 @@ impl<'a> Lower<'a> {
             });
         }
         out
+    }
+
+    /// Resolve one `A + B + …` bound list into trait references,
+    /// expanding alias bounds (`trait Num = Add + Sub`) through their
+    /// own lists — `stack` guards a cycle (`trait A = B`, `trait B =
+    /// A`), which resolves to nothing and is reported once at the
+    /// alias. The span of an expanded bound is the ALIAS's mention at
+    /// the use site, so E0501/E0502 provenance points where the user
+    /// wrote `Num`, never inside std.
+    pub(crate) fn resolve_bounds(
+        &mut self,
+        module: usize,
+        file: usize,
+        bound: wolf_ast::TypeBound<'_>,
+        fallback_span: Span,
+        stack: &mut Vec<(usize, String)>,
+        out: &mut Vec<BoundRef>,
+    ) {
+        for path in bound.paths() {
+            let segs: Vec<(String, Span)> = path
+                .segments()
+                .map(|t| (self.text(file, t.span), t.span))
+                .collect();
+            let span = segs
+                .first()
+                .map(|(_, s)| segs.iter().fold(*s, |a, (_, b)| a.join(*b)))
+                .unwrap_or(fallback_span);
+            match self.resolve_type_head(module, file, &segs) {
+                TypeHead::Item {
+                    module: tm,
+                    name: tn,
+                } => match self.trait_bound_check(tm, &tn) {
+                    BoundCheck::Ok => {
+                        if let Some((afile, alias)) = self.alias_bound_of(tm, &tn) {
+                            let key = (tm, tn.clone());
+                            if stack.contains(&key) {
+                                self.diags.push(
+                                    Diagnostic::error(
+                                        codes::E0503,
+                                        span,
+                                        format!("the alias bound `{tn}` names itself"),
+                                    )
+                                    .with_label("this alias is cyclic")
+                                    .with_note(
+                                        "`trait A = B` lists the traits a `[T: A]` bound \
+                                         means, so the list cannot contain `A` again — \
+                                         name traits with members.",
+                                    ),
+                                );
+                                continue;
+                            }
+                            stack.push(key);
+                            let mut inner = Vec::new();
+                            self.resolve_bounds(tm, afile, alias, span, stack, &mut inner);
+                            stack.pop();
+                            for mut b in inner {
+                                b.span = span;
+                                if !out.iter().any(|o| o.module == b.module && o.name == b.name) {
+                                    out.push(b);
+                                }
+                            }
+                        } else if !out.iter().any(|o| o.module == tm && o.name == tn) {
+                            out.push(BoundRef {
+                                module: tm,
+                                name: tn,
+                                span,
+                            });
+                        }
+                    }
+                    BoundCheck::NotATrait(kind) => {
+                        self.diags.push(
+                            Diagnostic::error(
+                                codes::E0503,
+                                span,
+                                format!("`{tn}` is a {kind}, and only traits can be bounds"),
+                            )
+                            .with_label("not a trait")
+                            .with_note(
+                                "a bound promises capabilities, and only a `trait` \
+                                 declares a capability set — check the name, or \
+                                 write the trait you meant.",
+                            ),
+                        );
+                    }
+                    BoundCheck::Parameterized => {
+                        self.diags.push(
+                            Diagnostic::error(
+                                codes::E0503,
+                                span,
+                                format!(
+                                    "the trait `{tn}` takes input parameters, which \
+                                     a bound cannot apply"
+                                ),
+                            )
+                            .with_label("this trait is parameterized")
+                            .with_note(
+                                "bounds are written `T: Trait` with no arguments; \
+                                 applying trait inputs inside a bound has no surface \
+                                 syntax yet — use a trait without input parameters.",
+                            ),
+                        );
+                    }
+                },
+                // Unresolved bound paths were already reported
+                // by name resolution (E0301); poisoned imports
+                // stay silent.
+                TypeHead::Unknown | TypeHead::Poisoned => {}
+            }
+        }
+    }
+
+    /// The alias form's bound list of the trait at (module, name),
+    /// with the file it is declared in; `None` for a brace-form
+    /// trait.
+    pub(crate) fn alias_bound_of<'n>(
+        &self,
+        module: usize,
+        name: &str,
+    ) -> Option<(usize, wolf_ast::TypeBound<'n>)>
+    where
+        'a: 'n,
+    {
+        let item = self.pkg.tables[module].get(name)?;
+        let node = item_node(self.pkg, item);
+        let d = wolf_ast::TraitDecl::cast(node)?;
+        Some((item.file, d.alias_bound()?))
     }
 
     /// Is the item at (module, name) a bindable trait bound?
