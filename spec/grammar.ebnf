@@ -136,7 +136,8 @@ field_init ::= IDENT ':' expr | IDENT
 literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
           | GENERALIZED_STRING | 'true' | 'false'
 
-if_expr    ::= 'if' expr block ('else' (if_expr | block))?
+if_expr    ::= 'if' expr 'then'? block ('else' (if_expr | block))?
+             | 'if' expr 'then' expr  ('else' (if_expr | expr))?
 match_expr ::= 'match' expr '{' arm* '}'
 match_arm  ::= pattern ('if' expr)? '=>' (expr | block)
 arm        ::= match_arm arm_sep?
