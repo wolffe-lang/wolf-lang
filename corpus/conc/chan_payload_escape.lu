@@ -1,5 +1,5 @@
 //! check: fail(E1010)
-//! phase: mem
+//! phase: typecheck
 //! conforms: conc.chan.payload
 //! `[conc.chan.payload]`'s lifetime half (s150): a payload leaves the
 //! sending frame for a receiver, so it must outlive that frame exactly
