@@ -909,6 +909,7 @@ fn lower_body(
         scopes: Vec::new(),
         visible: None,
         loops: Vec::new(),
+        pending_for_pat: None,
         fn_eu: None,
         fn_tail: None,
         callees: HashMap::new(),
@@ -1050,6 +1051,7 @@ fn lower_task_body<'t>(
         scopes: Vec::new(),
         visible: None,
         loops: Vec::new(),
+        pending_for_pat: None,
         fn_eu: None,
         fn_tail: None,
         callees: HashMap::new(),
@@ -2748,6 +2750,12 @@ struct Lowerer<'t, 'b, 'm> {
     /// installed — the defer body's own deeper scopes stay visible).
     visible: Option<(usize, usize, usize)>,
     loops: Vec<LoopFrame>,
+    /// A destructuring `for` pattern waiting for its body frame (s152):
+    /// `for (k, v) in m.pairs()` binds the element's fields, so
+    /// [`Self::lower_for_list`] parks the tuple pattern and its element
+    /// type here and [`Self::run_for_body`] binds them inside the
+    /// loop's own scope, where the names must live.
+    pending_for_pat: Option<(&'t GreenNode, TyId)>,
     /// The function's fallible shape: the eu WIR type of its return
     /// (None when the return is not a tagged error union).
     fn_eu: Option<TypeId>,
@@ -12729,6 +12737,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             None => None,
             Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(p.span)),
             Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+            // s152: `for (k, v) in m.pairs()` — a tuple pattern over a
+            // list of tuples binds each field of the loaded element
+            // (the `let (a, b) = …` binder, run inside the body's
+            // scope by `run_for_body`).
+            Some(p) if p.kind == SyntaxKind::TuplePat => {
+                self.pending_for_pat = Some((p, elem_sema));
+                None
+            }
             Some(p) => {
                 return Err(refuse(
                     "destructuring `for` patterns (tuple yields, c06/std)",
@@ -18272,6 +18288,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         exit: Option<Block>,
     ) -> R<LoopFrame> {
         self.scopes.push(ScopeFrame::default());
+        if let Some((pat, elem_sema)) = self.pending_for_pat.take()
+            && let Err(x) = self.bind_tuple_value(pat, iparam, self.table, elem_sema, pat.span)
+        {
+            self.scopes.pop();
+            return Err(x);
+        }
         if let Some(name) = bind_name {
             let var = self.b.declare_var(ity);
             self.b.def_var(var, iparam);
