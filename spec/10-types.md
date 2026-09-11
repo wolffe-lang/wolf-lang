@@ -399,12 +399,22 @@ expected. This section is that clause; `send`'s row follows it in
   context is consumed by no one: the block's value is `()` whatever the
   tail's type.
 
-- `[type.unit.discard]` **A `!()` tail in a unit context is a discard,
-  warned (W0601), never a mismatch.** The value's row is lost, and the
-  compiler says so at the tail with the diagnostic a non-trailing `!T`
-  statement has drawn since s67. Only `!()` qualifies: a `!int` tail
-  where `()` is expected is a mismatch on the `int`, exactly as a plain
-  `int` tail is. The two readings, costed before choosing:
+- `[type.unit.discard]` **A `!T` tail in a unit context is a discard,
+  warned (W0601), never a mismatch.** The value's row is lost — and,
+  when `T` is not `()`, the value with it — and the compiler says so at
+  the tail with the diagnostic a non-trailing `!T` statement has drawn
+  since s67. s146 admitted `!()` only, on the reading that a `!int`
+  tail where `()` is expected is a mismatch on the `int` exactly as a
+  plain `int` tail is; s154 retired that half (wolf-lang#326). It was
+  the same rule about position the clause had just refused, one level
+  in: `(mut xs).pop()` as a STATEMENT in a unit body is W0601, and the
+  identical line at the body's tail was E0401 "must return `()`" —
+  a return-type diagnosis of a discard, whose fix-it sent the reader
+  to manufacture a value nobody uses. The plain `int` tail keeps
+  E0401; what moves is the row, which is the thing being discarded.
+  W0601 names `let _ = …` at a value-carrying tail — the spelling that
+  makes the discard visible — beside `?` and `else`. The two readings,
+  costed before choosing:
 
   | | (i) handled — a `!()` tail is a mismatch | (ii) discarded — W0601 |
   |---|---|---|
@@ -462,7 +472,7 @@ is about it.)
   tail**, naming the declaration as the origin — never a `()` printed
   and never an exit status a runtime invents (wolf-interp#69's shape
   one level up). The omitted return type is `()`, and the one place a
-  fallible tail is not a mismatch is the unit context: a `!()` tail
+  fallible tail is not a mismatch is the unit context: a `!T` tail
   where `()` is expected is a warned discard, `[type.unit.discard]`.
   Witnesses: `typecheck/tail_declared_str.lu`,
   `typecheck/tail_declared_union.lu`.

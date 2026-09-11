@@ -536,6 +536,7 @@ typecheck/tail_declared_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/tail_declared_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/trait_default.lu: lowers
 typecheck/unit_context_discard.lu: lowers
+typecheck/unit_tail_value_discard.lu: lowers
 typecheck/variant_value/main.lu: lowers
 typecheck/wrap_as_int_in_range.lu: lowers
 typecheck/wrap_narrow_cast.lu: lowers

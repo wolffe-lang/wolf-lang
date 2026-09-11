@@ -2217,10 +2217,13 @@ The tail of a block in a unit context is the same discard
 (`[type.unit.discard]`): the last expression of a `for`, `while`, or
 `loop` body, of an `if` with no `else`, or of a function whose result
 is `()` produces a value nobody consumes, because the block's value
-is `()` whatever the tail's type. A `!()` there — a `ch.send(v)`
-closing a loop body is the common shape — is warned exactly like a
-non-trailing statement, never refused; `ch.send(v)?` hands the
-failure to the enclosing row (a spawned task's to its scope).
+is `()` whatever the tail's type. A `!T` there — a `ch.send(v)`
+closing a loop body, a `(mut xs).pop()` closing a unit function — is
+warned exactly like a non-trailing statement, never refused;
+`ch.send(v)?` hands the failure to the enclosing row (a spawned
+task's to its scope), and `let _ = (mut xs).pop()` spells a discard
+that is meant. A tail whose ok side carries a value loses the value
+too, and the warning says so.
 "#);
 
 code!(W0602, "a `pub` signature spells its error row anonymously", r#"

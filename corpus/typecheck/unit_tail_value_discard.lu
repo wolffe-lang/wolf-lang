@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="1")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! `[type.unit.discard]` widened (wolf-lang#326, s154): a `!T` tail in
+//! a unit context is the same warned discard as a `!()` one, and the
+//! warning names `let _ = …`. s146 admitted `!()` only, so this body —
+//! whose tail drops an `int ! {none}` — answered E0401 "this is
+//! `int ! {none}`, but `drop_last` must return `()`": a return-type
+//! diagnosis of a discard, one line below a STATEMENT of the identical
+//! shape that has only ever warned. The maintainer, reading chapter 5,
+//! followed the message to `… else copy xs[0]` and manufactured a
+//! value nobody wanted. `keep_last` is the control in the other
+//! direction: the same call bound with `let _ =` is the deliberate
+//! spelling and warns nowhere. lupin 0.1.33 runs both silently (it
+//! has no lint wave).
+
+fn drop_last(mut xs: List[int]) {
+    (mut xs).pop()
+}
+
+fn keep_last(mut xs: List[int]) {
+    let _ = (mut xs).pop()
+}
+
+fn main() -> !int {
+    var a = List[int]()
+    (mut a).push(1)
+    (mut a).push(2)
+    (mut a).push(3)
+    drop_last(mut a)
+    keep_last(mut a)
+    print("{a.len}")
+    0
+}

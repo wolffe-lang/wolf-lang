@@ -1601,28 +1601,43 @@ pub(crate) fn check_typed_body(pkg: &Package, body: &BodyRef, tb: &TypedBody) ->
         }
     }
 
-    // W0601 — `[type.unit.discard]`: a `!()` tail where `()` was
+    // W0601 — `[type.unit.discard]`: a `!T` tail where `()` was
     // expected (a loop body's, an else-less `if`'s, a unit function's).
     // The checker recorded the site; the block's value is `()`, so the
-    // tail is discarded exactly as a non-trailing statement is.
+    // tail is discarded exactly as a non-trailing statement is. When
+    // the ok side carries a value (s154, wolf-lang#326) the discard
+    // costs the value too, and the note names the spelling that makes
+    // it visible — `let _ = …`.
     for &span in &tb.unit_discards {
         let Some(t) = ty_at(span) else { continue };
-        diags.push(
-            Diagnostic::warning(
-                codes::W0601,
-                span,
-                format!(
-                    "this `{}` result is discarded, error row and all",
-                    rendered(t)
-                ),
-            )
-            .with_label("the block's value is `()`, so a failure here vanishes silently")
-            .with_note(
-                "propagate it with `?`, handle it with `else`, or bind it away \
-                 explicitly so the discard is visible."
-                    .to_string(),
+        let carries_value = match tb.table.kind(t) {
+            TyKind::ErrUnion(ok, _) => !matches!(tb.table.kind(*ok), TyKind::Unit),
+            _ => false,
+        };
+        let mut d = Diagnostic::warning(
+            codes::W0601,
+            span,
+            format!(
+                "this `{}` result is discarded, error row and all",
+                rendered(t)
             ),
         );
+        d = if carries_value {
+            d.with_label("the block's value is `()`, so the value and its failure both vanish")
+                .with_note(
+                    "propagate it with `?`, handle it with `else`, or bind it away \
+                     explicitly — `let _ = …` — so the discard is visible."
+                        .to_string(),
+                )
+        } else {
+            d.with_label("the block's value is `()`, so a failure here vanishes silently")
+                .with_note(
+                    "propagate it with `?`, handle it with `else`, or bind it away \
+                     explicitly so the discard is visible."
+                        .to_string(),
+                )
+        };
+        diags.push(d);
     }
 
     // W0401 — `<literal> as <narrow int>` that cannot fit.

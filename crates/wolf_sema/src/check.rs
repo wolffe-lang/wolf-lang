@@ -1576,25 +1576,30 @@ impl<'a> Checker<'a> {
         }
     }
 
-    /// `[type.unit.discard]` (s146, wolf-lang#275): a `!()` value where
-    /// `()` is expected is a warned discard, never a mismatch — the
-    /// block's value is `()`, nothing consumes the tail, and W0601 (the
-    /// typed wave, from [`TypedBody::unit_discards`]) says the row is
-    /// lost. Only `!()` qualifies: a `!int` tail where `()` is expected
-    /// is a mismatch on the `int`, exactly as a plain `int` tail is.
-    /// Answers whether the rule applied (the caller then skips the
-    /// unification that would have refused it).
+    /// `[type.unit.discard]` (s146, wolf-lang#275; widened at s154,
+    /// wolf-lang#326): a `!T` value where `()` is expected is a warned
+    /// discard, never a mismatch — the block's value is `()`, nothing
+    /// consumes the tail, and W0601 (the typed wave, from
+    /// [`TypedBody::unit_discards`]) says the value and the row with it
+    /// are lost.
+    ///
+    /// s146 admitted `!()` only, on the reading that a `!int` tail
+    /// where `()` is expected is a mismatch on the `int` exactly as a
+    /// plain `int` tail is. It is not: a bare `xs.pop()` STATEMENT in
+    /// the same body is already this warning, so the tail answered
+    /// E0401 ("must return `()`") for a program the line above would
+    /// only have warned about — and the mismatch's wording sent the
+    /// reader to manufacture a value nobody wants. The plain `int`
+    /// tail keeps E0401; what moves is the row, which is the thing
+    /// being discarded. Answers whether the rule applied (the caller
+    /// then skips the unification that would have refused it).
     fn unit_discard(&mut self, span: Span, actual: TyId, exp: &Expect) -> bool {
         let expected = self.shallow(exp.ty);
         if !matches!(self.lo.table.kind(expected), TyKind::Unit) {
             return false;
         }
         let act = self.shallow(actual);
-        let TyKind::ErrUnion(ok, _) = self.lo.table.kind(act).clone() else {
-            return false;
-        };
-        let ok = self.shallow(ok);
-        if !matches!(self.lo.table.kind(ok), TyKind::Unit) {
+        if !matches!(self.lo.table.kind(act), TyKind::ErrUnion(..)) {
             return false;
         }
         self.unit_discards.push(span);
