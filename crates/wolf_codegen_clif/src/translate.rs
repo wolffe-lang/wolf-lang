@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 134] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 138] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -271,7 +271,18 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 134] = [
     // s143 (#268): a proc body's `int` result, stashed by its entry
     // shim for `[conc.proc.exit]`'s `normal(value)`.
     ("__wolf_rt_task_value", 1, false),
+    // s150 (#300): a capturing closure's callable record, bump-
+    // allocated in the thread's ambient region — size in, the record
+    // pointer back (`[abi.native.closure]`).
+    ("__wolf_rt_closure_alloc", 1, true),
     ("__wolf_rt_chan_new", 1, true),
+    // s150 (`[conc.chan.payload]`): a channel of payload boxes, and
+    // the boxes — `box_new` fills one from a caller slot (size, src)
+    // and answers the word; `box_take` empties one into a caller slot
+    // (word, size, dst) and frees it.
+    ("__wolf_rt_chan_new_boxed", 1, true),
+    ("__wolf_rt_box_new", 2, true),
+    ("__wolf_rt_box_take", 3, false),
     ("__wolf_rt_chan_send", 2, true),
     ("__wolf_rt_chan_send_region", 2, true),
     ("__wolf_rt_chan_recv", 2, true),

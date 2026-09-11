@@ -653,6 +653,24 @@ pub unsafe extern "C" fn __wolf_rt_region_ambient_leave(prev: *mut core::ffi::c_
     AMBIENT_REGION.with(|c| c.set(prev));
 }
 
+/// s150 (wolf-lang#300): a capturing closure's callable record — the
+/// entry word, then its captures copied in (`[abi.native.closure]`) —
+/// lives in the AMBIENT region of the frame that creates it: the
+/// `[mem.region.create.3]` placement every container gets, so the
+/// value outlives its frame exactly as far as any other value built
+/// there (D12: a callee allocates into its caller's region), and a
+/// `region { }` around a closure-building loop bounds the records the
+/// way it bounds a `List`. A null slot is the process root, as for
+/// containers. The record is never freed on its own: it dies with its
+/// region.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_closure_alloc(size: i64) -> *mut u8 {
+    if size < 0 {
+        __wolf_rt_trap(trap_code::ALLOC_CONTRACT);
+    }
+    crate::list::alloc_in(ambient_region(), size as usize)
+}
+
 struct Region {
     /// Bump cursor into the current (last) chunk. Null when no chunk
     /// is open; `cur == end` (or null/null) sends the next allocation

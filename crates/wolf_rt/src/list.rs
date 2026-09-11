@@ -61,8 +61,9 @@ pub(crate) struct ListHdr {
 }
 
 /// Allocate `size` bytes in `region`, or in the process root when
-/// `region` is null.
-fn alloc_in(region: *mut c_void, size: usize) -> *mut u8 {
+/// `region` is null. Shared with the closure-record seam
+/// (`native::__wolf_rt_closure_alloc`, s150).
+pub(crate) fn alloc_in(region: *mut c_void, size: usize) -> *mut u8 {
     if region.is_null() {
         ambient_alloc(size)
     } else {

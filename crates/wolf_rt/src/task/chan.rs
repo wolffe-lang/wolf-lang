@@ -247,15 +247,33 @@ static NEXT_CHAN: AtomicU64 = AtomicU64::new(1);
 pub struct Chan {
     id: u64,
     cap: usize,
+    /// s150 (`[conc.chan.payload]`): every word this channel carries
+    /// is a payload BOX (`__wolf_rt_box_new`) — a payload wider than
+    /// one machine word crosses in a heap box the sender fills and
+    /// the receiver empties, and the channel OWNS a box in flight: a
+    /// send that fails frees its box, and the last handle's drop
+    /// frees every box still buffered or parked with a blocked
+    /// sender.
+    boxed: bool,
     st: Mutex<ChanSt>,
 }
 
 impl Chan {
     /// Create a channel: `cap == 0` rendezvous, else bounded.
     pub fn new(cap: usize) -> Arc<Chan> {
+        Self::new_with(cap, false)
+    }
+
+    /// A channel whose payloads are boxes (`[conc.chan.payload]`).
+    pub fn new_boxed(cap: usize) -> Arc<Chan> {
+        Self::new_with(cap, true)
+    }
+
+    fn new_with(cap: usize, boxed: bool) -> Arc<Chan> {
         Arc::new(Chan {
             id: NEXT_CHAN.fetch_add(1, SeqCst),
             cap,
+            boxed,
             st: Mutex::new(ChanSt {
                 buf: VecDeque::new(),
                 closed: false,
@@ -263,6 +281,11 @@ impl Chan {
                 recvers: VecDeque::new(),
             }),
         })
+    }
+
+    /// Whether this channel's words are payload boxes.
+    pub fn is_boxed(&self) -> bool {
+        self.boxed
     }
 
     /// Stable channel id (hook payloads; select's canonical lock
@@ -746,6 +769,120 @@ pub extern "C" fn __wolf_rt_chan_new(cap: i64) -> *mut c_void {
     Arc::into_raw(Chan::new(cap)).cast_mut().cast()
 }
 
+/// s150 (`[conc.chan.payload]`): a channel whose every word is a
+/// payload box — lowering picks this constructor when the payload
+/// type is wider than one machine word, and every send on it hands
+/// over a `__wolf_rt_box_new` word.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_chan_new_boxed(cap: i64) -> *mut c_void {
+    let cap = usize::try_from(cap).unwrap_or(0);
+    Arc::into_raw(Chan::new_boxed(cap)).cast_mut().cast()
+}
+
+// ---- payload boxes (s150, `[conc.chan.payload]`) -----------------------
+//
+// A payload wider than one word crosses a channel in a heap box: one
+// header word (the payload's byte size) followed by the bytes. The
+// sender fills it from a flat stack slot (`box_new`), the receiver
+// empties it into one (`box_take`) and the box is gone; a channel
+// that still holds boxes when its last handle drops frees them, and
+// a send that fails (`closed`, `cancelled`) frees the box it could
+// not hand over. The cost, stated where the clause states it: one
+// allocation and two copies per message beyond one word.
+
+const BOX_ALIGN: usize = 8;
+
+fn box_layout(size: usize) -> std::alloc::Layout {
+    std::alloc::Layout::from_size_align(8 + size.next_multiple_of(BOX_ALIGN).max(BOX_ALIGN), BOX_ALIGN)
+        .expect("payload box layout")
+}
+
+/// Free one payload box word (null-safe: a zero word is no box).
+///
+/// # Safety
+///
+/// `word` is zero or a word `__wolf_rt_box_new` returned that no one
+/// has taken or freed.
+unsafe fn box_free(word: u64) {
+    let p = word as usize as *mut u8;
+    if p.is_null() {
+        return;
+    }
+    // SAFETY: caller contract — a live box; its header is its size.
+    unsafe {
+        let size = p.cast::<u64>().read() as usize;
+        std::alloc::dealloc(p, box_layout(size));
+    }
+}
+
+/// Fill a fresh payload box with `size` bytes read from `src`; the
+/// box's word is the sender's payload word.
+///
+/// # Safety
+///
+/// `src` must address `size` readable bytes; `size >= 0`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_box_new(size: i64, src: *const u8) -> u64 {
+    let size = usize::try_from(size).unwrap_or(0);
+    let layout = box_layout(size);
+    // SAFETY: a non-zero layout; the header and `size` bytes fit it.
+    unsafe {
+        let p = std::alloc::alloc(layout);
+        if p.is_null() {
+            std::alloc::handle_alloc_error(layout);
+        }
+        p.cast::<u64>().write(size as u64);
+        if size > 0 {
+            core::ptr::copy_nonoverlapping(src, p.add(8), size);
+        }
+        p as usize as u64
+    }
+}
+
+/// Empty a payload box into `dst` (`size` bytes, at most the box's
+/// own) and free it.
+///
+/// # Safety
+///
+/// `word` a live box from `__wolf_rt_box_new`; `dst` must address
+/// `size` writable bytes. The box is dead after this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_box_take(word: u64, size: i64, dst: *mut u8) {
+    let p = word as usize as *const u8;
+    if p.is_null() {
+        return;
+    }
+    let want = usize::try_from(size).unwrap_or(0);
+    // SAFETY: caller contract — a live box; copy no more than it holds.
+    unsafe {
+        let have = p.cast::<u64>().read() as usize;
+        let n = want.min(have);
+        if n > 0 {
+            core::ptr::copy_nonoverlapping(p.add(8), dst, n);
+        }
+        box_free(word);
+    }
+}
+
+impl Drop for Chan {
+    fn drop(&mut self) {
+        if !self.boxed {
+            return;
+        }
+        // The last handle is gone: no receiver can ever take these.
+        let st = self.st.get_mut().unwrap_or_else(|p| p.into_inner());
+        for &v in &st.buf {
+            // SAFETY: every word a boxed channel holds is a live box
+            // ([conc.chan.payload]); nothing else can free it now.
+            unsafe { box_free(v) };
+        }
+        for w in &st.senders {
+            // SAFETY: as above — a parked sender's box was never taken.
+            unsafe { box_free(w.val) };
+        }
+    }
+}
+
 /// Clone the channel handle (a channel value copied to another task
 /// crosses as a new reference; the object is shared).
 ///
@@ -779,7 +916,16 @@ pub unsafe extern "C" fn __wolf_rt_chan_free(ch: *mut c_void) {
 pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
     // SAFETY: borrow the caller's handle.
     let ch = unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(ch.cast::<Chan>())) };
-    status(ch.send(val))
+    let r = ch.send(val);
+    if r.is_err() && ch.boxed {
+        // The channel owns a box from the moment it is handed over
+        // ([conc.chan.payload]): a send that did not happen frees it
+        // before the error value is answered.
+        // SAFETY: a boxed channel's word is a live box the failed
+        // send never stored.
+        unsafe { box_free(val) };
+    }
+    status(r)
 }
 
 /// Send a region value — the affine move (`[conc.chan.move]`): routes
