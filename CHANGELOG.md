@@ -1,6 +1,140 @@
 # Changelog
 
-## Unreleased
+## 0.2.11 — 2026-09-11
+
+THE CHAPTER THE MAINTAINER READ. 0.2.11 is the release where the two
+things a reader of chapter 5 hit in the same week stopped being
+refusals: `total[T]` adds through a bound, and a `Map` answers whether
+a key is there. Both were ruled the day they were met.
+
+    fn total[T: Num](xs: List[T], zero: T) -> T {
+        var acc = zero
+        for x in xs {
+            acc = acc + x
+        }
+        acc
+    }
+
+    totals[k] = (totals[k] else 0) + cents
+
+**Operators dispatch through traits** — `[type.trait.op]`. When the
+left operand is a type parameter or a user type, `+ - * / %` are
+`Add.add` … `Rem.rem`, prefix `-` is `Neg.neg`, `==`/`!=` are `Eq.eq`,
+the comparisons and `<=>` are `Ord.cmp`; the operator IS the trait
+call, with the operands lent. Two primitives stay builtin. A bare `T`
+is refused with the note the ruling asked for, "add `T: Add` to the
+bound", and the "later sprint" sentence is gone from everywhere it
+stood. **`Num` is an alias bound** — `trait Num = Add + Sub + Mul + Div
++ Rem + Eq + Ord` — so the chapter's function reads as above and
+compiles at `int` and `f64`.
+
+**`Map[K, V]` is typed, and an absent key is a row** — `[type.map.key]`
+and `[mem.map.absent]`. Keys are `str`, `int`, `char` and `bool` this
+edition (E0418 for anything else, by name); `m[k]` is `V ! {none}`,
+never `()`, handled the way every row is; `m[k] op= v` is E0417 with
+the two spellings that do the work in the note. std.map's `has`,
+`get`, `tally` execute on both tiers, and chapter 5's count runs on a
+map alone.
+
+**The one-line `if`** — `[gram.expr.if]`: `2 => if leap then 29 else
+28`, closed by a contextual `then` that is a keyword in that one
+position and a member name or a binding everywhere else. Braces stay
+valid everywhere; no program that parsed before changes shape, and
+the formatter never converts between the two forms (`[gram.fmt.if]`).
+
+**The closure as a value, then the payload.** Chapter 4's `let both =
+fn(c) tax(discount(c))` is a `fn` value whatever it captures
+(`[type.fn.value]`, `[abi.native.closure]` rewritten: every fn value
+is a pointer to a callable record). A channel carries any value the
+type system can move (`[conc.chan.payload]`) — chapter 12's
+`channel[Doc]` runs on both tiers. Fourteen of wolf-book's one-machine
+samples close by that pair.
+
+**The checked tier's byte budget is real, and a built `str` is an
+allocation site.** `[exec.checked.budget]`: steps AND bytes, each
+cumulative, exhausting either is `unsupported` — the twelve-line walk
+that cost 16.6 GiB is 47.8 MiB and an honest refusal. `[mem.region.escape]`:
+`region scratch { "re" + "gions" }` returned from a function is E1010
+on both tiers, where 0.2.10 (and lupin 0.1.31) printed freed bytes.
+
+**Two syscalls a request, gone** (`[os.fs.open]` mode 5, `accept4`,
+`TCP_NODELAY` at the first write Nagle could hold back), and
+`wolf --version | head -1` exits 0 (#282).
+
+The pairing is stamped at **lupin 0.1.32** (pin `e0ce018`, s147's
+fold, twenty-two commits inside v0.2.10). The two range arms close —
+`grammar/match_range.lu` and `grammar/match_range_char.lu`, 0.2.10's
+two Verdict rows. What stands is what lupin has not mirrored yet, by
+sprint: the one-line `if` (wolf-interp#90, is45), the key protocol and
+the region `str` (wolf-interp is46, #88), the operator bridge
+(wolf-interp#92, is46); the standing rows are named in the pairing
+section below.
+
+### The pairing takes lupin 0.1.32 (#87 ritual, #281 control)
+
+wolf is now differentially tested against **lupin 0.1.32** (`c3dd607`),
+which declares `e0ce018` — s147's IR-volume fold, inside v0.2.10 — as
+its conformance pin. The gap to this release is named: s148, r15's
+release commits, s149 through s153 and s155 are on the compiler's side
+of the pin, and is45 (0.1.33, declaring v0.2.10) is in its gate run as
+this is cut. 0.1.31..0.1.32 is is44: the range arm (wolf-interp#83) and
+#79's method half, which moved no corpus file.
+
+**Predicted before the run: two counts per tier** — the two exit(0)
+range witnesses moving from Verdict to agreement, and one verdict move
+below the ledger (`rows/match_range_empty.lu`, lupin's E0201 becoming
+E0815). A `fail`-pinned file is a completeness note whatever B answers,
+so `match_range_empty` and `match_range_open` could move no count.
+**Measured: two per tier, the same two, and the one row below.** Over
+the full 570-file corpus (536 entries), both tiers, against
+`target/release/wolf` built by `cargo xtask dist` at `5289501`, with the control against the 0.1.31 release archive on the
+same tree:
+
+                    checked                     native
+    agreements      290 -> 292  (+2)            320 -> 322  (+2)
+    completeness    141 -> 141   (0)            141 -> 141   (0)
+    soundness         2 ->   2   (0)              0 ->   0   (0)
+    unsupported     123 -> 123   (0)             95 ->  95   (0)
+    hard             20 ->  18  (-2)             18 ->  16  (-2)
+    coverage A      311 -> 311   (0)            341 -> 341   (0)
+    coverage B      396 -> 398  (+2)            396 -> 398  (+2)
+    coverage BOTH   277 -> 279  (+2)            305 -> 307  (+2)
+
+    corpus/grammar/match_range.lu        Verdict -> agreement   (wolf-interp#83)
+    corpus/grammar/match_range_char.lu   Verdict -> agreement   (wolf-interp#83)
+
+    below the ledger:
+    corpus/rows/match_range_empty.lu     B fail(E0201) -> fail(E0815)
+
+**What stands at 0.1.32.** `checked 18 = 6 Diag + 2 SOUNDNESS + 10
+Verdict`, `native 16 = 6 Diag + 10 Verdict`. The Diag rows are #167's
+warning asymmetry (`binder_capitalized`, `discarded_result`,
+`float_zero_minus`, `region_never_allocates`, `byte_view_escape`, plus
+`safety_comment_missing` on checked and `unit_context_discard` on
+native) and SOUNDNESS is #168's float-cast twins — 0.2.10's rows, none
+moved. The ten Verdict rows are this release's own sprints ahead of
+their mirrors, `exit(0)` here and `fail(E0201)` there: the nine
+positive one-line-`if` witnesses (`grammar/if_then_arm.lu`,
+`if_then_block.lu`, `if_then_chain.lu`, `if_then_ident.lu`,
+`if_then_let.lu`, `if_then_member.lu`, `if_then_paren_default.lu`,
+`if_then_stmt.lu`, `if_then_width.lu` — lupin stops at `then`,
+wolf-interp#90, is45's) and `traits/op_total_num.lu` (the alias form
+`trait Num = …`, wolf-interp#92, is46's). In the completeness class,
+by name: `memory/region_str_concat_return.lu` and
+`region_str_concat_send.lu` (E1010 here, lupin runs to `regions` —
+wolf-interp#88), `traits/op_eq_no_trait.lu` (E0301 here, lupin's
+structural `==` runs it), `traits/op_missing_impl.lu` and
+`op_hetero_add.lu` (E0502/E0514 here, `unsupported` there),
+`typecheck/map_compound_absent.lu` (E0417 here, a run-time refusal
+there) and `map_struct_key.lu` (E0418 here, exit 1 there — the
+interpreter never reads a type argument), and the two wolf-interp#85
+rows (`row_operand_compare`, `str_slice_assign`). Below every count,
+the rows where both machines exit 0 and print differently:
+`memory/map_absent_else.lu` (`none` here, `()` there),
+`map_char_bool_keys.lu`, `traits/op_eq_inverting.lu` (the impl is
+consulted here and not there). The CI sibling step needed zero edits,
+the fifth re-stamp in a row.
+
 
 ### The key protocol (s152 — #11 and #154's `Map` rows ruled)
 
