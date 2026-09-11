@@ -3902,6 +3902,18 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Shared(cell)))
             }
             Some(SyntaxKind::Minus) => {
+                // s155 (`[type.trait.op]`): `-x` on a user type or a
+                // type parameter runs `Neg.neg`.
+                if let Some(Dispatch::Trait {
+                    module,
+                    name,
+                    method,
+                    ..
+                }) = self.ctx().dispatch.get(&e.span).cloned()
+                {
+                    let v = self.eval_arg(operand, None)?;
+                    return self.op_dispatch_call(operand, v, Vec::new(), *module, name, method, e.span);
+                }
                 // The direct `-<int literal>` spelling decodes as the
                 // NEGATED value in one step (#151, mirroring WIR
                 // lowering's rule): `i64::MIN` has no positive half,
@@ -4014,6 +4026,41 @@ impl<'t> Machine<'t> {
             };
             return Ok(Flow::Val(r));
         }
+        // s155 (`[type.trait.op]`): an operator carrying a dispatch
+        // record runs the impl — the operands are its `read`
+        // arguments, the answer is read back the way the operator
+        // means it.
+        if let Some(Dispatch::Trait {
+            module,
+            name,
+            method,
+            ..
+        }) = self.ctx().dispatch.get(&e.span).cloned()
+            && let (Some(le), Some(re), Some(op)) = (d.lhs(), d.rhs(), op)
+        {
+            let l = self.eval_arg(le, None)?;
+            let r = self.eval_arg(re, None)?;
+            let out = self.op_dispatch_call(le, l, vec![r], *module, name, method, e.span)?;
+            let Flow::Val(out) = out else {
+                return Ok(out);
+            };
+            return Ok(Flow::Val(match (op, out) {
+                (SyntaxKind::NotEq, Value::Bool(b)) => Value::Bool(!b),
+                (
+                    SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq,
+                    Value::Enum { variant, .. },
+                ) => Value::Bool(match op {
+                    SyntaxKind::Lt => variant == "Less",
+                    SyntaxKind::Gt => variant == "Greater",
+                    SyntaxKind::LtEq => variant != "Greater",
+                    _ => variant != "Less",
+                }),
+                (SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq, _) => {
+                    return self.refuse("an ordering dispatch answering a non-enum", e.span);
+                }
+                (_, out) => out,
+            }));
+        }
         let l = match d.lhs() {
             Some(l) => val!(self.eval(l)),
             None => Value::Unit,
@@ -4104,6 +4151,33 @@ impl<'t> Machine<'t> {
             },
             _ => self.refuse("this operator in checked execution", e.span),
         }
+    }
+
+    /// Run the impl an operator dispatches through (`[type.trait.op]`):
+    /// the receiver's concrete type names the body (the impl's, else
+    /// the trait's default), exactly as a qualified `Trait.method`
+    /// call resolves; a raised row comes back as the raise.
+    #[allow(clippy::too_many_arguments)]
+    fn op_dispatch_call(
+        &mut self,
+        recv_expr: &'t GreenNode,
+        recv: Value,
+        rest: Vec<Value>,
+        module: usize,
+        name: &str,
+        method: &str,
+        at: Span,
+    ) -> E<Flow> {
+        let concrete = self.trait_concrete(recv_expr.span, false, &recv, at)?;
+        let body = self.resolve_trait_body(&concrete, module, name, method, at)?;
+        let mut call_args = vec![recv];
+        call_args.extend(rest);
+        self.pending_self_ty = Some(concrete);
+        let out = self.call_body(body, call_args)?;
+        if let Value::ErrTag { .. } = out {
+            return Ok(raise(out));
+        }
+        Ok(Flow::Val(out))
     }
 
     /// Compound-assignment arithmetic reuses the checked core with the
@@ -6183,6 +6257,32 @@ impl<'t> Machine<'t> {
                             return Ok(Flow::Val(Value::Fn(b)));
                         }
                     }
+                }
+            }
+        }
+        // A payload-free variant as a bare value (`Ordering.Less`,
+        // #23's member form; s155 needs it for every `Ord.cmp` body):
+        // the checker typed the expression as the enum, and the
+        // member names one of its variants with no payload — the
+        // value is that tag. The call form (`Color.Rgb(1, 2, 3)`)
+        // is `eval_call`'s.
+        if e.kind == SyntaxKind::MemberExpr
+            && let Some(TyKind::Nominal { module, name, .. }) = self.expr_ty(e.span)
+            && let Some(ItemSig::Enum { variants, .. }) = self.tc.sigs.get(*module as usize, name)
+        {
+            let m = MemberExpr::cast(e).expect("kind");
+            if let (Some(base), Some(member)) = (m.base(), m.member())
+                && base.kind == SyntaxKind::PathExpr
+                && self.lookup(&self.text(base.span)).is_none()
+            {
+                let vname = self.text(member.span);
+                if let Some(v) = variants.iter().find(|v| v.name == vname)
+                    && v.payload.is_empty()
+                {
+                    return Ok(Flow::Val(Value::Enum {
+                        variant: vname,
+                        payload: Vec::new(),
+                    }));
                 }
             }
         }
