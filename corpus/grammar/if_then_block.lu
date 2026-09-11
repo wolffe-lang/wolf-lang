@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="29\n")
+//! phase: run
+//! conforms: gram.expr.if, gram.fmt.if
+//! fmt: relaid
+//!
+//! s151 (#307) — `then` before a block is optional and parses; the
+//! braced form has one spelling, so `wolf fmt` drops it
+//! (`[gram.fmt.if]`) — this file is the relaid source, the
+//! formatter's tests pin what it lays.
+
+fn main() -> !int {
+    let leap = true
+    let days = if leap then { 29 } else { 28 }
+    print("{days}")
+    0
+}

@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="29\n28\n")
+//! phase: run
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — the bare `if` in value position: `then` closes the
+//! condition, the `if`'s own `else` closes the first branch, and both
+//! tiers lower each brace-less branch as the one-expression block it
+//! is. lupin 0.1.32 stops at `then`; wolf-interp's mirror carries the
+//! clause.
+
+fn february(leap: bool) -> int {
+    let days = if leap then 29 else 28
+    days
+}
+
+fn main() -> !int {
+    print("{february(true)}")
+    print("{february(false)}")
+    0
+}

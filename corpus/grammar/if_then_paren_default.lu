@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="7\n0\n1\n")
+//! phase: run
+//! conforms: gram.expr.if, gram.amb.else
+//!
+//! s151 (#307) — inside a bare branch the `if`'s own `else` binds
+//! first (`[gram.amb.else]`), so a defaulting `else` there is written
+//! in parentheses — in the `then` branch and in the `else` branch
+//! alike. The formatter keeps these parens: they are load-bearing.
+
+fn parse(s: str) -> !int { s.to_int() }
+
+fn pick(use_first: bool, a: str, b: str) -> int {
+    if use_first then (parse(a) else 0) else (parse(b) else 1)
+}
+
+fn main() -> !int {
+    let a = pick(true, "7", "x")
+    let b = pick(true, "x", "7")
+    let c = pick(false, "7", "x")
+    print("{a}")
+    print("{b}")
+    print("{c}")
+    0
+}

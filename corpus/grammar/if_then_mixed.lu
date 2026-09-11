@@ -1,0 +1,12 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — the two branches of one `if` share a form: a bare
+//! `then` branch followed by a braced `else` is refused by name.
+
+fn main() -> !int {
+    let leap = true
+    let days = if leap then 29 else { 28 }
+    days
+}

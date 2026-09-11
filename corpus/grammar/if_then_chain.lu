@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="neg\nzero\npos\nneg\nzero\n")
+//! phase: run
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — an `else if … then` chain, and a chain whose last
+//! link is braced: every `else if` picks its own form, and the
+//! formatter keeps each link as written (`[gram.fmt.if]`).
+
+fn sign(n: int) -> str {
+    if n < 0 then "neg" else if n == 0 then "zero" else "pos"
+}
+
+fn sign_braced_tail(n: int) -> str {
+    if n < 0 then "neg" else if n == 0 {
+        "zero"
+    } else {
+        "pos"
+    }
+}
+
+fn main() -> !int {
+    print(sign(-3))
+    print(sign(0))
+    print(sign(7))
+    print(sign_braced_tail(-1))
+    print(sign_braced_tail(0))
+    0
+}

@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="31\n29\n28\n30\n")
+//! phase: run
+//! conforms: gram.expr.if, gram.pat
+//!
+//! s151 (#307) — the ruling's own program: `2 => if leap then 29 else
+//! 28` in a match arm, the line that read heavier than it needed to
+//! with braces. The arm's comma closes the bare `else` branch.
+
+fn days(month: int, leap: bool) -> int {
+    match month {
+        2 => if leap then 29 else 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+fn main() -> !int {
+    print("{days(1, false)}")
+    print("{days(2, true)}")
+    print("{days(2, false)}")
+    print("{days(4, false)}")
+    0
+}

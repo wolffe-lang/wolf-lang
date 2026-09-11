@@ -1,0 +1,12 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — a bare branch holds one expression: a `let` in it
+//! is refused by name, the braced form offered.
+
+fn main() -> !int {
+    let leap = true
+    if leap then let days = 29
+    0
+}

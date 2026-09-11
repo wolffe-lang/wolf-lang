@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="a leap year has twenty-nine days in february\n")
+//! phase: run
+//! conforms: gram.expr.if, gram.fmt.if
+//! fmt: relaid
+//!
+//! s151 (#307) — the width fallback: a bare `if` whose one line no
+//! longer fits the width is broken to the braced form by `wolf fmt`,
+//! the only conversion between the forms, one direction, a fixed
+//! point (`[gram.fmt.if]`). This file is the relaid source.
+
+fn main() -> !int {
+    let leap = true
+    let description = if leap then "a leap year has twenty-nine days in february" else "a common year has twenty-eight days in february"
+    print(description)
+    0
+}

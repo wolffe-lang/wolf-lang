@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="even 0\nodd 1\neven 2\nodd 3\nlast\n")
+//! phase: run
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — the bare `if` in statement position, two-way and
+//! one-armed: the line's terminator closes the last branch.
+
+fn main() -> !int {
+    var i = 0
+    while i < 4 {
+        if i % 2 == 0 then print("even {i}") else print("odd {i}")
+        if i == 3 then print("last")
+        i += 1
+    }
+    0
+}

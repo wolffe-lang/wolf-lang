@@ -1,0 +1,15 @@
+//! check: run(exit=0, stdout="then is a name\n1\n")
+//! phase: run
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — `then` is contextual, not reserved: a bool named
+//! `then` is the condition of `if then { … }`, and `if then then 1
+//! else 0` reads the identifier first and the keyword second.
+
+fn main() -> !int {
+    let then = true
+    if then { print("then is a name") }
+    let n = if then then 1 else 0
+    print("{n}")
+    0
+}

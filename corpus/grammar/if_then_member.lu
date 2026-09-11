@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="less\nequal\n")
+//! phase: run
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — after a `.` `then` is a member name (std's
+//! `Ordering.then(other)` is called as `less.then(greater)`), and a
+//! `.then(` call inside an `if` condition is consumed by the member
+//! parser before the contextual keyword is looked for. The method's
+//! own body is a bare `if`.
+
+struct Order {
+    v: int,
+}
+
+impl Order {
+    fn then(self, other: Order) -> Order {
+        if self.v != 0 then self else other
+    }
+}
+
+fn main() -> !int {
+    let less = Order { v: -1 }
+    let equal = Order { v: 0 }
+    if equal.then(less).v < 0 then print("less") else print("more")
+    if equal.then(equal).v == 0 then print("equal") else print("unequal")
+    0
+}

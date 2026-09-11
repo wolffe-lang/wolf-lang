@@ -1,0 +1,13 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.expr.if
+//!
+//! s151 (#307) — neither `{` nor `then` after the condition: one
+//! E0201 whose note names both spellings; the `29 else 28` tail folds
+//! into that report.
+
+fn main() -> !int {
+    let leap = true
+    let days = if leap 29 else 28
+    days
+}
