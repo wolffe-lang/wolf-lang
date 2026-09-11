@@ -6994,6 +6994,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         match d.op().map(|t| t.kind) {
             Some(SyntaxKind::Minus) => {
+                // s155 (`[type.trait.op]`): `-x` on a user type or a
+                // type parameter is `Neg.neg(x)` — the dispatch record
+                // says so.
+                if let Some(&disp) = self.dispatch.get(&e.span)
+                    && let Dispatch::Trait {
+                        module,
+                        name,
+                        method,
+                        ..
+                    } = disp
+                {
+                    return self.lower_trait_call_exprs(vec![operand], *module, name, method, e);
+                }
                 if operand.kind == SyntaxKind::LiteralExpr
                     && let Some(v) = self.neg_literal_direct(operand, e.span)?
                 {
@@ -7071,11 +7084,107 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// What an operator makes of its trait call's answer
+    /// (`[type.trait.op]`): arithmetic and `==` are the answer itself;
+    /// `!=` negates `Eq.eq`; the ordering family reads `Ord.cmp`'s
+    /// `Ordering` against its variants — `a < b` is `cmp == Less`,
+    /// `a <= b` is `cmp != Greater`, and so on; `<=>` is the
+    /// `Ordering` value.
+    fn operator_dispatch_result(
+        &mut self,
+        op: SyntaxKind,
+        v: Value,
+        tmodule: usize,
+        tname: &'t str,
+        method: &'t str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        match op {
+            SyntaxKind::NotEq => {
+                let f = self.b.bconst(false);
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Icmp, &[v, f], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                        .one(),
+                )))
+            }
+            SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq => {
+                // The `Ordering` the trait's `cmp` answers: a
+                // payload-free enum, so the value is its tag.
+                let tr = wolf_sema::traits::TraitRef {
+                    module: tmodule,
+                    name: tname.to_string(),
+                };
+                let ret = self
+                    .sigs
+                    .traits
+                    .get(&tr)
+                    .and_then(|td| td.method(method))
+                    .map(|m| m.sig.ret)
+                    .ok_or_else(|| refuse("an ordering dispatch without its trait", e.span))?;
+                let TyKind::Nominal { module, name, .. } = self.sig_table.kind(ret).clone() else {
+                    return Err(refuse("an ordering dispatch answering a non-enum", e.span));
+                };
+                let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(module as usize, &name)
+                else {
+                    return Err(refuse("an ordering dispatch answering a non-enum", e.span));
+                };
+                if variants.iter().any(|vs| !vs.payload.is_empty()) {
+                    return Err(refuse("an `Ordering` with payload variants", e.span));
+                }
+                let index = |vname: &str| variants.iter().position(|vs| vs.name == vname);
+                let (Some(less), Some(greater)) = (index("Less"), index("Greater")) else {
+                    return Err(refuse(
+                        "an ordering dispatch whose enum lacks `Less`/`Greater`",
+                        e.span,
+                    ));
+                };
+                let (probe, cc) = match op {
+                    SyntaxKind::Lt => (less, IntCc::Eq),
+                    SyntaxKind::Gt => (greater, IntCc::Eq),
+                    SyntaxKind::LtEq => (greater, IntCc::Ne),
+                    _ => (less, IntCc::Ne),
+                };
+                if self.b.func.value_ty(v) != types::I64 {
+                    return Err(refuse("an ordering dispatch on a non-tag value", e.span));
+                }
+                let k = self.b.iconst(types::I64, probe as i64);
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Icmp, &[v, k], &[types::BOOL], Aux::IntCc(cc))
+                        .one(),
+                )))
+            }
+            _ => Ok(Flow::Val(Some(v))),
+        }
+    }
+
     fn lower_bin(&mut self, e: &'t GreenNode) -> R<Flow> {
         let d = wolf_ast::BinExpr::cast(e).expect("kind");
         let op = d.op().map(|t| t.kind);
         if matches!(op, Some(SyntaxKind::AmpAmp | SyntaxKind::PipePipe)) {
             return self.lower_short_circuit(d, op == Some(SyntaxKind::AmpAmp), e.span);
+        }
+        // s155 (`[type.trait.op]`): an operator on a user type or a
+        // type parameter carries a dispatch record — the operator IS
+        // the trait call, and the operands are its arguments.
+        if let Some(&disp) = self.dispatch.get(&e.span)
+            && let Dispatch::Trait {
+                module,
+                name,
+                method,
+                ..
+            } = disp
+            && let Some(op) = op
+        {
+            let (Some(l), Some(r)) = (d.lhs(), d.rhs()) else {
+                return Err(refuse("operator dispatch on a missing operand", e.span));
+            };
+            let v = flow_val!(self.lower_trait_call_exprs(vec![l, r], *module, name, method, e));
+            let Some(v) = v else {
+                return Err(refuse("a unit-typed operator dispatch", e.span));
+            };
+            return self.operator_dispatch_result(op, v, *module, name, method, e);
         }
         let lhs = match d.lhs() {
             Some(l) => flow_val!(self.lower_expr(l)),
@@ -9009,6 +9118,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         method: &'t str,
         e: &'t GreenNode,
     ) -> R<Flow> {
+        let _ = cs;
+        let args: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .collect();
+        self.lower_trait_call_exprs(args, tmodule, tname, method, e)
+    }
+
+    /// The static trait call over a list of argument expressions —
+    /// the qualified `Trait.method(a, b)` and, since s155, an
+    /// operator on a user type or a type parameter (`a + b` is
+    /// `Add.add(a, b)`, `[type.trait.op]`; the checker's dispatch
+    /// record at the operator's span names the trait and method).
+    fn lower_trait_call_exprs(
+        &mut self,
+        args: Vec<&'t GreenNode>,
+        tmodule: usize,
+        tname: &'t str,
+        method: &'t str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
         let tr = wolf_sema::traits::TraitRef {
             module: tmodule,
             name: tname.to_string(),
@@ -9019,7 +9151,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(tm) = td.method(method) else {
             return Err(refuse("a qualified call on an undeclared method", e.span));
         };
-        let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
         // The Self-pinning argument: the first whose DECLARED type
         // mentions `Self` (sema blamed the same argument, D28).
         let mut head: Option<String> = None;
@@ -9027,8 +9158,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             if !mentions_self(self.sig_table, p.ty) {
                 continue;
             }
-            if let Some(a) = args.get(i)
-                && let Some(vexpr) = Arg::value(*a)
+            if let Some(vexpr) = args.get(i)
                 && let Some(site) = self.expr_sema_ty(vexpr.span)
                 && let Some(name) = self_ty_key(self.table, self.strip_sema(site))
             {
@@ -9077,8 +9207,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let mut map: std::collections::BTreeMap<String, Bound> = std::collections::BTreeMap::new();
         for (i, p) in msig.params.iter().enumerate() {
-            if let Some(a) = args.get(i)
-                && let Some(vexpr) = Arg::value(*a)
+            if let Some(vexpr) = args.get(i)
                 && let Some(site) = self.expr_sema_ty(vexpr.span)
             {
                 self.match_binding(p.ty, site, &mut map, e.span)?;
@@ -9114,12 +9243,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ));
             }
         }
-        let _ = cs;
         let mut vals = Vec::new();
-        for a in &args {
-            let Some(vexpr) = Arg::value(*a) else {
-                continue;
-            };
+        for vexpr in &args {
             let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
                 return Err(refuse("unit-typed arguments", vexpr.span));
             };
