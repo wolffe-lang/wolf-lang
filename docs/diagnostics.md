@@ -384,7 +384,7 @@ Names never resolve through types here — a capitalized name used as an
 error-row tag (D30) is deferred to the type checker rather than
 reported by this pass.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -779,7 +779,7 @@ take a concrete type instead of a generic parameter. The error always
 lands here, at the definition, never as a backtrace out of some
 instantiation.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__golden_arith.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__golden_eq.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__golden_missing_bound.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0501_add_bound.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0501_operator.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__golden_arith.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__golden_eq.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__golden_missing_bound.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0501_add_bound.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0501_operator.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0501_operator_ord_neg.snap
 
 ## E0502 — a type argument does not satisfy the generic's bound
 
@@ -794,7 +794,7 @@ the trait is foreign, the sanctioned escape is an adapter: declare
 `type Local = distinct Foreign` and implement the trait for the
 adapter — same layout, free casts, its own impl set.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__call_unmet_bound.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_unmet_bound.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__call_unmet_bound.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_missing_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_operator_no_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_unmet_bound.snap
 
 ## E0503 — this bound is not a trait
 
@@ -810,7 +810,7 @@ surface syntax yet, so such traits cannot be used as bounds today —
 use a trait without input parameters, or dispatch through qualified
 calls instead.
 
-Fixtures: crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_not_a_trait.snap
+Fixtures: crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_alias_cycle.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_not_a_trait.snap
 
 ## E0504 — an impl must live with its trait or with its type
 
@@ -868,7 +868,7 @@ become part of the trait, because callers dispatch through the trait's
 declaration, not through any particular impl. The message names the
 member and shows the trait's declaration; make the impl agree with it.
 
-Fixtures: crates/wolf_sema/tests/snapshots/ctfe_diagnostics__staged_provenance_chain.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_mismatch.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0513_cycle.snap
+Fixtures: crates/wolf_sema/tests/snapshots/ctfe_diagnostics__staged_provenance_chain.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_alias_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_mismatch.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0513_cycle.snap
 
 ## E0508 — the trait cannot be a `dyn` object: a generic method
 
@@ -951,6 +951,25 @@ D28). Bind at least one of the associated types in the cycle to a
 concrete type and let the others build on it.
 
 Fixtures: crates/wolf_sema/tests/snapshots/trait_diagnostics__e0513_cycle.snap
+
+## E0514 — the operator trait's method does not have the operator's shape
+
+An operator on a type parameter or a user type dispatches through a
+trait named in the operator table (`[type.trait.op]`): `+` is
+`Add.add`, `-` is `Sub.sub` (prefix `-` is `Neg.neg`), `*` `/` `%` are
+`Mul.mul` `Div.div` `Rem.rem`, `==` and `!=` are `Eq.eq`, and the
+ordering family is `Ord.cmp`. The trait the operator found — by that
+name in the parameter's bounds, or in scope at a user type — either has
+no method of the table's name or declares it with another shape. The
+operator traits are homogeneous this edition: `fn add(self, other:
+Self) -> Self`, `fn neg(self) -> Self`, `fn eq(self, other: Self) ->
+bool`, `fn cmp(self, other: Self) -> Ordering` — one type in, the same
+type out. Declare the method with that shape (std.ops and std.cmp
+declare the eight this way), or give the trait another name if it is
+not meant to be the operator's; a heterogeneous operator (`Money *
+int`) waits on a stated need.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_hetero_add.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0514_hetero_add.snap
 
 ## E0601 — the error row is not well-formed
 
