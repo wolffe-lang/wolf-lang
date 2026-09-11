@@ -188,6 +188,7 @@
     "gram.fmt.imports": "01-grammar.md",
     "gram.fmt.indent": "01-grammar.md",
     "gram.fmt.inline": "01-grammar.md",
+    "gram.fmt.paren": "01-grammar.md",
     "gram.fmt.region": "01-grammar.md",
     "gram.fmt.strings": "01-grammar.md",
     "gram.inv": "01-grammar.md",

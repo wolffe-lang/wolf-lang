@@ -82,6 +82,10 @@ pub(crate) enum Ctx {
     /// `if`'s own `else` binds first there (`[gram.amb.else]`), so
     /// `(f() else 0)` unwrapped would re-bind the `else`.
     BareBranch,
+    /// A defaulting `else`'s FALLBACK (`x else (0 - 1)`): `Free`,
+    /// except that parens around a binary fallback are the reader's
+    /// and are kept (`[gram.fmt.paren]`, wolf-lang#340).
+    ElseFallback,
 }
 
 // ---------------------------------------------------------- utilities ---
@@ -1854,15 +1858,7 @@ impl<'a> Fmt<'a> {
                     out.push(Doc::text("| "));
                 }
                 for r in rest {
-                    self.expr(
-                        r,
-                        out,
-                        Ctx::BinOperand {
-                            tier: 15,
-                            left: false,
-                            assoc_left: false,
-                        },
-                    );
+                    self.expr(r, out, Ctx::ElseFallback);
                 }
             }
             K::IfExpr => self.if_expr(n, out),
@@ -3347,11 +3343,14 @@ fn spine_ctx(n: &GreenNode, m: &GreenNode, ctx: Ctx, leftmost: bool) -> Ctx {
         K::CallExpr | K::BracketApply | K::MemberExpr | K::TryExpr => Ctx::Postfix,
         K::CastExpr => Ctx::Cast,
         K::PrefixExpr | K::FromEndExpr => Ctx::Prefix,
-        K::ElseExpr => Ctx::BinOperand {
+        K::ElseExpr if leftmost => Ctx::BinOperand {
             tier: 15,
-            left: leftmost,
+            left: true,
             assoc_left: false,
         },
+        // The fallback half (`[gram.fmt.paren]`, wolf-lang#340) — the
+        // spine walk must read the same context the emitter hands it.
+        K::ElseExpr => Ctx::ElseFallback,
         K::RangeExpr => Ctx::RangeEnd,
         // A bare `if … then` branch: the spine walk must see the same
         // context `bare_branch` emits with, or the paren-dropper and the
@@ -3386,6 +3385,16 @@ fn ctx_allows_bare(ctx: Ctx, inner: &GreenNode) -> bool {
         // Everything but the defaulting `else` (tier 15), whose parens
         // are what keep it from the `if`'s own `else`.
         Ctx::BareBranch => t <= 14,
+        // `[gram.amb.else]` extends the default over the whole binary
+        // term either way, so the parens in `x else (0 - 1)` change no
+        // meaning — and that is exactly why they are the reader's and
+        // not the parser's. W0307's registry text stands the lint down
+        // when the author has "parenthesized either reading", and the
+        // formatter erased one of the two readings it names: the
+        // value-side grouping `(x else 0) - 1` survived (the `-` is the
+        // outer node there, so the parens never reach this context) and
+        // the fallback-side grouping did not. Keep it (wolf-lang#340).
+        Ctx::ElseFallback => t < 15 && inner.kind != K::BinExpr,
         Ctx::Cond => t <= 13 && !exposed_brace(inner),
         Ctx::BinOperand {
             tier: pt,

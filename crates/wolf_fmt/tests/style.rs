@@ -246,6 +246,30 @@ fn a_signature_past_the_width_breaks_its_parameter_list_not_its_error_row() {
     );
 }
 
+// --------------------------------------------------- [gram.fmt.paren] ----
+
+#[test]
+fn the_parens_around_a_binary_else_fallback_are_kept() {
+    // wolf-lang#340. `[gram.amb.else]` extends the default over the
+    // whole term either way, so these parens change no meaning — which
+    // is exactly why they are the reader's. W0307 stands down when the
+    // author has "parenthesized either reading"; the value-side
+    // grouping survived the formatter and this one did not.
+    let src = "fn f(m: Map[str, int], k: str) -> int {\n    m[k] else (0 - 1)\n}\n";
+    check(src, src);
+    // The other reading was never touched, and still is not.
+    let other = "fn f(m: Map[str, int], k: str) -> int {\n    (m[k] else 0) - 1\n}\n";
+    check(other, other);
+    // A fallback that is not a binary expression keeps dropping.
+    check(
+        "fn f(m: Map[str, int], k: str) -> int {\n    m[k] else (0)\n}\n",
+        "fn f(m: Map[str, int], k: str) -> int {\n    m[k] else 0\n}\n",
+    );
+    // A nested defaulting `else` is load-bearing and always was.
+    let nested = "fn f(m: Map[str, int]) -> int {\n    m[\"a\"] else (m[\"z\"] else 3)\n}\n";
+    check(nested, nested);
+}
+
 // -------------------------------------------------- [gram.fmt.inline] ----
 
 #[test]

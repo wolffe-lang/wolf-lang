@@ -1045,6 +1045,18 @@ no `goto`, no *required* semicolons (terminators are inserted;
   101-column call argument be fixed points `wolf fmt --check` accepted
   (#339's three, #303's second half outside an `if` chain). Pinned in
   `crates/wolf_fmt/tests/style.rs` under this anchor.
+- `[gram.fmt.paren]` **The parentheses around a defaulting `else`'s
+  fallback are kept when the fallback is a binary expression** — `x
+  else (0 - 1)` stays, where every other redundant paren drops by the
+  precedence table (s156, wolf-lang#340). `[gram.amb.else]` extends the
+  default over the whole term either way, so these parens change no
+  meaning, and that is exactly why they are the reader's and not the
+  parser's: W0307 stands down when the author has "parenthesized either
+  reading", and the formatter erased one of the two readings that
+  sentence names — the value-side grouping `(x else 0) - 1` survived
+  (its `-` is the outer node, so the parens never reach the fallback
+  position) and the fallback-side grouping did not. Pinned in
+  `crates/wolf_fmt/tests/style.rs` under this anchor.
 - `[gram.fmt.inline]` A block stays on one line (with `;` separators) only
   when it is a guard-clause-shaped body (≤2 statements, fits the width);
   otherwise the formatter breaks it multiline and strips the semicolons.
