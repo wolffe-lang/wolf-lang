@@ -1098,8 +1098,11 @@ fn lower_task_body<'t>(
             }
         }
         PendingKind::Closure { params } => {
-            let has_env = !task.caps.is_empty();
-            if has_env {
+            // s150 (#300): EVERY closure entry takes its callable
+            // record first ([abi.native.closure]) — a capture-free
+            // closure ignores it, a capturing one reads its captures
+            // from the record's tail (word 0 is the entry itself).
+            if !task.caps.is_empty() {
                 let env = entry_params[0];
                 let renv = lo.b.ins_region_foreign(ForeignRole::Header);
                 for (i, (name, sema)) in task.caps.iter().enumerate() {
@@ -1128,9 +1131,8 @@ fn lower_task_body<'t>(
                         .push((name.clone(), bind));
                 }
             }
-            let first = if has_env { 1 } else { 0 };
             for (j, (name, sema)) in params.iter().enumerate() {
-                let val = entry_params[first + j];
+                let val = entry_params[1 + j];
                 let wty = lo.b.func.value_ty(val);
                 let var = lo.b.declare_var(wty);
                 lo.b.def_var(var, val);
@@ -1207,12 +1209,17 @@ fn build_dyn_shim(module: &mut Module, shim: &DynShim) -> R<()> {
     let params = b.block_params(entry);
     let (data, tail) = params.split_first().expect("erased sig has a receiver");
     let tail: Vec<Value> = tail.to_vec();
-    // The vtable data pointer reads through the foreign header region
-    // (never stored through in any body this lowering emits).
-    let region = b.ins_region_foreign(ForeignRole::Header);
-    let recv = load_flat_raw(&mut b, shim.recv_ty, *data, region, shim.span)?;
     let ext = b.func.import_func(shim.target.clone(), shim.target_sig);
-    let mut args = vec![recv];
+    let mut args = Vec::with_capacity(tail.len() + 1);
+    if let Some(recv_ty) = shim.recv_ty {
+        // The vtable data pointer reads through the foreign header
+        // region (never stored through in any body this lowering
+        // emits).
+        let region = b.ins_region_foreign(ForeignRole::Header);
+        args.push(load_flat_raw(&mut b, recv_ty, *data, region, shim.span)?);
+    }
+    // s150: a fn-VALUE shim (`recv_ty: None`) drops the leading
+    // record pointer — a named function has no captures to read.
     args.extend(tail);
     let rets = b.ins_call(ext, &args);
     b.ins_ret(&rets);
@@ -1934,9 +1941,10 @@ fn wir_ty_frame(
         // them (deref, index, arithmetic, casts) keep their s26
         // refusals at the expression sites.
         TyKind::Ptr(_) => Ok(Some(types::PTR)),
-        // s95: a fn-typed VALUE is one code pointer — `func.addr` puts
-        // it there, and the call through it is its own construct (the
-        // c05 refusal at the call site, until an indirect call lands).
+        // s95/s150: a fn-typed VALUE is one word — the pointer to its
+        // callable record (`[abi.native.closure]`): a static one-slot
+        // table for a named function or a capture-free closure, an
+        // ambient-region record for a capturing one (#300).
         TyKind::Fn(_, _) => Ok(Some(types::PTR)),
         // s93: a rigid here is a generic parameter no substitution
         // bound — unless a rigid FRAME binds it (s94: a generic
@@ -2426,13 +2434,14 @@ enum LocalBind {
     /// s77's seven consuming positions — the lend analysis proved that
     /// before the caller was allowed to pass one.
     BytesView { ptr: Value, len: Value },
-    /// s105: a capturing closure bound by `let` — the two-word pair
-    /// (entry fn ptr via `func.addr`, env record ptr), the s96/s98
-    /// aggregate with the vtable slot replaced by a direct entry. The
-    /// pair stays in its frame: a call reads both halves (two
-    /// `agg.get`s and a `call.ind`, env leading); any other read
-    /// refuses by name.
-    Closure { pair: Value },
+    /// s105/s150: a capturing closure bound by `let` — its entry
+    /// (`func.addr`, known statically) and its callable RECORD (the
+    /// entry word then the copied captures, allocated in the ambient
+    /// region — `[abi.native.closure]`). A call by name skips the
+    /// record's entry load and calls the entry directly, record
+    /// leading; a read as a VALUE is the record pointer, which IS the
+    /// one-word fn value every callee expects (#300).
+    Closure { entry: Value, rec: Value },
     /// A unit-typed binding (no runtime value).
     Unit,
     /// A `when`-body payload rebind (s73, [conc.when.body]): reads and
@@ -2775,16 +2784,23 @@ struct Lowerer<'t, 'b, 'm> {
 /// from the data pointer, one call to the real target, its result out.
 /// The shim is the table's problem, never the call site's
 /// (`[abi.native.dyn]`).
+///
+/// s150 (#300): also the fn-VALUE shim behind a named function read
+/// as a value (`{target}.fv`): the same `(ptr, tail…)` shape with the
+/// leading pointer DROPPED — `recv_ty: None` — so a module function
+/// sits behind a one-slot callable record exactly as a closure does
+/// (`[abi.native.closure]`).
 struct DynShim {
-    /// The shim's WIR name: `{target}.dynshim`.
+    /// The shim's WIR name: `{target}.dynshim`, or `{target}.fv`.
     name: String,
-    /// The real method body the slot dispatches to.
+    /// The real body the shim dispatches to.
     target: String,
     target_sig: SigId,
     /// The erased signature (`ptr` receiver + declared tail).
     erased_sig: SigId,
-    /// The receiver's WIR layout (what flat-loads from the data ptr).
-    recv_ty: TypeId,
+    /// The receiver's WIR layout (what flat-loads from the data ptr);
+    /// `None` for a fn-value shim, whose leading pointer is ignored.
+    recv_ty: Option<TypeId>,
     span: Span,
 }
 
@@ -3326,7 +3342,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // of the s95 `func.addr` value.
             SyntaxKind::FnDecl => {
                 let d = wolf_ast::FnDecl::cast(stmt).expect("kind");
-                let v = self.queue_closure_entry(stmt, Vec::new(), None)?;
+                let (entry_name, _) = self.queue_closure_entry(stmt, Vec::new(), None)?;
+                let v = self.fn_value_static(&entry_name);
                 let Some(name_span) = d.name().map(|t| t.span) else {
                     return Ok(Flow::Val(None));
                 };
@@ -3606,22 +3623,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             return Ok(Flow::Val(None));
         }
-        // s105: a CAPTURING closure bound by `let`/`var` — build the
-        // pair here, where the binding claims the borrow (the mem
-        // tier's loan already did the same one rung earlier).
+        // s105/s150: a CAPTURING closure bound by `let`/`var` — build
+        // the record here, where the binding claims the borrow (the
+        // mem tier's loan already did the same one rung earlier), and
+        // keep the entry beside it so calls by name stay direct.
         // Capture-free closures fall through: they are ordinary s95
         // fn values.
         if init.kind == SyntaxKind::ClosureExpr
             && let Some(name_span) = name_span
             && !self.closure_captures(init.span).is_empty()
         {
-            let pair = self.lower_closure_pair(init)?;
+            let (entry, rec) = self.lower_closure_record(init)?;
             let name = self.text(name_span);
             self.scopes
                 .last_mut()
                 .expect("scope")
                 .binds
-                .push((name, LocalBind::Closure { pair }));
+                .push((name, LocalBind::Closure { entry, rec }));
             return Ok(Flow::Val(None));
         }
         let v = flow_val!(self.lower_expr(init));
@@ -4322,15 +4340,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // another value) or at the OP (container
                     // elements), by name.
                     Some(LocalBind::Region { handle, .. }) => Ok(Flow::Val(Some(handle))),
-                    // s105: the pair does not leave its frame — the
-                    // fn-value ABI is one word, and the env borrows
-                    // places of THIS frame. Calls go through the
-                    // binding; any other read refuses by name.
-                    Some(LocalBind::Closure { .. }) => Err(refuse(
-                        "a capturing closure read as a value (the pair stays in its \
-                         frame; call it by name — c25 closeout)",
-                        e.span,
-                    )),
+                    // s150 (#300): a capturing closure read as a VALUE
+                    // is its record pointer — the one-word fn value
+                    // (`[abi.native.closure]`). Its captures were
+                    // copied when the record was built, so the value
+                    // carries nothing of this frame ([type.fn.value]).
+                    Some(LocalBind::Closure { rec, .. }) => Ok(Flow::Val(Some(rec))),
                     // s89: a lent view has no first-class WIR value —
                     // that is the invariant s77 set and this sprint
                     // kept. Every position the lend analysis admits is
@@ -4414,11 +4429,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                         e.span,
                                     )?;
                                     let ext = self.b.func.import_func(qname.clone(), sig);
-                                    self.callees.insert(qname, ext);
+                                    self.callees.insert(qname.clone(), ext);
                                     ext
                                 }
                             };
-                            return Ok(Flow::Val(Some(self.b.ins_func_addr(ext))));
+                            return Ok(Flow::Val(Some(self.fn_value_named(&qname, ext, e.span))));
                         }
                         Err(refuse(
                             "module-item reads (mutable module state, c06)",
@@ -4572,15 +4587,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // else refuses by name.
             SyntaxKind::ClosureExpr => {
                 if self.closure_captures(e.span).is_empty() {
-                    let v = self.queue_closure_entry(e, Vec::new(), None)?;
-                    Ok(Flow::Val(Some(v)))
+                    let (name, _) = self.queue_closure_entry(e, Vec::new(), None)?;
+                    Ok(Flow::Val(Some(self.fn_value_static(&name))))
                 } else {
-                    Err(refuse(
-                        "a capturing closure outside a `let` binding (the env \
-                         borrows its captures; bind it, then call it — c25 \
-                         closeout)",
-                        e.span,
-                    ))
+                    // s150 (#300): a capturing closure in ANY value
+                    // position — an argument, a return, a tail — is
+                    // its record, built here (the mem tier decided
+                    // where the borrow of its captures ends).
+                    let (_, rec) = self.lower_closure_record(e)?;
+                    Ok(Flow::Val(Some(rec)))
                 }
             }
             // The conc surface (s73): native lowering onto the
@@ -4772,11 +4787,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let sig =
                             wir_sig_of(self.b.module, self.sig_table, self.sigs, fsig, 0, e.span)?;
                         let ext = self.b.func.import_func(qname.clone(), sig);
-                        self.callees.insert(qname, ext);
+                        self.callees.insert(qname.clone(), ext);
                         ext
                     }
                 };
-                return Ok(Flow::Val(Some(self.b.ins_func_addr(ext))));
+                return Ok(Flow::Val(Some(self.fn_value_named(&qname, ext, e.span))));
             }
             if let TyKind::Nominal { module, name, .. } = self.table.kind(whole).clone()
                 && let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(module as usize, &name)
@@ -5407,17 +5422,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .unwrap_or_default()
     }
 
-    /// s105: queue a closure's ENTRY function and return its address
-    /// (`func.addr`). Capture-free: the entry's signature IS the
-    /// closure's fn type — a true s95 fn value. Capturing: the env
-    /// record pointer leads, and the caller wraps the address into
-    /// the pair.
+    /// s105/s150: queue a closure's ENTRY function and return its
+    /// (name, import). The entry's signature is the callable-record
+    /// convention `[abi.native.closure]` fixes for EVERY fn value:
+    /// the record pointer first, the declared parameters after. A
+    /// capture-free closure ignores the record; a capturing one reads
+    /// its captures from it (`cap_layout`: offsets past the entry
+    /// word).
     fn queue_closure_entry(
         &mut self,
         e: &'t GreenNode,
         caps: Vec<(String, TyId)>,
         cap_layout: Option<(Vec<TypeId>, Vec<u64>)>,
-    ) -> R<Value> {
+    ) -> R<(String, ExtFunc)> {
         let Some(cty) = self.expr_sema_ty(e.span) else {
             return Err(refuse("a closure without a recorded type", e.span));
         };
@@ -5441,13 +5458,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let params: Vec<(String, TyId)> = pnames.into_iter().zip(ptys).collect();
         let body_ret = self.task_body_ret(e)?;
-        let mut sigparams: Vec<Param> = Vec::new();
-        if !caps.is_empty() {
-            sigparams.push(Param {
-                ty: types::PTR,
-                mode: Mode::Val,
-            });
-        }
+        let mut sigparams: Vec<Param> = vec![Param {
+            ty: types::PTR,
+            mode: Mode::Val,
+        }];
         for (_, sema) in &params {
             if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
                 return Err(refuse(
@@ -5483,36 +5497,166 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             kind: PendingKind::Closure { params },
         });
         let ext = self.rt_like_import(&name, entry_sig);
-        Ok(self.b.ins_func_addr(ext))
+        Ok((name, ext))
     }
 
-    /// s105: build a CAPTURING closure's pair at its `let` binding —
-    /// env record packed in a frame slot (values read now, the s86
-    /// packing; the mem tier's loans make copy-vs-borrow
-    /// unobservable), entry queued, the two words joined.
-    fn lower_closure_pair(&mut self, e: &'t GreenNode) -> R<Value> {
-        let caps = self.closure_captures(e.span);
-        let (slot, _region, layout) = self.pack_task_env(&caps, None, e.span, true)?;
-        let entry = self.queue_closure_entry(e, caps, Some(layout))?;
-        let pair_ty = self
+    /// s150 (#300): the one-word fn value of a function that captures
+    /// nothing — a named function's shim or a capture-free closure's
+    /// entry — is the address of a STATIC one-slot callable record
+    /// holding that entry (`[abi.native.closure]`: the vtable
+    /// mechanism, one slot). Content-interned, so every read of the
+    /// same function is the same pointer.
+    fn fn_value_static(&mut self, entry_name: &str) -> Value {
+        let hint = format!("fv.{entry_name}");
+        let (idx, _) = self
             .b
             .module
-            .types
-            .intern(types::TypeData::Agg(vec![types::PTR, types::PTR]));
-        Ok(self
-            .b
-            .ins(Opcode::AggMake, &[entry, slot], &[pair_ty], Aux::None)
-            .one())
+            .intern_fn_table(&hint, std::slice::from_ref(&entry_name.to_string()));
+        self.b.ins_data_addr(idx)
     }
 
-    /// s105: a call through a closure binding's pair — the dyn
-    /// dispatch shape with the vtable slot replaced by a direct
-    /// entry: two `agg.get`s and s97's `call.ind`, env leading. The
-    /// sig comes from the closure's recorded fn TYPE, exactly as
-    /// `lower_indirect_call` builds it, plus the leading env `ptr`.
+    /// s150 (#300): a named function read as a value. Its own
+    /// signature has no record parameter, so the record's slot holds
+    /// a shim `{name}.fv` of the record convention that drops the
+    /// leading pointer and calls the function ([`build_dyn_shim`]
+    /// with no receiver). One shim per function, built after the
+    /// task drain like the dyn shims.
+    fn fn_value_named(&mut self, qname: &str, ext: ExtFunc, span: Span) -> Value {
+        let target_sig = self.b.func.ext_funcs[ext].sig;
+        let shim = format!("{qname}.fv");
+        if !self.pending_dyn_shims.iter().any(|s| s.name == shim) {
+            let sd = self.b.module.sigs[target_sig].clone();
+            let mut params = Vec::with_capacity(sd.params.len() + 1);
+            params.push(Param {
+                ty: types::PTR,
+                mode: Mode::Val,
+            });
+            params.extend(sd.params.iter().cloned());
+            let erased_sig = self.b.module.make_sig(params, sd.results.clone());
+            self.pending_dyn_shims.push(DynShim {
+                name: shim.clone(),
+                target: qname.to_string(),
+                target_sig,
+                erased_sig,
+                recv_ty: None,
+                span,
+            });
+        }
+        self.fn_value_static(&shim)
+    }
+
+    /// The value one capture reads at closure/task creation — the
+    /// s86 by-copy packing (S-10): a binding's current value, a `mut`
+    /// parameter's current contents, a `when` payload's word, another
+    /// closure's record pointer (closures only: the record lives in
+    /// the ambient region, so a copy of its pointer is as good as the
+    /// original — a TASK still refuses it, `[conc.task.spawn]`'s
+    /// capture law is a different clause).
+    fn capture_value(&mut self, name: &str, closure: bool, span: Span) -> R<Value> {
+        Ok(match self.lookup(name) {
+            Some(LocalBind::Val { var, .. }) => self.b.use_var(var),
+            Some(LocalBind::MutRef {
+                ptr, region, elem, ..
+            }) => self.read_mut_ref(ptr, region, elem, span)?,
+            Some(LocalBind::SyncPayload { cell }) => self
+                .rt_call("__wolf_rt_sync_get", &[cell], Some(types::I64))
+                .expect("payload word"),
+            Some(LocalBind::Region { .. }) => {
+                return Err(refuse(
+                    if closure {
+                        "a region captured by a closure (open it in the enclosing \
+                         frame — c25 closeout)"
+                    } else {
+                        "a region captured by a task (send it through a channel — \
+                         [conc.chan.move])"
+                    },
+                    span,
+                ));
+            }
+            Some(LocalBind::Closure { rec, .. }) if closure => rec,
+            Some(LocalBind::Closure { .. }) => {
+                return Err(refuse(
+                    "a capturing closure captured by a task (call it in the frame \
+                     that built it — [conc.task.spawn])",
+                    span,
+                ));
+            }
+            // s89: a lent view cannot be captured — the capture
+            // outlives the call the lend is scoped to (S-10 copies
+            // captures into the environment).
+            Some(LocalBind::BytesView { .. }) => {
+                return Err(refuse(
+                    "a lent `bytes()` view captured by a task (bind it with `let` \
+                     to materialize, s89)",
+                    span,
+                ));
+            }
+            Some(LocalBind::Unit) | None => {
+                return Err(refuse("an unresolvable task capture", span));
+            }
+        })
+    }
+
+    /// s150 (#300): build a CAPTURING closure's callable record —
+    /// `[abi.native.closure]`: the entry word, then every capture's
+    /// value copied in at 8-byte-aligned offsets, allocated in the
+    /// AMBIENT region by the runtime (`__wolf_rt_closure_alloc`), so
+    /// the value outlives this frame exactly as far as any other
+    /// value built here does (D12: a callee allocates into its
+    /// caller's region). Returns (entry, record): a `let` binding
+    /// keeps both so calls by name skip the entry load; any other
+    /// position takes the record, which IS the fn value.
+    fn lower_closure_record(&mut self, e: &'t GreenNode) -> R<(Value, Value)> {
+        let caps = self.closure_captures(e.span);
+        let mut wtys = Vec::with_capacity(caps.len());
+        let mut offs = Vec::with_capacity(caps.len());
+        let mut size = 8u64; // word 0: the entry
+        for (_, sema) in &caps {
+            let Some(wty) = self.wir_value_ty(*sema, e.span)? else {
+                return Err(refuse("unit-typed closure captures", e.span));
+            };
+            if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
+                return Err(refuse(
+                    "a region captured by a closure (open it in the enclosing frame — \
+                     c25 closeout)",
+                    e.span,
+                ));
+            }
+            let Some(sz) = flat_size(&self.b.module.types, wty) else {
+                return Err(refuse("closure captures without a flat layout", e.span));
+            };
+            wtys.push(wty);
+            offs.push(size);
+            size += sz.next_multiple_of(8);
+        }
+        let n = self.b.iconst(types::I64, size as i64);
+        let rec = self
+            .rt_call_foreign("__wolf_rt_closure_alloc", &[n], None, Some(types::PTR))
+            .expect("closure record");
+        // Runtime-owned storage: written through the foreign buffer
+        // region (the list-element discipline), read by the entry
+        // through the foreign header region.
+        let r = self.foreign_buf_region();
+        for (i, (name, _)) in caps.iter().enumerate() {
+            let v = self.capture_value(name, true, e.span)?;
+            let addr = self.field_addr(rec, offs[i]);
+            self.store_flat(v, addr, r, e.span)?;
+        }
+        let (_, ext) = self.queue_closure_entry(e, caps, Some((wtys, offs)))?;
+        let entry = self.b.ins_func_addr(ext);
+        self.b.ins_store(entry, rec, r);
+        Ok((entry, rec))
+    }
+
+    /// s105/s150: a call through a closure binding — the entry is
+    /// known statically, so this is s97's `call.ind` with the record
+    /// leading and no entry load. The sig comes from the closure's
+    /// recorded fn TYPE, exactly as `lower_indirect_call` builds it,
+    /// plus the leading record `ptr`.
     fn lower_closure_call(
         &mut self,
-        pair: Value,
+        entry: Value,
+        rec: Value,
         d: CallExpr<'t>,
         cs: &CallSig,
         e: &'t GreenNode,
@@ -5565,15 +5709,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             None => vec![],
         };
         let sig = self.b.module.make_sig(params, results);
-        let entry = self
-            .b
-            .ins(Opcode::AggGet, &[pair], &[types::PTR], Aux::Int(0))
-            .one();
-        let env = self
-            .b
-            .ins(Opcode::AggGet, &[pair], &[types::PTR], Aux::Int(1))
-            .one();
-        let mut cargs = vec![env];
+        let mut cargs = vec![rec];
         cargs.extend(args);
         Ok(Flow::Val(self.b.ins_call_ind(entry, sig, &cargs)))
     }
@@ -5696,51 +5832,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             None => self.rt_slot(size.max(8)),
         };
         for (i, (name, _)) in caps.iter().enumerate() {
-            let v = match self.lookup(name) {
-                Some(LocalBind::Val { var, .. }) => self.b.use_var(var),
-                Some(LocalBind::MutRef {
-                    ptr, region, elem, ..
-                }) => self.read_mut_ref(ptr, region, elem, span)?,
-                Some(LocalBind::SyncPayload { cell }) => self
-                    .rt_call("__wolf_rt_sync_get", &[cell], Some(types::I64))
-                    .expect("payload word"),
-                Some(LocalBind::Region { .. }) => {
-                    return Err(refuse(
-                        if closure {
-                            "a region captured by a closure (open it in the enclosing \
-                             frame — c25 closeout)"
-                        } else {
-                            "a region captured by a task (send it through a channel — \
-                             [conc.chan.move])"
-                        },
-                        span,
-                    ));
-                }
-                // s105: a capturing closure's pair stays in its frame
-                // — an env record holding another env's pair would put
-                // borrowed places behind two boundaries no tracker
-                // follows.
-                Some(LocalBind::Closure { .. }) => {
-                    return Err(refuse(
-                        "a capturing closure captured by value (the pair stays in \
-                         its frame — c25 closeout)",
-                        span,
-                    ));
-                }
-                // s89: a lent view cannot be captured — the capture
-                // outlives the call the lend is scoped to (S-10 copies
-                // captures into the task's environment).
-                Some(LocalBind::BytesView { .. }) => {
-                    return Err(refuse(
-                        "a lent `bytes()` view captured by a task (bind it with `let` \
-                         to materialize, s89)",
-                        span,
-                    ));
-                }
-                Some(LocalBind::Unit) | None => {
-                    return Err(refuse("an unresolvable task capture", span));
-                }
-            };
+            let v = self.capture_value(name, closure, span)?;
             let addr = self.field_addr(slot, offs[i]);
             self.store_flat(v, addr, region, span)?;
         }
@@ -5776,7 +5868,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .copied()
     }
 
-    /// One-word channel payload conversions: widen to the wire i64.
+    /// One-word payload conversions: widen to the wire i64 (sync
+    /// cells, capacities, durations — the runtime's word slots).
     fn widen_to_wire(&mut self, v: Value, span: Span) -> R<Value> {
         let vt = self.b.func.value_ty(v);
         if vt == types::I64 {
@@ -5791,9 +5884,54 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(self.b.ins(op, &[v], &[types::I64], Aux::None).one());
         }
         Err(refuse(
-            "channel payloads beyond one word (s39 std sync)",
+            "sync-cell payloads beyond one word (s39 std sync)",
             span,
         ))
+    }
+
+    /// s150 (`[conc.chan.payload]`): how a channel payload of this
+    /// WIR type crosses — `None` when it IS a word (an `int`, a
+    /// `bool`, any integer width: the wire word itself), `Some(size)`
+    /// when it is wider or not integral (a `str` view, a struct, a
+    /// tuple, a float, a handle): a heap box of `size` flat bytes.
+    fn chan_box_size(&mut self, elem_wty: TypeId, span: Span) -> R<Option<u64>> {
+        if elem_wty == types::I64 || elem_wty == types::BOOL || types_is_int(elem_wty) {
+            return Ok(None);
+        }
+        match flat_size(&self.b.module.types, elem_wty) {
+            Some(sz) => Ok(Some(sz.max(1))),
+            None => Err(refuse("a channel payload without a flat layout", span)),
+        }
+    }
+
+    /// A payload value to its wire word: the word itself, or a box the
+    /// runtime fills from a flat stack slot (`[conc.chan.payload]`'s
+    /// stated cost — one allocation and a copy per message beyond a
+    /// word). The channel owns the box from here on.
+    fn box_wire(&mut self, v: Value, span: Span) -> R<Value> {
+        let vt = self.b.func.value_ty(v);
+        let Some(size) = self.chan_box_size(vt, span)? else {
+            return self.widen_to_wire(v, span);
+        };
+        let (region, slot) = self.rt_slot(size);
+        self.store_flat(v, slot, region, span)?;
+        let n = self.b.iconst(types::I64, size as i64);
+        Ok(self
+            .rt_call_slot("__wolf_rt_box_new", &[n], slot, region, Some(types::I64))
+            .expect("payload box word"))
+    }
+
+    /// A wire word back to the payload value: narrowed, or the box
+    /// emptied into a flat stack slot and freed — the receiver takes
+    /// ownership on `recv` (`[conc.chan.payload]`).
+    fn unbox_wire(&mut self, w: Value, elem_wty: TypeId, span: Span) -> R<Value> {
+        let Some(size) = self.chan_box_size(elem_wty, span)? else {
+            return self.narrow_from_wire(w, elem_wty, span);
+        };
+        let (region, slot) = self.rt_slot(size);
+        let n = self.b.iconst(types::I64, size as i64);
+        self.rt_call_slot("__wolf_rt_box_take", &[w, n], slot, region, None);
+        self.load_flat(elem_wty, slot, region, span)
     }
 
     /// The wire word back to the element type.
@@ -5815,7 +5953,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .one());
         }
         Err(refuse(
-            "channel payloads beyond one word (s39 std sync)",
+            "sync-cell payloads beyond one word (s39 std sync)",
             span,
         ))
     }
@@ -5865,7 +6003,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let Some(v) = v else {
                         return Err(refuse("a unit-typed send payload", arg.span));
                     };
-                    let w = self.widen_to_wire(v, arg.span)?;
+                    let w = self.box_wire(v, arg.span)?;
                     self.rt_call("__wolf_rt_chan_send", &[ch, w], Some(types::I32))
                 }
                 .expect("send status");
@@ -5909,7 +6047,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         Ok(Some(adopted))
                     } else {
                         let w = lo.b.ins_load(types::I64, slot, region);
-                        Ok(Some(lo.narrow_from_wire(w, okt, e.span)?))
+                        Ok(Some(lo.unbox_wire(w, okt, e.span)?))
                     }
                 })?;
                 Ok(Flow::Val(Some(v)))
@@ -6395,7 +6533,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             return Err(refuse("unit-typed select payloads", pat.span));
                         };
                         let w = self.b.ins_load(types::I64, out_val, region);
-                        let v = self.narrow_from_wire(w, ewty, pat.span)?;
+                        let v = self.unbox_wire(w, ewty, pat.span)?;
                         let var = self.b.declare_var(ewty);
                         self.b.def_var(var, v);
                         self.scopes.last_mut().expect("scope").binds.push((
@@ -6636,7 +6774,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.scopes.push(ScopeFrame::default());
         if let Some(name) = bind_name {
             let w = self.b.ins_load(types::I64, slot, region);
-            let v = self.narrow_from_wire(w, ewty, span)?;
+            let v = self.unbox_wire(w, ewty, span)?;
             let var = self.b.declare_var(ewty);
             self.b.def_var(var, v);
             self.scopes.last_mut().expect("scope").binds.push((
@@ -7682,7 +7820,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 target,
                 target_sig,
                 erased_sig,
-                recv_ty: src_w,
+                recv_ty: Some(src_w),
                 span: e.span,
             });
             slot_fns.push(shim);
@@ -8550,8 +8688,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // call.
         if callee.kind == SyntaxKind::PathExpr {
             let name = self.text(callee.span);
-            if let Some(LocalBind::Closure { pair }) = self.lookup(&name) {
-                return self.lower_closure_call(pair, d, cs, e);
+            if let Some(LocalBind::Closure { entry, rec }) = self.lookup(&name) {
+                return self.lower_closure_call(entry, rec, d, cs, e);
             }
         }
         let Some(fn_ty) = self.expr_sema_ty(callee.span) else {
@@ -8588,7 +8726,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             args.push(v);
         }
         let table = self.table;
-        let mut params = Vec::with_capacity(param_tys.len());
+        // s150 (#300): a fn value is a pointer to its callable record
+        // ([abi.native.closure]) — the entry is the record's first
+        // word, and the record leads the entry's parameters. The
+        // record is immutable once built, so the entry reads through
+        // the foreign header region (the vtable discipline).
+        let mut params = Vec::with_capacity(param_tys.len() + 1);
+        params.push(Param {
+            ty: types::PTR,
+            mode: Mode::Val,
+        });
         for &pt in &param_tys {
             let Some(w) = wir_ty(&mut self.b.module.types, table, self.sigs, pt, e.span)? else {
                 return Err(refuse("unit-typed parameters", e.span));
@@ -8603,7 +8750,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             None => vec![],
         };
         let sig = self.b.module.make_sig(params, results);
-        Ok(Flow::Val(self.b.ins_call_ind(fv, sig, &args)))
+        let r = self.foreign_hdr_region();
+        let entry = self.b.ins_load(types::PTR, fv, r);
+        let mut cargs = Vec::with_capacity(args.len() + 1);
+        cargs.push(fv);
+        cargs.extend(args);
+        Ok(Flow::Val(self.b.ins_call_ind(entry, sig, &cargs)))
     }
 
     /// s93: recover a generic callee's bindings at one call site from
@@ -15123,7 +15275,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         // s73: `channel[T](n)` — the runtime channel; omitted capacity
         // is rendezvous ([conc.chan.default]).
-        if let TyKind::Chan(_) = self.table.kind(ty) {
+        if let TyKind::Chan(el) = self.table.kind(ty).clone() {
             let cap = match d
                 .args()
                 .into_iter()
@@ -15138,8 +15290,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 None => self.b.iconst(types::I64, 0),
             };
+            // s150 (`[conc.chan.payload]`): a payload beyond one word
+            // crosses in a box the channel owns in flight — the
+            // runtime object knows, so it can free what is never
+            // received.
+            let boxed = match self.wir_value_ty(el, e.span)? {
+                Some(w) => self.chan_box_size(w, e.span)?.is_some(),
+                None => false,
+            };
+            let ctor = if boxed {
+                "__wolf_rt_chan_new_boxed"
+            } else {
+                "__wolf_rt_chan_new"
+            };
             let h = self
-                .rt_call("__wolf_rt_chan_new", &[cap], Some(types::PTR))
+                .rt_call(ctor, &[cap], Some(types::PTR))
                 .expect("chan handle");
             return Ok(Flow::Val(Some(h)));
         }
