@@ -99,6 +99,31 @@ fn pairing() -> (String, String) {
     )
 }
 
+/// The toolchain's OWN text — `--version`, `--help`, `--explain`,
+/// `--man`, `--completions` — written to stdout without `print!`'s
+/// panic (wolf-lang#282). `wolf --version | head -1` closes the pipe
+/// after one line; Rust ignores SIGPIPE at startup, so the second
+/// line's write answers EPIPE and `println!` panics with `failed
+/// printing to stdout: Broken pipe`, on every shell that reads one
+/// line of the version (the book's rig, the tap, lobo's stamp check).
+/// An early-closing reader has all it asked for: EPIPE here is a
+/// quiet exit 0, nothing on stderr — lupin's posture under the same
+/// pipe. Any OTHER write failure is still a failure, reported and
+/// exit 1: this helper narrows exactly one error kind on exactly the
+/// paths whose output is the toolchain's, never a program's.
+fn emit(text: &str) {
+    use std::io::Write as _;
+    let mut out = std::io::stdout().lock();
+    let done = out.write_all(text.as_bytes()).and_then(|()| out.flush());
+    if let Err(e) = done {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            std::process::exit(0);
+        }
+        eprintln!("wolf: cannot write to stdout: {e}");
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // `wolf <command> --help` (#250). Only in the SECOND position: in
@@ -109,7 +134,7 @@ fn main() {
         && (flag == "--help" || flag == "-h")
         && help::find(cmd).is_some()
     {
-        print!("{}", help::command_help(cmd));
+        emit(&help::command_help(cmd));
         return;
     }
     match args.first().map(String::as_str) {
@@ -121,20 +146,19 @@ fn main() {
         // the reference interpreter this release was differentially tested
         // against, read from the one PAIRING file (#87).
         Some("--version") => {
-            println!(
-                "{}",
-                own_version_line(env!("CARGO_PKG_VERSION"), BUILD_COMMIT, build_is_release())
-            );
+            let own = own_version_line(env!("CARGO_PKG_VERSION"), BUILD_COMMIT, build_is_release());
             let (lupin_version, lupin_pin) = pairing();
-            println!("paired with lupin {lupin_version} (reference interpreter), pin {lupin_pin}");
+            emit(&format!(
+                "{own}\npaired with lupin {lupin_version} (reference interpreter), pin {lupin_pin}\n"
+            ));
         }
         Some("--explain") => explain(&args[1..]),
         // The front door (#250). `wolf help build` and `wolf build
         // --help` are the same question, so they get the same answer.
         Some("--help" | "-h" | "help") => match args.get(1).map(String::as_str) {
-            None | Some("--help" | "-h" | "help") => print!("{}", help::overview()),
+            None | Some("--help" | "-h" | "help") => emit(&help::overview()),
             Some(name) if help::find(name).is_some() => {
-                print!("{}", help::command_help(name));
+                emit(&help::command_help(name));
             }
             Some(name) => {
                 eprintln!("{}", help::not_a_command(name));
@@ -144,10 +168,10 @@ fn main() {
         // Generated from the one verb table, so a packager has a man
         // page and completions to install without either being a
         // hand-kept copy that goes stale.
-        Some("--man") => print!("{}", help::man_page(env!("CARGO_PKG_VERSION"))),
+        Some("--man") => emit(&help::man_page(env!("CARGO_PKG_VERSION"))),
         Some("--completions") => match args.get(1).map(String::as_str) {
             Some(shell) => match help::completions(shell) {
-                Some(script) => print!("{script}"),
+                Some(script) => emit(&script),
                 None => {
                     eprintln!(
                         "wolf --completions: no completion for `{shell}` (have: {})",
@@ -430,9 +454,12 @@ fn explain(args: &[String]) {
         );
         std::process::exit(2);
     };
-    println!("{}: {}", info.code, info.summary);
-    println!();
-    println!("{}", info.explanation.trim());
+    emit(&format!(
+        "{}: {}\n\n{}\n",
+        info.code,
+        info.summary,
+        info.explanation.trim()
+    ));
 }
 
 /// Split the std-root flag out of a subcommand's arguments (F-0001):
