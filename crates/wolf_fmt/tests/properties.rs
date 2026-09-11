@@ -100,11 +100,14 @@ fn corpus_stability_formatting_is_identity() {
             f.display()
         );
     }
-    // The exception is for the leading-`else` witnesses, and the count
-    // is pinned so a stray `fmt: relaid` cannot hide a drift.
+    // The exception is for the leading-`else` witnesses and, since s151
+    // (`[gram.fmt.if]`), the `then {` and width-fallback witnesses of
+    // the bare `if`; the count is pinned so a stray `fmt: relaid`
+    // cannot hide a drift.
     assert_eq!(
-        relaid_seen, 2,
-        "the `fmt: relaid` witnesses are else_chain and else_default_newline"
+        relaid_seen, 4,
+        "the `fmt: relaid` witnesses are else_chain, else_default_newline, \
+         if_then_block and if_then_width"
     );
 }
 

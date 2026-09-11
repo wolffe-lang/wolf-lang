@@ -184,6 +184,17 @@ fn shallow_error(n: &GreenNode) -> bool {
     if matches!(n.kind, K::ErrorNode) {
         return true;
     }
+    // Mixed forms in one `if` (`if c then a else { b }`) are a parse
+    // error the parser reported and kept the shape of; laying it out
+    // would repair the program, so it passes verbatim.
+    if is_bare_if(n)
+        && n
+            .nodes()
+            .nth(2)
+            .is_some_and(|b| b.kind == K::Block && !is_bare_block(b))
+    {
+        return true;
+    }
     for c in &n.children {
         match c {
             Child::Token(t) => {
@@ -196,6 +207,12 @@ fn shallow_error(n: &GreenNode) -> bool {
                     // A block handles its own damage — but its
                     // delimiters must be present for that to work.
                     if block_frame_damaged(m) {
+                        return true;
+                    }
+                    // A bare `if … then` branch has no frame to repair
+                    // inside: its damage is the enclosing statement's
+                    // (`if c then let x = 1` stays on its line).
+                    if is_bare_block(m) && m.nodes().any(shallow_error) {
                         return true;
                     }
                 } else if shallow_error(m) {
