@@ -1418,7 +1418,7 @@ the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_value_captured_var_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap
 
 ## E1004 — this value is placed in one region, but needed in another
 
@@ -1529,7 +1529,7 @@ region immortal and immutable) and `shared` (counted escape) are
 coming in later tiers for the cases that genuinely need to outlive
 the region.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_container.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_payload_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_container.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_escape_local.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_binding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1010_escape_via_value.snap
 
 ## E1011 — this would open a region while a region that contains it is open
 
@@ -1658,7 +1658,7 @@ the data into a region and send the region, `freeze` it into `imm`
 data that shares by reference, or wrap it in a `sync` type such as a
 `Mutex` and share that.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_unsendable.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1102_unsendable_payload.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_struct_payload.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__chan_unsendable.snap, crates/wolf_sema/tests/snapshots/conc_diagnostics__e1102_unsendable_payload.snap
 
 ## E1103 — `when` blocks do not nest
 
@@ -2413,7 +2413,7 @@ looks like the closure tracks the variable. Create the closure after
 the last assignment, pass the value as a parameter at each call, or
 restructure so the captured binding never changes underneath it.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1102_stale_capture.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__capture_write_assign.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__store_buffer.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_value_captured_var_write.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1102_stale_capture.snap
 
 ## W1301 — this `unsafe` block does not state its invariant
 
