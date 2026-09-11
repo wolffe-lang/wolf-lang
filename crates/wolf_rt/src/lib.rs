@@ -14,6 +14,9 @@ pub mod io;
 // drifting (the fmtspec precedent).
 pub mod json;
 pub mod list;
+// The s152 keyed store (`[type.map]`): the list buffer discipline
+// under a linear-scan key lookup, one entry layout on both tiers.
+pub mod map;
 pub mod native;
 pub mod net;
 pub mod os;

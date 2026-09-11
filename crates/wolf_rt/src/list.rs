@@ -139,6 +139,24 @@ pub(crate) fn from_bytes(bytes: &[u8]) -> *mut ListHdr {
     hdr
 }
 
+/// A list of `elem`-byte elements minted from a byte image of its
+/// buffer at exact capacity — `pairs()`'s builder (s152,
+/// `wolf_rt::map`): the entry buffer copied once, no growth history.
+pub(crate) fn list_from_bytes(elem: usize, bytes: &[u8]) -> *mut ListHdr {
+    let hdr = new_list(elem.max(1));
+    if !bytes.is_empty() {
+        unsafe {
+            let h = &mut *hdr;
+            let data = alloc_in(h.region, bytes.len());
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), data, bytes.len());
+            h.data = data;
+            h.len = (bytes.len() / h.elem as usize) as i64;
+            h.cap = h.len;
+        }
+    }
+    hdr
+}
+
 /// Push one `int` element onto an 8-byte-element list.
 pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
     let cell = [v];
