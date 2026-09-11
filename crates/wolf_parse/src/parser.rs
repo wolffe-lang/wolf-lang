@@ -446,6 +446,16 @@ impl<'a> Parser<'a> {
         self.error(code, span, message);
     }
 
+    /// [`Self::error_unless_folded`] for a diagnostic built by the
+    /// caller (one carrying a note).
+    pub(crate) fn push_diag_unless_folded(&mut self, d: Diagnostic) {
+        if self.line_end_fold_once {
+            self.line_end_fold_once = false;
+            return;
+        }
+        self.push_diag(d);
+    }
+
     /// An arm-structure diagnostic (pattern / `from` / `=>` /
     /// separator), folded over a run of broken arms (see
     /// `arm_error_reported`).

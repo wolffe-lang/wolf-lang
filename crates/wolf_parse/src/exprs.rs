@@ -203,6 +203,12 @@ struct Ctx {
     /// Parsing the head expression of a statement: stop before an
     /// assignment operator so the statement wraps `AssignStmt`.
     stmt_head: bool,
+    /// Inside a bare `if … then` branch (`[gram.expr.if]`): the `if`'s
+    /// own `else` binds first (`[gram.amb.else]`), so the climb never
+    /// takes `else` as the defaulting operator here. Delimiters reset
+    /// it — `(f() else 0)` is how a defaulting `else` is written in a
+    /// bare branch.
+    no_default_else: bool,
     /// How many string literals enclose this position (E0007 fires at 9;
     /// the lexer's hard rail at 32 is E0108).
     str_depth: u8,
@@ -215,6 +221,7 @@ impl Ctx {
         Ctx {
             no_struct_lit: false,
             stmt_head: false,
+            no_default_else: false,
             str_depth: self.str_depth,
         }
     }
@@ -224,7 +231,16 @@ impl Ctx {
         Ctx {
             no_struct_lit: true,
             stmt_head: false,
+            no_default_else: false,
             str_depth: self.str_depth,
+        }
+    }
+
+    /// A bare `if … then` branch: delimited by the `if`'s own `else`.
+    fn bare_branch(self) -> Ctx {
+        Ctx {
+            no_default_else: true,
+            ..self.inner()
         }
     }
 }
@@ -620,6 +636,9 @@ fn expr_bp_inner(p: &mut Parser<'_>, min_bp: u8, ctx: Ctx) -> Option<CompletedMa
                 path_shaped = false;
             }
             // ------------------------------- `else` defaulting (tier 15)
+            // Off inside a bare `if … then` branch: that `else` is the
+            // `if`'s own (`[gram.expr.if]`, `[gram.amb.else]`).
+            TokenKind::Kw(Keyword::Else) if ctx.no_default_else => break,
             TokenKind::Kw(Keyword::Else) if ELSE_BP.0 >= min_bp => {
                 let m = lhs.precede(p);
                 p.bump(); // else
@@ -1314,6 +1333,7 @@ fn string_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
                 let inner = Ctx {
                     no_struct_lit: false,
                     stmt_head: false,
+                    no_default_else: false,
                     str_depth: depth,
                 };
                 interp(p, inner);
@@ -1375,32 +1395,133 @@ fn interp(p: &mut Parser<'_>, ctx: Ctx) {
 
 // --------------------------------------------------------- control flow --
 
-/// `if expr block ('else' (if_expr | block))?` (`[gram.expr.flow]`).
-/// An `else` here belongs to the `if` only when `if` or `{` follows —
-/// otherwise it is the defaulting operator on the completed if
-/// expression (`[gram.amb.else]`, report 05's corner case). An `else`
-/// that starts a line arrives without a terminator before it
-/// (`[gram.lex.newline]`'s lookahead, wolf-lang#276), so the binding
-/// here is the same on one line and across two.
+/// `if expr 'then'? block ('else' (if_expr | block))?` — the braced
+/// form — or `if expr 'then' expr ('else' (if_expr | expr))?`, the
+/// bare form (`[gram.expr.if]`, s151 wolf-lang#307).
+///
+/// `then` is contextual: an `Ident` the lexer never reserves,
+/// reclassified `ThenKw` only here, after a complete condition. It is
+/// the token that closes the condition — the condition parser is
+/// greedy (`if x -1 else 0`, `if f (y) else z` would swallow the next
+/// token), which is why the braced form has its `{`. Before a `{` it
+/// is optional. A bare branch is a brace-less `Block` holding one
+/// trailing `ExprStmt`, so every tier past the parser reads both forms
+/// alike. The two branches of one `if` share a form; an `else if` in a
+/// chain picks its own.
+///
+/// Braced form: an `else` belongs to the `if` only when `if` or `{`
+/// follows — otherwise it is the defaulting operator on the completed
+/// if expression (`[gram.amb.else]`, report 05's corner case). Bare
+/// form: the `if`'s own `else` binds first — the branch is parsed with
+/// the defaulting `else` off (`Ctx::bare_branch`), so `if c then f()
+/// else 0` is the two-way `if` and a defaulting `else` inside a bare
+/// branch is written `(f() else 0)`. An `else` that starts a line
+/// arrives without a terminator before it (`[gram.lex.newline]`'s
+/// lookahead, wolf-lang#276), so the binding here is the same on one
+/// line and across two, in both forms.
 fn if_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let m = p.start();
     p.bump(); // if
     condition_required(p, ctx, "the `if` condition");
-    block_required(p);
-    if p.at_kw(Keyword::Else)
-        && matches!(
-            p.nth(1),
-            TokenKind::Kw(Keyword::If) | TokenKind::Punct(Punct::LBrace)
-        )
-    {
-        p.bump(); // else
-        if p.at_kw(Keyword::If) {
-            if_expr(p, ctx);
-        } else {
-            block(p);
+    let then = p.at(TokenKind::Ident) && p.current_text() == b"then";
+    if then {
+        p.bump_as(SyntaxKind::ThenKw);
+    }
+    if p.at_punct(Punct::LBrace) {
+        // The braced form; a `then` before the `{` is optional.
+        block(p);
+        if p.at_kw(Keyword::Else)
+            && matches!(
+                p.nth(1),
+                TokenKind::Kw(Keyword::If) | TokenKind::Punct(Punct::LBrace)
+            )
+        {
+            p.bump(); // else
+            if p.at_kw(Keyword::If) {
+                if_expr(p, ctx);
+            } else {
+                block(p);
+            }
         }
+    } else if then {
+        // The bare form: `then expr ('else' (if_expr | expr))?`.
+        bare_branch(p, ctx, "then");
+        if p.at_kw(Keyword::Else) {
+            p.bump(); // else
+            if p.at_kw(Keyword::If) {
+                if_expr(p, ctx);
+            } else if p.at_punct(Punct::LBrace) {
+                // Mixed forms in one `if`: refused by name, the block
+                // consumed so the rest of the line still parses.
+                p.push_diag(
+                    wolf_diag::Diagnostic::error(
+                        codes::EXPECTED_TOKEN,
+                        p.current_span(),
+                        "the two branches of one `if` share a form — after `then …`, \
+                         the `else` branch is a bare expression too",
+                    )
+                    .with_note(IF_FORMS_NOTE),
+                );
+                block(p);
+            } else {
+                bare_branch(p, ctx, "else");
+            }
+        }
+    } else {
+        if_body_required(p);
     }
     m.complete(p, SyntaxKind::IfExpr)
+}
+
+/// The note that names both spellings of an `if` (`[gram.expr.if]`).
+const IF_FORMS_NOTE: &str = "an `if` is written `if c { a } else { b }`, or on one line \
+                             `if c then a else b` — braces or `then`, never neither, and \
+                             both branches the same way ([gram.expr.if])";
+
+/// One bare branch of an `if … then` (`[gram.expr.if]`): a brace-less
+/// `Block` holding one trailing `ExprStmt`, parsed with the defaulting
+/// `else` off so the `if`'s own `else` binds first. `after` is the
+/// keyword the branch follows, for the message.
+fn bare_branch(p: &mut Parser<'_>, ctx: Ctx, after: &str) {
+    let b = p.start();
+    let s = p.start();
+    if expr_bp(p, 0, ctx.bare_branch()).is_none() {
+        let msg = if p.at_kw(Keyword::Let) || p.at_kw(Keyword::Var) {
+            format!(
+                "a bare `{after}` branch holds one expression — a `{}` needs the braced form",
+                if p.at_kw(Keyword::Let) { "let" } else { "var" }
+            )
+        } else {
+            format!("expected an expression after `{after}`")
+        };
+        p.push_diag(
+            wolf_diag::Diagnostic::error(codes::EXPECTED_TOKEN, p.current_span(), msg)
+                .with_note(IF_FORMS_NOTE),
+        );
+        p.missing();
+        p.recover_until(true, |k| k == TokenKind::Term);
+        p.fold_line_end();
+    }
+    s.complete(p, SyntaxKind::ExprStmt);
+    b.complete(p, SyntaxKind::Block);
+}
+
+/// Neither `{` nor `then` after an `if` condition (`if c 29 else 28`):
+/// one E0201 naming both spellings, folded when the condition already
+/// reported.
+fn if_body_required(p: &mut Parser<'_>) {
+    p.push_diag_unless_folded(
+        wolf_diag::Diagnostic::error(
+            codes::EXPECTED_TOKEN,
+            p.here(),
+            "expected `{` or `then` after the `if` condition",
+        )
+        .with_note(IF_FORMS_NOTE),
+    );
+    p.missing();
+    // One report for the truncated construct; fold the follow-up
+    // missing-terminator diagnostic.
+    p.fold_line_end();
 }
 
 /// `for pattern in expr block`.
