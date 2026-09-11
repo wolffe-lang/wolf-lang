@@ -1,0 +1,21 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `keep` still holds a value allocated in region `scratch` when the region is freed
+ --> mem:///main.lu:5:9
+  |
+3 |     region scratch {
+  |            ------- region `scratch` is created here
+4 |         let n = 7
+5 |         keep = "n={n}"
+  |         ^^^^ the value flows out of the region here
+  |                ------- allocated here, into region `scratch`
+6 |     }
+  |     - the region is freed here — everything in it is freed wholesale, as one unit
+  |
+  = note: to keep the value, allocate it where it must live: build it outside the region block, or
+    aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { …
+    }`); widening the region block to cover every use also works. Two keep-alive
+    alternatives change the ownership instead: `freeze` the region (immutable forever) or
+    make the value a `shared` cell (reference-counted, never dangles).

@@ -1271,3 +1271,84 @@ fn e1001_tuple_destructure_moves_elements() {
          }\n",
     );
 }
+
+// ------------------------------- built strs are sites (s153, #310) --
+
+#[test]
+fn e1010_region_built_str_is_the_block_value() {
+    // wolf-lang#310's shape: `+` inside `scratch` allocates there
+    // ([mem.region.escape]); the block's value is the freed bytes.
+    // Through s152 this was silent — `regions` printed from freed
+    // storage, with a W1001 saying the region never allocates.
+    snap(
+        "e1010_str_concat_block_value",
+        "fn build() -> str {\n    \
+             region scratch {\n        \
+                 let s = \"re\" + \"gions\"\n        \
+                 s\n    \
+             }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             print(\"{build()}\")\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_region_built_str_by_interpolation_held_outside() {
+    // `+` is defined as `"{s}{u}"` ([type.str.concat]), so a hole makes
+    // an interpolation the same site: held by an outer binding when
+    // the region frees.
+    snap(
+        "e1010_str_interp_escape_via_binding",
+        "fn main() -> !int {\n    \
+             var keep = \"\"\n    \
+             region scratch {\n        \
+                 let n = 7\n        \
+                 keep = \"n={n}\"\n    \
+             }\n    \
+             if keep.len == 3 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_region_built_str_by_append_held_outside() {
+    // `keep += u` is `keep = keep + u`: the fresh allocation lands in
+    // the ambient region — `scratch` — and `keep` is declared outside.
+    snap(
+        "e1010_str_append_escape_via_binding",
+        "fn main() -> !int {\n    \
+             var keep = \"re\"\n    \
+             region scratch {\n        \
+                 keep += \"gions\"\n    \
+             }\n    \
+             if keep.len == 7 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn built_strs_in_the_ambient_region_stay_silent() {
+    // The conforming shapes: a str built in the caller's region and
+    // returned (the default effect binds it there); a str built inside
+    // a scratch region and consumed there; and the region is not
+    // "never allocates" any more — no W1001 — because it did.
+    snap(
+        "clean_str_builders",
+        "fn greet(name: str) -> str {\n    \
+             var s = \"hello, \" + name\n    \
+             s += \"!\"\n    \
+             \"{s} ({s.len})\"\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var total = 0\n    \
+             region scratch {\n        \
+                 let line = greet(\"wolf\") + \"\\n\"\n        \
+                 total = total + line.len\n    \
+             }\n    \
+             if total == 17 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
