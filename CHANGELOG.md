@@ -2,6 +2,98 @@
 
 ## Unreleased
 
+### The key protocol (s152 — #11 and #154's `Map` rows ruled)
+
+**`Map[K, V]` is typed, keyed by the four, and an absent key is a
+row (#11, #154).** The count exercise in the book's chapter 5 carried a
+parallel `List` for one reason: no program could ask a `Map` whether a
+key was bound — std's `has`/`get`/`get_or`/`remove`/`tally` existed
+and executed on neither machine (their `[K: Eq]` bound dispatched
+nowhere, because wolfc never typed `Map` at all: every `Map[str,
+int]()` was "a std/prelude stub without a signature"), and an
+absent-key read answered `()`, the one unchecked, untyped read in the
+language. The maintainer asked whether the list was there only to
+check "have we seen it already" and guessed the exercise could be
+pulled off with a map alone; they were right, and the ruling is two
+clauses. **`[type.map.key]`** (spec/10 §10): `Map[K, V]` admits `str`,
+`int`, `char` and `bool` keys this edition — the four whose equality
+the language itself defines — and every other key is **E0418** where
+it is spelled, in the constructor and in a signature position with the
+same words; a struct key waits on derived equality, by name. `[K: Eq]`
+is satisfied by the four through std.cmp's ordinary impls, so std.map's
+five key functions execute on both tiers (`map_std_keys.lu` is their
+bodies word for word). **`[mem.map.absent]`** (spec/02): `m[k]` is
+**`V ! {none}`** — never `()`, never a zero, never a trap — handled as
+every row is, and rendered as its row in a hole; `m[k] = v` on an
+absent key inserts and on a bound key replaces; **`m[k] op= v` is
+E0417**, E0416's sibling (the `str` index is not a place because a
+`str` never changes; the `Map` index is not a place because the entry
+may not exist), with a note naming the two spellings that do the work
+— `m[k] = (m[k] else 0) + v`, and std's `map.tally(mut m, k)`. That
+closes F-0011's filed question: the language rules the absence, std
+owns the defaulting. Iteration order stays unspecified and consistent
+(`pairs()` — both machines answer insertion order at this pin).
+
+**The compiler.** `TyKind::Map(K, V)` beside `List`/`Pool`: the
+constructor, the index read (a `{none}` union), the index write (a
+place exactly when `V` copies, never a trap at the mem tier), `len`,
+`is_empty`, `pairs() -> List[(K, V)]`, `clear`; `for (k, v) in
+m.pairs()` destructures natively now (the tuple binder run inside the
+loop's scope), which every tally the book writes wants. **The native
+tier serves every admitted key** — `Map[str, int]`, `Map[int, int]`,
+`Map[char, int]`, `Map[bool, str]` all execute — through five
+`wolf_rt::map` seams (`RT_SYMBOLS` 138 → 143): a header whose first
+five words ARE a `ListHdr` (so `len` is the list's load), entries laid
+out as the `(K, V)` tuple's flat layout in insertion order, `get`/`set`
+through one entry-shaped caller slot, `pairs` one byte copy into a
+fresh list, a linear scan with `str` keys compared by the bytes they
+name. The checked machine keeps the same entries as `Value::Map`.
+What refuses, by name: iterating the map value itself (walk
+`pairs()`), a `Map` in a hole, and — a finding, not this ruling — a
+format spec on a `!T` hole (`{m[k]:>5}`) on both tiers, so
+`{m[k] else 0:>5}` is the spelling (filed). **The messages**: E0417
+"cannot update `totals[k]` in place: the key may be absent" with the
+receiver labelled and the two fixes in the notes; E0418 "`Point`
+cannot be a `Map` key" with the four named and, for a nominal, the
+`str`-from-fields fix.
+
+**Witnesses**, each `exit(0)` byte-identical on the checked and native
+tiers with the stdout its header pins: `corpus/memory/map_count.lu`
+(the chapter's count program on a map alone), `map_std_keys.lu`
+(`has`/`get`/`tally` from std, over a local `Eq`), `map_absent_else.lu`
+(the miss read with `else`, and rendered as `none`), `map_int_keys.lu`,
+`map_char_bool_keys.lu`; refused: `corpus/typecheck/map_compound_absent.lu`
+(E0417), `map_struct_key.lu` (E0418, at both spellings).
+
+**Predicted, then measured.** Pairing rows under lupin 0.1.32,
+predicted before the first run from the interpreter's `Value::Map`
+and its `()` read, measured exactly: `map_count` refuses (`+` on `()`
+and `i64`, exit 4); `map_absent_else` runs to `7 () 1 true` / `[()]`
+where the compiler prints `7 0 1 true` / `[none]`; `map_int_keys`
+refuses the index write through a computed key ("does not denote a
+place", exit 4); `map_char_bool_keys` prints `() () ()`;
+`map_compound_absent` refuses the `+=` at run time where the compiler
+refuses it statically; `map_struct_key` runs to exit 1 (the interpreter
+never reads a type argument). One row closes on its own:
+`map_std_keys` is byte-identical — the interpreter's trait dispatch
+through a bound already works. The mirror — the four-key set, the
+`none` row on an absent read, the insert through a computed key — is
+filed with the clause text (wolf-interp, for is46). The book's
+chapter-5 rows, measured one at a time at this tree: none closes by
+this move alone and every one moves from "a std/prelude stub" to a
+named verdict — §5.2's block and the by-category tally stop at E0417
+(`+=`), the top-2 tally at E0409 (`>` on `int ! {none}`, `[type.row.operand]`),
+and "one index in the language is not checked" RUNS on both tiers and
+prints `[none]` where its prose teaches `[()]`; respelled as the
+clauses say (`= (… else 0) +`, `else 0` under the compare, `{… else
+0:>5}`), the three tallies execute on both tiers byte-identical to
+the transcripts the chapter prints. Those respellings are bs40's.
+The syntax-tier fail count is unchanged (E04xx is the checker's);
+the lowering ledger takes the seven (five lower, two refuse at
+typecheck) and one existing line moves — `grammar/interp_fmtcolon`
+reaches the mem tier now that `Map` types, and stops at the format
+spec on its `!int` hole.
+
 ### The one-line if (s151 — #307 ruled)
 
 **A brace-less `if`, closed by a contextual `then` (#307).** `if leap
