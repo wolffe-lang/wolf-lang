@@ -1497,7 +1497,10 @@ not help — a copy is a fresh allocation in the *current* ambient
 region, which is still the dying one. `freeze` (making the whole
 region immortal and immutable) and `shared` (counted escape) are
 coming in later tiers for the cases that genuinely need to outlive
-the region.
+the region. A `str` built inside the block — by `+`, `+=`, or an
+interpolation with a hole — is such a value too: the two-word view
+copies out freely, but the bytes it points at were allocated in the
+region ([mem.region.escape]).
 "#);
 
 code!(E1011, "this would open a region while a region that contains it is open", r#"

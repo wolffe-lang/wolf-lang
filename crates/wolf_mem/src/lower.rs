@@ -2043,7 +2043,16 @@ impl<'t> Lowerer<'t> {
                     // A `Copy` use duplicates a region-free scalar:
                     // no site flows (this is what keeps a Copy field
                     // read from pinning its parent's region).
-                    let val = if self.places.is_copy(place) {
+                    // s153 (#310): a `str` is `Copy` — its two-word
+                    // view copies — but the BYTES it views live where
+                    // they were built, so a whole-local `str` read
+                    // carries the local's sites (`[mem.region.escape]`:
+                    // a region-built `str` leaving its frame is E1010).
+                    // A field read stays site-free: the parent's own
+                    // site already covers it.
+                    let str_view =
+                        self.is_str_expr(e.span) && self.places.get(place).proj.is_empty();
+                    let val = if self.places.is_copy(place) && !str_view {
                         Val::none()
                     } else {
                         self.val_of_place(place, e.span)
@@ -2084,7 +2093,9 @@ impl<'t> Lowerer<'t> {
             }
             SyntaxKind::StringExpr => {
                 let d = StringExpr::cast(e).expect("kind");
+                let mut built = false;
                 for i in d.interps() {
+                    built = true;
                     if let Some(hole) = i.expr() {
                         // Interpolation formats the value: a read.
                         if let Some((place, _)) = self.as_place(hole) {
@@ -2093,6 +2104,16 @@ impl<'t> Lowerer<'t> {
                             self.eval_value(hole)?;
                         }
                     }
+                }
+                // s153 (#310, `[mem.region.escape]`): a hole makes this
+                // a BUILT str — `+` is defined as `"{s}{u}"`
+                // (`[type.str.concat]`), so the two are one allocation
+                // site in the ambient region. A plain literal's bytes
+                // are static and it stays site-free.
+                if built {
+                    let ty = self.rendered_expr_ty(e.span);
+                    let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+                    return Ok(Val::site(site, e.span));
                 }
                 Ok(Val::none())
             }
@@ -2990,9 +3011,29 @@ impl<'t> Lowerer<'t> {
                     self.push(Stmt::CheckedOp { span: e.span });
                     self.blocks[self.cur.0 as usize].trap = true;
                 }
+                // s153 (wolf-lang#310, `[mem.region.escape]`): `+` on
+                // `str` operands builds a fresh `str`
+                // (`[type.str.concat]`) — an allocation in the ambient
+                // region at the site of the `+`, never in an operand's.
+                // The operands' own sites do not flow: their bytes
+                // were COPIED into the new allocation. Before s153 the
+                // result was a site-free copy view, so a `str` built
+                // by `+` inside `region scratch { }` and returned (or
+                // sent) read freed bytes with no diagnostic.
+                if op == Some(SyntaxKind::Plus) && self.is_str_expr(e.span) {
+                    let ty = self.rendered_expr_ty(e.span);
+                    let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+                    return Ok(Val::site(site, e.span));
+                }
                 Ok(Val::none())
             }
         }
+    }
+
+    /// Is the expression at `span` typed `str` (s153)?
+    fn is_str_expr(&self, span: Span) -> bool {
+        self.expr_ty(span)
+            .is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str)))
     }
 
     /// X3: `+ - * / %` on integer operands trap (overflow/div-zero);
@@ -4362,58 +4403,87 @@ impl<'t> Lowerer<'t> {
                 self.push(Stmt::CheckedOp { span: stmt.span });
                 self.blocks[self.cur.0 as usize].trap = true;
             }
+            // s153 (#310, `[mem.region.escape]`): `s += u` on a `str`
+            // is `s = s + u` (`[type.str.concat]`) — a fresh allocation
+            // in the ambient region that lands in the place exactly as
+            // the `=` form's value does.
+            // The target's span is a place, not a typed expression
+            // (sema types it through `place_type` and records nothing
+            // under its span), so the append is recognized by its
+            // operand: `+=` admits a `str` or `char` right side only
+            // when the target is a `str` ([type.str.concat],
+            // [type.str.concat.mix]).
+            let str_append = d.op().map(|t| t.kind) == Some(SyntaxKind::PlusEq)
+                && d.value().is_some_and(|v| {
+                    self.expr_ty(v.span)
+                        .is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str | Prim::Char)))
+                });
+            if str_append {
+                let site = self.alloc_site("str".to_string(), SiteKind::CallResult, stmt.span);
+                let built = Val::site(site, stmt.span);
+                self.flow_store(place, place_expr, &built);
+            }
         } else {
             self.emit_init(place, place_expr.span);
-            // ------------------------------- region flow (s19) ------
-            match self.places.get(place).base.clone() {
-                Base::Local(l) => {
-                    let whole = self.places.get(place).proj.is_empty();
-                    if !whole {
-                        // An embedding store demands co-location with
-                        // the container's own allocation(s).
-                        if let Some(r) = val.region {
-                            // A region value stored into a field: the
-                            // iso edge ([mem.region.edge.iso]) — the
-                            // container's region becomes the parent,
-                            // the free is no longer this frame's, and
-                            // the field path keeps the identity.
-                            self.moved_region[r.0 as usize] = true;
-                            if let Some(&(c, _)) = self.sites_of_place(place).first() {
-                                let target = self.sites[c.0 as usize].region;
-                                self.region_parent.insert(r.0, target);
-                            }
-                            if let [Proj::Field(f)] = self.places.get(place).proj.as_slice() {
-                                self.region_field.insert((l, f.clone()), r);
-                            }
-                        }
-                        let containers = self.sites_of_place(place);
-                        if let Some(&(c, _)) = containers.first() {
-                            let target = self.sites[c.0 as usize].region;
-                            let cspan = self.sites[c.0 as usize].span;
-                            self.demand_store(&val, target, Some(cspan), place_expr.span);
-                        }
-                    } else if let Some(rid) = val.region {
-                        match self.region_local.get(&l).copied() {
-                            Some(Some(prev)) if prev != rid => {
-                                // Rebound to a different region on
-                                // some path: identity is no longer
-                                // static — `in` on it refuses.
-                                self.region_local.insert(l, None);
-                            }
-                            _ => {
-                                self.region_local.insert(l, Some(rid));
-                            }
-                        }
-                    }
-                    self.hold(l, &val, place_expr.span);
-                }
-                Base::Global(..) => {
-                    // Module state outlives every frame: `ρ_static`.
-                    self.demand_static(&val, place_expr.span);
-                }
-            }
+            self.flow_store(place, place_expr, &val);
         }
         Ok(())
+    }
+
+    /// The region flow of a store (s19): the value's sites land in the
+    /// place — held by the local, co-located with the container it is
+    /// embedded in, or demanded `ρ_static` for module state. Shared by
+    /// `=` and, since s153 (#310), by `+=` on a `str`, whose fresh
+    /// allocation lands exactly as an assigned one would.
+    fn flow_store(&mut self, place: PlaceId, place_expr: &'t GreenNode, val: &Val) {
+        // ------------------------------- region flow (s19) ------
+        match self.places.get(place).base.clone() {
+            Base::Local(l) => {
+                let whole = self.places.get(place).proj.is_empty();
+                if !whole {
+                    // An embedding store demands co-location with
+                    // the container's own allocation(s).
+                    if let Some(r) = val.region {
+                        // A region value stored into a field: the
+                        // iso edge ([mem.region.edge.iso]) — the
+                        // container's region becomes the parent,
+                        // the free is no longer this frame's, and
+                        // the field path keeps the identity.
+                        self.moved_region[r.0 as usize] = true;
+                        if let Some(&(c, _)) = self.sites_of_place(place).first() {
+                            let target = self.sites[c.0 as usize].region;
+                            self.region_parent.insert(r.0, target);
+                        }
+                        if let [Proj::Field(f)] = self.places.get(place).proj.as_slice() {
+                            self.region_field.insert((l, f.clone()), r);
+                        }
+                    }
+                    let containers = self.sites_of_place(place);
+                    if let Some(&(c, _)) = containers.first() {
+                        let target = self.sites[c.0 as usize].region;
+                        let cspan = self.sites[c.0 as usize].span;
+                        self.demand_store(val, target, Some(cspan), place_expr.span);
+                    }
+                } else if let Some(rid) = val.region {
+                    match self.region_local.get(&l).copied() {
+                        Some(Some(prev)) if prev != rid => {
+                            // Rebound to a different region on
+                            // some path: identity is no longer
+                            // static — `in` on it refuses.
+                            self.region_local.insert(l, None);
+                        }
+                        _ => {
+                            self.region_local.insert(l, Some(rid));
+                        }
+                    }
+                }
+                self.hold(l, val, place_expr.span);
+            }
+            Base::Global(..) => {
+                // Module state outlives every frame: `ρ_static`.
+                self.demand_static(val, place_expr.span);
+            }
+        }
     }
 }
 
