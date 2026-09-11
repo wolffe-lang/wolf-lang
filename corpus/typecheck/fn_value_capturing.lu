@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="306 357\n321")
+//! phase: run
+//! conforms: type.fn.value, abi.native.closure
+//!
+//! Chapter 4's `fn_as_value`, verbatim (wolf-lang#300, s150): `both`
+//! captures two capture-free closures and is passed to `adjusted` as a
+//! `fn(int) -> int` — a capturing closure read as a VALUE, which the
+//! s105 pair refused ("the pair stays in its frame"). `[type.fn.value]`:
+//! a closure is a fn value whatever it captures; its captures are
+//! copied when it is written. Both machines print the same two lines.
+
+fn adjusted(cents: int, f: fn(int) -> int) -> int { f(cents) }
+
+fn main() -> !int {
+    let discount = fn(c) c - c / 10
+    let tax = fn(c) c + c / 20
+    print("{adjusted(340, discount)} {adjusted(340, tax)}")
+    let both = fn(c) tax(discount(c))
+    print("{adjusted(340, both)}")
+    0
+}

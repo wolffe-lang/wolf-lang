@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="15\n275 300\n21")
+//! phase: run
+//! conforms: type.fn.value, abi.native.closure
+//!
+//! `[type.fn.value]` (s150, wolf-lang#300), the other positions: a
+//! closure capturing an `int` passed as a fn value (`apply(5, addk)`),
+//! a closure capturing a parameter RETURNED from the function that
+//! wrote it (`rounder`, chapter 4's other block — the record lives in
+//! the ambient region, so it outlives `rounder`'s frame), and a
+//! closure capturing another capturing closure (`twice` holds `addk`'s
+//! record pointer). Every capture is a copy taken where the closure is
+//! written; `[abi.native.closure]` is the one-word record behind each.
+
+fn apply(x: int, f: fn(int) -> int) -> int { f(x) }
+fn rounder(to: int) -> fn(int) -> int { fn(c) (c + to / 2) / to * to }
+
+fn main() -> !int {
+    let k = 10
+    let addk = fn(c) c + k
+    print("{apply(5, addk)}")
+    let nickel = rounder(5)
+    let dollar = rounder(100)
+    print("{nickel(273)} {dollar(273)}")
+    let twice = fn(c) addk(addk(c))
+    print("{apply(1, twice)}")
+    0
+}

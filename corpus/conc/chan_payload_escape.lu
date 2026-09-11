@@ -1,0 +1,20 @@
+//! check: fail(E1010)
+//! phase: mem
+//! conforms: conc.chan.payload
+//! `[conc.chan.payload]`'s lifetime half (s150): a payload leaves the
+//! sending frame for a receiver, so it must outlive that frame exactly
+//! as a returned value must — a struct built in a frame-local region
+//! is E1010 at the send, and the message names the receiver.
+
+struct Doc { title: str, words: int }
+
+fn main() -> !int {
+    let ch = channel[Doc](1)
+    region scratch {
+        let d = Doc { title: "re" + "gions", words: 1 }
+        ch.send(d)?                // ERROR E1010: `d` lives in scratch
+    }
+    let got = ch.recv()?
+    print("{got.title}")
+    0
+}

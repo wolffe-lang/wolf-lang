@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="regions\nmoves\nchannels\n3 documents shelved, 2740 words\nlast: closed")
+//! phase: run
+//! conforms: conc.chan.payload, conc.chan.close
+//!
+//! `[conc.chan.payload]` (s150, wolf-lang#268's largest family): a
+//! struct is a payload — chapter 12 §12.1's `channel[Doc]`, which
+//! E1102 refused and the native tier carried one word of. `Doc` is
+//! three words (a `str` view and an `int`); each send copies it into a
+//! box the channel owns in flight, the `for` takes each box on
+//! receipt, and the drained-closed channel answers `closed` to the
+//! last `recv`. The checked lane declines channel methods (no
+//! resolvable bodies); this is a native witness, byte-identical under
+//! lupin.
+
+struct Doc { title: str, words: int }
+
+fn main() -> !int {
+    let inbox = channel[Doc](4)
+    var total = 0
+    var seen = 0
+    scope writers {
+        writers.spawn(fn() {
+            inbox.send(Doc { title: "regions", words: 900 })?
+            inbox.send(Doc { title: "moves", words: 640 })?
+            inbox.send(Doc { title: "channels", words: 1200 })?
+            inbox.close()
+        })
+        for d in inbox { total += d.words; seen += 1; print("{d.title}") }
+    }
+    print("{seen} documents shelved, {total} words")
+    let last = inbox.recv() else |err| { print("last: {err}"); return 0 }
+    print("{last.title}")
+    0
+}

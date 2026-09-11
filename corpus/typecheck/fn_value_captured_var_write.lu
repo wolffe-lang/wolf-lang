@@ -1,0 +1,22 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: type.fn.value, mem.tier0.borrow.2
+//! warns: W1102
+//! `[type.fn.value]`'s `var` half (s150, wolf-lang#300): a capturing
+//! closure's value COPIES `k` when it is written, so the write below
+//! is the one program that could tell copy from reference apart — and
+//! it refuses, through the shared loan `[mem.tier0.borrow.2]` puts on
+//! every captured place while the value is still needed (E1002; W1102
+//! names the copy). The `let` form is `memory/closure_borrow_write.lu`;
+//! this is the closure passed as a fn VALUE after the write, which is
+//! the same loan. lupin traps `exclusivity` at the write.
+
+fn apply(x: int, f: fn(int) -> int) -> int { f(x) }
+
+fn main() -> !int {
+    var k = 1
+    let addk = fn(c) c + k
+    k = 2                          // ERROR E1002: addk still needs `k`
+    print("{apply(1, addk)}")
+    0
+}
