@@ -65,5 +65,10 @@ fn the_open_pipe_still_gets_both_version_lines() {
     assert!(out.status.success());
     assert_eq!(text.lines().count(), 2, "two stamped lines:\n{text}");
     assert!(text.starts_with("wolf "), "{text}");
-    assert!(text.lines().nth(1).is_some_and(|l| l.starts_with("paired with lupin ")), "{text}");
+    assert!(
+        text.lines()
+            .nth(1)
+            .is_some_and(|l| l.starts_with("paired with lupin ")),
+        "{text}"
+    );
 }

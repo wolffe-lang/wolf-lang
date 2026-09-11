@@ -2845,7 +2845,10 @@ impl<'a> Checker<'a> {
                             generics, variants, ..
                         }) => (
                             generics,
-                            variants.iter().flat_map(|v| v.payload.iter().copied()).collect(),
+                            variants
+                                .iter()
+                                .flat_map(|v| v.payload.iter().copied())
+                                .collect(),
                         ),
                         _ => return false,
                     };

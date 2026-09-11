@@ -793,8 +793,11 @@ pub extern "C" fn __wolf_rt_chan_new_boxed(cap: i64) -> *mut c_void {
 const BOX_ALIGN: usize = 8;
 
 fn box_layout(size: usize) -> std::alloc::Layout {
-    std::alloc::Layout::from_size_align(8 + size.next_multiple_of(BOX_ALIGN).max(BOX_ALIGN), BOX_ALIGN)
-        .expect("payload box layout")
+    std::alloc::Layout::from_size_align(
+        8 + size.next_multiple_of(BOX_ALIGN).max(BOX_ALIGN),
+        BOX_ALIGN,
+    )
+    .expect("payload box layout")
 }
 
 /// Free one payload box word (null-safe: a zero word is no box).
