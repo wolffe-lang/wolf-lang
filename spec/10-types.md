@@ -464,6 +464,34 @@ is about it.)
   where `()` is expected is a warned discard, `[type.unit.discard]`.
   Witnesses: `typecheck/tail_declared_str.lu`,
   `typecheck/tail_declared_union.lu`.
+- `[type.fn.value]` **A closure is a `fn` value whatever it captures,
+  and a capturing closure's value copies its captures when it is
+  created.** A named function, a capture-free closure and a capturing
+  closure are all values of their fn type — passed as an argument,
+  returned, bound and called through the binding — the same
+  `fn(int) -> int` to every callee, and nothing marks which stood
+  behind it. What a capturing closure holds is a COPY of each captured
+  binding's value, taken once, where the closure is written: the value
+  never sees a later write to a captured place (W1102 says so at the
+  write), and while the value is still needed a write to a captured
+  `var` is E1002 — the shared loan of `[mem.tier0.borrow.2]`, which is
+  what makes copy and reference indistinguishable to a conforming
+  program. A `var` is therefore captured by its value at creation,
+  never by its place; a captured region value is refused by name (open
+  it in the enclosing frame); a captured value must outlive every
+  frame the closure value leaves — returning a closure that captured a
+  frame-local list is the list's escape, E1010, as if the list itself
+  were returned. Positions: a capturing closure may be bound, passed,
+  returned, or be a closure body's tail; inside a container or a
+  struct literal it is refused by name until that borrow story is
+  written. Cost: one record allocation per capturing closure value, in
+  the ambient region (`[abi.native.closure]`), its captures copied in.
+  Witnesses: `typecheck/fn_value_capturing.lu` (chapter 4's program,
+  verbatim), `typecheck/fn_value_captured_int.lu`,
+  `typecheck/fn_value_captured_var_write.lu` (`fail(E1002)`). (Ruled
+  2026-09-10, s150 — wolf-lang#300: c25 had ruled the pair stays in
+  its frame and c05/#117 deferred closures as values; the chapter that
+  teaches functions as values was the one the maintainer met it in.)
 
 ## §9 The error row as a value `[type.row]`
 

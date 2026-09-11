@@ -83,27 +83,34 @@ AAPCS64, win64, Apple arm64 deltas).
   Same stability status as everything in this section:
   `[abi.native.unstable]` governs.
 
-- `[abi.native.closure]` A capture-free closure IS a function: it
-  lambda-lifts to a module function whose signature is the closure's
-  fn type, and its value is the one-word code pointer every fn value
-  is (`[abi.native.call]`'s indirect form dispatches it; nothing
-  marks it as having been a closure). A CAPTURING closure is a
-  TWO-WORD pair: the entry pointer, then the env record pointer, laid
-  out as an ordinary by-value aggregate `{ptr, ptr}` — the
-  `[abi.native.dyn]` shape with the vtable slot replaced by a direct
-  entry. The env record packs the captured values in capture order at
-  8-byte-aligned offsets (the `[abi.native.taskenv]` layout, frame
-  storage); the entry is a synthesized function taking the env
-  pointer first and the declared parameters after, loading each
-  capture from the record before the body runs. A call through the
-  pair is two component reads and one indirect call with the env
-  leading. The record BORROWS its captures — every capture is
-  read-only, writes to the captured places refuse while the pair
-  lives, and the pair does not leave the frame that built it (no
-  argument, return, or container position) — which is exactly what
-  makes the record's bitwise copy of each capture unobservable. Same
-  stability status as everything in this section:
-  `[abi.native.unstable]` governs.
+- `[abi.native.closure]` **Every fn value is one word: a pointer to a
+  callable record whose first word is the entry.** The entry is a
+  function taking the record pointer first and the declared
+  parameters after; a call through a fn value is one load (the entry)
+  and one indirect call with the record leading — `[abi.native.dyn]`'s
+  shape with a one-slot table and no data half. A named function read
+  as a value, and a capture-free closure (which lambda-lifts to a
+  module function), sit behind a STATIC one-slot record —
+  content-interned, so every read of the same function is the same
+  pointer; the named function's slot holds a shim of the record
+  convention that drops the leading pointer. A CAPTURING closure's
+  record is the entry word followed by its captured values in capture
+  order at 8-byte-aligned offsets (the `[abi.native.taskenv]`
+  packing), allocated in the AMBIENT region of the frame that builds
+  it (`[mem.region.create.3]`: the placement every container gets, so
+  the value outlives its frame exactly as far as any other value built
+  there does, and a `region` around a closure-building loop bounds the
+  records the way it bounds a `List`). The record COPIES its captures
+  at creation (`[type.fn.value]`); the mem tier's shared loan on the
+  captured places is what makes that copy unobservable while the value
+  lives. A binding that names a capturing closure keeps the entry
+  beside the record, so a call by name skips the load. (Rewritten
+  2026-09-10, s150 — wolf-lang#300: the s105 shape was a two-word pair
+  that never left its frame, and chapter 4's `adjusted(340, both)` was
+  refused for it. The `fn(int) -> int` a callee receives is now the
+  same word whether a named function, a capture-free closure or a
+  capturing one stands behind it.) Same stability status as everything
+  in this section: `[abi.native.unstable]` governs.
 
 ## §2 C membranes `[abi.c]`
 

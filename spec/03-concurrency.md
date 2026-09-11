@@ -180,6 +180,32 @@ premise by construction.
 - `[conc.chan.type]` `channel[T](n)` requires T sendable: `Copy`, `imm`,
   a region value (moved on send), or a `sync` type. Anything else is a
   compile error (E1102) pointing at D14's three verbs.
+- `[conc.chan.payload]` **A payload is any value the type system can
+  move, and the channel owns it in flight.** `[conc.chan.type]`'s four
+  kinds are payloads; so is a struct, an enum or a tuple whose every
+  field is a payload other than a region value — a region crosses on
+  its own (`[conc.chan.move]`), never inside another value, because a
+  copied handle would be two owners. A `send` copies the payload into
+  the channel (the `[conc.chan.imm]` reading: `Copy` and by-value data
+  copy at the send, and the sender's binding is untouched); the
+  channel owns that copy while it is buffered or parked with a blocked
+  sender; `recv` — a `for` over the channel, a `select` arm — hands it
+  to the receiver, who owns it from then on. A payload leaves the
+  sending frame, so it must outlive it exactly as a returned value
+  must: a payload built in a frame-local region is E1010 at the send
+  (witness `corpus/conc/chan_payload_escape.lu`). A `str` payload is
+  its view: the bytes stay where they were built and cross by
+  reference (`[conc.chan.imm]`). The cost, stated: a payload of
+  one machine word or less (an `int`, a `bool`, a `char`, any integer
+  width) crosses in the word; anything wider — a `str`, a struct, a
+  tuple, a float, a handle — crosses in a heap box the sender fills
+  and the receiver empties, one allocation and two copies per message.
+  A send that fails (`closed`, `cancelled`) frees its box before it
+  answers, and a channel freed while boxes are still in it frees them
+  with itself. (Ruled 2026-09-10, s150 — wolf-lang#268's largest
+  family: the native tier carried one word since s39 and E1102 refused
+  every aggregate, which held chapter 12 §12.1's `channel[Doc]` on one
+  machine. Witness `corpus/conc/chan_struct_payload.lu`.)
 - `[conc.chan.buf]` Capacity `n ≥ 1` buffers; `n = 0` is rendezvous.
   Sends on a full channel and receives on an empty one block (they are
   cancellation points and recorded events).
