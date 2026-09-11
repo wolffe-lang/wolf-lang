@@ -434,6 +434,25 @@ impl Resolver<'_> {
                     // and impl member signatures (s14).
                     self.bind("Self".to_string(), None);
                     self.bind_generics(d.generics());
+                    // The ALIAS form's right-hand side (s155,
+                    // `[type.trait.op.alias]`): `trait Num = ops.Add +
+                    // … + cmp.Eq` names traits, and until s156 the
+                    // resolver never walked the node, so the alias — the
+                    // only consumer of the imports it names — marked
+                    // none of them used and the file was E0305 on each
+                    // import in turn, with `help: delete the unused
+                    // import` pointing at the names three lines below
+                    // (wolf-lang#334). A generic BOUND has always
+                    // counted, through the very same walk; nothing
+                    // about the alias position made it different, it
+                    // was simply not visited. `sig::Lower` re-resolves
+                    // the list independently for checking and takes
+                    // `&self`, so it structurally cannot set the bits.
+                    if let Some(bound) = d.alias_bound() {
+                        for path in bound.paths() {
+                            self.resolve_path_first(path.syntax(), false);
+                        }
+                    }
                     for m in d.members() {
                         self.resolve_item(m);
                     }
@@ -1559,6 +1578,44 @@ mod tests {
         assert_eq!(s.applicability, Applicability::MachineApplicable);
         assert_eq!(s.edits.len(), 1);
         assert!(s.edits[0].1.is_empty(), "the edit deletes the line");
+    }
+
+    /// wolf-lang#334: a qualified trait in a trait-ALIAS right-hand
+    /// side marks its import used. The alias is often the ONLY consumer
+    /// of the imports it names — `[type.trait.op.alias]`'s own worked
+    /// example, `trait Num = Add + … + Eq + Ord`, spans std.ops and
+    /// std.cmp — and the resolver never walked the node, so the file
+    /// was E0305 on every import at once with `help: delete the unused
+    /// import` pointing at the names three lines below. A BOUND has
+    /// always counted, through the very same walk.
+    #[test]
+    fn a_trait_alias_rhs_marks_its_imports_used() {
+        let r = resolve(&[
+            (
+                &[],
+                "main.lu",
+                "use cmp\nuse ops\ntrait Num = ops.Add + cmp.Eq\n\
+                 fn total[T: Num](xs: List[T], zero: T) -> T { zero }\n\
+                 fn main() -> !int { 0 }\n",
+            ),
+            (
+                &["ops"],
+                "o.lu",
+                "/// Addition.\npub trait Add { fn add(self, other: Self) -> Self }\n",
+            ),
+            (
+                &["cmp"],
+                "c.lu",
+                "/// Equality.\npub trait Eq { fn eq(self, other: Self) -> bool }\n",
+            ),
+        ]);
+        assert!(
+            !r.diagnostics
+                .iter()
+                .any(|d| d.severity == wolf_diag::Severity::Error),
+            "the alias is the only consumer of both imports: {:?}",
+            r.diagnostics
+        );
     }
 
     #[test]
