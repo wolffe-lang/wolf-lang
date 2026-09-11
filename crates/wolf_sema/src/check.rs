@@ -9035,6 +9035,25 @@ impl<'a> Checker<'a> {
         Ok(self.normalize(ret))
     }
 
+    /// The bare binding a place expression names, if it is one
+    /// (`x`, `(x)`) — #325's subject key, so a mode refusal and the
+    /// `mut`-parameter lint can be told to be about the same name.
+    fn bare_place_name(&self, n: &GreenNode) -> Option<String> {
+        let mut root = n;
+        while root.kind == SyntaxKind::ParenExpr {
+            root = root.nodes().next()?;
+        }
+        if root.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        let idents: Vec<_> = root
+            .tokens()
+            .filter(|t| t.kind == SyntaxKind::Ident)
+            .collect();
+        let [one] = idents[..] else { return None };
+        Some(self.text(one.span))
+    }
+
     /// E0804 — the X1 receiver-mode law: the call site spells exactly
     /// the mode the method declares (`(mut p).norm()`), and no mode
     /// for `read self`. Syntax only; exclusivity itself is c04.
@@ -9059,6 +9078,7 @@ impl<'a> Checker<'a> {
                 let kw = word(dm);
                 let lo = Span::new(recv.span.file, recv.span.lo, recv.span.lo);
                 let hi = Span::new(recv.span.file, recv.span.hi, recv.span.hi);
+                let subject = self.bare_place_name(recv);
                 self.diags.push(
                     Diagnostic::error(
                         codes::E0804,
@@ -9077,7 +9097,12 @@ impl<'a> Checker<'a> {
                         format!("spell the receiver mode: `({kw} …)`"),
                         vec![(lo, format!("({kw} ")), (hi, ")".to_string())],
                         Applicability::MachineApplicable,
-                    )),
+                    ))
+                    // #325: the receiver this refusal names. W1002 on
+                    // the same parameter is standing down on it — the
+                    // unspelled write IS a write, and the two fix-its
+                    // point opposite ways.
+                    .about_opt(subject, recv.span),
                 );
             }
             (None, Some(gm)) => {

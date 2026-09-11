@@ -1268,7 +1268,10 @@ impl<'t> Lowerer<'t> {
                  [mem.tier0.mode.read]. Declare it `mut` if this function's purpose is \
                  to change it (call sites then spell the mutation), `take` it if the \
                  function consumes it, or mutate this function's own `copy`.",
-            ),
+            )
+            // #325: the parameter this refusal names, at the write it
+            // found — W1002 for the same name stands down on it.
+            .about(name, span),
         );
     }
 

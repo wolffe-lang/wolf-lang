@@ -1011,6 +1011,9 @@ fn compile_native(
                 diags: Vec<Diagnostic>|
      -> Result<(), BuildStop> {
         pending.extend(wolf_diag::lint::apply(&levels, &scan.allows, diags));
+        // #325: a mode refusal retires the `mut`-parameter lint it
+        // contradicts — the accumulator is where the two phases meet.
+        wolf_diag::suppress_mode_shadowed(pending);
         if has_errors(pending) {
             wolf_diag::sort_diagnostics(pending);
             render(sources, pending);
@@ -2805,6 +2808,9 @@ fn fix(args: &[String]) {
         }
     }
     let mut diags = wolf_diag::lint::apply(&levels, &scan.allows, diags);
+    // #325: never offer W1002's drop-the-`mut` edit beside the mode
+    // error that asks for the opposite.
+    wolf_diag::suppress_mode_shadowed(&mut diags);
     wolf_diag::sort_diagnostics(&mut diags);
 
     // FileId index → (display path, source bytes).
@@ -3499,6 +3505,7 @@ fn conform_run(args: &[String]) {
                             } else {
                                 let mut all = all;
                                 all.extend(tc.diagnostics.iter().cloned());
+                                wolf_diag::suppress_mode_shadowed(&mut all);
                                 wolf_diag::sort_diagnostics(&mut all);
                                 if let Some(code) = first_error(&all) {
                                     ("typecheck", format!("fail({code})"), all)

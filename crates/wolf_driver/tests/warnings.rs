@@ -227,3 +227,51 @@ fn fix_drops_dead_mut_at_declaration_and_call_sites() {
     let (code, _) = run_fix(&[]);
     assert_eq!(code, 0, "nothing left to fix");
 }
+
+/// wolf-lang#325 (s154): W1002 stands down where a mode error names
+/// the same parameter. The body writes `xs` — it misspelled the write,
+/// which is the E0804 — and the lint's flat scan could not see it, so
+/// the two diagnostics disagreed about whether a line writes and the
+/// lint's machine-applicable fix pointed away from E0804's. The
+/// build's stderr carries one diagnostic now, and `wolf fix` offers no
+/// edit at all.
+#[test]
+fn mode_error_retires_the_mut_parameter_lint() {
+    let dir = fixture(
+        "mut-lint-vs-mode-error",
+        "fn take_last[T](mut xs: List[T]) -> T ! {none} {\n    xs.pop()\n}\n\n\
+         fn main() -> !int {\n    var xs = List[int]()\n    (mut xs).push(1)\n    \
+         take_last(mut xs) else 0\n}\n",
+    );
+    let (code, err) = build_wir(&dir, &[]);
+    assert_eq!(code, 1, "the mode error still stops the build:\n{err}");
+    assert!(err.contains("error[E0804]"), "the mode error renders:\n{err}");
+    assert!(
+        !err.contains("W1002"),
+        "the lint that contradicts it is retired:\n{err}"
+    );
+    let out = Command::new(wolf())
+        .arg("fix")
+        .arg(dir.join("main.lu"))
+        .output()
+        .expect("run wolf fix");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !text.contains("W1002"),
+        "`wolf fix` offers no drop-the-`mut` edit here:\n{text}"
+    );
+}
+
+/// The control for the case above: with no mode error in sight the
+/// lint is unchanged — a `mut` parameter nothing writes still warns.
+#[test]
+fn dead_mut_parameter_still_warns_without_a_mode_error() {
+    let dir = fixture(
+        "mut-lint-control",
+        "fn offset(mut base: int, delta: int) -> int {\n    base + delta\n}\n\n\
+         fn main() -> !int {\n    var b = 1\n    offset(mut b, 2) - 3\n}\n",
+    );
+    let (code, err) = build_wir(&dir, &[]);
+    assert_eq!(code, 0, "a warning never fails a default build:\n{err}");
+    assert!(err.contains("warning[W1002]"), "the lint fires:\n{err}");
+}

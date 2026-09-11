@@ -625,7 +625,12 @@ impl Wave<'_> {
                              that never happens; the read default is the honest mode."
                                 .to_string(),
                         )
-                        .with_suggestion(sugg),
+                        .with_suggestion(sugg)
+                        // #325: the name this lint is about, and the
+                        // body its write scan read. A later mode error
+                        // on the same parameter stands the lint down —
+                        // the write it could not see is real.
+                        .about(name.clone(), body_node.span),
                     );
                 }
                 ParamMode::Take => {

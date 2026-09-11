@@ -1,0 +1,23 @@
+//! check: fail(E0804)
+//! phase: resolve
+//! conforms: ty.method.receiver-mode, mem.tier0.mode.mut
+//!
+//! wolf-lang#325 (s154): the same X1 refusal on a `mut` PARAMETER's
+//! receiver. Until s154 W1002 ("`xs` is `mut`, and the body never
+//! writes it") rode beside this error and offered to drop the `mut` —
+//! the opposite of the fix E0804 names, and a reader who took it
+//! landed on E1014. The body does write `xs`; it misspelled the
+//! write, and the lint's flat scan could not see it. A mode error on
+//! a use of a parameter now stands W1002 down for that parameter, so
+//! this file reports exactly one diagnostic. lupin 0.1.33 says only
+//! the trap here (it has no lint wave).
+
+fn take_last[T](mut xs: List[T]) -> T ! {none} {
+    xs.pop()
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    take_last(mut xs) else 0
+}

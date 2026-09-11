@@ -328,6 +328,7 @@ pub fn test_cmd(args: &[String]) {
         let gate =
             |pending: &mut Vec<Diagnostic>, sources: &Sources, diags: Vec<Diagnostic>| -> bool {
                 pending.extend(wolf_diag::lint::apply(&levels, &scan.allows, diags));
+                wolf_diag::suppress_mode_shadowed(pending);
                 if has_errors(pending) {
                     wolf_diag::sort_diagnostics(pending);
                     render(sources, pending);

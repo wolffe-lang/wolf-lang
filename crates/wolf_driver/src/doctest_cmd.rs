@@ -269,6 +269,7 @@ fn should_fail_verdict(want: &[String], diags: &[Diagnostic]) -> Outcome {
 
 fn compile_failure(sources: &Sources, diags: &[Diagnostic]) -> Outcome {
     let mut ds = diags.to_vec();
+    wolf_diag::suppress_mode_shadowed(&mut ds);
     wolf_diag::sort_diagnostics(&mut ds);
     render(sources, &ds);
     let codes: Vec<String> = ds

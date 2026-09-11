@@ -164,6 +164,14 @@ pub struct Diagnostic {
     /// The structural row diff, when this diagnostic is about error
     /// rows (E06xx).
     pub row_diff: Option<RowDiff>,
+    /// The binding this diagnostic is *about*, and the region over
+    /// which that spelling is the same binding (s154, wolf-lang#325).
+    /// A warning carries the scope it reasons over (a function body);
+    /// an error carries the use site it fired on. It exists so one
+    /// pass can tell that two diagnostics from different phases are
+    /// arguing about the same name — see [`suppress_mode_shadowed`].
+    /// Never rendered.
+    pub subject: Option<(String, Span)>,
 }
 
 // Manual Debug: `row_diff` appears only when present, so the many
@@ -202,6 +210,7 @@ impl Diagnostic {
             notes: Vec::new(),
             suggestions: Vec::new(),
             row_diff: None,
+            subject: None,
         }
     }
 
@@ -252,6 +261,61 @@ impl Diagnostic {
         self.row_diff = Some(diff);
         self
     }
+
+    /// Record the binding this diagnostic is about (s154, #325): the
+    /// name, and the region over which that spelling is one binding.
+    #[must_use]
+    pub fn about(mut self, name: impl Into<String>, scope: Span) -> Diagnostic {
+        self.subject = Some((name.into(), scope));
+        self
+    }
+
+    /// [`Diagnostic::about`] for a name the caller may not have (a
+    /// place expression that is not a bare binding): `None` records
+    /// nothing.
+    #[must_use]
+    pub fn about_opt(self, name: Option<String>, scope: Span) -> Diagnostic {
+        match name {
+            Some(n) => self.about(n, scope),
+            None => self,
+        }
+    }
+}
+
+/// W1002 stands down where a mode ERROR already spoke about the same
+/// parameter (s154, wolf-lang#325).
+///
+/// W1002 ("this `mut` parameter is never written") is a resolve-rung
+/// lint with a flat, syntactic write scan; E0804 (the receiver mode is
+/// not spelled at the call site) and E1014 (a write reaches a `read`
+/// parameter) are later, typed refusals. When both fire on one
+/// parameter they disagree about whether a line writes it — and only
+/// the error is right, because the write the lint could not see is
+/// exactly the one the error is naming. Following W1002's fix-it there
+/// (drop the `mut`) walks the reader AWAY from the fix E0804 asks for.
+/// Two diagnostics that disagree about whether a line writes are one
+/// too many: the warning is dropped for that parameter.
+pub fn suppress_mode_shadowed(diags: &mut Vec<Diagnostic>) {
+    let mode_errors: Vec<(String, Span)> = diags
+        .iter()
+        .filter(|d| matches!(d.code.as_str(), "E0804" | "E1014"))
+        .filter_map(|d| d.subject.as_ref().map(|(n, s)| (n.clone(), *s)))
+        .collect();
+    if mode_errors.is_empty() {
+        return;
+    }
+    let shadowed = |d: &Diagnostic| {
+        let Some((name, scope)) = &d.subject else {
+            return false;
+        };
+        mode_errors.iter().any(|(n, use_site)| {
+            n == name
+                && use_site.file == scope.file
+                && use_site.lo >= scope.lo
+                && use_site.hi <= scope.hi
+        })
+    };
+    diags.retain(|d| d.code.as_str() != "W1002" || !shadowed(d));
 }
 
 /// Deterministic report order: file, then span, then code. Stable for
