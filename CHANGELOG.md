@@ -2,6 +2,98 @@
 
 ## Unreleased
 
+### The one-line if (s151 — #307 ruled)
+
+**A brace-less `if`, closed by a contextual `then` (#307).** `if leap
+{ 29 } else { 28 }` in a match arm read heavier than it needed to; the
+maintainer ruled a bare form, `2 => if leap then 29 else 28`, under
+three rules that all bind. **`[gram.expr.if]`**:
+
+```
+if_expr ::= 'if' expr 'then'? block ('else' (if_expr | block))?
+          | 'if' expr 'then' expr  ('else' (if_expr | expr))?
+```
+
+Braces stay valid everywhere and a `then` before a block is optional,
+never required — no program that parsed before this clause changes
+shape or meaning (rule 1). `then` is required only in the bare form,
+because it is the token that closes a greedy condition (`if x -1 else
+0` would swallow the `-1`; that is the work the braced form's `{` does
+— rule 2). And `then` is **contextual, not reserved** — `[gram.inv.kw]`'s
+fifty are unchanged: after a `.` it is a member name (std's
+`Ordering.then`, called as `less.then(greater)`), as a binding it is an
+identifier, and it is the keyword only after a complete `if` condition,
+so `if then { … }` with a bool named `then` still parses (rule 3). The
+two branches of one `if` share a form; an `else if` in a chain picks
+its own. **`[gram.amb.else]`** gains its sentence: inside a bare branch
+the `if`'s own `else` binds first, so `if c then f() else 0` is the
+two-way `if` and a defaulting `else` there is written `(f() else 0)`;
+after a braced `if`'s `}` nothing changes (`else b` with neither `if`
+nor `{` following is the defaulting operator, as it always was); the
+newline rule holds for the bare form too. In the compiler the lexer
+never sees a keyword: the parser reclassifies `Ident("then")` as
+`ThenKw` in that one position (the `self` precedent) and builds a bare
+branch as a brace-less `Block` holding one trailing `ExprStmt`, so
+sema, the mem tier, both lowerings and the checked machine read the
+two spellings alike and changed by zero lines. **The message**: `if c
+29 else 28` was a bare E0201 ("expected `{` to open the block"); it is
+"expected `{` or `then` after the `if` condition" now, with a note that
+names both spellings — the same note under the two other refusals,
+mixed forms in one `if` (`if c then 29 else { 28 }`) and a `let` in a
+bare branch.
+
+**`[gram.fmt.if]`, new.** The formatter **never converts between the
+braced and the bare form** — the author's choice stands; this is the
+one place `[gram.fmt]`'s one-shape rule yields, and it yields to rule 1.
+The alternative, a canonical bare form in value position, would have
+rewritten 68 lines across four repos (corpus 9, wolf-std 9, lobo 39,
+wolf-book 11, measured 2026-09-11) and was not taken. Inside a form it
+normalizes: `then` before `{` is dropped; a bare `if` whose one line no
+longer fits the width breaks to the braced form — the only conversion,
+one direction, and a fixed point, because the bare form's BROKEN
+rendering is the braced form (one `Group` per chain, `IfBreak`s at the
+seams) and the round-trip modulus reads a bare block as `{ expr }` and
+a `then` as layout. A bare chain breaks as one; a braced `else if`
+inside a bare chain keeps its braces behind a shield and does not make
+the head break. Parens around a defaulting `else` in a bare branch are
+load-bearing and kept (`Ctx::BareBranch`). Damage inside a bare branch
+is the statement's — it has no frame to repair inside — and mixed
+forms pass verbatim, so the formatter never repairs a refused program.
+
+**Witnesses**, `corpus/grammar/`, each `exit(0)` byte-identical on the
+checked and native tiers with the stdout its header pins:
+`if_then_let.lu`, `if_then_arm.lu` (the ruling's program),
+`if_then_stmt.lu`, `if_then_chain.lu` (an `else if … then` chain and
+one with a braced tail), `if_then_paren_default.lu`
+(`[gram.amb.else]`), `if_then_block.lu` (`then {`, `fmt: relaid`),
+`if_then_ident.lu` (`if then then 1 else 0`), `if_then_member.lu` (a
+`.then(` call in a condition; the method's own body a bare `if`),
+`if_then_width.lu` (the fallback, `fmt: relaid`); refused:
+`if_then_missing.lu`, `if_then_mixed.lu`, `if_then_let_body.lu`,
+`fail(E0201)` at parse on both tiers.
+
+**Predicted, then measured.** Pairing rows under lupin 0.1.32:
+predicted 7 (the bool-named-`then` and `.then(` witnesses were to be
+byte-identical), measured **9** — every positive witness stops at
+lupin's `E0201: expected `{`, found identifier `then``, because those
+two use the bare form on a later line as well (`if then then 1 else
+0`; the method body); the three refusals agree with lupin by code,
+E0201, at another column. wolf-interp's mirror carries the clause
+text. Ratchets: corpus syntax-tier fail count 23 → 26; the `fmt:
+relaid` pin 2 → 4; lowering ledger +9 `lowers`, +3 pre-wir;
+lane-coverage 300/331/331 (union 348, all-three 283) over floors held
+at 291/318/318/335/274; IR-volume nine new paths, reported and never
+red, transcribed from the linux lane; RT_SYMBOLS unchanged.
+**Formatter motion over the real trees** — `wolf fmt --check` file by
+file at wolf-std `046bd4f` (447 files) and lobo `d792290` (147 files),
+the new binary against the 0.2.10 control: **predicted zero, measured
+zero** (std's 32 non-canonical files are the same 32 under both; lobo
+has none under either). Source motion, tests aside: kind +7, ast
++28/−1, parser +150/−19, fmt +179 (lower +167, canon +12), spec +58/−5
+— predicted 3 / 20 / 70 / 130 / 45; the formatter ran over by the two
+damage rules the prediction had not priced, the parser by the two
+extra refusal messages and their note.
+
 ### The closure as a value, then the payload (s150 — #300 closes, #282 closes)
 
 **A capturing closure is a `fn` value (#300).** Chapter 4's
